@@ -16,6 +16,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import java.util.*;
 
 /**
@@ -61,10 +64,10 @@ public class GraphProcess {
     private boolean needsTimeRebase = false;                             // 读档标记：指示是否需要将相对时间转换为绝对世界时间
 
     // 内存与作用域
-    private final Deque<Integer> executionStack = new LinkedList<>();             // 指令执行栈变成了 Integer
-    // [Phase 2] 寄存器数组化
-    private final Deque<Object[]> variableStack = new LinkedList<>(); // 变量作用域栈
-    private Object[] eventRegisters = new Object[16];                 // 事件数据沙箱 (初始16个槽位，按需扩容)
+    // [终极优化] 使用 IntArrayList 模拟双端队列，彻底消除 LinkedList 的装箱与对象分配
+    private final IntArrayList executionStack = new IntArrayList();
+    private final Deque<Object[]> variableStack = new LinkedList<>();
+    private Object[] eventRegisters = new Object[16];
 
     /** 确保寄存器数组有足够的容量，模拟动态扩容 */
     private Object[] ensureCapacity(Object[] arr, int requiredIndex) {
@@ -74,9 +77,10 @@ public class GraphProcess {
         return arr;
     }
 
-    // 帧级缓存
-    private final Map<CacheKey, Object> frameCache = new HashMap<>();             // 使用对象作为Key，消除拼接开销
-    private final Set<Integer> recursionGuard = new HashSet<>();
+    // 帧级缓存 (Zero-Allocation)
+    // [终极优化] 使用 Long 作为键的哈希表，配合位运算消除 new CacheKey()
+    private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>();
+    private final IntOpenHashSet recursionGuard = new IntOpenHashSet();
 
     // 外部环境
     private ServerLevel level;
@@ -157,7 +161,7 @@ public class GraphProcess {
             ListTag list = tag.getList("ExecutionStack", Tag.TAG_STRING);
             for (int i = 0; i < list.size(); i++) {
                 int stackId = index.getStringToId(list.getString(i));
-                if (stackId != -1) this.executionStack.addLast(stackId);
+                if (stackId != -1) this.executionStack.add(stackId); // addLast 变成了 add
             }
         }
     }
@@ -213,7 +217,7 @@ public class GraphProcess {
             ScheduledTask task = it.next();
             if (currentWorldTick >= task.wakeUpTick()) {
                 if (task.resumeNodeId() != -1) {
-                    this.executionStack.addLast(task.resumeNodeId());
+                    this.executionStack.add(task.resumeNodeId()); // 替换为 add (相当于压入队尾)
                 }
                 it.remove();
             }
@@ -246,9 +250,7 @@ public class GraphProcess {
         while ((currentFlowId != -1 || !executionStack.isEmpty()) && state == State.RUNNING) {
 
             if (currentFlowId == -1) {
-                Integer next = executionStack.pollFirst();
-                if (next == null) continue;
-                currentFlowId = next;
+                currentFlowId = executionStack.removeInt(0); // 替换 pollFirst (弹出队头)
             }
 
             if (steps++ > MAX_STEPS) return;
@@ -301,11 +303,10 @@ public class GraphProcess {
                     String portName = ports.get(i);
                     int targetId = index.findFlowTarget(currentFlowId, portName);
                     if (targetId != -1) {
-                        this.executionStack.addFirst(targetId);
+                        this.executionStack.add(0, targetId); // 替换 addFirst (压入队头)
                     }
                 }
-                Integer next = executionStack.pollFirst();
-                this.currentFlowId = (next != null) ? next : -1;
+                this.currentFlowId = executionStack.isEmpty() ? -1 : executionStack.removeInt(0);
             }
             case ExecutionResult.Wait wait -> {
                 long wakeTime = level.getGameTime() + wait.ticks();
@@ -336,7 +337,10 @@ public class GraphProcess {
      * 附带了帧级结果缓存与成环依赖检测。
      */
     private Object executeDataNode(int nodeId, String portName) {
-        CacheKey cacheKey = new CacheKey(nodeId, portName); // 优雅的缓存命中，0 字符串拼接
+        int portId = index.getOrRegisterKey(portName);
+
+        // 2. 位运算拼装终极 CacheKey (高32位放NodeID，低32位放PortID)
+        long cacheKey = ((long) nodeId << 32) | (portId & 0xFFFFFFFFL);
 
         if (frameCache.containsKey(cacheKey)) {
             return frameCache.get(cacheKey);
@@ -429,8 +433,9 @@ public class GraphProcess {
         // 5. 执行指令栈
         if (!executionStack.isEmpty()) {
             ListTag list = new ListTag();
-            for (int id : executionStack) {
-                list.add(StringTag.valueOf(index.getIdToString(id)));
+            for (int i = 0; i < executionStack.size(); i++) {
+                // 使用 getInt(i) 直接获取基本类型
+                list.add(StringTag.valueOf(index.getIdToString(executionStack.getInt(i))));
             }
             tag.put("ExecutionStack", list);
         }
