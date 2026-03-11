@@ -6,6 +6,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.io.Reader;
 import java.util.*;
 
@@ -33,6 +35,11 @@ public class RuntimeGraphIndex {
     // 类型分类索引保持不变，但值变成了 int
     private final Map<String, List<Integer>> typeLookup;
 
+    // ===========================================
+    // 2. 运行时字典 (用于变量/事件的寄存器映射)
+    // ===========================================
+    private final Map<String, Integer> keyDictionary = new ConcurrentHashMap<>();
+    private final List<String> dictionaryReverse = new CopyOnWriteArrayList<>();
 
     // ===========================================
     // 构造器与工厂方法
@@ -160,6 +167,28 @@ public class RuntimeGraphIndex {
 
     public String getIdToString(int id) {
         return (id >= 0 && id < idToString.length) ? idToString[id] : null;
+    }
+
+    // ===========================================
+    // 变量与事件字典 API (Phase 2)
+    // ===========================================
+
+    /** 将 String 键映射为固定的 Int 寄存器 ID，若不存在则自动分配一个新槽位 */
+    public int getOrRegisterKey(String key) {
+        return keyDictionary.computeIfAbsent(key, k -> {
+            int id = dictionaryReverse.size();
+            dictionaryReverse.add(k);
+            return id;
+        });
+    }
+
+    /** 将 Int 寄存器 ID 翻译回 String (用于报错和存档) */
+    @Nullable
+    public String getKeyFromId(int id) {
+        if (id >= 0 && id < dictionaryReverse.size()) {
+            return dictionaryReverse.get(id);
+        }
+        return null;
     }
 
     // ===========================================

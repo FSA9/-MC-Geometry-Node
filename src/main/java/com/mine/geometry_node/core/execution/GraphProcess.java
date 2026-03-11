@@ -62,8 +62,17 @@ public class GraphProcess {
 
     // 内存与作用域
     private final Deque<Integer> executionStack = new LinkedList<>();             // 指令执行栈变成了 Integer
-    private final Deque<Map<String, Object>> variableStack = new LinkedList<>();
-    private final Map<String, Object> eventData = new HashMap<>();
+    // [Phase 2] 寄存器数组化
+    private final Deque<Object[]> variableStack = new LinkedList<>(); // 变量作用域栈
+    private Object[] eventRegisters = new Object[16];                 // 事件数据沙箱 (初始16个槽位，按需扩容)
+
+    /** 确保寄存器数组有足够的容量，模拟动态扩容 */
+    private Object[] ensureCapacity(Object[] arr, int requiredIndex) {
+        if (requiredIndex >= arr.length) {
+            return Arrays.copyOf(arr, Math.max(arr.length * 2, requiredIndex + 1));
+        }
+        return arr;
+    }
 
     // 帧级缓存
     private final Map<CacheKey, Object> frameCache = new HashMap<>();             // 使用对象作为Key，消除拼接开销
@@ -86,7 +95,8 @@ public class GraphProcess {
         this.index = index;
         this.currentFlowId = startNodeId;
         this.context = new InnerContext();
-        this.variableStack.push(new HashMap<>());
+        // 初始化全局作用域寄存器
+        this.variableStack.push(new Object[16]);
     }
 
     /**
@@ -114,31 +124,31 @@ public class GraphProcess {
             this.needsTimeRebase = true;
         }
 
-        // 3. 恢复事件数据沙箱
-        this.eventData.clear();
+        // 3. 恢复事件数据沙箱 (转换为寄存器恢复)
+        this.eventRegisters = new Object[16];
         if (tag.contains("EventData", Tag.TAG_COMPOUND)) {
             CompoundTag eventTag = tag.getCompound("EventData");
             for (String key : eventTag.getAllKeys()) {
-                // 修改点 1：传入 provider
                 Object deserialized = VariableRegistry.fromTag(eventTag.get(key), provider);
                 if (deserialized != null) {
-                    this.eventData.put(key, deserialized);
+                    int id = index.getOrRegisterKey(key);
+                    this.eventRegisters = ensureCapacity(this.eventRegisters, id);
+                    this.eventRegisters[id] = deserialized;
                 }
             }
         }
 
-        // 4. 恢复变量栈
+        // 4. 恢复变量栈 (转换为寄存器恢复)
         this.variableStack.clear();
         if (tag.contains("VariableStack", Tag.TAG_LIST)) {
             ListTag stackTag = tag.getList("VariableStack", Tag.TAG_COMPOUND);
             for (int i = 0; i < stackTag.size(); i++) {
-                Map<String, Object> scope = new HashMap<>();
-                // 修改点 2：传入 provider
-                loadVariables(stackTag.getCompound(i), scope, provider);
+                Object[] scope = new Object[16];
+                scope = loadVariables(stackTag.getCompound(i), scope, provider);
                 this.variableStack.addLast(scope);
             }
         } else {
-            this.variableStack.push(new HashMap<>());
+            this.variableStack.push(new Object[16]);
         }
 
         // 5. 恢复执行指令栈
@@ -163,7 +173,9 @@ public class GraphProcess {
     }
 
     public void setEventData(String key, Object value) {
-        this.eventData.put(key, value);
+        int id = index.getOrRegisterKey(key);
+        this.eventRegisters = ensureCapacity(this.eventRegisters, id);
+        this.eventRegisters[id] = value;
     }
 
     public boolean isFinished() {
@@ -389,27 +401,26 @@ public class GraphProcess {
             tag.put("SleepingTasks", tasksTag);
         }
 
-        // 3. 事件数据沙箱
-        if (!eventData.isEmpty()) {
-            CompoundTag eventTag = new CompoundTag();
-            eventData.forEach((key, val) -> {
+        boolean hasEventData = false;
+        CompoundTag eventTag = new CompoundTag();
+        for (int i = 0; i < eventRegisters.length; i++) {
+            Object val = eventRegisters[i];
+            if (val != null) {
+                hasEventData = true;
+                String key = index.getKeyFromId(i);
                 Object toSave = (val instanceof Entity ent) ? ent.getUUID() : val;
-                // 修改点 3：传入 provider
                 Tag serialized = VariableRegistry.toTag(toSave, provider);
-                if (serialized != null) {
-                    eventTag.put(key, serialized);
-                }
-            });
-            tag.put("EventData", eventTag);
+                if (serialized != null && key != null) eventTag.put(key, serialized);
+            }
         }
+        if (hasEventData) tag.put("EventData", eventTag);
 
         // 4. 局部变量栈
         ListTag stackTag = new ListTag();
-        Iterator<Map<String, Object>> it = variableStack.descendingIterator();
+        Iterator<Object[]> it = variableStack.descendingIterator();
         while (it.hasNext()) {
-            Map<String, Object> scope = it.next();
+            Object[] scope = it.next();
             CompoundTag scopeTag = new CompoundTag();
-            // 修改点 4：传入 provider
             saveVariables(scopeTag, scope, provider);
             stackTag.add(scopeTag);
         }
@@ -430,22 +441,28 @@ public class GraphProcess {
         return VariableRegistry.isSupported(v);
     }
 
-    private void saveVariables(CompoundTag tag, Map<String, Object> scope, HolderLookup.Provider provider) {
-        scope.forEach((key, val) -> {
-            Tag serialized = VariableRegistry.toTag(val, provider);
-            if (serialized != null) {
-                tag.put(key, serialized);
+    private void saveVariables(CompoundTag tag, Object[] scope, HolderLookup.Provider provider) {
+        for (int i = 0; i < scope.length; i++) {
+            if (scope[i] != null) {
+                String key = index.getKeyFromId(i);
+                Tag serialized = VariableRegistry.toTag(scope[i], provider);
+                if (serialized != null && key != null) {
+                    tag.put(key, serialized);
+                }
             }
-        });
+        }
     }
 
-    private void loadVariables(CompoundTag tag, Map<String, Object> scope, HolderLookup.Provider provider) {
+    private Object[] loadVariables(CompoundTag tag, Object[] scope, HolderLookup.Provider provider) {
         for (String key : tag.getAllKeys()) {
             Object deserialized = VariableRegistry.fromTag(tag.get(key), provider);
             if (deserialized != null) {
-                scope.put(key, deserialized);
+                int id = index.getOrRegisterKey(key);
+                scope = ensureCapacity(scope, id);
+                scope[id] = deserialized;
             }
         }
+        return scope;
     }
 
 
@@ -466,10 +483,11 @@ public class GraphProcess {
 
         @Override
         public Object getVariable(String name) {
+            int id = index.getOrRegisterKey(name);
             // 从栈顶往栈底查找作用域变量
-            for (Map<String, Object> scope : variableStack) {
-                if (scope.containsKey(name)) {
-                    Object val = scope.get(name);
+            for (Object[] scope : variableStack) {
+                if (id < scope.length && scope[id] != null) {
+                    Object val = scope[id];
                     if (val instanceof UUID uuid) {
                         if (level == null) return null;
                         Entity resolvedEntity = level.getEntity(uuid);
@@ -484,19 +502,21 @@ public class GraphProcess {
 
         @Override
         public void setVariable(String name, Object value) {
-            Map<String, Object> currentScope = variableStack.peek();
+            // 弹出栈顶作用域，扩容修改后再压回去
+            Object[] currentScope = variableStack.pop();
             if (currentScope == null) return;
 
-            if (value == null) {
-                currentScope.remove(name);
-                return;
-            }
+            int id = index.getOrRegisterKey(name);
+            currentScope = ensureCapacity(currentScope, id);
 
-            if (isValidType(value)) {
-                currentScope.put(name, (value instanceof Entity ent) ? ent.getUUID() : value);
+            if (value == null) {
+                currentScope[id] = null; // 赋值为null等同于移除
+            } else if (isValidType(value)) {
+                currentScope[id] = (value instanceof Entity ent) ? ent.getUUID() : value;
             } else {
                 System.err.println("GraphProcess: Unsupported variable type " + value.getClass().getSimpleName());
             }
+            variableStack.push(currentScope);
         }
 
         @Override
@@ -519,8 +539,10 @@ public class GraphProcess {
 
         @Override
         public Object getEventData(String key) {
-            Object val = GraphProcess.this.eventData.get(key);
+            int id = index.getOrRegisterKey(key);
+            if (id >= eventRegisters.length) return null;
 
+            Object val = eventRegisters[id];
             // UUID -> Entity 解析
             if (val instanceof UUID uuid) {
                 if (level == null) return null;
@@ -533,7 +555,9 @@ public class GraphProcess {
 
         @Override
         public void setEventData(String key, Object value) {
-            GraphProcess.this.eventData.put(key, value);
+            int id = index.getOrRegisterKey(key);
+            eventRegisters = ensureCapacity(eventRegisters, id);
+            eventRegisters[id] = value;
         }
 
         @Override
