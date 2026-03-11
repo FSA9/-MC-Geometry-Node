@@ -6,44 +6,61 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.io.Reader;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * [运行时图索引] (不可变 / 只读)
+ * [运行时图索引 / 蓝图字节码载体] (Immutable Graph Index)
+ * <p>
+ * 它是蓝图 JSON 文件经过解析、展平(Flatten)和编译后的**只读**静态表现形式。
+ * 核心设计目标：
+ * 1. 彻底消灭运行时的 String ID 哈希查找，将其转化为紧凑的 int[] 数组寻址 (O(1))。
+ * 2. 在实例化阶段 (build) 提前完成所有死锁/成环检测，确保运行时的绝对安全。
+ * 3. 维护全局统一的“变量/事件名 -> 寄存器槽位”的并发映射字典。
  */
 public class RuntimeGraphIndex {
 
-    // ===========================================
-    // 1. 核心索引字段 (Fields)
-    // ===========================================
+    // ====================================================
+    // 1. 数据结构定义 (Data Structures)
+    // ====================================================
 
-    // [新增] ID 双向映射
+    /** 编译期内部使用：表示数据流连接的源头信息 (基于 String) */
+    public record ConnectionSource(String sourceNodeId, String sourcePortName) {}
+
+    /** 运行时核心结构：表示数据流连接的源头信息 (基于 Int 寄存器/索引) */
+    public record IntConnectionSource(int sourceNodeId, String sourcePortName) {}
+
+
+    // ====================================================
+    // 2. 核心索引结构 (Compiled Arrays & Maps)
+    // ====================================================
+
+    // --- ID 双向映射表 ---
     private final String[] idToString;
     private final Map<String, Integer> stringToId;
 
-    // [优化] 核心数据结构全部变为数组 (下标即为 int nodeId)
-    private final JsonObject[] nodeDataArray;
-    private final String[] typeArray;
-    private final Map<String, Integer>[] flowOutputArray;
-    private final Map<String, IntConnectionSource>[] inputArray;
-    private final Map<String, Object>[] propertyArray;
-    private final Map<String, Object>[] staticInputArray;
+    // --- 节点数据核心数组 (数组下标即为 int nodeId) ---
+    private final JsonObject[] nodeDataArray;                             // 节点原始配置数据 (只读透传)
+    private final String[] typeArray;                                     // 节点类型标识 (如 "math_add")
+    private final Map<String, Integer>[] flowOutputArray;                 // 执行流拓扑：当前节点输出端口 -> 下一个节点 ID
+    private final Map<String, IntConnectionSource>[] inputArray;          // 数据流拓扑：当前节点输入端口 -> 上游数据提供者
+    private final Map<String, Object>[] propertyArray;                    // 节点静态属性 (Properties)
+    private final Map<String, Object>[] staticInputArray;                 // 节点静态默认输入 (Static Inputs)
 
-    // 类型分类索引保持不变，但值变成了 int
-    private final Map<String, List<Integer>> typeLookup;
+    // --- 分类与查询辅助 ---
+    private final Map<String, List<Integer>> typeLookup;                  // 按节点类型归类 (常用于查找事件起始节点)
 
-    // ===========================================
-    // 2. 运行时字典 (用于变量/事件的寄存器映射)
-    // ===========================================
+    // --- 全局并发字典 (Phase 2 优化) ---
+    // 用于将运行时的动态 String (如局部变量名、事件参数名) 映射为固定的寄存器槽位(int)
     private final Map<String, Integer> keyDictionary = new ConcurrentHashMap<>();
     private final List<String> dictionaryReverse = new CopyOnWriteArrayList<>();
 
-    // ===========================================
-    // 构造器与工厂方法
-    // ===========================================
+
+    // ====================================================
+    // 3. 构造与工厂方法 (Constructors & Factory)
+    // ====================================================
 
     private RuntimeGraphIndex(String[] idToString,
                               Map<String, Integer> stringToId,
@@ -66,19 +83,20 @@ public class RuntimeGraphIndex {
     }
 
     /**
-     * [核心构建] 从 Reader (JSON) 直接构建索引
+     * [编译器主入口] 将原始 JSON 蓝图文件编译为高性能的运行时索引。
      */
     public static RuntimeGraphIndex build(Reader jsonReader) {
         JsonObject root = JsonParser.parseReader(jsonReader).getAsJsonObject();
         JsonObject rootNodes = root.getAsJsonObject("nodes");
 
+        // Step 1: 展平图结构 (消除 NodeGroup 等嵌套逻辑)
         GraphFlattener flattener = new GraphFlattener();
         flattener.flatten(rootNodes);
 
-        // 依然使用 String 校验死锁，安全可靠
+        // Step 2: 编译期安全检查 (数据流成环/死锁检测)
         validateNoDataCycles(flattener.inputLookup);
 
-        // --- 开始第一阶段优化：将 String 映射为 Int ---
+        // Step 3: 生成 ID 映射表 (String -> Int)
         Set<String> allIds = flattener.nodeDataLookup.keySet();
         int size = allIds.size();
 
@@ -92,7 +110,7 @@ public class RuntimeGraphIndex {
             indexCounter++;
         }
 
-        // 初始化数组
+        // Step 4: 初始化连续内存数组
         JsonObject[] nodeDataArray = new JsonObject[size];
         String[] typeArray = new String[size];
         Map<String, Integer>[] flowOutputArray = new Map[size];
@@ -101,18 +119,19 @@ public class RuntimeGraphIndex {
         Map<String, Object>[] staticInputArray = new Map[size];
 
         for (int i = 0; i < size; i++) {
-            inputArray[i] = new HashMap<>(); // 预初始化
+            inputArray[i] = new HashMap<>();
         }
 
-        // 填充数组
+        // Step 5: 填充数组 (降维打击)
         for (int i = 0; i < size; i++) {
             String strId = idToString[i];
 
+            // 5.1 基础配置填充
             nodeDataArray[i] = flattener.nodeDataLookup.get(strId);
             JsonObject node = nodeDataArray[i];
             typeArray[i] = (node != null && node.has("node_type")) ? node.get("node_type").getAsString() : "unknown";
 
-            // 执行流转换 (String -> int)
+            // 5.2 执行流转换 (Target String ID -> Target Int ID)
             Map<String, String> oldFlow = flattener.flowOutputLookup.get(strId);
             if (oldFlow != null) {
                 Map<String, Integer> newFlow = new HashMap<>();
@@ -125,11 +144,12 @@ public class RuntimeGraphIndex {
                 flowOutputArray[i] = Collections.emptyMap();
             }
 
+            // 5.3 静态数据提取
             propertyArray[i] = flattener.propertyLookup.getOrDefault(strId, Collections.emptyMap());
             staticInputArray[i] = flattener.staticInputLookup.getOrDefault(strId, Collections.emptyMap());
         }
 
-        // 数据流转换 (TargetID#Port -> SourceIntID)
+        // Step 6: 数据流拓扑转换 (TargetID#Port -> SourceIntID)
         for (Map.Entry<String, ConnectionSource> entry : flattener.inputLookup.entrySet()) {
             String[] parts = entry.getKey().split("#");
             String targetId = parts[0];
@@ -143,7 +163,7 @@ public class RuntimeGraphIndex {
             }
         }
 
-        // 类型分类转换
+        // Step 7: 类型反向索引构建
         Map<String, List<Integer>> typeToIntList = new HashMap<>();
         for (Map.Entry<String, List<String>> entry : flattener.typeLookup.entrySet()) {
             List<Integer> intList = new ArrayList<>();
@@ -158,22 +178,23 @@ public class RuntimeGraphIndex {
     }
 
 
-    // ===========================================
-    // 映射工具 API
-    // ===========================================
+    // ====================================================
+    // 4. 字典与映射 API (Dictionaries & Mappings)
+    // ====================================================
+
+    /** 通过 String ID 获取运行时的 Int 索引 (常用于读档恢复) */
     public int getStringToId(String strId) {
         return stringToId.getOrDefault(strId, -1);
     }
 
+    /** 通过 Int 索引还原原始的 String ID (常用于报错日志与存档持久化) */
     public String getIdToString(int id) {
         return (id >= 0 && id < idToString.length) ? idToString[id] : null;
     }
 
-    // ===========================================
-    // 变量与事件字典 API (Phase 2)
-    // ===========================================
-
-    /** 将 String 键映射为固定的 Int 寄存器 ID，若不存在则自动分配一个新槽位 */
+    /** * [寄存器分配器] 将任意 String 键映射为固定的 Int 寄存器 ID。
+     * 若该键首次出现，则自动扩容并分配一个全新的连续 ID。
+     */
     public int getOrRegisterKey(String key) {
         return keyDictionary.computeIfAbsent(key, k -> {
             int id = dictionaryReverse.size();
@@ -182,7 +203,7 @@ public class RuntimeGraphIndex {
         });
     }
 
-    /** 将 Int 寄存器 ID 翻译回 String (用于报错和存档) */
+    /** 将 Int 寄存器 ID 翻译回原始的 String (用于序列化保存) */
     @Nullable
     public String getKeyFromId(int id) {
         if (id >= 0 && id < dictionaryReverse.size()) {
@@ -191,9 +212,11 @@ public class RuntimeGraphIndex {
         return null;
     }
 
-    // ===========================================
-    // 公开查询 API - O(1)
-    // ===========================================
+
+    // ====================================================
+    // 5. 图查询 API - O(1) (Graph Query Operations)
+    // ====================================================
+
     public String getNodeType(int nodeId) {
         if (nodeId < 0 || nodeId >= typeArray.length) return "unknown";
         return typeArray[nodeId];
@@ -203,9 +226,11 @@ public class RuntimeGraphIndex {
         if (nodeId < 0 || nodeId >= nodeDataArray.length) return false;
         JsonObject node = nodeDataArray[nodeId];
         if (node == null) return false;
+
         if (node.has("inputs") && node.getAsJsonObject("inputs").has(portName)) return true;
         if (node.has("outputs") && node.getAsJsonObject("outputs").has(portName)) return true;
         if (node.has("execution") && node.getAsJsonObject("execution").has(portName)) return true;
+
         return false;
     }
 
@@ -221,32 +246,45 @@ public class RuntimeGraphIndex {
         return staticInputArray[nodeId].get(portName);
     }
 
-    // 注意这里返回值变成了 int，找不到返回 -1
+    /**
+     * 查找控制流的下一个目标节点
+     * @return 目标节点的 int ID，若分支尽头无连接则返回 -1
+     */
     public int findFlowTarget(int currentNodeId, String outputPortName) {
         if (currentNodeId < 0 || currentNodeId >= flowOutputArray.length) return -1;
         return flowOutputArray[currentNodeId].getOrDefault(outputPortName, -1);
     }
 
+    /**
+     * 向上游索要数据流的源头
+     * @return 包装了源节点 ID 与端口名的记录类，若未连接则返回 null
+     */
     @Nullable
     public IntConnectionSource findInputSource(int targetNodeId, String inputPortName) {
         if (targetNodeId < 0 || targetNodeId >= inputArray.length) return null;
         return inputArray[targetNodeId].get(inputPortName);
     }
 
+    /**
+     * 获取指定类型的所有节点 (常用于查找引擎分发事件的入口节点)
+     */
     public List<Integer> findNodesByType(String nodeType) {
         return typeLookup.getOrDefault(nodeType, List.of());
     }
 
-    // 新增内部类：使用 int 代替 string
-    public record IntConnectionSource(int sourceNodeId, String sourcePortName) {}
 
+    // ====================================================
+    // 6. 编译器安全防线 (Compiler Validators)
+    // ====================================================
 
-    // ===========================================
-    // 核心验证逻辑
-    // ===========================================
-
+    /**
+     * [死锁检测] 遍历验证整张图的数据流依赖是否存在环形结构。
+     * 若检测到成环（例如 A 的运算需要 B，B 的运算又需要 A），将直接抛出异常中断编译。
+     */
     private static void validateNoDataCycles(Map<String, ConnectionSource> inputLookup) {
         Map<String, Set<String>> dependencyGraph = new HashMap<>();
+
+        // 构建有向依赖图 (Target -> Source)
         for (String key : inputLookup.keySet()) {
             String targetNodeId = key.split("#")[0];
             String sourceNodeId = inputLookup.get(key).sourceNodeId();
@@ -256,6 +294,7 @@ public class RuntimeGraphIndex {
         Set<String> visited = new HashSet<>();
         Set<String> recStack = new HashSet<>();
 
+        // 对每个节点发起 DFS
         for (String nodeId : dependencyGraph.keySet()) {
             if (checkCycleDFS(nodeId, dependencyGraph, visited, recStack)) {
                 throw new IllegalStateException("Data flow cycle detected! Graph compilation failed at node: " + nodeId);
@@ -263,6 +302,9 @@ public class RuntimeGraphIndex {
         }
     }
 
+    /**
+     * 经典的深度优先搜索 (DFS) 探路算法寻找环
+     */
     private static boolean checkCycleDFS(String current, Map<String, Set<String>> adj,
                                          Set<String> visited, Set<String> recStack) {
         if (recStack.contains(current)) return true;
@@ -283,10 +325,11 @@ public class RuntimeGraphIndex {
     }
 
 
-    // ===========================================
-    // 5. 内部辅助方法
-    // ===========================================
+    // ====================================================
+    // 7. 内部序列化工具 (JSON Helpers)
+    // ====================================================
 
+    /** 批量解析 JSON 中的属性字典 */
     static Map<String, Object> parseValueMap(JsonObject obj) {
         Map<String, Object> map = new HashMap<>();
         for (String key : obj.keySet()) {
@@ -298,9 +341,10 @@ public class RuntimeGraphIndex {
                 System.err.println("[RuntimeGraphIndex] Warning: Ignored null/unsupported value for key: " + key);
             }
         }
-        return Map.copyOf(map);
+        return Map.copyOf(map); // 返回不可变 Map 保证运行时安全
     }
 
+    /** 递归拆解 GSON 的基础包装类，映射为 Java 基础类型 */
     static Object unwrapJsonElement(JsonElement element) {
         if (element.isJsonPrimitive()) {
             var prim = element.getAsJsonPrimitive();
@@ -308,7 +352,7 @@ public class RuntimeGraphIndex {
             if (prim.isNumber()) return prim.getAsNumber();
             if (prim.isString()) return prim.getAsString();
         }
-        // JSON解析
+
         if (element.isJsonArray()) {
             JsonArray jsonArray = element.getAsJsonArray();
             List<Object> list = new ArrayList<>();
@@ -319,18 +363,4 @@ public class RuntimeGraphIndex {
         }
         return null;
     }
-
-    private static String makeKey(String nodeId, String portName) {
-        return nodeId + "#" + portName;
-    }
-
-
-    // ===========================================
-    // 6. 内部数据结构 (Nested Types)
-    // ===========================================
-
-    /**
-     * 表示数据流连接的源头信息
-     */
-    public record ConnectionSource(String sourceNodeId, String sourcePortName) {}
 }

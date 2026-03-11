@@ -6,6 +6,9 @@ import com.mine.geometry_node.core.execution.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.execution.variables.VariableRegistry;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.*;
@@ -16,105 +19,93 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
-import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import java.util.*;
 
 /**
- * [核心执行单元] 图的运行实例 (The "Process")。
+ * [蓝图虚拟机核心进程] (The Graph VM Process)
  * <p>
- * 代表一次独立的蓝图执行流程，充当微型虚拟机 (VM) 的角色。
- * 负责维护执行指令栈、变量作用域、协程调度(延迟任务)以及瞬时环境上下文。
+ * 代表一次独立的蓝图执行生命周期。
+ * 采用了零对象分配（Zero-Allocation）的底层设计，利用 Fastutil 库、
+ * 寄存器数组和位运算来维持极高的执行性能。
  */
 public class GraphProcess {
 
-    // ====================================================
-    // 数据结构定义 (Data Structures)
-    // ====================================================
+    // ================================
+    // 1. 数据结构定义
+    // ================================
 
+    /** 虚拟机的生命周期状态 */
     public enum State {
-        RUNNING,    // 活跃状态：正在执行或准备执行
-        WAITING,    // 挂起状态：等待协程任务(Delay)唤醒
-        FINISHED    // 终止状态：流程彻底结束，等待引擎回收
+        RUNNING,    // 活跃：正在执行指令栈中的节点
+        WAITING,    // 挂起：指令栈为空，正等待协程/延迟任务唤醒
+        FINISHED    // 终止：所有任务结束，等待引擎回收销毁
     }
 
-    // ====================================================
-    // 成员变量 (Fields)
-    // ====================================================
-
-    // 基础配置
-    private final String graphId;
-    private final RuntimeGraphIndex index;
-    private final InnerContext context; // 外观模式：暴露给节点使用的受限 API
-
-    /** 描述一个被挂起的延迟任务 (注意 resumeNodeId 变成了 int) */
+    /** 描述一个被挂起的延迟协程任务 */
     private record ScheduledTask(long wakeUpTick, int resumeNodeId) {}
 
-    /** 用于取代原来的 String 拼接 cacheKey */
-    private record CacheKey(int nodeId, String port) {}
 
-    // 运行时状态 (改用 -1 代替 null)
-    private State state = State.RUNNING;
-    private int currentFlowId = -1;       // 当前待执行节点 ID
-    private int activeNodeId = -1;        // 当前正在计算/执行的节点 ID
+    // ================================
+    // 2. 核心状态与内存寄存器
+    // ================================
 
-    // 任务调度
-    private final List<ScheduledTask> sleepingTasks = new ArrayList<>(); // 等待唤醒的协程队列
-    private boolean needsTimeRebase = false;                             // 读档标记：指示是否需要将相对时间转换为绝对世界时间
+    // --- 基础信息 ---
+    private final String graphId;
+    private final RuntimeGraphIndex index;
+    private final InnerContext context;
 
-    // 内存与作用域
-    // [终极优化] 使用 IntArrayList 模拟双端队列，彻底消除 LinkedList 的装箱与对象分配
-    private final IntArrayList executionStack = new IntArrayList();
-    private final Deque<Object[]> variableStack = new LinkedList<>();
-    private Object[] eventRegisters = new Object[16];
-
-    /** 确保寄存器数组有足够的容量，模拟动态扩容 */
-    private Object[] ensureCapacity(Object[] arr, int requiredIndex) {
-        if (requiredIndex >= arr.length) {
-            return Arrays.copyOf(arr, Math.max(arr.length * 2, requiredIndex + 1));
-        }
-        return arr;
-    }
-
-    // 帧级缓存 (Zero-Allocation)
-    // [终极优化] 使用 Long 作为键的哈希表，配合位运算消除 new CacheKey()
-    private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>();
-    private final IntOpenHashSet recursionGuard = new IntOpenHashSet();
-
-    // 外部环境
+    // --- 外部环境上下文 ---
     private ServerLevel level;
-    private Entity entity; // 挂载该图的宿主实体
+    private Entity entity;
+
+    // --- 引擎执行状态 ---
+    private State state = State.RUNNING;
+    private int currentFlowId = -1;       // 指令指针 (PC)：当前待执行的节点 ID
+    private int activeNodeId = -1;        // 当前正在计算数据的节点 ID
+
+    // --- 协程调度栈 ---
+    private final List<ScheduledTask> sleepingTasks = new ArrayList<>();
+    private boolean needsTimeRebase = false; // 读档标记：是否需要将相对时间转换为当前世界绝对时间
+
+    // --- 内存模型 ---
+    private final IntArrayList executionStack = new IntArrayList();           // 执行栈：存储待执行的分支节点
+    private final Deque<Object[]> variableStack = new LinkedList<>();         // 变量栈：局部变量的多层作用域
+    private Object[] eventRegisters = new Object[16];                         // 事件寄存器：存储系统事件注入的瞬时参数
+
+    // --- 帧级缓存 ---
+    private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>(); // 运算结果缓存 (高32位NodeId, 低32位PortId)
+    private final IntOpenHashSet recursionGuard = new IntOpenHashSet();                       // 循环依赖防线：防止数据流死锁
 
 
-    // ====================================================
-    // 构造与初始化 (Constructors)
-    // ====================================================
+    // ================================
+    // 3. 构造与序列化
+    // ================================
 
     /**
-     * 创建并初始化一个新的执行进程。
+     * [全新启动] 实例化并初始化一个新的执行进程
      */
     public GraphProcess(String graphId, RuntimeGraphIndex index, int startNodeId) {
         this.graphId = graphId;
         this.index = index;
         this.currentFlowId = startNodeId;
         this.context = new InnerContext();
-        // 初始化全局作用域寄存器
+
+        // 压入全局（顶级）变量作用域
         this.variableStack.push(new Object[16]);
     }
 
     /**
-     * [断点续传] 从 NBT 存档中反序列化恢复执行进程。
+     * [断点续传] 从 NBT 存档中反序列化恢复执行进程
      */
     public GraphProcess(CompoundTag tag, RuntimeGraphIndex index, HolderLookup.Provider provider) {
         this.index = index;
         this.context = new InnerContext();
 
         this.graphId = tag.getString("GraphId");
-        // 读档时：String -> int，如果图更新了找不到该节点，赋予 -1 结束进程
-        this.currentFlowId = tag.contains("NodeId") ? index.getStringToId(tag.getString("NodeId")) : -1;
         this.state = State.valueOf(tag.getString("State"));
+        this.currentFlowId = tag.contains("NodeId") ? index.getStringToId(tag.getString("NodeId")) : -1;
 
+        // 1. 恢复协程任务
         this.sleepingTasks.clear();
         if (tag.contains("SleepingTasks", Tag.TAG_LIST)) {
             ListTag tasksTag = tag.getList("SleepingTasks", Tag.TAG_COMPOUND);
@@ -128,7 +119,7 @@ public class GraphProcess {
             this.needsTimeRebase = true;
         }
 
-        // 3. 恢复事件数据沙箱 (转换为寄存器恢复)
+        // 2. 恢复事件寄存器
         this.eventRegisters = new Object[16];
         if (tag.contains("EventData", Tag.TAG_COMPOUND)) {
             CompoundTag eventTag = tag.getCompound("EventData");
@@ -142,7 +133,7 @@ public class GraphProcess {
             }
         }
 
-        // 4. 恢复变量栈 (转换为寄存器恢复)
+        // 3. 恢复变量作用域栈
         this.variableStack.clear();
         if (tag.contains("VariableStack", Tag.TAG_LIST)) {
             ListTag stackTag = tag.getList("VariableStack", Tag.TAG_COMPOUND);
@@ -155,54 +146,108 @@ public class GraphProcess {
             this.variableStack.push(new Object[16]);
         }
 
-        // 5. 恢复执行指令栈
+        // 4. 恢复执行指令栈
         this.executionStack.clear();
         if (tag.contains("ExecutionStack", Tag.TAG_LIST)) {
             ListTag list = tag.getList("ExecutionStack", Tag.TAG_STRING);
             for (int i = 0; i < list.size(); i++) {
                 int stackId = index.getStringToId(list.getString(i));
-                if (stackId != -1) this.executionStack.add(stackId); // addLast 变成了 add
+                if (stackId != -1) this.executionStack.add(stackId);
             }
         }
     }
 
+    public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
+        tag.putString("GraphId", graphId);
+        tag.putString("State", state.name());
 
-    // ====================================================
-    // 生命周期与驱动 API (Lifecycle & Public API)
-    // ====================================================
+        if (currentFlowId != -1) {
+            tag.putString("NodeId", index.getIdToString(currentFlowId));
+        }
+
+        // 1. 保存协程任务
+        if (!sleepingTasks.isEmpty()) {
+            ListTag tasksTag = new ListTag();
+            for (ScheduledTask task : sleepingTasks) {
+                CompoundTag taskTag = new CompoundTag();
+                long remaining = (level != null && !needsTimeRebase) ?
+                        Math.max(0, task.wakeUpTick() - level.getGameTime()) : task.wakeUpTick();
+
+                taskTag.putLong("WaitRemaining", remaining);
+                if (task.resumeNodeId() != -1) {
+                    taskTag.putString("ResumeNodeId", index.getIdToString(task.resumeNodeId()));
+                }
+                tasksTag.add(taskTag);
+            }
+            tag.put("SleepingTasks", tasksTag);
+        }
+
+        // 2. 保存事件寄存器
+        boolean hasEventData = false;
+        CompoundTag eventTag = new CompoundTag();
+        for (int i = 0; i < eventRegisters.length; i++) {
+            if (eventRegisters[i] != null) {
+                hasEventData = true;
+                String key = index.getKeyFromId(i);
+                Object toSave = (eventRegisters[i] instanceof Entity ent) ? ent.getUUID() : eventRegisters[i];
+                Tag serialized = VariableRegistry.toTag(toSave, provider);
+                if (serialized != null && key != null) eventTag.put(key, serialized);
+            }
+        }
+        if (hasEventData) tag.put("EventData", eventTag);
+
+        // 3. 保存变量作用域栈
+        ListTag stackTag = new ListTag();
+        Iterator<Object[]> it = variableStack.descendingIterator();
+        while (it.hasNext()) {
+            CompoundTag scopeTag = new CompoundTag();
+            saveVariables(scopeTag, it.next(), provider);
+            stackTag.add(scopeTag);
+        }
+        tag.put("VariableStack", stackTag);
+
+        // 4. 保存执行指令栈
+        if (!executionStack.isEmpty()) {
+            ListTag list = new ListTag();
+            for (int i = 0; i < executionStack.size(); i++) {
+                list.add(StringTag.valueOf(index.getIdToString(executionStack.getInt(i))));
+            }
+            tag.put("ExecutionStack", list);
+        }
+
+        return tag;
+    }
+
+
+    // ================================
+    // 4. 生命周期与公开 API
+    // ================================
+
+    public String getGraphId() { return graphId; }
+    public boolean isFinished() { return state == State.FINISHED; }
 
     public void setEnvironment(ServerLevel level, @Nullable Entity entity) {
         this.level = level;
         this.entity = entity;
     }
 
+    /**
+     * [引擎注值] 向事件寄存器写入参数 (通常由事件分发器调用)
+     */
     public void setEventData(String key, Object value) {
         int id = index.getOrRegisterKey(key);
         this.eventRegisters = ensureCapacity(this.eventRegisters, id);
         this.eventRegisters[id] = value;
     }
-
-    public boolean isFinished() {
-        return state == State.FINISHED;
-    }
-
-    public String getGraphId() {
-        return graphId;
-    }
-
-    /**
-     * [核心驱动马达] 游戏主循环每 Tick 调用一次。
-     * 负责处理时间轴对齐、唤醒到期协程，并驱动逻辑主循环。
-     */
+    
     public void tick(long currentWorldTick) {
-        // 0. 前置合法性检查
         if (state == State.FINISHED || level == null) return;
 
-        // 1. 清理瞬时缓存 (每 Tick 重置)
+        // 1. 每帧清空瞬时运算缓存与防死锁集合
         frameCache.clear();
         recursionGuard.clear();
 
-        // 2. 读档后首帧处理：时间轴校准 (相对时间 -> 绝对世界时间)
+        // 2. 相对等待时间 to 世界绝对时间
         if (this.needsTimeRebase) {
             for (int i = 0; i < sleepingTasks.size(); i++) {
                 ScheduledTask oldTask = sleepingTasks.get(i);
@@ -211,37 +256,37 @@ public class GraphProcess {
             this.needsTimeRebase = false;
         }
 
-        // 3. 任务调度：唤醒到期的任务并压入执行栈
+        // 3. 协程调度：唤醒到期的延迟任务，将其压入主执行栈
         Iterator<ScheduledTask> it = sleepingTasks.iterator();
         while (it.hasNext()) {
             ScheduledTask task = it.next();
             if (currentWorldTick >= task.wakeUpTick()) {
                 if (task.resumeNodeId() != -1) {
-                    this.executionStack.add(task.resumeNodeId()); // 替换为 add (相当于压入队尾)
+                    this.executionStack.add(task.resumeNodeId());
                 }
                 it.remove();
             }
         }
 
+        // 4. 状态机推演与执行
         if (currentFlowId != -1 || !executionStack.isEmpty()) {
             state = State.RUNNING;
             runExecutionLoop();
         } else if (sleepingTasks.isEmpty()) {
-            // 既无运行指令，也无挂起任务 -> 寿终正寝
-            state = State.FINISHED;
+            state = State.FINISHED; // 彻底结束
         } else {
-            // 无运行指令，但仍有任务沉睡 -> 保持挂起
-            state = State.WAITING;
+            state = State.WAITING;  // 挂起等待
         }
     }
 
-    // ====================================================
-    // 核心执行引擎
-    // ====================================================
+
+    // ================================
+    // 5. 虚拟机内部引擎
+    // ================================
 
     /**
-     * 执行控制流逻辑 (Push Model)。
-     * 只要指令栈有任务，将持续执行，直至挂起(Delay)或触及单帧执行上限。
+     * [控制流执行模型 (Push Model)]
+     * 持续执行栈中指令，直到触发挂起 (Wait) 或触碰单帧防卡死上限 (MAX_STEPS)。
      */
     private void runExecutionLoop() {
         int steps = 0;
@@ -249,10 +294,12 @@ public class GraphProcess {
 
         while ((currentFlowId != -1 || !executionStack.isEmpty()) && state == State.RUNNING) {
 
+            // 若当前无指令，则从栈顶弹出下一个
             if (currentFlowId == -1) {
-                currentFlowId = executionStack.removeInt(0); // 替换 pollFirst (弹出队头)
+                currentFlowId = executionStack.removeInt(0);
             }
 
+            // 防卡死
             if (steps++ > MAX_STEPS) return;
 
             String nodeType = index.getNodeType(currentFlowId);
@@ -263,11 +310,12 @@ public class GraphProcess {
 
             BaseNode logic = NodeRegistry.INSTANCE.get(nodeType);
             if (logic == null) {
-                System.err.println("GraphProcess: Unknown node type " + nodeType);
+                System.err.println("[GraphProcess] Unknown node type encountered: " + nodeType);
                 state = State.FINISHED;
                 return;
             }
 
+            // --- 核心执行域 ---
             try {
                 int previousActive = this.activeNodeId;
                 this.activeNodeId = currentFlowId;
@@ -278,19 +326,20 @@ public class GraphProcess {
                 handleExecutionResult(result);
 
             } catch (Exception e) {
-                System.err.println("GraphProcess Error at node " + index.getIdToString(currentFlowId) + ": " + e.getMessage());
+                System.err.println("[GraphProcess] Critical error at node " + index.getIdToString(currentFlowId) + ": " + e.getMessage());
                 e.printStackTrace();
                 state = State.FINISHED;
             }
         }
 
+        // 善后状态判定
         if (currentFlowId == -1 && executionStack.isEmpty() && sleepingTasks.isEmpty()) {
             state = State.FINISHED;
         }
     }
 
     /**
-     * 解析节点的执行结果，并操纵虚拟机状态机进行响应跳转。
+     * 解析节点的执行结果，并改变指令指针或压栈
      */
     private void handleExecutionResult(ExecutionResult result) {
         switch (result) {
@@ -298,17 +347,18 @@ public class GraphProcess {
                 this.currentFlowId = index.findFlowTarget(currentFlowId, next.outputPortName());
             }
             case ExecutionResult.Call call -> {
+                // 将后续执行流按序压入栈顶 (逆序压入保证正序弹出)
                 List<String> ports = call.outputPorts();
                 for (int i = ports.size() - 1; i >= 0; i--) {
-                    String portName = ports.get(i);
-                    int targetId = index.findFlowTarget(currentFlowId, portName);
+                    int targetId = index.findFlowTarget(currentFlowId, ports.get(i));
                     if (targetId != -1) {
-                        this.executionStack.add(0, targetId); // 替换 addFirst (压入队头)
+                        this.executionStack.add(0, targetId);
                     }
                 }
                 this.currentFlowId = executionStack.isEmpty() ? -1 : executionStack.removeInt(0);
             }
             case ExecutionResult.Wait wait -> {
+                // 挂起当前流，注册协程唤醒时间
                 long wakeTime = level.getGameTime() + wait.ticks();
                 int nextId = index.findFlowTarget(currentFlowId, wait.nextPortName());
                 if (nextId != -1) {
@@ -317,10 +367,12 @@ public class GraphProcess {
                 this.currentFlowId = -1;
             }
             case ExecutionResult.Finish ignored -> {
+                // 自然结束当前分支
                 this.currentFlowId = -1;
             }
             case ExecutionResult.Error err -> {
-                System.err.println("Graph Error: " + err.errorMessage());
+                // 异常宕机
+                System.err.println("[GraphProcess] Execution aborted: " + err.errorMessage());
                 this.executionStack.clear();
                 this.currentFlowId = -1;
                 this.state = State.FINISHED;
@@ -328,26 +380,24 @@ public class GraphProcess {
         }
     }
 
-    // ====================================================
-    // 数据拉取模型
-    // ====================================================
-
     /**
-     * 递归向上游节点索要数据 (Pull Model)。
-     * 附带了帧级结果缓存与成环依赖检测。
+     * [数据流计算模型 (Pull Model)]
+     * 递归向上游节点索要数据。附带单帧缓存与死锁防御。
      */
     private Object executeDataNode(int nodeId, String portName) {
         int portId = index.getOrRegisterKey(portName);
 
-        // 2. 位运算拼装终极 CacheKey (高32位放NodeID，低32位放PortID)
+        // 位运算拼装终极 CacheKey (高32位放NodeID，低32位放PortID)
         long cacheKey = ((long) nodeId << 32) | (portId & 0xFFFFFFFFL);
 
+        // 缓存命中：同帧内已被计算过，直接返回
         if (frameCache.containsKey(cacheKey)) {
             return frameCache.get(cacheKey);
         }
 
+        // 循环依赖检测：触发死锁
         if (recursionGuard.contains(nodeId)) {
-            System.err.println("GraphProcess: Detected dependency cycle at node " + index.getIdToString(nodeId));
+            System.err.println("[GraphProcess] Dependency cycle detected at node: " + index.getIdToString(nodeId));
             return null;
         }
 
@@ -377,73 +427,15 @@ public class GraphProcess {
     }
 
 
-    // ====================================================
-    // 序列化&反序列化
-    // ====================================================
+    // ================================
+    // 6. 内存管理辅助工具
+    // ================================
 
-    public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
-        tag.putString("GraphId", graphId);
-        tag.putString("State", state.name());
-        if (currentFlowId != -1) {
-            tag.putString("NodeId", index.getIdToString(currentFlowId));
+    private Object[] ensureCapacity(Object[] arr, int requiredIndex) {
+        if (requiredIndex >= arr.length) {
+            return Arrays.copyOf(arr, Math.max(arr.length * 2, requiredIndex + 1));
         }
-
-        if (!sleepingTasks.isEmpty()) {
-            ListTag tasksTag = new ListTag();
-            for (ScheduledTask task : sleepingTasks) {
-                CompoundTag taskTag = new CompoundTag();
-                long remaining = (level != null && !needsTimeRebase) ?
-                        Math.max(0, task.wakeUpTick() - level.getGameTime()) :
-                        task.wakeUpTick();
-
-                taskTag.putLong("WaitRemaining", remaining);
-                if (task.resumeNodeId() != -1) {
-                    taskTag.putString("ResumeNodeId", index.getIdToString(task.resumeNodeId()));
-                }
-                tasksTag.add(taskTag);
-            }
-            tag.put("SleepingTasks", tasksTag);
-        }
-
-        boolean hasEventData = false;
-        CompoundTag eventTag = new CompoundTag();
-        for (int i = 0; i < eventRegisters.length; i++) {
-            Object val = eventRegisters[i];
-            if (val != null) {
-                hasEventData = true;
-                String key = index.getKeyFromId(i);
-                Object toSave = (val instanceof Entity ent) ? ent.getUUID() : val;
-                Tag serialized = VariableRegistry.toTag(toSave, provider);
-                if (serialized != null && key != null) eventTag.put(key, serialized);
-            }
-        }
-        if (hasEventData) tag.put("EventData", eventTag);
-
-        // 4. 局部变量栈
-        ListTag stackTag = new ListTag();
-        Iterator<Object[]> it = variableStack.descendingIterator();
-        while (it.hasNext()) {
-            Object[] scope = it.next();
-            CompoundTag scopeTag = new CompoundTag();
-            saveVariables(scopeTag, scope, provider);
-            stackTag.add(scopeTag);
-        }
-        tag.put("VariableStack", stackTag);
-
-        // 5. 执行指令栈
-        if (!executionStack.isEmpty()) {
-            ListTag list = new ListTag();
-            for (int i = 0; i < executionStack.size(); i++) {
-                // 使用 getInt(i) 直接获取基本类型
-                list.add(StringTag.valueOf(index.getIdToString(executionStack.getInt(i))));
-            }
-            tag.put("ExecutionStack", list);
-        }
-        return tag;
-    }
-
-    private boolean isValidType(Object v) {
-        return VariableRegistry.isSupported(v);
+        return arr;
     }
 
     private void saveVariables(CompoundTag tag, Object[] scope, HolderLookup.Provider provider) {
@@ -471,10 +463,13 @@ public class GraphProcess {
     }
 
 
-    // ====================================================
-    // 内部类：上下文实现
-    // ====================================================
+    // ================================
+    // 7. 内部执行上下文
+    // ================================
 
+    /**
+     * 供蓝图节点调用的隔离接口，隐藏底层虚拟机的复杂状态。
+     */
     private class InnerContext implements ExecutionContext {
 
         @Override
@@ -489,10 +484,11 @@ public class GraphProcess {
         @Override
         public Object getVariable(String name) {
             int id = index.getOrRegisterKey(name);
-            // 从栈顶往栈底查找作用域变量
+            // 从栈顶往栈底（由近及远）查找局部变量
             for (Object[] scope : variableStack) {
                 if (id < scope.length && scope[id] != null) {
                     Object val = scope[id];
+                    // 若为实体引用，实施即时反解析
                     if (val instanceof UUID uuid) {
                         if (level == null) return null;
                         Entity resolvedEntity = level.getEntity(uuid);
@@ -507,7 +503,6 @@ public class GraphProcess {
 
         @Override
         public void setVariable(String name, Object value) {
-            // 弹出栈顶作用域，扩容修改后再压回去
             Object[] currentScope = variableStack.pop();
             if (currentScope == null) return;
 
@@ -515,13 +510,36 @@ public class GraphProcess {
             currentScope = ensureCapacity(currentScope, id);
 
             if (value == null) {
-                currentScope[id] = null; // 赋值为null等同于移除
-            } else if (isValidType(value)) {
+                currentScope[id] = null; // null 视为删除变量
+            } else if (VariableRegistry.isSupported(value)) {
+                // 实体类型 to UUID，防止内存泄漏
                 currentScope[id] = (value instanceof Entity ent) ? ent.getUUID() : value;
             } else {
-                System.err.println("GraphProcess: Unsupported variable type " + value.getClass().getSimpleName());
+                System.err.println("[GraphProcess] Unsupported variable type: " + value.getClass().getSimpleName());
             }
             variableStack.push(currentScope);
+        }
+
+        @Override
+        public Object getEventData(String key) {
+            int id = index.getOrRegisterKey(key);
+            if (id >= eventRegisters.length) return null;
+
+            Object val = eventRegisters[id];
+            if (val instanceof UUID uuid) {
+                if (level == null) return null;
+                Entity resolvedEntity = level.getEntity(uuid);
+                if (resolvedEntity == null || resolvedEntity.isRemoved()) return null;
+                return resolvedEntity;
+            }
+            return val;
+        }
+
+        @Override
+        public void setEventData(String key, Object value) {
+            int id = index.getOrRegisterKey(key);
+            eventRegisters = ensureCapacity(eventRegisters, id);
+            eventRegisters[id] = value;
         }
 
         @Override
@@ -543,29 +561,6 @@ public class GraphProcess {
         }
 
         @Override
-        public Object getEventData(String key) {
-            int id = index.getOrRegisterKey(key);
-            if (id >= eventRegisters.length) return null;
-
-            Object val = eventRegisters[id];
-            // UUID -> Entity 解析
-            if (val instanceof UUID uuid) {
-                if (level == null) return null;
-                Entity resolvedEntity = level.getEntity(uuid);
-                if (resolvedEntity == null || resolvedEntity.isRemoved()) return null;
-                return resolvedEntity;
-            }
-            return val;
-        }
-
-        @Override
-        public void setEventData(String key, Object value) {
-            int id = index.getOrRegisterKey(key);
-            eventRegisters = ensureCapacity(eventRegisters, id);
-            eventRegisters[id] = value;
-        }
-
-        @Override
         public boolean hasPort(String portName) {
             return activeNodeId != -1 && GraphProcess.this.index.hasPort(activeNodeId, portName);
         }
@@ -574,61 +569,48 @@ public class GraphProcess {
         public void setPersistentAttribute(@Nullable Object target, String name, Object value) {
             if (target == null) return;
 
-            // 1. 实体层级
             if (target instanceof Entity ent) {
                 GraphDataAttachment att = ent.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
                 if (att != null) att.setAttribute(name, value);
-            }
-            // 2. 全局层级 - "GLOBAL"
-            else if ("GLOBAL".equals(target) && level != null) {
+            } else if ("GLOBAL".equals(target) && level != null) {
                 LevelGraphAttachment att = LevelGraphAttachment.get(level.getServer().overworld());
                 att.setAttribute(name, value);
-            }
-            // 3. 维度层级 (如 "minecraft:overworld")
-            else if (target instanceof String dimId && level != null) {
+            } else if (target instanceof String dimId && level != null) {
                 ResourceLocation loc = ResourceLocation.tryParse(dimId);
-
                 if (loc != null) {
                     ResourceKey<Level> dimKey = ResourceKey.create(Registries.DIMENSION, loc);
-
                     ServerLevel targetLevel = level.getServer().getLevel(dimKey);
-                    if (targetLevel != null) {LevelGraphAttachment att = LevelGraphAttachment.get(targetLevel);
+                    if (targetLevel != null) {
+                        LevelGraphAttachment att = LevelGraphAttachment.get(targetLevel);
                         att.setAttribute(name, value);
                     }
                 } else {
-                    System.err.println("GraphProcess: Invalid dimension format -> " + dimId);
+                    System.err.println("[GraphProcess] Invalid dimension format -> " + dimId);
                 }
             }
         }
 
         @Override
         public Object getPersistentAttribute(@Nullable Object target, String name) {
-            if (target == null) return null; // 严格模式
+            if (target == null) return null;
 
-            // 1. 实体层级
             if (target instanceof Entity ent) {
                 GraphDataAttachment att = ent.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
                 return att != null ? att.getAttribute(name) : null;
-            }
-            // 2. 全局层级
-            else if ("GLOBAL".equals(target) && level != null) {
+            } else if ("GLOBAL".equals(target) && level != null) {
                 LevelGraphAttachment att = LevelGraphAttachment.get(level.getServer().overworld());
                 return att.getAttribute(name);
-            }
-            // 3. 维度层级
-            else if (target instanceof String dimId && level != null) {
+            } else if (target instanceof String dimId && level != null) {
                 ResourceLocation loc = ResourceLocation.tryParse(dimId);
-
                 if (loc != null) {
                     ResourceKey<Level> dimKey = ResourceKey.create(Registries.DIMENSION, loc);
-
                     ServerLevel targetLevel = level.getServer().getLevel(dimKey);
                     if (targetLevel != null) {
                         LevelGraphAttachment att = LevelGraphAttachment.get(targetLevel);
                         return att.getAttribute(name);
                     }
                 } else {
-                    System.err.println("GraphProcess: Invalid dimension format -> " + dimId);
+                    System.err.println("[GraphProcess] Invalid dimension format -> " + dimId);
                 }
             }
             return null;
