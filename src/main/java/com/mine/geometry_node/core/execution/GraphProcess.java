@@ -36,9 +36,6 @@ public class GraphProcess {
         FINISHED    // 终止状态：流程彻底结束，等待引擎回收
     }
 
-    /** 描述一个被挂起的延迟任务 */
-    private record ScheduledTask(long wakeUpTick, String resumeNodeId) {}
-
     // ====================================================
     // 成员变量 (Fields)
     // ====================================================
@@ -48,23 +45,29 @@ public class GraphProcess {
     private final RuntimeGraphIndex index;
     private final InnerContext context; // 外观模式：暴露给节点使用的受限 API
 
-    // 运行时状态
+    /** 描述一个被挂起的延迟任务 (注意 resumeNodeId 变成了 int) */
+    private record ScheduledTask(long wakeUpTick, int resumeNodeId) {}
+
+    /** 用于取代原来的 String 拼接 cacheKey */
+    private record CacheKey(int nodeId, String port) {}
+
+    // 运行时状态 (改用 -1 代替 null)
     private State state = State.RUNNING;
-    private String currentFlowId;       // 当前待执行节点 ID
-    private String activeNodeId;        // 当前正在计算/执行的节点 ID
+    private int currentFlowId = -1;       // 当前待执行节点 ID
+    private int activeNodeId = -1;        // 当前正在计算/执行的节点 ID
 
     // 任务调度
     private final List<ScheduledTask> sleepingTasks = new ArrayList<>(); // 等待唤醒的协程队列
     private boolean needsTimeRebase = false;                             // 读档标记：指示是否需要将相对时间转换为绝对世界时间
 
     // 内存与作用域
-    private final Deque<String> executionStack = new LinkedList<>();              // 指令执行栈 (LIFO)
-    private final Deque<Map<String, Object>> variableStack = new LinkedList<>();  // 局部变量栈 (支持作用域嵌套)
-    private final Map<String, Object> eventData = new HashMap<>();                // 事件瞬时数据沙箱 (如：破坏方块的坐标、攻击者)
+    private final Deque<Integer> executionStack = new LinkedList<>();             // 指令执行栈变成了 Integer
+    private final Deque<Map<String, Object>> variableStack = new LinkedList<>();
+    private final Map<String, Object> eventData = new HashMap<>();
 
     // 帧级缓存
-    private final Map<String, Object> frameCache = new HashMap<>();               // 帧缓存
-    private final Set<String> recursionGuard = new HashSet<>();                   // 递归深度/环形依赖检测防护
+    private final Map<CacheKey, Object> frameCache = new HashMap<>();             // 使用对象作为Key，消除拼接开销
+    private final Set<Integer> recursionGuard = new HashSet<>();
 
     // 外部环境
     private ServerLevel level;
@@ -78,13 +81,11 @@ public class GraphProcess {
     /**
      * 创建并初始化一个新的执行进程。
      */
-    public GraphProcess(String graphId, RuntimeGraphIndex index, String startNodeId) {
+    public GraphProcess(String graphId, RuntimeGraphIndex index, int startNodeId) {
         this.graphId = graphId;
         this.index = index;
         this.currentFlowId = startNodeId;
         this.context = new InnerContext();
-
-        // 初始化根作用域
         this.variableStack.push(new HashMap<>());
     }
 
@@ -95,18 +96,20 @@ public class GraphProcess {
         this.index = index;
         this.context = new InnerContext();
 
-        // 1. 恢复基础状态
         this.graphId = tag.getString("GraphId");
-        this.currentFlowId = tag.contains("NodeId") ? tag.getString("NodeId") : null;
+        // 读档时：String -> int，如果图更新了找不到该节点，赋予 -1 结束进程
+        this.currentFlowId = tag.contains("NodeId") ? index.getStringToId(tag.getString("NodeId")) : -1;
         this.state = State.valueOf(tag.getString("State"));
 
-        // 2. 恢复睡眠任务队列
         this.sleepingTasks.clear();
         if (tag.contains("SleepingTasks", Tag.TAG_LIST)) {
             ListTag tasksTag = tag.getList("SleepingTasks", Tag.TAG_COMPOUND);
             for (int i = 0; i < tasksTag.size(); i++) {
                 CompoundTag taskTag = tasksTag.getCompound(i);
-                this.sleepingTasks.add(new ScheduledTask(taskTag.getLong("WaitRemaining"), taskTag.getString("ResumeNodeId")));
+                int resumeId = index.getStringToId(taskTag.getString("ResumeNodeId"));
+                if (resumeId != -1) {
+                    this.sleepingTasks.add(new ScheduledTask(taskTag.getLong("WaitRemaining"), resumeId));
+                }
             }
             this.needsTimeRebase = true;
         }
@@ -139,12 +142,12 @@ public class GraphProcess {
         }
 
         // 5. 恢复执行指令栈
-        // ... (保持原样)
         this.executionStack.clear();
         if (tag.contains("ExecutionStack", Tag.TAG_LIST)) {
             ListTag list = tag.getList("ExecutionStack", Tag.TAG_STRING);
             for (int i = 0; i < list.size(); i++) {
-                this.executionStack.addLast(list.getString(i));
+                int stackId = index.getStringToId(list.getString(i));
+                if (stackId != -1) this.executionStack.addLast(stackId);
             }
         }
     }
@@ -197,15 +200,14 @@ public class GraphProcess {
         while (it.hasNext()) {
             ScheduledTask task = it.next();
             if (currentWorldTick >= task.wakeUpTick()) {
-                if (task.resumeNodeId() != null) {
+                if (task.resumeNodeId() != -1) {
                     this.executionStack.addLast(task.resumeNodeId());
                 }
-                it.remove(); // 任务出列
+                it.remove();
             }
         }
 
-        // 4. 状态流转与主循环分发
-        if (currentFlowId != null || !executionStack.isEmpty()) {
+        if (currentFlowId != -1 || !executionStack.isEmpty()) {
             state = State.RUNNING;
             runExecutionLoop();
         } else if (sleepingTasks.isEmpty()) {
@@ -227,22 +229,18 @@ public class GraphProcess {
      */
     private void runExecutionLoop() {
         int steps = 0;
-        final int MAX_STEPS = 1000; // 单帧上限
+        final int MAX_STEPS = 1000;
 
-        while ((currentFlowId != null || !executionStack.isEmpty()) && state == State.RUNNING) {
+        while ((currentFlowId != -1 || !executionStack.isEmpty()) && state == State.RUNNING) {
 
-            // 1. 指针转移：当前流程断链时，从栈顶弹出新任务
-            if (currentFlowId == null) {
-                currentFlowId = executionStack.pollFirst();
-                if (currentFlowId == null) continue;
+            if (currentFlowId == -1) {
+                Integer next = executionStack.pollFirst();
+                if (next == null) continue;
+                currentFlowId = next;
             }
 
-            // 2. 帧限流防护
-            if (steps++ > MAX_STEPS) {
-                return;
-            }
+            if (steps++ > MAX_STEPS) return;
 
-            // 3. 节点寻址与校验
             String nodeType = index.getNodeType(currentFlowId);
             if ("unknown".equals(nodeType)) {
                 state = State.FINISHED;
@@ -256,26 +254,23 @@ public class GraphProcess {
                 return;
             }
 
-            // 4. 执行节点与结果处理
             try {
-                String previousActive = this.activeNodeId;
-                this.activeNodeId = currentFlowId; // 记录现场
+                int previousActive = this.activeNodeId;
+                this.activeNodeId = currentFlowId;
 
                 ExecutionResult result = logic.execute(context);
 
-                this.activeNodeId = previousActive; // 恢复现场
-
+                this.activeNodeId = previousActive;
                 handleExecutionResult(result);
 
             } catch (Exception e) {
-                System.err.println("GraphProcess Error at node " + currentFlowId + ": " + e.getMessage());
+                System.err.println("GraphProcess Error at node " + index.getIdToString(currentFlowId) + ": " + e.getMessage());
                 e.printStackTrace();
                 state = State.FINISHED;
             }
         }
 
-        // 5. 收尾判定
-        if (currentFlowId == null && executionStack.isEmpty() && sleepingTasks.isEmpty()) {
+        if (currentFlowId == -1 && executionStack.isEmpty() && sleepingTasks.isEmpty()) {
             state = State.FINISHED;
         }
     }
@@ -286,40 +281,35 @@ public class GraphProcess {
     private void handleExecutionResult(ExecutionResult result) {
         switch (result) {
             case ExecutionResult.Next next -> {
-                // 单链跳转：更新当前执行指针
                 this.currentFlowId = index.findFlowTarget(currentFlowId, next.outputPortName());
             }
             case ExecutionResult.Call call -> {
-                // 分支调用：倒序压栈，确保声明在前的端口优先执行 (LIFO 特性)
                 List<String> ports = call.outputPorts();
                 for (int i = ports.size() - 1; i >= 0; i--) {
                     String portName = ports.get(i);
-                    String targetId = index.findFlowTarget(currentFlowId, portName);
-                    if (targetId != null) {
+                    int targetId = index.findFlowTarget(currentFlowId, portName);
+                    if (targetId != -1) {
                         this.executionStack.addFirst(targetId);
                     }
                 }
-                this.currentFlowId = executionStack.pollFirst();
+                Integer next = executionStack.pollFirst();
+                this.currentFlowId = (next != null) ? next : -1;
             }
             case ExecutionResult.Wait wait -> {
-                // 协程挂起：将未来任务扔进调度器，交出当前执行权
                 long wakeTime = level.getGameTime() + wait.ticks();
-                String nextId = index.findFlowTarget(currentFlowId, wait.nextPortName());
-
-                if (nextId != null) {
+                int nextId = index.findFlowTarget(currentFlowId, wait.nextPortName());
+                if (nextId != -1) {
                     this.sleepingTasks.add(new ScheduledTask(wakeTime, nextId));
                 }
-                this.currentFlowId = null;
+                this.currentFlowId = -1;
             }
             case ExecutionResult.Finish ignored -> {
-                // 主动终止当前分支
-                this.currentFlowId = null;
+                this.currentFlowId = -1;
             }
             case ExecutionResult.Error err -> {
-                // 抛出运行时异常，强制清栈退出
                 System.err.println("Graph Error: " + err.errorMessage());
                 this.executionStack.clear();
-                this.currentFlowId = null;
+                this.currentFlowId = -1;
                 this.state = State.FINISHED;
             }
         }
@@ -333,22 +323,20 @@ public class GraphProcess {
      * 递归向上游节点索要数据 (Pull Model)。
      * 附带了帧级结果缓存与成环依赖检测。
      */
-    private Object executeDataNode(String nodeId, String portName) {
-        String cacheKey = nodeId + "#" + portName;
+    private Object executeDataNode(int nodeId, String portName) {
+        CacheKey cacheKey = new CacheKey(nodeId, portName); // 优雅的缓存命中，0 字符串拼接
 
-        // 1. 命中缓存直接返回
         if (frameCache.containsKey(cacheKey)) {
             return frameCache.get(cacheKey);
         }
 
-        // 2. 环形死锁检测
         if (recursionGuard.contains(nodeId)) {
-            System.err.println("GraphProcess: Detected dependency cycle at node " + nodeId);
+            System.err.println("GraphProcess: Detected dependency cycle at node " + index.getIdToString(nodeId));
             return null;
         }
 
         recursionGuard.add(nodeId);
-        String previousActiveNodeId = this.activeNodeId;
+        int previousActiveNodeId = this.activeNodeId;
 
         try {
             String nodeType = index.getNodeType(nodeId);
@@ -358,8 +346,6 @@ public class GraphProcess {
             if (logic == null) return null;
 
             this.activeNodeId = nodeId;
-
-            // 触发运算
             Object result = logic.compute(context, portName);
 
             frameCache.put(cacheKey, result);
@@ -369,7 +355,6 @@ public class GraphProcess {
             e.printStackTrace();
             return null;
         } finally {
-            // 清理现场
             this.activeNodeId = previousActiveNodeId;
             recursionGuard.remove(nodeId);
         }
@@ -381,14 +366,12 @@ public class GraphProcess {
     // ====================================================
 
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
-        // 1. 基础状态
         tag.putString("GraphId", graphId);
         tag.putString("State", state.name());
-        if (currentFlowId != null) {
-            tag.putString("NodeId", currentFlowId);
+        if (currentFlowId != -1) {
+            tag.putString("NodeId", index.getIdToString(currentFlowId));
         }
 
-        // 2. 协程队列 (转为剩余时间保存)
         if (!sleepingTasks.isEmpty()) {
             ListTag tasksTag = new ListTag();
             for (ScheduledTask task : sleepingTasks) {
@@ -398,8 +381,8 @@ public class GraphProcess {
                         task.wakeUpTick();
 
                 taskTag.putLong("WaitRemaining", remaining);
-                if (task.resumeNodeId() != null) {
-                    taskTag.putString("ResumeNodeId", task.resumeNodeId());
+                if (task.resumeNodeId() != -1) {
+                    taskTag.putString("ResumeNodeId", index.getIdToString(task.resumeNodeId()));
                 }
                 tasksTag.add(taskTag);
             }
@@ -435,12 +418,11 @@ public class GraphProcess {
         // 5. 执行指令栈
         if (!executionStack.isEmpty()) {
             ListTag list = new ListTag();
-            for (String id : executionStack) {
-                list.add(StringTag.valueOf(id));
+            for (int id : executionStack) {
+                list.add(StringTag.valueOf(index.getIdToString(id)));
             }
             tag.put("ExecutionStack", list);
         }
-
         return tag;
     }
 
@@ -519,25 +501,20 @@ public class GraphProcess {
 
         @Override
         public Object getInputValue(String portName) {
-            String currentNodeId = GraphProcess.this.activeNodeId;
-            if (currentNodeId == null) return null;
-
-            RuntimeGraphIndex.ConnectionSource source = index.findInputSource(currentNodeId, portName);
+            if (activeNodeId == -1) return null;
+            RuntimeGraphIndex.IntConnectionSource source = index.findInputSource(activeNodeId, portName);
             if (source == null) return null;
-
             return executeDataNode(source.sourceNodeId(), source.sourcePortName());
         }
 
         @Override
         public Object getStaticInput(String portName) {
-            String currentNodeId = GraphProcess.this.activeNodeId;
-            return (currentNodeId != null) ? GraphProcess.this.index.getNodeStaticInput(currentNodeId, portName) : null;
+            return (activeNodeId != -1) ? GraphProcess.this.index.getNodeStaticInput(activeNodeId, portName) : null;
         }
 
         @Override
         public Object getNodeProperty(String key) {
-            String currentNodeId = GraphProcess.this.activeNodeId;
-            return (currentNodeId != null) ? GraphProcess.this.index.getNodeProperty(currentNodeId, key) : null;
+            return (activeNodeId != -1) ? GraphProcess.this.index.getNodeProperty(activeNodeId, key) : null;
         }
 
         @Override
@@ -561,8 +538,7 @@ public class GraphProcess {
 
         @Override
         public boolean hasPort(String portName) {
-            String currentNodeId = GraphProcess.this.activeNodeId;
-            return currentNodeId != null && GraphProcess.this.index.hasPort(currentNodeId, portName);
+            return activeNodeId != -1 && GraphProcess.this.index.hasPort(activeNodeId, portName);
         }
 
         @Override

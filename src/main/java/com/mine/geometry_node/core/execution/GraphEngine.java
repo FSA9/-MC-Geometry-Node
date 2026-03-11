@@ -111,16 +111,14 @@ public class GraphEngine {
      */
     private static void triggerAndMountCustomEvent(ServerLevel level, @Nullable Entity target, String graphId, String eventNodeId,
                                                    String targetFrequency, @Nullable Consumer<GraphProcess> initializer, Consumer<GraphProcess> mountAction) {
-
         RuntimeGraphIndex index = GraphResourceManager.getInstance().getIndex(graphId);
         if (index == null) return;
 
-        // 查找接收节点
-        List<String> startNodeIds = index.findNodesByType(eventNodeId);
+        List<Integer> startNodeIds = index.findNodesByType(eventNodeId); // 这里变成了 int
 
-        // 过滤
-        for (String startNodeId : startNodeIds) {
+        for (int startNodeId : startNodeIds) {
             Object staticFreqObj = index.getNodeStaticInput(startNodeId, "frequency");
+
             String nodeFrequency = "";
 
             if (staticFreqObj instanceof String s) {
@@ -215,10 +213,10 @@ public class GraphEngine {
             return;
         }
 
-        List<String> startNodeIds = index.findNodesByType(eventNodeId);
-        for (String startNodeId : startNodeIds) {
-            // 实例化虚拟机
+        List<Integer> startNodeIds = index.findNodesByType(eventNodeId);
+        for (int startNodeId : startNodeIds) {
             GraphProcess newProcess = new GraphProcess(graphId, index, startNodeId);
+
             newProcess.setEnvironment(level, target);
 
             // 注入初始参数

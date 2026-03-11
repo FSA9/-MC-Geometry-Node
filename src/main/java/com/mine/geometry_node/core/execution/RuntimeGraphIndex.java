@@ -18,41 +18,44 @@ public class RuntimeGraphIndex {
     // 1. 核心索引字段 (Fields)
     // ===========================================
 
-    // 原始 JSON 节点存储 (用于获取 raw data 或调试)
-    private final Map<String, JsonObject> nodeDataLookup;
+    // [新增] ID 双向映射
+    private final String[] idToString;
+    private final Map<String, Integer> stringToId;
 
-    // 属性索引: NodeID -> { PropertyKey -> Value } (对应 JSON "properties")
-    private final Map<String, Map<String, Object>> propertyLookup;
+    // [优化] 核心数据结构全部变为数组 (下标即为 int nodeId)
+    private final JsonObject[] nodeDataArray;
+    private final String[] typeArray;
+    private final Map<String, Integer>[] flowOutputArray;
+    private final Map<String, IntConnectionSource>[] inputArray;
+    private final Map<String, Object>[] propertyArray;
+    private final Map<String, Object>[] staticInputArray;
 
-    // 静态输入索引: NodeID -> { PortName -> Value } (对应 JSON "inputs")
-    private final Map<String, Map<String, Object>> staticInputLookup;
-
-    // 控制流正向索引: SourceID -> { PortName -> TargetID } (对应 JSON "execution")
-    private final Map<String, Map<String, String>> flowOutputLookup;
-
-    // 数据流反向索引: TargetID#TargetPort -> ConnectionSource (对应 JSON "outputs")
-    private final Map<String, ConnectionSource> inputLookup;
-
-    // 类型分类索引: NodeType -> List<NodeID>
-    private final Map<String, List<String>> typeLookup;
+    // 类型分类索引保持不变，但值变成了 int
+    private final Map<String, List<Integer>> typeLookup;
 
 
     // ===========================================
     // 构造器与工厂方法
     // ===========================================
 
-    private RuntimeGraphIndex(Map<String, JsonObject> nodes,
-                              Map<String, Map<String, String>> flow,
-                              Map<String, ConnectionSource> inputs,
-                              Map<String, List<String>> types,
-                              Map<String, Map<String, Object>> properties,
-                              Map<String, Map<String, Object>> staticInputs) {
-        this.nodeDataLookup = nodes;
-        this.flowOutputLookup = flow;
-        this.inputLookup = inputs;
-        this.typeLookup = types;
-        this.propertyLookup = properties;
-        this.staticInputLookup = staticInputs;
+    private RuntimeGraphIndex(String[] idToString,
+                              Map<String, Integer> stringToId,
+                              JsonObject[] nodeDataArray,
+                              String[] typeArray,
+                              Map<String, Integer>[] flowOutputArray,
+                              Map<String, IntConnectionSource>[] inputArray,
+                              Map<String, List<Integer>> typeLookup,
+                              Map<String, Object>[] propertyArray,
+                              Map<String, Object>[] staticInputArray) {
+        this.idToString = idToString;
+        this.stringToId = stringToId;
+        this.nodeDataArray = nodeDataArray;
+        this.typeArray = typeArray;
+        this.flowOutputArray = flowOutputArray;
+        this.inputArray = inputArray;
+        this.typeLookup = typeLookup;
+        this.propertyArray = propertyArray;
+        this.staticInputArray = staticInputArray;
     }
 
     /**
@@ -62,57 +65,114 @@ public class RuntimeGraphIndex {
         JsonObject root = JsonParser.parseReader(jsonReader).getAsJsonObject();
         JsonObject rootNodes = root.getAsJsonObject("nodes");
 
-        // 快速扫描是否包含节点组
-        boolean hasGroups = false;
-        for (String key : rootNodes.keySet()) {
-            JsonObject node = rootNodes.getAsJsonObject(key);
-            if (node.has("node_type") && "node_group".equals(node.get("node_type").getAsString())) {
-                hasGroups = true;
-                break;
-            }
-        }
-
-        if (hasGroups) {
-            System.out.println("[RuntimeGraphIndex] Detected node groups. Using GraphFlattener.");
-        }
-
-        // 2. 统一使用 GraphFlattener 构建
-        // 即使没有节点组，复用 Flattener 的内部解析也能保证逻辑一致性，且 bridgeGroups 会自动空转，开销极小。
         GraphFlattener flattener = new GraphFlattener();
         flattener.flatten(rootNodes);
 
-        // 3. 校验数据流循环依赖
+        // 依然使用 String 校验死锁，安全可靠
         validateNoDataCycles(flattener.inputLookup);
 
-        // 4. 封装为不可变索引返回
-        return new RuntimeGraphIndex(
-                Map.copyOf(flattener.nodeDataLookup),
-                Map.copyOf(flattener.flowOutputLookup),
-                Map.copyOf(flattener.inputLookup),
-                Map.copyOf(flattener.typeLookup),
-                Map.copyOf(flattener.propertyLookup),
-                Map.copyOf(flattener.staticInputLookup)
-        );
+        // --- 开始第一阶段优化：将 String 映射为 Int ---
+        Set<String> allIds = flattener.nodeDataLookup.keySet();
+        int size = allIds.size();
+
+        String[] idToString = new String[size];
+        Map<String, Integer> stringToId = new HashMap<>(size);
+
+        int indexCounter = 0;
+        for (String id : allIds) {
+            idToString[indexCounter] = id;
+            stringToId.put(id, indexCounter);
+            indexCounter++;
+        }
+
+        // 初始化数组
+        JsonObject[] nodeDataArray = new JsonObject[size];
+        String[] typeArray = new String[size];
+        Map<String, Integer>[] flowOutputArray = new Map[size];
+        Map<String, IntConnectionSource>[] inputArray = new Map[size];
+        Map<String, Object>[] propertyArray = new Map[size];
+        Map<String, Object>[] staticInputArray = new Map[size];
+
+        for (int i = 0; i < size; i++) {
+            inputArray[i] = new HashMap<>(); // 预初始化
+        }
+
+        // 填充数组
+        for (int i = 0; i < size; i++) {
+            String strId = idToString[i];
+
+            nodeDataArray[i] = flattener.nodeDataLookup.get(strId);
+            JsonObject node = nodeDataArray[i];
+            typeArray[i] = (node != null && node.has("node_type")) ? node.get("node_type").getAsString() : "unknown";
+
+            // 执行流转换 (String -> int)
+            Map<String, String> oldFlow = flattener.flowOutputLookup.get(strId);
+            if (oldFlow != null) {
+                Map<String, Integer> newFlow = new HashMap<>();
+                for (Map.Entry<String, String> e : oldFlow.entrySet()) {
+                    Integer targetInt = stringToId.get(e.getValue());
+                    if (targetInt != null) newFlow.put(e.getKey(), targetInt);
+                }
+                flowOutputArray[i] = newFlow;
+            } else {
+                flowOutputArray[i] = Collections.emptyMap();
+            }
+
+            propertyArray[i] = flattener.propertyLookup.getOrDefault(strId, Collections.emptyMap());
+            staticInputArray[i] = flattener.staticInputLookup.getOrDefault(strId, Collections.emptyMap());
+        }
+
+        // 数据流转换 (TargetID#Port -> SourceIntID)
+        for (Map.Entry<String, ConnectionSource> entry : flattener.inputLookup.entrySet()) {
+            String[] parts = entry.getKey().split("#");
+            String targetId = parts[0];
+            String portName = parts[1];
+
+            Integer targetInt = stringToId.get(targetId);
+            Integer sourceInt = stringToId.get(entry.getValue().sourceNodeId());
+
+            if (targetInt != null && sourceInt != null) {
+                inputArray[targetInt].put(portName, new IntConnectionSource(sourceInt, entry.getValue().sourcePortName()));
+            }
+        }
+
+        // 类型分类转换
+        Map<String, List<Integer>> typeToIntList = new HashMap<>();
+        for (Map.Entry<String, List<String>> entry : flattener.typeLookup.entrySet()) {
+            List<Integer> intList = new ArrayList<>();
+            for (String s : entry.getValue()) {
+                Integer id = stringToId.get(s);
+                if (id != null) intList.add(id);
+            }
+            typeToIntList.put(entry.getKey(), List.copyOf(intList));
+        }
+
+        return new RuntimeGraphIndex(idToString, stringToId, nodeDataArray, typeArray, flowOutputArray, inputArray, typeToIntList, propertyArray, staticInputArray);
     }
 
+
+    // ===========================================
+    // 映射工具 API
+    // ===========================================
+    public int getStringToId(String strId) {
+        return stringToId.getOrDefault(strId, -1);
+    }
+
+    public String getIdToString(int id) {
+        return (id >= 0 && id < idToString.length) ? idToString[id] : null;
+    }
 
     // ===========================================
     // 公开查询 API - O(1)
     // ===========================================
-
-    /**
-     * 获取节点类型
-     */
-    public String getNodeType(String nodeId) {
-        JsonObject node = nodeDataLookup.get(nodeId);
-        return node != null && node.has("node_type") ? node.get("node_type").getAsString() : "unknown";
+    public String getNodeType(int nodeId) {
+        if (nodeId < 0 || nodeId >= typeArray.length) return "unknown";
+        return typeArray[nodeId];
     }
 
-    /**
-     * 严格查询端口是否存在
-     */
-    public boolean hasPort(String nodeId, String portName) {
-        JsonObject node = nodeDataLookup.get(nodeId);
+    public boolean hasPort(int nodeId, String portName) {
+        if (nodeId < 0 || nodeId >= nodeDataArray.length) return false;
+        JsonObject node = nodeDataArray[nodeId];
         if (node == null) return false;
         if (node.has("inputs") && node.getAsJsonObject("inputs").has(portName)) return true;
         if (node.has("outputs") && node.getAsJsonObject("outputs").has(portName)) return true;
@@ -120,49 +180,36 @@ public class RuntimeGraphIndex {
         return false;
     }
 
-    /**
-     * 获取节点配置属性 (Properties)
-     * @return 属性值，若不存在返回 null
-     */
     @Nullable
-    public Object getNodeProperty(String nodeId, String key) {
-        Map<String, Object> props = propertyLookup.get(nodeId);
-        return (props != null) ? props.get(key) : null;
+    public Object getNodeProperty(int nodeId, String key) {
+        if (nodeId < 0 || nodeId >= propertyArray.length) return null;
+        return propertyArray[nodeId].get(key);
     }
 
-    /**
-     * 获取节点静态输入值 (Static Inputs)
-     * 对应 UI 输入框中的默认值
-     */
     @Nullable
-    public Object getNodeStaticInput(String nodeId, String portName) {
-        Map<String, Object> inputs = staticInputLookup.get(nodeId);
-        return (inputs != null) ? inputs.get(portName) : null;
+    public Object getNodeStaticInput(int nodeId, String portName) {
+        if (nodeId < 0 || nodeId >= staticInputArray.length) return null;
+        return staticInputArray[nodeId].get(portName);
     }
 
-    /**
-     * 查找控制流的目标节点
-     */
-    @Nullable
-    public String findFlowTarget(String currentNodeId, String outputPortName) {
-        Map<String, String> outputs = flowOutputLookup.get(currentNodeId);
-        return (outputs != null) ? outputs.get(outputPortName) : null;
+    // 注意这里返回值变成了 int，找不到返回 -1
+    public int findFlowTarget(int currentNodeId, String outputPortName) {
+        if (currentNodeId < 0 || currentNodeId >= flowOutputArray.length) return -1;
+        return flowOutputArray[currentNodeId].getOrDefault(outputPortName, -1);
     }
 
-    /**
-     * 查找数据流的输入源头
-     */
     @Nullable
-    public ConnectionSource findInputSource(String targetNodeId, String inputPortName) {
-        return inputLookup.get(makeKey(targetNodeId, inputPortName));
+    public IntConnectionSource findInputSource(int targetNodeId, String inputPortName) {
+        if (targetNodeId < 0 || targetNodeId >= inputArray.length) return null;
+        return inputArray[targetNodeId].get(inputPortName);
     }
 
-    /**
-     * 根据节点类型批量获取节点 ID 列表
-     */
-    public List<String> findNodesByType(String nodeType) {
+    public List<Integer> findNodesByType(String nodeType) {
         return typeLookup.getOrDefault(nodeType, List.of());
     }
+
+    // 新增内部类：使用 int 代替 string
+    public record IntConnectionSource(int sourceNodeId, String sourcePortName) {}
 
 
     // ===========================================

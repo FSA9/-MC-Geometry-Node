@@ -21,10 +21,6 @@ import icyllis.modernui.widget.TextView;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
 
-/**
- * 主界面 UI 实现
- * 采用典型的“三段式”布局：Header + Middle(Left/Center/Right) + Bottom
- */
 public class MainUI extends Fragment {
 
     // --- 状态变量 ---
