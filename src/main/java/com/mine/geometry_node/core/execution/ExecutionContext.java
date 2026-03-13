@@ -137,4 +137,72 @@ public interface ExecutionContext {
      */
     @Nullable
     Object getPersistentAttribute(@Nullable Object target, String name);
+
+    // ==========================================
+    // 高级控制流与引擎特权 API (专供复杂逻辑节点使用)
+    // ==========================================
+
+    /**
+     * [缓存控制] 清空当前帧的数据运算缓存。
+     * 通常由循环节点（如 ForEach）在每次迭代开始时调用，强制下游运算节点重新求值，
+     * 避免同一 Tick 内循环读取到陈旧的缓存数据。
+     */
+    void clearFrameCache();
+
+    /**
+     * [同步分支执行] 挂起当前节点的执行流，立即将指定的输出分支压入子栈并同步跑完。
+     * 只有当该分支（及其所有的后续连线）彻底触底结束后，此方法才会返回 (阻塞式调用)。
+     * 专用于 ForEach 等需要往复执行的循环节点。
+     *
+     * @param portName 当前节点的输出执行端口名 (如 "loop")
+     */
+    void executeBranchSync(String portName);
+
+    /**
+     * [临时黑板写入] 设置当前图进程级别的瞬时态数据。
+     * 专为控制流节点保存内部游标 (如 Index, Current Element) 设计，防止污染常规局部变量。
+     *
+     * @param key 数据的唯一键
+     * @param value 数据值
+     */
+    void setTempData(String key, Object value);
+
+    /**
+     * [临时黑板读取] 获取瞬时态数据。
+     */
+    @Nullable
+    Object getTempData(String key);
+
+    /**
+     * [临时黑板清理] 移除指定的瞬时态数据，防止内存泄漏。
+     */
+    void removeTempData(String key);
+
+    /**
+     * 获取当前正在执行（或计算）的节点运行时 ID。
+     */
+    int getCurrentNodeId();
+
+    /**
+     * [异步调度] 将指定的节点加入延迟唤醒队列。
+     * @param nodeId 节点 ID
+     * @param delayTicks 延迟的刻数
+     */
+    void scheduleNode(int nodeId, long delayTicks);
+
+    /**
+     * [视觉特效广播]
+     * 向世界中指定坐标附近的客户端下发纯视觉渲染指令。
+     * * @param effectType 特效类型标识 (如 "debug_line")
+     * @param sourceEntityId 起点绑定的实体ID (-1 表示不绑定，使用死坐标)
+     * @param startPos 起点绝对坐标 (或锚点的局部偏移量)
+     * @param targetEntityId 终点绑定的实体ID (-1 表示不绑定)
+     * @param endPos 终点绝对坐标 (或锚点的局部偏移量)
+     * @param color 颜色 (ARGB)
+     * @param size 尺寸/粗细
+     * @param durationTicks 持续时间
+     */
+    void broadcastVisual(String effectType, int sourceEntityId, net.minecraft.world.phys.Vec3 startPos,
+                         int targetEntityId, net.minecraft.world.phys.Vec3 endPos,
+                         int color, float size, int durationTicks);
 }

@@ -15,7 +15,7 @@ public class GetEntityPitch extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_pitch"))
                 .addRow(new PortRow(
-                        StandardPorts.TARGET.toInput(),
+                        StandardPorts.ENTITY.toInput(),
                         StandardPorts.VALUE.toOutput(),
                         UIHint.DEFAULT, null, null
                 ))
@@ -26,9 +26,9 @@ public class GetEntityPitch extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!StandardPorts.VALUE.getId().equals(portName)) return null;
 
-        List<Entity> targets = getTargets(context, StandardPorts.TARGET.getId());
-        if (targets.isEmpty()) return null;
+        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        if (entities.isEmpty()) return null;
 
-        return targets.getFirst().getXRot(); // 返回 float (Pitch)
+        return entities.getFirst().getXRot(); // 返回 float (Pitch)
     }
 }

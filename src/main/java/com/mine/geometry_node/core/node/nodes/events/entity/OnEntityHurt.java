@@ -12,7 +12,7 @@ public class OnEntityHurt extends BaseEventNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node.on_entity_hurt"))
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.TARGET.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ATTACK_SOURCE.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.DIRECT_SOURCE.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null))

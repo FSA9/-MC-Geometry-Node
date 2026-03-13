@@ -15,7 +15,7 @@ public class GetEntityDimension extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_dimension"))
                 .addRow(new PortRow(
-                        StandardPorts.TARGET.toInput(),
+                        StandardPorts.ENTITY.toInput(),
                         StandardPorts.DIMENSION.toOutput(),
                         UIHint.DEFAULT, null, null
                 ))
@@ -26,10 +26,11 @@ public class GetEntityDimension extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!StandardPorts.DIMENSION.getId().equals(portName)) return null;
 
-        List<Entity> targets = getTargets(context, StandardPorts.TARGET.getId());
-        if (targets.isEmpty()) return null;
+        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
 
-        Entity firstEntity = targets.getFirst();
+        if (entities.isEmpty()) return null;
+
+        Entity firstEntity = entities.getFirst();
         if (firstEntity.level() != null) {
             return firstEntity.level().dimension().location().toString(); // 例如 "minecraft:overworld"
         }

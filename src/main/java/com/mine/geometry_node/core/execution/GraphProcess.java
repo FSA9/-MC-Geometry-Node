@@ -4,6 +4,8 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.execution.attachment.GraphDataAttachment;
 import com.mine.geometry_node.core.execution.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.execution.variables.VariableRegistry;
+import com.mine.geometry_node.core.network.NetworkHandler;
+import com.mine.geometry_node.core.network.packet.PacketSpawnVisual;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
@@ -15,6 +17,7 @@ import net.minecraft.nbt.*;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
@@ -76,6 +79,8 @@ public class GraphProcess {
     private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>(); // 运算结果缓存 (高32位NodeId, 低32位PortId)
     private final IntOpenHashSet recursionGuard = new IntOpenHashSet();                       // 循环依赖防线：防止数据流死锁
 
+    // --- 瞬时态数据黑板 ---
+    private final Map<String, Object> tempData = new HashMap<>();
 
     // ================================
     // 3. 构造与序列化
@@ -262,7 +267,7 @@ public class GraphProcess {
             ScheduledTask task = it.next();
             if (currentWorldTick >= task.wakeUpTick()) {
                 if (task.resumeNodeId() != -1) {
-                    this.executionStack.add(task.resumeNodeId());
+                    this.executionStack.add(0, task.resumeNodeId());
                 }
                 it.remove();
             }
@@ -510,7 +515,7 @@ public class GraphProcess {
             currentScope = ensureCapacity(currentScope, id);
 
             if (value == null) {
-                currentScope[id] = null; // null 视为删除变量
+                currentScope[id] = null; // 删除变量
             } else if (VariableRegistry.isSupported(value)) {
                 // 实体类型 to UUID，防止内存泄漏
                 currentScope[id] = (value instanceof Entity ent) ? ent.getUUID() : value;
@@ -614,6 +619,95 @@ public class GraphProcess {
                 }
             }
             return null;
+        }
+
+        // ==========================================
+        // 高级控制流与引擎特权 API
+        // ==========================================
+
+        @Override
+        public void clearFrameCache() {
+            // 直接清空引擎运算缓存
+            GraphProcess.this.frameCache.clear();
+        }
+
+        @Override
+        public void executeBranchSync(String portName) {
+            if (activeNodeId == -1) return;
+            int targetId = index.findFlowTarget(activeNodeId, portName);
+            if (targetId == -1) return;
+
+            // 1. 备份当前执行现场
+            int savedFlowId = GraphProcess.this.currentFlowId;
+            IntArrayList savedStack = new IntArrayList(GraphProcess.this.executionStack);
+            State savedState = GraphProcess.this.state; // 备份当前虚拟机生命周期状态
+
+            // 2. 将引擎的指针指向“子分支”起点
+            GraphProcess.this.currentFlowId = targetId;
+            GraphProcess.this.executionStack.clear();
+            GraphProcess.this.state = State.RUNNING;    // 强制设为运行态，给子分支注入活力
+
+            // 3. 阻塞式执行子分支
+            GraphProcess.this.runExecutionLoop();
+
+            // 4. 恢复初始执行现场
+            GraphProcess.this.currentFlowId = savedFlowId;
+            GraphProcess.this.executionStack.clear();
+            GraphProcess.this.executionStack.addAll(savedStack);
+            GraphProcess.this.state = savedState;       // 恢复外层的生命周期状态
+        }
+
+        @Override
+        public void setTempData(String key, Object value) {
+            GraphProcess.this.tempData.put(key, value);
+        }
+
+        @Override
+        public Object getTempData(String key) {
+            return GraphProcess.this.tempData.get(key);
+        }
+
+        @Override
+        public void removeTempData(String key) {
+            GraphProcess.this.tempData.remove(key);
+        }
+
+        @Override
+        public int getCurrentNodeId() {
+            return GraphProcess.this.activeNodeId;
+        }
+
+        @Override
+        public void scheduleNode(int nodeId, long delayTicks) {
+            if (GraphProcess.this.level == null) return;
+            long wakeTime = GraphProcess.this.level.getGameTime() + delayTicks;
+            GraphProcess.this.sleepingTasks.add(new ScheduledTask(wakeTime, nodeId));
+        }
+
+        @Override
+        public void broadcastVisual(String effectType, int sourceEntityId, net.minecraft.world.phys.Vec3 startPos,
+                                    int targetEntityId, net.minecraft.world.phys.Vec3 endPos,
+                                    int color, float size, int durationTicks) {
+
+            if (GraphProcess.this.level == null) return;
+
+            int radius = 128;  // 广播半径
+
+            // 组装通用视觉网络包
+            PacketSpawnVisual payload =
+                    new PacketSpawnVisual(
+                            effectType, sourceEntityId, startPos, targetEntityId, endPos, color, size, durationTicks
+                    );
+
+            // 广播范围
+            List<ServerPlayer> nearbyPlayers =
+                    GraphProcess.this.level.getPlayers(
+                            player -> player.position().distanceToSqr(startPos) < radius * radius
+                    );
+
+            if (!nearbyPlayers.isEmpty()) {
+                NetworkHandler.sendToPlayers(nearbyPlayers, payload);
+            }
         }
     }
 }

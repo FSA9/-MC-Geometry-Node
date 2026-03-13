@@ -156,8 +156,8 @@ public class GraphEventHandler {
                 // 2. 实体造成伤害
                 if (attacker != null) {
                     com.mine.geometry_node.core.execution.GraphEngine.dispatchEvent(serverLevel, attacker, OnEntityDealDamage.TYPE_ID, process -> {
-                        process.setEventData(StandardPorts.ENTITY.getId(), attacker);
-                        process.setEventData(StandardPorts.TARGET.getId(), entity);
+                        process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), attacker);
+                        process.setEventData(StandardPorts.ENTITY.getId(), entity);
                         process.setEventData(StandardPorts.VALUE.getId(), amount);
                         process.setEventData(StandardPorts.DAMAGE_TYPE.getId(), damageTypeId);
 
@@ -216,7 +216,7 @@ public class GraphEventHandler {
 
                 com.mine.geometry_node.core.execution.GraphEngine.dispatchEvent(serverLevel, player, EntityInteractEntity.TYPE_ID, process -> {
                     process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), player);
-                    process.setEventData(StandardPorts.TARGET.getId(), entity);
+                    process.setEventData(StandardPorts.ENTITY.getId(), entity);
                 });
             }
             return EventResult.pass();

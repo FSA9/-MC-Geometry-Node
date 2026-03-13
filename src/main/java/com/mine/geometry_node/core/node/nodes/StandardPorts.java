@@ -8,13 +8,19 @@ public enum StandardPorts {
     // Flow
     FLOW_IN("flow_in", PortType.EXECUTION),
     FLOW_OUT("flow_out", PortType.EXECUTION),
+    LOOP("loop", PortType.EXECUTION),
+    COMPLETED("completed", PortType.EXECUTION),
     FLOW_TRUE("flow_true", PortType.EXECUTION),
     FLOW_FALSE("flow_false", PortType.EXECUTION),
+
+    // Int
+    INT("int", PortType.INTEGER),
+    INDEX("index", PortType.INTEGER),
+    TICK("tick", PortType.INTEGER),
 
     // Bool
     BOOL("bool", PortType.BOOLEAN),
     CASE("case", PortType.BOOLEAN),
-
 
     // Float
     VALUE("value", PortType.FLOAT),
@@ -24,13 +30,13 @@ public enum StandardPorts {
     // String
     NAME("name", PortType.STRING),
     TYPE("type", PortType.STRING),
+    SCOPE("scope", PortType.STRING),
     MESSAGE("message", PortType.STRING),
     DIMENSION("dimension", PortType.STRING),
     DAMAGE_TYPE("damage_type", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),
-    TARGET("target", PortType.ENTITY),
     TRIGGER_ENTITY("trigger_entity", PortType.ENTITY),
     SOURCE_ENTITY("source_entity", PortType.ENTITY),
     ATTACK_SOURCE("attack_source", PortType.ENTITY),

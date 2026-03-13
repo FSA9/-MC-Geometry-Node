@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.command.GraphCommand;
 import com.mine.geometry_node.core.execution.attachment.GraphDataAttachment;
 import com.mine.geometry_node.core.execution.GraphEventHandler;
 import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
+import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.registry.ReloadListenerRegistry;
@@ -56,10 +57,13 @@ public class GeometryNode {
         // 注册到 NeoForge 事件总线
         NeoForge.EVENT_BUS.register(this);
 
-        // 1. 初始化节点注册表
+        // 初始化网络包
+        NetworkHandler.init();
+
+        // 初始化节点注册表
         NodeRegistry.INSTANCE.init();
 
-        // 激活蓝图系统的事件引擎！
+        // 初始化蓝图系统事件引擎！
         GraphEventHandler.init();
 
         // [新增] 注册蓝图资源管理器 (监听 data/*/graphs/ 目录下的 JSON)

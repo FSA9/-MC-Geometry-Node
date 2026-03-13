@@ -15,7 +15,7 @@ public class GetEntityUUID extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_uuid"))
                 .addRow(new PortRow(
-                        StandardPorts.TARGET.toInput(),
+                        StandardPorts.ENTITY.toInput(),
                         PortDef.create("uuid", "geometry_node.port.uuid", PortType.STRING),
                         UIHint.DEFAULT, null, null
                 ))
@@ -26,9 +26,9 @@ public class GetEntityUUID extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!"uuid".equals(portName)) return null;
 
-        List<Entity> targets = getTargets(context, StandardPorts.TARGET.getId());
-        if (targets.isEmpty()) return null;
+        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        if (entities.isEmpty()) return null;
 
-        return targets.getFirst().getStringUUID(); // 返回 String
+        return entities.getFirst().getStringUUID(); // 返回 String
     }
 }

@@ -15,7 +15,7 @@ public class GetEntityVisibleName extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_visible_name"))
                 .addRow(new PortRow(
-                        StandardPorts.TARGET.toInput(),
+                        StandardPorts.ENTITY.toInput(),
                         PortDef.create("name", "geometry_node.port.name", PortType.STRING),
                         UIHint.DEFAULT, null, null
                 ))
@@ -26,10 +26,9 @@ public class GetEntityVisibleName extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!"name".equals(portName)) return null;
 
-        List<Entity> targets = getTargets(context, StandardPorts.TARGET.getId());
-        if (targets.isEmpty()) return null;
+        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        if (entities.isEmpty()) return null;
 
-        // 获取纯文本格式的实体显示名称
-        return targets.getFirst().getName().getString();
+        return entities.getFirst().getName().getString();
     }
 }

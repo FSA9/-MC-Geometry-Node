@@ -16,7 +16,7 @@ public class GetEntityHealth extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_health"))
                 .addRow(new PortRow(
-                        StandardPorts.TARGET.toInput(),
+                        StandardPorts.ENTITY.toInput(),
                         StandardPorts.VALUE.toOutput(),
                         UIHint.DEFAULT, null, null
                 ))
@@ -28,14 +28,14 @@ public class GetEntityHealth extends BaseNode {
         if (!StandardPorts.VALUE.getId().equals(portName)) {
             return null;
         }
+
+        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
         
-        List<Entity> targets = getTargets(context, StandardPorts.TARGET.getId());
-        
-        if (targets.isEmpty()) {
+        if (entities.isEmpty()) {
             return null;
         }
 
-        Entity firstEntity = targets.getFirst();
+        Entity firstEntity = entities.getFirst();
 
         if (firstEntity instanceof LivingEntity living) {
             return living.getHealth();

@@ -15,7 +15,7 @@ public class GetEntityTags extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_tags"))
                 .addRow(new PortRow(
-                        StandardPorts.TARGET.toInput(),
+                        StandardPorts.ENTITY.toInput(),
                         PortDef.create("tags", "geometry_node.port.tags", PortType.LIST),
                         UIHint.DEFAULT, null, null
                 ))
@@ -26,10 +26,10 @@ public class GetEntityTags extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!"tags".equals(portName)) return null;
 
-        List<Entity> targets = getTargets(context, StandardPorts.TARGET.getId());
-        if (targets.isEmpty()) return null;
+        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        if (entities.isEmpty()) return null;
 
         // 原版的 getTags() 返回的是 Set<String>，我们转成 ArrayList 方便底层 LIST 类型处理
-        return new java.util.ArrayList<>(targets.getFirst().getTags());
+        return new java.util.ArrayList<>(entities.getFirst().getTags());
     }
 }

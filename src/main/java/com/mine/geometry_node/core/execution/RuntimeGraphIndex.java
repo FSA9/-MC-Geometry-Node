@@ -13,17 +13,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * [运行时图索引 / 蓝图字节码载体] (Immutable Graph Index)
- * <p>
- * 它是蓝图 JSON 文件经过解析、展平(Flatten)和编译后的**只读**静态表现形式。
- * 核心设计目标：
- * 1. 彻底消灭运行时的 String ID 哈希查找，将其转化为紧凑的 int[] 数组寻址 (O(1))。
- * 2. 在实例化阶段 (build) 提前完成所有死锁/成环检测，确保运行时的绝对安全。
- * 3. 维护全局统一的“变量/事件名 -> 寄存器槽位”的并发映射字典。
  */
 public class RuntimeGraphIndex {
 
     // ====================================================
-    // 1. 数据结构定义 (Data Structures)
+    // 1. 数据结构定义
     // ====================================================
 
     /** 编译期内部使用：表示数据流连接的源头信息 (基于 String) */
@@ -34,7 +28,7 @@ public class RuntimeGraphIndex {
 
 
     // ====================================================
-    // 2. 核心索引结构 (Compiled Arrays & Maps)
+    // 2. 核心索引结构
     // ====================================================
 
     // --- ID 双向映射表 ---
@@ -52,7 +46,7 @@ public class RuntimeGraphIndex {
     // --- 分类与查询辅助 ---
     private final Map<String, List<Integer>> typeLookup;                  // 按节点类型归类 (常用于查找事件起始节点)
 
-    // --- 全局并发字典 (Phase 2 优化) ---
+    // --- 全局并发字典 ---
     // 用于将运行时的动态 String (如局部变量名、事件参数名) 映射为固定的寄存器槽位(int)
     private final Map<String, Integer> keyDictionary = new ConcurrentHashMap<>();
     private final List<String> dictionaryReverse = new CopyOnWriteArrayList<>();
@@ -89,14 +83,14 @@ public class RuntimeGraphIndex {
         JsonObject root = JsonParser.parseReader(jsonReader).getAsJsonObject();
         JsonObject rootNodes = root.getAsJsonObject("nodes");
 
-        // Step 1: 展平图结构 (消除 NodeGroup 等嵌套逻辑)
+        // 1: 展平图结构 (消除 NodeGroup 等嵌套逻辑)
         GraphFlattener flattener = new GraphFlattener();
         flattener.flatten(rootNodes);
 
-        // Step 2: 编译期安全检查 (数据流成环/死锁检测)
+        // 2: 编译期安全检查 (数据流成环/死锁检测)
         validateNoDataCycles(flattener.inputLookup);
 
-        // Step 3: 生成 ID 映射表 (String -> Int)
+        // 3: 生成 ID 映射表 (String -> Int)
         Set<String> allIds = flattener.nodeDataLookup.keySet();
         int size = allIds.size();
 
@@ -110,7 +104,7 @@ public class RuntimeGraphIndex {
             indexCounter++;
         }
 
-        // Step 4: 初始化连续内存数组
+        // 4: 初始化连续内存数组
         JsonObject[] nodeDataArray = new JsonObject[size];
         String[] typeArray = new String[size];
         Map<String, Integer>[] flowOutputArray = new Map[size];
@@ -122,7 +116,7 @@ public class RuntimeGraphIndex {
             inputArray[i] = new HashMap<>();
         }
 
-        // Step 5: 填充数组 (降维打击)
+        // 5: 填充数组 (降维打击)
         for (int i = 0; i < size; i++) {
             String strId = idToString[i];
 
@@ -149,7 +143,7 @@ public class RuntimeGraphIndex {
             staticInputArray[i] = flattener.staticInputLookup.getOrDefault(strId, Collections.emptyMap());
         }
 
-        // Step 6: 数据流拓扑转换 (TargetID#Port -> SourceIntID)
+        // 6: 数据流拓扑转换 (TargetID#Port -> SourceIntID)
         for (Map.Entry<String, ConnectionSource> entry : flattener.inputLookup.entrySet()) {
             String[] parts = entry.getKey().split("#");
             String targetId = parts[0];
@@ -163,7 +157,7 @@ public class RuntimeGraphIndex {
             }
         }
 
-        // Step 7: 类型反向索引构建
+        // 7: 类型反向索引构建
         Map<String, List<Integer>> typeToIntList = new HashMap<>();
         for (Map.Entry<String, List<String>> entry : flattener.typeLookup.entrySet()) {
             List<Integer> intList = new ArrayList<>();

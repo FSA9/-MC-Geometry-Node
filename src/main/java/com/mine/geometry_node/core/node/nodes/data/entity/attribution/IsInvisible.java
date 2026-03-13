@@ -15,7 +15,7 @@ public class IsInvisible extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.is_invisible"))
                 .addRow(new PortRow(
-                        StandardPorts.TARGET.toInput(),
+                        StandardPorts.ENTITY.toInput(),
                         StandardPorts.BOOL.toOutput(),
                         UIHint.DEFAULT, null, null
                 ))
@@ -26,9 +26,9 @@ public class IsInvisible extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!StandardPorts.BOOL.getId().equals(portName)) return null;
 
-        List<Entity> targets = getTargets(context, StandardPorts.TARGET.getId());
-        if (targets.isEmpty()) return false;
+        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        if (entities.isEmpty()) return false;
 
-        return targets.getFirst().isInvisible();
+        return entities.getFirst().isInvisible();
     }
 }

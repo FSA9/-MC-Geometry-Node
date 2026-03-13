@@ -4,11 +4,13 @@ import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.actions.entity.AddForce;
 import com.mine.geometry_node.core.node.nodes.actions.entity.SendMessage;
-import com.mine.geometry_node.core.node.nodes.data.GetAttribute;
-import com.mine.geometry_node.core.node.nodes.data.SetAttribute;
+import com.mine.geometry_node.core.node.nodes.actions.visual.DrawDebugLine;
+import com.mine.geometry_node.core.node.nodes.data.GetEntityAttribute;
+import com.mine.geometry_node.core.node.nodes.data.SetEntityAttribute;
 import com.mine.geometry_node.core.node.nodes.events.OnBlockBreak;
 import com.mine.geometry_node.core.node.nodes.events.OnBlockPlace;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityDeath;
+import com.mine.geometry_node.core.node.nodes.logics.ForEach;
 import com.mine.geometry_node.core.node.nodes.logics.Switch;
 import com.mine.geometry_node.core.node.nodes.functions.graph.ReceiveBlueprint;
 import com.mine.geometry_node.core.node.nodes.functions.graph.TriggerBlueprint;
@@ -71,13 +73,17 @@ public class NodeRegistry {
         // Actions
         register(ACTIONS, new SendMessage());
         register(ACTIONS, new AddForce());
+        register(ACTIONS, new DrawDebugLine());
 
         // Attribute
-        register(ATTRIBUTES, new SetAttribute());
-        register(ATTRIBUTES, new GetAttribute());
+        register(ATTRIBUTES, new SetEntityAttribute());
+        register(ATTRIBUTES, new GetEntityAttribute());
 
         // Flows
         register(FLOWS, new Switch());
+
+        // Logics
+        register(LOGICS, new ForEach());
 
         // Maths
         register(MATHS_OPERATION, new Math_Operation());

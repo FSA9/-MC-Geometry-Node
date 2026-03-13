@@ -15,7 +15,7 @@ public class EntityInteractEntity extends BaseEventNode {
                 // 输出：发起交互的实体 (例如玩家)
                 .addRow(new PortRow(null, StandardPorts.TRIGGER_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 // 输出：被交互的目标实体 (例如村民、羊)
-                .addRow(new PortRow(null, StandardPorts.TARGET.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .build();
     }
 }

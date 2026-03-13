@@ -15,7 +15,7 @@ public class GetEntityVelocity extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_velocity"))
                 .addRow(new PortRow(
-                        StandardPorts.TARGET.toInput(),
+                        StandardPorts.ENTITY.toInput(),
                         PortDef.create("velocity", "geometry_node.port.velocity", PortType.XYZ),
                         UIHint.DEFAULT, null, null
                 ))
@@ -26,9 +26,9 @@ public class GetEntityVelocity extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!"velocity".equals(portName)) return null;
 
-        List<Entity> targets = getTargets(context, StandardPorts.TARGET.getId());
-        if (targets.isEmpty()) return null;
+        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        if (entities.isEmpty()) return null;
 
-        return targets.getFirst().getDeltaMovement(); // 返回 Vec3
+        return entities.getFirst().getDeltaMovement();
     }
 }

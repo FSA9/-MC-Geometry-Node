@@ -1,30 +1,33 @@
 {
-  "graph_name": "Jump On Block Place",
+  "graph_name": "Test Draw Debug Line",
   "version": "0.0.1",
   "nodes": {
     "node_evt_place_01": {
       "node_type": "on_block_place",
-      "UI_pos": [100.0, 300.0],
+      "UI_pos": [100.0, 400.0],
       "properties": {},
       "inputs": {},
       "execution": {
-        "flow_out": "node_add_force_01"
+        "flow_out": "node_draw_line"
       },
       "outputs": {
-        "entity": [
+        "xyz": [
           {
-            "target_node": "node_add_force_01",
-            "target_port": "target"
+            "target_node": "node_draw_line",
+            "target_port": "start_pos"
           }
         ]
       }
     },
-    "node_add_force_01": {
-      "node_type": "action_add_force",
-      "UI_pos": [450.0, 300.0],
+    "node_draw_line": {
+      "node_type": "draw_debug_line",
+      "UI_pos": [400.0, 400.0],
       "properties": {},
       "inputs": {
-        "xyz": [0.0, 1.0, 0.0]
+        "end_pos": [0, 100, 0],
+        "color": -65536,
+        "duration": 100,
+        "size": 0.1
       },
       "execution": {},
       "outputs": {}

@@ -15,7 +15,7 @@ public class GetEntityEyePosition extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_eye_position"))
                 .addRow(new PortRow(
-                        StandardPorts.TARGET.toInput(),
+                        StandardPorts.ENTITY.toInput(),
                         StandardPorts.XYZ.toOutput(),
                         UIHint.DEFAULT, null, null
                 ))
@@ -26,9 +26,9 @@ public class GetEntityEyePosition extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!StandardPorts.XYZ.getId().equals(portName)) return null;
 
-        List<Entity> targets = getTargets(context, StandardPorts.TARGET.getId());
-        if (targets.isEmpty()) return null;
+        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        if (entities.isEmpty()) return null;
 
-        return targets.getFirst().getEyePosition(); // 返回 Vec3
+        return entities.getFirst().getEyePosition(); // 返回 Vec3
     }
 }
