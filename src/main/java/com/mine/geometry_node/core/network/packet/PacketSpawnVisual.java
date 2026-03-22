@@ -11,28 +11,28 @@ import net.minecraft.world.phys.Vec3;
  * 服务端将纯粹的视觉渲染指令下发给客户端。
  */
 public record PacketSpawnVisual(
-        String effectType,        // 视觉类型标识，例如 "debug_line"
-        int sourceEntityId,       // 起点绑定的实体ID (若为 -1，则使用 startPos 绝对坐标)
-        Vec3 startPos,            // 起点绝对坐标，或实体锚点的局部偏移量
-        int targetEntityId,       // 终点绑定的实体ID (若为 -1，则使用 endPos 绝对坐标/方向)
-        Vec3 endPos,              // 终点绝对坐标，或实体锚点的局部偏移量
+        String effectType,        // 类型标识
+        int sourceEntityId,       // 起点绑定实体ID (若为 -1，则使用 startPos 绝对坐标)
+        Vec3 startPos,            // 起点绝对坐标，或实体锚点局部偏移量
+        int targetEntityId,       // 终点绑定实体ID (若为 -1，则使用 endPos 绝对坐标/方向)
+        Vec3 endPos,              // 终点绝对坐标，或实体锚点局部偏移量
         int color,                // 颜色 (ARGB 格式)
         float size,               // 粗细/大小
-        int durationTicks         // 持续刻数 (客户端收到后会倒计时)
+        int durationTicks         // 持续刻数
 ) implements CustomPacketPayload {
 
-    // 1. 定义 Packet 的唯一标识
+    // 1. 定义 Packet 唯一标识
     public static final Type<PacketSpawnVisual> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath("geometry_node", "spawn_visual")
     );
 
-    // 2. 手动构建 StreamCodec (突破 6 个字段的限制)
+    // 2. 手动构建 StreamCodec (突破字段限制)
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketSpawnVisual> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> packet.write(buf),
             PacketSpawnVisual::new
     );
 
-    // 3. 反序列化：从客户端 Buffer 读取 (必须与写入顺序绝对一致)
+    // 3. 反序列化
     public PacketSpawnVisual(RegistryFriendlyByteBuf buf) {
         this(
                 buf.readUtf(),

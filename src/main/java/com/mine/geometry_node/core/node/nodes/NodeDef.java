@@ -1,18 +1,19 @@
 package com.mine.geometry_node.core.node.nodes;
 
 import net.minecraft.network.chat.Component;
-import java.util.ArrayList;
-import java.util.List;
 
-/**
- * [元数据] 节点全量描述 (Schema)
- * 移除 menuPath，排版由 NodeRegistry 实体树接管
- */
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 public record NodeDef(
         String typeId,
         NodeType category,
         Component displayName,
-        List<PortRow> rows // 删除了 menuPath
+        String comment,
+        Map<String, Object> meta,
+        List<PortRow> rows
 ) {
     public static Builder builder(String typeId, NodeType category, Component displayName) {
         return new Builder(typeId, category, displayName);
@@ -23,8 +24,8 @@ public record NodeDef(
         private final NodeType category;
         private final Component displayName;
 
-        // 删除了 menuPath 变量和 setMenuPath 方法
-
+        private String comment = "";
+        private final Map<String, Object> meta = new HashMap<>();
         private final List<PortRow> rows = new ArrayList<>();
 
         private Builder(String typeId, NodeType category, Component displayName) {
@@ -33,9 +34,20 @@ public record NodeDef(
             this.displayName = displayName;
         }
 
-        /**
-         * add PortRow
-         */
+        public Builder comment(String comment) {
+            this.comment = comment;
+            return this;
+        }
+
+        public Builder addMeta(String key, Object value) {
+            /*
+            * max_dynamic_input_number: （int）最大输入动态端口数
+            * max_dynamic_output_number: （int）最大输出动态端口数
+            */
+            this.meta.put(key, value);
+            return this;
+        }
+
         public Builder addRow(PortRow row) {
             if (row != null) {
                 this.rows.add(row);
@@ -44,8 +56,7 @@ public record NodeDef(
         }
 
         public NodeDef build() {
-            // 构建时不再传入 menuPath
-            return new NodeDef(typeId, category, displayName, List.copyOf(rows));
+            return new NodeDef(typeId, category, displayName, comment, Map.copyOf(meta), List.copyOf(rows));
         }
     }
 }

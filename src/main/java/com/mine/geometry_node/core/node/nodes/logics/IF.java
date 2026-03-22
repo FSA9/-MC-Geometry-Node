@@ -29,7 +29,7 @@ public class IF extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Boolean isTrue = getInput(context, StandardPorts.BOOL.getId(), Boolean.class);
 
-        if (isTrue) {
+        if (Boolean.TRUE.equals(isTrue)) {
             return next(StandardPorts.FLOW_TRUE.getId());
         } else {
             return next(StandardPorts.FLOW_FALSE.getId());

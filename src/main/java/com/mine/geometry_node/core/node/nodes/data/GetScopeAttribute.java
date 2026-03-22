@@ -12,7 +12,8 @@ public class GetScopeAttribute extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_scope_attribute"))
-                .addRow(new PortRow(StandardPorts.SCOPE.toInput(), StandardPorts.ANY_VALUE.toOutput(), UIHint.INPUT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ANY_VALUE.toOutput(), null, null, null))
+                .addRow(new PortRow(StandardPorts.SCOPE.toInput(), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.NAME.toInput(), null, UIHint.INPUT, null, null))
                 .build();
     }

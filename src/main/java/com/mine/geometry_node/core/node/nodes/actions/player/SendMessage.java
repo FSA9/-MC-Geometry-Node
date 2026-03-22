@@ -1,0 +1,40 @@
+package com.mine.geometry_node.core.node.nodes.actions.player;
+
+import com.mine.geometry_node.core.execution.ExecutionContext;
+import com.mine.geometry_node.core.execution.ExecutionResult;
+import com.mine.geometry_node.core.node.nodes.*;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+
+import java.util.List;
+
+public class SendMessage extends BaseNode {
+
+    public static final String TYPE_ID = "send_message";
+
+    @Override
+    public NodeDef getDefaultDefinition() {
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.send_message"))
+                .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.MESSAGE.toInput(), null, UIHint.INPUT, null, null))
+                .build();
+    }
+
+    @Override
+    public ExecutionResult execute(ExecutionContext context) {
+        List<Entity> targets = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+
+        String message = getInput(context, StandardPorts.MESSAGE.getId(), String.class);
+        if (message == null) message = "";
+
+        for (Entity target : targets) {
+            if (target instanceof Player player) {
+                player.sendSystemMessage(Component.literal(message));
+            }
+        }
+
+        return next(StandardPorts.FLOW_OUT.getId());
+    }
+}

@@ -10,6 +10,7 @@ import java.util.Map;
 public class GetBlockType extends BaseNode {
 
     public static final String TYPE_ID = "get_block_type";
+    public static final String PROPERTY_SELECTED = "selected_block_type";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -19,15 +20,18 @@ public class GetBlockType extends BaseNode {
                         StandardPorts.TYPE.toOutput(),
                         UIHint.SELECT,
                         null,
-                        Map.of("options", RegistryDataManager.getAllBlocks())
+                        Map.of(
+                                "property_key", PROPERTY_SELECTED,
+                                "options", RegistryDataManager.getAllBlocks()
+                        )
                 ))
                 .build();
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if ("block_id".equals(portName)) {
-            return getInput(context, "selected_type", String.class); //
+        if (StandardPorts.TYPE.getId().equals(portName)) {
+            return context.getNodeProperty(PROPERTY_SELECTED);
         }
         return null;
     }

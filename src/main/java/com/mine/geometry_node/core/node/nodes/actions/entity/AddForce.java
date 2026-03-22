@@ -33,10 +33,23 @@ public class AddForce extends BaseNode {
             for (Entity entity : entities) {
                 Vec3 currentVelocity = entity.getDeltaMovement();
                 entity.setDeltaMovement(currentVelocity.add(force));
-                entity.hasImpulse = true;
 
-                if (entity instanceof ServerPlayer player) {
-                    player.connection.send(new ClientboundSetEntityMotionPacket(player));
+                entity.hasImpulse = true;
+                entity.hurtMarked = true;
+
+                // 构建原版物理同步数据包
+                ClientboundSetEntityMotionPacket packet =
+                        new ClientboundSetEntityMotionPacket(entity);
+
+                // 3. 发给玩家 (覆盖客户端本地预测)
+                if (entity instanceof net.minecraft.server.level.ServerPlayer player) {
+                    player.connection.send(packet);
+                }
+
+                // 4. 发给周围所有“看着”这个实体的其他客户端！
+                // 绕过延迟，强制全服瞬间同步该实体的速度！
+                if (context.getLevel() != null) {
+                    context.getLevel().getChunkSource().broadcast(entity, packet);
                 }
             }
         }

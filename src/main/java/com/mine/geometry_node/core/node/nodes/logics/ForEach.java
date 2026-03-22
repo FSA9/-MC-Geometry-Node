@@ -43,10 +43,10 @@ public class ForEach extends BaseNode {
                 (listSize == 0 ? maxInt : Math.min(listSize, maxInt)) : listSize;
 
         int myNodeId = context.getCurrentNodeId();
-        // 对外暴露的数据 Key
+        // 对外暴露数据 Key
         String indexKey = "ForEach_" + myNodeId + "_index";
         String elementKey = "ForEach_" + myNodeId + "_element";
-        // 【新增】对内专用的状态机游标 Key
+        // 对内专用状态机游标 Key
         String cursorKey = "ForEach_" + myNodeId + "_cursor";
 
         // 1. 读取内部状态机游标 (从 cursorKey 读，不影响 indexKey)

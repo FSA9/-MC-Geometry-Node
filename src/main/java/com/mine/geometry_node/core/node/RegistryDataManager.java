@@ -58,7 +58,7 @@ public class RegistryDataManager {
 
     public static List<String> getAllSounds() {
         if (SOUND_CACHE == null) {
-            SOUND_CACHE = net.minecraft.core.registries.BuiltInRegistries.SOUND_EVENT.keySet().stream()
+            SOUND_CACHE = BuiltInRegistries.SOUND_EVENT.keySet().stream()
                     .map(net.minecraft.resources.ResourceLocation::toString)
                     .sorted()
                     .toList();
@@ -90,14 +90,13 @@ public class RegistryDataManager {
     }
 
     // ==========================================
-    // 内部通用提取逻辑 (防崩溃核心)
+    // 内部通用提取逻辑
     // ==========================================
 
     /**
      * 安全提取指定动态注册表的所有 Key，并统一格式化为排序好的字符串列表。
      */
     private static <T> List<String> getDynamicRegistryKeys(RegistryAccess access, ResourceKey<net.minecraft.core.Registry<T>> registryKey) {
-        // 1. 防御：如果调用者传了个 null 进来（比如世界还没加载完），直接退回空列表
         if (access == null) {
             return List.of();
         }
@@ -108,6 +107,7 @@ public class RegistryDataManager {
             var registryOpt = access.registry(registryKey);
 
             if (registryOpt.isEmpty()) {
+                System.err.println("Registry not found for: " + registryKey.location());
                 return List.of();
             }
 

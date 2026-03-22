@@ -17,7 +17,7 @@ public class Switch extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        // 刚从菜单拖出来时，默认至少给 1 个分支 (序号 1)
+
         return buildDef(List.of(1));
     }
 
@@ -44,14 +44,14 @@ public class Switch extends BaseNode {
     private NodeDef buildDef(List<Integer> branchIndices) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.flow_switch"));
 
-        // 第1行：输入执行流
+        // 输入执行流
         builder.addRow(new PortRow(
                 StandardPorts.FLOW_IN.toExec(),
                 null,
                 UIHint.DEFAULT, null, null
         ));
 
-        // 第2行起：动态行
+        // 动态行
         for (Integer index : branchIndices) {
             builder.addRow(new PortRow(
                     StandardPorts.CASE.toInputWithIndex(index, false),
@@ -71,8 +71,8 @@ public class Switch extends BaseNode {
         int i = 1;
 
         while (true) {
-            String casePort = "case_" + i;
-            String flowPort = "flow_out_" + i;
+            String casePort = StandardPorts.CASE.getIdWithIndex(i);
+            String flowPort = StandardPorts.FLOW_OUT.getIdWithIndex(i);
 
             if (!context.hasPort(casePort)) {
                 break;

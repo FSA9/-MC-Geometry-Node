@@ -17,20 +17,27 @@ public enum StandardPorts {
     INT("int", PortType.INTEGER),
     INDEX("index", PortType.INTEGER),
     TICK("tick", PortType.INTEGER),
+    COLOR("color", PortType.INTEGER),
 
     // Bool
     BOOL("bool", PortType.BOOLEAN),
+    DEBUG("debug", PortType.BOOLEAN),
     CASE("case", PortType.BOOLEAN),
+    IS_HIT("is_hit", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
+    DIST("distance", PortType.FLOAT),
     RADIUS("radius", PortType.FLOAT),
+    SIZE_1("size_1", PortType.FLOAT),
     TIME("time", PortType.FLOAT),
 
     // String
     NAME("name", PortType.STRING),
     TYPE("type", PortType.STRING),
+
     SCOPE("scope", PortType.STRING),
+    EXPRESSION("expression", PortType.STRING),
     MESSAGE("message", PortType.STRING),
     DIMENSION("dimension", PortType.STRING),
     DAMAGE_TYPE("damage_type", PortType.STRING),
@@ -53,7 +60,12 @@ public enum StandardPorts {
 
     // XYZ
     XYZ("xyz", PortType.XYZ),
+    START_POS("start_pos", PortType.XYZ),
+    END_POS("end_pos", PortType.XYZ),
     CENTER("center", PortType.XYZ),
+    VECTOR("vector", PortType.XYZ),
+    ROTATION("rotation", PortType.XYZ),
+    SIZE_3("size_3", PortType.XYZ),
 
     // ANY
 
@@ -71,7 +83,7 @@ public enum StandardPorts {
     public PortType getType() { return type; }
     public String getTranslationKey() { return "geometry_node.port." + id; }
 
-    // --- 快捷构建工厂 (基础) ---
+    // --- 快捷构建工厂 ---
 
     public PortDef toInput() {
         return PortDef.create(id, getTranslationKey(), type);

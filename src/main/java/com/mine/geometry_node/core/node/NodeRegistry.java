@@ -2,20 +2,24 @@ package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.nodes.actions.BoxOverlapWithRotation;
+import com.mine.geometry_node.core.node.nodes.actions.Raycast;
 import com.mine.geometry_node.core.node.nodes.actions.entity.AddForce;
-import com.mine.geometry_node.core.node.nodes.actions.entity.SendMessage;
+import com.mine.geometry_node.core.node.nodes.actions.player.SendMessage;
 import com.mine.geometry_node.core.node.nodes.actions.visual.DrawDebugLine;
+import com.mine.geometry_node.core.node.nodes.actions.visual.DrawLaserBeam;
 import com.mine.geometry_node.core.node.nodes.data.GetEntityAttribute;
 import com.mine.geometry_node.core.node.nodes.data.SetEntityAttribute;
-import com.mine.geometry_node.core.node.nodes.events.OnBlockBreak;
-import com.mine.geometry_node.core.node.nodes.events.OnBlockPlace;
+import com.mine.geometry_node.core.node.nodes.events.block.OnBlockBreak;
+import com.mine.geometry_node.core.node.nodes.events.block.OnBlockPlace;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityDeath;
+import com.mine.geometry_node.core.node.nodes.functions.vector.VectorAdd;
 import com.mine.geometry_node.core.node.nodes.logics.ForEach;
 import com.mine.geometry_node.core.node.nodes.logics.Switch;
 import com.mine.geometry_node.core.node.nodes.functions.graph.ReceiveBlueprint;
 import com.mine.geometry_node.core.node.nodes.functions.graph.TriggerBlueprint;
 import com.mine.geometry_node.core.node.nodes.functions.time.Function_Delay_s;
-import com.mine.geometry_node.core.node.nodes.maths.operation.Math_Operation;
+import com.mine.geometry_node.core.node.nodes.maths.operation.MathOperation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -33,7 +37,7 @@ public class NodeRegistry {
     public final NodeCategory ACTIONS = new NodeCategory("geometry_node.menu.actions");
     public final NodeCategory EVENTS = new NodeCategory("geometry_node.menu.events");
     public final NodeCategory FLOWS = new NodeCategory("geometry_node.menu.flow");
-    public final NodeCategory FUNCTIONS = new NodeCategory("geometry_node.menu.functions");
+    public final NodeCategory FUNCTIONS = new NodeCategory("geometry_node.menu.effects");
     public final NodeCategory LOGICS = new NodeCategory("geometry_node.menu.logics");
     public final NodeCategory MATHS = new NodeCategory("geometry_node.menu.maths");
     public final NodeCategory ATTRIBUTES = new NodeCategory("geometry_node.menu.attributes");
@@ -74,6 +78,9 @@ public class NodeRegistry {
         register(ACTIONS, new SendMessage());
         register(ACTIONS, new AddForce());
         register(ACTIONS, new DrawDebugLine());
+        register(ACTIONS, new DrawLaserBeam());
+        register(ACTIONS, new Raycast());
+        register(ACTIONS, new BoxOverlapWithRotation());
 
         // Attribute
         register(ATTRIBUTES, new SetEntityAttribute());
@@ -86,12 +93,13 @@ public class NodeRegistry {
         register(LOGICS, new ForEach());
 
         // Maths
-        register(MATHS_OPERATION, new Math_Operation());
+        register(MATHS_OPERATION, new MathOperation());
 
         // Functions
         register(FUNCTIONS, new Function_Delay_s());
         register(COMM, new ReceiveBlueprint());
         register(COMM, new TriggerBlueprint());
+        register(COMM, new VectorAdd());
 
         System.out.println("[GeometryNode] Successfully registered " + registry.size() + " nodes.");
     }

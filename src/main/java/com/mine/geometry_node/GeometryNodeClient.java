@@ -25,8 +25,11 @@ public class GeometryNodeClient {
         // 监听按键
         NeoForge.EVENT_BUS.addListener(this::onClientTick);
 
-        // 2. 监听世界渲染阶段，用于画线 (Forge/NeoForge 原生总线)
+        // 监听世界渲染
         NeoForge.EVENT_BUS.addListener(this::onRenderLevelStage);
+
+        // 渲染注册
+        ClientVisualManager.init();
     }
 
     private void onClientTick(ClientTickEvent.Post event) {
@@ -34,7 +37,6 @@ public class GeometryNodeClient {
             icyllis.modernui.mc.MuiModApi.openScreen(new MainUI());
         }
 
-        // 必须让线条的寿命流逝！
         ClientVisualManager.tick();
     }
 

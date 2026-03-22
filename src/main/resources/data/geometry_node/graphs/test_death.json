@@ -1,33 +1,73 @@
 {
-  "graph_name": "Test Draw Debug Line",
+  "graph_name": "Test 3D Laser Beam",
   "version": "0.0.1",
   "nodes": {
-    "node_evt_place_01": {
+    "node_evt_place": {
       "node_type": "on_block_place",
-      "UI_pos": [100.0, 400.0],
+      "UI_pos": [100.0, 300.0],
       "properties": {},
       "inputs": {},
       "execution": {
-        "flow_out": "node_draw_line"
+        "flow_out": "node_raycast"
       },
       "outputs": {
         "xyz": [
           {
-            "target_node": "node_draw_line",
+            "target_node": "node_math_add",
+            "target_port": "vector_1"
+          }
+        ]
+      }
+    },
+    "node_math_add": {
+      "node_type": "vector_add",
+      "UI_pos": [100.0, 500.0],
+      "properties": {},
+      "inputs": {
+        "vector_2": [0.0, 1.0, 0.0]
+      },
+      "execution": {},
+      "outputs": {
+        "vector": [
+          {
+            "target_node": "node_raycast",
+            "target_port": "start_pos"
+          },
+          {
+            "target_node": "node_laser",
             "target_port": "start_pos"
           }
         ]
       }
     },
-    "node_draw_line": {
-      "node_type": "draw_debug_line",
-      "UI_pos": [400.0, 400.0],
+    "node_raycast": {
+      "node_type": "raycast",
+      "UI_pos": [400.0, 300.0],
       "properties": {},
       "inputs": {
-        "end_pos": [0, 100, 0],
-        "color": -65536,
-        "duration": 100,
-        "size": 0.1
+        "vector": [0.0, 1.0, 0.0],
+        "distance": 30.0
+      },
+      "execution": {
+        "flow_out": "node_laser"
+      },
+      "outputs": {
+        "xyz": [
+          {
+            "target_node": "node_laser",
+            "target_port": "end_pos"
+          }
+        ]
+      }
+    },
+    "node_laser": {
+      "node_type": "draw_laser_beam",
+      "UI_pos": [700.0, 300.0],
+      "properties": {},
+      "inputs": {
+        "color": -855703552,
+        "tick": 60,
+        "size_1": 0.25
       },
       "execution": {},
       "outputs": {}
