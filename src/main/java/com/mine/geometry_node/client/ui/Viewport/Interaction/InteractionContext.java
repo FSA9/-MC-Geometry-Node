@@ -56,6 +56,7 @@ public interface InteractionContext {
 
     // --- 其他保持不变 ---
     void invalidate();
+    void requestViewportFocus();
     List<UINode> getSelectedNodes();
     void clearSelection();
     void addToSelection(UINode node);

@@ -7,13 +7,16 @@ import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionManager;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.KeyManager;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.view.MotionEvent;
+import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.View;
+import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 
 import java.util.ArrayList;
@@ -34,6 +37,7 @@ import java.util.UUID;
  */
 public class Viewport extends FrameLayout implements InteractionContext, EditorContext.EditorListener {
 
+    private static final int TOOL_TYPE_MOUSE = 1;
 
     // 核心组件与数据依赖
 
@@ -74,6 +78,14 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
     /** 当前视口中所有的连接线集合 */
     private final List<Connection> mConnections = new ArrayList<>();
+
+    private View mCapturedHintView;
+
+    private boolean mHintCaptureUsesLogical;
+
+    private final int[] mTmpTargetLoc = new int[2];
+
+    private final float[] mTmpEventScreen = new float[2];
 
 
     // 渲染画笔与复用对象 (防止 onDraw 触发频繁 GC)
@@ -139,7 +151,7 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
         mConnectionPaint.setAntiAlias(true);
         mConnectionPaint.setStyle(Paint.Style.STROKE);
-        mConnectionPaint.setStrokeWidth(3.0f); // 3.0f 将被底层渲染引擎视为逻辑单位 DP
+        mConnectionPaint.setStrokeWidth(3.0f);
         mConnectionPaint.setColor(0xFFE0E0E0);
     }
 
@@ -149,7 +161,7 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
     @Override
     public void onNodeAdded(NodeData nodeData) {
-        NodeDef def = NodeRegistry.INSTANCE.getDefaultDefinition(nodeData.type);
+        NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(nodeData);
         if (def == null) {
             return;
         }
@@ -170,6 +182,53 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         if (uiNode != null) {
             mNodeLayer.removeView(uiNode);
             mSelectedNodes.remove(uiNode);
+        }
+        mConnections.removeIf(c ->
+                c.outputNode.getNodeData().id.equals(nodeId) || c.inputNode.getNodeData().id.equals(nodeId));
+    }
+
+    @Override
+    public void onNodeStructureChanged(NodeData nodeData) {
+        if (nodeData == null || nodeData.id == null) return;
+        UINode old = mNodeViews.remove(nodeData.id);
+        boolean wasSelected = old != null && mSelectedNodes.contains(old);
+        if (old != null) {
+            mNodeLayer.removeView(old);
+            mSelectedNodes.remove(old);
+        }
+        onNodeAdded(nodeData);
+        if (wasSelected) {
+            UINode rebuilt = mNodeViews.get(nodeData.id);
+            if (rebuilt != null) {
+                mSelectedNodes.add(rebuilt);
+                rebuilt.setSelected(true);
+            }
+        }
+        rebuildConnectionsFromGraph();
+        invalidate();
+    }
+
+    @Override
+    public void onGraphConnectionsRebuildRequested() {
+        rebuildConnectionsFromGraph();
+        invalidate();
+    }
+
+    private void rebuildConnectionsFromGraph() {
+        mConnections.clear();
+        NodeGraph g = mEditorContext.getGraph();
+        for (NodeData out : g.nodes.values()) {
+            UINode outUi = mNodeViews.get(out.id);
+            if (outUi == null) continue;
+            for (java.util.Map.Entry<String, java.util.List<com.mine.geometry_node.core.node.Connection>> e : out.outputs.entrySet()) {
+                if (e.getValue() == null) continue;
+                for (com.mine.geometry_node.core.node.Connection link : e.getValue()) {
+                    UINode inUi = mNodeViews.get(link.targetNodeId());
+                    if (inUi != null) {
+                        mConnections.add(new Connection(outUi, e.getKey(), inUi, link.targetPortName()));
+                    }
+                }
+            }
         }
     }
 
@@ -216,7 +275,10 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     @Override
     public void onConnectionRemoved(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         mConnections.removeIf(c ->
-                c.outputNode.getNodeData().id.equals(outNodeId) && c.inputNode.getNodeData().id.equals(inNodeId)
+                c.outputNode.getNodeData().id.equals(outNodeId)
+                        && c.outputPortID.equals(outPortId)
+                        && c.inputNode.getNodeData().id.equals(inNodeId)
+                        && c.inputPortID.equals(inPortId)
         );
         invalidate();
     }
@@ -541,9 +603,203 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     @Override public icyllis.modernui.core.Context getUIContext() { return getContext(); }
     @Override public EditorContext getEditorContext() { return mEditorContext; }
 
+    @Override
+    public void requestViewportFocus() {
+        requestFocus();
+    }
+
 
     // 7. 事件分发拦截
 
+    private void eventToScreen(MotionEvent ev) {
+        mTmpEventScreen[0] = ev.getRawX();
+        mTmpEventScreen[1] = ev.getRawY();
+    }
+
+    private View findHintByScreen(float screenX, float screenY) {
+        for (int i = mNodeLayer.getChildCount() - 1; i >= 0; i--) {
+            View child = mNodeLayer.getChildAt(i);
+            if (!(child instanceof UINode node)) continue;
+            View v = node.findInteractiveViewAtScreen(screenX, screenY);
+            if (v != null) return v;
+        }
+        return null;
+    }
+
+    private View findInteractiveHintAtLogical(float uiX, float uiY) {
+        for (int i = mNodeLayer.getChildCount() - 1; i >= 0; i--) {
+            View child = mNodeLayer.getChildAt(i);
+            if (!(child instanceof UINode node)) continue;
+            float left = node.getTranslationX();
+            float top = node.getTranslationY();
+            float right = left + node.getWidth() / UIConstants.mDensity;
+            float bottom = top + node.getHeight() / UIConstants.mDensity;
+            if (uiX < left || uiX > right || uiY < top || uiY > bottom) continue;
+            float localX = (uiX - left) * UIConstants.mDensity;
+            float localY = (uiY - top) * UIConstants.mDensity;
+            View v = node.findInteractiveViewAt(localX, localY);
+            if (v != null) return v;
+        }
+        return null;
+    }
+
+    private boolean dispatchTransformedToView(MotionEvent ev, View target, boolean skipEventToScreen) {
+        if (!skipEventToScreen) {
+            eventToScreen(ev);
+        }
+        target.getLocationOnScreen(mTmpTargetLoc);
+        float lx = mTmpEventScreen[0] - mTmpTargetLoc[0];
+        float ly = mTmpEventScreen[1] - mTmpTargetLoc[1];
+        float ox = ev.getX();
+        float oy = ev.getY();
+        ev.setLocation(lx, ly);
+        boolean handled = target.dispatchTouchEvent(ev);
+        ev.setLocation(ox, oy);
+        return handled;
+    }
+
+    private boolean dispatchTransformedToViewLogical(MotionEvent ev, View target) {
+        float uiX = screenToUIX(ev.getX());
+        float uiY = screenToUIY(ev.getY());
+        if (!(target.getParent() instanceof UINode node)) return false;
+        float lx = (uiX - node.getTranslationX()) * UIConstants.mDensity - target.getLeft();
+        float ly = (uiY - node.getTranslationY()) * UIConstants.mDensity - target.getTop();
+        float ox = ev.getX();
+        float oy = ev.getY();
+        ev.setLocation(lx, ly);
+        boolean handled = target.dispatchTouchEvent(ev);
+        ev.setLocation(ox, oy);
+        return handled;
+    }
+
+    private boolean dispatchTransformedGenericToView(MotionEvent ev, View target, boolean skipEventToScreen) {
+        if (!skipEventToScreen) {
+            eventToScreen(ev);
+        }
+        target.getLocationOnScreen(mTmpTargetLoc);
+        float lx = mTmpEventScreen[0] - mTmpTargetLoc[0];
+        float ly = mTmpEventScreen[1] - mTmpTargetLoc[1];
+        float ox = ev.getX();
+        float oy = ev.getY();
+        ev.setLocation(lx, ly);
+        boolean handled = target.dispatchGenericMotionEvent(ev);
+        ev.setLocation(ox, oy);
+        return handled;
+    }
+
+    private boolean dispatchTransformedGenericToViewLogical(MotionEvent ev, View target) {
+        float uiX = screenToUIX(ev.getX());
+        float uiY = screenToUIY(ev.getY());
+        if (!(target.getParent() instanceof UINode node)) return false;
+        float lx = (uiX - node.getTranslationX()) * UIConstants.mDensity - target.getLeft();
+        float ly = (uiY - node.getTranslationY()) * UIConstants.mDensity - target.getTop();
+        float ox = ev.getX();
+        float oy = ev.getY();
+        ev.setLocation(lx, ly);
+        boolean handled = target.dispatchGenericMotionEvent(ev);
+        ev.setLocation(ox, oy);
+        return handled;
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent ev) {
+        int action = ev.getActionMasked();
+        if (action == MotionEvent.ACTION_HOVER_MOVE
+                || action == MotionEvent.ACTION_HOVER_ENTER
+                || action == MotionEvent.ACTION_HOVER_EXIT) {
+            float uiX = screenToUIX(ev.getX());
+            float uiY = screenToUIY(ev.getY());
+            View hit = findInteractiveHintAtLogical(uiX, uiY);
+            if (hit != null) {
+                if (dispatchTransformedGenericToViewLogical(ev, hit)) {
+                    return true;
+                }
+            }
+            eventToScreen(ev);
+            hit = findHintByScreen(mTmpEventScreen[0], mTmpEventScreen[1]);
+            if (hit != null) {
+                if (dispatchTransformedGenericToView(ev, hit, true)) {
+                    return true;
+                }
+            }
+        }
+        return super.dispatchGenericMotionEvent(ev);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        int action = ev.getActionMasked();
+        if (mCapturedHintView != null) {
+            boolean r = mHintCaptureUsesLogical
+                    ? dispatchTransformedToViewLogical(ev, mCapturedHintView)
+                    : dispatchTransformedToView(ev, mCapturedHintView, false);
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                mCapturedHintView = null;
+                mHintCaptureUsesLogical = false;
+            }
+            return r;
+        }
+        if (ev.getPointerCount() == 1) {
+            if (action == MotionEvent.ACTION_MOVE && ev.getButtonState() == 0
+                    && ev.getToolType(0) == TOOL_TYPE_MOUSE) {
+                float uiX = screenToUIX(ev.getX());
+                float uiY = screenToUIY(ev.getY());
+                View hit = findInteractiveHintAtLogical(uiX, uiY);
+                if (hit != null) {
+                    if (dispatchTransformedToViewLogical(ev, hit)) {
+                        return true;
+                    }
+                }
+                eventToScreen(ev);
+                hit = findHintByScreen(mTmpEventScreen[0], mTmpEventScreen[1]);
+                if (hit != null) {
+                    if (dispatchTransformedToView(ev, hit, true)) {
+                        return true;
+                    }
+                }
+            }
+            if (action == MotionEvent.ACTION_DOWN) {
+                float uiX = screenToUIX(ev.getX());
+                float uiY = screenToUIY(ev.getY());
+                View hit = findInteractiveHintAtLogical(uiX, uiY);
+                if (hit != null) {
+                    if (dispatchTransformedToViewLogical(ev, hit)) {
+                        mCapturedHintView = hit;
+                        mHintCaptureUsesLogical = true;
+                        return true;
+                    }
+                }
+                eventToScreen(ev);
+                hit = findHintByScreen(mTmpEventScreen[0], mTmpEventScreen[1]);
+                if (hit != null) {
+                    if (dispatchTransformedToView(ev, hit, true)) {
+                        mCapturedHintView = hit;
+                        mHintCaptureUsesLogical = false;
+                        return true;
+                    }
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev);
+    }
+
+    @Override
+    public PointerIcon onResolvePointerIcon(MotionEvent event) {
+        float uiX = screenToUIX(event.getX());
+        float uiY = screenToUIY(event.getY());
+        View hit = findInteractiveHintAtLogical(uiX, uiY);
+        if (hit == null) {
+            eventToScreen(event);
+            hit = findHintByScreen(mTmpEventScreen[0], mTmpEventScreen[1]);
+        }
+        if (hit != null) {
+            if (hit instanceof EditText) {
+                return PointerIcon.getSystemIcon(PointerIcon.TYPE_TEXT);
+            }
+            return PointerIcon.getSystemIcon(PointerIcon.TYPE_HAND);
+        }
+        return super.onResolvePointerIcon(event);
+    }
 
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
@@ -552,10 +808,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        // 保证点击时 Viewport 获取焦点，以便接收键盘事件
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            requestFocus();
-        }
         return mInteractionManager.onTouchEvent(event) || super.onTouchEvent(event);
     }
 
@@ -600,8 +852,8 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         }
 
         public boolean isSame(UINode outN, String outID, UINode inN, String inID) {
-            return outputNode == outN && outputPortID == outID &&
-                    inputNode == inN && inputPortID == inID;
+            return outputNode == outN && java.util.Objects.equals(outputPortID, outID)
+                    && inputNode == inN && java.util.Objects.equals(inputPortID, inID);
         }
     }
 }

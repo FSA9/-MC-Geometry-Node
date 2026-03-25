@@ -1,4 +1,87 @@
 {
+  "菜单": "=============================================================================",
+
+  "1级菜单": "==========================================================================",
+  "geometry_node.menu.actions": "Actions",
+  "geometry_node.menu.data": "Data",
+  "geometry_node.menu.events": "Events",
+  "geometry_node.menu.functions": "Functions",
+  "geometry_node.menu.logics": "Logics",
+  "geometry_node.menu.maths": "Maths",
+  "geometry_node.menu.texture": "Texture",
+  "2级菜单": "==========================================================================",
+  "geometry_node.menu.ai": "AI",
+  "geometry_node.menu.block": "Block",
+  "geometry_node.menu.entity": "Entity",
+  "geometry_node.menu.inventory": "Inventory",
+  "geometry_node.menu.item": "Item",
+  "geometry_node.menu.player": "Player",
+  "geometry_node.menu.visual": "Visuals",
+  "geometry_node.menu.world": "World",
+  "geometry_node.menu.type": "Type",
+  "geometry_node.menu.server": "Server",
+  "geometry_node.menu.graph": "Graph",
+  "geometry_node.menu.text": "Text",
+  "geometry_node.menu.time": "Time",
+  "geometry_node.menu.vector": "Vector",
+  "geometry_node.menu.matrix": "Matrix",
+  "geometry_node.menu.operation": "Operations",
+
+
+  "端口": "=============================================================================",
+  "geometry_node.port.flow_in": "In",
+  "geometry_node.port.flow_out": "Out",
+  "geometry_node.port.loop": "Loop Body",
+  "geometry_node.port.completed": "Completed",
+  "geometry_node.port.flow_true": "True",
+  "geometry_node.port.flow_false": "False",
+
+  "geometry_node.port.int": "Integer",
+  "geometry_node.port.index": "Index",
+  "geometry_node.port.tick": "Tick",
+  "geometry_node.port.color": "Color",
+
+  "geometry_node.port.bool": "Boolean",
+  "geometry_node.port.debug": "Debug",
+  "geometry_node.port.case": "Case",
+  "geometry_node.port.is_hit": "Is Hit",
+
+  "geometry_node.port.value": "Value",
+  "geometry_node.port.distance": "Distance",
+  "geometry_node.port.radius": "Radius",
+  "geometry_node.port.size_1": "Size",
+  "geometry_node.port.time": "Time",
+
+  "geometry_node.port.name": "Name",
+  "geometry_node.port.type": "Type",
+  "geometry_node.port.scope": "Scope",
+  "geometry_node.port.expression": "Expression",
+  "geometry_node.port.message": "Message",
+  "geometry_node.port.dimension": "Dimension",
+  "geometry_node.port.damage_type": "Damage Type",
+
+  "geometry_node.port.entity": "Entity",
+  "geometry_node.port.trigger_entity": "Trigger Entity",
+  "geometry_node.port.source_entity": "Source Entity",
+  "geometry_node.port.attack_source": "Attack Source",
+  "geometry_node.port.direct_source": "Direct Source",
+
+  "geometry_node.port.block_state": "Block State",
+  "geometry_node.port.item": "Item",
+  "geometry_node.port.list": "List",
+
+  "geometry_node.port.xyz": "XYZ",
+  "geometry_node.port.start_pos": "Start Position",
+  "geometry_node.port.end_pos": "End Position",
+  "geometry_node.port.center": "Center",
+  "geometry_node.port.vector": "Vector",
+  "geometry_node.port.rotation": "Rotation",
+  "geometry_node.port.size_3": "Size (3D)",
+
+  "geometry_node.port.any_value": "Any Value",
+
+
+
   "menu.node.search": "Search...",
   "menu.node.back": "<- Back",
   "menu.node.category.input": "Input",
@@ -13,15 +96,6 @@
   "menu.node.item.subtract": "Subtract",
 
 
-
-
-  "geometry_node.port.flow": "Flow",
-  "geometry_node.port.entity": "Entity",
-  "geometry_node.port.pos": "Pos",
-  "geometry_node.port.block_state": "Block State",
-  "geometry_node.port.attack_source": "Attack Source",
-  "geometry_node.port.direct_source": "Direct Source",
-  "geometry_node.port.damage_type": "Damage Type",
   
   "geometry_node.node.event_on_block_break": "OnBlockBreak",
   "geometry_node.node.event_on_block_place": "OnBlockPlace",

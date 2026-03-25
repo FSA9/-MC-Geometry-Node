@@ -49,6 +49,8 @@ public class EditorContext {
         default void onNodeMoved(String nodeId, float x, float y) {}
         default void onConnectionAdded(String outNode, String outPort, String inNode, String inPort) {}
         default void onConnectionRemoved(String outNode, String outPort, String inNode, String inPort) {}
+        default void onNodeStructureChanged(NodeData nodeData) {}
+        default void onGraphConnectionsRebuildRequested() {}
     }
 
     public void addListener(EditorListener listener) {
@@ -83,5 +85,13 @@ public class EditorContext {
 
     public void notifyConnectionRemoved(String outN, String outP, String inN, String inP) {
         for (EditorListener l : mListeners) l.onConnectionRemoved(outN, outP, inN, inP);
+    }
+
+    public void notifyNodeStructureChanged(NodeData node) {
+        for (EditorListener l : mListeners) l.onNodeStructureChanged(node);
+    }
+
+    public void notifyGraphConnectionsRebuildRequested() {
+        for (EditorListener l : mListeners) l.onGraphConnectionsRebuildRequested();
     }
 }

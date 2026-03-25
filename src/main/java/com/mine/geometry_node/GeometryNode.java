@@ -66,7 +66,7 @@ public class GeometryNode {
         // 初始化蓝图系统事件引擎！
         GraphEventHandler.init();
 
-        // [新增] 注册蓝图资源管理器 (监听 data/*/graphs/ 目录下的 JSON)
+        // 注册蓝图资源管理器 (监听 data/*/graphs/ 目录下的 JSON)
         ReloadListenerRegistry.register(PackType.SERVER_DATA, GraphResourceManager.getInstance());
 
         ATTACHMENT_TYPES.register(modEventBus);

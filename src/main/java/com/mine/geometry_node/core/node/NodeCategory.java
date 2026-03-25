@@ -1,9 +1,8 @@
 package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+
+import java.util.*;
 
 /**
  * [UI 层级定义] 菜单文件夹实体
@@ -12,6 +11,8 @@ import java.util.List;
 public class NodeCategory {
 
     public final String translationKey;
+
+    private final Map<String, NodeCategory> children = new LinkedHashMap<>();
 
     // 树枝&树叶
     private final List<NodeCategory> subCategories = new ArrayList<>();
@@ -24,7 +25,8 @@ public class NodeCategory {
     // --- 链式构建方法 ---
 
     public NodeCategory addChild(NodeCategory child) {
-        if (child != null && !this.subCategories.contains(child)) {
+        if (child != null && !this.children.containsKey(child.translationKey)) {
+            this.children.put(child.translationKey, child);
             this.subCategories.add(child);
         }
         return this;
@@ -38,6 +40,10 @@ public class NodeCategory {
     }
 
     // --- 只读获取方法 ---
+
+    public NodeCategory getChild(String translationKey) {
+        return this.children.get(translationKey);
+    }
 
     public List<NodeCategory> getSubCategories() {
         return Collections.unmodifiableList(subCategories);

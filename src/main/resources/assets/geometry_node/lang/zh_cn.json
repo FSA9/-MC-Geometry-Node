@@ -1,4 +1,90 @@
 {
+  "菜单": "=============================================================================",
+
+  "1级菜单": "==========================================================================",
+  "geometry_node.menu.actions": "动作",
+  "geometry_node.menu.data": "数据",
+  "geometry_node.menu.events": "事件",
+  "geometry_node.menu.functions": "函数",
+  "geometry_node.menu.logics": "逻辑",
+  "geometry_node.menu.maths": "数学",
+  "geometry_node.menu.texture": "纹理",
+  "2级菜单": "==========================================================================",
+  "geometry_node.menu.ai": "AI",
+  "geometry_node.menu.block": "方块",
+  "geometry_node.menu.entity": "实体",
+  "geometry_node.menu.inventory": "物品栏",
+  "geometry_node.menu.item": "物品",
+  "geometry_node.menu.player": "玩家",
+  "geometry_node.menu.visual": "视觉",
+  "geometry_node.menu.world": "世界",
+  "geometry_node.menu.type": "类型",
+  "geometry_node.menu.server": "服务器",
+  "geometry_node.menu.graph": "图",
+  "geometry_node.menu.text": "文本",
+  "geometry_node.menu.time": "时间",
+  "geometry_node.menu.vector": "向量",
+  "geometry_node.menu.matrix": "矩阵",
+  "geometry_node.menu.operation": "运算",
+
+
+
+  "端口": "=============================================================================",
+  "geometry_node.port.flow_in": "输入",
+  "geometry_node.port.flow_out": "输出",
+  "geometry_node.port.loop": "循环体",
+  "geometry_node.port.completed": "完成",
+  "geometry_node.port.flow_true": "为真",
+  "geometry_node.port.flow_false": "为假",
+
+  "geometry_node.port.int": "整数",
+  "geometry_node.port.index": "索引",
+  "geometry_node.port.tick": "刻",
+  "geometry_node.port.color": "颜色",
+
+  "geometry_node.port.bool": "布尔值",
+  "geometry_node.port.debug": "调试",
+  "geometry_node.port.case": "匹配",
+  "geometry_node.port.is_hit": "是否命中",
+
+  "geometry_node.port.value": "值",
+  "geometry_node.port.distance": "距离",
+  "geometry_node.port.radius": "半径",
+  "geometry_node.port.size_1": "尺寸",
+  "geometry_node.port.time": "时间",
+
+  "geometry_node.port.name": "名称",
+  "geometry_node.port.type": "类型",
+  "geometry_node.port.scope": "作用域",
+  "geometry_node.port.expression": "表达式",
+  "geometry_node.port.message": "消息",
+  "geometry_node.port.dimension": "维度",
+  "geometry_node.port.damage_type": "伤害类型",
+
+  "geometry_node.port.entity": "实体",
+  "geometry_node.port.trigger_entity": "触发实体",
+  "geometry_node.port.source_entity": "源实体",
+  "geometry_node.port.attack_source": "攻击源",
+  "geometry_node.port.direct_source": "直接来源",
+
+  "geometry_node.port.block_state": "方块状态",
+  "geometry_node.port.item": "物品",
+  "geometry_node.port.list": "列表",
+
+  "geometry_node.port.xyz": "坐标",
+  "geometry_node.port.start_pos": "起点",
+  "geometry_node.port.end_pos": "终点",
+  "geometry_node.port.center": "中心点",
+  "geometry_node.port.vector": "向量",
+  "geometry_node.port.rotation": "旋转",
+  "geometry_node.port.size_3": "三维尺寸",
+
+  "geometry_node.port.any_value": "任意值",
+
+
+
+
+
   "menu.node.search": "搜索...",
   "menu.node.back": "<- 返回",
   "menu.node.category.input": "输入",
@@ -12,13 +98,6 @@
   "menu.node.item.add": "加法",
   "menu.node.item.subtract": "减法",
 
-  "geometry_node.port.flow": "执行流",
-  "geometry_node.port.entity": "实体",
-  "geometry_node.port.pos": "坐标",
-  "geometry_node.port.block_state": "方块属性",
-  "geometry_node.port.attack_source": "攻击来源",
-  "geometry_node.port.direct_source": "直接来源",
-  "geometry_node.port.damage_type": "伤害类型",
 
   "geometry_node.node.event_on_block_break": "当方块被破坏",
   "geometry_node.node.event_on_block_place": "当方块被放置",

@@ -1,107 +1,77 @@
 package com.mine.geometry_node.core.node;
 
+import com.mine.geometry_node.api.GeometryNodePlugin;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.nodes.actions.BoxOverlapWithRotation;
-import com.mine.geometry_node.core.node.nodes.actions.Raycast;
-import com.mine.geometry_node.core.node.nodes.actions.entity.AddForce;
-import com.mine.geometry_node.core.node.nodes.actions.player.SendMessage;
-import com.mine.geometry_node.core.node.nodes.actions.visual.DrawDebugLine;
-import com.mine.geometry_node.core.node.nodes.actions.visual.DrawLaserBeam;
-import com.mine.geometry_node.core.node.nodes.data.GetEntityAttribute;
-import com.mine.geometry_node.core.node.nodes.data.SetEntityAttribute;
-import com.mine.geometry_node.core.node.nodes.events.block.OnBlockBreak;
-import com.mine.geometry_node.core.node.nodes.events.block.OnBlockPlace;
-import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityDeath;
-import com.mine.geometry_node.core.node.nodes.functions.vector.VectorAdd;
-import com.mine.geometry_node.core.node.nodes.logics.ForEach;
-import com.mine.geometry_node.core.node.nodes.logics.Switch;
-import com.mine.geometry_node.core.node.nodes.functions.graph.ReceiveBlueprint;
-import com.mine.geometry_node.core.node.nodes.functions.graph.TriggerBlueprint;
-import com.mine.geometry_node.core.node.nodes.functions.time.Function_Delay_s;
-import com.mine.geometry_node.core.node.nodes.maths.operation.MathOperation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
 public class NodeRegistry {
     public static final NodeRegistry INSTANCE = new NodeRegistry();
+
     // 后端核心存储
     private final Map<String, BaseNode> registry = new HashMap<>();
     private final Map<String, NodeDef> defaultDefCache = new LinkedHashMap<>();
 
-    // 前端目录树
+    // 唯一保留的前端根目录
     public final NodeCategory ROOT = new NodeCategory("geometry_node.menu.root");
 
-    // 一级目录
-    public final NodeCategory ACTIONS = new NodeCategory("geometry_node.menu.actions");
-    public final NodeCategory EVENTS = new NodeCategory("geometry_node.menu.events");
-    public final NodeCategory FLOWS = new NodeCategory("geometry_node.menu.flow");
-    public final NodeCategory FUNCTIONS = new NodeCategory("geometry_node.menu.effects");
-    public final NodeCategory LOGICS = new NodeCategory("geometry_node.menu.logics");
-    public final NodeCategory MATHS = new NodeCategory("geometry_node.menu.maths");
-    public final NodeCategory ATTRIBUTES = new NodeCategory("geometry_node.menu.attributes");
+    // 路径分隔符
+    private static final String PATH_SEPARATOR = "/";
 
-    // 二级目录
-    public final NodeCategory MATHS_OPERATION = new NodeCategory("geometry_node.menu.operation");
-    public final NodeCategory COMM = new NodeCategory("geometry_node.menu.graph");
-    public final NodeCategory TEXT = new NodeCategory("geometry_node.menu.text");
-    public final NodeCategory TIME = new NodeCategory("geometry_node.menu.time");
-    public final NodeCategory VECTOR = new NodeCategory("geometry_node.menu.vector");
-
-    private NodeRegistry() {
-        ROOT.addChild(EVENTS)
-            .addChild(ACTIONS)
-            .addChild(ATTRIBUTES)
-            .addChild(FLOWS)
-            .addChild(MATHS)
-            .addChild(LOGICS)
-            .addChild(FUNCTIONS);
-
-        MATHS.addChild(MATHS_OPERATION);
-
-        FUNCTIONS.addChild(COMM)
-                .addChild(TEXT)
-                .addChild(TIME)
-                .addChild(VECTOR);
-    }
+    private NodeRegistry() {}
 
     public void init() {
-        System.out.println("[GeometryNode] Registering built-in nodes...");
+        System.out.println("[GeometryNode] 开始检索并加载节点插件 (基于 Java SPI)...");
 
-        // Events
-        register(EVENTS, new OnBlockBreak());
-        register(EVENTS, new OnBlockPlace());
-        register(EVENTS, new OnEntityDeath());
+        // 核心魔法：纯 Java 原生的服务发现机制，通杀所有平台！
+        ServiceLoader<GeometryNodePlugin> loader = ServiceLoader.load(GeometryNodePlugin.class);
 
-        // Actions
-        register(ACTIONS, new SendMessage());
-        register(ACTIONS, new AddForce());
-        register(ACTIONS, new DrawDebugLine());
-        register(ACTIONS, new DrawLaserBeam());
-        register(ACTIONS, new Raycast());
-        register(ACTIONS, new BoxOverlapWithRotation());
+        // 挨个调用它们的注册方法
+        for (GeometryNodePlugin plugin : loader) {
+            System.out.println("[GeometryNode] 发现节点插件: " + plugin.getClass().getSimpleName());
+            try {
+                plugin.registerNodes(this);
+            } catch (Exception e) {
+                System.err.println("[GeometryNode] 插件加载失败: " + plugin.getClass().getName());
+                e.printStackTrace();
+            }
+        }
 
-        // Attribute
-        register(ATTRIBUTES, new SetEntityAttribute());
-        register(ATTRIBUTES, new GetEntityAttribute());
+        System.out.println("[GeometryNode] 插件加载完毕，当前共注册了 " + registry.size() + " 个节点。");
+    }
 
-        // Flows
-        register(FLOWS, new Switch());
+    // 增加一个便捷注册方法，直接吃字符串路径
+    public void register(String path, BaseNode node) {
+        NodeCategory category = getOrCreateCategory(path);
+        register(category, node); // 调用你原来那个完整的 register 方法
+    }
 
-        // Logics
-        register(LOGICS, new ForEach());
+    // 更新：完美实现你的 Translation Key 级联拼接逻辑
+    public NodeCategory getOrCreateCategory(String path) {
+        if (path == null || path.trim().isEmpty()) {
+            return ROOT;
+        }
 
-        // Maths
-        register(MATHS_OPERATION, new MathOperation());
+        String[] parts = path.split("/");
+        NodeCategory current = ROOT;
 
-        // Functions
-        register(FUNCTIONS, new Function_Delay_s());
-        register(COMM, new ReceiveBlueprint());
-        register(COMM, new TriggerBlueprint());
-        register(COMM, new VectorAdd());
+        for (String part : parts) {
+            String cleanPart = part.trim();
+            if (cleanPart.isEmpty()) continue;
 
-        System.out.println("[GeometryNode] Successfully registered " + registry.size() + " nodes.");
+            String currentTranslationKey = "geometry_node.menu." + cleanPart;
+
+            NodeCategory child = current.getChild(currentTranslationKey);
+            if (child == null) {
+                child = new NodeCategory(currentTranslationKey);
+                current.addChild(child);
+            }
+            current = child;
+        }
+
+        return current;
     }
 
     public void register(NodeCategory category, BaseNode node) {
@@ -120,6 +90,16 @@ public class NodeRegistry {
         defaultDefCache.put(typeId, def);
 
         category.addNode(node);
+    }
+
+    @Nullable
+    public NodeDef resolveDefinition(NodeData data) {
+        if (data == null || data.type == null) return null;
+        BaseNode b = registry.get(data.type);
+        if (b != null) {
+            return b.getDefinition(data);
+        }
+        return getDefaultDefinition(data.type);
     }
 
     @Nullable

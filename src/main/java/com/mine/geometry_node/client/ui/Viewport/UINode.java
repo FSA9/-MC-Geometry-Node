@@ -1,6 +1,7 @@
 // --- START OF FILE UINode.java ---
 package com.mine.geometry_node.client.ui.Viewport;
 
+import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.PortRow;
@@ -10,6 +11,7 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
+import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.CheckBox;
 import icyllis.modernui.widget.EditText;
@@ -28,7 +30,7 @@ public class UINode extends FrameLayout {
 
     // --- 绘制参数常量 ---
     private static final float PORT_RADIUS = 5.0f;
-    private static final float PORT_TOUCH_RADIUS = 10.0f;
+    private static final float PORT_TOUCH_RADIUS = 16.0f;
     private static final float CORNER_RADIUS = 6.0f;
     private static final float STROKE_WIDTH_NORMAL = 1.5f;
     private static final float STROKE_WIDTH_SELECTED = 2.5f;
@@ -64,6 +66,8 @@ public class UINode extends FrameLayout {
     // 【重要修改】现在存放的是通用的 View，因为里面会有 CheckBox, EditText 等不同控件
     private final Map<Integer, View> mHintViews = new HashMap<>();
 
+    private final int[] mTmpHintOnScreen = new int[2];
+
     public record DynamicActionInfo(boolean isAdd, String referencePortId) {}
 
     public UINode(Context context, NodeData nodeData, NodeDef nodeDef) {
@@ -86,6 +90,9 @@ public class UINode extends FrameLayout {
         mTitleView.setTextColor(COLOR_TEXT_HEADER);
         mTitleView.setTextSize(TEXT_SIZE_HEADER);
         mTitleView.setGravity(icyllis.modernui.view.Gravity.CENTER);
+        mTitleView.setClickable(false);
+        mTitleView.setFocusable(false);
+        mTitleView.setLongClickable(false);
         addView(mTitleView, new LayoutParams(LayoutParams.MATCH_PARENT, HEADER_HEIGHT));
 
         // 2. 遍历行，构建标签与真实交互控件
@@ -164,6 +171,9 @@ public class UINode extends FrameLayout {
         tv.setTextColor(COLOR_TEXT_LABEL);
         tv.setTextSize(TEXT_SIZE_LABEL);
         tv.setGravity(gravity | icyllis.modernui.view.Gravity.CENTER_VERTICAL);
+        tv.setClickable(false);
+        tv.setFocusable(false);
+        tv.setLongClickable(false);
         return tv;
     }
 
@@ -175,10 +185,11 @@ public class UINode extends FrameLayout {
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
             float portCenterY = currentY + ROW_HEIGHT / 2.0f;
+            float portCenterYDp = portCenterY / UIConstants.mDensity;
 
             // 排版左侧标签
             if (row.leftPort() != null) {
-                mInputPortY.put(row.leftPort().id(), portCenterY);
+                mInputPortY.put(row.leftPort().id(), portCenterYDp);
                 TextView tv = mPortLabels.get(row.leftPort().id());
                 if (tv != null) {
                     LayoutParams lp = (LayoutParams) tv.getLayoutParams();
@@ -194,7 +205,7 @@ public class UINode extends FrameLayout {
 
             // 排版右侧标签
             if (row.rightPort() != null) {
-                mOutputPortY.put(row.rightPort().id(), portCenterY);
+                mOutputPortY.put(row.rightPort().id(), portCenterYDp);
                 TextView tv = mPortLabels.get(row.rightPort().id());
                 if (tv != null) {
                     LayoutParams lp = (LayoutParams) tv.getLayoutParams();
@@ -238,35 +249,41 @@ public class UINode extends FrameLayout {
 
         mTotalHeight = (int) currentY;
         setLayoutParams(new LayoutParams(NODE_WIDTH, mTotalHeight));
-        invalidate(); // 触发布局和重绘
+        invalidate();
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        float d = UIConstants.mDensity;
+        float lx = ev.getX() / d;
+        float ly = ev.getY() / d;
+        if (hitTestPort(lx, ly, true) != null || hitTestPort(lx, ly, false) != null) {
+            return false;
+        }
+        return super.dispatchTouchEvent(ev);
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
-        float w = NODE_WIDTH;
-        float h = mTotalHeight;
+        float w = getWidth() > 0 ? getWidth() : NODE_WIDTH * UIConstants.mDensity;
+        float h = getHeight() > 0 ? getHeight() : mTotalHeight;
 
-        // 1. 绘制主体背景
         mPaint.setStyle(Paint.Style.FILL);
         mPaint.setColor(COLOR_BODY);
         mTempRect.set(0, 0, w, h);
         canvas.drawRoundRect(mTempRect, CORNER_RADIUS, (int) CORNER_RADIUS, mPaint);
 
-        // 2. 绘制标题栏背景
         canvas.save();
         canvas.clipRect(0, 0, w, HEADER_HEIGHT);
         mPaint.setColor(mNodeDef.category().getColor());
         canvas.drawRoundRect(0, 0, w, HEADER_HEIGHT + CORNER_RADIUS, CORNER_RADIUS, (int) CORNER_RADIUS, mPaint);
         canvas.restore();
 
-        // 3. 绘制节点边框
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(mIsSelected ? STROKE_WIDTH_SELECTED : STROKE_WIDTH_NORMAL);
         mPaint.setColor(mIsSelected ? COLOR_SELECTED : COLOR_OUTLINE);
         canvas.drawRoundRect(mTempRect, CORNER_RADIUS, (int) CORNER_RADIUS, mPaint);
 
-        // 4. 遍历绘制纯几何图形 (圆圈, 动态加减号)
-        // 【重要修改】去除了 Checkbox、Select、Input 的手绘逻辑
         float currentY = HEADER_HEIGHT;
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
@@ -283,7 +300,6 @@ public class UINode extends FrameLayout {
                 canvas.drawCircle(w, centerY, PORT_RADIUS, mPaint);
             }
 
-            // 绘制动态按钮 (+/-)
             if (isDynamicRow(row)) {
                 boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
                 float rowBottom = currentY + ROW_HEIGHT;
@@ -320,40 +336,79 @@ public class UINode extends FrameLayout {
     }
 
     public void getPortPosition(String portId, boolean isInput, float[] outPos) {
-        outPos[0] = isInput ? 0 : NODE_WIDTH;
+        float wDp = getWidth() > 0 ? getWidth() / UIConstants.mDensity : NODE_WIDTH;
+        outPos[0] = isInput ? 0 : wDp;
         Float y = isInput ? mInputPortY.get(portId) : mOutputPortY.get(portId);
         outPos[1] = (y != null) ? y : 0f;
     }
 
-    public String hitTestPort(float localX, float localY, boolean checkInput) {
-        float targetX = checkInput ? 0 : NODE_WIDTH;
-        float dx = localX - targetX;
-        Map<String, Float> map = checkInput ? mInputPortY : mOutputPortY;
-        float thresholdSq = PORT_TOUCH_RADIUS * PORT_TOUCH_RADIUS;
-
-        for (Map.Entry<String, Float> entry : map.entrySet()) {
-            float dy = localY - entry.getValue();
-            if (dx * dx + dy * dy <= thresholdSq) return entry.getKey();
+    public View findInteractiveViewAtScreen(float screenX, float screenY) {
+        for (int row = mNodeDef.rows().size() - 1; row >= 0; row--) {
+            View v = mHintViews.get(row);
+            if (v == null) continue;
+            v.getLocationOnScreen(mTmpHintOnScreen);
+            int w = v.getWidth();
+            int h = v.getHeight();
+            if (screenX >= mTmpHintOnScreen[0] && screenX < mTmpHintOnScreen[0] + w
+                    && screenY >= mTmpHintOnScreen[1] && screenY < mTmpHintOnScreen[1] + h) {
+                return v;
+            }
         }
         return null;
     }
 
+    public View findInteractiveViewAt(float localX, float localY) {
+        for (int row = mNodeDef.rows().size() - 1; row >= 0; row--) {
+            View v = mHintViews.get(row);
+            if (v == null) continue;
+            int l = v.getLeft();
+            int t = v.getTop();
+            int r = v.getRight();
+            int b = v.getBottom();
+            if (localX >= l && localX < r && localY >= t && localY < b) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    public String hitTestPort(float localX, float localY, boolean checkInput) {
+        float wDp = getWidth() > 0 ? getWidth() / UIConstants.mDensity : NODE_WIDTH;
+        float targetX = checkInput ? 0 : wDp;
+        float dx = localX - targetX;
+        Map<String, Float> map = checkInput ? mInputPortY : mOutputPortY;
+        float thresholdSq = PORT_TOUCH_RADIUS * PORT_TOUCH_RADIUS;
+        String best = null;
+        float bestDistSq = Float.MAX_VALUE;
+        for (Map.Entry<String, Float> entry : map.entrySet()) {
+            float dy = localY - entry.getValue();
+            float distSq = dx * dx + dy * dy;
+            if (distSq <= thresholdSq && distSq < bestDistSq) {
+                bestDistSq = distSq;
+                best = entry.getKey();
+            }
+        }
+        return best;
+    }
+
     public DynamicActionInfo hitTestDynamicButton(float localX, float localY) {
-        float currentY = HEADER_HEIGHT;
+        float d = UIConstants.mDensity;
+        float wDp = getWidth() > 0 ? getWidth() / d : NODE_WIDTH;
+        float yPx = HEADER_HEIGHT;
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
             if (isDynamicRow(row)) {
                 boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
-                float rowBottom = currentY + ROW_HEIGHT;
-                float btnCenterX = isLast ? 0 : NODE_WIDTH;
+                float rowBottomDp = (yPx + ROW_HEIGHT) / d;
+                float btnCenterXDp = isLast ? 0 : wDp;
 
-                if (Math.abs(localX - btnCenterX) <= 8.0f && Math.abs(localY - rowBottom) <= 8.0f) {
+                if (Math.abs(localX - btnCenterXDp) <= 8.0f && Math.abs(localY - rowBottomDp) <= 8.0f) {
                     String refId = row.leftPort() != null ? row.leftPort().id() :
                             (row.rightPort() != null ? row.rightPort().id() : "");
                     return new DynamicActionInfo(isLast, refId);
                 }
             }
-            currentY += ROW_HEIGHT;
+            yPx += ROW_HEIGHT;
         }
         return null;
     }
