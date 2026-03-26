@@ -1,11 +1,9 @@
 package com.mine.geometry_node.core.node.nodes.events.block;
 
-import com.mine.geometry_node.core.node.NodeInfo;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.nodes.events.BaseEventNode;
 import net.minecraft.network.chat.Component;
 
-@NodeInfo(category = "geometry_node.menu.events/block")
 public class OnBlockBreak extends BaseEventNode {
 
     public static final String TYPE_ID = "on_block_break";

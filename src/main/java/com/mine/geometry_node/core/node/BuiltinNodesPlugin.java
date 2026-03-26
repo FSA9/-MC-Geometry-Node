@@ -2,8 +2,14 @@ package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.api.GeometryNodePlugin;
 
+import com.mine.geometry_node.core.node.nodes.actions.entity.AddForce;
 import com.mine.geometry_node.core.node.nodes.actions.player.SendMessage;
+import com.mine.geometry_node.core.node.nodes.actions.visual.DrawDebugLine;
 import com.mine.geometry_node.core.node.nodes.events.block.OnBlockBreak;
+import com.mine.geometry_node.core.node.nodes.events.block.OnBlockPlace;
+import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityDeath;
+import com.mine.geometry_node.core.node.nodes.logics.Switch;
+import com.mine.geometry_node.core.node.nodes.maths.operation.MathOperation;
 
 
 public class BuiltinNodesPlugin implements GeometryNodePlugin {
@@ -14,15 +20,18 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // Events
         registry.register("events/block", new OnBlockBreak());
-        // registry.register("events/block", new OnBlockPlace());
-        // registry.register("events/entity", new OnEntityDeath());
+        registry.register("events/block", new OnBlockPlace());
+        registry.register("events/entity", new OnEntityDeath());
 
         // Actions
         registry.register("actions/player", new SendMessage());
-        // registry.register("actions/entity", new AddForce());
-        // registry.register("actions/visual", new DrawDebugLine());
+        registry.register("actions/entity", new AddForce());
+        registry.register("actions/visual", new DrawDebugLine());
 
         // Maths
-        // registry.register("maths/operation", new MathOperation());
+        registry.register("maths/operation", new MathOperation());
+
+        // Logics
+        registry.register("logics", new Switch());
     }
 }

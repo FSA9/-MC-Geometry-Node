@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface InteractionContext {
 
-    // --- 核心坐标转换 API (统一入口) ---
+    // --- 核心坐标转换 API ---
 
     /**
      * 将屏幕物理坐标 (触摸点) 转换为 UI 逻辑坐标 (DP)
@@ -42,19 +42,18 @@ public interface InteractionContext {
 
     // --- 节点与选择 (全部基于 UI 坐标) ---
 
-    // 查找节点 (传入 UI 坐标)
+    // 查找节点
     UINode findNodeAt(float uiX, float uiY);
 
-    // 查找端口 (传入 UI 坐标)
+    // 查找端口
     Viewport.PortInfo findPortAt(float uiX, float uiY);
 
-    // 移动选中节点 (传入 UI 坐标增量)
+    // 移动选中节点
     void moveSelectedNodes(float uiDx, float uiDy);
 
-    // 框选 (传入 UI 坐标矩形)
+    // 框选
     void updateBoxSelection(float uiX, float uiY, float uiW, float uiH);
 
-    // --- 其他保持不变 ---
     void invalidate();
     void requestViewportFocus();
     List<UINode> getSelectedNodes();

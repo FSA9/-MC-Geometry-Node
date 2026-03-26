@@ -10,139 +10,111 @@ import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
+
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.View;
-import icyllis.modernui.widget.EditText;
-import icyllis.modernui.widget.FrameLayout;
+import icyllis.modernui.view.ViewGroup;
+import icyllis.modernui.widget.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * 视口容器 (画布核心引擎)
  * <p>
  * 架构职责：
- * 1. 坐标系映射：负责将屏幕物理坐标 (Screen Pixels) 转换为 UI 逻辑坐标 (Logical DP)。
- * 2. 节点承载：管理所有 UINode 的生命周期与渲染层级，UINode 内部的 TranslationX/Y 仅存储逻辑坐标。
- * 3. 视口变换：处理画布的平移 (Pan) 和缩放 (Zoom)，底层渲染框架自动处理 DP 到物理像素的映射。
- * 4. 事件中转：将触摸和键盘事件分发给 InteractionManager 和 KeyManager。
- * </p>
+ * 1. 坐标系映射：屏幕物理坐标 (Screen Pixels) <-> UI 逻辑坐标 (Logical DP)。
+ * 2. 节点承载：管理 UINode 生命周期与渲染层级。
+ * 3. 视口变换：处理画布的平移 (Pan) 和缩放 (Zoom)。
+ * 4. 事件中转：拦截并分发触摸/按键事件到底层交互组件或节点内的 UI 控件。
  */
 public class Viewport extends FrameLayout implements InteractionContext, EditorContext.EditorListener {
 
     private static final int TOOL_TYPE_MOUSE = 1;
 
-    // 核心组件与数据依赖
+    // ==========================================
+    // 1. 核心组件 (Core Components)
+    // ==========================================
+    private final FrameLayout mNodeLayer;                  // 节点真实的物理容器，承接缩放/平移
+    private final InteractionManager mInteractionManager;  // 交互管理器：框选、拖拽、连线
+    private final KeyManager mKeyManager;                  // 快捷键管理器
+    private final EditorContext mEditorContext;            // 编辑器上下文：桥接数据与UI
 
+    // ==========================================
+    // 2. 视口状态 (Viewport State)
+    // ==========================================
+    private float mViewportX = 0;                          // 视口物理偏移 X 坐标 (Screen Pixels)
+    private float mViewportY = 0;                          // 视口物理偏移 Y 坐标 (Screen Pixels)
+    private float mCurrentScale = 1.0f;                    // 当前缩放比例 (1.0f 为基准)
+    private boolean mFirstLayout = true;                   // 首次布局标记
 
-    /** 节点真实的物理容器，所有的平移和缩放变换最终作用于此容器 */
-    private final FrameLayout mNodeLayer;
-
-    /** 交互管理器：处理框选、拖拽节点、连线等复杂交互逻辑 */
-    private final InteractionManager mInteractionManager;
-
-    /** 快捷键管理器：处理键盘输入 */
-    private final KeyManager mKeyManager;
-
-    /** 编辑器上下文：桥接底层图数据与 UI 表现 */
-    private final EditorContext mEditorContext;
-
-
-    // 视口状态与数据映射
-
-
-    /** 视口物理偏移 X 坐标 (Screen Pixels) */
-    private float mViewportX = 0;
-
-    /** 视口物理偏移 Y 坐标 (Screen Pixels) */
-    private float mViewportY = 0;
-
-    /** 视口当前的缩放比例 (1.0f 为基准) */
-    private float mCurrentScale = 1.0f;
-
-    /** 标记是否是首次布局，用于初始化视口中心点 */
-    private boolean mFirstLayout = true;
-
-    /** 当前被选中的节点集合 */
+    // ==========================================
+    // 3. 数据与节点映射 (Data & Node Mapping)
+    // ==========================================
     private final List<UINode> mSelectedNodes = new ArrayList<>();
-
-    /** 节点 ID 到 UINode 实例的映射表，实现 O(1) 查找 */
-    private final Map<String, UINode> mNodeViews = new HashMap<>();
-
-    /** 当前视口中所有的连接线集合 */
+    private final Map<String, UINode> mNodeViews = new HashMap<>(); // NodeID -> UINode
     private final List<Connection> mConnections = new ArrayList<>();
 
-    private View mCapturedHintView;
+    // ==========================================
+    // 4. 事件与交互拦截缓存 (Event Cache)
+    // ==========================================
+    private View mCapturedHintView;                        // 当前捕获交互事件的内部控件 (如输入框)
+    private boolean mHintCaptureUsesLogical;               // 该控件是否使用逻辑坐标判定
 
-    private boolean mHintCaptureUsesLogical;
-
-    private final int[] mTmpTargetLoc = new int[2];
-
-    private final float[] mTmpEventScreen = new float[2];
-
-
-    // 渲染画笔与复用对象 (防止 onDraw 触发频繁 GC)
-
-
+    // ==========================================
+    // 5. 渲染与临时复用对象 (避免高频 GC)
+    // ==========================================
+    private final icyllis.modernui.graphics.RectF mTmpNodeBounds = new icyllis.modernui.graphics.RectF(); // 复用包围盒
     private final Paint mGridPaint = new Paint();
     private final Paint mBackgroundPaint = new Paint();
     private final Paint mConnectionPaint = new Paint();
 
-    /** 临时数组，用于计算输出端口坐标，避免在渲染循环中创建对象 */
+    private final int[] mTmpTargetLoc = new int[2];
+    private final float[] mTmpEventScreen = new float[2];
     private final float[] mTempOutPos = new float[2];
-
-    /** 临时数组，用于计算输入端口坐标，避免在渲染循环中创建对象 */
     private final float[] mTempInPos  = new float[2];
 
+    // ==========================================
+    // 模块 1: 初始化与生命周期 (Initialization)
+    // ==========================================
 
-    // 初始化与生命周期
-
-
-    /**
-     * 构造函数：初始化视口环境与核心组件
-     */
     public Viewport(Context context, EditorContext editorContext) {
         super(context);
         this.mEditorContext = editorContext;
         this.mEditorContext.addListener(this);
 
-        // 初始化节点层
+        // 初始化组件层级
         mNodeLayer = new FrameLayout(context);
         initViewportProps();
         initPaints();
         addView(mNodeLayer, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
-        // 初始化交互管理器
+        // 初始化管理器
         mInteractionManager = new InteractionManager(this);
         mKeyManager = new KeyManager(this);
 
-        // 确保 Viewport 可以接收焦点与按键事件
+        // 允许接收焦点与按键
         setFocusable(true);
         setFocusableInTouchMode(true);
     }
 
-    /**
-     * 初始化视图容器的层级属性
-     */
     private void initViewportProps() {
-        setWillNotDraw(false);    // 允许执行 onDraw 绘制背景和网格
-        setClipChildren(false);   // 允许子视图绘制超出边界（方便节点拖拽时过度）
+        setWillNotDraw(false);
+        setClipChildren(false);
 
-        mNodeLayer.setPivotX(0);  // 将缩放中心设置在左上角，配合 viewport 偏移计算
+        mNodeLayer.setPivotX(0);
         mNodeLayer.setPivotY(0);
         mNodeLayer.setClipChildren(false);
     }
 
-    /**
-     * 初始化背景、网格、连线的渲染画笔
-     */
     private void initPaints() {
         mBackgroundPaint.setColor(UIConstants.ViewPort.BG_COLOR);
 
@@ -155,20 +127,16 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         mConnectionPaint.setColor(0xFFE0E0E0);
     }
 
-
-    // 1. 数据驱动监听器 (EditorContext.EditorListener)
-
+    // ==========================================
+    // 模块 2: 数据驱动监听 (EditorContext.EditorListener)
+    // ==========================================
 
     @Override
     public void onNodeAdded(NodeData nodeData) {
         NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(nodeData);
-        if (def == null) {
-            return;
-        }
+        if (def == null) return;
 
-        UINode uiNode = new UINode(getContext(), nodeData, def);
-
-        // NodeData 中存储的是逻辑坐标 (DP)，直接赋值给 View 的 Translation
+        UINode uiNode = new UINode(getContext(), nodeData, def, mEditorContext);
         uiNode.setTranslationX(nodeData.getX());
         uiNode.setTranslationY(nodeData.getY());
 
@@ -190,12 +158,14 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     @Override
     public void onNodeStructureChanged(NodeData nodeData) {
         if (nodeData == null || nodeData.id == null) return;
+
         UINode old = mNodeViews.remove(nodeData.id);
         boolean wasSelected = old != null && mSelectedNodes.contains(old);
         if (old != null) {
             mNodeLayer.removeView(old);
             mSelectedNodes.remove(old);
         }
+
         onNodeAdded(nodeData);
         if (wasSelected) {
             UINode rebuilt = mNodeViews.get(nodeData.id);
@@ -220,7 +190,7 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         for (NodeData out : g.nodes.values()) {
             UINode outUi = mNodeViews.get(out.id);
             if (outUi == null) continue;
-            for (java.util.Map.Entry<String, java.util.List<com.mine.geometry_node.core.node.Connection>> e : out.outputs.entrySet()) {
+            for (Map.Entry<String, List<com.mine.geometry_node.core.node.Connection>> e : out.outputs.entrySet()) {
                 if (e.getValue() == null) continue;
                 for (com.mine.geometry_node.core.node.Connection link : e.getValue()) {
                     UINode inUi = mNodeViews.get(link.targetNodeId());
@@ -234,13 +204,11 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
     @Override
     public void onSelectionChanged(List<String> selectedNodeIds) {
-        // 重置所有节点状态
         for (UINode node : mNodeViews.values()) {
             node.setSelected(false);
         }
         mSelectedNodes.clear();
 
-        // 更新选中状态
         for (String id : selectedNodeIds) {
             UINode uiNode = mNodeViews.get(id);
             if (uiNode != null) {
@@ -255,7 +223,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     public void onNodeMoved(String nodeId, float x, float y) {
         UINode uiNode = mNodeViews.get(nodeId);
         if (uiNode != null) {
-            // 接收并设置逻辑坐标 (DP)
             uiNode.setTranslationX(x);
             uiNode.setTranslationY(y);
             invalidate();
@@ -283,120 +250,38 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         invalidate();
     }
 
-
-    // 2. 核心渲染逻辑 (背景、网格、连线层)
-
+    // ==========================================
+    // 模块 3: 视口变换与坐标系映射 (Transform & Coordinates)
+    // ==========================================
 
     @Override
-    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        super.onSizeChanged(w, h, oldw, oldh);
-
-        // 首次布局时，将视口原点对齐到画布中心
-        if (mFirstLayout && w > 0 && h > 0) {
-            mViewportX = w / 2f;
-            mViewportY = h / 2f;
-            updateTransform();
-            mFirstLayout = false;
-        }
+    public void updateTransform() {
+        mNodeLayer.setTranslationX(mViewportX / UIConstants.mDensity);
+        mNodeLayer.setTranslationY(mViewportY / UIConstants.mDensity);
+        mNodeLayer.setScaleX(mCurrentScale);
+        mNodeLayer.setScaleY(mCurrentScale);
+        invalidate();
     }
 
     @Override
-    protected void onDraw(Canvas canvas) {
-        // 1. 绘制底层背景颜色
-        canvas.drawRect(0, 0, getWidth(), getHeight(), mBackgroundPaint);
+    public void performZoom(boolean zoomIn, float pivotScreenX, float pivotScreenY) {
+        float oldScale = mCurrentScale;
+        float factor = zoomIn ? UIConstants.ViewPort.ZOOM_SENSITIVITY : -UIConstants.ViewPort.ZOOM_SENSITIVITY;
 
-        // 2. 绘制无限网格 (基于物理像素和缩放进行动态计算)
-        drawInfiniteGrid(canvas);
+        mCurrentScale = Math.max(UIConstants.ViewPort.ZOOM_MIN,
+                Math.min(UIConstants.ViewPort.ZOOM_MAX, oldScale + factor));
 
-        super.onDraw(canvas);
+        if (mCurrentScale == oldScale) return;
+
+        float ratio = mCurrentScale / oldScale;
+        mViewportX = pivotScreenX - (pivotScreenX - mViewportX) * ratio;
+        mViewportY = pivotScreenY - (pivotScreenY - mViewportY) * ratio;
+
+        updateTransform();
     }
-
-    /**
-     * 绘制动态网格系统
-     */
-    private void drawInfiniteGrid(Canvas canvas) {
-        // 计算缩放后的实际网格间距 (逻辑间距 * 缩放比例 * 屏幕密度)
-        float scaledGrid = UIConstants.ViewPort.GRID_SIZE * mCurrentScale * UIConstants.mDensity;
-
-        // 当网格过密时停止绘制，防止性能下降和视觉杂乱
-        if (scaledGrid < 5f) return;
-
-        float w = getWidth();
-        float h = getHeight();
-
-        // 计算网格起始偏移 (利用取模运算将网格对齐到视口偏移量)
-        float startX = mViewportX % scaledGrid;
-        if (startX > 0) startX -= scaledGrid;
-
-        float startY = mViewportY % scaledGrid;
-        if (startY > 0) startY -= scaledGrid;
-
-        // --- 绘制常规网格线 ---
-        mGridPaint.setColor(UIConstants.ViewPort.COLOR_GRID_LINE);
-        mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_NORMAL);
-
-        for (float x = startX; x < w; x += scaledGrid) {
-            canvas.drawLine(x, 0, x, h, mGridPaint);
-        }
-        for (float y = startY; y < h; y += scaledGrid) {
-            canvas.drawLine(0, y, w, y, mGridPaint);
-        }
-
-        // --- 绘制坐标轴中心线 ---
-        mGridPaint.setColor(UIConstants.ViewPort.COLOR_GRID_AXIS);
-        mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_AXIS);
-
-        if (mViewportX >= 0 && mViewportX <= w) {
-            canvas.drawLine(mViewportX, 0, mViewportX, h, mGridPaint);
-        }
-        if (mViewportY >= 0 && mViewportY <= h) {
-            canvas.drawLine(0, mViewportY, w, mViewportY, mGridPaint);
-        }
-    }
-
-    @Override
-    protected void dispatchDraw(Canvas canvas) {
-        // 1. 绘制节点之间的连线 (必须在子 View 节点之前绘制，使其处于下层)
-        drawAllConnections(canvas);
-
-        // 2. 绘制子 View (即 mNodeLayer 及其包含的 UINode)
-        super.dispatchDraw(canvas);
-
-        // 3. 绘制交互覆盖层 Overlay (如框选虚线框、正在拖拽的连线草稿)
-        mInteractionManager.drawOverlay(canvas);
-    }
-
-    /**
-     * 遍历并绘制所有已建立的节点连线
-     */
-    private void drawAllConnections(Canvas canvas) {
-        for (Connection c : mConnections) {
-            // 获取输出端逻辑坐标 (使用 String outputPortId)
-            c.outputNode.getPortPosition(c.outputPortID, false, mTempOutPos);
-            float outUiX = c.outputNode.getTranslationX() + mTempOutPos[0];
-            float outUiY = c.outputNode.getTranslationY() + mTempOutPos[1];
-
-            // 获取输入端逻辑坐标 (使用 String inputPortId)
-            c.inputNode.getPortPosition(c.inputPortID, true, mTempInPos);
-            float inUiX = c.inputNode.getTranslationX() + mTempInPos[0];
-            float inUiY = c.inputNode.getTranslationY() + mTempInPos[1];
-
-            // 将 UI 逻辑坐标转换为屏幕物理坐标后进行绘制
-            canvas.drawLine(
-                    uiToScreenX(outUiX), uiToScreenY(outUiY),
-                    uiToScreenX(inUiX), uiToScreenY(inUiY),
-                    mConnectionPaint
-            );
-        }
-    }
-
-
-    // 3. 核心坐标变换机制 (实现 InteractionContext)
-
 
     @Override
     public float screenToUIX(float screenX) {
-        // 降维：(物理坐标 - 视口偏移) -> 还原缩放 -> 还原密度，得到 DP
         return ((screenX - mViewportX) / mCurrentScale) / UIConstants.mDensity;
     }
 
@@ -407,7 +292,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
     @Override
     public float uiToScreenX(float uiX) {
-        // 升维：DP -> 乘密度应用屏幕 -> 乘缩放应用视口 -> 叠加物理偏移
         return (uiX * UIConstants.mDensity) * mCurrentScale + mViewportX;
     }
 
@@ -416,136 +300,167 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         return (uiY * UIConstants.mDensity) * mCurrentScale + mViewportY;
     }
 
-
-    // 4. 视口控制与变换 (平移与缩放)
-
-
-    /**
-     * 将当前视口的偏移和缩放状态应用到 NodeLayer 上
-     */
-    @Override
-    public void updateTransform() {
-        // mNodeLayer 的 setTranslation 接收的是逻辑坐标，需除以密度进行换算
-        mNodeLayer.setTranslationX(mViewportX / UIConstants.mDensity);
-        mNodeLayer.setTranslationY(mViewportY / UIConstants.mDensity);
-
-        mNodeLayer.setScaleX(mCurrentScale);
-        mNodeLayer.setScaleY(mCurrentScale);
-
-        invalidate();
-    }
-
-    /**
-     * 执行缩放操作 (以指定屏幕坐标为锚点)
-     */
-    @Override
-    public void performZoom(boolean zoomIn, float pivotScreenX, float pivotScreenY) {
-        float oldScale = mCurrentScale;
-        float factor = zoomIn ? UIConstants.ViewPort.ZOOM_SENSITIVITY : -UIConstants.ViewPort.ZOOM_SENSITIVITY;
-
-        // 限制缩放范围
-        mCurrentScale = Math.max(UIConstants.ViewPort.ZOOM_MIN,
-                Math.min(UIConstants.ViewPort.ZOOM_MAX, oldScale + factor));
-
-        if (mCurrentScale == oldScale) return;
-
-        // 计算缩放比率以重新定位视口原点 (实现以鼠标点为中心的缩放)
-        float ratio = mCurrentScale / oldScale;
-        mViewportX = pivotScreenX - (pivotScreenX - mViewportX) * ratio;
-        mViewportY = pivotScreenY - (pivotScreenY - mViewportY) * ratio;
-
-        updateTransform();
-    }
-
     @Override public float getViewportX() { return mViewportX; }
     @Override public float getViewportY() { return mViewportY; }
     @Override public void setViewportX(float x) { mViewportX = x; }
     @Override public void setViewportY(float y) { mViewportY = y; }
     @Override public float getCurrentScale() { return mCurrentScale; }
 
-
-    // 5. 命中测试与交互 (全部基于 UI 逻辑坐标系计算)
-
+    // ==========================================
+    // 模块 4: 核心渲染逻辑 (Render Logic)
+    // ==========================================
 
     @Override
-    public UINode findNodeAt(float uiX, float uiY) {
-        // 倒序遍历处理 Z-Order (确保总是优先命中上层节点)
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        if (mFirstLayout && w > 0 && h > 0) {
+            mViewportX = w / 2f;
+            mViewportY = h / 2f;
+            updateTransform();
+            mFirstLayout = false;
+        }
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        canvas.drawRect(0, 0, getWidth(), getHeight(), mBackgroundPaint);
+        drawInfiniteGrid(canvas);
+        super.onDraw(canvas);
+    }
+
+    private void drawInfiniteGrid(Canvas canvas) {
+        float scaledGrid = UIConstants.ViewPort.GRID_SIZE * mCurrentScale * UIConstants.mDensity;
+        if (scaledGrid < 5f) return;
+
+        float w = getWidth();
+        float h = getHeight();
+
+        float startX = mViewportX % scaledGrid;
+        if (startX > 0) startX -= scaledGrid;
+
+        float startY = mViewportY % scaledGrid;
+        if (startY > 0) startY -= scaledGrid;
+
+        // 常规网格线
+        mGridPaint.setColor(UIConstants.ViewPort.COLOR_GRID_LINE);
+        mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_NORMAL);
+        for (float x = startX; x < w; x += scaledGrid) {
+            canvas.drawLine(x, 0, x, h, mGridPaint);
+        }
+        for (float y = startY; y < h; y += scaledGrid) {
+            canvas.drawLine(0, y, w, y, mGridPaint);
+        }
+
+        // 坐标中心线
+        mGridPaint.setColor(UIConstants.ViewPort.COLOR_GRID_AXIS);
+        mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_AXIS);
+        if (mViewportX >= 0 && mViewportX <= w) {
+            canvas.drawLine(mViewportX, 0, mViewportX, h, mGridPaint);
+        }
+        if (mViewportY >= 0 && mViewportY <= h) {
+            canvas.drawLine(0, mViewportY, w, mViewportY, mGridPaint);
+        }
+    }
+
+    @Override
+    protected void dispatchDraw(Canvas canvas) {
+        drawAllConnections(canvas);
+        super.dispatchDraw(canvas);
+        mInteractionManager.drawOverlay(canvas);
+    }
+
+    private void drawAllConnections(Canvas canvas) {
+        for (Connection c : mConnections) {
+            c.outputNode.getPortPosition(c.outputPortID, false, mTempOutPos);
+            float outUiX = c.outputNode.getTranslationX() + mTempOutPos[0];
+            float outUiY = c.outputNode.getTranslationY() + mTempOutPos[1];
+
+            c.inputNode.getPortPosition(c.inputPortID, true, mTempInPos);
+            float inUiX = c.inputNode.getTranslationX() + mTempInPos[0];
+            float inUiY = c.inputNode.getTranslationY() + mTempInPos[1];
+
+            canvas.drawLine(
+                    uiToScreenX(outUiX), uiToScreenY(outUiY),
+                    uiToScreenX(inUiX), uiToScreenY(inUiY),
+                    mConnectionPaint
+            );
+        }
+    }
+
+    // ==========================================
+    // 模块 5: 节点检索与基础交互 APIs (Hit Test & Base Interaction)
+    // ==========================================
+
+    private interface NodeVisitor<T> {
+        T visit(UINode node);
+    }
+
+    /**
+     * 按照 Z-Order (从顶层到底层) 遍历节点，直到找到第一个命中的目标
+     */
+    private <T> T findHitInZOrder(NodeVisitor<T> visitor) {
         for (int i = mNodeLayer.getChildCount() - 1; i >= 0; i--) {
             View child = mNodeLayer.getChildAt(i);
-
             if (child instanceof UINode node) {
-                float left = node.getTranslationX();
-                float top = node.getTranslationY();
-                float right = left + node.getWidth() / UIConstants.mDensity;
-                float bottom = top + node.getHeight() / UIConstants.mDensity;
-
-                // 逻辑坐标系下的 AABB 碰撞检测
-                if (uiX >= left && uiX <= right && uiY >= top && uiY <= bottom) {
-                    return node;
-                }
+                T result = visitor.visit(node);
+                if (result != null) return result; // 一旦命中，立即阻断并返回
             }
         }
         return null;
     }
 
     @Override
-    public Viewport.PortInfo findPortAt(float uiX, float uiY) {
-        UINode node = findNodeAt(uiX, uiY);
-        if (node == null) return null;
-
-        // 转换至节点内部的局部 UI 坐标
-        float localX = uiX - node.getTranslationX();
-        float localY = uiY - node.getTranslationY();
-
-        String inPortId = node.hitTestPort(localX, localY, true);
-        if (inPortId != null) return new PortInfo(node, inPortId, true);
-
-        String outPortId = node.hitTestPort(localX, localY, false);
-        if (outPortId != null) return new PortInfo(node, outPortId, false);
-
-        return null;
+    public UINode findNodeAt(float uiX, float uiY) {
+        return findHitInZOrder(node -> {
+            node.getLogicalBounds(mTmpNodeBounds);
+            return mTmpNodeBounds.contains(uiX, uiY) ? node : null;
+        });
     }
 
     @Override
-    public void moveSelectedNodes(float uiDx, float uiDy) {
-        for (UINode node : mSelectedNodes) {
-            // 位移直接叠加逻辑坐标
-            node.setTranslationX(node.getTranslationX() + uiDx);
-            node.setTranslationY(node.getTranslationY() + uiDy);
-        }
+    public Viewport.PortInfo findPortAt(float uiX, float uiY) {
+        float fixedMargin = 6.0f;
+        return findHitInZOrder(node -> {
+            node.getLogicalBounds(mTmpNodeBounds);
+            mTmpNodeBounds.inset(-fixedMargin, -fixedMargin);
+
+            if (mTmpNodeBounds.contains(uiX, uiY)) {
+                float localX = uiX - node.getTranslationX();
+                float localY = uiY - node.getTranslationY();
+
+                String inPortId = node.hitTestPort(localX, localY, true, fixedMargin);
+                if (inPortId != null) return new PortInfo(node, inPortId, true);
+
+                String outPortId = node.hitTestPort(localX, localY, false, fixedMargin);
+                if (outPortId != null) return new PortInfo(node, outPortId, false);
+            }
+            return null;
+        });
     }
 
     @Override
     public void updateBoxSelection(float uiX, float uiY, float uiW, float uiH) {
         clearSelection();
-
-        // 预计算框选区域右、下边界，避免在循环体内重复计算
         float selRight = uiX + uiW;
         float selBottom = uiY + uiH;
 
         for (int i = 0; i < mNodeLayer.getChildCount(); i++) {
             if (mNodeLayer.getChildAt(i) instanceof UINode n) {
-                float nodeLeft = n.getTranslationX();
-                float nodeTop = n.getTranslationY();
-                float nodeRight = nodeLeft + n.getWidth() / UIConstants.mDensity;
-                float nodeBottom = nodeTop + n.getHeight() / UIConstants.mDensity;
-
-                // 2D 矩形相交检测算法 (AABB)
-                boolean isIntersecting = uiX < nodeRight &&
-                        selRight > nodeLeft &&
-                        uiY < nodeBottom &&
-                        selBottom > nodeTop;
-
-                if (isIntersecting) {
+                n.getLogicalBounds(mTmpNodeBounds);
+                if (mTmpNodeBounds.intersects(uiX, uiY, selRight, selBottom)) {
                     addToSelection(n);
                 }
             }
         }
     }
 
-
-    // 6. 状态管理与 API 接口实现
-
+    @Override
+    public void moveSelectedNodes(float uiDx, float uiDy) {
+        for (UINode node : mSelectedNodes) {
+            node.setTranslationX(node.getTranslationX() + uiDx);
+            node.setTranslationY(node.getTranslationY() + uiDy);
+        }
+    }
 
     @Override public List<UINode> getSelectedNodes() { return mSelectedNodes; }
 
@@ -585,120 +500,182 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         mNodeLayer.addView(node);
     }
 
-    /**
-     * 通过外部调用（如右键菜单）添加指定类型节点
-     */
     public void addNode(float screenX, float screenY, String typeId) {
         float uiX = screenToUIX(screenX);
         float uiY = screenToUIY(screenY);
-
         String mockId = UUID.randomUUID().toString();
         NodeData data = new NodeData(mockId, typeId, uiX, uiY);
 
-        CmdAddNode cmd =
-                new CmdAddNode(mEditorContext.getGraphController(), data);
+        CmdAddNode cmd = new CmdAddNode(mEditorContext.getGraphController(), data);
         mEditorContext.getCommandManager().execute(cmd);
     }
 
-    @Override public icyllis.modernui.core.Context getUIContext() { return getContext(); }
+    @Override public Context getUIContext() { return getContext(); }
     @Override public EditorContext getEditorContext() { return mEditorContext; }
+    @Override public void requestViewportFocus() { requestFocus(); }
 
-    @Override
-    public void requestViewportFocus() {
-        requestFocus();
+
+    // ==========================================
+    // 模块 6: 内部控件事件分发 (Event Dispatch & UI Hints)
+    // ==========================================
+
+    private record HintHitResult(View view, boolean isLogical) {}
+
+    private interface EventDispatcher {
+        boolean dispatch(View target, MotionEvent ev);
     }
 
-
-    // 7. 事件分发拦截
-
+    /**
+     * 将屏幕事件缓存转换为物理坐标点
+     */
     private void eventToScreen(MotionEvent ev) {
         mTmpEventScreen[0] = ev.getRawX();
         mTmpEventScreen[1] = ev.getRawY();
     }
 
-    private View findHintByScreen(float screenX, float screenY) {
-        for (int i = mNodeLayer.getChildCount() - 1; i >= 0; i--) {
-            View child = mNodeLayer.getChildAt(i);
-            if (!(child instanceof UINode node)) continue;
-            View v = node.findInteractiveViewAtScreen(screenX, screenY);
-            if (v != null) return v;
-        }
-        return null;
-    }
-
-    private View findInteractiveHintAtLogical(float uiX, float uiY) {
-        for (int i = mNodeLayer.getChildCount() - 1; i >= 0; i--) {
-            View child = mNodeLayer.getChildAt(i);
-            if (!(child instanceof UINode node)) continue;
-            float left = node.getTranslationX();
-            float top = node.getTranslationY();
-            float right = left + node.getWidth() / UIConstants.mDensity;
-            float bottom = top + node.getHeight() / UIConstants.mDensity;
-            if (uiX < left || uiX > right || uiY < top || uiY > bottom) continue;
-            float localX = (uiX - left) * UIConstants.mDensity;
-            float localY = (uiY - top) * UIConstants.mDensity;
-            View v = node.findInteractiveViewAt(localX, localY);
-            if (v != null) return v;
-        }
-        return null;
-    }
-
-    private boolean dispatchTransformedToView(MotionEvent ev, View target, boolean skipEventToScreen) {
-        if (!skipEventToScreen) {
-            eventToScreen(ev);
-        }
-        target.getLocationOnScreen(mTmpTargetLoc);
-        float lx = mTmpEventScreen[0] - mTmpTargetLoc[0];
-        float ly = mTmpEventScreen[1] - mTmpTargetLoc[1];
-        float ox = ev.getX();
-        float oy = ev.getY();
-        ev.setLocation(lx, ly);
-        boolean handled = target.dispatchTouchEvent(ev);
-        ev.setLocation(ox, oy);
-        return handled;
-    }
-
-    private boolean dispatchTransformedToViewLogical(MotionEvent ev, View target) {
+    /**
+     * 统一的控件命中测试：一次遍历，双重校验，严格遵守 Z-Order
+     */
+    private HintHitResult findInteractiveHint(MotionEvent ev) {
         float uiX = screenToUIX(ev.getX());
         float uiY = screenToUIY(ev.getY());
-        if (!(target.getParent() instanceof UINode node)) return false;
-        float lx = (uiX - node.getTranslationX()) * UIConstants.mDensity - target.getLeft();
-        float ly = (uiY - node.getTranslationY()) * UIConstants.mDensity - target.getTop();
-        float ox = ev.getX();
-        float oy = ev.getY();
-        ev.setLocation(lx, ly);
-        boolean handled = target.dispatchTouchEvent(ev);
-        ev.setLocation(ox, oy);
-        return handled;
+        eventToScreen(ev);
+
+        return findHitInZOrder(node -> {
+            // 1. 优先尝试：逻辑坐标系碰撞
+            node.getLogicalBounds(mTmpNodeBounds);
+            if (mTmpNodeBounds.contains(uiX, uiY)) {
+                float localX = (uiX - node.getTranslationX()) * UIConstants.mDensity;
+                float localY = (uiY - node.getTranslationY()) * UIConstants.mDensity;
+                View v = node.findInteractiveViewAt(localX, localY);
+                if (v != null) return new HintHitResult(v, true);
+            }
+
+            // 2. 降级尝试：屏幕物理坐标系碰撞 (针对不受缩放影响的特殊弹出框等)
+            View vScreen = node.findInteractiveViewAtScreen(mTmpEventScreen[0], mTmpEventScreen[1], mCurrentScale);
+            if (vScreen != null) return new HintHitResult(vScreen, false);
+
+            return null;
+        });
     }
 
-    private boolean dispatchTransformedGenericToView(MotionEvent ev, View target, boolean skipEventToScreen) {
-        if (!skipEventToScreen) {
-            eventToScreen(ev);
+    /**
+     * 统一的事件坐标变换与分发引擎
+     * @param isLogical 是否使用逻辑坐标系计算偏移
+     * @param skipEventToScreen 是否跳过屏幕坐标换算 (仅 isLogical 为 false 时有效)
+     */
+    private boolean dispatchTransformedEvent(MotionEvent ev, View target, boolean isLogical, boolean skipEventToScreen, EventDispatcher dispatcher) {
+        float ox = ev.getX();
+        float oy = ev.getY();
+        float lx, ly;
+
+        if (isLogical) {
+            if (!(target.getParent() instanceof UINode node)) return false;
+            float uiX = screenToUIX(ox);
+            float uiY = screenToUIY(oy);
+            lx = (uiX - node.getTranslationX()) * UIConstants.mDensity - target.getLeft();
+            ly = (uiY - node.getTranslationY()) * UIConstants.mDensity - target.getTop();
+        } else {
+            if (!skipEventToScreen) eventToScreen(ev);
+            target.getLocationOnScreen(mTmpTargetLoc);
+            lx = mTmpEventScreen[0] - mTmpTargetLoc[0];
+            ly = mTmpEventScreen[1] - mTmpTargetLoc[1];
         }
-        target.getLocationOnScreen(mTmpTargetLoc);
-        float lx = mTmpEventScreen[0] - mTmpTargetLoc[0];
-        float ly = mTmpEventScreen[1] - mTmpTargetLoc[1];
-        float ox = ev.getX();
-        float oy = ev.getY();
+
+        // 替换坐标 -> 派发事件 -> 还原坐标
         ev.setLocation(lx, ly);
-        boolean handled = target.dispatchGenericMotionEvent(ev);
+        boolean handled = dispatcher.dispatch(target, ev);
         ev.setLocation(ox, oy);
+
         return handled;
     }
 
-    private boolean dispatchTransformedGenericToViewLogical(MotionEvent ev, View target) {
-        float uiX = screenToUIX(ev.getX());
-        float uiY = screenToUIY(ev.getY());
-        if (!(target.getParent() instanceof UINode node)) return false;
-        float lx = (uiX - node.getTranslationX()) * UIConstants.mDensity - target.getLeft();
-        float ly = (uiY - node.getTranslationY()) * UIConstants.mDensity - target.getTop();
-        float ox = ev.getX();
-        float oy = ev.getY();
-        ev.setLocation(lx, ly);
-        boolean handled = target.dispatchGenericMotionEvent(ev);
-        ev.setLocation(ox, oy);
-        return handled;
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        int action = ev.getActionMasked();
+
+        // 1. 已捕获焦点的快速通道
+        if (mCapturedHintView != null) {
+            boolean r = dispatchTransformedEvent(ev, mCapturedHintView, mHintCaptureUsesLogical, !mHintCaptureUsesLogical, View::dispatchTouchEvent);
+
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                mCapturedHintView = null;
+                mHintCaptureUsesLogical = false;
+            }
+            return r;
+        }
+
+        // 2. 单指操作的控件碰撞与分发
+        if (ev.getPointerCount() == 1) {
+            boolean isMouseHoverMove = (action == MotionEvent.ACTION_MOVE && ev.getButtonState() == 0 && ev.getToolType(0) == TOOL_TYPE_MOUSE);
+            boolean isActionDown = (action == MotionEvent.ACTION_DOWN);
+
+            if (isMouseHoverMove || isActionDown) {
+                HintHitResult hitResult = findInteractiveHint(ev);
+
+                if (hitResult != null) {
+                    boolean handled = dispatchTransformedEvent(ev, hitResult.view(), hitResult.isLogical(), !hitResult.isLogical(), View::dispatchTouchEvent);
+                    if (handled) {
+                        if (isActionDown) {
+                            mCapturedHintView = hitResult.view();
+                            mHintCaptureUsesLogical = hitResult.isLogical();
+                        }
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // 3. 原生画布与连线交互兜底
+        return super.dispatchTouchEvent(ev);
+    }
+
+    /**
+     * 极简下拉菜单实现 (使用基础 LinearLayout 拼装)
+     * 如果 modernui 缺少 PopupWindow，你可以把这里的逻辑替换为你生成 ViewportMenu 的方法
+     */
+    private static void showSimpleDropdown(Context context, View anchorView, String[] options, Consumer<String> onSelected) {
+        // 1. 创建下拉列表容器
+        LinearLayout listLayout = new LinearLayout(context);
+        listLayout.setOrientation(LinearLayout.VERTICAL);
+//        listLayout.setBackgroundColor(0xFF222222); // 深色背景
+
+        // 2. 将选项填充进去
+        for (String opt : options) {
+            TextView tv = new TextView(context);
+            tv.setText(opt);
+            tv.setTextColor(0xFFFFFFFF);
+            tv.setTextSize(10);
+            tv.setPadding(10, 8, 10, 8); // 设置边距让点击区域更大
+
+            // 鼠标悬停变色效果 (可选)
+            // tv.setOnHoverListener(...)
+
+            listLayout.addView(tv, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+
+        // 3. 封装进 PopupWindow 并显示
+        // 注意：如果 icyllis.modernui 连 PopupWindow 都没有，
+        // 那你需要在此处实例化你的 ViewportMenu，并为其动态添加选项。
+        PopupWindow popup = new PopupWindow(listLayout,
+                anchorView.getWidth(), // 宽度与按钮一致
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        popup.setFocusable(true);
+        popup.setOutsideTouchable(true);
+
+        // 绑定点击事件，点击后回调并关闭弹窗
+        for (int i = 0; i < listLayout.getChildCount(); i++) {
+            final String selectedOpt = options[i];
+            listLayout.getChildAt(i).setOnClickListener(v -> {
+                onSelected.accept(selectedOpt);
+                popup.dismiss();
+            });
+        }
+
+        // 在按钮正下方显示
+        popup.showAsDropDown(anchorView);
     }
 
     @Override
@@ -707,18 +684,10 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         if (action == MotionEvent.ACTION_HOVER_MOVE
                 || action == MotionEvent.ACTION_HOVER_ENTER
                 || action == MotionEvent.ACTION_HOVER_EXIT) {
-            float uiX = screenToUIX(ev.getX());
-            float uiY = screenToUIY(ev.getY());
-            View hit = findInteractiveHintAtLogical(uiX, uiY);
-            if (hit != null) {
-                if (dispatchTransformedGenericToViewLogical(ev, hit)) {
-                    return true;
-                }
-            }
-            eventToScreen(ev);
-            hit = findHintByScreen(mTmpEventScreen[0], mTmpEventScreen[1]);
-            if (hit != null) {
-                if (dispatchTransformedGenericToView(ev, hit, true)) {
+
+            HintHitResult hitResult = findInteractiveHint(ev);
+            if (hitResult != null) {
+                if (dispatchTransformedEvent(ev, hitResult.view(), hitResult.isLogical(), !hitResult.isLogical(), View::dispatchGenericMotionEvent)) {
                     return true;
                 }
             }
@@ -727,72 +696,11 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     }
 
     @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        int action = ev.getActionMasked();
-        if (mCapturedHintView != null) {
-            boolean r = mHintCaptureUsesLogical
-                    ? dispatchTransformedToViewLogical(ev, mCapturedHintView)
-                    : dispatchTransformedToView(ev, mCapturedHintView, false);
-            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                mCapturedHintView = null;
-                mHintCaptureUsesLogical = false;
-            }
-            return r;
-        }
-        if (ev.getPointerCount() == 1) {
-            if (action == MotionEvent.ACTION_MOVE && ev.getButtonState() == 0
-                    && ev.getToolType(0) == TOOL_TYPE_MOUSE) {
-                float uiX = screenToUIX(ev.getX());
-                float uiY = screenToUIY(ev.getY());
-                View hit = findInteractiveHintAtLogical(uiX, uiY);
-                if (hit != null) {
-                    if (dispatchTransformedToViewLogical(ev, hit)) {
-                        return true;
-                    }
-                }
-                eventToScreen(ev);
-                hit = findHintByScreen(mTmpEventScreen[0], mTmpEventScreen[1]);
-                if (hit != null) {
-                    if (dispatchTransformedToView(ev, hit, true)) {
-                        return true;
-                    }
-                }
-            }
-            if (action == MotionEvent.ACTION_DOWN) {
-                float uiX = screenToUIX(ev.getX());
-                float uiY = screenToUIY(ev.getY());
-                View hit = findInteractiveHintAtLogical(uiX, uiY);
-                if (hit != null) {
-                    if (dispatchTransformedToViewLogical(ev, hit)) {
-                        mCapturedHintView = hit;
-                        mHintCaptureUsesLogical = true;
-                        return true;
-                    }
-                }
-                eventToScreen(ev);
-                hit = findHintByScreen(mTmpEventScreen[0], mTmpEventScreen[1]);
-                if (hit != null) {
-                    if (dispatchTransformedToView(ev, hit, true)) {
-                        mCapturedHintView = hit;
-                        mHintCaptureUsesLogical = false;
-                        return true;
-                    }
-                }
-            }
-        }
-        return super.dispatchTouchEvent(ev);
-    }
-
-    @Override
     public PointerIcon onResolvePointerIcon(MotionEvent event) {
-        float uiX = screenToUIX(event.getX());
-        float uiY = screenToUIY(event.getY());
-        View hit = findInteractiveHintAtLogical(uiX, uiY);
-        if (hit == null) {
-            eventToScreen(event);
-            hit = findHintByScreen(mTmpEventScreen[0], mTmpEventScreen[1]);
-        }
-        if (hit != null) {
+        HintHitResult hitResult = findInteractiveHint(event);
+
+        if (hitResult != null) {
+            View hit = hitResult.view();
             if (hit instanceof EditText) {
                 return PointerIcon.getSystemIcon(PointerIcon.TYPE_TEXT);
             }
@@ -816,9 +724,9 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         return mKeyManager.onKeyDown(event) || super.onKeyDown(keyCode, event);
     }
 
-
-    // 内部类 (纯数据结构)
-
+    // ==========================================
+    // 模块 7: 内部数据结构 (Inner Classes)
+    // ==========================================
 
     /**
      * 端口交互的封装上下文信息
