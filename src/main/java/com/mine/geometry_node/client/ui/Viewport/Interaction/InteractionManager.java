@@ -169,10 +169,52 @@ public class InteractionManager {
             float localY = uiY - target.getTranslationY();
             UINode.DynamicActionInfo btnInfo = target.hitTestDynamicButton(localX, localY);
             if (btnInfo != null) {
-                // TODO: 这里留空。未来在这里调用 Command 增加/删除 JSON 中的动态端口和连线
-                System.out.println("[Interaction] Clicked Dynamic Button: "
-                        + (btnInfo.isAdd() ? "ADD (+)" : "REMOVE (-)")
-                        + " at row with port: " + btnInfo.referencePortId());
+                // 1. 获取目标节点数据
+                com.mine.geometry_node.core.node.NodeData nodeData = target.getNodeData();
+                String propertyKey = "dynamic_branch_output_count";
+
+                // 2. 读取当前分支数量 (默认 1)
+                int currentCount = 1;
+                if (nodeData.properties.containsKey(propertyKey)) {
+                    Object countObj = nodeData.properties.get(propertyKey);
+                    if (countObj instanceof Number) {
+                        currentCount = ((Number) countObj).intValue();
+                    } else if (countObj instanceof String) {
+                        try { currentCount = Integer.parseInt((String) countObj); } catch (Exception ignored) {}
+                    }
+                }
+
+                // 3. 读取最大限制 (从 Meta 字典获取，兜底给个 10)
+                int maxCount = 10;
+                if (target.getNodeDef().meta().containsKey("max_dynamic_output_number")) {
+                    Object maxObj = target.getNodeDef().meta().get("max_dynamic_output_number");
+                    if (maxObj instanceof Integer) maxCount = (Integer) maxObj;
+                }
+
+                // 4. 根据点击类型执行对应的 Command
+                if (btnInfo.isAdd()) {
+                    if (currentCount < maxCount) {
+                        com.mine.geometry_node.client.ui.UICommand.commands.CmdAddBranch cmd =
+                                new com.mine.geometry_node.client.ui.UICommand.commands.CmdAddBranch(
+                                        mContext.getEditorContext().getGraphController(),
+                                        nodeData.id, propertyKey, currentCount);
+                        mContext.getEditorContext().getCommandManager().execute(cmd);
+                    } else {
+                        System.out.println("[Interaction] 动态端口数量已达上限: " + maxCount);
+                    }
+                } else {
+                    if (currentCount > 1) {
+                        com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch cmd =
+                                new com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch(
+                                        mContext.getEditorContext().getGraphController(),
+                                        mContext.getEditorContext().getGraph(),
+                                        nodeData.id, propertyKey, currentCount);
+                        mContext.getEditorContext().getCommandManager().execute(cmd);
+                    } else {
+                        System.out.println("[Interaction] 无法删除，必须保留至少一个分支");
+                    }
+                }
+
                 return; // 消费事件，阻止进入拖拽模式
             }
 
@@ -397,6 +439,10 @@ public class InteractionManager {
     }
 
     private void drawDraftLine(Canvas canvas) {
+        float currentScale = mContext.getCurrentScale();
+        float scaledLineWidth = 3.0f * currentScale; // 3.0f 是你在 initPaints 中设置的基础宽度
+        mDraftLinePaint.setStrokeWidth(scaledLineWidth);
+
         // 1. 获取起始端口的 UI 逻辑坐标
         mDraftStartPort.node.getPortPosition(mDraftStartPort.portId, mDraftStartPort.isInput, mTempPos);
         float startUiX = mDraftStartPort.node.getTranslationX() + mTempPos[0];

@@ -17,7 +17,6 @@ import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.View;
-import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.*;
 
 import java.util.ArrayList;
@@ -25,7 +24,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 /**
  * 视口容器 (画布核心引擎)
@@ -47,6 +45,7 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     private final InteractionManager mInteractionManager;  // 交互管理器：框选、拖拽、连线
     private final KeyManager mKeyManager;                  // 快捷键管理器
     private final EditorContext mEditorContext;            // 编辑器上下文：桥接数据与UI
+    private ViewportMenu mActiveMenu;
 
     // ==========================================
     // 2. 视口状态 (Viewport State)
@@ -61,7 +60,7 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     // ==========================================
     private final List<UINode> mSelectedNodes = new ArrayList<>();
     private final Map<String, UINode> mNodeViews = new HashMap<>(); // NodeID -> UINode
-    private final List<Connection> mConnections = new ArrayList<>();
+//    private final List<Connection> mConnections = new ArrayList<>();
 
     // ==========================================
     // 4. 事件与交互拦截缓存 (Event Cache)
@@ -123,8 +122,8 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
         mConnectionPaint.setAntiAlias(true);
         mConnectionPaint.setStyle(Paint.Style.STROKE);
-        mConnectionPaint.setStrokeWidth(3.0f);
-        mConnectionPaint.setColor(0xFFE0E0E0);
+        mConnectionPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_CONNECTION);
+        mConnectionPaint.setColor(0xFFE0E0E0); // 颜色暂留硬编码，等待后续拓展
     }
 
     // ==========================================
@@ -151,8 +150,8 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
             mNodeLayer.removeView(uiNode);
             mSelectedNodes.remove(uiNode);
         }
-        mConnections.removeIf(c ->
-                c.outputNode.getNodeData().id.equals(nodeId) || c.inputNode.getNodeData().id.equals(nodeId));
+
+        invalidate();
     }
 
     @Override
@@ -174,32 +173,23 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
                 rebuilt.setSelected(true);
             }
         }
-        rebuildConnectionsFromGraph();
+
         invalidate();
     }
 
     @Override
     public void onGraphConnectionsRebuildRequested() {
-        rebuildConnectionsFromGraph();
         invalidate();
     }
 
-    private void rebuildConnectionsFromGraph() {
-        mConnections.clear();
-        NodeGraph g = mEditorContext.getGraph();
-        for (NodeData out : g.nodes.values()) {
-            UINode outUi = mNodeViews.get(out.id);
-            if (outUi == null) continue;
-            for (Map.Entry<String, List<com.mine.geometry_node.core.node.Connection>> e : out.outputs.entrySet()) {
-                if (e.getValue() == null) continue;
-                for (com.mine.geometry_node.core.node.Connection link : e.getValue()) {
-                    UINode inUi = mNodeViews.get(link.targetNodeId());
-                    if (inUi != null) {
-                        mConnections.add(new Connection(outUi, e.getKey(), inUi, link.targetPortName()));
-                    }
-                }
-            }
-        }
+    @Override
+    public void onExecutionConnectionAdded(String outNodeId, String outPortId, String inNodeId) {
+        invalidate();
+    }
+
+    @Override
+    public void onExecutionConnectionRemoved(String outNodeId, String outPortId, String inNodeId) {
+        invalidate();
     }
 
     @Override
@@ -233,20 +223,16 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     public void onConnectionAdded(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         UINode outNode = mNodeViews.get(outNodeId);
         UINode inNode = mNodeViews.get(inNodeId);
-        if (outNode == null || inNode == null) return;
-
-        mConnections.add(new Connection(outNode, outPortId, inNode, inPortId));
+        if (outNode != null) outNode.updateNodeLayout();
+        if (inNode != null) inNode.updateNodeLayout();
         invalidate();
     }
-
     @Override
     public void onConnectionRemoved(String outNodeId, String outPortId, String inNodeId, String inPortId) {
-        mConnections.removeIf(c ->
-                c.outputNode.getNodeData().id.equals(outNodeId)
-                        && c.outputPortID.equals(outPortId)
-                        && c.inputNode.getNodeData().id.equals(inNodeId)
-                        && c.inputPortID.equals(inPortId)
-        );
+        UINode outNode = mNodeViews.get(outNodeId);
+        UINode inNode = mNodeViews.get(inNodeId);
+        if (outNode != null) outNode.updateNodeLayout();
+        if (inNode != null) inNode.updateNodeLayout();
         invalidate();
     }
 
@@ -329,8 +315,8 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     }
 
     private void drawInfiniteGrid(Canvas canvas) {
-        float scaledGrid = UIConstants.ViewPort.GRID_SIZE * mCurrentScale * UIConstants.mDensity;
-        if (scaledGrid < 5f) return;
+        float scaledGrid = UIConstants.GRID_SIZE * mCurrentScale;
+        if (scaledGrid < 5f) return; // 性能优化：网格过小时不绘制
 
         float w = getWidth();
         float h = getHeight();
@@ -369,22 +355,67 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         mInteractionManager.drawOverlay(canvas);
     }
 
+    // 在 Viewport.java 中替换旧方法
     private void drawAllConnections(Canvas canvas) {
-        for (Connection c : mConnections) {
-            c.outputNode.getPortPosition(c.outputPortID, false, mTempOutPos);
-            float outUiX = c.outputNode.getTranslationX() + mTempOutPos[0];
-            float outUiY = c.outputNode.getTranslationY() + mTempOutPos[1];
+        float scaledLineWidth = UIConstants.ViewPort.LINE_WIDTH_CONNECTION * mCurrentScale;
+        mConnectionPaint.setStrokeWidth(scaledLineWidth);
 
-            c.inputNode.getPortPosition(c.inputPortID, true, mTempInPos);
-            float inUiX = c.inputNode.getTranslationX() + mTempInPos[0];
-            float inUiY = c.inputNode.getTranslationY() + mTempInPos[1];
+        // 直接从核心数据层获取节点
+        com.mine.geometry_node.core.node.NodeGraph graph = mEditorContext.getGraph();
+        if (graph == null) return;
 
-            canvas.drawLine(
-                    uiToScreenX(outUiX), uiToScreenY(outUiY),
-                    uiToScreenX(inUiX), uiToScreenY(inUiY),
-                    mConnectionPaint
-            );
+        for (NodeData outData : graph.nodes.values()) {
+            UINode outUi = mNodeViews.get(outData.id);
+            if (outUi == null) continue;
+
+            // 1. 绘制普通数据连线
+            if (outData.outputs != null) {
+                for (Map.Entry<String, List<com.mine.geometry_node.core.node.Connection>> entry : outData.outputs.entrySet()) {
+                    String outPortId = entry.getKey();
+                    if (entry.getValue() == null) continue;
+
+                    for (com.mine.geometry_node.core.node.Connection link : entry.getValue()) {
+                        UINode inUi = mNodeViews.get(link.targetNodeId());
+                        if (inUi != null) {
+                            drawLine(canvas, outUi, outPortId, inUi, link.targetPortName());
+                        }
+                    }
+                }
+            }
+
+            // 2. 绘制执行流连线
+            if (outData.execution != null) {
+                for (Map.Entry<String, String> entry : outData.execution.entrySet()) {
+                    String execOutPortId = entry.getKey();
+                    String targetNodeId = entry.getValue();
+
+                    UINode inUi = mNodeViews.get(targetNodeId);
+                    if (inUi != null) {
+                        String targetExecPortId = findFirstExecInputPort(inUi);
+                        if (targetExecPortId != null) {
+                            drawLine(canvas, outUi, execOutPortId, inUi, targetExecPortId);
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    // 辅助绘制方法，复用了你原本定义的 mTempOutPos 和 mTempInPos，零 GC！
+    private void drawLine(Canvas canvas, UINode outUi, String outPortId, UINode inUi, String inPortId) {
+        outUi.getPortPosition(outPortId, false, mTempOutPos);
+        float outUiX = outUi.getTranslationX() + mTempOutPos[0];
+        float outUiY = outUi.getTranslationY() + mTempOutPos[1];
+
+        inUi.getPortPosition(inPortId, true, mTempInPos);
+        float inUiX = inUi.getTranslationX() + mTempInPos[0];
+        float inUiY = inUi.getTranslationY() + mTempInPos[1];
+
+        canvas.drawLine(
+                uiToScreenX(outUiX), uiToScreenY(outUiY),
+                uiToScreenX(inUiX), uiToScreenY(inUiY),
+                mConnectionPaint
+        );
     }
 
     // ==========================================
@@ -413,25 +444,27 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     public UINode findNodeAt(float uiX, float uiY) {
         return findHitInZOrder(node -> {
             node.getLogicalBounds(mTmpNodeBounds);
+            mTmpNodeBounds.inset(-12.0f, -12.0f);  // 扩充容差，以包含悬浮在边缘的加减号按钮和端口外沿
             return mTmpNodeBounds.contains(uiX, uiY) ? node : null;
         });
     }
 
     @Override
     public Viewport.PortInfo findPortAt(float uiX, float uiY) {
-        float fixedMargin = 6.0f;
+        // 使用基于模数动态计算出的交互判定半径
+        float dynamicMargin = UIConstants.Node.PORT_HITBOX_RADIUS;
         return findHitInZOrder(node -> {
             node.getLogicalBounds(mTmpNodeBounds);
-            mTmpNodeBounds.inset(-fixedMargin, -fixedMargin);
+            mTmpNodeBounds.inset(-dynamicMargin, -dynamicMargin);
 
             if (mTmpNodeBounds.contains(uiX, uiY)) {
                 float localX = uiX - node.getTranslationX();
                 float localY = uiY - node.getTranslationY();
 
-                String inPortId = node.hitTestPort(localX, localY, true, fixedMargin);
+                String inPortId = node.hitTestPort(localX, localY, true, dynamicMargin);
                 if (inPortId != null) return new PortInfo(node, inPortId, true);
 
-                String outPortId = node.hitTestPort(localX, localY, false, fixedMargin);
+                String outPortId = node.hitTestPort(localX, localY, false, dynamicMargin);
                 if (outPortId != null) return new PortInfo(node, outPortId, false);
             }
             return null;
@@ -480,19 +513,32 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         }
     }
 
-    @Override public void addConnection(Connection c) { mConnections.add(c); }
-
     @Override
     public boolean hasConnection(UINode outN, String outId, UINode inN, String inId) {
-        for (Connection c : mConnections) {
-            if (c.isSame(outN, outId, inN, inId)) return true;
+        List<com.mine.geometry_node.core.node.Connection> links = outN.getNodeData().getConnections(outId);
+        if (links == null) return false;
+
+        for (com.mine.geometry_node.core.node.Connection link : links) {
+            if (link.targetNodeId().equals(inN.getNodeData().id) && link.targetPortName().equals(inId)) {
+                return true;
+            }
         }
         return false;
     }
 
     @Override
     public void showMenu(float screenX, float screenY) {
-        new ViewportMenu(getContext()).showAt(screenX, screenY, this);
+        closeMenu();
+
+        mActiveMenu = new ViewportMenu(getContext());
+        mActiveMenu.showAt(screenX, screenY, this);
+    }
+
+    public void closeMenu() {
+        if (mActiveMenu != null && mActiveMenu.isShowing()) {
+            mActiveMenu.dismiss();
+            mActiveMenu = null;
+        }
     }
 
     @Override
@@ -514,6 +560,14 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     @Override public EditorContext getEditorContext() { return mEditorContext; }
     @Override public void requestViewportFocus() { requestFocus(); }
 
+    private String findFirstExecInputPort(UINode node) {
+        for (com.mine.geometry_node.core.node.nodes.PortRow row : node.getNodeDef().rows()) {
+            if (row.leftPort() != null && row.leftPort().type() == com.mine.geometry_node.core.node.nodes.PortType.EXECUTION) {
+                return row.leftPort().id();
+            }
+        }
+        return "flow_in"; // 兜底返回默认名
+    }
 
     // ==========================================
     // 模块 6: 内部控件事件分发 (Event Dispatch & UI Hints)
@@ -578,8 +632,12 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         } else {
             if (!skipEventToScreen) eventToScreen(ev);
             target.getLocationOnScreen(mTmpTargetLoc);
-            lx = mTmpEventScreen[0] - mTmpTargetLoc[0];
-            ly = mTmpEventScreen[1] - mTmpTargetLoc[1];
+
+            // 【核心修复】计算出屏幕物理差值后，必须除以缩放系数，将其还原为控件的真实本地坐标比例
+            float physicalLx = mTmpEventScreen[0] - mTmpTargetLoc[0];
+            float physicalLy = mTmpEventScreen[1] - mTmpTargetLoc[1];
+            lx = physicalLx / mCurrentScale;
+            ly = physicalLy / mCurrentScale;
         }
 
         // 替换坐标 -> 派发事件 -> 还原坐标
@@ -591,8 +649,31 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     }
 
     @Override
+    public boolean dispatchKeyEvent(icyllis.modernui.view.KeyEvent event) {
+        // 【核心修复】全局拦截：只要按下了 Ctrl 键，Viewport 优先尝试处理
+        if (event.isCtrlPressed()) {
+            System.out.println("isCtrlPressed");
+            // 我们只在按下 (ACTION_DOWN) 时触发保存/撤销操作
+            if (event.getAction() == icyllis.modernui.view.KeyEvent.ACTION_DOWN) {
+                // 将事件交给 KeyManager 判定。如果是 S, Z, Y，KeyManager 会返回 true
+                if (mKeyManager.onKeyDown(event)) {
+                    return true; // 关键：返回 true 代表事件已消费，EditText 将完全不知道发生了什么
+                }
+            }
+        }
+
+        // 如果不是快捷键，或者没有按下 Ctrl，按照原有的正常逻辑分发
+        // 这样 EditText 依然可以正常输入文字、使用 Ctrl+C / Ctrl+V 等自带功能
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         int action = ev.getActionMasked();
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            closeMenu();
+        }
 
         // 1. 已捕获焦点的快速通道
         if (mCapturedHintView != null) {
@@ -628,54 +709,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
         // 3. 原生画布与连线交互兜底
         return super.dispatchTouchEvent(ev);
-    }
-
-    /**
-     * 极简下拉菜单实现 (使用基础 LinearLayout 拼装)
-     * 如果 modernui 缺少 PopupWindow，你可以把这里的逻辑替换为你生成 ViewportMenu 的方法
-     */
-    private static void showSimpleDropdown(Context context, View anchorView, String[] options, Consumer<String> onSelected) {
-        // 1. 创建下拉列表容器
-        LinearLayout listLayout = new LinearLayout(context);
-        listLayout.setOrientation(LinearLayout.VERTICAL);
-//        listLayout.setBackgroundColor(0xFF222222); // 深色背景
-
-        // 2. 将选项填充进去
-        for (String opt : options) {
-            TextView tv = new TextView(context);
-            tv.setText(opt);
-            tv.setTextColor(0xFFFFFFFF);
-            tv.setTextSize(10);
-            tv.setPadding(10, 8, 10, 8); // 设置边距让点击区域更大
-
-            // 鼠标悬停变色效果 (可选)
-            // tv.setOnHoverListener(...)
-
-            listLayout.addView(tv, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT));
-        }
-
-        // 3. 封装进 PopupWindow 并显示
-        // 注意：如果 icyllis.modernui 连 PopupWindow 都没有，
-        // 那你需要在此处实例化你的 ViewportMenu，并为其动态添加选项。
-        PopupWindow popup = new PopupWindow(listLayout,
-                anchorView.getWidth(), // 宽度与按钮一致
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        popup.setFocusable(true);
-        popup.setOutsideTouchable(true);
-
-        // 绑定点击事件，点击后回调并关闭弹窗
-        for (int i = 0; i < listLayout.getChildCount(); i++) {
-            final String selectedOpt = options[i];
-            listLayout.getChildAt(i).setOnClickListener(v -> {
-                onSelected.accept(selectedOpt);
-                popup.dismiss();
-            });
-        }
-
-        // 在按钮正下方显示
-        popup.showAsDropDown(anchorView);
     }
 
     @Override
@@ -740,28 +773,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
             this.node = n;
             this.portId = id;
             this.isInput = in;
-        }
-    }
-
-    /**
-     * 节点间连线的数据模型映射
-     */
-    public static class Connection {
-        public UINode inputNode;
-        public UINode outputNode;
-        public String inputPortID;
-        public String outputPortID;
-
-        public Connection(UINode outN, String outID, UINode inN, String inID) {
-            this.outputNode = outN;
-            this.outputPortID = outID;
-            this.inputNode = inN;
-            this.inputPortID = inID;
-        }
-
-        public boolean isSame(UINode outN, String outID, UINode inN, String inID) {
-            return outputNode == outN && java.util.Objects.equals(outputPortID, outID)
-                    && inputNode == inN && java.util.Objects.equals(inputPortID, inID);
         }
     }
 }

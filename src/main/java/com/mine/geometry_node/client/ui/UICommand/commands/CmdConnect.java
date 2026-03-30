@@ -14,13 +14,28 @@ public class CmdConnect implements ICommand {
         this.inNodeId = inNodeId; this.inPortId = inPortId;
     }
 
+    // 新增：判断器，根据你的命名规范，包含 flow 的通常是执行流
+    private boolean isExecutionFlow() {
+        return outPortId.startsWith("flow_") || inPortId.startsWith("flow_");
+    }
+
     @Override
     public void execute() {
-        mController.addConnection(outNodeId, outPortId, inNodeId, inPortId);
+        if (isExecutionFlow()) {
+            // 执行流
+            mController.addExecutionConnection(outNodeId, outPortId, inNodeId);
+        } else {
+            // 数据流
+            mController.addConnection(outNodeId, outPortId, inNodeId, inPortId);
+        }
     }
 
     @Override
     public void undo() {
-        mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
+        if (isExecutionFlow()) {
+            mController.removeExecutionConnection(outNodeId, outPortId);
+        } else {
+            mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
+        }
     }
 }

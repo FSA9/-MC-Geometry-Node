@@ -1,12 +1,13 @@
 package com.mine.geometry_node.client.ui.Viewport.Interaction;
 
+import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.Viewport.UINode;
 import com.mine.geometry_node.client.ui.Viewport.Viewport;
 import java.util.List;
 
 public interface InteractionContext {
 
-    // --- 核心坐标转换 API ---
+    // --- 核心坐标转换 API (统一入口) ---
 
     /**
      * 将屏幕物理坐标 (触摸点) 转换为 UI 逻辑坐标 (DP)
@@ -42,29 +43,30 @@ public interface InteractionContext {
 
     // --- 节点与选择 (全部基于 UI 坐标) ---
 
-    // 查找节点
+    // 查找节点 (传入 UI 坐标)
     UINode findNodeAt(float uiX, float uiY);
 
-    // 查找端口
+    // 查找端口 (传入 UI 坐标)
     Viewport.PortInfo findPortAt(float uiX, float uiY);
 
-    // 移动选中节点
+    // 移动选中节点 (传入 UI 坐标增量)
     void moveSelectedNodes(float uiDx, float uiDy);
 
-    // 框选
+    // 框选 (传入 UI 坐标矩形)
     void updateBoxSelection(float uiX, float uiY, float uiW, float uiH);
 
+    // --- 其他保持不变 ---
     void invalidate();
     void requestViewportFocus();
     List<UINode> getSelectedNodes();
     void clearSelection();
     void addToSelection(UINode node);
-    void addConnection(Viewport.Connection connection);
+//    void addConnection(Viewport.Connection connection);
     boolean hasConnection(UINode outNode, String outPortId, UINode inNode, String inPortId);
     void showMenu(float screenX, float screenY);
 
     void addNodeToScene(UINode node);
 
     icyllis.modernui.core.Context getUIContext();
-    com.mine.geometry_node.client.ui.UICommand.EditorContext getEditorContext();
+    EditorContext getEditorContext();
 }

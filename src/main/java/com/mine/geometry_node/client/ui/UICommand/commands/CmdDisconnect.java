@@ -14,13 +14,29 @@ public class CmdDisconnect implements ICommand {
         this.inNodeId = inNodeId; this.inPortId = inPortId;
     }
 
+    private boolean isExecutionFlow() {
+        return outPortId.startsWith("flow_") || inPortId.startsWith("flow_");
+    }
+
     @Override
     public void execute() {
-        mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
+        if (isExecutionFlow()) {
+            // 执行流
+            mController.removeExecutionConnection(outNodeId, outPortId);
+        } else {
+            // 数据流
+            mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
+        }
     }
 
     @Override
     public void undo() {
-        mController.addConnection(outNodeId, outPortId, inNodeId, inPortId);
+        if (isExecutionFlow()) {
+            // 执行流
+            mController.addExecutionConnection(outNodeId, outPortId, inNodeId);
+        } else {
+            // 数据流
+            mController.addConnection(outNodeId, outPortId, inNodeId, inPortId);
+        }
     }
 }

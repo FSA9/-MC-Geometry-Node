@@ -43,6 +43,8 @@ public record NodeDef(
             /*
             * max_dynamic_input_number: （int）最大输入动态端口数
             * max_dynamic_output_number: （int）最大输出动态端口数
+            * dynamic_branch_input_count:（int）当前动态输入端口数量
+            * dynamic_branch_output_count:（int）当前动态输出端口数量
             */
             this.meta.put(key, value);
             return this;

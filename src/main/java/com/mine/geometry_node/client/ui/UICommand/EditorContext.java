@@ -43,6 +43,8 @@ public class EditorContext {
      * Viewport 会实现这个接口，以便在数据改变时自动增加/删除节点 View
      */
     public interface EditorListener {
+        default void onExecutionConnectionAdded(String outNode, String outPort, String inNode) {}
+        default void onExecutionConnectionRemoved(String outNode, String outPort, String inNode) {}
         default void onNodeAdded(NodeData nodeData) {}
         default void onNodeRemoved(String nodeId) {}
         default void onSelectionChanged(List<String> selectedNodeIds) {}
@@ -93,5 +95,13 @@ public class EditorContext {
 
     public void notifyGraphConnectionsRebuildRequested() {
         for (EditorListener l : mListeners) l.onGraphConnectionsRebuildRequested();
+    }
+
+    public void notifyExecutionConnectionAdded(String outN, String outP, String inN) {
+        for (EditorListener l : mListeners) l.onExecutionConnectionAdded(outN, outP, inN);
+    }
+
+    public void notifyExecutionConnectionRemoved(String outN, String outP, String inN) {
+        for (EditorListener l : mListeners) l.onExecutionConnectionRemoved(outN, outP, inN);
     }
 }

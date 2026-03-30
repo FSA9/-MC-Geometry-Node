@@ -43,20 +43,32 @@ public class GraphController {
         }
     }
 
-    // 数据层添加连线，并触发 UI 刷新
     public void addConnection(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         NodeData outNode = mContext.getGraph().getNode(outNodeId);
         if (outNode != null) {
             outNode.addDataConnection(outPortId, inNodeId, inPortId);
+
+            NodeData inNode = mContext.getGraph().getNode(inNodeId);
+            if (inNode != null) {
+                inNode.inputs.remove(inPortId);
+                inNode.connectedInputs.add(inPortId);
+            }
+
+            // 3. 数据全部就绪，最后通知 UI 刷新
             mContext.notifyConnectionAdded(outNodeId, outPortId, inNodeId, inPortId);
         }
     }
 
-    // 数据层移除连线，并触发 UI 刷新
     public void removeConnection(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         NodeData outNode = mContext.getGraph().getNode(outNodeId);
         if (outNode != null) {
             outNode.removeDataConnection(outPortId, inNodeId, inPortId);
+
+            NodeData inNode = mContext.getGraph().getNode(inNodeId);
+            if (inNode != null) {
+                inNode.connectedInputs.remove(inPortId);
+            }
+
             mContext.notifyConnectionRemoved(outNodeId, outPortId, inNodeId, inPortId);
         }
     }
@@ -99,6 +111,18 @@ public class GraphController {
             }
         }
 
+        // --- 新增：4.5 清理当前节点失效的【执行流】连线 ---
+        List<String> invalidExecPorts = new ArrayList<>();
+        for (String execPort : node.execution.keySet()) {
+            if (!validOutputs.contains(execPort)) {
+                invalidExecPorts.add(execPort);
+            }
+        }
+        for (String invalidExec : invalidExecPorts) {
+            String targetNodeId = node.execution.remove(invalidExec);
+            removeExecutionConnection(nodeId, invalidExec);
+        }
+
         // 5. 清理其他节点连接到当前节点失效【输入】端口的连线 (左侧端口减少了)
         for (NodeData otherNode : mContext.getGraph().nodes.values()) {
             for (String otherOutPort : new ArrayList<>(otherNode.outputs.keySet())) {
@@ -113,5 +137,43 @@ public class GraphController {
 
         // 6. 无论有没有断线，只要属性变了都通知 Viewport 重新构建该节点的 UI
         mContext.notifyNodeStructureChanged(node);
+    }
+
+    public void addExecutionConnection(String outNodeId, String outPortId, String inNodeId) {
+        NodeData outNode = mContext.getGraph().getNode(outNodeId);
+        if (outNode != null) {
+            outNode.addExecutionConnection(outPortId, inNodeId);
+            mContext.notifyExecutionConnectionAdded(outNodeId, outPortId, inNodeId);
+        }
+    }
+
+    public void removeExecutionConnection(String outNodeId, String outPortId) {
+        NodeData outNode = mContext.getGraph().getNode(outNodeId);
+        if (outNode != null) {
+            String inNodeId = outNode.execution.get(outPortId);
+            if (inNodeId != null) {
+                outNode.removeExecutionConnection(outPortId);
+                mContext.notifyExecutionConnectionRemoved(outNodeId, outPortId, inNodeId);
+            }
+        }
+    }
+
+    public void setNodeInputValue(String nodeId, String portId, Object value) {
+        NodeData node = mContext.getGraph().getNode(nodeId);
+        if (node == null) return;
+
+        // 注意：这里需要确保你的 NodeData 中有一个用于存储输入值的集合，比如 Map<String, Object> inputs
+        if (value == null) {
+            node.inputs.remove(portId);
+        } else {
+            node.inputs.put(portId, value);
+        }
+    }
+
+    public boolean isInputPortConnected(String targetNodeId, String targetPortId) {
+        NodeData node = mContext.getGraph().getNode(targetNodeId);
+        if (node == null) return false;
+
+        return node.connectedInputs.contains(targetPortId);
     }
 }

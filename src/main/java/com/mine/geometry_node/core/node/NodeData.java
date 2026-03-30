@@ -2,10 +2,8 @@
 package com.mine.geometry_node.core.node;
 
 import com.google.gson.annotations.SerializedName;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.ArrayList;
+
+import java.util.*;
 
 /**
  * [存储层] 节点实例纯状态容器
@@ -32,6 +30,8 @@ public class NodeData {
     @SerializedName("outputs")
     public Map<String, List<Connection>> outputs = new HashMap<>();
 
+    public transient Set<String> connectedInputs = new HashSet<>();
+
     // 支持节点组递归
     @SerializedName("sub_nodes")
     public Map<String, NodeData> subNodes;
@@ -57,6 +57,14 @@ public class NodeData {
     }
 
     // --- 辅助方法 ---
+
+    public void addExecutionConnection(String outPort, String targetId) {
+        this.execution.put(outPort, targetId);
+    }
+
+    public void removeExecutionConnection(String outPort) {
+        this.execution.remove(outPort);
+    }
 
     public void addDataConnection(String outPort, String targetId, String targetInPort) {
         Connection newLink = new Connection(targetId, targetInPort);

@@ -9,56 +9,63 @@ import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class Switch extends BaseNode {
 
     public static final String TYPE_ID = "flow_switch";
 
+    // 默认数量与最大上限
+    private static final int DEFAULT_BRANCH_COUNT = 1;
+    private static final int MAX_BRANCH_COUNT = 10;
+
     @Override
     public NodeDef getDefaultDefinition() {
-
-        return buildDef(List.of(1));
+        return buildDef(DEFAULT_BRANCH_COUNT);
     }
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
-        List<Integer> branchIndices = instanceData.execution.keySet().stream()
-                .filter(key -> key.startsWith("flow_out_"))
-                .map(key -> {
-                    try {
-                        return Integer.parseInt(key.substring("flow_out_".length()));
-                    } catch (NumberFormatException e) {
-                        return -1;
-                    }
-                })
-                .filter(i -> i > 0)
-                .sorted()
-                .collect(Collectors.toList());
+        int branchCount = DEFAULT_BRANCH_COUNT;
 
-        if (branchIndices.isEmpty()) branchIndices.add(1);
+        // 核心修改：不再遍历 execution，而是直接读取我们保存的属性状态
+        if (instanceData != null && instanceData.properties.containsKey("dynamic_branch_output_count")) {
+            Object countObj = instanceData.properties.get("dynamic_branch_output_count");
+            // 兼容强转防御：防止从某些 JSON 库反序列化回来后变成了 String
+            if (countObj instanceof Number) {
+                branchCount = ((Number) countObj).intValue();
+            } else if (countObj instanceof String) {
+                try {
+                    branchCount = Integer.parseInt((String) countObj);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
 
-        return buildDef(branchIndices);
+        // 兜底保护，防止 JSON 被外部恶意篡改导致越界
+        branchCount = Math.max(1, Math.min(branchCount, MAX_BRANCH_COUNT));
+        return buildDef(branchCount);
     }
 
-    private NodeDef buildDef(List<Integer> branchIndices) {
+    private NodeDef buildDef(int branchCount) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.flow_switch"));
 
-        // 输入执行流
+        // 写入 Meta 数据，UI 层和命令层可以读取这个值来限制加号的点击
+        builder.addMeta("max_dynamic_output_number", MAX_BRANCH_COUNT);
+
+        // 1. 固定输入执行流
         builder.addRow(new PortRow(
                 StandardPorts.FLOW_IN.toExec(),
                 null,
                 UIHint.DEFAULT, null, null
         ));
 
-        // 动态行
-        for (Integer index : branchIndices) {
+        // 2. 根据记录的数量动态生成行
+        for (int i = 1; i <= branchCount; i++) {
             builder.addRow(new PortRow(
-                    StandardPorts.CASE.toInputWithIndex(index, false),
-                    StandardPorts.FLOW_OUT.toExecWithIndex(index),
+                    StandardPorts.CASE.toInputWithIndex(i, false),
+                    StandardPorts.FLOW_OUT.toExecWithIndex(i),
                     UIHint.CHECKBOX,
                     null,
-                    Map.of("is_dynamic", true)
+                    Map.of("is_dynamic", true) // 保留这个，UI 依然靠它渲染 +/- 按钮
             ));
         }
 
@@ -68,22 +75,25 @@ public class Switch extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         List<String> activePorts = new ArrayList<>();
-        int i = 1;
 
-        while (true) {
+        // 运行时同样读取数量，不再死循环猜测
+        int branchCount = DEFAULT_BRANCH_COUNT;
+        Object countProp = context.getNodeProperty("dynamic_branch_output_count");
+        if (countProp instanceof Number) {
+            branchCount = ((Number) countProp).intValue();
+        } else if (countProp instanceof String) {
+            try { branchCount = Integer.parseInt((String) countProp); } catch (Exception ignored) {}
+        }
+
+        // 严格按照生成的端口数量进行数据推断
+        for (int i = 1; i <= branchCount; i++) {
             String casePort = StandardPorts.CASE.getIdWithIndex(i);
             String flowPort = StandardPorts.FLOW_OUT.getIdWithIndex(i);
-
-            if (!context.hasPort(casePort)) {
-                break;
-            }
 
             Boolean isTrigger = getInput(context, casePort, Boolean.class);
             if (Boolean.TRUE.equals(isTrigger)) {
                 activePorts.add(flowPort);
             }
-
-            i++;
         }
 
         return activePorts.isEmpty() ? ExecutionResult.finish() : ExecutionResult.call(activePorts);

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.Viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.core.node.NodeData;
@@ -12,12 +13,11 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
+import icyllis.modernui.graphics.drawable.ShapeDrawable;
+import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
-import icyllis.modernui.widget.CheckBox;
-import icyllis.modernui.widget.EditText;
-import icyllis.modernui.widget.FrameLayout;
-import icyllis.modernui.widget.TextView;
+import icyllis.modernui.widget.*;
 
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -35,30 +35,7 @@ import java.util.Map;
 public class UINode extends FrameLayout {
 
     // ==========================================
-    // 1. 静态常量配置 (Constants)
-    // ==========================================
-
-    private static final int NODE_WIDTH = 160;
-    private static final int ROW_HEIGHT = 20;
-    private static final int HEADER_HEIGHT = 20;
-
-    private static final float PORT_RADIUS = 5.0f;
-    private static final float CORNER_RADIUS = 6.0f;
-    private static final float STROKE_WIDTH_NORMAL = 1.5f;
-    private static final float STROKE_WIDTH_SELECTED = 2.5f;
-
-    private static final int LABEL_MARGIN_PORT = 8;
-    private static final int TEXT_SIZE_HEADER = 10;
-    private static final int TEXT_SIZE_LABEL = 10;
-
-    private static final int COLOR_BODY = 0xEE2A2A2A;
-    private static final int COLOR_OUTLINE = 0xFF111111;
-    private static final int COLOR_SELECTED = 0xFFFFFFFF;
-    private static final int COLOR_TEXT_LABEL = 0xFFDDDDDD;
-    private static final int COLOR_TEXT_HEADER = 0xFFFFFFFF;
-
-    // ==========================================
-    // 2. 控件渲染策略注册表 (UI Hint Factory)
+    // 1. 控件渲染策略注册表 (UI Hint Factory)
     // ==========================================
 
     /**
@@ -71,26 +48,50 @@ public class UINode extends FrameLayout {
 
     private static final Map<UIHint, HintRenderer> HINT_RENDERERS = new EnumMap<>(UIHint.class);
 
+
     static {
-        // --- CheckBox 渲染策略 ---
+        // --- CheckBox 勾选框 ---
         HINT_RENDERERS.put(UIHint.CHECKBOX, new HintRenderer() {
             @Override
             public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
                 String propKey = row.hintParams() != null ? (String) row.hintParams().get("property_key") : null;
-                Object val = propKey != null ? nodeData.properties.get(propKey) : null;
-                if (val == null && row.leftPort() != null) val = row.leftPort().defaultValue();
+
+                // 核心修复：优先读取已保存的值
+                Object val = null;
+                if (propKey != null) {
+                    val = nodeData.properties.get(propKey);
+                } else if (row.leftPort() != null) {
+                    // 假设存在 nodeData.inputs
+                    val = nodeData.inputs.containsKey(row.leftPort().id()) ? nodeData.inputs.get(row.leftPort().id()) : row.leftPort().defaultValue();
+                }
 
                 CheckBox cb = new CheckBox(context);
                 cb.setChecked(String.valueOf(val).equalsIgnoreCase("true"));
+
+                cb.setBackground(null);         // 1. 去除圆形的触摸水波纹背景
+                cb.setMinimumWidth(0);          // 2. 取消默认的最小触摸宽度限制
+                cb.setMinimumHeight(0);         // 3. 取消默认的最小触摸高度限制
+                cb.setPadding(0, 0, 0, 0);      // 4. 清除内部的所有 Padding
+
                 cb.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                    if (propKey != null && editorContext != null) {
-                        Object oldVal = nodeData.properties.get(propKey);
-                        if (!Boolean.valueOf(isChecked).equals(oldVal)) {
-                            CmdChangeProperty cmd = new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, isChecked);
-                            editorContext.getCommandManager().execute(cmd);
+                    if (editorContext != null) {
+                        if (propKey != null) {
+                            Object oldVal = nodeData.properties.get(propKey);
+                            if (!Boolean.valueOf(isChecked).equals(oldVal)) {
+                                CmdChangeProperty cmd = new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, isChecked);
+                                editorContext.getCommandManager().execute(cmd);
+                            }
+                        } else if (row.leftPort() != null) {
+                            String portId = row.leftPort().id();
+                            Object oldVal = nodeData.inputs.get(portId);
+                            if (!Boolean.valueOf(isChecked).equals(oldVal)) {
+                                CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, isChecked);
+                                editorContext.getCommandManager().execute(cmd);
+                            }
                         }
-                    } else if (propKey != null) {
-                        nodeData.properties.put(propKey, isChecked); // 兜底逻辑
+                    } else { // 兜底逻辑
+                        if (propKey != null) nodeData.properties.put(propKey, isChecked);
+                        else if (row.leftPort() != null) nodeData.inputs.put(row.leftPort().id(), isChecked);
                     }
                 });
                 return cb;
@@ -98,35 +99,61 @@ public class UINode extends FrameLayout {
 
             @Override
             public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
+                // 提前测量一下控件获取真实宽高，为垂直居中做准备
+                view.measure(
+                        MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+                        MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+                );
+                int cbHeight = view.getMeasuredHeight() > 0 ? view.getMeasuredHeight() : 16;
+
                 LayoutParams lp = (LayoutParams) view.getLayoutParams();
                 lp.width = LayoutParams.WRAP_CONTENT;
                 lp.height = LayoutParams.WRAP_CONTENT;
                 lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
-                lp.leftMargin = LABEL_MARGIN_PORT;
-                lp.topMargin = (int) currentY;
+
+                // 1. 勾选框的左 padding 设为 x
+                lp.leftMargin = UIConstants.Node.LABEL_MARGIN_PORT - 5;
+                // 2. 垂直居中偏移 (行高减去控件高度除以2)
+                lp.topMargin = (int) currentY + Math.max(0, (UIConstants.Node.ROW_HEIGHT - cbHeight) / 2);
                 view.setLayoutParams(lp);
             }
         });
 
-        // --- Input 输入框渲染策略 ---
+        // --- Input 输入框 ---
         HINT_RENDERERS.put(UIHint.INPUT, new HintRenderer() {
             @Override
             public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
                 String propKey = row.hintParams() != null ? (String) row.hintParams().get("property_key") : null;
-                Object val = propKey != null ? nodeData.properties.get(propKey) : null;
-                if (val == null && row.leftPort() != null) val = row.leftPort().defaultValue();
+
+                // 核心修复：优先读取已保存的值
+                Object val = null;
+                if (propKey != null) {
+                    val = nodeData.properties.get(propKey);
+                } else if (row.leftPort() != null) {
+                    val = nodeData.inputs.containsKey(row.leftPort().id()) ? nodeData.inputs.get(row.leftPort().id()) : row.leftPort().defaultValue();
+                }
 
                 EditText et = new EditText(context);
                 et.setText(val != null ? val.toString() : "");
-                et.setTextColor(COLOR_TEXT_LABEL);
-                et.setTextSize(TEXT_SIZE_LABEL);
+                et.setTextColor(UIConstants.CLR_GRAY_LABEL);
+                et.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
+
                 et.setOnFocusChangeListener((v, hasFocus) -> {
-                    if (!hasFocus && propKey != null && editorContext != null) {
+                    if (!hasFocus && editorContext != null) {
                         String currentText = et.getText().toString();
-                        Object oldVal = nodeData.properties.get(propKey);
-                        if (!currentText.equals(oldVal)) {
-                            CmdChangeProperty cmd = new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, currentText);
-                            editorContext.getCommandManager().execute(cmd);
+                        if (propKey != null) {
+                            Object oldVal = nodeData.properties.get(propKey);
+                            if (!currentText.equals(oldVal)) {
+                                CmdChangeProperty cmd = new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, currentText);
+                                editorContext.getCommandManager().execute(cmd);
+                            }
+                        } else if (row.leftPort() != null) {
+                            String portId = row.leftPort().id();
+                            Object oldVal = nodeData.inputs.get(portId);
+                            if (!currentText.equals(oldVal)) {
+                                CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, currentText);
+                                editorContext.getCommandManager().execute(cmd);
+                            }
                         }
                     }
                 });
@@ -139,86 +166,166 @@ public class UINode extends FrameLayout {
             }
         });
 
-        // --- Select 下拉框渲染策略 ---
+        // --- Select 下拉框 ---
         HINT_RENDERERS.put(UIHint.SELECT, new HintRenderer() {
             @Override
             public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
                 String propKey = row.hintParams() != null ? (String) row.hintParams().get("property_key") : null;
-                Object val = propKey != null ? nodeData.properties.get(propKey) : null;
                 String[] options = row.hintParams() != null ? (String[]) row.hintParams().get("options") : new String[0];
 
-                TextView selectBtn = new TextView(context);
-                String currentText = val != null ? val.toString() : (options.length > 0 ? options[0] : "");
-                selectBtn.setText(currentText + " ▼");
-                selectBtn.setTextColor(COLOR_TEXT_LABEL);
-                selectBtn.setTextSize(TEXT_SIZE_LABEL);
-                selectBtn.setGravity(icyllis.modernui.view.Gravity.CENTER);
+                // 核心修复：优先读取已保存的值
+                Object val = null;
+                if (propKey != null) {
+                    val = nodeData.properties.get(propKey);
+                } else if (row.leftPort() != null) {
+                    val = nodeData.inputs.containsKey(row.leftPort().id()) ? nodeData.inputs.get(row.leftPort().id()) : row.leftPort().defaultValue();
+                }
 
-                selectBtn.setOnClickListener(v -> {
-                    showSimpleDropdown(context, selectBtn, options, selectedVal -> {
-                        selectBtn.setText(selectedVal + " ▼");
-                        if (propKey != null && editorContext != null) {
-                            Object oldVal = nodeData.properties.get(propKey);
-                            if (!selectedVal.equals(oldVal)) {
-                                CmdChangeProperty cmd = new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, selectedVal);
-                                editorContext.getCommandManager().execute(cmd);
-                            }
+                Spinner spinner = new Spinner(context);
+
+                ShapeDrawable borderBg = new ShapeDrawable();
+                borderBg.setColor(0x05FFFFFF); // 极淡的白色填充
+                borderBg.setCornerRadius(3);
+                borderBg.setStroke(1, 0xFF555555); // 灰色边框
+                spinner.setBackground(borderBg);
+
+                ShapeDrawable popupBg = new ShapeDrawable();
+                popupBg.setColor(0xFFFFFFFF); // 纯白底色
+                popupBg.setCornerRadius(2);
+                popupBg.setStroke(1, 0xFFCCCCCC); // 浅灰边框
+                spinner.setPopupBackgroundDrawable(popupBg);
+
+                // 2. 配置适配器
+                spinner.setAdapter(new icyllis.modernui.widget.BaseAdapter() {
+                    @Override public int getCount() { return options.length; }
+                    @Override public Object getItem(int position) { return options[position]; }
+                    @Override public long getItemId(int position) { return position; }
+
+                    @Override
+                    public View getView(int position, View convertView, icyllis.modernui.view.ViewGroup parent) {
+                        TextView tv = (TextView) convertView;
+                        if (tv == null) {
+                            tv = new TextView(context);
+                            tv.setTextColor(UIConstants.CLR_GRAY_LABEL);
+                            tv.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
+                            tv.setGravity(icyllis.modernui.view.Gravity.CENTER_VERTICAL);
+                            tv.setPadding(6, 0, 6, 0);
                         }
-                    });
+                        tv.setText(options[position]);
+                        return tv;
+                    }
+
+                    @Override
+                    public View getDropDownView(int position, View convertView, icyllis.modernui.view.ViewGroup parent) {
+                        TextView tv = (TextView) convertView;
+                        if (tv == null) {
+                            tv = new TextView(context);
+                            tv.setTextColor(0xFF000000);      // 纯黑字体
+                            tv.setTextSize(12);
+                            tv.setPadding(16, 12, 16, 12);
+                        }
+                        tv.setText(options[position]);
+                        return tv;
+                    }
                 });
-                return selectBtn;
+
+                // 3. 恢复默认选中项 (从 AbsSpinner 继承的 setSelection)
+                if (val != null) {
+                    for (int i = 0; i < options.length; i++) {
+                        if (options[i].equals(val.toString())) {
+                            spinner.setSelection(i);
+                            break;
+                        }
+                    }
+                }
+
+                // 4. 动态修正下拉列表缩放宽度
+                spinner.setOnTouchListener((v, event) -> {
+                    if (event.getAction() == icyllis.modernui.view.MotionEvent.ACTION_DOWN) {
+                        icyllis.modernui.view.ViewParent parent = v.getParent();
+                        while (parent != null && !(parent instanceof Viewport)) {
+                            parent = parent.getParent();
+                        }
+                        if (parent instanceof Viewport) {
+                            float currentScale = ((Viewport) parent).getCurrentScale();
+                            int scaledWidth = (int) (v.getWidth() * currentScale);
+                            spinner.setDropDownWidth(scaledWidth);
+                        }
+                    }
+                    return false;
+                });
+
+                // 5. 监听选中事件
+                spinner.setOnItemSelectedListener(new icyllis.modernui.widget.AdapterView.OnItemSelectedListener() {
+                    @Override
+                    public void onItemSelected(icyllis.modernui.widget.AdapterView<?> parent, View view, int position, long id) {
+                        String selectedVal = options[position];
+                        if (editorContext != null) {
+                            if (propKey != null) {
+                                Object oldVal = nodeData.properties.get(propKey);
+                                if (oldVal == null || !selectedVal.equals(oldVal.toString())) {
+                                    CmdChangeProperty cmd = new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, selectedVal);
+                                    editorContext.getCommandManager().execute(cmd);
+                                }
+                            } else if (row.leftPort() != null) {
+                                String portId = row.leftPort().id();
+                                Object oldVal = nodeData.inputs.get(portId);
+                                if (oldVal == null || !selectedVal.equals(oldVal.toString())) {
+                                    CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, selectedVal);
+                                    editorContext.getCommandManager().execute(cmd);
+                                }
+                            }
+                        } else { // 兜底
+                            if (propKey != null) nodeData.properties.put(propKey, selectedVal);
+                            else if (row.leftPort() != null) nodeData.inputs.put(row.leftPort().id(), selectedVal);
+                        }
+                    }
+                    @Override
+                    public void onNothingSelected(icyllis.modernui.widget.AdapterView<?> parent) {}
+                });
+
+                return spinner;
             }
 
             @Override
             public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-                applyStandardHintLayout(view, row, currentY, nodeWidth);
+                int leftMargin = (row.leftPort() != null) ? (int)(nodeWidth * 0.45f) : UIConstants.Node.LABEL_MARGIN_PORT;
+                int rightMargin = (row.rightPort() != null) ? UIConstants.Node.ROW_HEIGHT : UIConstants.Node.LABEL_MARGIN_PORT;
+
+                int targetWidth = nodeWidth - leftMargin - rightMargin;
+                if (targetWidth < 10) targetWidth = 10;
+                int targetHeight = UIConstants.Node.ROW_HEIGHT - 4; // 留出上下间隙
+
+                LayoutParams lp = (LayoutParams) view.getLayoutParams();
+                if (lp == null) {
+                    lp = new LayoutParams(targetWidth, targetHeight);
+                } else {
+                    lp.width = targetWidth;
+                    lp.height = targetHeight;
+                }
+
+                lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
+                lp.leftMargin = leftMargin;
+                lp.topMargin = (int) currentY + 2; // 垂直居中偏移
+
+                view.setLayoutParams(lp);
             }
         });
-    }
-
-    private static void showSimpleDropdown(Context context, View anchorView, String[] options, java.util.function.Consumer<String> onSelected) {
-        icyllis.modernui.widget.LinearLayout listLayout = new icyllis.modernui.widget.LinearLayout(context);
-        listLayout.setOrientation(icyllis.modernui.widget.LinearLayout.VERTICAL);
-//        listLayout.setBackgroundColor(0xFF222222);
-
-        for (String opt : options) {
-            TextView tv = new TextView(context);
-            tv.setText(opt);
-            tv.setTextColor(0xFFFFFFFF);
-            tv.setTextSize(TEXT_SIZE_LABEL);
-            tv.setPadding(10, 8, 10, 8);
-
-            listLayout.addView(tv, new icyllis.modernui.widget.LinearLayout.LayoutParams(
-                    icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT));
-        }
-
-        icyllis.modernui.widget.PopupWindow popup = new icyllis.modernui.widget.PopupWindow(listLayout,
-                anchorView.getWidth(),
-                icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT);
-        popup.setFocusable(true);
-        popup.setOutsideTouchable(true);
-
-        for (int i = 0; i < listLayout.getChildCount(); i++) {
-            final String selectedOpt = options[i];
-            listLayout.getChildAt(i).setOnClickListener(v -> {
-                onSelected.accept(selectedOpt);
-                popup.dismiss();
-            });
-        }
-        popup.showAsDropDown(anchorView);
     }
 
     /**
      * 辅助方法：Input 和 Select 等长条形控件的通用排版计算
      */
     private static void applyStandardHintLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        float startX = (row.leftPort() != null) ? (nodeWidth * 0.45f) : LABEL_MARGIN_PORT;
-        float endX = nodeWidth - ((row.rightPort() != null) ? 40 : LABEL_MARGIN_PORT);
+        float startX = (row.leftPort() != null) ? (nodeWidth * 0.45f) : UIConstants.Node.LABEL_MARGIN_PORT;
+        float endX = nodeWidth - ((row.rightPort() != null) ? UIConstants.Node.ROW_HEIGHT : UIConstants.Node.LABEL_MARGIN_PORT);
+
+        float targetWidth = endX - startX;
+        if (targetWidth < 10f) targetWidth = 10f;
 
         LayoutParams lp = (LayoutParams) view.getLayoutParams();
-        lp.width = (int) (endX - startX);
-        lp.height = ROW_HEIGHT - 6;
+        lp.width = (int) targetWidth;
+        lp.height = UIConstants.Node.ROW_HEIGHT - 6;
         lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
         lp.leftMargin = (int) startX;
         lp.topMargin = (int) currentY + 3;
@@ -226,7 +333,7 @@ public class UINode extends FrameLayout {
     }
 
     // ==========================================
-    // 3. 核心数据与状态 (Data & State)
+    // 2. 核心数据与状态 (Data & State)
     // ==========================================
     private final NodeData mNodeData;
     private final NodeDef mNodeDef;
@@ -235,7 +342,7 @@ public class UINode extends FrameLayout {
     private int mTotalHeight;
 
     // ==========================================
-    // 4. 渲染与排版缓存 (Cache)
+    // 3. 渲染与排版缓存 (Cache)
     // ==========================================
     private final Paint mPaint = new Paint();
     private final RectF mTempRect = new RectF();
@@ -271,13 +378,13 @@ public class UINode extends FrameLayout {
         // --- 1. 构建头部标题 ---
         TextView titleView = new TextView(context);
         titleView.setText(mNodeDef.displayName().getString());
-        titleView.setTextColor(COLOR_TEXT_HEADER);
-        titleView.setTextSize(TEXT_SIZE_HEADER);
+        titleView.setTextColor(UIConstants.CLR_WHITE);
+        titleView.setTextSize(UIConstants.Node.TEXT_SIZE_HEADER);
         titleView.setGravity(icyllis.modernui.view.Gravity.CENTER);
         titleView.setClickable(false);
         titleView.setFocusable(false);
         titleView.setLongClickable(false);
-        addView(titleView, new LayoutParams(LayoutParams.MATCH_PARENT, HEADER_HEIGHT));
+        addView(titleView, new LayoutParams(LayoutParams.MATCH_PARENT, UIConstants.Node.HEADER_HEIGHT));
 
         // --- 2. 遍历行，构建端口标签与交互控件 ---
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
@@ -286,13 +393,13 @@ public class UINode extends FrameLayout {
             if (row.leftPort() != null) {
                 TextView tv = createLabel(context, row.leftPort().displayName().getString(), icyllis.modernui.view.Gravity.LEFT);
                 mPortLabels.put(row.leftPort().id(), tv);
-                addView(tv, new LayoutParams(LayoutParams.WRAP_CONTENT, ROW_HEIGHT));
+                addView(tv, new LayoutParams(LayoutParams.WRAP_CONTENT, UIConstants.Node.ROW_HEIGHT));
             }
 
             if (row.rightPort() != null) {
                 TextView tv = createLabel(context, row.rightPort().displayName().getString(), icyllis.modernui.view.Gravity.RIGHT);
                 mPortLabels.put(row.rightPort().id(), tv);
-                addView(tv, new LayoutParams(LayoutParams.WRAP_CONTENT, ROW_HEIGHT));
+                addView(tv, new LayoutParams(LayoutParams.WRAP_CONTENT, UIConstants.Node.ROW_HEIGHT));
             }
 
             // --- 3. 利用策略工厂构建交互控件 ---
@@ -317,8 +424,8 @@ public class UINode extends FrameLayout {
     private TextView createLabel(Context context, String text, int gravity) {
         TextView tv = new TextView(context);
         tv.setText(text);
-        tv.setTextColor(COLOR_TEXT_LABEL);
-        tv.setTextSize(TEXT_SIZE_LABEL);
+        tv.setTextColor(UIConstants.CLR_GRAY_LABEL);
+        tv.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
         tv.setGravity(gravity | icyllis.modernui.view.Gravity.CENTER_VERTICAL);
         tv.setClickable(false);
         tv.setFocusable(false);
@@ -334,10 +441,10 @@ public class UINode extends FrameLayout {
         mInputPortY.clear();
         mOutputPortY.clear();
 
-        float currentY = HEADER_HEIGHT;
+        float currentY = UIConstants.Node.HEADER_HEIGHT;
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
-            float portCenterY = currentY + ROW_HEIGHT / 2.0f;
+            float portCenterY = currentY + UIConstants.Node.ROW_HEIGHT / 2.0f;
             float portCenterYDp = portCenterY / UIConstants.mDensity;
 
             // --- 1. 排版左侧标签 ---
@@ -346,8 +453,33 @@ public class UINode extends FrameLayout {
                 TextView tv = mPortLabels.get(row.leftPort().id());
                 if (tv != null) {
                     LayoutParams lp = (LayoutParams) tv.getLayoutParams();
-                    int leftMargin = LABEL_MARGIN_PORT;
-                    if (row.uiHint() == UIHint.CHECKBOX) leftMargin += 16; // 为 Checkbox 留出空间
+                    int leftMargin = UIConstants.Node.LABEL_MARGIN_PORT - 5;
+
+                    if (row.uiHint() == UIHint.CHECKBOX) {
+                        int checkboxWidth = 16;
+
+                        // 【连线判定】：判断此 CheckBox 对应的端口是否已连线
+                        boolean isConnected = mEditorContext.getGraphController().isInputPortConnected(mNodeData.id, row.leftPort().id());
+
+                        if (isConnected) {
+                            // 连线后：把 CheckBox 占用的宽度收缩为 0，文字标签靠左对齐
+                            checkboxWidth = 0;
+                            leftMargin = UIConstants.Node.LABEL_MARGIN_PORT;
+                        } else {
+                            View cbView = mHintViews.get(i);
+                            if (cbView != null) {
+                                cbView.measure(
+                                        MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+                                        MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+                                );
+                                if (cbView.getMeasuredWidth() > 0) {
+                                    checkboxWidth = cbView.getMeasuredWidth();
+                                }
+                            }
+                            leftMargin = UIConstants.Node.LABEL_MARGIN_PORT + checkboxWidth + 3;
+                        }
+                    }
+
                     lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
                     lp.leftMargin = leftMargin;
                     lp.topMargin = (int) currentY;
@@ -363,7 +495,7 @@ public class UINode extends FrameLayout {
                 if (tv != null) {
                     LayoutParams lp = (LayoutParams) tv.getLayoutParams();
                     lp.gravity = icyllis.modernui.view.Gravity.RIGHT | icyllis.modernui.view.Gravity.TOP;
-                    lp.rightMargin = LABEL_MARGIN_PORT;
+                    lp.rightMargin = UIConstants.Node.LABEL_MARGIN_PORT;
                     lp.topMargin = (int) currentY;
                     tv.setLayoutParams(lp);
                     tv.setTranslationX(0); tv.setTranslationY(0);
@@ -374,17 +506,25 @@ public class UINode extends FrameLayout {
             UIHint hint = row.uiHint();
             View hintView = mHintViews.get(i);
             if (hint != null && hintView != null) {
+                // 【判定连线状态】
+                boolean isConnected = false;
+                if (row.leftPort() != null) {
+                    isConnected = mEditorContext.getGraphController().isInputPortConnected(mNodeData.id, row.leftPort().id());
+                }
+
+                hintView.setVisibility(isConnected ? View.GONE : View.VISIBLE);
+
                 HintRenderer renderer = HINT_RENDERERS.get(hint);
                 if (renderer != null) {
-                    renderer.updateLayout(hintView, row, currentY, NODE_WIDTH);
+                    renderer.updateLayout(hintView, row, currentY, UIConstants.Node.NODE_WIDTH);
                 }
             }
 
-            currentY += ROW_HEIGHT;
+            currentY += UIConstants.Node.ROW_HEIGHT;
         }
 
         mTotalHeight = (int) currentY;
-        setLayoutParams(new LayoutParams(NODE_WIDTH, mTotalHeight));
+        setLayoutParams(new LayoutParams(UIConstants.Node.NODE_WIDTH, mTotalHeight));
         invalidate();
     }
 
@@ -394,54 +534,61 @@ public class UINode extends FrameLayout {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        float w = getWidth() > 0 ? getWidth() : NODE_WIDTH * UIConstants.mDensity;
+        float w = getWidth() > 0 ? getWidth() : UIConstants.Node.NODE_WIDTH * UIConstants.mDensity;
         float h = getHeight() > 0 ? getHeight() : mTotalHeight;
 
         // --- 1. 绘制节点主体背景 ---
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(COLOR_BODY);
+        mPaint.setColor(UIConstants.CLR_BG_NODE_BODY);
         mTempRect.set(0, 0, w, h);
-        canvas.drawRoundRect(mTempRect, CORNER_RADIUS, (int) CORNER_RADIUS, mPaint);
+        canvas.drawRoundRect(mTempRect, UIConstants.Node.CORNER_RADIUS, (int) UIConstants.Node.CORNER_RADIUS, mPaint);
 
         // --- 2. 绘制节点头部 (根据 Category 着色) ---
         canvas.save();
-        canvas.clipRect(0, 0, w, HEADER_HEIGHT);
+        canvas.clipRect(0, 0, w, UIConstants.Node.HEADER_HEIGHT);
         mPaint.setColor(mNodeDef.category().getColor());
-        canvas.drawRoundRect(0, 0, w, HEADER_HEIGHT + CORNER_RADIUS, CORNER_RADIUS, (int) CORNER_RADIUS, mPaint);
+        canvas.drawRoundRect(0, 0, w, UIConstants.Node.HEADER_HEIGHT + UIConstants.Node.CORNER_RADIUS,
+                UIConstants.Node.CORNER_RADIUS, (int) UIConstants.Node.CORNER_RADIUS, mPaint);
         canvas.restore();
 
         // --- 3. 绘制节点外框描边 (选中高亮) ---
         mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(mIsSelected ? STROKE_WIDTH_SELECTED : STROKE_WIDTH_NORMAL);
-        mPaint.setColor(mIsSelected ? COLOR_SELECTED : COLOR_OUTLINE);
-        canvas.drawRoundRect(mTempRect, CORNER_RADIUS, (int) CORNER_RADIUS, mPaint);
+        mPaint.setStrokeWidth(mIsSelected ? UIConstants.Node.STROKE_WIDTH_SELECTED : UIConstants.Node.STROKE_WIDTH_NORMAL);
+        mPaint.setColor(mIsSelected ? UIConstants.CLR_WHITE : UIConstants.CLR_NODE_OUTLINE);
+        canvas.drawRoundRect(mTempRect, UIConstants.Node.CORNER_RADIUS, (int) UIConstants.Node.CORNER_RADIUS, mPaint);
 
         // --- 4. 绘制端口圆点与动态按钮 ---
-        float currentY = HEADER_HEIGHT;
+        float currentY = UIConstants.Node.HEADER_HEIGHT;
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
-            float centerY = currentY + ROW_HEIGHT / 2.0f;
+            float centerY = currentY + UIConstants.Node.ROW_HEIGHT / 2.0f;
 
             if (row.leftPort() != null) {
                 mPaint.setStyle(Paint.Style.FILL);
                 mPaint.setColor(row.leftPort().type().getColor());
-                canvas.drawCircle(0, centerY, PORT_RADIUS, mPaint);
+                canvas.drawCircle(0, centerY, UIConstants.Node.PORT_VISUAL_RADIUS, mPaint);
             }
 
             if (row.rightPort() != null) {
                 mPaint.setStyle(Paint.Style.FILL);
                 mPaint.setColor(row.rightPort().type().getColor());
-                canvas.drawCircle(w, centerY, PORT_RADIUS, mPaint);
+                canvas.drawCircle(w, centerY, UIConstants.Node.PORT_VISUAL_RADIUS, mPaint);
             }
 
             if (isDynamicRow(row)) {
                 boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
-                float rowBottom = currentY + ROW_HEIGHT;
-                if (isLast) drawDynamicButton(canvas, 0, rowBottom, true);
-                else drawDynamicButton(canvas, w, rowBottom, false);
+                float rowBottom = currentY + UIConstants.Node.ROW_HEIGHT;
+
+                if (isLast) {
+                    // 加号：画在底部正中间
+                    drawDynamicButton(canvas, w / 2.0f, rowBottom, true);
+                } else {
+                    // 减号：向内收缩 16px，略微偏上，避开右侧的输出端口
+                    drawDynamicButton(canvas, w - 16.0f, rowBottom - UIConstants.Node.ROW_HEIGHT / 2.0f, false);
+                }
             }
 
-            currentY += ROW_HEIGHT;
+            currentY += UIConstants.Node.ROW_HEIGHT;
         }
 
         super.onDraw(canvas);
@@ -480,7 +627,9 @@ public class UINode extends FrameLayout {
         float d = UIConstants.mDensity;
         float lx = ev.getX() / d;
         float ly = ev.getY() / d;
-        float interceptRadius = .0f;
+//        float interceptRadius = .0f;
+
+        float interceptRadius = UIConstants.Node.PORT_HITBOX_RADIUS;
 
         if (hitTestPort(lx, ly, true, interceptRadius) != null ||
                 hitTestPort(lx, ly, false, interceptRadius) != null) {
@@ -490,23 +639,38 @@ public class UINode extends FrameLayout {
     }
 
     public View findInteractiveViewAtScreen(float screenX, float screenY, float currentScale) {
-        for (View v : mHintViews.values()) {
-            v.getLocationOnScreen(mTmpHintOnScreen);
+        int[] nodeLocation = new int[2];
+        this.getLocationOnScreen(nodeLocation);
 
-            // 将内部未缩放的布局尺寸，乘以当前的画面缩放比例
-            float w = v.getWidth() * currentScale;
-            float h = v.getHeight() * currentScale;
+        // 1. 获取节点缩放后的视觉宽高
+        float nodeScreenW = this.getWidth() * currentScale;
+        float nodeScreenH = this.getHeight() * currentScale;
 
-            if (screenX >= mTmpHintOnScreen[0] && screenX < mTmpHintOnScreen[0] + w
-                    && screenY >= mTmpHintOnScreen[1] && screenY < mTmpHintOnScreen[1] + h) {
-                return v;
-            }
+        // 2. 第一层拦截：如果点击完全在节点整体视觉边界外部，直接 return null
+        if (screenX < nodeLocation[0] || screenX > nodeLocation[0] + nodeScreenW ||
+                screenY < nodeLocation[1] || screenY > nodeLocation[1] + nodeScreenH) {
+            return null;
         }
-        return null;
+
+        // 3. 【核心修复】将屏幕坐标映射为该节点的纯本地坐标
+        // (屏幕X - 节点屏幕起点X) / 缩放系数 = 本地X
+        float localX = (screenX - nodeLocation[0]) / currentScale;
+        float localY = (screenY - nodeLocation[1]) / currentScale;
+
+        // 4. 直接复用你现有的精准本地检测逻辑
+        return findInteractiveViewAt(localX, localY);
     }
 
     public View findInteractiveViewAt(float localX, float localY) {
+        if (localX < 0 || localX > this.getWidth() || localY < 0 || localY > this.getHeight()) {
+            return null;
+        }
+
         for (View v : mHintViews.values()) {
+            if (v.getVisibility() != View.VISIBLE) {
+                continue;
+            }
+
             if (localX >= v.getLeft() && localX < v.getRight()
                     && localY >= v.getTop() && localY < v.getBottom()) {
                 return v;
@@ -516,7 +680,7 @@ public class UINode extends FrameLayout {
     }
 
     public String hitTestPort(float localX, float localY, boolean checkInput, float touchRadius) {
-        float wDp = getWidth() > 0 ? getWidth() / UIConstants.mDensity : NODE_WIDTH;
+        float wDp = getWidth() > 0 ? getWidth() / UIConstants.mDensity : UIConstants.Node.NODE_WIDTH;
         float targetX = checkInput ? 0 : wDp;
         float dx = localX - targetX;
 
@@ -538,24 +702,35 @@ public class UINode extends FrameLayout {
 
     public DynamicActionInfo hitTestDynamicButton(float localX, float localY) {
         float d = UIConstants.mDensity;
-        float wDp = getWidth() > 0 ? getWidth() / d : NODE_WIDTH;
-        float yPx = HEADER_HEIGHT;
+        float wDp = getWidth() > 0 ? getWidth() / d : UIConstants.Node.NODE_WIDTH;
+        float yPx = UIConstants.Node.HEADER_HEIGHT;
 
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
             if (isDynamicRow(row)) {
                 boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
-                float rowBottomDp = (yPx + ROW_HEIGHT) / d;
-                float btnCenterXDp = isLast ? 0 : wDp;
+                float rowBottomDp = (yPx + UIConstants.Node.ROW_HEIGHT) / d;
 
-                // 检测是否点击到了加减号按钮的包围盒 (8dp 容差)
-                if (Math.abs(localX - btnCenterXDp) <= 8.0f && Math.abs(localY - rowBottomDp) <= 8.0f) {
+                float btnCenterXDp;
+                float btnCenterYDp;
+
+                // 【修复】判定坐标必须与 onDraw 中的绘制坐标严格对应
+                if (isLast) {
+                    btnCenterXDp = wDp / 2.0f;
+                    btnCenterYDp = rowBottomDp;
+                } else {
+                    btnCenterXDp = wDp - (16.0f / d);
+                    btnCenterYDp = rowBottomDp - (UIConstants.Node.ROW_HEIGHT / 2.0f / d);
+                }
+
+                // 适度放大点击容差至 10.0f
+                if (Math.abs(localX - btnCenterXDp) <= 10.0f && Math.abs(localY - btnCenterYDp) <= 10.0f) {
                     String refId = row.leftPort() != null ? row.leftPort().id() :
                             (row.rightPort() != null ? row.rightPort().id() : "");
                     return new DynamicActionInfo(isLast, refId);
                 }
             }
-            yPx += ROW_HEIGHT;
+            yPx += UIConstants.Node.ROW_HEIGHT;
         }
         return null;
     }
@@ -565,10 +740,12 @@ public class UINode extends FrameLayout {
     // ==========================================
 
     public void getPortPosition(String portId, boolean isInput, float[] outPos) {
-        float wDp = getWidth() > 0 ? getWidth() / UIConstants.mDensity : NODE_WIDTH;
+        float wDp = getWidth() > 0 ? getWidth() / UIConstants.mDensity : UIConstants.Node.NODE_WIDTH;
         outPos[0] = isInput ? 0 : wDp;
         Float y = isInput ? mInputPortY.get(portId) : mOutputPortY.get(portId);
-        outPos[1] = (y != null) ? y : 0f;
+
+        // 修复 3：如果因为动态结构变化导致找不到端口 Y 坐标，给一个默认高度防止飞到左上角 (0,0)
+        outPos[1] = (y != null) ? y : (UIConstants.Node.HEADER_HEIGHT + UIConstants.Node.ROW_HEIGHT / 2.0f);
     }
 
     public NodeData getNodeData() { return mNodeData; }
