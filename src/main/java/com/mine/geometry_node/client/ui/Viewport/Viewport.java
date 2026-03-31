@@ -1,15 +1,11 @@
 package com.mine.geometry_node.client.ui.Viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdAddNode;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionManager;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.KeyManager;
 import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.NodeGraph;
-import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -23,55 +19,54 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
- * 视口容器 (画布核心引擎)
+ * 视口容器 (画布核心引擎 - 纯 View 层)
  * <p>
  * 架构职责：
- * 1. 坐标系映射：屏幕物理坐标 (Screen Pixels) <-> UI 逻辑坐标 (Logical DP)。
- * 2. 节点承载：管理 UINode 生命周期与渲染层级。
- * 3. 视口变换：处理画布的平移 (Pan) 和缩放 (Zoom)。
- * 4. 事件中转：拦截并分发触摸/按键事件到底层交互组件或节点内的 UI 控件。
+ * 1. 坐标系映射：屏幕物理坐标 <-> UI 逻辑坐标。
+ * 2. 节点承载：渲染层级管理与连线绘制。
+ * 3. 视口变换：处理画布的平移与缩放。
+ * 4. 事件中转：处理 Touch 事件并分发给对应的管理器或 UI 控件。
  */
-public class Viewport extends FrameLayout implements InteractionContext, EditorContext.EditorListener {
+public class Viewport extends FrameLayout implements InteractionContext {
 
     private static final int TOOL_TYPE_MOUSE = 1;
 
     // ==========================================
-    // 1. 核心组件 (Core Components)
+    // 1. 核心组件
     // ==========================================
-    private final FrameLayout mNodeLayer;                  // 节点真实的物理容器，承接缩放/平移
-    private final InteractionManager mInteractionManager;  // 交互管理器：框选、拖拽、连线
-    private final KeyManager mKeyManager;                  // 快捷键管理器
-    private final EditorContext mEditorContext;            // 编辑器上下文：桥接数据与UI
+    private final FrameLayout mNodeLayer;
+    private final InteractionManager mInteractionManager;
+    private final KeyManager mKeyManager;
+    private final EditorContext mEditorContext;
+    private final ViewportController mController;          // 控制器引用
     private ViewportMenu mActiveMenu;
 
     // ==========================================
-    // 2. 视口状态 (Viewport State)
+    // 2. 视口状态
     // ==========================================
-    private float mViewportX = 0;                          // 视口物理偏移 X 坐标 (Screen Pixels)
-    private float mViewportY = 0;                          // 视口物理偏移 Y 坐标 (Screen Pixels)
-    private float mCurrentScale = 1.0f;                    // 当前缩放比例 (1.0f 为基准)
-    private boolean mFirstLayout = true;                   // 首次布局标记
+    private float mViewportX = 0;
+    private float mViewportY = 0;
+    private float mCurrentScale = 1.0f;
+    private boolean mFirstLayout = true;
 
     // ==========================================
-    // 3. 数据与节点映射 (Data & Node Mapping)
+    // 3. 视图映射缓存
     // ==========================================
     private final List<UINode> mSelectedNodes = new ArrayList<>();
-    private final Map<String, UINode> mNodeViews = new HashMap<>(); // NodeID -> UINode
-//    private final List<Connection> mConnections = new ArrayList<>();
+    private final Map<String, UINode> mNodeViews = new HashMap<>();
 
     // ==========================================
-    // 4. 事件与交互拦截缓存 (Event Cache)
+    // 4. 事件缓存
     // ==========================================
-    private View mCapturedHintView;                        // 当前捕获交互事件的内部控件 (如输入框)
-    private boolean mHintCaptureUsesLogical;               // 该控件是否使用逻辑坐标判定
+    private View mCapturedHintView;
+    private boolean mHintCaptureUsesLogical;
 
     // ==========================================
-    // 5. 渲染与临时复用对象 (避免高频 GC)
+    // 5. 渲染对象复用
     // ==========================================
-    private final icyllis.modernui.graphics.RectF mTmpNodeBounds = new icyllis.modernui.graphics.RectF(); // 复用包围盒
+    private final icyllis.modernui.graphics.RectF mTmpNodeBounds = new icyllis.modernui.graphics.RectF();
     private final Paint mGridPaint = new Paint();
     private final Paint mBackgroundPaint = new Paint();
     private final Paint mConnectionPaint = new Paint();
@@ -81,26 +76,21 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     private final float[] mTempOutPos = new float[2];
     private final float[] mTempInPos  = new float[2];
 
-    // ==========================================
-    // 模块 1: 初始化与生命周期 (Initialization)
-    // ==========================================
-
     public Viewport(Context context, EditorContext editorContext) {
         super(context);
         this.mEditorContext = editorContext;
-        this.mEditorContext.addListener(this);
 
-        // 初始化组件层级
         mNodeLayer = new FrameLayout(context);
         initViewportProps();
         initPaints();
         addView(mNodeLayer, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
-        // 初始化管理器
         mInteractionManager = new InteractionManager(this);
         mKeyManager = new KeyManager(this);
 
-        // 允许接收焦点与按键
+        // 绑定 Controller
+        mController = new ViewportController(this, editorContext);
+
         setFocusable(true);
         setFocusableInTouchMode(true);
     }
@@ -108,7 +98,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     private void initViewportProps() {
         setWillNotDraw(false);
         setClipChildren(false);
-
         mNodeLayer.setPivotX(0);
         mNodeLayer.setPivotY(0);
         mNodeLayer.setClipChildren(false);
@@ -116,10 +105,8 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
     private void initPaints() {
         mBackgroundPaint.setColor(UIConstants.ViewPort.BG_COLOR);
-
         mGridPaint.setAntiAlias(true);
         mGridPaint.setStyle(Paint.Style.STROKE);
-
         mConnectionPaint.setAntiAlias(true);
         mConnectionPaint.setStyle(Paint.Style.STROKE);
         mConnectionPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_CONNECTION);
@@ -127,73 +114,34 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     }
 
     // ==========================================
-    // 模块 2: 数据驱动监听 (EditorContext.EditorListener)
+    // UI 操控 APIs (供 ViewportController 调用)
     // ==========================================
 
-    @Override
-    public void onNodeAdded(NodeData nodeData) {
-        NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(nodeData);
-        if (def == null) return;
-
-        UINode uiNode = new UINode(getContext(), nodeData, def, mEditorContext);
-        uiNode.setTranslationX(nodeData.getX());
-        uiNode.setTranslationY(nodeData.getY());
-
+    public void addNodeView(String nodeId, UINode uiNode) {
         mNodeLayer.addView(uiNode);
-        mNodeViews.put(nodeData.id, uiNode);
+        mNodeViews.put(nodeId, uiNode);
+        invalidate();
     }
 
-    @Override
-    public void onNodeRemoved(String nodeId) {
+    public void removeNodeView(String nodeId) {
         UINode uiNode = mNodeViews.remove(nodeId);
         if (uiNode != null) {
             mNodeLayer.removeView(uiNode);
             mSelectedNodes.remove(uiNode);
+            invalidate();
         }
-
-        invalidate();
     }
 
-    @Override
-    public void onNodeStructureChanged(NodeData nodeData) {
-        if (nodeData == null || nodeData.id == null) return;
-
-        UINode old = mNodeViews.remove(nodeData.id);
-        boolean wasSelected = old != null && mSelectedNodes.contains(old);
-        if (old != null) {
-            mNodeLayer.removeView(old);
-            mSelectedNodes.remove(old);
-        }
-
-        onNodeAdded(nodeData);
-        if (wasSelected) {
-            UINode rebuilt = mNodeViews.get(nodeData.id);
-            if (rebuilt != null) {
-                mSelectedNodes.add(rebuilt);
-                rebuilt.setSelected(true);
-            }
-        }
-
-        invalidate();
+    public UINode getNodeView(String nodeId) {
+        return mNodeViews.get(nodeId);
     }
 
-    @Override
-    public void onGraphConnectionsRebuildRequested() {
-        invalidate();
+    public boolean isNodeSelected(String nodeId) {
+        UINode uiNode = mNodeViews.get(nodeId);
+        return uiNode != null && mSelectedNodes.contains(uiNode);
     }
 
-    @Override
-    public void onExecutionConnectionAdded(String outNodeId, String outPortId, String inNodeId) {
-        invalidate();
-    }
-
-    @Override
-    public void onExecutionConnectionRemoved(String outNodeId, String outPortId, String inNodeId) {
-        invalidate();
-    }
-
-    @Override
-    public void onSelectionChanged(List<String> selectedNodeIds) {
+    public void updateSelectionState(List<String> selectedNodeIds) {
         for (UINode node : mNodeViews.values()) {
             node.setSelected(false);
         }
@@ -209,8 +157,7 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         invalidate();
     }
 
-    @Override
-    public void onNodeMoved(String nodeId, float x, float y) {
+    public void updateNodePosition(String nodeId, float x, float y) {
         UINode uiNode = mNodeViews.get(nodeId);
         if (uiNode != null) {
             uiNode.setTranslationX(x);
@@ -219,25 +166,20 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         }
     }
 
-    @Override
-    public void onConnectionAdded(String outNodeId, String outPortId, String inNodeId, String inPortId) {
-        UINode outNode = mNodeViews.get(outNodeId);
-        UINode inNode = mNodeViews.get(inNodeId);
-        if (outNode != null) outNode.updateNodeLayout();
-        if (inNode != null) inNode.updateNodeLayout();
-        invalidate();
+    public void notifyNodeLayoutUpdate(String nodeId) {
+        UINode uiNode = mNodeViews.get(nodeId);
+        if (uiNode != null) {
+            uiNode.updateNodeLayout();
+        }
     }
-    @Override
-    public void onConnectionRemoved(String outNodeId, String outPortId, String inNodeId, String inPortId) {
-        UINode outNode = mNodeViews.get(outNodeId);
-        UINode inNode = mNodeViews.get(inNodeId);
-        if (outNode != null) outNode.updateNodeLayout();
-        if (inNode != null) inNode.updateNodeLayout();
-        invalidate();
+
+    public void addNode(float screenX, float screenY, String typeId) {
+        // 代理给 Controller 处理数据逻辑
+        mController.executeAddNode(screenX, screenY, typeId);
     }
 
     // ==========================================
-    // 模块 3: 视口变换与坐标系映射 (Transform & Coordinates)
+    // 视口变换与坐标系映射
     // ==========================================
 
     @Override
@@ -293,7 +235,7 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     @Override public float getCurrentScale() { return mCurrentScale; }
 
     // ==========================================
-    // 模块 4: 核心渲染逻辑 (Render Logic)
+    // 渲染逻辑
     // ==========================================
 
     @Override
@@ -316,7 +258,7 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
     private void drawInfiniteGrid(Canvas canvas) {
         float scaledGrid = UIConstants.GRID_SIZE * mCurrentScale;
-        if (scaledGrid < 5f) return; // 性能优化：网格过小时不绘制
+        if (scaledGrid < 5f) return;
 
         float w = getWidth();
         float h = getHeight();
@@ -327,7 +269,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         float startY = mViewportY % scaledGrid;
         if (startY > 0) startY -= scaledGrid;
 
-        // 常规网格线
         mGridPaint.setColor(UIConstants.ViewPort.COLOR_GRID_LINE);
         mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_NORMAL);
         for (float x = startX; x < w; x += scaledGrid) {
@@ -337,7 +278,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
             canvas.drawLine(0, y, w, y, mGridPaint);
         }
 
-        // 坐标中心线
         mGridPaint.setColor(UIConstants.ViewPort.COLOR_GRID_AXIS);
         mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_AXIS);
         if (mViewportX >= 0 && mViewportX <= w) {
@@ -355,12 +295,10 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         mInteractionManager.drawOverlay(canvas);
     }
 
-    // 在 Viewport.java 中替换旧方法
     private void drawAllConnections(Canvas canvas) {
         float scaledLineWidth = UIConstants.ViewPort.LINE_WIDTH_CONNECTION * mCurrentScale;
         mConnectionPaint.setStrokeWidth(scaledLineWidth);
 
-        // 直接从核心数据层获取节点
         com.mine.geometry_node.core.node.NodeGraph graph = mEditorContext.getGraph();
         if (graph == null) return;
 
@@ -368,7 +306,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
             UINode outUi = mNodeViews.get(outData.id);
             if (outUi == null) continue;
 
-            // 1. 绘制普通数据连线
             if (outData.outputs != null) {
                 for (Map.Entry<String, List<com.mine.geometry_node.core.node.Connection>> entry : outData.outputs.entrySet()) {
                     String outPortId = entry.getKey();
@@ -383,7 +320,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
                 }
             }
 
-            // 2. 绘制执行流连线
             if (outData.execution != null) {
                 for (Map.Entry<String, String> entry : outData.execution.entrySet()) {
                     String execOutPortId = entry.getKey();
@@ -401,7 +337,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         }
     }
 
-    // 辅助绘制方法，复用了你原本定义的 mTempOutPos 和 mTempInPos，零 GC！
     private void drawLine(Canvas canvas, UINode outUi, String outPortId, UINode inUi, String inPortId) {
         outUi.getPortPosition(outPortId, false, mTempOutPos);
         float outUiX = outUi.getTranslationX() + mTempOutPos[0];
@@ -419,22 +354,19 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     }
 
     // ==========================================
-    // 模块 5: 节点检索与基础交互 APIs (Hit Test & Base Interaction)
+    // 节点检索与交互 APIs
     // ==========================================
 
     private interface NodeVisitor<T> {
         T visit(UINode node);
     }
 
-    /**
-     * 按照 Z-Order (从顶层到底层) 遍历节点，直到找到第一个命中的目标
-     */
     private <T> T findHitInZOrder(NodeVisitor<T> visitor) {
         for (int i = mNodeLayer.getChildCount() - 1; i >= 0; i--) {
             View child = mNodeLayer.getChildAt(i);
             if (child instanceof UINode node) {
                 T result = visitor.visit(node);
-                if (result != null) return result; // 一旦命中，立即阻断并返回
+                if (result != null) return result;
             }
         }
         return null;
@@ -444,14 +376,13 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     public UINode findNodeAt(float uiX, float uiY) {
         return findHitInZOrder(node -> {
             node.getLogicalBounds(mTmpNodeBounds);
-            mTmpNodeBounds.inset(-12.0f, -12.0f);  // 扩充容差，以包含悬浮在边缘的加减号按钮和端口外沿
+            mTmpNodeBounds.inset(-12.0f, -12.0f);
             return mTmpNodeBounds.contains(uiX, uiY) ? node : null;
         });
     }
 
     @Override
     public Viewport.PortInfo findPortAt(float uiX, float uiY) {
-        // 使用基于模数动态计算出的交互判定半径
         float dynamicMargin = UIConstants.Node.PORT_HITBOX_RADIUS;
         return findHitInZOrder(node -> {
             node.getLogicalBounds(mTmpNodeBounds);
@@ -529,31 +460,24 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     @Override
     public void showMenu(float screenX, float screenY) {
         closeMenu();
-
         mActiveMenu = new ViewportMenu(getContext());
         mActiveMenu.showAt(screenX, screenY, this);
     }
 
     public void closeMenu() {
-        if (mActiveMenu != null && mActiveMenu.isShowing()) {
-            mActiveMenu.dismiss();
+        if (mActiveMenu != null) {
+            // 安全移除 View
+            if (mActiveMenu.getParent() == this) {
+                removeView(mActiveMenu);
+            }
             mActiveMenu = null;
+            requestViewportFocus(); // 重新获取焦点给画布
         }
     }
 
     @Override
     public void addNodeToScene(UINode node) {
         mNodeLayer.addView(node);
-    }
-
-    public void addNode(float screenX, float screenY, String typeId) {
-        float uiX = screenToUIX(screenX);
-        float uiY = screenToUIY(screenY);
-        String mockId = UUID.randomUUID().toString();
-        NodeData data = new NodeData(mockId, typeId, uiX, uiY);
-
-        CmdAddNode cmd = new CmdAddNode(mEditorContext.getGraphController(), data);
-        mEditorContext.getCommandManager().execute(cmd);
     }
 
     @Override public Context getUIContext() { return getContext(); }
@@ -566,11 +490,11 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
                 return row.leftPort().id();
             }
         }
-        return "flow_in"; // 兜底返回默认名
+        return "flow_in";
     }
 
     // ==========================================
-    // 模块 6: 内部控件事件分发 (Event Dispatch & UI Hints)
+    // 事件分发
     // ==========================================
 
     private record HintHitResult(View view, boolean isLogical) {}
@@ -579,24 +503,17 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         boolean dispatch(View target, MotionEvent ev);
     }
 
-    /**
-     * 将屏幕事件缓存转换为物理坐标点
-     */
     private void eventToScreen(MotionEvent ev) {
         mTmpEventScreen[0] = ev.getRawX();
         mTmpEventScreen[1] = ev.getRawY();
     }
 
-    /**
-     * 统一的控件命中测试：一次遍历，双重校验，严格遵守 Z-Order
-     */
     private HintHitResult findInteractiveHint(MotionEvent ev) {
         float uiX = screenToUIX(ev.getX());
         float uiY = screenToUIY(ev.getY());
         eventToScreen(ev);
 
         return findHitInZOrder(node -> {
-            // 1. 优先尝试：逻辑坐标系碰撞
             node.getLogicalBounds(mTmpNodeBounds);
             if (mTmpNodeBounds.contains(uiX, uiY)) {
                 float localX = (uiX - node.getTranslationX()) * UIConstants.mDensity;
@@ -605,7 +522,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
                 if (v != null) return new HintHitResult(v, true);
             }
 
-            // 2. 降级尝试：屏幕物理坐标系碰撞 (针对不受缩放影响的特殊弹出框等)
             View vScreen = node.findInteractiveViewAtScreen(mTmpEventScreen[0], mTmpEventScreen[1], mCurrentScale);
             if (vScreen != null) return new HintHitResult(vScreen, false);
 
@@ -613,11 +529,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         });
     }
 
-    /**
-     * 统一的事件坐标变换与分发引擎
-     * @param isLogical 是否使用逻辑坐标系计算偏移
-     * @param skipEventToScreen 是否跳过屏幕坐标换算 (仅 isLogical 为 false 时有效)
-     */
     private boolean dispatchTransformedEvent(MotionEvent ev, View target, boolean isLogical, boolean skipEventToScreen, EventDispatcher dispatcher) {
         float ox = ev.getX();
         float oy = ev.getY();
@@ -633,14 +544,12 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
             if (!skipEventToScreen) eventToScreen(ev);
             target.getLocationOnScreen(mTmpTargetLoc);
 
-            // 【核心修复】计算出屏幕物理差值后，必须除以缩放系数，将其还原为控件的真实本地坐标比例
             float physicalLx = mTmpEventScreen[0] - mTmpTargetLoc[0];
             float physicalLy = mTmpEventScreen[1] - mTmpTargetLoc[1];
             lx = physicalLx / mCurrentScale;
             ly = physicalLy / mCurrentScale;
         }
 
-        // 替换坐标 -> 派发事件 -> 还原坐标
         ev.setLocation(lx, ly);
         boolean handled = dispatcher.dispatch(target, ev);
         ev.setLocation(ox, oy);
@@ -650,20 +559,13 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
 
     @Override
     public boolean dispatchKeyEvent(icyllis.modernui.view.KeyEvent event) {
-        // 【核心修复】全局拦截：只要按下了 Ctrl 键，Viewport 优先尝试处理
         if (event.isCtrlPressed()) {
-            System.out.println("isCtrlPressed");
-            // 我们只在按下 (ACTION_DOWN) 时触发保存/撤销操作
             if (event.getAction() == icyllis.modernui.view.KeyEvent.ACTION_DOWN) {
-                // 将事件交给 KeyManager 判定。如果是 S, Z, Y，KeyManager 会返回 true
                 if (mKeyManager.onKeyDown(event)) {
-                    return true; // 关键：返回 true 代表事件已消费，EditText 将完全不知道发生了什么
+                    return true;
                 }
             }
         }
-
-        // 如果不是快捷键，或者没有按下 Ctrl，按照原有的正常逻辑分发
-        // 这样 EditText 依然可以正常输入文字、使用 Ctrl+C / Ctrl+V 等自带功能
         return super.dispatchKeyEvent(event);
     }
 
@@ -671,11 +573,10 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
     public boolean dispatchTouchEvent(MotionEvent ev) {
         int action = ev.getActionMasked();
 
-        if (action == MotionEvent.ACTION_DOWN) {
-            closeMenu();
-        }
+//        if (action == MotionEvent.ACTION_DOWN) {
+//            closeMenu();
+//        }
 
-        // 1. 已捕获焦点的快速通道
         if (mCapturedHintView != null) {
             boolean r = dispatchTransformedEvent(ev, mCapturedHintView, mHintCaptureUsesLogical, !mHintCaptureUsesLogical, View::dispatchTouchEvent);
 
@@ -686,7 +587,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
             return r;
         }
 
-        // 2. 单指操作的控件碰撞与分发
         if (ev.getPointerCount() == 1) {
             boolean isMouseHoverMove = (action == MotionEvent.ACTION_MOVE && ev.getButtonState() == 0 && ev.getToolType(0) == TOOL_TYPE_MOUSE);
             boolean isActionDown = (action == MotionEvent.ACTION_DOWN);
@@ -707,7 +607,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
             }
         }
 
-        // 3. 原生画布与连线交互兜底
         return super.dispatchTouchEvent(ev);
     }
 
@@ -757,13 +656,6 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         return mKeyManager.onKeyDown(event) || super.onKeyDown(keyCode, event);
     }
 
-    // ==========================================
-    // 模块 7: 内部数据结构 (Inner Classes)
-    // ==========================================
-
-    /**
-     * 端口交互的封装上下文信息
-     */
     public static class PortInfo {
         public UINode node;
         public String portId;

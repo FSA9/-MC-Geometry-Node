@@ -10,16 +10,14 @@ import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
-import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
 
 import java.util.Stack;
 
-public class ViewportMenu {
+public class ViewportMenu extends FrameLayout {
 
-    private PopupWindow mPopupWindow;
     private LinearLayout mContentLayout;
     private LinearLayout mListContainer;
     private EditText mSearchBox;
@@ -29,25 +27,37 @@ public class ViewportMenu {
 
     private final Stack<NodeCategory> mHistory = new Stack<>();
     private NodeCategory mCurrentFolder;
-    private final Context mContext;
 
     public ViewportMenu(Context context) {
-        mContext = context;
-        initUI();
-        initPopupWindow();
+        super(context);
+        initUI(context);
         navigateTo(NodeRegistry.INSTANCE.ROOT);
     }
 
-    private void initUI() {
-        mContentLayout = new LinearLayout(mContext);
+    private void initUI(Context context) {
+        // 1. 设置自身为全屏透明遮罩 (Overlay)
+        this.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+
+        // 2. 点击遮罩的空白区域时关闭菜单
+        this.setOnClickListener(v -> dismiss());
+
+        // 3. 构建真正的菜单内容容器
+        mContentLayout = new LinearLayout(context);
         mContentLayout.setOrientation(LinearLayout.VERTICAL);
         mContentLayout.setBackground(createRectDrawable(
                 UIConstants.ViewPort.NodeMenu.BG_COLOR,
                 UIConstants.ViewPort.NodeMenu.BORDER_RADIUS));
         mContentLayout.setPadding(4, 4, 4, 4);
 
-        // --- 1. 搜索框 ---
-        mSearchBox = new EditText(mContext);
+        // 拦截点击事件，防止点击菜单本体时事件穿透到背景遮罩导致误关闭
+        mContentLayout.setOnClickListener(v -> {});
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                UIConstants.ViewPort.NodeMenu.ITEM_WEIGHT, LayoutParams.WRAP_CONTENT);
+        mContentLayout.setLayoutParams(lp);
+
+        // --- 搜索框 ---
+        mSearchBox = new EditText(context);
         mSearchBox.setHint(Component.translatable("menu.node.search").getString());
         float searchFontSize = UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * (float)UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
         mSearchBox.setTextSize(0, searchFontSize);
@@ -68,9 +78,9 @@ public class ViewportMenu {
         searchLp.setMargins(4, 4, 4, 6);
         mContentLayout.addView(mSearchBox, searchLp);
 
-        // --- 2. 滚动列表区 ---
-        ScrollView sv = new ScrollView(mContext);
-        mListContainer = new LinearLayout(mContext);
+        // --- 滚动列表区 ---
+        ScrollView sv = new ScrollView(context);
+        mListContainer = new LinearLayout(context);
         mListContainer.setOrientation(LinearLayout.VERTICAL);
         sv.addView(mListContainer, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -78,69 +88,57 @@ public class ViewportMenu {
 
         mContentLayout.addView(sv, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 300));
-    }
 
-    private void initPopupWindow() {
-        mPopupWindow = new PopupWindow(mContentLayout, 200, ViewGroup.LayoutParams.WRAP_CONTENT);
-        mPopupWindow.setFocusable(true);
-        mPopupWindow.setOutsideTouchable(true);
-
-        ShapeDrawable transparentBg = new ShapeDrawable();
-        transparentBg.setColor(0x00000000);
-        mPopupWindow.setBackgroundDrawable(transparentBg);
-
-        mPopupWindow.setOnDismissListener(() -> {
-            if (mViewport != null) {
-                mViewport.requestViewportFocus();
-            }
-        });
+        // 将菜单容器添加到全屏遮罩中
+        addView(mContentLayout);
     }
 
     public void showAt(float x, float y, ViewGroup parent) {
         if (parent instanceof Viewport) mViewport = (Viewport) parent;
 
-        // 保存用于生成节点的坐标
+        // 保存用于生成节点的逻辑坐标
         mMenuX = x;
         mMenuY = y;
 
-        // 坐标系转换 (局部坐标 -> 屏幕全局坐标)
-        int[] location = new int[2];
-        if (parent != null) {
-            parent.getLocationOnScreen(location);
-        }
+        // 控制内部菜单容器的位置
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
+        lp.leftMargin = (int) x;
+        lp.topMargin = (int) y;
 
-        // 计算出在屏幕上的绝对坐标
-        int popX = location[0] + (int) x;
-        int popY = location[1] + (int) y;
-
-        // 边界防溢出
+        // 边界防溢出处理
         if (parent != null) {
             if (x + 200 > parent.getWidth()) {
-                popX = location[0] + parent.getWidth() - 200;
+                lp.leftMargin = (int) (parent.getWidth() - 220);
             }
             if (y + 350 > parent.getHeight()) { // 假设菜单最大高度约 350
-                popY = location[1] + parent.getHeight() - 350;
+                lp.topMargin = (int) (parent.getHeight() - 360);
             }
         }
+        mContentLayout.setLayoutParams(lp);
 
-        // 使用全局坐标弹出
-        mPopupWindow.showAtLocation(parent, Gravity.TOP | Gravity.LEFT, popX, popY);
+        // 将自己（全屏遮罩）添加到父容器中
+        if (this.getParent() != null) {
+            ((ViewGroup) this.getParent()).removeView(this);
+        }
+        parent.addView(this);
 
-        mSearchBox.setText("");
-        mSearchBox.requestFocus();
+        mSearchBox.post(() -> {
+            mSearchBox.setText("");
+            mSearchBox.requestFocus();
+        });
     }
 
     public void dismiss() {
-        if (mPopupWindow != null && mPopupWindow.isShowing()) {
-            mPopupWindow.dismiss();
+        if (mViewport != null) {
+            // 回调视口统一处理移除和焦点恢复
+            mViewport.closeMenu();
+        } else if (getParent() != null) {
+            ((ViewGroup) getParent()).removeView(this);
         }
     }
 
-    public boolean isShowing() {
-        return mPopupWindow != null && mPopupWindow.isShowing();
-    }
+    // --- 核心导航 & 渲染逻辑 ---
 
-    // --- 核心导航&渲染逻辑 ---
     private void navigateTo(NodeCategory folder) {
         if (mCurrentFolder != null && folder != mCurrentFolder) {
             mHistory.push(mCurrentFolder);
@@ -157,30 +155,35 @@ public class ViewportMenu {
     }
 
     private void saveGraphAction() {
-        com.mine.geometry_node.core.node.NodeGraph graph = mViewport.getEditorContext().getGraph();
-        String jsonOutput = com.mine.geometry_node.client.ui.persistence.GraphJsonIO.toJson(graph);
-        System.out.println("[Menu] 手动保存成功:");
-        System.out.println(jsonOutput);
+        if (mViewport != null && mViewport.getEditorContext() != null) {
+            com.mine.geometry_node.core.node.NodeGraph graph = mViewport.getEditorContext().getGraph();
+            String jsonOutput = com.mine.geometry_node.client.ui.persistence.GraphJsonIO.toJson(graph);
+            System.out.println("[Menu] 手动保存成功:");
+            System.out.println(jsonOutput);
+        }
     }
 
     private void renderCurrentFolder() {
         mListContainer.removeAllViews();
 
+        // 根目录渲染特有功能 (如保存)
         if (mCurrentFolder == NodeRegistry.INSTANCE.ROOT) {
-            addClickItem("💾 " + "保存项目 (Save JSON)", 0xFF44AAFF, v -> {
-                if (mViewport != null) {
-                    saveGraphAction();
-                }
-                dismiss();
+            addClickItem("💾 保存项目 (Save JSON)", 0xFF44AAFF, v -> {
+                saveGraphAction();
+                // 延迟移除 View，避免在事件分发循环内发生视图层级改变导致死锁/定格
+                post(this::dismiss);
             });
 
-            View divider = new View(mContext);
+            icyllis.modernui.view.View divider = new icyllis.modernui.view.View(getContext());
             mListContainer.addView(divider, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1));
         }
 
+        // 返回按钮
         if (mCurrentFolder != NodeRegistry.INSTANCE.ROOT) {
             addClickItem("← " + Component.translatable("menu.node.back").getString(), 0xFF888888, v -> navigateBack());
         }
+
+        // 渲染子文件夹
         for (NodeCategory sub : mCurrentFolder.getSubCategories()) {
             String label = Component.translatable(sub.translationKey).getString() + "  ›";
             addClickItem(label, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> {
@@ -188,18 +191,21 @@ public class ViewportMenu {
                 navigateTo(sub);
             });
         }
+
+        // 渲染节点
         for (BaseNode node : mCurrentFolder.getNodes()) {
             String label = node.getDefaultDefinition().displayName().getString();
             addClickItem(label, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> {
                 if (mViewport != null) {
                     mViewport.addNode(mMenuX, mMenuY, node.getTypeId());
                 }
-                dismiss();
+                // 延迟移除 View，避免定格 Bug
+                post(this::dismiss);
             });
         }
     }
 
-    // 搜索
+    // --- 搜索 ---
     private void performSearch(String query) {
         if (query.trim().isEmpty()) {
             renderCurrentFolder();
@@ -215,15 +221,16 @@ public class ViewportMenu {
                     if (mViewport != null) {
                         mViewport.addNode(mMenuX, mMenuY, def.typeId());
                     }
-                    dismiss();
+                    // 延迟移除 View，避免定格 Bug
+                    post(this::dismiss);
                 });
             }
         }
     }
 
     // --- 底层 UI 组件 ---
-    private void addClickItem(String text, int color, View.OnClickListener listener) {
-        TextView tv = new TextView(mContext);
+    private void addClickItem(String text, int color, icyllis.modernui.view.View.OnClickListener listener) {
+        TextView tv = new TextView(getContext());
         tv.setText(text);
         float fontSize = UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * (float)UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
         tv.setTextSize(0, fontSize);
