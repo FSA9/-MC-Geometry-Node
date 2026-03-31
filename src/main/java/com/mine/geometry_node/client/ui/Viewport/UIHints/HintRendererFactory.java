@@ -1,0 +1,19 @@
+package com.mine.geometry_node.client.ui.Viewport.UIHints;
+
+import com.mine.geometry_node.core.node.nodes.UIHint;
+import java.util.EnumMap;
+import java.util.Map;
+
+public class HintRendererFactory {
+    private static final Map<UIHint, UIHintRenderer> RENDERERS = new EnumMap<>(UIHint.class);
+
+    static {
+        RENDERERS.put(UIHint.CHECKBOX, new CheckBoxHintRenderer());
+        RENDERERS.put(UIHint.INPUT, new InputHintRenderer());
+        RENDERERS.put(UIHint.SELECT, new SelectHintRenderer());
+    }
+
+    public static UIHintRenderer getRenderer(UIHint hint) {
+        return RENDERERS.get(hint);
+    }
+}

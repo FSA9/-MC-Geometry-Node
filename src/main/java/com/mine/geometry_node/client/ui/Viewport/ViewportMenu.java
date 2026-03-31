@@ -76,7 +76,6 @@ public class ViewportMenu {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // 这里的 300 限制了滚动区域的最大高度，如果节点很多，就会在 300px 内出现滚轮滑动
         mContentLayout.addView(sv, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 300));
     }
@@ -86,9 +85,8 @@ public class ViewportMenu {
         mPopupWindow.setFocusable(true);
         mPopupWindow.setOutsideTouchable(true);
 
-        // 必须给一个背景，否则 PopupWindow 不会响应外部点击消失！
         ShapeDrawable transparentBg = new ShapeDrawable();
-        transparentBg.setColor(0x00000000); // 纯透明 (Alpha = 0)
+        transparentBg.setColor(0x00000000);
         mPopupWindow.setBackgroundDrawable(transparentBg);
 
         mPopupWindow.setOnDismissListener(() -> {
@@ -163,8 +161,6 @@ public class ViewportMenu {
         String jsonOutput = com.mine.geometry_node.client.ui.persistence.GraphJsonIO.toJson(graph);
         System.out.println("[Menu] 手动保存成功:");
         System.out.println(jsonOutput);
-
-        // 如果你想通过提示 UI 反馈给用户，可以在这里调用通知系统
     }
 
     private void renderCurrentFolder() {
@@ -203,7 +199,7 @@ public class ViewportMenu {
         }
     }
 
-    // --- 搜索逻辑 ---
+    // 搜索
     private void performSearch(String query) {
         if (query.trim().isEmpty()) {
             renderCurrentFolder();
