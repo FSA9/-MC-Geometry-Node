@@ -522,9 +522,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
                 if (v != null) return new HintHitResult(v, true);
             }
 
-            View vScreen = node.findInteractiveViewAtScreen(mTmpEventScreen[0], mTmpEventScreen[1], mCurrentScale);
-            if (vScreen != null) return new HintHitResult(vScreen, false);
-
             return null;
         });
     }

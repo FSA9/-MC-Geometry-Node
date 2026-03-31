@@ -356,29 +356,6 @@ public class UINode extends FrameLayout {
         return super.dispatchTouchEvent(ev);
     }
 
-    public View findInteractiveViewAtScreen(float screenX, float screenY, float currentScale) {
-        int[] nodeLocation = new int[2];
-        this.getLocationOnScreen(nodeLocation);
-
-        // 1. 获取节点缩放后的视觉宽高
-        float nodeScreenW = this.getWidth() * currentScale;
-        float nodeScreenH = this.getHeight() * currentScale;
-
-        // 2. 第一层拦截：如果点击完全在节点整体视觉边界外部，直接 return null
-        if (screenX < nodeLocation[0] || screenX > nodeLocation[0] + nodeScreenW ||
-                screenY < nodeLocation[1] || screenY > nodeLocation[1] + nodeScreenH) {
-            return null;
-        }
-
-        // 3. 【核心修复】将屏幕坐标映射为该节点的纯本地坐标
-        // (屏幕X - 节点屏幕起点X) / 缩放系数 = 本地X
-        float localX = (screenX - nodeLocation[0]) / currentScale;
-        float localY = (screenY - nodeLocation[1]) / currentScale;
-
-        // 4. 直接复用你现有的精准本地检测逻辑
-        return findInteractiveViewAt(localX, localY);
-    }
-
     public View findInteractiveViewAt(float localX, float localY) {
         if (localX < 0 || localX > this.getWidth() || localY < 0 || localY > this.getHeight()) {
             return null;
