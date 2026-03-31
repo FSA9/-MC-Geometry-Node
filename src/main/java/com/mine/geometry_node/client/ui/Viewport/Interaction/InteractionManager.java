@@ -4,6 +4,8 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdConnect;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdMoveNode;
 import com.mine.geometry_node.client.ui.Viewport.UINode;
 import com.mine.geometry_node.client.ui.Viewport.Viewport;
+import com.mine.geometry_node.core.node.nodes.PortRow;
+import com.mine.geometry_node.core.node.nodes.PortType;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
@@ -462,7 +464,37 @@ public class InteractionManager {
 
 
     private boolean isValidConnection(Viewport.PortInfo s, Viewport.PortInfo e) {
-        return s != null && e != null && s.node != e.node && s.isInput != e.isInput;
+        // 1. 基础物理校验：非空、不能连接自身节点、必须一进一出
+        if (s == null || e == null || s.node == e.node || s.isInput == e.isInput) {
+            return false;
+        }
+
+        Viewport.PortInfo outPortInfo = s.isInput ? e : s;
+        Viewport.PortInfo inPortInfo   = s.isInput ? s : e;
+
+        PortType outType = getPortType(outPortInfo);
+        PortType inType  = getPortType(inPortInfo);
+
+        return PortType.isCompatible(outType, inType);
+    }
+
+    private PortType getPortType(Viewport.PortInfo portInfo) {
+        if (portInfo == null || portInfo.node == null) return null;
+
+        for (PortRow row : portInfo.node.getNodeDef().rows()) {
+            if (portInfo.isInput) {
+                // 输入
+                if (row.leftPort() != null && row.leftPort().id().equals(portInfo.portId)) {
+                    return row.leftPort().type();
+                }
+            } else {
+                // 输出
+                if (row.rightPort() != null && row.rightPort().id().equals(portInfo.portId)) {
+                    return row.rightPort().type();
+                }
+            }
+        }
+        return null;
     }
 
     private boolean isRightMouse(MotionEvent e) {

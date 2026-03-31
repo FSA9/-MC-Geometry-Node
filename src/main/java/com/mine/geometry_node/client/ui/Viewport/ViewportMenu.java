@@ -90,6 +90,12 @@ public class ViewportMenu {
         ShapeDrawable transparentBg = new ShapeDrawable();
         transparentBg.setColor(0x00000000); // 纯透明 (Alpha = 0)
         mPopupWindow.setBackgroundDrawable(transparentBg);
+
+        mPopupWindow.setOnDismissListener(() -> {
+            if (mViewport != null) {
+                mViewport.requestViewportFocus();
+            }
+        });
     }
 
     public void showAt(float x, float y, ViewGroup parent) {

@@ -123,7 +123,7 @@ public class Viewport extends FrameLayout implements InteractionContext, EditorC
         mConnectionPaint.setAntiAlias(true);
         mConnectionPaint.setStyle(Paint.Style.STROKE);
         mConnectionPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_CONNECTION);
-        mConnectionPaint.setColor(0xFFE0E0E0); // 颜色暂留硬编码，等待后续拓展
+        mConnectionPaint.setColor(0xFFE0E0E0);
     }
 
     // ==========================================
