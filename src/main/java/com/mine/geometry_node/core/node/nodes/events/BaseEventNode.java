@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.node.nodes.events;
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import com.mine.geometry_node.core.node.nodes.StandardPorts;
+import com.mine.geometry_node.core.node.port.StandardPorts;
 import org.jetbrains.annotations.Nullable;
 
 /**

@@ -4,8 +4,12 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdConnect;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdMoveNode;
 import com.mine.geometry_node.client.ui.Viewport.UINode;
 import com.mine.geometry_node.client.ui.Viewport.Viewport;
-import com.mine.geometry_node.core.node.nodes.PortRow;
-import com.mine.geometry_node.core.node.nodes.PortType;
+import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.meta.PropertyKeys;
+import com.mine.geometry_node.core.node.meta.SchemaKeys;
+import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
@@ -90,7 +94,7 @@ public class InteractionManager {
 
         mSelectionBorderPaint.setColor(0xFF44AAFF);
         mSelectionBorderPaint.setStyle(Paint.Style.STROKE);
-        mSelectionBorderPaint.setStrokeWidth(1.0f); // 在绘制时会被底层视为 dp
+        mSelectionBorderPaint.setStrokeWidth(1.0f);
 
         mDraftLinePaint.setAntiAlias(true);
         mDraftLinePaint.setStyle(Paint.Style.STROKE);
@@ -105,7 +109,6 @@ public class InteractionManager {
     public boolean onGenericMotionEvent(MotionEvent event) {
         if (event.getAction() == MotionEvent.ACTION_SCROLL) {
             float scrollY = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
-            // 缩放中心点使用屏幕物理坐标传入，Viewport 内部会处理转换
             mContext.performZoom(scrollY > 0, event.getX(), event.getY());
             return true;
         }
@@ -171,27 +174,23 @@ public class InteractionManager {
             float localY = uiY - target.getTranslationY();
             UINode.DynamicActionInfo btnInfo = target.hitTestDynamicButton(localX, localY);
             if (btnInfo != null) {
-                // 1. 获取目标节点数据
-                com.mine.geometry_node.core.node.NodeData nodeData = target.getNodeData();
-                String propertyKey = "dynamic_branch_output_count";
+                NodeData nodeData = target.getNodeData();
+                NodeDef nodeDef = target.getNodeDef();
 
-                // 2. 读取当前分支数量 (默认 1)
+                // 2. 读取当前分支数量
                 int currentCount = 1;
+                String propertyKey = PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
                 if (nodeData.properties.containsKey(propertyKey)) {
                     Object countObj = nodeData.properties.get(propertyKey);
-                    if (countObj instanceof Number) {
-                        currentCount = ((Number) countObj).intValue();
-                    } else if (countObj instanceof String) {
-                        try { currentCount = Integer.parseInt((String) countObj); } catch (Exception ignored) {}
+                    if (countObj instanceof Number num) {
+                        currentCount = num.intValue();
+                    } else if (countObj instanceof String str) {
+                        try { currentCount = Integer.parseInt(str); } catch (Exception ignored) {}
                     }
                 }
 
-                // 3. 读取最大限制 (从 Meta 字典获取，兜底给个 10)
-                int maxCount = 10;
-                if (target.getNodeDef().meta().containsKey("max_dynamic_output_number")) {
-                    Object maxObj = target.getNodeDef().meta().get("max_dynamic_output_number");
-                    if (maxObj instanceof Integer) maxCount = (Integer) maxObj;
-                }
+                // 3. 读取最大限制
+                int maxCount = nodeDef.getMetaOrDefault(SchemaKeys.MAX_DYNAMIC_OUTPUT, 10);
 
                 // 4. 根据点击类型执行对应的 Command
                 if (btnInfo.isAdd()) {

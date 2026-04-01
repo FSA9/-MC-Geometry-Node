@@ -2,11 +2,12 @@ package com.mine.geometry_node.core.node.nodes.maths.operation;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.*;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +50,7 @@ public class MathExpression extends BaseNode {
 
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.math_expression"))
                 .comment(comment)
-                .addMeta("max_dynamic_input_number", 26);
+                .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 26);
 
         // 结果输出
         builder.addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null));

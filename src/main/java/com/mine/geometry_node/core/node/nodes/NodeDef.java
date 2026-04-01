@@ -1,20 +1,32 @@
 package com.mine.geometry_node.core.node.nodes;
 
+import com.mine.geometry_node.core.node.meta.MetaKey;
+import com.mine.geometry_node.core.node.port.PortRow;
 import net.minecraft.network.chat.Component;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public record NodeDef(
         String typeId,
         NodeType category,
         Component displayName,
         String comment,
-        Map<String, Object> meta,
+        Map<MetaKey<?>, Object> meta,
         List<PortRow> rows
 ) {
+    @SuppressWarnings("unchecked")
+    public <T> Optional<T> getMeta(MetaKey<T> key) {
+        Object value = meta.get(key);
+        return value == null ? Optional.empty() : Optional.of((T) value);
+    }
+
+    public <T> T getMetaOrDefault(MetaKey<T> key, T defaultValue) {
+        return getMeta(key).orElse(defaultValue);
+    }
+
     public static Builder builder(String typeId, NodeType category, Component displayName) {
         return new Builder(typeId, category, displayName);
     }
@@ -25,7 +37,7 @@ public record NodeDef(
         private final Component displayName;
 
         private String comment = "";
-        private final Map<String, Object> meta = new HashMap<>();
+        private final Map<MetaKey<?>, Object> meta = new HashMap<>();
         private final List<PortRow> rows = new ArrayList<>();
 
         private Builder(String typeId, NodeType category, Component displayName) {
@@ -39,14 +51,10 @@ public record NodeDef(
             return this;
         }
 
-        public Builder addMeta(String key, Object value) {
-            /*
-            * max_dynamic_input_number: （int）最大输入动态端口数
-            * max_dynamic_output_number: （int）最大输出动态端口数
-            * dynamic_branch_input_count:（int）当前动态输入端口数量
-            * dynamic_branch_output_count:（int）当前动态输出端口数量
-            */
-            this.meta.put(key, value);
+        public <T> Builder addMeta(MetaKey<T> key, T value) {
+            if (key != null && value != null) {
+                this.meta.put(key, value);
+            }
             return this;
         }
 

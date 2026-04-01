@@ -3,9 +3,9 @@ package com.mine.geometry_node.core.node.nodes;
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.ExecutionResult;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.port.TypeConverter;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**

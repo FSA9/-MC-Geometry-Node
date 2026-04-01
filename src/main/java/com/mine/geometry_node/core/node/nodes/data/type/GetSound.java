@@ -3,6 +3,9 @@ package com.mine.geometry_node.core.node.nodes.data.type;
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 import java.util.Map;

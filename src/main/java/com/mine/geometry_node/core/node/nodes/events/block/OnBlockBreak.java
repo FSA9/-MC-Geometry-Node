@@ -2,6 +2,9 @@ package com.mine.geometry_node.core.node.nodes.events.block;
 
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.nodes.events.BaseEventNode;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 public class OnBlockBreak extends BaseEventNode {

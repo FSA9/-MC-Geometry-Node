@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.execution;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.execution.attachment.GraphDataAttachment;
 import com.mine.geometry_node.core.execution.attachment.LevelGraphAttachment;
-import com.mine.geometry_node.core.node.nodes.StandardPorts;
+import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.nodes.events.block.OnBlockBreak;
 import com.mine.geometry_node.core.node.nodes.events.block.OnBlockPlace;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;

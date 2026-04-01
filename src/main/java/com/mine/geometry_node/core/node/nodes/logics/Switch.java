@@ -3,7 +3,11 @@ package com.mine.geometry_node.core.node.nodes.logics;
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.ExecutionResult;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -48,8 +52,7 @@ public class Switch extends BaseNode {
     private NodeDef buildDef(int branchCount) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.flow_switch"));
 
-        // 写入 Meta 数据，UI 层和命令层可以读取这个值来限制加号的点击
-        builder.addMeta("max_dynamic_output_number", MAX_BRANCH_COUNT);
+        builder.addMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT, MAX_BRANCH_COUNT);
 
         // 1. 固定输入执行流
         builder.addRow(new PortRow(

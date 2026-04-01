@@ -3,6 +3,9 @@ package com.mine.geometry_node.core.node.nodes.functions.time;
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 public class Function_Delay_s extends BaseNode {

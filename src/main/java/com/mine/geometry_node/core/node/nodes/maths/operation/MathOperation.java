@@ -2,7 +2,11 @@ package com.mine.geometry_node.core.node.nodes.maths.operation;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.meta.PropertyKeys;
 import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 import java.util.Map;
@@ -18,19 +22,14 @@ public class MathOperation extends BaseNode {
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
-        String operator = (String) instanceData.properties.getOrDefault("operator", "+");
+        String operator = (String) instanceData.properties.getOrDefault(PropertyKeys.OPERATOR.id(), "+");
         return buildDef(operator);
     }
 
     private NodeDef buildDef(String operator) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.math_operation"));
         builder.addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(null, null, UIHint.SELECT, null,
-                Map.of(
-                        "property_key", "operator",
-                        "options", new String[]{"+", "-", "sin", "cos"}
-                )
-        ));
+        builder.addRow(PortRow.select(PropertyKeys.OPERATOR, new String[]{"+", "-", "sin", "cos"}));
         builder.addRow(new PortRow(StandardPorts.VALUE.toInputWithIndex(1), null, UIHint.INPUT, null, null));
         if ("+".equals(operator) || "-".equals(operator)) {
             builder.addRow(new PortRow(
@@ -47,7 +46,7 @@ public class MathOperation extends BaseNode {
         if (!StandardPorts.VALUE.getId().equals(portName)) return null;
 
         // 获取操作符
-        String operator = (String) context.getNodeProperty("operator");
+        String operator = (String) context.getNodeProperty(PropertyKeys.OPERATOR.id());
         if (operator == null) operator = "+";
 
         // 获取输入值

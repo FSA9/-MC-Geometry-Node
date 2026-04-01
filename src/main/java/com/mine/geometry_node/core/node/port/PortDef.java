@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes;
+package com.mine.geometry_node.core.node.port;
 
 import net.minecraft.network.chat.Component;
 

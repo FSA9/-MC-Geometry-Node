@@ -6,7 +6,7 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.Viewport.Viewport;
 import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.nodes.PortRow;
+import com.mine.geometry_node.core.node.port.PortRow;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
@@ -19,6 +19,11 @@ public class SelectHintRenderer implements UIHintRenderer {
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
         String propKey = row.hintParams() != null ? (String) row.hintParams().get("property_key") : null;
         String[] options = row.hintParams() != null ? (String[]) row.hintParams().get("options") : new String[0];
+
+//        if (row.hintParams() != null) {
+//            propKey = (String) row.hintParams().get(PortRow.PARAM_PROPERTY_KEY);
+//            options = (String[]) row.hintParams().getOrDefault(PortRow.PARAM_OPTIONS, new String[0]);
+//        }
 
         // 核心修复：优先读取已保存的值
         Object val = null;

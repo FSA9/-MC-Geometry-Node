@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.node.Connection;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.nodes.PortRow;
+import com.mine.geometry_node.core.node.port.PortRow;
 
 import java.util.ArrayList;
 import java.util.HashSet;

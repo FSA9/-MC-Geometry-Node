@@ -7,6 +7,8 @@ import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionManager;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.KeyManager;
 import com.mine.geometry_node.core.node.NodeData;
 
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -485,8 +487,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override public void requestViewportFocus() { requestFocus(); }
 
     private String findFirstExecInputPort(UINode node) {
-        for (com.mine.geometry_node.core.node.nodes.PortRow row : node.getNodeDef().rows()) {
-            if (row.leftPort() != null && row.leftPort().type() == com.mine.geometry_node.core.node.nodes.PortType.EXECUTION) {
+        for (PortRow row : node.getNodeDef().rows()) {
+            if (row.leftPort() != null && row.leftPort().type() == PortType.EXECUTION) {
                 return row.leftPort().id();
             }
         }

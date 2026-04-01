@@ -1,27 +1,23 @@
 package com.mine.geometry_node.client.ui.Viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.Viewport.UIHints.HintRendererFactory;
 import com.mine.geometry_node.client.ui.Viewport.UIHints.UIHintRenderer;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.nodes.PortRow;
-import com.mine.geometry_node.core.node.nodes.UIHint;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.UIHint;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.*;
 
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -345,13 +341,12 @@ public class UINode extends FrameLayout {
         float d = UIConstants.mDensity;
         float lx = ev.getX() / d;
         float ly = ev.getY() / d;
-//        float interceptRadius = .0f;
 
         float interceptRadius = UIConstants.Node.PORT_HITBOX_RADIUS;
 
         if (hitTestPort(lx, ly, true, interceptRadius) != null ||
                 hitTestPort(lx, ly, false, interceptRadius) != null) {
-            return false; // 如果按到了端口，禁止把事件传递给节点本身的拖拽或内部控件
+            return false;
         }
         return super.dispatchTouchEvent(ev);
     }
@@ -409,7 +404,6 @@ public class UINode extends FrameLayout {
                 float btnCenterXDp;
                 float btnCenterYDp;
 
-                // 【修复】判定坐标必须与 onDraw 中的绘制坐标严格对应
                 if (isLast) {
                     btnCenterXDp = wDp / 2.0f;
                     btnCenterYDp = rowBottomDp;

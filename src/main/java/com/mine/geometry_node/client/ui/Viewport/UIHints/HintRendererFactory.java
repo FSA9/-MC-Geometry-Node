@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.Viewport.UIHints;
 
-import com.mine.geometry_node.core.node.nodes.UIHint;
+import com.mine.geometry_node.core.node.port.UIHint;
 import java.util.EnumMap;
 import java.util.Map;
 

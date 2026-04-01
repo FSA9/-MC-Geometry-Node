@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.nodes.PortRow;
+import com.mine.geometry_node.core.node.port.PortRow;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;

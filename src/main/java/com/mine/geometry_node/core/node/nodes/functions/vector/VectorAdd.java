@@ -2,6 +2,9 @@ package com.mine.geometry_node.core.node.nodes.functions.vector;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 

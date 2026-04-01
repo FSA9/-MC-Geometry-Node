@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes;
+package com.mine.geometry_node.core.node.port;
 
 /**
  * [标准端口字典]
