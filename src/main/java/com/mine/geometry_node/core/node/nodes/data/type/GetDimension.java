@@ -23,7 +23,7 @@ public class GetDimension extends BaseNode {
                         UIHint.CUSTOM,
                         "dynamic_registry_select",
                         Map.of(
-                                "property_key", PROPERTY_SELECTED,
+                                "properties", PROPERTY_SELECTED,
                                 "registry", "minecraft:dimension"
                         )
                 ))

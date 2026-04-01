@@ -24,7 +24,7 @@ public class GetBlockType extends BaseNode {
                         UIHint.SELECT,
                         null,
                         Map.of(
-                                "property_key", PROPERTY_SELECTED,
+                                "properties", PROPERTY_SELECTED,
                                 "options", RegistryDataManager.getAllBlocks()
                         )
                 ))

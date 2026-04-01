@@ -121,7 +121,7 @@ public class UINode extends FrameLayout {
             if (hint != null) {
                 UIHintRenderer renderer = HintRendererFactory.getRenderer(hint);
                 if (renderer != null) {
-                    String propKey = row.hintParams() != null ? (String) row.hintParams().get("property_key") : null;
+                    String propKey = row.hintParams() != null ? (String) row.hintParams().get("properties") : null;
                     Object val = propKey != null ? mNodeData.properties.get(propKey) : null;
                     if (val == null && row.leftPort() != null) val = row.leftPort().defaultValue();
 
@@ -433,8 +433,8 @@ public class UINode extends FrameLayout {
         outPos[0] = isInput ? 0 : wDp;
         Float y = isInput ? mInputPortY.get(portId) : mOutputPortY.get(portId);
 
-        // 修复 3：如果因为动态结构变化导致找不到端口 Y 坐标，给一个默认高度防止飞到左上角 (0,0)
-        outPos[1] = (y != null) ? y : (UIConstants.Node.HEADER_HEIGHT + UIConstants.Node.ROW_HEIGHT / 2.0f);
+//        // 修复 3：如果因为动态结构变化导致找不到端口 Y 坐标，给一个默认高度防止飞到左上角 (0,0)
+//        outPos[1] = (y != null) ? y : (UIConstants.Node.HEADER_HEIGHT + UIConstants.Node.ROW_HEIGHT / 2.0f);
     }
 
     public NodeData getNodeData() { return mNodeData; }

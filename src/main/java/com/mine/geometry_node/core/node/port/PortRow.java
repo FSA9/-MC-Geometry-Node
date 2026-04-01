@@ -11,14 +11,14 @@ public record PortRow(
         @Nullable String customWidgetId,  // CUSTOM 组件 ID
         @Nullable Map<String, Object> hintParams // 额外静态参数
 ) {
-    public static final String PARAM_PROPERTY_KEY = "property_key";
+    public static final String PARAM_properties = "properties";
 
     public static final String PARAM_OPTIONS = "options";
 
     public static PortRow select(MetaKey<?> propertyKey, String[] options) {
         return new PortRow(
                 null, null, UIHint.SELECT, null,
-                Map.of(PARAM_PROPERTY_KEY, propertyKey.id(), PARAM_OPTIONS, options)
+                Map.of(PARAM_properties, propertyKey.id(), PARAM_OPTIONS, options)
         );
     }
 }

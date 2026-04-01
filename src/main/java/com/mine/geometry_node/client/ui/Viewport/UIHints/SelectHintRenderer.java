@@ -17,11 +17,11 @@ import icyllis.modernui.widget.TextView;
 public class SelectHintRenderer implements UIHintRenderer {
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        String propKey = row.hintParams() != null ? (String) row.hintParams().get("property_key") : null;
+        String propKey = row.hintParams() != null ? (String) row.hintParams().get("properties") : null;
         String[] options = row.hintParams() != null ? (String[]) row.hintParams().get("options") : new String[0];
 
 //        if (row.hintParams() != null) {
-//            propKey = (String) row.hintParams().get(PortRow.PARAM_PROPERTY_KEY);
+//            propKey = (String) row.hintParams().get(PortRow.PARAM_properties);
 //            options = (String[]) row.hintParams().getOrDefault(PortRow.PARAM_OPTIONS, new String[0]);
 //        }
 
@@ -36,7 +36,7 @@ public class SelectHintRenderer implements UIHintRenderer {
         Spinner spinner = new Spinner(context);
 
         ShapeDrawable borderBg = new ShapeDrawable();
-        borderBg.setColor(0x05FFFFFF); // 极淡的白色填充
+        borderBg.setColor(0x05FFFFFF);
         borderBg.setCornerRadius(3);
         borderBg.setStroke(1, 0xFF555555); // 灰色边框
         spinner.setBackground(borderBg);

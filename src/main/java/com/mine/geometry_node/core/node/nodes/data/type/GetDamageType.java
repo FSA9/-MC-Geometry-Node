@@ -24,7 +24,7 @@ public class GetDamageType extends BaseNode {
                         UIHint.CUSTOM,
                         "dynamic_registry_select",
                         Map.of(
-                                "property_key", PROPERTY_SELECTED,
+                                "properties", PROPERTY_SELECTED,
                                 "registry", "minecraft:damage_type"
                         )
                 ))

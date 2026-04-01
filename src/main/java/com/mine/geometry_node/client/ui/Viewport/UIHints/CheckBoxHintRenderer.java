@@ -15,7 +15,7 @@ import icyllis.modernui.widget.FrameLayout.LayoutParams;
 public class CheckBoxHintRenderer implements UIHintRenderer {
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        String propKey = row.hintParams() != null ? (String) row.hintParams().get("property_key") : null;
+        String propKey = row.hintParams() != null ? (String) row.hintParams().get("properties") : null;
         Object val = null;
         if (propKey != null) {
             val = nodeData.properties.get(propKey);

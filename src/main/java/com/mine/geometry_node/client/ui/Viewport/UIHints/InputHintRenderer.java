@@ -14,7 +14,7 @@ import icyllis.modernui.widget.FrameLayout;
 public class InputHintRenderer implements UIHintRenderer {
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        String propKey = row.hintParams() != null ? (String) row.hintParams().get("property_key") : null;
+        String propKey = row.hintParams() != null ? (String) row.hintParams().get("properties") : null;
 
         // 核心修复：优先读取已保存的值
         Object val = null;
