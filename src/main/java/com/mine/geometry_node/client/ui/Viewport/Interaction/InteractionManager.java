@@ -177,9 +177,18 @@ public class InteractionManager {
                 NodeData nodeData = target.getNodeData();
                 NodeDef nodeDef = target.getNodeDef();
 
+                boolean isInputDynamic = nodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
+
+                String propertyKey = isInputDynamic ?
+                        PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id() :
+                        PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
+
+                int maxCount = isInputDynamic ?
+                        nodeDef.getMetaOrDefault(SchemaKeys.MAX_DYNAMIC_INPUT, 10) :
+                        nodeDef.getMetaOrDefault(SchemaKeys.MAX_DYNAMIC_OUTPUT, 10);
+
                 // 2. 读取当前分支数量
                 int currentCount = 1;
-                String propertyKey = PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
                 if (nodeData.properties.containsKey(propertyKey)) {
                     Object countObj = nodeData.properties.get(propertyKey);
                     if (countObj instanceof Number num) {
@@ -188,9 +197,6 @@ public class InteractionManager {
                         try { currentCount = Integer.parseInt(str); } catch (Exception ignored) {}
                     }
                 }
-
-                // 3. 读取最大限制
-                int maxCount = nodeDef.getMetaOrDefault(SchemaKeys.MAX_DYNAMIC_OUTPUT, 10);
 
                 // 4. 根据点击类型执行对应的 Command
                 if (btnInfo.isAdd()) {

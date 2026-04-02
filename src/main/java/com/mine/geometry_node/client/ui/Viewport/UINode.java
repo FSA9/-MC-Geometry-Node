@@ -330,7 +330,7 @@ public class UINode extends FrameLayout {
     }
 
     private boolean isDynamicRow(PortRow row) {
-        return row.hintParams() != null && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC.id()));
+        return row.hintParams() != null && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC));
     }
 
     // ==========================================
@@ -434,8 +434,11 @@ public class UINode extends FrameLayout {
         outPos[0] = isInput ? 0 : wDp;
         Float y = isInput ? mInputPortY.get(portId) : mOutputPortY.get(portId);
 
-//        // 修复 3：如果因为动态结构变化导致找不到端口 Y 坐标，给一个默认高度防止飞到左上角 (0,0)
-//        outPos[1] = (y != null) ? y : (UIConstants.Node.HEADER_HEIGHT + UIConstants.Node.ROW_HEIGHT / 2.0f);
+        if (y != null) {
+            outPos[1] = y;
+        } else {
+            outPos[1] = UIConstants.Node.HEADER_HEIGHT + UIConstants.Node.ROW_HEIGHT / 2.0f;
+        }
     }
 
     public NodeData getNodeData() { return mNodeData; }

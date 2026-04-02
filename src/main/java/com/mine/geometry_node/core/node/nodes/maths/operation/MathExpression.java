@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node.nodes.maths.operation;
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.meta.PropertyKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
@@ -24,21 +25,29 @@ public class MathExpression extends BaseNode {
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
-        List<String> dynamicPorts = new ArrayList<>();
+        int portCount = 1; // 默认最少 1 个变量 (A)
 
-        if (instanceData != null && instanceData.inputs != null) {
-            for (String key : instanceData.inputs.keySet()) {
-                if (key.length() == 1 && Character.isUpperCase(key.charAt(0))) {
-                    dynamicPorts.add(key);
-                }
+        // 1. 像 Switch 一样，从 Properties 中读取 UI 保存的动态端口数量
+        if (instanceData != null && instanceData.properties.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
+            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+            if (countObj instanceof Number n) {
+                portCount = n.intValue();
+            } else if (countObj instanceof String s) {
+                try { portCount = Integer.parseInt(s); } catch (NumberFormatException ignored) {}
             }
         }
 
-        if (dynamicPorts.isEmpty()) {
-            dynamicPorts.add("A");
+        // 2. 兜底保护，最多 26 个字母 (A - Z)
+        portCount = Math.max(1, Math.min(portCount, 26));
+
+        // 3. 根据数量生成 A, B, C, D...
+        List<String> dynamicPorts = new ArrayList<>();
+        for (int i = 0; i < portCount; i++) {
+            // 通过 ASCII 码偏移生成字母: 0 -> 'A', 1 -> 'B', 2 -> 'C'
+            char varName = (char) ('A' + i);
+            dynamicPorts.add(String.valueOf(varName));
         }
 
-//        Collections.sort(dynamicPorts);
         return buildDef(dynamicPorts);
     }
 

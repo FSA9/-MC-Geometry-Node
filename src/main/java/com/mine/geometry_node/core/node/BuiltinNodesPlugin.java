@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.node.nodes.events.block.OnBlockBreak;
 import com.mine.geometry_node.core.node.nodes.events.block.OnBlockPlace;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityDeath;
 import com.mine.geometry_node.core.node.nodes.logics.Switch;
+import com.mine.geometry_node.core.node.nodes.maths.operation.MathExpression;
 import com.mine.geometry_node.core.node.nodes.maths.operation.MathOperation;
 
 
@@ -31,11 +32,12 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/visual", new DrawDebugLine());
 
         // Data
-        registry.register("data/type", new GetEffect());
-        registry.register("data/type", new GetDamageType());
+//        registry.register("data/type", new GetEffect());
+//        registry.register("data/type", new GetDamageType());
 
 
         // Maths
+        registry.register("maths/operation", new MathExpression());
         registry.register("maths/operation", new MathOperation());
 
         // Logics
