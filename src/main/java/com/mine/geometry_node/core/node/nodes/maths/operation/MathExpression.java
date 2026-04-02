@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.maths.operation;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
@@ -65,7 +66,9 @@ public class MathExpression extends BaseNode {
             builder.addRow(new PortRow(
                     dynamicPort,
                     null,
-                    UIHint.DEFAULT, null, Map.of("is_dynamic", true)
+                    UIHint.DEFAULT,
+                    null,
+                    Map.of(PortMetaKeys.IS_DYNAMIC, true)
             ));
         }
 

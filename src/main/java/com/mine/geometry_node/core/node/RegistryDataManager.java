@@ -81,6 +81,23 @@ public class RegistryDataManager {
     }
 
     /**
+     * [UI 专用路由] 根据传入的 Registry ID 动态分发并获取数据
+     */
+    public static List<String> getDynamicOptions(String registryId, RegistryAccess access) {
+        if (registryId == null || access == null) return List.of();
+
+        return switch (registryId) {
+            case "minecraft:dimension" -> getDimensions(access);
+            case "minecraft:enchantment" -> getEnchantments(access);
+            case "minecraft:damage_type" -> getDamageTypes(access);
+            default -> {
+                System.err.println("[RegistryDataManager] 未知的动态注册表 ID: " + registryId);
+                yield List.of();
+            }
+        };
+    }
+
+    /**
      * 安全提取指定动态注册表所有 Key，并统一格式化为排序好的字符串列表。
      */
     private static <T> List<String> getDynamicRegistryKeys(RegistryAccess access, ResourceKey<net.minecraft.core.Registry<T>> registryKey) {

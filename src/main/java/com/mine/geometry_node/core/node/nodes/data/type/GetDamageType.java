@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.type;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -13,19 +14,20 @@ public class GetDamageType extends BaseNode {
 
     public static final String TYPE_ID = "get_damage_type";
 
-    public static final String PROPERTY_SELECTED = "selected_damage_type";
+    public static final String PROPERTY_SELECTED = PortMetaKeys.DYNAMIC_REGISTRY_ID.id();
 
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_damage_type"))
+                .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), null, null, null))
                 .addRow(new PortRow(
                         null,
-                        StandardPorts.DAMAGE_TYPE.toOutput(),
-                        UIHint.CUSTOM,
-                        "dynamic_registry_select",
+                        null,
+                        UIHint.SELECT,
+                        null,
                         Map.of(
-                                "properties", PROPERTY_SELECTED,
-                                "registry", "minecraft:damage_type"
+                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED,
+                                PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:damage_type"
                         )
                 ))
                 .build();

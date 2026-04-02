@@ -6,6 +6,8 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.Viewport.Viewport;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.RegistryDataManager;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.port.PortRow;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -14,16 +16,43 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.Spinner;
 import icyllis.modernui.widget.TextView;
 
+import java.util.List;
+
 public class SelectHintRenderer implements UIHintRenderer {
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        String propKey = row.hintParams() != null ? (String) row.hintParams().get("properties") : null;
-        String[] options = row.hintParams() != null ? (String[]) row.hintParams().get("options") : new String[0];
+        // 1. 获取绑定的属性名
+        String propKey = row.hintParams() != null ? (String) row.hintParams().get(PortMetaKeys.BIND_PROPERTY) : null;
 
-//        if (row.hintParams() != null) {
-//            propKey = (String) row.hintParams().get(PortRow.PARAM_properties);
-//            options = (String[]) row.hintParams().getOrDefault(PortRow.PARAM_OPTIONS, new String[0]);
-//        }
+        // --- 核心升级：智能选项解析策略 ---
+        List<String> resolvedOptions = new java.util.ArrayList<>();
+
+        if (row.hintParams() != null) {
+            // 策略 A：优先尝试获取静态选项 (Options)
+            String[] staticOptions = (String[]) row.hintParams().get(PortMetaKeys.OPTIONS);
+
+            if (staticOptions != null && staticOptions.length > 0) {
+                resolvedOptions.addAll(java.util.List.of(staticOptions));
+            }
+            // 策略 B：如果没有静态选项，尝试获取动态注册表 ID
+            else {
+                String dynamicRegistryId = (String) row.hintParams().get(PortMetaKeys.DYNAMIC_REGISTRY_ID);
+                if (dynamicRegistryId != null) {
+                    // 从客户端全局实例中安全获取 RegistryAccess
+                    var mc = net.minecraft.client.Minecraft.getInstance();
+                    if (mc.level != null) {
+                        net.minecraft.core.RegistryAccess access = mc.level.registryAccess();
+                        resolvedOptions.addAll(RegistryDataManager.getDynamicOptions(dynamicRegistryId, access));
+                    } else {
+                        System.err.println("[SelectHintRenderer] 无法获取动态选项，因为当前世界未加载。");
+                    }
+                }
+            }
+        }
+
+        // 转换回旧版代码兼容的数组格式
+        final String[] options = resolvedOptions.toArray(new String[0]);
+        // ------------------------------------
 
         // 核心修复：优先读取已保存的值
         Object val = null;

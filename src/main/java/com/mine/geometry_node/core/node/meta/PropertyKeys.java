@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.meta;
 
 public class PropertyKeys {
-    public static final MetaKey<String> OPERATOR = new MetaKey<>("operator");
+    public static final MetaKey<String> SELECTION = new MetaKey<>("selection");
 
     /**
      * 当前动态输入端口数量

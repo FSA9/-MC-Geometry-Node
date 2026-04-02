@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node.nodes.logics;
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.ExecutionResult;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -68,7 +69,7 @@ public class Switch extends BaseNode {
                     StandardPorts.FLOW_OUT.toExecWithIndex(i),
                     UIHint.CHECKBOX,
                     null,
-                    Map.of("is_dynamic", true) // 保留这个，UI 依然靠它渲染 +/- 按钮
+                    Map.of(PortMetaKeys.IS_DYNAMIC, true)
             ));
         }
 

@@ -11,8 +11,4 @@ public enum UIHint {
     CHECKBOX,       // 勾选框
     INPUT,          // 输入框
     CUSTOM          // 自定义复杂组件
-    /**
-     * "is_dynamic": bool  // 是否为动态端口
-     *
-     */
 }

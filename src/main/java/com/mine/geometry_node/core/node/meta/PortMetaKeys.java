@@ -1,0 +1,23 @@
+package com.mine.geometry_node.core.node.meta;
+
+public class PortMetaKeys {
+    /**
+     * 标记该端口行是否为动态端口
+     */
+    public static final MetaKey<Boolean> IS_DYNAMIC = new MetaKey<>("is_dynamic");
+
+    /**
+     * 下拉框控件关联的 Property 键名
+     */
+    public static final MetaKey<String> BIND_PROPERTY = new MetaKey<>("properties");
+
+    /**
+     * 下拉框控件的可选列表
+     */
+    public static final MetaKey<String[]> OPTIONS = new MetaKey<>("options");
+
+    /**
+     * [UI 指令] 动态注册表 ID (用于按需拉取数据，如 "minecraft:dimension")
+     */
+    public static final MetaKey<String> DYNAMIC_REGISTRY_ID = new MetaKey<>("dynamic_registry");
+}

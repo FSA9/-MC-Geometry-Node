@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.Viewport.UIHints.HintRendererFactory;
 import com.mine.geometry_node.client.ui.Viewport.UIHints.UIHintRenderer;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.UIHint;
@@ -329,7 +330,7 @@ public class UINode extends FrameLayout {
     }
 
     private boolean isDynamicRow(PortRow row) {
-        return row.hintParams() != null && Boolean.TRUE.equals(row.hintParams().get("is_dynamic"));
+        return row.hintParams() != null && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC.id()));
     }
 
     // ==========================================
