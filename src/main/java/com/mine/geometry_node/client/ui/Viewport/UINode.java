@@ -32,23 +32,8 @@ import java.util.Map;
  * 4. 提供节点内部元素的命中测试 (Hit Test) 接口供 Viewport 调用。
  */
 public class UINode extends FrameLayout {
-
     // ==========================================
-    // 1. 控件渲染策略注册表 (UI Hint Factory)
-    // ==========================================
-
-    /**
-     * 策略接口：定义控件的创建与排版规则
-     */
-//    private interface HintRenderer {
-//        View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext);
-//        void updateLayout(View view, PortRow row, float currentY, int nodeWidth);
-//    }
-//
-//    private static final Map<UIHint, HintRenderer> HINT_RENDERERS = new EnumMap<>(UIHint.class);
-
-    // ==========================================
-    // 2. 核心数据与状态 (Data & State)
+    // 核心数据与状态
     // ==========================================
     private final NodeData mNodeData;
     private final NodeDef mNodeDef;
@@ -57,13 +42,12 @@ public class UINode extends FrameLayout {
     private int mTotalHeight;
 
     // ==========================================
-    // 3. 渲染与排版缓存 (Cache)
+    // 渲染与排版缓存
     // ==========================================
     private final Paint mPaint = new Paint();
     private final RectF mTempRect = new RectF();
     private final Map<String, Float> mInputPortY = new HashMap<>();
     private final Map<String, Float> mOutputPortY = new HashMap<>();
-    private final int[] mTmpHintOnScreen = new int[2];
 
     private final Map<String, TextView> mPortLabels = new HashMap<>();
     private final Map<Integer, View> mHintViews = new HashMap<>();
@@ -90,7 +74,7 @@ public class UINode extends FrameLayout {
     }
 
     private void buildUIElements(Context context) {
-        // --- 1. 构建头部标题 ---
+        // --- 构建头部标题 ---
         TextView titleView = new TextView(context);
         titleView.setText(mNodeDef.displayName().getString());
         titleView.setTextColor(UIConstants.CLR_WHITE);
@@ -101,7 +85,7 @@ public class UINode extends FrameLayout {
         titleView.setLongClickable(false);
         addView(titleView, new LayoutParams(LayoutParams.MATCH_PARENT, UIConstants.Node.HEADER_HEIGHT));
 
-        // --- 2. 遍历行，构建端口标签与交互控件 ---
+        // --- 遍历行，构建端口标签与交互控件 ---
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
 
@@ -117,7 +101,7 @@ public class UINode extends FrameLayout {
                 addView(tv, new LayoutParams(LayoutParams.WRAP_CONTENT, UIConstants.Node.ROW_HEIGHT));
             }
 
-            // --- 3. 利用策略工厂构建交互控件 ---
+            // --- 利用策略工厂构建交互控件 ---
             UIHint hint = row.uiHint();
             if (hint != null) {
                 UIHintRenderer renderer = HintRendererFactory.getRenderer(hint);
@@ -162,7 +146,7 @@ public class UINode extends FrameLayout {
             float portCenterY = currentY + UIConstants.Node.ROW_HEIGHT / 2.0f;
             float portCenterYDp = portCenterY / UIConstants.mDensity;
 
-            // --- 1. 排版左侧标签 ---
+            // --- 排版左侧标签 ---
             if (row.leftPort() != null) {
                 mInputPortY.put(row.leftPort().id(), portCenterYDp);
                 TextView tv = mPortLabels.get(row.leftPort().id());
@@ -177,8 +161,6 @@ public class UINode extends FrameLayout {
                         boolean isConnected = mEditorContext.getGraphController().isInputPortConnected(mNodeData.id, row.leftPort().id());
 
                         if (isConnected) {
-                            // 连线后：把 CheckBox 占用的宽度收缩为 0，文字标签靠左对齐
-                            checkboxWidth = 0;
                             leftMargin = UIConstants.Node.LABEL_MARGIN_PORT;
                         } else {
                             View cbView = mHintViews.get(i);
@@ -203,7 +185,7 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            // --- 2. 排版右侧标签 ---
+            // --- 排版右侧标签 ---
             if (row.rightPort() != null) {
                 mOutputPortY.put(row.rightPort().id(), portCenterYDp);
                 TextView tv = mPortLabels.get(row.rightPort().id());
@@ -217,7 +199,7 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            // --- 3. 利用策略工厂计算并应用控件排版 ---
+            // --- 利用策略工厂计算并应用控件排版 ---
             UIHint hint = row.uiHint();
             View hintView = mHintViews.get(i);
             if (hint != null && hintView != null) {
@@ -258,7 +240,7 @@ public class UINode extends FrameLayout {
         mTempRect.set(0, 0, w, h);
         canvas.drawRoundRect(mTempRect, UIConstants.Node.CORNER_RADIUS, (int) UIConstants.Node.CORNER_RADIUS, mPaint);
 
-        // --- 2. 绘制节点头部 (根据 Category 着色) ---
+        // --- 2. 绘制节点头部 ---
         canvas.save();
         canvas.clipRect(0, 0, w, UIConstants.Node.HEADER_HEIGHT);
         mPaint.setColor(mNodeDef.category().getColor());
@@ -414,7 +396,7 @@ public class UINode extends FrameLayout {
                 }
 
                 // 适度放大点击容差至 10.0f
-                if (Math.abs(localX - btnCenterXDp) <= 10.0f && Math.abs(localY - btnCenterYDp) <= 10.0f) {
+                if (Math.abs(localX - btnCenterXDp) <= 6.0f && Math.abs(localY - btnCenterYDp) <= 6.0f) {
                     String refId = row.leftPort() != null ? row.leftPort().id() :
                             (row.rightPort() != null ? row.rightPort().id() : "");
                     return new DynamicActionInfo(isLast, refId);

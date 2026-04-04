@@ -32,8 +32,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/visual", new DrawDebugLine());
 
         // Data
-//        registry.register("data/type", new GetEffect());
-//        registry.register("data/type", new GetDamageType());
+        registry.register("data/type", new GetEffect());
+        registry.register("data/type", new GetDamageType());
 
 
         // Maths

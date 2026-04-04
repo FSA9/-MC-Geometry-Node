@@ -22,7 +22,7 @@ import java.util.*;
  *     <li><b>运行时进程 (Active Processes):</b> 动态记录当前正在运行的蓝图执行线程（由 Tick 驱动）。</li>
  * </ol>
  */
-public class GraphDataAttachment {
+public class EntityGraphAttachment {
 
     // Fields
 
@@ -37,7 +37,7 @@ public class GraphDataAttachment {
 
     // Constructor
 
-    public GraphDataAttachment() {}
+    public EntityGraphAttachment() {}
 
     // Logic Loop (Tick)
 
@@ -172,7 +172,7 @@ public class GraphDataAttachment {
                     GraphProcess process = new GraphProcess(processTag, index, provider);
                     this.processes.add(process);
                 } else {
-                    System.err.printf("[GraphDataAttachment] Failed to restore process '%s' - Graph Index not found.%n", graphId);
+                    System.err.printf("[EntityGraphAttachment] Failed to restore process '%s' - Graph Index not found.%n", graphId);
                 }
             }
         }

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.execution;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.execution.attachment.GraphDataAttachment;
+import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.execution.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.execution.storage.GlobalGraphStorage;
 import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
@@ -31,7 +31,7 @@ public class GraphEngine {
      * [事件触发 - 核心引擎] 支持有实体或无实体的事件分发。
      * <p>
      * - 全局图将被挂载到所在维度的 LevelGraphAttachment 中。
-     * - 局部图将被挂载到触发实体的 GraphDataAttachment 中。
+     * - 局部图将被挂载到触发实体的 EntityGraphAttachment 中。
      *
      * @param level       事件发生的维度世界
      * @param target      事件的主体实体 (如果纯世界事件如天气变化，可传入 null)
@@ -51,7 +51,7 @@ public class GraphEngine {
 
         // 触发局部绑定图 (放入触发实体背包)
         if (target != null) {
-            GraphDataAttachment entityAttachment = getAttachment(target);
+            EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
                 for (String graphId : entityAttachment.getBoundGraphs()) {
                     triggerAndMountEvent(level, target, graphId, eventNodeId, initializer, process -> {
@@ -92,7 +92,7 @@ public class GraphEngine {
 
         // 2. 触发局部绑定图 (目标实体)
         if (target != null) {
-            GraphDataAttachment entityAttachment = getAttachment(target);
+            EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
                 for (String graphId : entityAttachment.getBoundGraphs()) {
                     triggerAndMountCustomEvent(level, target, graphId, targetEventType, frequency, initializer, process -> {
@@ -154,7 +154,7 @@ public class GraphEngine {
         RuntimeGraphIndex index = GraphResourceManager.getInstance().getIndex(graphId);
         if (index == null) return;
 
-        GraphDataAttachment attachment = getAttachment(entity);
+        EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
             attachment.bindGraph(graphId);
         }
@@ -166,7 +166,7 @@ public class GraphEngine {
     }
 
     public static void unbindGraph(Entity entity, String graphId) {
-        GraphDataAttachment attachment = getAttachment(entity);
+        EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
             attachment.unbindGraph(graphId);
         }
@@ -178,7 +178,7 @@ public class GraphEngine {
     }
 
     public static void unbindAllGraphs(Entity entity) {
-        GraphDataAttachment attachment = getAttachment(entity);
+        EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
             attachment.clearGraphs();
         }
@@ -190,7 +190,7 @@ public class GraphEngine {
     }
 
     public static java.util.Set<String> getBoundGraphs(Entity entity) {
-        GraphDataAttachment attachment = getAttachment(entity);
+        EntityGraphAttachment attachment = getAttachment(entity);
         return attachment != null ? attachment.getBoundGraphs() : java.util.Collections.emptySet();
     }
 
@@ -231,7 +231,7 @@ public class GraphEngine {
         }
     }
 
-    private static GraphDataAttachment getAttachment(Entity entity) {
+    private static EntityGraphAttachment getAttachment(Entity entity) {
         return entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
     }
 

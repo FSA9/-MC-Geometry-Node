@@ -1,8 +1,9 @@
 package com.mine.geometry_node;
 
 import com.mine.geometry_node.core.command.GraphCommand;
-import com.mine.geometry_node.core.execution.attachment.GraphDataAttachment;
+import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.execution.GraphEventHandler;
+import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -37,17 +38,17 @@ public class GeometryNode {
     public static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES =
             DeferredRegister.create(NeoForgeRegistries.ATTACHMENT_TYPES, GeometryNode.MODID);
 
-    public static final Supplier<AttachmentType<GraphDataAttachment>> GRAPH_DATA_ATTACHMENT =
-            ATTACHMENT_TYPES.register("graph_data", () -> AttachmentType.builder(() -> new GraphDataAttachment())
-                    .serialize(new IAttachmentSerializer<CompoundTag, GraphDataAttachment>() {
+    public static final Supplier<AttachmentType<EntityGraphAttachment>> GRAPH_DATA_ATTACHMENT =
+            ATTACHMENT_TYPES.register("graph_data", () -> AttachmentType.builder(() -> new EntityGraphAttachment())
+                    .serialize(new IAttachmentSerializer<CompoundTag, EntityGraphAttachment>() {
                         @Override
-                        public CompoundTag write(GraphDataAttachment attachment, HolderLookup.Provider provider) {
+                        public CompoundTag write(EntityGraphAttachment attachment, HolderLookup.Provider provider) {
                             return attachment.save(new CompoundTag(), provider);
                         }
 
                         @Override
-                        public GraphDataAttachment read(IAttachmentHolder holder, CompoundTag tag, HolderLookup.Provider provider) {
-                            GraphDataAttachment newAttachment = new GraphDataAttachment();
+                        public EntityGraphAttachment read(IAttachmentHolder holder, CompoundTag tag, HolderLookup.Provider provider) {
+                            EntityGraphAttachment newAttachment = new EntityGraphAttachment();
                             newAttachment.load(tag, provider);
                             return newAttachment;
                         }
@@ -80,5 +81,7 @@ public class GeometryNode {
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("[GeometryNode] Server starting, ready to process graphs!");
+        // 启动时从世界存档加载动态蓝图
+        DynamicGraphManager.loadAllFromDisk(event.getServer());
     }
 }

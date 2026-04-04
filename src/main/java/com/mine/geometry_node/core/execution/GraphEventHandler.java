@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.execution;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.execution.attachment.GraphDataAttachment;
+import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.execution.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.nodes.events.block.OnBlockBreak;
@@ -88,7 +88,7 @@ public class GraphEventHandler {
             }
 
             // 获取挂载层并驱动
-            GraphDataAttachment attachment = getAttachmentFromEntity(entity);
+            EntityGraphAttachment attachment = getAttachmentFromEntity(entity);
 
             // 即使 entity.isRemoved() 为 true，只要进程列表不为空，继续驱动遗愿图！
             if (attachment != null && !attachment.getProcesses().isEmpty()) {
@@ -240,7 +240,7 @@ public class GraphEventHandler {
 
     // Helpers
 
-    private static GraphDataAttachment getAttachmentFromEntity(Entity entity) {
+    private static EntityGraphAttachment getAttachmentFromEntity(Entity entity) {
         return entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
     }
 }

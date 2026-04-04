@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.execution;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.execution.attachment.GraphDataAttachment;
+import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.execution.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.execution.variables.VariableRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -576,7 +576,7 @@ public class GraphProcess {
             if (target == null) return;
 
             if (target instanceof Entity ent) {
-                GraphDataAttachment att = ent.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
+                EntityGraphAttachment att = ent.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
                 if (att != null) att.setAttribute(name, value);
             } else if ("GLOBAL".equals(target) && level != null) {
                 LevelGraphAttachment att = LevelGraphAttachment.get(level.getServer().overworld());
@@ -601,7 +601,7 @@ public class GraphProcess {
             if (target == null) return null;
 
             if (target instanceof Entity ent) {
-                GraphDataAttachment att = ent.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
+                EntityGraphAttachment att = ent.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
                 return att != null ? att.getAttribute(name) : null;
             } else if ("GLOBAL".equals(target) && level != null) {
                 LevelGraphAttachment att = LevelGraphAttachment.get(level.getServer().overworld());
