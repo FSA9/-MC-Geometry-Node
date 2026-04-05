@@ -9,11 +9,11 @@ import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 public class Function_Delay_tick extends BaseNode {
-    public static final String TYPE_ID = "function_delay_s";
+    public static final String TYPE_ID = "function_delay_tick";
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.function_delay_s"))
+        return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.function_delay_tick"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.TIME.toInput(), null, UIHint.INPUT, null, null))
                 .build();

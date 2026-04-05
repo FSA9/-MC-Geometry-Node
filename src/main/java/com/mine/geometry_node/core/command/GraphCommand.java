@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.command;
 
+import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mine.geometry_node.core.execution.GraphEngine;
@@ -17,11 +18,14 @@ import java.util.Collection;
 public class GraphCommand {
     // 动态图 ID 补全提供者
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRAPHS = (context, builder) -> {
-        // 从资源管理器获取所有已加载的图 ID
-        return SharedSuggestionProvider.suggest(
-                GraphResourceManager.getInstance().getAllGraphIds(),
-                builder
-        );
+        java.util.Set<String> allGraphs = new java.util.HashSet<>();
+
+        // 静态数据包
+        allGraphs.addAll(GraphResourceManager.getInstance().getAllGraphIds());
+        // 动态上传图
+        allGraphs.addAll(DynamicGraphManager.getAllDynamicGraphIds());
+
+        return SharedSuggestionProvider.suggest(allGraphs, builder);
     };
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {

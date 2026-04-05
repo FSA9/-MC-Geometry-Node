@@ -111,7 +111,7 @@ public class GraphEngine {
      */
     private static void triggerAndMountCustomEvent(ServerLevel level, @Nullable Entity target, String graphId, String eventNodeId,
                                                    String targetFrequency, @Nullable Consumer<GraphProcess> initializer, Consumer<GraphProcess> mountAction) {
-        RuntimeGraphIndex index = GraphResourceManager.getInstance().getIndex(graphId);
+        RuntimeGraphIndex index = getGraphIndex(graphId);
         if (index == null) return;
 
         List<Integer> startNodeIds = index.findNodesByType(eventNodeId); // 这里变成了 int
@@ -233,6 +233,22 @@ public class GraphEngine {
 
     private static EntityGraphAttachment getAttachment(Entity entity) {
         return entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
+    }
+
+    /**
+     * [双轨制查找] 核心图纸解析路由
+     * 优先级：动态内存热更图 > 静态数据包图
+     */
+    @Nullable
+    public static RuntimeGraphIndex getGraphIndex(String graphId) {
+        // 1. 优先去动态图管理器中查找 (玩家 UI 实时保存的)
+        RuntimeGraphIndex dynamicIndex = com.mine.geometry_node.core.execution.storage.DynamicGraphManager.getIndex(graphId);
+        if (dynamicIndex != null) {
+            return dynamicIndex;
+        }
+
+        // 2. 兜底去数据包资源管理器中查找 (模组自带或外部数据包)
+        return GraphResourceManager.getInstance().getIndex(graphId);
     }
 
     private static void log(String msg) {
