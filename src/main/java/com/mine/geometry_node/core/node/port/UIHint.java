@@ -10,5 +10,6 @@ public enum UIHint {
     SELECT,         // 下拉框
     CHECKBOX,       // 勾选框
     INPUT,          // 输入框
+    VECTOR,         // 矢量输入框
     CUSTOM          // 自定义复杂组件
 }

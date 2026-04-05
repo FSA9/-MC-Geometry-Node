@@ -19,8 +19,8 @@ public class DrawDebugLine extends BaseNode {
                 // 执行流：输入与输出
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 核心数据端口：使用 PortDef.create 创建具有默认值的自定义语义端口
-                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.END_POS.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.END_POS.toInput(), null, UIHint.VECTOR, null, null))
                 // 渲染参数端口：颜色 (ARGB)、粗细、持续时间(Tick)
                 .addRow(new PortRow(StandardPorts.COLOR.toInput(), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_1.toInput(), null, UIHint.INPUT, null, null))

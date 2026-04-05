@@ -18,7 +18,7 @@ public enum PortType {
     ENTITY("实体", 0xFFE91E63, null),
     ITEM("物品", 0xFFE91E63, null),
     BLOCK("方块", 0xFF8D6E63, null),
-    XYZ("XYZ", 0xFF00BCD4, Vec3.ZERO),
+    XYZ("XYZ", 0xFF00BCD4, List.of(0.0f, 0.0f, 0.0f)),
     LIST("列表", 0xFFFF9800, List.of()),
     ANY("任意", 0xFF95A5A6, null);
 

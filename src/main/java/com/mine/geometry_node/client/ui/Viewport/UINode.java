@@ -202,6 +202,10 @@ public class UINode extends FrameLayout {
             // --- 利用策略工厂计算并应用控件排版 ---
             UIHint hint = row.uiHint();
             View hintView = mHintViews.get(i);
+
+            // 默认占据一行高度
+            float rowHeightAdded = UIConstants.Node.ROW_HEIGHT;
+
             if (hint != null && hintView != null) {
                 // 【判定连线状态】
                 boolean isConnected = false;
@@ -214,10 +218,17 @@ public class UINode extends FrameLayout {
                 UIHintRenderer renderer = HintRendererFactory.getRenderer(hint);
                 if (renderer != null) {
                     renderer.updateLayout(hintView, row, currentY, UIConstants.Node.NODE_WIDTH);
+
+                    // 【核心修改：如果是向量且未连线，高度需要增加额外的 3 行！】
+                    // 假设你的枚举叫 UIHint.VECTOR，或者根据 row.leftPort().type() == PortType.XYZ 判断
+                    if (!isConnected && row.leftPort() != null && row.leftPort().type() == com.mine.geometry_node.core.node.port.PortType.XYZ) {
+                        rowHeightAdded += (UIConstants.Node.ROW_HEIGHT * 3);
+                    }
                 }
             }
 
-            currentY += UIConstants.Node.ROW_HEIGHT;
+            // 动态累加高度
+            currentY += rowHeightAdded;
         }
 
         mTotalHeight = (int) currentY;

@@ -21,11 +21,11 @@ public class GetEntitiesByAABB extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.XYZ.toInputWithIndex(1),
                             null,
-                                    UIHint.DEFAULT, null, null
+                                    UIHint.VECTOR, null, null
                 ))
                 .addRow(new PortRow(StandardPorts.XYZ.toInputWithIndex(2),
                             null,
-                                    UIHint.DEFAULT, null, null
+                                    UIHint.VECTOR, null, null
                 ))
                 .build();
     }

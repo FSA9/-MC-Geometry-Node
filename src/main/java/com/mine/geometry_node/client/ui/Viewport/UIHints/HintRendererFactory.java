@@ -11,6 +11,7 @@ public class HintRendererFactory {
         RENDERERS.put(UIHint.CHECKBOX, new CheckBoxHintRenderer());
         RENDERERS.put(UIHint.INPUT, new InputHintRenderer());
         RENDERERS.put(UIHint.SELECT, new SelectHintRenderer());
+        RENDERERS.put(UIHint.VECTOR, new VectorHintRenderer());
     }
 
     public static UIHintRenderer getRenderer(UIHint hint) {
