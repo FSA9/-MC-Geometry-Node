@@ -19,7 +19,6 @@ public class CmdRemoveBranch implements ICommand {
     private final int mOldCount;
     private final int mNewCount;
 
-    // --- 绝密档案：备份即将被销毁的连线 ---
     // 1. 本节点输出出去的数据连线备份
     private final Map<String, List<Connection>> mBackupOutputs = new HashMap<>();
     // 2. 本节点输出出去的执行流连线备份
@@ -37,7 +36,6 @@ public class CmdRemoveBranch implements ICommand {
         this.mOldCount = currentCount;
         this.mNewCount = currentCount - 1;
 
-        // 【关键】在生成命令的瞬间，就开始备份！
         backupConnectionsBeforeRemoval();
     }
 
@@ -59,7 +57,7 @@ public class CmdRemoveBranch implements ICommand {
             mBackupExecution.put(deadOutputPort, targetNode.execution.get(deadOutputPort));
         }
 
-        // 3. 遍历全图，寻找连接到 deadInputPort (比如 case_3) 的线
+        // 3. 遍历全图，寻找连接到 deadInputPort 的线
         for (NodeData otherNode : mGraph.nodes.values()) {
             if (otherNode.id.equals(mNodeId)) continue;
 

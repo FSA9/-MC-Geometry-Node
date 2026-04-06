@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.UIHint;
 
 import icyllis.modernui.core.Context;
@@ -218,17 +219,11 @@ public class UINode extends FrameLayout {
                 UIHintRenderer renderer = HintRendererFactory.getRenderer(hint);
                 if (renderer != null) {
                     renderer.updateLayout(hintView, row, currentY, UIConstants.Node.NODE_WIDTH);
-
-                    // 【核心修改：如果是向量且未连线，高度需要增加额外的 3 行！】
-                    // 假设你的枚举叫 UIHint.VECTOR，或者根据 row.leftPort().type() == PortType.XYZ 判断
-                    if (!isConnected && row.leftPort() != null && row.leftPort().type() == com.mine.geometry_node.core.node.port.PortType.XYZ) {
-                        rowHeightAdded += (UIConstants.Node.ROW_HEIGHT * 3);
-                    }
                 }
             }
 
             // 动态累加高度
-            currentY += rowHeightAdded;
+            currentY += calculateRowHeight(row);
         }
 
         mTotalHeight = (int) currentY;
@@ -285,7 +280,8 @@ public class UINode extends FrameLayout {
 
             if (isDynamicRow(row)) {
                 boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
-                float rowBottom = currentY + UIConstants.Node.ROW_HEIGHT;
+                float rowTotalHeight = calculateRowHeight(row);
+                float rowBottom = currentY + rowTotalHeight;
 
                 if (isLast) {
                     // 加号：画在底部正中间
@@ -296,7 +292,7 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            currentY += UIConstants.Node.ROW_HEIGHT;
+            currentY += calculateRowHeight(row);
         }
 
         super.onDraw(canvas);
@@ -391,9 +387,10 @@ public class UINode extends FrameLayout {
 
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
+            float rowHeight = calculateRowHeight(row);
             if (isDynamicRow(row)) {
                 boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
-                float rowBottomDp = (yPx + UIConstants.Node.ROW_HEIGHT) / d;
+                float rowBottomDp = (yPx + rowHeight) / d;
 
                 float btnCenterXDp;
                 float btnCenterYDp;
@@ -406,7 +403,7 @@ public class UINode extends FrameLayout {
                     btnCenterYDp = rowBottomDp - (UIConstants.Node.ROW_HEIGHT / 2.0f / d);
                 }
 
-                // 适度放大点击容差至 10.0f
+                // 适度放大点击容差
                 if (Math.abs(localX - btnCenterXDp) <= 6.0f && Math.abs(localY - btnCenterYDp) <= 6.0f) {
                     String refId = row.leftPort() != null ? row.leftPort().id() :
                             (row.rightPort() != null ? row.rightPort().id() : "");
@@ -416,6 +413,39 @@ public class UINode extends FrameLayout {
             yPx += UIConstants.Node.ROW_HEIGHT;
         }
         return null;
+    }
+
+    private float calculateRowHeight(PortRow row) {
+        float height = UIConstants.Node.ROW_HEIGHT;
+
+        // 如果没有任何 UI 控件，直接返回基础 1 行高度
+        if (row.uiHint() == null) {
+            return height;
+        }
+
+        // 检查是否连线，连线状态下控件会被隐藏，高度只占 1 行
+        boolean isConnected = false;
+        if (row.leftPort() != null) {
+            isConnected = mEditorContext.getGraphController().isInputPortConnected(mNodeData.id, row.leftPort().id());
+        }
+
+        // 核心：未连线时，通过 Renderer 动态获取所需额外高度，实现完全解耦
+        if (!isConnected) {
+            UIHintRenderer renderer = HintRendererFactory.getRenderer(row.uiHint());
+            // 如果找不到 Renderer，默认不增加额外高度
+            float extraRows = (renderer != null) ? renderer.getRequiredExtraRows(row) : 0.0f;
+
+            boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
+
+            if (hasLabel) {
+                // 有标签：基础 1 行 + 控件占用的额外行数
+                height = UIConstants.Node.ROW_HEIGHT * (1.0f + extraRows);
+            } else {
+                // 无标签 (纯配置属性)：至少保证有 1 行。如果控件本身较大，取最大值
+                height = UIConstants.Node.ROW_HEIGHT * Math.max(1.0f, extraRows);
+            }
+        }
+        return height;
     }
 
     // ==========================================

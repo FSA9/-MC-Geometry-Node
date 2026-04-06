@@ -14,18 +14,18 @@ import java.util.Map;
 public class NodeGraph {
     @SerializedName("graph_name")
     public String graphName;        // 图名称
+
+    @SerializedName("tags")
+    public List<String> tags = new ArrayList<>();
+
     @SerializedName("version")
     public String version;          // 版本
-    // public String author;        // 作者信息
-    // public long lastModified;    // 最后修改时间
 
     // 节点列表
     @SerializedName("nodes")
     public Map<String, NodeData> nodes = new HashMap<>();
 
-    public NodeGraph() {
-//        this.lastModified = System.currentTimeMillis();
-    }
+    public NodeGraph() {}
 
     public NodeGraph(String graphName) {
         this();
@@ -36,7 +36,7 @@ public class NodeGraph {
      * 辅助方法：根据 UUID 查找节点数据
      */
     public NodeData getNode(String id) {
-        return nodes.get(id); // Map 查找比 List 流查找快得多 (O(1) vs O(n))
+        return nodes.get(id);
     }
 
     public void addNode(NodeData node) {

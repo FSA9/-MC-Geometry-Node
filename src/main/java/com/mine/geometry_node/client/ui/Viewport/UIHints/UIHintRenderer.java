@@ -9,4 +9,8 @@ import icyllis.modernui.view.View;
 public interface UIHintRenderer {
     View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext);
     void updateLayout(View view, PortRow row, float currentY, int nodeWidth);
+
+    default float getRequiredExtraRows(PortRow row) {
+        return 0.0f;
+    }
 }

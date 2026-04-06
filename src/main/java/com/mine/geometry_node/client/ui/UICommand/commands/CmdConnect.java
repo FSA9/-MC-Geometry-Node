@@ -14,7 +14,7 @@ public class CmdConnect implements ICommand {
         this.inNodeId = inNodeId; this.inPortId = inPortId;
     }
 
-    // 新增：判断器，根据你的命名规范，包含 flow 的通常是执行流
+    // 执行流判断器
     private boolean isExecutionFlow() {
         return outPortId.startsWith("flow_") || inPortId.startsWith("flow_");
     }
