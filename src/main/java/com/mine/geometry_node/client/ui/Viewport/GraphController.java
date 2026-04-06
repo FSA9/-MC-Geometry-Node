@@ -51,7 +51,7 @@ public class GraphController {
             NodeData inNode = mContext.getGraph().getNode(inNodeId);
             if (inNode != null) {
                 inNode.inputs.remove(inPortId);
-                inNode.connectedInputs.add(inPortId);
+                inNode.setInputConnected(inPortId, true);
             }
 
             // 3. 数据全部就绪，最后通知 UI 刷新
@@ -66,7 +66,7 @@ public class GraphController {
 
             NodeData inNode = mContext.getGraph().getNode(inNodeId);
             if (inNode != null) {
-                inNode.connectedInputs.remove(inPortId);
+                inNode.setInputConnected(inPortId, false);
             }
 
             mContext.notifyConnectionRemoved(outNodeId, outPortId, inNodeId, inPortId);

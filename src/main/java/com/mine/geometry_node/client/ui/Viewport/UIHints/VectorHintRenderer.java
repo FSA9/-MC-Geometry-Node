@@ -18,7 +18,6 @@ import java.util.List;
 
 public class VectorHintRenderer implements UIHintRenderer {
 
-    // 【新增】：声明 Vector 控件需要额外 3 行的高度
     @Override
     public float getRequiredExtraRows(PortRow row) {
         return 3.0f;
@@ -26,44 +25,35 @@ public class VectorHintRenderer implements UIHintRenderer {
 
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        // (保持原有代码不变)
         LinearLayout container = new LinearLayout(context);
         container.setOrientation(LinearLayout.VERTICAL);
 
         String portId = row.leftPort().id();
         Object rawVal = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
 
-        List<Number> vec = (rawVal instanceof List) ? (List<Number>) rawVal : List.of(0f, 0f, 0f);
-
         for (int i = 0; i < 3; i++) {
             final int index = i;
             EditText et = new EditText(context);
-            et.setText(String.valueOf(vec.get(i).floatValue()));
-            et.setTextColor(UIConstants.CLR_GRAY_LABEL);
-            et.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
 
-            et.setGravity(icyllis.modernui.view.Gravity.RIGHT | icyllis.modernui.view.Gravity.CENTER_VERTICAL);
-            et.setBackground(new ColorDrawable(0xFF252525));
-            et.setPadding(12, 0, 12, 0);
+            // 使用工具类安全提取坐标
+            float currentVal = UIHintUtils.getSafeVectorComponent(rawVal, index);
+            et.setText(String.valueOf(currentVal));
 
-            LinearLayout.LayoutParams etParams = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    UIConstants.Node.ROW_HEIGHT - 4
-            );
-            etParams.bottomMargin = 4;
-            container.addView(et, etParams);
+            // 使用工具类应用样式
+            UIHintUtils.applyStandardInputStyle(et);
+            container.addView(et, UIHintUtils.getStandardInputLayoutParams());
 
             et.setOnFocusChangeListener((v, hasFocus) -> {
                 if (!hasFocus && editorContext != null) {
                     try {
                         float parsedFloat = Float.parseFloat(et.getText().toString());
                         Object currentRaw = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
-                        List<Number> currentVec = (currentRaw instanceof List) ? (List<Number>) currentRaw : List.of(0f, 0f, 0f);
+                        float oldComponent = UIHintUtils.getSafeVectorComponent(currentRaw, index);
 
-                        if (currentVec.get(index).floatValue() != parsedFloat) {
+                        if (oldComponent != parsedFloat) {
                             List<Float> newList = new ArrayList<>();
                             for (int j = 0; j < 3; j++) {
-                                newList.add(j == index ? parsedFloat : currentVec.get(j).floatValue());
+                                newList.add(j == index ? parsedFloat : UIHintUtils.getSafeVectorComponent(currentRaw, j));
                             }
                             CmdChangeInputValue cmd = new CmdChangeInputValue(
                                     editorContext.getGraphController(), nodeData.id, portId, currentRaw, newList);
@@ -71,8 +61,7 @@ public class VectorHintRenderer implements UIHintRenderer {
                         }
                     } catch (NumberFormatException e) {
                         Object fallbackRaw = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
-                        List<Number> fallbackVec = (fallbackRaw instanceof List) ? (List<Number>) fallbackRaw : List.of(0f, 0f, 0f);
-                        et.setText(String.valueOf(fallbackVec.get(index).floatValue()));
+                        et.setText(String.valueOf(UIHintUtils.getSafeVectorComponent(fallbackRaw, index)));
                     }
                 }
             });
@@ -82,7 +71,6 @@ public class VectorHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        // (保持原有代码不变)
         float startX = UIConstants.Node.LABEL_MARGIN_PORT;
         float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
 

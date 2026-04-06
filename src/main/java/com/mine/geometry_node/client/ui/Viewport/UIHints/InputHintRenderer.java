@@ -17,7 +17,6 @@ import icyllis.modernui.widget.LinearLayout;
 
 public class InputHintRenderer implements UIHintRenderer {
 
-    // 【新增】：声明 Input 控件需要额外 1 行的高度
     @Override
     public float getRequiredExtraRows(PortRow row) {
         return 1.0f;
@@ -25,9 +24,7 @@ public class InputHintRenderer implements UIHintRenderer {
 
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        // (保持原有代码完全不变)
         String propKey = row.hintParams() != null ? (String) row.hintParams().get("properties") : null;
-
         Object val = null;
         PortType expectedType = PortType.ANY;
 
@@ -46,19 +43,10 @@ public class InputHintRenderer implements UIHintRenderer {
 
         EditText et = new EditText(context);
         et.setText(val != null ? val.toString() : "");
-        et.setTextColor(UIConstants.CLR_GRAY_LABEL);
-        et.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
 
-        et.setGravity(icyllis.modernui.view.Gravity.RIGHT | icyllis.modernui.view.Gravity.CENTER_VERTICAL);
-        et.setBackground(new ColorDrawable(0xFF252525));
-        et.setPadding(12, 0, 12, 0);
-
-        LinearLayout.LayoutParams etParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                UIConstants.Node.ROW_HEIGHT - 4
-        );
-        etParams.bottomMargin = 4;
-        container.addView(et, etParams);
+        // 使用工具类应用样式
+        UIHintUtils.applyStandardInputStyle(et);
+        container.addView(et, UIHintUtils.getStandardInputLayoutParams());
 
         et.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus && editorContext != null) {

@@ -20,7 +20,9 @@ import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -55,6 +57,15 @@ public class UINode extends FrameLayout {
 
     public record DynamicActionInfo(boolean isAdd, String referencePortId) {}
 
+    private static class RowLayoutMetrics {
+        float topY;        // 该行顶部的 Y 坐标
+        float height;      // 该行的高度
+        RectF btnHitbox;   // 动态按钮的点击判定区 (逻辑坐标 dp)，为空则代表此行无按钮
+        boolean isAddBtn;  // 如果有按钮，是加号还是减号
+        String refPortId;  // 按钮关联的端口 ID
+    }
+
+    private final List<RowLayoutMetrics> mRowMetrics = new ArrayList<>();
 
     // ==========================================
     // 模块 1: 初始化与构建 (Initialization)
@@ -138,18 +149,32 @@ public class UINode extends FrameLayout {
     // ==========================================
 
     public void updateNodeLayout() {
+        // 1. 清空所有旧的缓存
         mInputPortY.clear();
         mOutputPortY.clear();
+        mRowMetrics.clear();
 
         float currentY = UIConstants.Node.HEADER_HEIGHT;
+
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
+
+            // 【关键】：高度计算只调一次
+            float rowHeight = calculateRowHeight(row);
+
+            // 【关键还原】：端口的 Y 坐标始终位于这一行的“首行垂直居中”位置
             float portCenterY = currentY + UIConstants.Node.ROW_HEIGHT / 2.0f;
             float portCenterYDp = portCenterY / UIConstants.mDensity;
 
-            // --- 排版左侧标签 ---
+            // 2. 初始化这一行的缓存指标
+            RowLayoutMetrics metrics = new RowLayoutMetrics();
+            metrics.topY = currentY;
+            metrics.height = rowHeight;
+
+            // --- 3. 原封不动保留的：排版左侧标签 ---
             if (row.leftPort() != null) {
-                mInputPortY.put(row.leftPort().id(), portCenterYDp);
+                mInputPortY.put(row.leftPort().id(), portCenterYDp); // 保留！供外部连线使用
+
                 TextView tv = mPortLabels.get(row.leftPort().id());
                 if (tv != null) {
                     LayoutParams lp = (LayoutParams) tv.getLayoutParams();
@@ -157,9 +182,8 @@ public class UINode extends FrameLayout {
 
                     if (row.uiHint() == UIHint.CHECKBOX) {
                         int checkboxWidth = 16;
-
-                        // 【连线判定】：判断此 CheckBox 对应的端口是否已连线
-                        boolean isConnected = mEditorContext.getGraphController().isInputPortConnected(mNodeData.id, row.leftPort().id());
+                        // 优化 1 成果：直接读状态，不再查 Controller
+                        boolean isConnected = mNodeData.isInputConnected(row.leftPort().id());
 
                         if (isConnected) {
                             leftMargin = UIConstants.Node.LABEL_MARGIN_PORT;
@@ -186,9 +210,10 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            // --- 排版右侧标签 ---
+            // --- 4. 原封不动保留的：排版右侧标签 ---
             if (row.rightPort() != null) {
-                mOutputPortY.put(row.rightPort().id(), portCenterYDp);
+                mOutputPortY.put(row.rightPort().id(), portCenterYDp); // 保留！
+
                 TextView tv = mPortLabels.get(row.rightPort().id());
                 if (tv != null) {
                     LayoutParams lp = (LayoutParams) tv.getLayoutParams();
@@ -200,18 +225,14 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            // --- 利用策略工厂计算并应用控件排版 ---
+            // --- 5. 略微修改的：排版 UIHint 控件 ---
             UIHint hint = row.uiHint();
             View hintView = mHintViews.get(i);
-
-            // 默认占据一行高度
-            float rowHeightAdded = UIConstants.Node.ROW_HEIGHT;
-
             if (hint != null && hintView != null) {
-                // 【判定连线状态】
+                // 优化 1 成果：直接读状态
                 boolean isConnected = false;
                 if (row.leftPort() != null) {
-                    isConnected = mEditorContext.getGraphController().isInputPortConnected(mNodeData.id, row.leftPort().id());
+                    isConnected = mNodeData.isInputConnected(row.leftPort().id());
                 }
 
                 hintView.setVisibility(isConnected ? View.GONE : View.VISIBLE);
@@ -222,8 +243,32 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            // 动态累加高度
-            currentY += calculateRowHeight(row);
+            // --- 6. 新增的：预计算动态按钮的碰撞判定区 (Hitbox) ---
+            if (isDynamicRow(row)) {
+                boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
+                metrics.isAddBtn = isLast;
+                metrics.refPortId = row.leftPort() != null ? row.leftPort().id() : (row.rightPort() != null ? row.rightPort().id() : "");
+
+                float rowBottomDp = (currentY + rowHeight) / UIConstants.mDensity;
+                float cxDp, cyDp;
+                float wDp = UIConstants.Node.NODE_WIDTH;
+
+                if (isLast) {
+                    cxDp = wDp / 2.0f;
+                    cyDp = rowBottomDp;
+                } else {
+                    cxDp = wDp - (16.0f / UIConstants.mDensity);
+                    cyDp = rowBottomDp - (UIConstants.Node.ROW_HEIGHT / 2.0f / UIConstants.mDensity);
+                }
+
+                // 统一生成 12x12 dp 的碰撞矩形
+                float tolerance = 6.0f;
+                metrics.btnHitbox = new RectF(cxDp - tolerance, cyDp - tolerance, cxDp + tolerance, cyDp + tolerance);
+            }
+
+            // 7. 将这一行的数据存入缓存，并向下推移 Y 坐标
+            mRowMetrics.add(metrics);
+            currentY += rowHeight;
         }
 
         mTotalHeight = (int) currentY;
@@ -261,10 +306,10 @@ public class UINode extends FrameLayout {
         canvas.drawRoundRect(mTempRect, UIConstants.Node.CORNER_RADIUS, (int) UIConstants.Node.CORNER_RADIUS, mPaint);
 
         // --- 4. 绘制端口圆点与动态按钮 ---
-        float currentY = UIConstants.Node.HEADER_HEIGHT;
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
-            float centerY = currentY + UIConstants.Node.ROW_HEIGHT / 2.0f;
+            RowLayoutMetrics metrics = mRowMetrics.get(i);
+            float centerY = metrics.topY + UIConstants.Node.ROW_HEIGHT / 2.0f;
 
             if (row.leftPort() != null) {
                 mPaint.setStyle(Paint.Style.FILL);
@@ -278,21 +323,13 @@ public class UINode extends FrameLayout {
                 canvas.drawCircle(w, centerY, UIConstants.Node.PORT_VISUAL_RADIUS, mPaint);
             }
 
-            if (isDynamicRow(row)) {
-                boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
-                float rowTotalHeight = calculateRowHeight(row);
-                float rowBottom = currentY + rowTotalHeight;
+            if (metrics.btnHitbox != null) {
+                float cx = metrics.isAddBtn ? (w / 2.0f) : (w - 16.0f);
+                float cy = metrics.topY + metrics.height;
+                if (!metrics.isAddBtn) cy -= UIConstants.Node.ROW_HEIGHT / 2.0f;
 
-                if (isLast) {
-                    // 加号：画在底部正中间
-                    drawDynamicButton(canvas, w / 2.0f, rowBottom, true);
-                } else {
-                    // 减号：向内收缩 16px，略微偏上，避开右侧的输出端口
-                    drawDynamicButton(canvas, w - 16.0f, rowBottom - UIConstants.Node.ROW_HEIGHT / 2.0f, false);
-                }
+                drawDynamicButton(canvas, cx, cy, metrics.isAddBtn);
             }
-
-            currentY += calculateRowHeight(row);
         }
 
         super.onDraw(canvas);
@@ -382,35 +419,13 @@ public class UINode extends FrameLayout {
 
     public DynamicActionInfo hitTestDynamicButton(float localX, float localY) {
         float d = UIConstants.mDensity;
-        float wDp = getWidth() > 0 ? getWidth() / d : UIConstants.Node.NODE_WIDTH;
-        float yPx = UIConstants.Node.HEADER_HEIGHT;
+        float lxDp = localX / d;
+        float lyDp = localY / d;
 
-        for (int i = 0; i < mNodeDef.rows().size(); i++) {
-            PortRow row = mNodeDef.rows().get(i);
-            float rowHeight = calculateRowHeight(row);
-            if (isDynamicRow(row)) {
-                boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
-                float rowBottomDp = (yPx + rowHeight) / d;
-
-                float btnCenterXDp;
-                float btnCenterYDp;
-
-                if (isLast) {
-                    btnCenterXDp = wDp / 2.0f;
-                    btnCenterYDp = rowBottomDp;
-                } else {
-                    btnCenterXDp = wDp - (16.0f / d);
-                    btnCenterYDp = rowBottomDp - (UIConstants.Node.ROW_HEIGHT / 2.0f / d);
-                }
-
-                // 适度放大点击容差
-                if (Math.abs(localX - btnCenterXDp) <= 6.0f && Math.abs(localY - btnCenterYDp) <= 6.0f) {
-                    String refId = row.leftPort() != null ? row.leftPort().id() :
-                            (row.rightPort() != null ? row.rightPort().id() : "");
-                    return new DynamicActionInfo(isLast, refId);
-                }
+        for (RowLayoutMetrics metrics : mRowMetrics) {
+            if (metrics.btnHitbox != null && metrics.btnHitbox.contains(lxDp, lyDp)) {
+                return new DynamicActionInfo(metrics.isAddBtn, metrics.refPortId);
             }
-            yPx += UIConstants.Node.ROW_HEIGHT;
         }
         return null;
     }
@@ -426,7 +441,7 @@ public class UINode extends FrameLayout {
         // 检查是否连线，连线状态下控件会被隐藏，高度只占 1 行
         boolean isConnected = false;
         if (row.leftPort() != null) {
-            isConnected = mEditorContext.getGraphController().isInputPortConnected(mNodeData.id, row.leftPort().id());
+            isConnected = mNodeData.isInputConnected(row.leftPort().id());
         }
 
         // 核心：未连线时，通过 Renderer 动态获取所需额外高度，实现完全解耦

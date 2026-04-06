@@ -86,6 +86,30 @@ public class NodeData {
         }
     }
 
+    /**
+     * 判断指定的输入端口是否已被连线
+     */
+    public boolean isInputConnected(String portId) {
+        if (connectedInputs == null) {
+            connectedInputs = new HashSet<>();
+        }
+        return connectedInputs.contains(portId);
+    }
+
+    /**
+     * 更新输入端口的连线状态 (由 GraphController 在连线/断开时调用)
+     */
+    public void setInputConnected(String portId, boolean connected) {
+        if (connectedInputs == null) {
+            connectedInputs = new HashSet<>();
+        }
+        if (connected) {
+            connectedInputs.add(portId);
+        } else {
+            connectedInputs.remove(portId);
+        }
+    }
+
     // 获取目标端口所有连线
     public List<Connection> getConnections(String outPort) {
         return this.outputs.getOrDefault(outPort, List.of());
