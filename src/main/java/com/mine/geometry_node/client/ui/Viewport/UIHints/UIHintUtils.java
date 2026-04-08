@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.Viewport.UIHints;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import icyllis.modernui.graphics.drawable.ColorDrawable;
+import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 
@@ -14,8 +15,14 @@ public class UIHintUtils {
         et.setTextColor(UIConstants.CLR_GRAY_LABEL);
         et.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
         et.setGravity(icyllis.modernui.view.Gravity.RIGHT | icyllis.modernui.view.Gravity.CENTER_VERTICAL);
-        et.setBackground(new ColorDrawable(0xFF252525));
-        et.setPadding(12, 0, 12, 0);
+
+        ShapeDrawable bgDrawable = new ShapeDrawable();
+        bgDrawable.setColor(0xFF252525);
+        bgDrawable.setCornerRadius(UIConstants.Node.CORNER_RADIUS * UIConstants.mDensity);
+        bgDrawable.setStroke((int) (UIConstants.mDensity), 0xFF333333);
+
+        et.setBackground(bgDrawable);
+        et.setPadding(8, 2, 8, 2);
     }
 
     /**

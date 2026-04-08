@@ -2,12 +2,14 @@ package com.mine.geometry_node.client.ui;
 
 /**
  * UI 常量配置中心
- * 包含基础调色板定义和各模块的具体参数配置
+ * <p>
+ * 架构职责：集中管理全局基础调色板、各组件视觉尺寸以及交互阈值判定参数。
+ * 避免在逻辑代码中出现“魔法数字”(Magic Numbers)。
  */
 public class UIConstants {
 
     // ==========================================
-    // 基础调色板 (Color Palette - 集中定义所有原始颜色值)
+    // 基础调色板 (Color Palette)
     // ==========================================
 
     // --- 背景深色系 ---
@@ -27,10 +29,6 @@ public class UIConstants {
     public static final int CLR_SEARCH_BG = 0xFF333333;      // 搜索框深灰背景
     public static final int CLR_GRID_LINE = 0xFF282828;      // 画布网格线暗灰色
     public static final int CLR_HOVER_WHITE = 0x40FFFFFF;    // 悬停覆盖色 (半透白)
-
-    // --- 框选与节点类型色 ---
-    public static final int CLR_SELECT_FILL = 0x3342A5F5;    // 框选区域填充蓝 (半透)
-    public static final int CLR_SELECT_STROKE = 0xFF42A5F5;  // 框选区域边框蓝
 
     // --- 屏幕显示 ---
     public static final float mDensity = 2.0f;               // 屏幕像素密度
@@ -71,27 +69,44 @@ public class UIConstants {
     }
 
     /**
-     * Node 节点内部布局配置 (基于模数推导)
+     * Node 节点内部布局配置
      */
     public static class Node {
         public static final int NODE_WIDTH = 12 * GRID_SIZE;                      // 节点总宽度
-        public static final int ROW_HEIGHT = 2 * GRID_SIZE;                      // 节点单行高度
-        public static final int HEADER_HEIGHT = 2 * GRID_SIZE;                   // 节点标题栏高度
+        public static final int ROW_HEIGHT = 2 * GRID_SIZE;                       // 节点单行高度
+        public static final int HEADER_HEIGHT = 2 * GRID_SIZE;                    // 节点标题栏高度
 
-        public static final float PORT_VISUAL_RADIUS = ROW_HEIGHT / 4.0f;        // 端口视觉半径
-        public static final float PORT_HITBOX_RADIUS = PORT_VISUAL_RADIUS * 1.2f; // 端口交互判定半径
+        public static final float CORNER_RADIUS = 1.5f;                           // 节点圆角半径
+        public static final float STROKE_WIDTH_NORMAL = 1.5f;                     // 节点普通状态边框线宽
+        public static final float STROKE_WIDTH_SELECTED = 2.5f;                   // 节点选中状态边框线宽
 
-        public static final float CORNER_RADIUS = 6.0f;                          // 节点圆角半径
-        public static final float STROKE_WIDTH_NORMAL = 1.5f;                    // 节点普通状态边框线宽
-        public static final float STROKE_WIDTH_SELECTED = 2.5f;                  // 节点选中状态边框线宽
+        // --- 文本标签与复选框排版参数 ---
+        public static final int LABEL_MARGIN_PORT = 16;                           // 端口与标签文本之间的基础间距
+        public static final int MARGIN_CHECKBOX_OFFSET = 5;                       // 有复选框时的左侧缩进补偿
+        public static final int MARGIN_CHECKBOX_GAP = 3;                          // 复选框与文本标签间的间距
+        public static final int CHECKBOX_DEFAULT_WIDTH = 16;                      // 复选框控件的默认宽度
+        public static final int TEXT_SIZE_HEADER = 10;                            // 节点标题字体大小
+        public static final int TEXT_SIZE_LABEL = 10;                             // 节点内端口标签字体大小
 
-        public static final int LABEL_MARGIN_PORT = 8;                           // 端口与标签文本之间的间距
-        public static final int TEXT_SIZE_HEADER = 10;                           // 节点标题字体大小
-        public static final int TEXT_SIZE_LABEL = 10;                            // 节点内端口标签字体大小
+        // --- 端口尺寸与判定参数 ---
+        public static final float PORT_VISUAL_RADIUS = ROW_HEIGHT / 4.0f;         // 端口视觉圆点半径
+        public static final float PORT_HITBOX_RADIUS_RATIO = 1.1f;                // 交互判定半径相对于视觉半径的倍数
+        public static final float PORT_HITBOX_RADIUS = PORT_VISUAL_RADIUS * PORT_HITBOX_RADIUS_RATIO; // 端口交互判定半径
+
+        // --- 动态按钮排版与判定参数 (+/-) ---
+        public static final float DYNAMIC_BTN_OFFSET_DP = 16.0f;                  // 动态按钮距右侧的偏移量
+        public static final float DYNAMIC_BTN_SIZE_DP = 10.0f;                    // 动态按钮整体正方形边长
+        public static final float DYNAMIC_BTN_ICON_SIZE_DP = 6.0f;                // 动态按钮内部十字形图标尺寸
+        public static final float DYNAMIC_BTN_STROKE_WIDTH = 1.0f;                // 动态按钮描边线宽
+        public static final float DYNAMIC_BTN_HITBOX_TOLERANCE_DP = 6.0f;         // 逻辑排版阶段的半包围盒容差 (DP)
+        public static final float DYNAMIC_BTN_TOUCH_TOLERANCE_DP = 15.0f;         // 物理屏幕触摸事件的高容差判定半径 (DP)
+
+        public static final int CLR_DYNAMIC_BTN_BG = 0xFF444444;                  // 动态按钮背景色
+        public static final int CLR_DYNAMIC_BTN_FG = 0xFFFFFFFF;                  // 动态按钮前景色 (边框与符号)
     }
 
     /**
-     * ViewPort 视口与网格配置
+     * ViewPort 视口与画布配置
      */
     public static class ViewPort {
         public static final int BG_COLOR = CLR_BG_DARK_1;        // 视口画布背景色
@@ -105,6 +120,26 @@ public class UIConstants {
         public static final float ZOOM_MIN = 0.4f;               // 画布最小缩放倍率
         public static final float ZOOM_MAX = 10.0f;              // 画布最大缩放倍率
         public static final float ZOOM_SENSITIVITY = 0.1f;       // 鼠标滚轮缩放灵敏度步长
+
+        // --- 画布框选样式配置 ---
+        public static class Selection {
+            public static final int CLR_FILL = 0x3344AAFF;       // 框选区域填充蓝 (半透)
+            public static final int CLR_BORDER = 0xFF44AAFF;     // 框选区域边框蓝
+            public static final float STROKE_WIDTH = 1.0f;       // 框选边框线宽
+        }
+
+        // --- 节点连线样式配置 ---
+        public static class Connection {
+            public static final int CLR_DRAFT_LINE = 0xFFE0E0E0; // 交互草稿连线颜色
+            public static final float LINE_WIDTH_ESTABLISHED = 3.0f; // 已经建联的连线宽度
+            public static final float LINE_WIDTH_DRAFT = 3.0f;       // 正在拖拽的草稿连线宽度
+        }
+
+        // --- 画布交互阈值配置 ---
+        public static class Interaction {
+            public static final float TOUCH_SLOP = 5.0f;         // 物理屏幕防抖阈值 (超过此值判定为拖拽)
+            public static final float MIN_DRAG_DISTANCE = 0.1f;  // 逻辑坐标防抖阈值 (微小浮点误差过滤)
+        }
 
         /** 视口右键菜单配置 */
         public static class NodeMenu {

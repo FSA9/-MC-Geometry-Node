@@ -378,7 +378,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     public UINode findNodeAt(float uiX, float uiY) {
         return findHitInZOrder(node -> {
             node.getLogicalBounds(mTmpNodeBounds);
-            mTmpNodeBounds.inset(-12.0f, -12.0f);
+            mTmpNodeBounds.inset(-UIConstants.Node.PORT_VISUAL_RADIUS, -UIConstants.Node.PORT_VISUAL_RADIUS);
             return mTmpNodeBounds.contains(uiX, uiY) ? node : null;
         });
     }

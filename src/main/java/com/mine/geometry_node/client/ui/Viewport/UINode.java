@@ -17,6 +17,7 @@ import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.MotionEvent;
+import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.*;
 
@@ -35,6 +36,7 @@ import java.util.Map;
  * 4. 提供节点内部元素的命中测试 (Hit Test) 接口供 Viewport 调用。
  */
 public class UINode extends FrameLayout {
+
     // ==========================================
     // 核心数据与状态
     // ==========================================
@@ -125,7 +127,7 @@ public class UINode extends FrameLayout {
                     View hintView = renderer.createView(context, mNodeData, row, mEditorContext);
                     if (hintView != null) {
                         mHintViews.put(i, hintView);
-                        addView(hintView, new LayoutParams(0, 0)); // 尺寸将在 updateNodeLayout 中重新分配
+                        addView(hintView, new LayoutParams(0, 0));
                     }
                 }
             }
@@ -149,7 +151,6 @@ public class UINode extends FrameLayout {
     // ==========================================
 
     public void updateNodeLayout() {
-        // 1. 清空所有旧缓存
         mInputPortY.clear();
         mOutputPortY.clear();
         mRowMetrics.clear();
@@ -158,29 +159,26 @@ public class UINode extends FrameLayout {
 
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
-
             float rowHeight = calculateRowHeight(row);
 
-            // 端口的 Y 坐标始终位于这一行的“首行垂直居中”位置
             float portCenterY = currentY + UIConstants.Node.ROW_HEIGHT / 2.0f;
             float portCenterYDp = portCenterY / UIConstants.mDensity;
 
-            // 2. 初始化本行缓存指标
             RowLayoutMetrics metrics = new RowLayoutMetrics();
             metrics.topY = currentY;
             metrics.height = rowHeight;
 
-            // --- 3. 左侧标签 ---
+            // --- 3. 左侧标签排版 ---
             if (row.leftPort() != null) {
-                mInputPortY.put(row.leftPort().id(), portCenterYDp); // 保留！供外部连线使用
+                mInputPortY.put(row.leftPort().id(), portCenterYDp);
 
                 TextView tv = mPortLabels.get(row.leftPort().id());
                 if (tv != null) {
                     LayoutParams lp = (LayoutParams) tv.getLayoutParams();
-                    int leftMargin = UIConstants.Node.LABEL_MARGIN_PORT - 5;
+                    int leftMargin = UIConstants.Node.LABEL_MARGIN_PORT - UIConstants.Node.MARGIN_CHECKBOX_OFFSET;
 
                     if (row.uiHint() == UIHint.CHECKBOX) {
-                        int checkboxWidth = 16;
+                        int checkboxWidth = UIConstants.Node.CHECKBOX_DEFAULT_WIDTH;
                         boolean isConnected = mNodeData.isInputConnected(row.leftPort().id());
 
                         if (isConnected) {
@@ -196,7 +194,7 @@ public class UINode extends FrameLayout {
                                     checkboxWidth = cbView.getMeasuredWidth();
                                 }
                             }
-                            leftMargin = UIConstants.Node.LABEL_MARGIN_PORT + checkboxWidth + 3;
+                            leftMargin = UIConstants.Node.LABEL_MARGIN_PORT + checkboxWidth + UIConstants.Node.MARGIN_CHECKBOX_GAP;
                         }
                     }
 
@@ -208,9 +206,9 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            // --- 4. 右侧标签 ---
+            // --- 4. 右侧标签排版 ---
             if (row.rightPort() != null) {
-                mOutputPortY.put(row.rightPort().id(), portCenterYDp); // 保留！
+                mOutputPortY.put(row.rightPort().id(), portCenterYDp);
 
                 TextView tv = mPortLabels.get(row.rightPort().id());
                 if (tv != null) {
@@ -223,11 +221,10 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            // --- 5. UIHint 控件 ---
+            // --- 5. UIHint 控件显隐与刷新 ---
             UIHint hint = row.uiHint();
             View hintView = mHintViews.get(i);
             if (hint != null && hintView != null) {
-                // 优化 1 成果：直接读状态
                 boolean isConnected = false;
                 if (row.leftPort() != null) {
                     isConnected = mNodeData.isInputConnected(row.leftPort().id());
@@ -255,16 +252,14 @@ public class UINode extends FrameLayout {
                     cxDp = wDp / 2.0f;
                     cyDp = rowBottomDp;
                 } else {
-                    cxDp = wDp - (16.0f / UIConstants.mDensity);
+                    cxDp = wDp - (UIConstants.Node.DYNAMIC_BTN_OFFSET_DP / UIConstants.mDensity);
                     cyDp = rowBottomDp - (UIConstants.Node.ROW_HEIGHT / 2.0f / UIConstants.mDensity);
                 }
 
-                // 统一生成 12x12 dp 的碰撞矩形
-                float tolerance = 6.0f;
-                metrics.btnHitbox = new RectF(cxDp - tolerance, cyDp - tolerance, cxDp + tolerance, cyDp + tolerance);
+                float tol = UIConstants.Node.DYNAMIC_BTN_HITBOX_TOLERANCE_DP;
+                metrics.btnHitbox = new RectF(cxDp - tol, cyDp - tol, cxDp + tol, cyDp + tol);
             }
 
-            // 7. 将这一行的数据存入缓存，并向下推移 Y 坐标
             mRowMetrics.add(metrics);
             currentY += rowHeight;
         }
@@ -280,33 +275,37 @@ public class UINode extends FrameLayout {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        float w = getWidth() > 0 ? getWidth() : UIConstants.Node.NODE_WIDTH * UIConstants.mDensity;
+        float d = UIConstants.mDensity;
+        float w = getWidth() > 0 ? getWidth() : UIConstants.Node.NODE_WIDTH * d;
         float h = getHeight() > 0 ? getHeight() : mTotalHeight;
 
-        // --- 1. 绘制节点主体背景 ---
+        // 统一将 dp 尺寸乘以密度，转换为物理像素
+        float scaledRadius = UIConstants.Node.CORNER_RADIUS * d;
+        float scaledHeaderHeight = UIConstants.Node.HEADER_HEIGHT;
+
+        // --- 1. 绘制节点主体背景 (四个角全部圆角) ---
         mPaint.setStyle(Paint.Style.FILL);
         mPaint.setColor(UIConstants.CLR_BG_NODE_BODY);
         mTempRect.set(0, 0, w, h);
-        canvas.drawRoundRect(mTempRect, UIConstants.Node.CORNER_RADIUS, (int) UIConstants.Node.CORNER_RADIUS, mPaint);
+        canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, scaledRadius, scaledRadius, mPaint);
 
         // --- 2. 绘制节点头部 ---
-        canvas.save();
-        canvas.clipRect(0, 0, w, UIConstants.Node.HEADER_HEIGHT);
         mPaint.setColor(mNodeDef.category().getColor());
-        canvas.drawRoundRect(0, 0, w, UIConstants.Node.HEADER_HEIGHT + UIConstants.Node.CORNER_RADIUS,
-                UIConstants.Node.CORNER_RADIUS, (int) UIConstants.Node.CORNER_RADIUS, mPaint);
-        canvas.restore();
+        mTempRect.set(0, 0, w, scaledHeaderHeight);
+        canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, 0f, 0f, mPaint);
 
-        // --- 3. 绘制节点外框描边 (选中高亮) ---
+        // --- 3. 绘制节点外框描边 (四个角全部圆角) ---
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(mIsSelected ? UIConstants.Node.STROKE_WIDTH_SELECTED : UIConstants.Node.STROKE_WIDTH_NORMAL);
         mPaint.setColor(mIsSelected ? UIConstants.CLR_WHITE : UIConstants.CLR_NODE_OUTLINE);
-        canvas.drawRoundRect(mTempRect, UIConstants.Node.CORNER_RADIUS, (int) UIConstants.Node.CORNER_RADIUS, mPaint);
+        mTempRect.set(0, 0, w, h);
+        canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, scaledRadius, scaledRadius, mPaint);
 
         // --- 4. 绘制端口圆点与动态按钮 ---
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
             RowLayoutMetrics metrics = mRowMetrics.get(i);
+
             float centerY = metrics.topY + UIConstants.Node.ROW_HEIGHT / 2.0f;
 
             if (row.leftPort() != null) {
@@ -322,7 +321,7 @@ public class UINode extends FrameLayout {
             }
 
             if (metrics.btnHitbox != null) {
-                float cx = metrics.isAddBtn ? (w / 2.0f) : (w - 16.0f);
+                float cx = metrics.isAddBtn ? (w / 2.0f) : (w - UIConstants.Node.DYNAMIC_BTN_OFFSET_DP);
                 float cy = metrics.topY + metrics.height;
                 if (!metrics.isAddBtn) cy -= UIConstants.Node.ROW_HEIGHT / 2.0f;
 
@@ -334,22 +333,23 @@ public class UINode extends FrameLayout {
     }
 
     private void drawDynamicButton(Canvas canvas, float cx, float cy, boolean isAdd) {
-        float halfSize = 5.0f;
+        float halfSize = UIConstants.Node.DYNAMIC_BTN_SIZE_DP / 2.0f;
+        float iconHalf = UIConstants.Node.DYNAMIC_BTN_ICON_SIZE_DP / 2.0f;
 
-        mPaint.setColor(0xFF444444);
+        mPaint.setColor(UIConstants.Node.CLR_DYNAMIC_BTN_BG);
         mPaint.setStyle(Paint.Style.FILL);
         canvas.drawRect(cx - halfSize, cy - halfSize, cx + halfSize, cy + halfSize, mPaint);
 
-        mPaint.setColor(0xFFFFFFFF);
+        mPaint.setColor(UIConstants.Node.CLR_DYNAMIC_BTN_FG);
         mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(1.0f);
+        mPaint.setStrokeWidth(UIConstants.Node.DYNAMIC_BTN_STROKE_WIDTH);
         canvas.drawRect(cx - halfSize, cy - halfSize, cx + halfSize, cy + halfSize, mPaint);
 
         if (isAdd) {
-            canvas.drawLine(cx - 3, cy, cx + 3, cy, mPaint);
-            canvas.drawLine(cx, cy - 3, cx, cy + 3, mPaint);
+            canvas.drawLine(cx - iconHalf, cy, cx + iconHalf, cy, mPaint);
+            canvas.drawLine(cx, cy - iconHalf, cx, cy + iconHalf, mPaint);
         } else {
-            canvas.drawLine(cx - 3, cy, cx + 3, cy, mPaint);
+            canvas.drawLine(cx - iconHalf, cy, cx + iconHalf, cy, mPaint);
         }
     }
 
@@ -360,6 +360,21 @@ public class UINode extends FrameLayout {
     // ==========================================
     // 模块 4: 触摸拦截与命中测试 (Hit Test)
     // ==========================================
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        return true;
+    }
+
+    @Override
+    public boolean onInterceptHoverEvent(MotionEvent event) {
+        return true;
+    }
+
+    @Override
+    public PointerIcon onResolvePointerIcon(MotionEvent event) {
+        return PointerIcon.getSystemIcon(PointerIcon.TYPE_DEFAULT);
+    }
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
@@ -382,12 +397,9 @@ public class UINode extends FrameLayout {
         }
 
         for (View v : mHintViews.values()) {
-            if (v.getVisibility() != View.VISIBLE) {
-                continue;
-            }
+            if (v.getVisibility() != View.VISIBLE) continue;
 
-            if (localX >= v.getLeft() && localX < v.getRight()
-                    && localY >= v.getTop() && localY < v.getBottom()) {
+            if (localX >= v.getLeft() && localX < v.getRight() && localY >= v.getTop() && localY < v.getBottom()) {
                 return v;
             }
         }
@@ -419,24 +431,17 @@ public class UINode extends FrameLayout {
         float pxX = localX * UIConstants.mDensity;
         float pxY = localY * UIConstants.mDensity;
 
-        // 2. 获取实际绘制时的物理像素宽度
         float w = getWidth() > 0 ? getWidth() : UIConstants.Node.NODE_WIDTH * UIConstants.mDensity;
-
-        // 3. 定义像素级的点击宽容度 (相当于 15dp 的有效半径，手感很好)
-        float tolerancePx = 15.0f * UIConstants.mDensity;
+        float tolerancePx = UIConstants.Node.DYNAMIC_BTN_TOUCH_TOLERANCE_DP * UIConstants.mDensity;
 
         for (RowLayoutMetrics metrics : mRowMetrics) {
-            // 我们依然借用 btnHitbox != null 来作为“这一行存在动态按钮”的标志
             if (metrics.btnHitbox != null) {
-
-                // 4. 【核心修复】直接照抄 onDraw() 里的视觉中心计算公式！确保 100% 视觉与判定重合
-                float cx = metrics.isAddBtn ? (w / 2.0f) : (w - 16.0f);
+                float cx = metrics.isAddBtn ? (w / 2.0f) : (w - UIConstants.Node.DYNAMIC_BTN_OFFSET_DP);
                 float cy = metrics.topY + metrics.height;
                 if (!metrics.isAddBtn) {
                     cy -= UIConstants.Node.ROW_HEIGHT / 2.0f;
                 }
 
-                // 5. 在物理像素坐标系下进行精准范围比对
                 if (Math.abs(pxX - cx) <= tolerancePx && Math.abs(pxY - cy) <= tolerancePx) {
                     return new DynamicActionInfo(metrics.isAddBtn, metrics.refPortId);
                 }
@@ -448,30 +453,23 @@ public class UINode extends FrameLayout {
     private float calculateRowHeight(PortRow row) {
         float height = UIConstants.Node.ROW_HEIGHT;
 
-        // 如果没有任何 UI 控件，直接返回基础 1 行高度
         if (row.uiHint() == null) {
             return height;
         }
 
-        // 检查是否连线，连线状态下控件会被隐藏，高度只占 1 行
         boolean isConnected = false;
         if (row.leftPort() != null) {
             isConnected = mNodeData.isInputConnected(row.leftPort().id());
         }
 
-        // 核心：未连线时，通过 Renderer 动态获取所需额外高度，实现完全解耦
         if (!isConnected) {
             UIHintRenderer renderer = HintRendererFactory.getRenderer(row.uiHint());
-            // 如果找不到 Renderer，默认不增加额外高度
             float extraRows = (renderer != null) ? renderer.getRequiredExtraRows(row) : 0.0f;
 
             boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
-
             if (hasLabel) {
-                // 有标签：基础 1 行 + 控件占用的额外行数
                 height = UIConstants.Node.ROW_HEIGHT * (1.0f + extraRows);
             } else {
-                // 无标签 (纯配置属性)：至少保证有 1 行。如果控件本身较大，取最大值
                 height = UIConstants.Node.ROW_HEIGHT * Math.max(1.0f, extraRows);
             }
         }
