@@ -416,13 +416,30 @@ public class UINode extends FrameLayout {
     }
 
     public DynamicActionInfo hitTestDynamicButton(float localX, float localY) {
-        float d = UIConstants.mDensity;
-        float lxDp = localX / d;
-        float lyDp = localY / d;
+        float pxX = localX * UIConstants.mDensity;
+        float pxY = localY * UIConstants.mDensity;
+
+        // 2. 获取实际绘制时的物理像素宽度
+        float w = getWidth() > 0 ? getWidth() : UIConstants.Node.NODE_WIDTH * UIConstants.mDensity;
+
+        // 3. 定义像素级的点击宽容度 (相当于 15dp 的有效半径，手感很好)
+        float tolerancePx = 15.0f * UIConstants.mDensity;
 
         for (RowLayoutMetrics metrics : mRowMetrics) {
-            if (metrics.btnHitbox != null && metrics.btnHitbox.contains(lxDp, lyDp)) {
-                return new DynamicActionInfo(metrics.isAddBtn, metrics.refPortId);
+            // 我们依然借用 btnHitbox != null 来作为“这一行存在动态按钮”的标志
+            if (metrics.btnHitbox != null) {
+
+                // 4. 【核心修复】直接照抄 onDraw() 里的视觉中心计算公式！确保 100% 视觉与判定重合
+                float cx = metrics.isAddBtn ? (w / 2.0f) : (w - 16.0f);
+                float cy = metrics.topY + metrics.height;
+                if (!metrics.isAddBtn) {
+                    cy -= UIConstants.Node.ROW_HEIGHT / 2.0f;
+                }
+
+                // 5. 在物理像素坐标系下进行精准范围比对
+                if (Math.abs(pxX - cx) <= tolerancePx && Math.abs(pxY - cy) <= tolerancePx) {
+                    return new DynamicActionInfo(metrics.isAddBtn, metrics.refPortId);
+                }
             }
         }
         return null;

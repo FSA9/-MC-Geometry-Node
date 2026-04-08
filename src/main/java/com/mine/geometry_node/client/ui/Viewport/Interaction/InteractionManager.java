@@ -159,20 +159,16 @@ public class InteractionManager {
 
         // --- 以下为左键交互判定 (全基于 UI 坐标) ---
 
-        // 优先级 1：点击端口 -> 进入连线模式
-        Viewport.PortInfo port = mContext.findPortAt(uiX, uiY);
-        if (port != null) {
-            enterConnectingMode(port, uiX, uiY);
-            return;
-        }
-
-        // 优先级 2：点击节点内部元素或节点本身
+        // 提前获取目标节点，因为后续高优先级拦截都需要基于它
         UINode target = mContext.findNodeAt(uiX, uiY);
+
+        // ================= 优先级 1：先拦截节点上的动态按钮 (+/-) 点击 =================
+        // 防御：如果不放第一位，旁边端口的粗大判定圈会把点击事件吸走，变成连线模式
         if (target != null) {
-            // 2.1 拦截动态按钮 (+/-) 点击
             float localX = uiX - target.getTranslationX();
             float localY = uiY - target.getTranslationY();
             UINode.DynamicActionInfo btnInfo = target.hitTestDynamicButton(localX, localY);
+
             if (btnInfo != null) {
                 NodeData nodeData = target.getNodeData();
                 NodeDef nodeDef = target.getNodeDef();
@@ -187,7 +183,7 @@ public class InteractionManager {
                         nodeDef.getMetaOrDefault(SchemaKeys.MAX_DYNAMIC_INPUT, 10) :
                         nodeDef.getMetaOrDefault(SchemaKeys.MAX_DYNAMIC_OUTPUT, 10);
 
-                // 2. 读取当前分支数量
+                // 读取当前分支数量
                 int currentCount = 1;
                 if (nodeData.properties.containsKey(propertyKey)) {
                     Object countObj = nodeData.properties.get(propertyKey);
@@ -198,7 +194,7 @@ public class InteractionManager {
                     }
                 }
 
-                // 4. 根据点击类型执行对应的 Command
+                // 根据点击类型执行对应的 Command
                 if (btnInfo.isAdd()) {
                     if (currentCount < maxCount) {
                         com.mine.geometry_node.client.ui.UICommand.commands.CmdAddBranch cmd =
@@ -222,15 +218,24 @@ public class InteractionManager {
                     }
                 }
 
-                return; // 消费事件，阻止进入拖拽模式
+                return; // 成功消费按钮事件，阻止进入后面的拖拽或连线模式
             }
+        }
 
-            // 2.2 进入拖拽模式
+        // ================= 优先级 2：点击端口 -> 进入连线模式 =================
+        Viewport.PortInfo port = mContext.findPortAt(uiX, uiY);
+        if (port != null) {
+            enterConnectingMode(port, uiX, uiY);
+            return;
+        }
+
+        // ================= 优先级 3：点击节点主体 -> 进入拖拽模式 =================
+        if (target != null) {
             enterDraggingMode(target, uiX, uiY);
             return;
         }
 
-        // 优先级 3：点击空白处 -> 进入框选模式
+        // ================= 优先级 4：点击空白处 -> 进入框选模式 =================
         enterSelectingMode(uiX, uiY);
     }
 
