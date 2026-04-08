@@ -3,6 +3,7 @@ package com.mine.geometry_node;
 import com.mine.geometry_node.core.command.GraphCommand;
 import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.execution.GraphEventHandler;
+import com.mine.geometry_node.core.execution.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -11,6 +12,7 @@ import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.registry.ReloadListenerRegistry;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.server.packs.PackType;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.attachment.IAttachmentHolder;
@@ -54,8 +56,25 @@ public class GeometryNode {
                         }
                     }).build());
 
+    public static final Supplier<AttachmentType<EntityImmunityAttachment>> IMMUNITY_ATTACHMENT =
+            ATTACHMENT_TYPES.register("immunities", () -> AttachmentType.builder(EntityImmunityAttachment::new)
+                    .serialize(new IAttachmentSerializer<ListTag, EntityImmunityAttachment>() {
+                        @Override
+                        public ListTag write(EntityImmunityAttachment attachment, HolderLookup.Provider provider) {
+                            return attachment.save(provider);
+                        }
+
+                        @Override
+                        public EntityImmunityAttachment read(IAttachmentHolder holder, ListTag tag, HolderLookup.Provider provider) {
+                            EntityImmunityAttachment attachment = new EntityImmunityAttachment();
+                            attachment.load(tag, provider);
+                            return attachment;
+                        }
+                    })
+                    .copyOnDeath()
+                    .build());
+
     public GeometryNode(IEventBus modEventBus, ModContainer modContainer) {
-        // 注册到 NeoForge 事件总线
         NeoForge.EVENT_BUS.register(this);
 
         // 初始化网络包

@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.execution;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
+import com.mine.geometry_node.core.execution.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.execution.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.nodes.events.block.OnBlockBreak;
@@ -140,8 +141,12 @@ public class GraphEventHandler {
                 net.minecraft.world.entity.Entity directSource = source.getDirectEntity();
                 String damageTypeId = source.getMsgId();
 
+                if (EntityImmunityAttachment.hasImmunity(entity, damageTypeId)) {
+                    return EventResult.interruptFalse();
+                }
+
                 // 1. 实体受伤
-                com.mine.geometry_node.core.execution.GraphEngine.dispatchEvent(serverLevel, entity, OnEntityHurt.TYPE_ID, process -> {
+                GraphEngine.dispatchEvent(serverLevel, entity, OnEntityHurt.TYPE_ID, process -> {
                     process.setEventData(StandardPorts.ENTITY.getId(), entity);
                     process.setEventData(StandardPorts.VALUE.getId(), amount);
                     process.setEventData(StandardPorts.DAMAGE_TYPE.getId(), damageTypeId);
@@ -156,7 +161,7 @@ public class GraphEventHandler {
 
                 // 2. 实体造成伤害
                 if (attacker != null) {
-                    com.mine.geometry_node.core.execution.GraphEngine.dispatchEvent(serverLevel, attacker, OnEntityDealDamage.TYPE_ID, process -> {
+                    GraphEngine.dispatchEvent(serverLevel, attacker, OnEntityDealDamage.TYPE_ID, process -> {
                         process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), attacker);
                         process.setEventData(StandardPorts.ENTITY.getId(), entity);
                         process.setEventData(StandardPorts.VALUE.getId(), amount);
@@ -201,7 +206,7 @@ public class GraphEventHandler {
                 net.minecraft.server.level.ServerLevel serverLevel = (net.minecraft.server.level.ServerLevel) player.level();
                 net.minecraft.world.level.block.state.BlockState state = serverLevel.getBlockState(pos);
 
-                com.mine.geometry_node.core.execution.GraphEngine.dispatchEvent(serverLevel, player, EntityInteractBlock.TYPE_ID, process -> {
+                GraphEngine.dispatchEvent(serverLevel, player, EntityInteractBlock.TYPE_ID, process -> {
                     process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), player);
                     process.setEventData(StandardPorts.XYZ.getId(), pos);
                     process.setEventData(StandardPorts.BLOCK_STATE.getId(), state);
@@ -215,7 +220,7 @@ public class GraphEventHandler {
             if (!player.level().isClientSide()) {
                 net.minecraft.server.level.ServerLevel serverLevel = (net.minecraft.server.level.ServerLevel) player.level();
 
-                com.mine.geometry_node.core.execution.GraphEngine.dispatchEvent(serverLevel, player, EntityInteractEntity.TYPE_ID, process -> {
+                GraphEngine.dispatchEvent(serverLevel, player, EntityInteractEntity.TYPE_ID, process -> {
                     process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), player);
                     process.setEventData(StandardPorts.ENTITY.getId(), entity);
                 });
@@ -229,7 +234,7 @@ public class GraphEventHandler {
                 net.minecraft.server.level.ServerLevel serverLevel = (net.minecraft.server.level.ServerLevel) player.level();
                 net.minecraft.world.item.ItemStack itemStack = player.getItemInHand(hand);
 
-                com.mine.geometry_node.core.execution.GraphEngine.dispatchEvent(serverLevel, player, EntityUseItem.TYPE_ID, process -> {
+                GraphEngine.dispatchEvent(serverLevel, player, EntityUseItem.TYPE_ID, process -> {
                     process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), player);
                     process.setEventData(StandardPorts.ITEM.getId(), itemStack);
                 });

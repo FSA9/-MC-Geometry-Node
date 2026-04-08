@@ -149,7 +149,7 @@ public class UINode extends FrameLayout {
     // ==========================================
 
     public void updateNodeLayout() {
-        // 1. 清空所有旧的缓存
+        // 1. 清空所有旧缓存
         mInputPortY.clear();
         mOutputPortY.clear();
         mRowMetrics.clear();
@@ -159,19 +159,18 @@ public class UINode extends FrameLayout {
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
 
-            // 【关键】：高度计算只调一次
             float rowHeight = calculateRowHeight(row);
 
-            // 【关键还原】：端口的 Y 坐标始终位于这一行的“首行垂直居中”位置
+            // 端口的 Y 坐标始终位于这一行的“首行垂直居中”位置
             float portCenterY = currentY + UIConstants.Node.ROW_HEIGHT / 2.0f;
             float portCenterYDp = portCenterY / UIConstants.mDensity;
 
-            // 2. 初始化这一行的缓存指标
+            // 2. 初始化本行缓存指标
             RowLayoutMetrics metrics = new RowLayoutMetrics();
             metrics.topY = currentY;
             metrics.height = rowHeight;
 
-            // --- 3. 原封不动保留的：排版左侧标签 ---
+            // --- 3. 左侧标签 ---
             if (row.leftPort() != null) {
                 mInputPortY.put(row.leftPort().id(), portCenterYDp); // 保留！供外部连线使用
 
@@ -182,7 +181,6 @@ public class UINode extends FrameLayout {
 
                     if (row.uiHint() == UIHint.CHECKBOX) {
                         int checkboxWidth = 16;
-                        // 优化 1 成果：直接读状态，不再查 Controller
                         boolean isConnected = mNodeData.isInputConnected(row.leftPort().id());
 
                         if (isConnected) {
@@ -210,7 +208,7 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            // --- 4. 原封不动保留的：排版右侧标签 ---
+            // --- 4. 右侧标签 ---
             if (row.rightPort() != null) {
                 mOutputPortY.put(row.rightPort().id(), portCenterYDp); // 保留！
 
@@ -225,7 +223,7 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            // --- 5. 略微修改的：排版 UIHint 控件 ---
+            // --- 5. UIHint 控件 ---
             UIHint hint = row.uiHint();
             View hintView = mHintViews.get(i);
             if (hint != null && hintView != null) {
@@ -243,7 +241,7 @@ public class UINode extends FrameLayout {
                 }
             }
 
-            // --- 6. 新增的：预计算动态按钮的碰撞判定区 (Hitbox) ---
+            // --- 6. 预计算动态按钮碰撞判定区 (Hitbox) ---
             if (isDynamicRow(row)) {
                 boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
                 metrics.isAddBtn = isLast;
