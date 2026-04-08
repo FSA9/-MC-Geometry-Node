@@ -55,6 +55,9 @@ public enum StandardPorts {
     // Item
     ITEM("item", PortType.ITEM),
 
+    // Item Stack
+    ITEM_STACK("item_stack", PortType.ITEM_STACK),
+
     // LIST
     LIST("list", PortType.LIST),
 

@@ -34,9 +34,6 @@ public class GetEntityDimension extends BaseNode {
         if (entities.isEmpty()) return null;
 
         Entity firstEntity = entities.getFirst();
-        if (firstEntity.level() != null) {
-            return firstEntity.level().dimension().location().toString(); // 例如 "minecraft:overworld"
-        }
-        return null;
+        return firstEntity.level().dimension().location().toString(); // 例如 "minecraft:overworld"
     }
 }

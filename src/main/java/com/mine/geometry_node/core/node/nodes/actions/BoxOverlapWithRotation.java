@@ -25,8 +25,8 @@ public class BoxOverlapWithRotation extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.box_overlap_rotated"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.CENTER.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.SIZE_3.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.CENTER.toInput(), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.SIZE_3.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(), null, UIHint.INPUT, null, null))
                 .build();
     }

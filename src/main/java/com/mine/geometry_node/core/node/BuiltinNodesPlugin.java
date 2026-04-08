@@ -58,63 +58,62 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // Actions/Entity
         registry.register("actions/entity", new AddForce());
-//        registry.register("actions/entity", new AddPotionEffect());
-//        registry.register("actions/entity", new ClearAllPotionEffects());
-//        registry.register("actions/entity", new ClearInvulnerableTicks());
-//        registry.register("actions/entity", new ClearPotionEffects());
-//        registry.register("actions/entity", new DamageEntity());
-//        registry.register("actions/entity", new DismountEntity());
-//        registry.register("actions/entity", new ExtinguishEntity());
+//        registry.register("actions/entity", new _AddPotionEffect());
+        registry.register("actions/entity", new ClearAllPotionEffects());
+        registry.register("actions/entity", new ClearInvulnerableTicks());
+//        registry.register("actions/entity", new _ClearPotionEffects());
+        registry.register("actions/entity", new DamageEntity());
+//        registry.register("actions/entity", new _DismountEntity());
+        registry.register("actions/entity", new ExtinguishEntity());
 //        registry.register("actions/entity", new GetInvulnerableTicks());
-//        registry.register("actions/entity", new GrantDamageTypeImmunity());
-//        registry.register("actions/entity", new HealEntity());
-//        registry.register("actions/entity", new IgniteEntity());
-//        registry.register("actions/entity", new KillEntity());
-//        registry.register("actions/entity", new LeashEntity());
-//        registry.register("actions/entity", new MountEntity());
-//        registry.register("actions/entity", new RevokeDamageTypeImmunity());
-//        registry.register("actions/entity", new SetCustomName());
+        registry.register("actions/entity", new GrantDamageTypeImmunity());
+        registry.register("actions/entity", new HealEntity());
+        registry.register("actions/entity", new IgniteEntity());
+        registry.register("actions/entity", new KillEntity());
+        registry.register("actions/entity", new LeashEntity());
+        registry.register("actions/entity", new MountEntity());
+        registry.register("actions/entity", new RevokeDamageTypeImmunity());
+        registry.register("actions/entity", new SetCustomName());
 //        registry.register("actions/entity", new SetEntityOnFire());
-//        registry.register("actions/entity", new SetEntityRotation());
-//        registry.register("actions/entity", new SetEntitySize());
-//        registry.register("actions/entity", new SetEntityVelocity());
+        registry.register("actions/entity", new SetEntityRotation());
+//        registry.register("actions/entity", new _SetEntitySize());
+        registry.register("actions/entity", new SetEntityVelocity());
 //        registry.register("actions/entity", new SetEquipment());
 //        registry.register("actions/entity", new SetInvulnerable());
-//        registry.register("actions/entity", new SetInvulnerableTicks());
-//        registry.register("actions/entity", new SpawnEntity());
-//        registry.register("actions/entity", new TeleportEntity());
-//        registry.register("actions/entity", new UnleashEntity());
-//        registry.register("actions/entity", new UseItem());
+        registry.register("actions/entity", new SetInvulnerableTicks());
+//        registry.register("actions/entity", new _SpawnEntity());
+        registry.register("actions/entity", new TeleportEntityToPos());
+//        registry.register("actions/entity", new _UnleashEntity());
+//        registry.register("actions/entity", new _UseItem());
 
         // Actions/Inventory
-//        registry.register("actions/inventory", new ClearInventory());
-//        registry.register("actions/inventory", new ClearItem());
-//        registry.register("actions/inventory", new ClearSlot());
-//        registry.register("actions/inventory", new DropInventorySlot());
-//        registry.register("actions/inventory", new DropItem());
-//        registry.register("actions/inventory", new EquipItem());
-//        registry.register("actions/inventory", new GiveItem());
-//        registry.register("actions/inventory", new MoveItemToSlot());
-//        registry.register("actions/inventory", new TakeItem());
+        registry.register("actions/inventory", new ClearInventory());
+        registry.register("actions/inventory", new ClearItem());
+        registry.register("actions/inventory", new ClearSlot());
+        registry.register("actions/inventory", new DropInventorySlot());
+//        registry.register("actions/inventory", new _DropItem());
+//        registry.register("actions/inventory", new _EquipItem());
+//        registry.register("actions/inventory", new _GiveItem());
+//        registry.register("actions/inventory", new _MoveItemToSlot());
+//        registry.register("actions/inventory", new _TakeItem());
 
         // Actions/Item
 //        registry.register("actions/item", new DamageItem());
-//        registry.register("actions/item", new EnchantItem());
-//        registry.register("actions/item", new RemoveEnchantment());
+//        registry.register("actions/item", new _EnchantItem());
+//        registry.register("actions/item", new _RemoveEnchantment());
 //        registry.register("actions/item", new RepairItem());
 
         // Actions/Player
-//        registry.register("actions/player", new AddExperience());
-//        registry.register("actions/player", new com.mine.geometry_node.core.node.nodes.actions.player.ExecuteCommand());
+        registry.register("actions/player", new AddExperience());
+        registry.register("actions/player", new ExecuteCommand());
 //        registry.register("actions/player", new PlayScreenShake());
 //        registry.register("actions/player", new PlaySoundForPlayer());
         registry.register("actions/player", new SendMessage());
 //        registry.register("actions/player", new SetCameraTarget());
 //        registry.register("actions/player", new SetFlySpeed());
-//        registry.register("actions/player", new SetGameMode());
-//        registry.register("actions/player", new SetWalkSpeed());
+        registry.register("actions/player", new SetGameMode());
+        registry.register("actions/player", new SetWalkSpeed());
 //        registry.register("actions/player", new ShowTitle());
-//        registry.register("actions/player", new TeleportPlayer());
 
         // Actions/Visual
         registry.register("actions/visual", new DrawDebugLine());
@@ -164,17 +163,15 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/entity/attribution", new IsSneaking());
         registry.register("data/entity/attribution", new IsSprinting());
         registry.register("data/entity/attribution", new IsSwimming());
-//        registry.register("data/entity/attribution", new com.mine.geometry_node.core.node.nodes.data.entity.attribution.SetEntityHealth());
-//        registry.register("data/entity/attribution", new com.mine.geometry_node.core.node.nodes.data.entity.attribution.SetEntityVelocity());
 
         // Data/Type
-//        registry.register("data/type", new GetBlockType());
-//        registry.register("data/type", new GetDamageType());
-//        registry.register("data/type", new GetDimension());
-//        registry.register("data/type", new GetEffect());
-//        registry.register("data/type", new GetEntityType());
-//        registry.register("data/type", new GetItemType());
-//        registry.register("data/type", new GetSound());
+        registry.register("data/type", new GetBlockType());
+        registry.register("data/type", new GetDamageType());
+        registry.register("data/type", new GetDimension());
+        registry.register("data/type", new GetEffect());
+        registry.register("data/type", new GetEntityType());
+        registry.register("data/type", new GetItemType());
+        registry.register("data/type", new GetSound());
 
         // --- EVENTS ---
 //        registry.register("events", new OnProjectileHit());
@@ -188,31 +185,29 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/entity", new EntityInteractBlock());
         registry.register("events/entity", new EntityInteractEntity());
         registry.register("events/entity", new EntityUseItem());
-//        registry.register("events/entity", new OnBabyGrowUp());
-//        registry.register("events/entity", new OnEntityBreed());
-//        registry.register("events/entity", new OnEntityChangeDimension());
-//        registry.register("events/entity", new OnEntityCollideWithBlock());
+        registry.register("events/entity", new OnBabyGrowUp());
+        registry.register("events/entity", new OnEntityBreed());
+        registry.register("events/entity", new OnEntityChangeDimension());
         registry.register("events/entity", new OnEntityDealDamage());
         registry.register("events/entity", new OnEntityDeath());
-//        registry.register("events/entity", new OnEntityDismount());
-//        registry.register("events/entity", new OnEntityDropItem());
-//        registry.register("events/entity", new OnEntityGriefBlock());
-//        registry.register("events/entity", new OnEntityHeal());
+        registry.register("events/entity", new OnEntityDropItem());
+        registry.register("events/entity", new OnEntityGriefBlock());
+        registry.register("events/entity", new OnEntityHeal());
         registry.register("events/entity", new OnEntityHurt());
-//        registry.register("events/entity", new OnEntityJump());
-//        registry.register("events/entity", new OnEntityMount());
+        registry.register("events/entity", new OnEntityJump());
+        registry.register("events/entity", new OnEntityMount());
 //        registry.register("events/entity", new OnEntityPickupItem());
 //        registry.register("events/entity", new OnEntityPotionEffectApply());
 //        registry.register("events/entity", new OnEntityPotionEffectExpire());
-//        registry.register("events/entity", new OnEntitySpawn());
-//        registry.register("events/entity", new OnEntityTame());
-//        registry.register("events/entity", new OnEntityTeleport());
-//        registry.register("events/entity", new OnProjectileShoot());
-//        registry.register("events/entity", new OnSheepSheared());
-//        registry.register("events/entity", new OnSlimeSplit());
-//        registry.register("events/entity", new OnTargetChange());
-//        registry.register("events/entity", new OnVillagerCure());
-//        registry.register("events/entity", new OnVillagerTrade());
+        registry.register("events/entity", new OnEntitySpawn());
+        registry.register("events/entity", new OnEntityTame());
+        registry.register("events/entity", new OnEntityTeleport());
+        registry.register("events/entity", new OnProjectileShoot());
+        registry.register("events/entity", new OnSheepSheared());
+        registry.register("events/entity", new OnSlimeSplit());
+        registry.register("events/entity", new OnTargetChange());
+        registry.register("events/entity", new OnVillagerCure());
+        registry.register("events/entity", new OnVillagerTrade());
 
         // Events/Inventory
 //        registry.register("events/inventory", new OnContainerClose());

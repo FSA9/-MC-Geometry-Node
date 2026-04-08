@@ -1,4 +1,4 @@
 package com.mine.geometry_node.core.node.nodes.actions.entity;
 
-public class SpawnEntity {
+public class _UseItem {
 }

@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.ExecutionResult;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.meta.PropertyKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -33,8 +34,8 @@ public class Switch extends BaseNode {
         int branchCount = DEFAULT_BRANCH_COUNT;
 
         // 核心修改：不再遍历 execution，而是直接读取我们保存的属性状态
-        if (instanceData != null && instanceData.properties.containsKey("dynamic_branch_output_count")) {
-            Object countObj = instanceData.properties.get("dynamic_branch_output_count");
+        if (instanceData != null && instanceData.properties.containsKey(PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id())) {
+            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id());
             // 兼容强转防御：防止从某些 JSON 库反序列化回来后变成了 String
             if (countObj instanceof Number) {
                 branchCount = ((Number) countObj).intValue();
@@ -82,7 +83,7 @@ public class Switch extends BaseNode {
 
         // 运行时同样读取数量，不再死循环猜测
         int branchCount = DEFAULT_BRANCH_COUNT;
-        Object countProp = context.getNodeProperty("dynamic_branch_output_count");
+        Object countProp = context.getNodeProperty(PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id());
         if (countProp instanceof Number) {
             branchCount = ((Number) countProp).intValue();
         } else if (countProp instanceof String) {

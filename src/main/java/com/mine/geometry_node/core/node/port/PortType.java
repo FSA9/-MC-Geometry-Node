@@ -17,6 +17,7 @@ public enum PortType {
     STRING("字符串", 0xFF9B59B6, ""),
     ENTITY("实体", 0xFFE91E63, null),
     ITEM("物品", 0xFFE91E63, null),
+    ITEM_STACK("物品栈", 0xFFFF5252, null),
     BLOCK("方块", 0xFF8D6E63, null),
     XYZ("XYZ", 0xFF00BCD4, List.of(0.0f, 0.0f, 0.0f)),
     LIST("列表", 0xFFFF9800, List.of()),

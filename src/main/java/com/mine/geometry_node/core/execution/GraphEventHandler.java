@@ -13,6 +13,12 @@ import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.BlockEvent;
 import dev.architectury.event.events.common.EntityEvent;
 import dev.architectury.event.events.common.InteractionEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.EntityMountEvent;
+import net.neoforged.neoforge.event.entity.EntityTeleportEvent;
+import net.neoforged.neoforge.event.entity.living.*;
+import net.neoforged.neoforge.event.entity.player.TradeWithVillagerEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -240,6 +246,172 @@ public class GraphEventHandler {
                 });
             }
             return CompoundEventResult.pass();
+        });
+
+        EntityEvent.ADD.register((entity, level) -> {
+            if (!level.isClientSide() && level instanceof ServerLevel serverLevel) {
+                GraphEngine.dispatchEvent(serverLevel, entity, OnEntitySpawn.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), entity);
+                    process.setEventData(StandardPorts.XYZ.getId(), entity.position());
+                });
+            }
+            return EventResult.pass();
+        });
+
+        // 以下事件使用 NeoForge 原生事件总线 (1.21.1)
+        var bus = net.neoforged.neoforge.common.NeoForge.EVENT_BUS;
+
+        // 2. 实体繁殖 (OnEntityBreed)
+        bus.addListener((net.neoforged.neoforge.event.entity.living.BabyEntitySpawnEvent event) -> {
+            if (event.getParentA() != null && !event.getParentA().level().isClientSide()) {
+                ServerLevel level = (ServerLevel) event.getParentA().level();
+                GraphEngine.dispatchEvent(level, event.getParentA(), OnEntityBreed.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getParentA());
+                    process.setEventData(StandardPorts.SOURCE_ENTITY.getId(), event.getChild());
+                    if (event.getCausedByPlayer() != null) {
+                        process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), event.getCausedByPlayer());
+                    }
+                });
+            }
+        });
+
+        // 3. 实体切换维度 (OnEntityChangeDimension)
+        bus.addListener((net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityChangeDimension.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
+                    process.setEventData(StandardPorts.DIMENSION.getId(), event.getDimension().location().toString());
+                });
+            }
+        });
+
+        // 4. 玩家丢弃物品 (OnEntityDropItem - Player)
+        bus.addListener((net.neoforged.neoforge.event.entity.item.ItemTossEvent event) -> {
+            if (!event.getPlayer().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnEntityDropItem.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getPlayer());
+                    process.setEventData(StandardPorts.ITEM.getId(), event.getEntity().getItem());
+                });
+            }
+        });
+
+        // 5. 实体死亡掉落物品 (OnEntityDropItem - Mob)
+        bus.addListener((net.neoforged.neoforge.event.entity.living.LivingDropsEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                for (var drop : event.getDrops()) {
+                    GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityDropItem.TYPE_ID, process -> {
+                        process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
+                        process.setEventData(StandardPorts.ITEM.getId(), drop.getItem());
+                    });
+                }
+            }
+        });
+
+        // 6. 实体破坏方块 / 苦力怕爆炸防爆检查 (OnEntityGriefBlock)
+        bus.addListener((net.neoforged.neoforge.event.entity.EntityMobGriefingEvent event) -> {
+            if (event.getEntity() != null && !event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityGriefBlock.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
+                    // 注意：GriefingEvent 不自带坐标，通常需要结合节点内获取实体当前坐标来使用
+                });
+            }
+        });
+
+        // 7. 实体恢复生命 (OnEntityHeal)
+        bus.addListener((net.neoforged.neoforge.event.entity.living.LivingHealEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityHeal.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
+                    process.setEventData(StandardPorts.VALUE.getId(), event.getAmount());
+                });
+            }
+        });
+
+        // 8. 实体跳跃 (OnEntityJump)
+        bus.addListener((net.neoforged.neoforge.event.entity.living.LivingEvent.LivingJumpEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityJump.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
+                });
+            }
+        });
+
+        // 9. 实体骑乘 (OnEntityMount)
+        bus.addListener((net.neoforged.neoforge.event.entity.EntityMountEvent event) -> {
+            if (!event.getLevel().isClientSide() && event.isMounting()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getLevel(), event.getEntityMounting(), OnEntityMount.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getEntityMounting()); // 乘客
+                    process.setEventData(StandardPorts.SOURCE_ENTITY.getId(), event.getEntityBeingMounted()); // 载具
+                });
+            }
+        });
+
+        // 10. 实体被驯服 (OnEntityTame)
+        bus.addListener((net.neoforged.neoforge.event.entity.living.AnimalTameEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityTame.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
+                    process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), event.getTamer());
+                });
+            }
+        });
+
+        // 11. 实体传送 (OnEntityTeleport)
+        bus.addListener((net.neoforged.neoforge.event.entity.EntityTeleportEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityTeleport.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
+                    process.setEventData(StandardPorts.START_POS.getId(), event.getPrev());
+                    process.setEventData(StandardPorts.END_POS.getId(), event.getTarget());
+                });
+            }
+        });
+
+        // 12. 仇恨/目标改变 (OnTargetChange)
+        bus.addListener((net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent event) -> {
+            if (!event.getEntity().level().isClientSide() && event.getNewAboutToBeSetTarget() != null) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnTargetChange.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
+                    process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), event.getNewAboutToBeSetTarget());
+                });
+            }
+        });
+
+        // 13. 村民被治愈 (OnVillagerCure) -> 监听实体类型转换
+        bus.addListener((net.neoforged.neoforge.event.entity.living.LivingConversionEvent.Post event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                if (event.getEntity() instanceof net.minecraft.world.entity.monster.ZombieVillager &&
+                        event.getOutcome() instanceof net.minecraft.world.entity.npc.Villager) {
+
+                    GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getOutcome(), OnVillagerCure.TYPE_ID, process -> {
+                        process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
+                        // Trigger Entity 通常保存在 ZombieVillager 的 conversionPlayer 里，但事件未直接暴露，这里传转换后的村民实体作为主体
+                    });
+                }
+            }
+        });
+
+        // 14. 村民交易 (OnVillagerTrade)
+        bus.addListener((net.neoforged.neoforge.event.entity.player.TradeWithVillagerEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getAbstractVillager(), OnVillagerTrade.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getAbstractVillager());
+                    process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), event.getEntity());
+                    // 假设能拿到交易结果，因 Forge 事件不直接暴露 ItemStack，建议用作纯通知流
+                });
+            }
+        });
+
+        // 15. 发射弹射物 (OnProjectileShoot) -> 拦截弹射物加入世界
+        bus.addListener((net.neoforged.neoforge.event.entity.EntityJoinLevelEvent event) -> {
+            if (!event.getLevel().isClientSide() && event.getEntity() instanceof net.minecraft.world.entity.projectile.Projectile projectile) {
+                if (projectile.getOwner() != null) {
+                    GraphEngine.dispatchEvent((ServerLevel) event.getLevel(), projectile.getOwner(), OnProjectileShoot.TYPE_ID, process -> {
+                        process.setEventData(StandardPorts.ENTITY.getId(), projectile.getOwner());
+                        process.setEventData(StandardPorts.DIRECT_SOURCE.getId(), projectile);
+                    });
+                }
+            }
         });
     }
 

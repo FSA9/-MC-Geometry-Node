@@ -11,7 +11,7 @@ public enum NodeType {
     FLOW_CONTROL("控制流", 0xFF607D8B), // 灰色：逻辑控制，如 If, ForLoop, Sequence
 
     // --- 行为与副作用 ---
-    ACTION("动作", 0xFF1976D2),       // 蓝色：对世界产生影响，如 SetBlock, SpawnEntity, Print
+    ACTION("动作", 0xFF1976D2),       // 蓝色：对世界产生影响，如 SetBlock, _SpawnEntity, Print
     
     // --- 数据计算 ---
     MATH("数学", 0xFF388E3C),         // 绿色：纯计算，如 Add, Sin, Random

@@ -1,4 +1,4 @@
 package com.mine.geometry_node.core.node.nodes.actions.inventory;
 
-public class EquipItem {
+public class _EquipItem {
 }
