@@ -185,9 +185,9 @@
   "geometry_node.node.repair_item": "修复物品",
 
   "--- ACTIONS/PLAYER ---": "--- 玩家动作 ---",
-  "geometry_node.node.add_experience": "增加经验值",
+  "geometry_node.node.add_experience": "增加经验",
   "geometry_node.node.play_screen_shake": "播放屏幕震动",
-  "geometry_node.node.play_sound_for_player": "为玩家播放声音",
+  "geometry_node.node.play_sound_for_player": "播放声音",
   "geometry_node.node.send_message": "发送消息",
   "geometry_node.node.set_camera_target": "设置摄像机目标",
   "geometry_node.node.set_fly_speed": "设置飞行速度",
@@ -216,8 +216,8 @@
   "geometry_node.node.get_scope_attribute": "获取作用域属性值",
   "geometry_node.node.set_entity_attribute": "设置实体属性",
   "geometry_node.node.set_scope_attribute": "设置作用域属性值",
-  "geometry_node.node.get_entities_by_aabb": "通过范围(AABB)获取实体",
-  "geometry_node.node.get_entities_by_radius": "通过半径获取实体",
+  "geometry_node.node.get_entities_by_aabb": "获取实体(AABB)",
+  "geometry_node.node.get_entities_by_radius": "获取实体(r)",
 
   "--- DATA/ATTRIBUTION ---": "--- 实体数值读取 ---",
   "geometry_node.node.get_entity_dimension": "获取实体所在维度",
@@ -245,13 +245,13 @@
   "geometry_node.node.set_entity_health": "设置实体生命值",
 
   "--- DATA/TYPE ---": "--- 类型转换 ---",
-  "geometry_node.node.get_block_type": "转换方块类型",
-  "geometry_node.node.get_damage_type": "转换伤害类型",
-  "geometry_node.node.get_dimension": "转换维度类型",
-  "geometry_node.node.get_effect": "转换效果类型",
-  "geometry_node.node.get_entity_type": "转换实体类型",
-  "geometry_node.node.get_item_type": "转换物品类型",
-  "geometry_node.node.get_sound": "转换声音类型",
+  "geometry_node.node.get_block_type": "获取方块类型",
+  "geometry_node.node.get_damage_type": "获取伤害类型",
+  "geometry_node.node.get_dimension": "获取维度类型",
+  "geometry_node.node.get_effect": "获取效果类型",
+  "geometry_node.node.get_entity_type": "获取实体类型",
+  "geometry_node.node.get_item_type": "获取物品类型",
+  "geometry_node.node.get_sound": "获取声音类型",
 
   "--- EVENTS ---": "--- 事件监听 ---",
   "geometry_node.node.on_projectile_hit": "当投射物击中时",
@@ -339,16 +339,16 @@
   "geometry_node.node.vector_add": "向量相加",
 
   "--- LOGICS ---": "--- 逻辑控制 ---",
-  "geometry_node.node.contain": "包含判断",
-  "geometry_node.node.equal": "等于判断",
-  "geometry_node.node.for_each": "循环遍历",
-  "geometry_node.node.if": "条件判断(If)",
-  "geometry_node.node.switch": "逻辑分支(Switch)",
+  "geometry_node.node.contain": "包含",
+  "geometry_node.node.equal": "等于",
+  "geometry_node.node.for_each": "For Each",
+  "geometry_node.node.if": "If",
+  "geometry_node.node.switch": "Switch",
 
   "--- MATHS ---": "--- 数学运算 ---",
   "geometry_node.node.random": "随机数",
   "geometry_node.node.math_expression": "数学表达式",
-  "geometry_node.node.math_operation": "数学基础运算"
+  "geometry_node.node.math_operation": "运算"
 
 
 }
