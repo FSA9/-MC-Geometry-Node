@@ -1,13 +1,23 @@
 package com.mine.geometry_node.client.ui.Viewport.Interaction;
 
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveNode;
+import com.mine.geometry_node.client.ui.UICommand.commands.CmdPasteNodes;
+import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveNodes;
 import com.mine.geometry_node.client.ui.Viewport.UINode;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
+import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeGraph;
 import icyllis.modernui.view.KeyEvent;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class KeyManager {
 
+    // GLFW 常量
     private static final int GLFW_KEY_DELETE = 261;
+
+    // 内存剪贴板（以 JSON 字符串形式存在）
+    private static String sClipboardJson = null;
 
     private final InteractionContext mContext;
 
@@ -17,45 +27,98 @@ public class KeyManager {
 
     public boolean onKeyDown(KeyEvent event) {
         boolean isCtrl = event.isCtrlPressed();
+        int keyCode = event.getKeyCode();
 
-        switch (event.getKeyCode()) {
-            case KeyEvent.KEY_Z:
-                if (isCtrl) {
+        if (isCtrl) {
+            switch (keyCode) {
+                case KeyEvent.KEY_Z: // Ctrl+Z 撤销
                     mContext.getEditorContext().getCommandManager().undo();
                     return true;
-                }
-                break;
-            case KeyEvent.KEY_Y:
-                if (isCtrl) {
+                case KeyEvent.KEY_Y: // Ctrl+Y 重做
                     mContext.getEditorContext().getCommandManager().redo();
                     return true;
-                }
-                break;
-            case KeyEvent.KEY_S:
-                if (isCtrl) {
+                case KeyEvent.KEY_S: // Ctrl+S 保存
                     performSaveJSON();
                     return true;
-                }
-                break;
-//            case GLFW_KEY_DELETE:
-//                if (!isCtrl) {
-//                    for (UINode node : mContext.getSelectedNodes()) {
-//                        String id = node.getNodeData().id;
-//                        mContext.getEditorContext().getCommandManager().execute(
-//                                new CmdRemoveNode(mContext.getEditorContext().getGraphController(), id));
-//                    }
-//                    mContext.clearSelection();
-//                    return true;
-//                }
-//                break;
+                case KeyEvent.KEY_C: // Ctrl+C 复制
+                    performCopy();
+                    return true;
+                case KeyEvent.KEY_V: // Ctrl+V 粘贴
+                    performPaste();
+                    return true;
+            }
+        } else {
+            if (keyCode == GLFW_KEY_DELETE) { // Delete 删除
+                performDelete();
+                return true;
+            }
         }
         return false;
     }
 
-    private void performSaveJSON() {
-        // 强制视口请求焦点，夺走正在编辑的 EditText 的焦点，触发结算
-        mContext.requestViewportFocus();
+    /**
+     * 执行复制 (Ctrl + C)
+     */
+    private void performCopy() {
+        List<UINode> selected = mContext.getSelectedNodes();
+        if (selected.isEmpty()) return;
 
+        // 1. 创建一个临时的子图，把选中的节点放进去
+        NodeGraph tempGraph = new NodeGraph("Clipboard");
+        for (UINode uiNode : selected) {
+            NodeData data = uiNode.getNodeData();
+            tempGraph.nodes.put(data.id, data);
+        }
+
+        // 2. 利用你现成的 GraphJsonIO 把它变成 JSON 字符串，存入剪贴板
+        sClipboardJson = GraphJsonIO.toJson(tempGraph);
+        System.out.println("Copied " + selected.size() + " nodes to clipboard.");
+    }
+
+    /**
+     * 执行粘贴 (Ctrl + V)
+     */
+    private void performPaste() {
+        if (sClipboardJson == null || sClipboardJson.isEmpty()) return;
+
+        // 执行粘贴命令，传入 30 像素的偏移量，防止节点重叠
+        CmdPasteNodes cmd = new CmdPasteNodes(
+                mContext.getEditorContext().getGraphController(),
+                sClipboardJson,
+                30.0f
+        );
+        mContext.getEditorContext().getCommandManager().execute(cmd);
+
+        System.out.println("Pasted nodes from clipboard.");
+    }
+
+    /**
+     * 执行删除 (Delete)
+     */
+    private void performDelete() {
+        List<UINode> selected = mContext.getSelectedNodes();
+        if (selected.isEmpty()) return;
+
+        // 收集要删除的 ID
+        List<String> idsToRemove = new ArrayList<>();
+        for (UINode uiNode : selected) {
+            idsToRemove.add(uiNode.getNodeData().id);
+        }
+
+        // 执行批量删除命令
+        CmdRemoveNodes cmd = new CmdRemoveNodes(
+                mContext.getEditorContext().getGraphController(),
+                mContext.getEditorContext().getGraph(),
+                idsToRemove
+        );
+        mContext.getEditorContext().getCommandManager().execute(cmd);
+
+        // 删除后清空选中状态
+        mContext.clearSelection();
+    }
+
+    private void performSaveJSON() {
+        mContext.requestViewportFocus();
         String jsonOutput = GraphJsonIO.toJson(mContext.getEditorContext().getGraph());
         System.out.println(jsonOutput);
     }

@@ -386,22 +386,35 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override
     public Viewport.PortInfo findPortAt(float uiX, float uiY) {
         float dynamicMargin = UIConstants.Node.PORT_HITBOX_RADIUS;
-        return findHitInZOrder(node -> {
-            node.getLogicalBounds(mTmpNodeBounds);
-            mTmpNodeBounds.inset(-dynamicMargin, -dynamicMargin);
 
-            if (mTmpNodeBounds.contains(uiX, uiY)) {
-                float localX = uiX - node.getTranslationX();
-                float localY = uiY - node.getTranslationY();
+        // 手动倒序遍历（从顶到底判断 Z 轴）
+        for (int i = mNodeLayer.getChildCount() - 1; i >= 0; i--) {
+            View child = mNodeLayer.getChildAt(i);
+            if (child instanceof UINode node) {
+                node.getLogicalBounds(mTmpNodeBounds);
 
-                String inPortId = node.hitTestPort(localX, localY, true, dynamicMargin);
-                if (inPortId != null) return new PortInfo(node, inPortId, true);
+                // 1. 先扩展包围盒，检查鼠标是否在包含端口的【宽泛判定区】内
+                mTmpNodeBounds.inset(-dynamicMargin, -dynamicMargin);
+                if (mTmpNodeBounds.contains(uiX, uiY)) {
+                    float localX = uiX - node.getTranslationX();
+                    float localY = uiY - node.getTranslationY();
 
-                String outPortId = node.hitTestPort(localX, localY, false, dynamicMargin);
-                if (outPortId != null) return new PortInfo(node, outPortId, false);
+                    // 尝试精确命中端口
+                    String inPortId = node.hitTestPort(localX, localY, true, dynamicMargin);
+                    if (inPortId != null) return new PortInfo(node, inPortId, true);
+
+                    String outPortId = node.hitTestPort(localX, localY, false, dynamicMargin);
+                    if (outPortId != null) return new PortInfo(node, outPortId, false);
+                }
+
+                // 2. 如果没命中该节点的端口，但鼠标落在这个节点的【主体】内，必须阻断往下层寻找！
+                node.getLogicalBounds(mTmpNodeBounds); // 恢复真实节点主体包围盒
+                if (mTmpNodeBounds.contains(uiX, uiY)) {
+                    return null; // 被当前节点主体死死遮挡，阻断穿透
+                }
             }
-            return null;
-        });
+        }
+        return null;
     }
 
     @Override
@@ -499,7 +512,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     // 事件分发
     // ==========================================
 
-    private record HintHitResult(View view, boolean isLogical) {}
+    private record HintHitResult(View view, boolean isLogical, UINode node) {}
 
     private interface EventDispatcher {
         boolean dispatch(View target, MotionEvent ev);
@@ -513,19 +526,24 @@ public class Viewport extends FrameLayout implements InteractionContext {
     private HintHitResult findInteractiveHint(MotionEvent ev) {
         float uiX = screenToUIX(ev.getX());
         float uiY = screenToUIY(ev.getY());
-        eventToScreen(ev);
 
-        return findHitInZOrder(node -> {
-            node.getLogicalBounds(mTmpNodeBounds);
-            if (mTmpNodeBounds.contains(uiX, uiY)) {
-                float localX = (uiX - node.getTranslationX()) * UIConstants.mDensity;
-                float localY = (uiY - node.getTranslationY()) * UIConstants.mDensity;
-                View v = node.findInteractiveViewAt(localX, localY);
-                if (v != null) return new HintHitResult(v, true);
+        // 1. 先获取当前位置最顶层的节点（遵循真实的 Z 轴遮挡关系）
+        UINode topNode = findNodeAt(uiX, uiY);
+
+        if (topNode != null) {
+            // 2. 如果点到了节点，我们【只在这个最顶层节点】内部寻找交互控件
+            float localX = (uiX - topNode.getTranslationX()) * UIConstants.mDensity;
+            float localY = (uiY - topNode.getTranslationY()) * UIConstants.mDensity;
+
+            View interactiveView = topNode.findInteractiveViewAt(localX, localY);
+            if (interactiveView != null) {
+                eventToScreen(ev);
+                return new HintHitResult(interactiveView, true, topNode);
             }
+            // 【关键防御】：如果顶层节点覆盖了这里，但它没有输入框，也不能继续往下层找！直接阻断。
+        }
 
-            return null;
-        });
+        return null;
     }
 
     private boolean dispatchTransformedEvent(MotionEvent ev, View target, boolean isLogical, boolean skipEventToScreen, EventDispatcher dispatcher) {
@@ -572,10 +590,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
     public boolean dispatchTouchEvent(MotionEvent ev) {
         int action = ev.getActionMasked();
 
-//        if (action == MotionEvent.ACTION_DOWN) {
-//            closeMenu();
-//        }
-
         if (mCapturedHintView != null) {
             boolean r = dispatchTransformedEvent(ev, mCapturedHintView, mHintCaptureUsesLogical, !mHintCaptureUsesLogical, View::dispatchTouchEvent);
 
@@ -599,9 +613,17 @@ public class Viewport extends FrameLayout implements InteractionContext {
                         if (isActionDown) {
                             mCapturedHintView = hitResult.view();
                             mHintCaptureUsesLogical = hitResult.isLogical();
+
+                            if (!mSelectedNodes.contains(hitResult.node())) {
+                                clearSelection();
+                                addToSelection(hitResult.node());
+                                invalidate();
+                            }
                         }
                         return true;
                     }
+                }else if (isActionDown) {
+                    requestViewportFocus();
                 }
             }
         }
