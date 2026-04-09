@@ -14,7 +14,7 @@ public enum NodeType {
     ACTION("动作", 0xFF1976D2),       // 蓝色：对世界产生影响，如 SetBlock, _SpawnEntity, Print
     
     // --- 数据计算 ---
-    MATH("数学", 0xFF388E3C),         // 绿色：纯计算，如 Add, Sin, Random
+    MATH("数学", 0xFF388E3C),         // 绿色：纯计算，如 Add, Sin, RandomValue
     LOGIC("逻辑运算", 0xFF455A64),     // 深灰/蓝灰：And, Or, Not, Compare
     DATA("数据/属性", 0xFF0097A7),     // 青色：获取属性，如 GetPos, GetHealth, GetTime
     

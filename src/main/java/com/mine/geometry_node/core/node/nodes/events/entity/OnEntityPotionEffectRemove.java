@@ -7,19 +7,16 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
-public class OnEntityPotionEffectApply extends BaseEventNode {
+public class OnEntityPotionEffectRemove extends BaseEventNode {
 
-    public static final String TYPE_ID = "on_entity_potion_effect_apply";
+    public static final String TYPE_ID = "on_entity_potion_effect_remove";
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node.on_entity_potion_effect_apply"))
+        return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node.on_entity_potion_effect_remove"))
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                // 输出药水效果的注册名 (例如 "minecraft:speed")
                 .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), UIHint.DEFAULT, null, null))
-                // 输出药水等级 (Amplifier)
-                .addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null))
                 .build();
     }
 }

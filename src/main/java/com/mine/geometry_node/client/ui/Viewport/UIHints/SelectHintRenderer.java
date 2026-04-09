@@ -84,15 +84,20 @@ public class SelectHintRenderer implements UIHintRenderer {
             }
 
             if (parent instanceof Viewport viewport) {
-                // 计算按钮相对于 Viewport 的绝对坐标
-                float absX = 0;
-                float absY = 0;
-                icyllis.modernui.view.View current = v;
-                while (current != null && current != viewport) {
-                    absX += current.getLeft() + current.getTranslationX();
-                    absY += current.getTop() + current.getTranslationY();
-                    current = (icyllis.modernui.view.View) current.getParent();
-                }
+                // 1. 获取按钮在屏幕上的绝对物理像素坐标
+                int[] btnLoc = new int[2];
+                v.getLocationOnScreen(btnLoc);
+
+                // 2. 获取 Viewport 在屏幕上的绝对物理像素坐标
+                int[] vpLoc = new int[2];
+                viewport.getLocationOnScreen(vpLoc);
+
+                // 3. 计算按钮左上角相对于 Viewport 的物理像素坐标
+                float relX = btnLoc[0] - vpLoc[0];
+                float relY = btnLoc[1] - vpLoc[1];
+
+                // 4. 获取当前画布的缩放比例 (极其关键)
+                float currentScale = viewport.getCurrentScale();
 
                 // 实例化内部类菜单
                 DropdownSearchMenu menu = new DropdownSearchMenu(context, resolvedOptions, selectedVal -> {
@@ -120,8 +125,9 @@ public class SelectHintRenderer implements UIHintRenderer {
                     }
                 });
 
-                // 弹窗在按钮正下方显示
-                menu.showAt(absX, absY + v.getHeight(), viewport);
+                // 5. 弹窗在按钮正下方显示
+                // 注意：由于整个节点图层被缩放，按钮实际渲染在屏幕上的高度是 原始高度 * 缩放比例
+                menu.showAt(relX, relY + (v.getHeight() * currentScale), viewport);
             }
         });
 
@@ -151,8 +157,7 @@ public class SelectHintRenderer implements UIHintRenderer {
     }
 
     // ==========================================
-    // 专属私有内部类：带搜索的下拉菜单
-    // 仅仅为 SelectHintRenderer 服务，不再暴露到外部
+    // 私有内部类：带搜索的下拉菜单
     // ==========================================
     private static class DropdownSearchMenu extends FrameLayout {
         private LinearLayout mContentLayout;

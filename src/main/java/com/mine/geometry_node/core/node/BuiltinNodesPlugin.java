@@ -76,7 +76,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/entity", new SetCustomName());
 //        registry.register("actions/entity", new SetEntityOnFire());
         registry.register("actions/entity", new SetEntityRotation());
-//        registry.register("actions/entity", new _SetEntitySize());
+//        registry.register("actions/entity", new SetEntitySize());
         registry.register("actions/entity", new SetEntityVelocity());
 //        registry.register("actions/entity", new SetEquipment());
 //        registry.register("actions/entity", new SetInvulnerable());
@@ -165,13 +165,13 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/entity/attribution", new IsSwimming());
 
         // Data/Type
-        registry.register("data/type", new GetBlockType());
-        registry.register("data/type", new GetDamageType());
-        registry.register("data/type", new GetDimension());
-        registry.register("data/type", new GetEffect());
-        registry.register("data/type", new GetEntityType());
-        registry.register("data/type", new GetItemType());
-        registry.register("data/type", new GetSound());
+//        registry.register("data/type", new GetBlockType());
+//        registry.register("data/type", new GetDamageType());
+//        registry.register("data/type", new GetDimension());
+//        registry.register("data/type", new GetEffect());
+//        registry.register("data/type", new GetEntityType());
+//        registry.register("data/type", new GetItemType());
+//        registry.register("data/type", new GetSound());
 
         // --- EVENTS ---
 //        registry.register("events", new OnProjectileHit());
@@ -196,15 +196,14 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/entity", new OnEntityHurt());
         registry.register("events/entity", new OnEntityJump());
         registry.register("events/entity", new OnEntityMount());
-//        registry.register("events/entity", new OnEntityPickupItem());
-//        registry.register("events/entity", new OnEntityPotionEffectApply());
-//        registry.register("events/entity", new OnEntityPotionEffectExpire());
+        registry.register("events/entity", new OnPlayerPickupItem());
+        registry.register("events/entity", new OnEntityPotionEffectApply());
+        registry.register("events/entity", new OnEntityPotionEffectExpire());
+        registry.register("events/entity", new OnEntityPotionEffectRemove());
         registry.register("events/entity", new OnEntitySpawn());
         registry.register("events/entity", new OnEntityTame());
         registry.register("events/entity", new OnEntityTeleport());
         registry.register("events/entity", new OnProjectileShoot());
-        registry.register("events/entity", new OnSheepSheared());
-        registry.register("events/entity", new OnSlimeSplit());
         registry.register("events/entity", new OnTargetChange());
         registry.register("events/entity", new OnVillagerCure());
         registry.register("events/entity", new OnVillagerTrade());
@@ -224,46 +223,34 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 //        registry.register("events/item", new OnToolBreak());
 
         // Events/Player
-//        registry.register("events/player", new OnPlayerChangeGameMode());
-//        registry.register("events/player", new OnPlayerChat());
-//        registry.register("events/player", new OnPlayerEarnAdvancement());
-//        registry.register("events/player", new OnPlayerExecuteCommand());
-//        registry.register("events/player", new OnPlayerJoin());
-//        registry.register("events/player", new OnPlayerLeftClickBlock());
-//        registry.register("events/player", new OnPlayerLevelChange());
-//        registry.register("events/player", new OnPlayerPickupXp());
-//        registry.register("events/player", new OnPlayerQuit());
-//        registry.register("events/player", new OnPlayerRespawn());
-//        registry.register("events/player", new OnPlayerSleep());
-//        registry.register("events/player", new OnPlayerTeleport());
-//        registry.register("events/player", new OnPlayerTick());
-//        registry.register("events/player", new OnPlayerToggleSneak());
-//        registry.register("events/player", new OnPlayerToggleSprint());
-//        registry.register("events/player", new OnPlayerWakeUp());
+        registry.register("events/player", new OnPlayerChangeGameMode());
+        registry.register("events/player", new OnPlayerChat());
+        registry.register("events/player", new OnPlayerEarnAdvancement());
+        registry.register("events/player", new OnPlayerExecuteCommand());
+        registry.register("events/player", new OnPlayerJoin());
+        registry.register("events/player", new OnPlayerLeftClickBlock());
+        registry.register("events/player", new OnPlayerLevelChange());
+        registry.register("events/player", new OnPlayerPickupXp());
+        registry.register("events/player", new OnPlayerQuit());
+        registry.register("events/player", new OnPlayerRespawn());
+        registry.register("events/player", new OnPlayerSleep());
+        registry.register("events/player", new OnPlayerTick());
+        registry.register("events/player", new OnPlayerWakeUp());
 
         // Events/Server
 //        registry.register("events/server", new OnServerTick());
 //        registry.register("events/server", new OnWorldTick());
 
         // Events/World
-//        registry.register("events/world", new OnAnvilRepair());
-//        registry.register("events/world", new OnBlockUpdate());
-//        registry.register("events/world", new OnChunkLoad());
-//        registry.register("events/world", new OnChunkUnload());
-//        registry.register("events/world", new OnCropGrow());
-//        registry.register("events/world", new OnExplosion());
-//        registry.register("events/world", new OnFluidFlow());
-//        registry.register("events/world", new OnLeavesDecay());
-//        registry.register("events/world", new OnLightningStrike());
-//        registry.register("events/world", new OnLootTableGenerate());
-//        registry.register("events/world", new OnPortalCreate());
-//        registry.register("events/world", new OnRedstoneUpdate());
-//        registry.register("events/world", new OnSpawnerSpawn());
-//        registry.register("events/world", new OnStructureGenerate());
-//        registry.register("events/world", new OnWeatherChange());
+        registry.register("events/world", new OnChunkLoad());
+        registry.register("events/world", new OnChunkUnload());
+        registry.register("events/world", new OnExplosion());
+        registry.register("events/world", new OnLightningStrike());
+        registry.register("events/world", new OnPortalCreate());
+        registry.register("events/world", new OnStructureGenerate());
 
         // --- FUNCTIONS ---
-//        registry.register("functions/graph", new CancelEvent());
+        registry.register("functions/graph", new FinishGraph());
         registry.register("functions/graph", new ReceiveBlueprint());
         registry.register("functions/graph", new TriggerBlueprint());
 
@@ -280,7 +267,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("logics", new Switch());
 
         // --- MATHS ---
-//        registry.register("maths", new Random());
+        registry.register("maths", new RandomValue());
         registry.register("maths/operation", new MathExpression());
         registry.register("maths/operation", new MathOperation());
 
