@@ -15,7 +15,7 @@ import net.minecraft.world.entity.Entity;
 
 import java.util.Collection;
 
-public class GraphCommand {
+public class ServerGraphCommand {
     // 动态图 ID 补全提供者
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRAPHS = (context, builder) -> {
         java.util.Set<String> allGraphs = new java.util.HashSet<>();
@@ -29,12 +29,42 @@ public class GraphCommand {
     };
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        // bind_graph
+
         dispatcher.register(
                 Commands.literal("bind_graph")
                         .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("local")
+
+                        // --- 1.1 实体局部图 (target) ---
+                        .then(Commands.literal("target")
                                 .then(Commands.argument("targets", EntityArgument.entities())
+
+                                        // 默认动作 (什么都不输入): /bind_graph target <targets> -> 列出绑定的图
+                                        .executes(context -> {
+                                            Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
+                                            for (Entity entity : targets) {
+                                                java.util.Set<String> graphs = GraphEngine.getBoundGraphs(entity);
+                                                context.getSource().sendSuccess(() -> Component.literal(
+                                                        entity.getName().getString() + " 绑定的图: " + (graphs.isEmpty() ? "无" : graphs)
+                                                ), false);
+                                            }
+                                            return targets.size();
+                                        })
+
+                                        // 显式 list: /bind_graph target <targets> list -> 列出绑定的图
+                                        .then(Commands.literal("list")
+                                                .executes(context -> {
+                                                    Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
+                                                    for (Entity entity : targets) {
+                                                        java.util.Set<String> graphs = GraphEngine.getBoundGraphs(entity);
+                                                        context.getSource().sendSuccess(() -> Component.literal(
+                                                                entity.getName().getString() + " 绑定的图: " + (graphs.isEmpty() ? "无" : graphs)
+                                                        ), false);
+                                                    }
+                                                    return targets.size();
+                                                })
+                                        )
+
+                                        // 绑定特定图: /bind_graph target <targets> <graph_id>
                                         .then(Commands.argument("graph_id", ResourceLocationArgument.id())
                                                 .suggests(SUGGEST_GRAPHS)
                                                 .executes(context -> {
@@ -54,25 +84,47 @@ public class GraphCommand {
                                         )
                                 )
                         )
+
+                        // --- 1.2 全局图 (global) ---
                         .then(Commands.literal("global")
+
+                                // 默认动作 (什么都不输入): /bind_graph global -> 列出全局绑定的图
+                                .executes(context -> {
+                                    java.util.Set<String> graphs = GraphEngine.getGlobalBoundGraphs(context.getSource().getLevel());
+                                    context.getSource().sendSuccess(() -> Component.literal(
+                                            "全局绑定的图: " + (graphs.isEmpty() ? "无" : graphs)
+                                    ), false);
+                                    return 1;
+                                })
+
+                                // 显式 list: /bind_graph global list -> 列出全局绑定的图
+                                .then(Commands.literal("list")
+                                        .executes(context -> {
+                                            java.util.Set<String> graphs = GraphEngine.getGlobalBoundGraphs(context.getSource().getLevel());
+                                            context.getSource().sendSuccess(() -> Component.literal(
+                                                    "全局绑定的图: " + (graphs.isEmpty() ? "无" : graphs)
+                                            ), false);
+                                            return 1;
+                                        })
+                                )
+
+                                // 绑定特定图: /bind_graph global <graph_id>
                                 .then(Commands.argument("graph_id", ResourceLocationArgument.id())
                                         .suggests(SUGGEST_GRAPHS)
                                         .executes(context -> {
                                             String graphId = ResourceLocationArgument.getId(context, "graph_id").toString();
-
                                             GraphEngine.bindGlobalGraph(context.getSource().getLevel(), graphId);
-
                                             context.getSource().sendSuccess(() -> Component.literal("成功将图 " + graphId + " 绑定到全局服务器。"), true);
                                             return 1;
                                         })
                                 )
                         )
         );
-        // unbind_graph
+
         dispatcher.register(
                 Commands.literal("unbind_graph")
                         .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("local")
+                        .then(Commands.literal("target")
                                 .then(Commands.argument("targets", EntityArgument.entities())
                                         .executes(context -> {
                                             Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
@@ -96,15 +148,12 @@ public class GraphCommand {
                                         )
                                 )
                         )
-                        // 子指令 2: global
                         .then(Commands.literal("global")
-                                // 2.1 不带参数：解绑全局所有图
                                 .executes(context -> {
                                     GraphEngine.unbindAllGlobalGraphs(context.getSource().getLevel());
                                     context.getSource().sendSuccess(() -> Component.literal("成功解绑全局服务器上的所有图。"), true);
                                     return 1;
                                 })
-                                // 2.2 带参数：解绑全局指定图
                                 .then(Commands.argument("graph_id", ResourceLocationArgument.id())
                                         .suggests(SUGGEST_GRAPHS)
                                         .executes(context -> {
@@ -116,34 +165,54 @@ public class GraphCommand {
                                 )
                         )
         );
-        // list_graph
+
         dispatcher.register(
-                Commands.literal("list_graph")
+                Commands.literal("list_graphs")
                         .requires(source -> source.hasPermission(2))
-                        .then(Commands.literal("local")
-                                .then(Commands.argument("targets", EntityArgument.entities())
-                                        .executes(context -> {
-                                            Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
-                                            for (Entity entity : targets) {
-                                                java.util.Set<String> graphs = GraphEngine.getBoundGraphs(entity);
-                                                context.getSource().sendSuccess(() -> Component.literal(
-                                                        entity.getName().getString() + " 绑定的图: " + (graphs.isEmpty() ? "无" : graphs)
-                                                ), false);
-                                            }
-                                            return targets.size();
-                                        })
-                                )
-                        )
-                        .then(Commands.literal("global")
+                        .then(Commands.literal("server")
                                 .executes(context -> {
-                                    java.util.Set<String> graphs = GraphEngine.getGlobalBoundGraphs(context.getSource().getLevel());
-                                    context.getSource().sendSuccess(() -> Component.literal(
-                                            "全局绑定的图: " + (graphs.isEmpty() ? "无" : graphs)
-                                    ), false);
-                                    return 1;
+                                    java.util.Set<String> allGraphs = new java.util.HashSet<>();
+                                    allGraphs.addAll(GraphResourceManager.getInstance().getAllGraphIds());
+                                    allGraphs.addAll(DynamicGraphManager.getAllDynamicGraphIds());
+
+                                    if (allGraphs.isEmpty()) {
+                                        context.getSource().sendSuccess(() -> Component.literal("§e[云端]§r 服务器上没有图纸。"), false);
+                                    } else {
+                                        String list = String.join("\n- ", allGraphs);
+                                        context.getSource().sendSuccess(() -> Component.literal("§b[云端图纸列表]§r\n- " + list), false);
+                                    }
+                                    return allGraphs.size();
                                 })
                         )
         );
 
+        dispatcher.register(
+                Commands.literal("download_graph")
+                        .requires(source -> source.hasPermission(2))
+                        .then(Commands.argument("graph_id", ResourceLocationArgument.id())
+                                .suggests(SUGGEST_GRAPHS)
+                                .executes(context -> {
+                                    net.minecraft.server.level.ServerPlayer player = context.getSource().getPlayerOrException();
+                                    String graphId = ResourceLocationArgument.getId(context, "graph_id").toString();
+
+                                    try {
+                                        java.io.File folder = player.getServer().getWorldPath(DynamicGraphManager.GRAPH_DIR).toFile();
+                                        java.io.File file = new java.io.File(folder, graphId + ".json");
+
+                                        if (file.exists()) {
+                                            String json = java.nio.file.Files.readString(file.toPath());
+                                            com.mine.geometry_node.core.network.NetworkHandler.sendToPlayer(player,
+                                                    new com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload(graphId, json));
+                                            context.getSource().sendSuccess(() -> Component.literal("§a正在下发图纸: " + graphId), false);
+                                        } else {
+                                            context.getSource().sendFailure(Component.literal("找不到动态图纸文件，可能是内置数据包图纸。"));
+                                        }
+                                    } catch (Exception e) {
+                                        context.getSource().sendFailure(Component.literal("服务器读取文件失败: " + e.getMessage()));
+                                    }
+                                    return 1;
+                                })
+                        )
+        );
     }
 }

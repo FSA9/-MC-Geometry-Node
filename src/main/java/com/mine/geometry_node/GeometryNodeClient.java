@@ -1,5 +1,6 @@
 package com.mine.geometry_node;
 
+import com.mine.geometry_node.core.command.ClientGraphCommand;
 import com.mine.geometry_node.client.key.KeyBindings;
 import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.ui.MainUI;
@@ -30,6 +31,8 @@ public class GeometryNodeClient {
 
         // 渲染注册
         ClientVisualManager.init();
+
+        ClientGraphCommand.register();
     }
 
     private void onClientTick(ClientTickEvent.Post event) {

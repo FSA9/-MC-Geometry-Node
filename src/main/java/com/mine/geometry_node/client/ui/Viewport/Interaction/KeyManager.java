@@ -119,7 +119,14 @@ public class KeyManager {
 
     private void performSaveJSON() {
         mContext.requestViewportFocus();
-        String jsonOutput = GraphJsonIO.toJson(mContext.getEditorContext().getGraph());
-        System.out.println(jsonOutput);
+
+        // 1. 获取当前图纸对象
+        com.mine.geometry_node.core.node.NodeGraph graph = mContext.getEditorContext().getGraph();
+
+        // 2. 转换为 JSON
+        String jsonOutput = GraphJsonIO.toJson(graph);
+
+        // 3. 调用本地保存 (传入图纸名字和 JSON 内容)
+        com.mine.geometry_node.client.ui.persistence.LocalDraftManager.saveDraft(graph.graphName, jsonOutput);
     }
 }

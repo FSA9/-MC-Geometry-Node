@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.Viewport;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.core.node.NodeCategory;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -158,8 +159,7 @@ public class ViewportMenu extends FrameLayout {
         if (mViewport != null && mViewport.getEditorContext() != null) {
             com.mine.geometry_node.core.node.NodeGraph graph = mViewport.getEditorContext().getGraph();
             String jsonOutput = com.mine.geometry_node.client.ui.persistence.GraphJsonIO.toJson(graph);
-            System.out.println("[Menu] 手动保存成功:");
-            System.out.println(jsonOutput);
+            LocalDraftManager.saveDraft(graph.graphName, jsonOutput);
         }
     }
 

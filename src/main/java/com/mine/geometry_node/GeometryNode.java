@@ -1,6 +1,6 @@
 package com.mine.geometry_node;
 
-import com.mine.geometry_node.core.command.GraphCommand;
+import com.mine.geometry_node.core.command.ServerGraphCommand;
 import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.execution.GraphEventHandler;
 import com.mine.geometry_node.core.execution.attachment.EntityImmunityAttachment;
@@ -93,7 +93,7 @@ public class GeometryNode {
 
         // 注册测试指令 (基于 Architectury API)
         CommandRegistrationEvent.EVENT.register((dispatcher, registry, selection) -> {
-            GraphCommand.register(dispatcher);
+            ServerGraphCommand.register(dispatcher);
         });
     }
 

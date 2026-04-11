@@ -601,15 +601,26 @@ public class GraphEventHandler {
             }
         });
 
-        bus.addListener((net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent event) -> {
+// --- 监听 Pre 事件 ---
+        bus.addListener((net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent.Pre event) -> {
             if (!event.getPlayer().level().isClientSide()) {
                 net.minecraft.server.level.ServerLevel serverLevel = (net.minecraft.server.level.ServerLevel) event.getPlayer().level();
 
-                GraphEngine.dispatchEvent(serverLevel, event.getPlayer(), OnPlayerPickupItem.TYPE_ID, process -> {
-                    // 传递拾取者
+                GraphEngine.dispatchEvent(serverLevel, event.getPlayer(), OnPlayerPickupItemPre.TYPE_ID, process -> {
                     process.setEventData(StandardPorts.ENTITY.getId(), event.getPlayer());
+                    process.setEventData(StandardPorts.ITEM_STACK.getId(), event.getItemEntity().getItem());
+                });
+            }
+        });
 
-                    // 传递被拾取的物品栈（event.getItem() 返回的是 ItemEntity，再调用 .getItem() 获取 ItemStack）
+// --- 监听 Post 事件 ---
+        bus.addListener((net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent.Post event) -> {
+            if (!event.getPlayer().level().isClientSide()) {
+                net.minecraft.server.level.ServerLevel serverLevel = (net.minecraft.server.level.ServerLevel) event.getPlayer().level();
+
+                GraphEngine.dispatchEvent(serverLevel, event.getPlayer(), OnPlayerPickupItemPost.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), event.getPlayer());
+                    // 注意：Post 事件触发时，ItemEntity 可能已经开始销毁流程，但数据通常依然是可读的
                     process.setEventData(StandardPorts.ITEM_STACK.getId(), event.getItemEntity().getItem());
                 });
             }
