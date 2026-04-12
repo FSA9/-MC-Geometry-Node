@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui;
 
-import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.Viewport.Viewport;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import icyllis.modernui.ModernUI;
@@ -32,15 +31,9 @@ public class MainUI extends Fragment {
     // 生命周期与核心初始化
     // ==========================================
 
-    // 全局编辑器上下文
-    private EditorContext mEditorContext;
-
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, DataSet savedInstanceState) {
         Context context = getContext();
-
-        // 初始化全局上下文
-        mEditorContext = new EditorContext(null);
 
         // 1. 创建根布局 (垂直排列)
         LinearLayout rootLayout = createRootLayout(context);
@@ -103,8 +96,8 @@ public class MainUI extends Fragment {
         middleContainer.addView(createDraggableSplitter(context, true, null));
 
         // B. 中央 3D 视口 (Viewport)
-        View centerViewport = createViewportWrapper(context);
-        middleContainer.addView(centerViewport, createWeightParams(UIConstants.MainUI.WEIGHT_CENTER));
+        com.mine.geometry_node.client.ui.Viewport.ViewportPanel centerPanel = new com.mine.geometry_node.client.ui.Viewport.ViewportPanel(context);
+        middleContainer.addView(centerPanel, createWeightParams(UIConstants.MainUI.WEIGHT_CENTER));
 
         // 分割线 2
         middleContainer.addView(createDraggableSplitter(context, true, null));
@@ -120,16 +113,14 @@ public class MainUI extends Fragment {
      * 构建并添加底部区域 (包含水平分割线)
      */
     private void setupBottomSection(Context context, LinearLayout root) {
-        RelativeLayout bottomPanel = createPanel(context, "Timeline / Assets", UIConstants.MainUI.BG_TIMELINE);
+        com.mine.geometry_node.client.ui.AssetLibrary.AssetBrowserPanel bottomPanel = new com.mine.geometry_node.client.ui.AssetLibrary.AssetBrowserPanel(context);
 
         LinearLayout.LayoutParams bottomParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(UIConstants.MainUI.HEIGHT_BOTTOM_DEFAULT)
         );
 
-        // 先添加水平分割线 (关联底栏)
         root.addView(createDraggableSplitter(context, false, bottomPanel));
-        // 再添加底部面板
         root.addView(bottomPanel, bottomParams);
     }
 
@@ -162,7 +153,7 @@ public class MainUI extends Fragment {
      * 创建视口包装容器
      */
     private FrameLayout createViewportWrapper(Context context) {
-        Viewport viewport = new Viewport(context, mEditorContext);
+        Viewport viewport = new Viewport(context);
         FrameLayout container = new FrameLayout(context);
         container.addView(viewport, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,

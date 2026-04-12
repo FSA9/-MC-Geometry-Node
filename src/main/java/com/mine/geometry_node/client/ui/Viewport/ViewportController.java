@@ -9,35 +9,35 @@ import com.mine.geometry_node.core.node.nodes.NodeDef;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * 视口控制器 (Controller)
- * <p>
- * 职责：
- * 1. 监听底层数据 (EditorContext) 的变化。
- * 2. 负责 UINode 视图的实例化与生命周期管理。
- * 3. 调度 Viewport 进行纯粹的 UI 更新。
- * 4. 接收来自 Viewport 的交互意图并转化为数据命令 (Command)。
- */
 public class ViewportController implements EditorContext.EditorListener {
 
     private final Viewport mViewport;
-    private final EditorContext mEditorContext;
+    private EditorContext mEditorContext;
 
     public ViewportController(Viewport viewport, EditorContext editorContext) {
         this.mViewport = viewport;
-        this.mEditorContext = editorContext;
-        // 注册监听器，由控制器来监听数据变化
-        this.mEditorContext.addListener(this);
+        // 核心修复：使用 setter 方法安全地初始化
+        setEditorContext(editorContext);
     }
 
-    // ==========================================
-    // 视图到数据的反向调度 (View -> Controller -> Data)
-    // ==========================================
+    public void setEditorContext(EditorContext context) {
+        // 1. 如果有旧的上下文，先解绑监听，防止内存泄漏和鬼影事件
+        if (this.mEditorContext != null) {
+            this.mEditorContext.removeListener(this);
+        }
 
-    /**
-     * 处理添加节点的意图 (由 Viewport/Menu 触发)
-     */
+        this.mEditorContext = context;
+
+        // 2. 绑定新上下文（只在非白板模式下绑定）
+        if (this.mEditorContext != null) {
+            this.mEditorContext.addListener(this);
+        }
+    }
+
     public void executeAddNode(float screenX, float screenY, String typeId) {
+        // 防御：白板模式下禁止操作
+        if (mEditorContext == null) return;
+
         float uiX = mViewport.screenToUIX(screenX);
         float uiY = mViewport.screenToUIY(screenY);
         String mockId = UUID.randomUUID().toString();
@@ -47,21 +47,13 @@ public class ViewportController implements EditorContext.EditorListener {
         mEditorContext.getCommandManager().execute(cmd);
     }
 
-    // ==========================================
-    // 数据到视图的正向驱动 (Data -> Controller -> View)
-    // ==========================================
-
     @Override
     public void onNodeAdded(NodeData nodeData) {
         NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(nodeData);
         if (def == null) return;
-
-        // 实例化 UINode 视图对象
         UINode uiNode = new UINode(mViewport.getContext(), nodeData, def, mEditorContext);
         uiNode.setTranslationX(nodeData.getX());
         uiNode.setTranslationY(nodeData.getY());
-
-        // 通知 Viewport 将其添加到画布
         mViewport.addNodeView(nodeData.id, uiNode);
     }
 
@@ -73,17 +65,9 @@ public class ViewportController implements EditorContext.EditorListener {
     @Override
     public void onNodeStructureChanged(NodeData nodeData) {
         if (nodeData == null || nodeData.id == null) return;
-
-        // 记录结构变化前的选中状态
         boolean wasSelected = mViewport.isNodeSelected(nodeData.id);
-
-        // 移除旧节点视图
         mViewport.removeNodeView(nodeData.id);
-
-        // 重新添加新节点视图
         onNodeAdded(nodeData);
-
-        // 恢复选中状态
         if (wasSelected) {
             UINode rebuilt = mViewport.getNodeView(nodeData.id);
             if (rebuilt != null) {

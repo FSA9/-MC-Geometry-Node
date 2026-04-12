@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionManager;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.KeyManager;
+import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.core.node.NodeData;
 
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -12,6 +13,7 @@ import com.mine.geometry_node.core.node.port.PortType;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
+import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.View;
@@ -38,10 +40,10 @@ public class Viewport extends FrameLayout implements InteractionContext {
     // ==========================================
     // 1. 核心组件
     // ==========================================
-    private final FrameLayout mNodeLayer;
+    private FrameLayout mNodeLayer;
     private final InteractionManager mInteractionManager;
     private final KeyManager mKeyManager;
-    private final EditorContext mEditorContext;
+    private GraphSession mCurrentSession;
     private final ViewportController mController;          // 控制器引用
     private ViewportMenu mActiveMenu;
 
@@ -56,8 +58,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
     // ==========================================
     // 3. 视图映射缓存
     // ==========================================
-    private final List<UINode> mSelectedNodes = new ArrayList<>();
-    private final Map<String, UINode> mNodeViews = new HashMap<>();
+    private List<UINode> mSelectedNodes = new ArrayList<>();
+    private Map<String, UINode> mNodeViews = new HashMap<>();
 
     // ==========================================
     // 4. 事件缓存
@@ -78,20 +80,16 @@ public class Viewport extends FrameLayout implements InteractionContext {
     private final float[] mTempOutPos = new float[2];
     private final float[] mTempInPos  = new float[2];
 
-    public Viewport(Context context, EditorContext editorContext) {
-        super(context);
-        this.mEditorContext = editorContext;
+    private TextView mEmptyHint;
 
-        mNodeLayer = new FrameLayout(context);
+    public Viewport(Context context) {
+        super(context);
         initViewportProps();
         initPaints();
-        addView(mNodeLayer, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
         mInteractionManager = new InteractionManager(this);
         mKeyManager = new KeyManager(this);
-
-        // 绑定 Controller
-        mController = new ViewportController(this, editorContext);
+        mController = new ViewportController(this, null);
 
         setFocusable(true);
         setFocusableInTouchMode(true);
@@ -100,9 +98,17 @@ public class Viewport extends FrameLayout implements InteractionContext {
     private void initViewportProps() {
         setWillNotDraw(false);
         setClipChildren(false);
-        mNodeLayer.setPivotX(0);
-        mNodeLayer.setPivotY(0);
-        mNodeLayer.setClipChildren(false);
+
+        // 初始化白板提示
+        mEmptyHint = new TextView(getContext());
+        mEmptyHint.setText("当前没有打开的蓝图\n请在资产浏览器中双击 JSON 文件开始编辑");
+        mEmptyHint.setTextSize(18);
+        mEmptyHint.setTextColor(0xFF888888);
+        mEmptyHint.setGravity(Gravity.CENTER);
+
+        LayoutParams lp = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.CENTER;
+        addView(mEmptyHint, lp);
     }
 
     private void initPaints() {
@@ -115,14 +121,56 @@ public class Viewport extends FrameLayout implements InteractionContext {
         mConnectionPaint.setColor(0xFFE0E0E0);
     }
 
+    public void bindSession(GraphSession session) {
+        if (this.mCurrentSession != null) {
+            this.mCurrentSession.viewportX = mViewportX;
+            this.mCurrentSession.viewportY = mViewportY;
+            this.mCurrentSession.currentScale = mCurrentScale;
+            removeView(this.mCurrentSession.nodeLayer);
+        }
+
+        this.mCurrentSession = session;
+
+        if (session != null) {
+            mEmptyHint.setVisibility(View.GONE);
+
+            mViewportX = session.viewportX;
+            mViewportY = session.viewportY;
+            mCurrentScale = session.currentScale;
+
+            mNodeLayer = session.nodeLayer;
+            mNodeViews = session.nodeViews;
+            mSelectedNodes = session.selectedNodes;
+
+            // 核心修改：确保 LayoutParams 正确，并强行请求布局
+            addView(mNodeLayer, 0, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+
+            mController.setEditorContext(session.editorContext);
+
+            // 强行刷新：由于是动态切换 Layer，必须请求重新测量和绘图
+            requestLayout();
+        } else {
+            mEmptyHint.setVisibility(View.VISIBLE);
+            mNodeLayer = null;
+            mNodeViews = new HashMap<>();
+            mSelectedNodes = new ArrayList<>();
+            mController.setEditorContext(null);
+        }
+
+        updateTransform();
+        invalidate(); // 确保重绘网格和连线
+    }
+
     // ==========================================
     // UI 操控 APIs (供 ViewportController 调用)
     // ==========================================
 
     public void addNodeView(String nodeId, UINode uiNode) {
-        mNodeLayer.addView(uiNode);
-        mNodeViews.put(nodeId, uiNode);
-        invalidate();
+        if (mNodeLayer != null) {
+            mNodeLayer.addView(uiNode);
+            mNodeViews.put(nodeId, uiNode);
+            invalidate();
+        }
     }
 
     public void removeNodeView(String nodeId) {
@@ -186,10 +234,12 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public void updateTransform() {
-        mNodeLayer.setTranslationX(mViewportX / UIConstants.mDensity);
-        mNodeLayer.setTranslationY(mViewportY / UIConstants.mDensity);
-        mNodeLayer.setScaleX(mCurrentScale);
-        mNodeLayer.setScaleY(mCurrentScale);
+        if (mNodeLayer != null) {
+            mNodeLayer.setTranslationX(mViewportX / UIConstants.mDensity);
+            mNodeLayer.setTranslationY(mViewportY / UIConstants.mDensity);
+            mNodeLayer.setScaleX(mCurrentScale);
+            mNodeLayer.setScaleY(mCurrentScale);
+        }
         invalidate();
     }
 
@@ -254,6 +304,11 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override
     protected void onDraw(Canvas canvas) {
         canvas.drawRect(0, 0, getWidth(), getHeight(), mBackgroundPaint);
+
+        if (mCurrentSession == null) {
+            return;
+        }
+
         drawInfiniteGrid(canvas);
         super.onDraw(canvas);
     }
@@ -298,10 +353,12 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     private void drawAllConnections(Canvas canvas) {
+        if (mCurrentSession == null || mCurrentSession.editorContext == null) return;
+
         float scaledLineWidth = UIConstants.ViewPort.LINE_WIDTH_CONNECTION * mCurrentScale;
         mConnectionPaint.setStrokeWidth(scaledLineWidth);
 
-        com.mine.geometry_node.core.node.NodeGraph graph = mEditorContext.getGraph();
+        com.mine.geometry_node.core.node.NodeGraph graph = mCurrentSession.editorContext.getGraph();
         if (graph == null) return;
 
         for (NodeData outData : graph.nodes.values()) {
@@ -364,6 +421,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     private <T> T findHitInZOrder(NodeVisitor<T> visitor) {
+        if (mNodeLayer == null) return null;
         for (int i = mNodeLayer.getChildCount() - 1; i >= 0; i--) {
             View child = mNodeLayer.getChildAt(i);
             if (child instanceof UINode node) {
@@ -385,6 +443,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public Viewport.PortInfo findPortAt(float uiX, float uiY) {
+        if (mNodeLayer == null) return null;
         float dynamicMargin = UIConstants.Node.PORT_HITBOX_RADIUS;
 
         // 手动倒序遍历（从顶到底判断 Z 轴）
@@ -420,6 +479,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override
     public void updateBoxSelection(float uiX, float uiY, float uiW, float uiH) {
         clearSelection();
+        if (mNodeLayer == null) return;
         float selRight = uiX + uiW;
         float selBottom = uiY + uiH;
 
@@ -492,11 +552,11 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public void addNodeToScene(UINode node) {
-        mNodeLayer.addView(node);
+        if (mNodeLayer != null) mNodeLayer.addView(node);
     }
 
     @Override public Context getUIContext() { return getContext(); }
-    @Override public EditorContext getEditorContext() { return mEditorContext; }
+    @Override public EditorContext getEditorContext() { return mCurrentSession != null ? mCurrentSession.editorContext : null; }
     @Override public void requestViewportFocus() { requestFocus(); }
 
     private String findFirstExecInputPort(UINode node) {

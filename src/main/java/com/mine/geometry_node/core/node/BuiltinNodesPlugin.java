@@ -156,13 +156,13 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/entity/attribution", new IsSwimming());
 
         // Data/Type
-        registry.register("data/type", new GetBlockType());
-        registry.register("data/type", new GetDamageType());
-        registry.register("data/type", new GetDimension());
-        registry.register("data/type", new GetEffect());
-        registry.register("data/type", new GetEntityType());
-        registry.register("data/type", new GetItemType());
-        registry.register("data/type", new GetSound());
+//        registry.register("data/type", new GetBlockType());
+//        registry.register("data/type", new GetDamageType());
+//        registry.register("data/type", new GetDimension());
+//        registry.register("data/type", new GetEffect());
+//        registry.register("data/type", new GetEntityType());
+//        registry.register("data/type", new GetItemType());
+//        registry.register("data/type", new GetSound());
 
         // --- EVENTS ---
 //        registry.register("events", new OnProjectileHit());
