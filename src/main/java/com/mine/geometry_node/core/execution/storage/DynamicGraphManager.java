@@ -20,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * 具备 File I/O 落盘能力与 0 毫秒内存热更新能力。
  */
 public class DynamicGraphManager {
-
     // 定义当前世界存档下的专属子文件夹名称
     public static final LevelResource GRAPH_DIR = new LevelResource("geometry_nodes");
 
@@ -41,77 +40,64 @@ public class DynamicGraphManager {
         return Collections.unmodifiableSet(dynamicIndexCache.keySet());
     }
 
-    /**
-     * [API 3: 发布并热更新] 当收到客户端的上传网络包时调用
-     */
-    public static void saveAndHotReload(MinecraftServer server, String graphId, String jsonContent) {
-        if (server == null || graphId == null || jsonContent == null) return;
+    public static void saveAndHotReload(MinecraftServer server, String graphId, String jsonContent) throws Exception {
+        if (server == null) return;
 
-        try {
-            // 1. 尝试在内存中编译图纸 (Dry Run 测试)
-            // 这一步非常重要！如果 JSON 格式错乱，它会直接抛出异常，阻止烂数据污染硬盘和内存
-            RuntimeGraphIndex newIndex;
-            try (StringReader reader = new StringReader(jsonContent)) {
-                newIndex = RuntimeGraphIndex.build(reader);
-            }
+        Path folder = server.getWorldPath(GRAPH_DIR);
+        Path relativePath = GraphIdMapper.idToRelativePath(graphId);
+        File file = folder.resolve(relativePath).toFile();
 
-            // 2. 编译成功，准备落盘写文件
-            Path dirPath = server.getWorldPath(GRAPH_DIR);
-            File folder = dirPath.toFile();
-            if (!folder.exists() && !folder.mkdirs()) {
-                GeometryNode.LOGGER.error("[DynamicGraphManager] 无法创建目录: {}", folder.getAbsolutePath());
-                return;
-            }
+        // 自动创建多级子目录
+        File parentDir = file.getParentFile();
+        if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
+            throw new Exception("无法创建服务器数据目录!");
+        }
 
-            File file = new File(folder, graphId + ".json");
-            try (FileWriter writer = new FileWriter(file)) {
-                writer.write(jsonContent);
-            }
+        try (java.io.FileWriter writer = new java.io.FileWriter(file)) {
+            writer.write(jsonContent);
+        }
 
-            // 3. 落盘成功，瞬间替换内存缓存 (完成热更新)
-            dynamicIndexCache.put(graphId, newIndex);
-            GeometryNode.LOGGER.info("[DynamicGraphManager] 蓝图已实时发布并热重载: {}", graphId);
+        // 立即热更新内存
+        try (java.io.StringReader reader = new java.io.StringReader(jsonContent)) {
+            com.mine.geometry_node.core.execution.RuntimeGraphIndex index =
+                    com.mine.geometry_node.core.execution.RuntimeGraphIndex.build(reader);
 
-        } catch (Exception e) {
-            GeometryNode.LOGGER.error("[DynamicGraphManager] 蓝图发布失败 (可能存在语法错误): {}", graphId, e);
+            // 确保缓存的键是标准的 ResourceLocation 格式
+            String normalizedId = GraphIdMapper.pathToId(folder, file.toPath());
+            dynamicIndexCache.put(normalizedId, index);
         }
     }
 
-    /**
-     * [API 4: 启动加载] 在服务器启动时调用，将硬盘里的草稿读回内存
-     */
     public static void loadAllFromDisk(MinecraftServer server) {
         dynamicIndexCache.clear();
         if (server == null) return;
 
         try {
-            File folder = server.getWorldPath(GRAPH_DIR).toFile();
-            if (!folder.exists() || !folder.isDirectory()) {
-                return; // 文件夹不存在，说明是新存档，直接跳过
+            Path folder = server.getWorldPath(GRAPH_DIR);
+            if (!java.nio.file.Files.exists(folder) || !java.nio.file.Files.isDirectory(folder)) {
+                return;
             }
 
-            File[] files = folder.listFiles((dir, name) -> name.endsWith(".json"));
-            if (files == null) return;
-
-            int count = 0;
-            for (File file : files) {
-                String fileName = file.getName();
-                // 去掉 .json 后缀作为 graphId
-                String graphId = fileName.substring(0, fileName.length() - 5);
-
-                try (FileReader reader = new FileReader(file)) {
-                    RuntimeGraphIndex index = RuntimeGraphIndex.build(reader);
-                    dynamicIndexCache.put(graphId, index);
-                    count++;
-                } catch (Exception e) {
-                    GeometryNode.LOGGER.error("[DynamicGraphManager] 无法加载本地蓝图文件: {}", fileName, e);
-                }
+            // 深度递归遍历服务端文件
+            try (java.util.stream.Stream<Path> walk = java.nio.file.Files.walk(folder)) {
+                walk.filter(java.nio.file.Files::isRegularFile)
+                        .filter(p -> p.toString().endsWith(".json"))
+                        .forEach(file -> {
+                            try {
+                                String graphId = GraphIdMapper.pathToId(folder, file);
+                                try (java.io.FileReader reader = new java.io.FileReader(file.toFile())) {
+                                    com.mine.geometry_node.core.execution.RuntimeGraphIndex index =
+                                            com.mine.geometry_node.core.execution.RuntimeGraphIndex.build(reader);
+                                    dynamicIndexCache.put(graphId, index);
+                                }
+                            } catch (Exception e) {
+                                com.mine.geometry_node.GeometryNode.LOGGER.error("[DynamicGraphManager] 无法加载蓝图文件: {}", file, e);
+                            }
+                        });
             }
-
-            GeometryNode.LOGGER.info("[DynamicGraphManager] 成功从本地加载了 {} 个动态蓝图。", count);
-
+            com.mine.geometry_node.GeometryNode.LOGGER.info("[DynamicGraphManager] 已加载 {} 个动态蓝图。", dynamicIndexCache.size());
         } catch (Exception e) {
-            GeometryNode.LOGGER.error("[DynamicGraphManager] 读取本地目录失败", e);
+            com.mine.geometry_node.GeometryNode.LOGGER.error("[DynamicGraphManager] 读取动态蓝图目录失败", e);
         }
     }
 }

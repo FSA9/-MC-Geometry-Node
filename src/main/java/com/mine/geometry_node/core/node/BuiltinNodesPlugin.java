@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.api.GeometryNodePlugin;
-// 导入由于数量极其庞大，建议使用通配符或由IDE自动补全，以下展示核心注册逻辑
 import com.mine.geometry_node.core.node.nodes.actions.*;
 import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
@@ -10,6 +9,7 @@ import com.mine.geometry_node.core.node.nodes.actions.visual.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.attribution.*;
+import com.mine.geometry_node.core.node.nodes.data.type.*;
 import com.mine.geometry_node.core.node.nodes.events.block.*;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
@@ -156,13 +156,13 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/entity/attribution", new IsSwimming());
 
         // Data/Type
-//        registry.register("data/type", new GetBlockType());
-//        registry.register("data/type", new GetDamageType());
-//        registry.register("data/type", new GetDimension());
-//        registry.register("data/type", new GetEffect());
-//        registry.register("data/type", new GetEntityType());
-//        registry.register("data/type", new GetItemType());
-//        registry.register("data/type", new GetSound());
+        registry.register("data/type", new GetBlockType());
+        registry.register("data/type", new GetDamageType());
+        registry.register("data/type", new GetDimension());
+        registry.register("data/type", new GetEffect());
+        registry.register("data/type", new GetEntityType());
+        registry.register("data/type", new GetItemType());
+        registry.register("data/type", new GetSound());
 
         // --- EVENTS ---
 //        registry.register("events", new OnProjectileHit());

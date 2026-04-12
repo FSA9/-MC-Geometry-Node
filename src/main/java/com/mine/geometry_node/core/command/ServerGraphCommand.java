@@ -2,18 +2,20 @@ package com.mine.geometry_node.core.command;
 
 import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
+import com.mine.geometry_node.core.execution.storage.GraphIdMapper;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mine.geometry_node.core.execution.GraphEngine;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
-import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
 import java.util.Collection;
+import java.util.Set;
 
 public class ServerGraphCommand {
     // 动态图 ID 补全提供者
@@ -30,6 +32,9 @@ public class ServerGraphCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 
+        // =====================================================================
+        // 指令: /bind_graph
+        // =====================================================================
         dispatcher.register(
                 Commands.literal("bind_graph")
                         .requires(source -> source.hasPermission(2))
@@ -65,11 +70,11 @@ public class ServerGraphCommand {
                                         )
 
                                         // 绑定特定图: /bind_graph target <targets> <graph_id>
-                                        .then(Commands.argument("graph_id", ResourceLocationArgument.id())
+                                        .then(Commands.argument("graph_id", StringArgumentType.greedyString())
                                                 .suggests(SUGGEST_GRAPHS)
                                                 .executes(context -> {
                                                     Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
-                                                    String graphId = ResourceLocationArgument.getId(context, "graph_id").toString();
+                                                    String graphId = StringArgumentType.getString(context, "graph_id");
 
                                                     int count = 0;
                                                     for (Entity entity : targets) {
@@ -109,10 +114,10 @@ public class ServerGraphCommand {
                                 )
 
                                 // 绑定特定图: /bind_graph global <graph_id>
-                                .then(Commands.argument("graph_id", ResourceLocationArgument.id())
+                                .then(Commands.argument("graph_id", StringArgumentType.greedyString())
                                         .suggests(SUGGEST_GRAPHS)
                                         .executes(context -> {
-                                            String graphId = ResourceLocationArgument.getId(context, "graph_id").toString();
+                                            String graphId = StringArgumentType.getString(context, "graph_id");
                                             GraphEngine.bindGlobalGraph(context.getSource().getLevel(), graphId);
                                             context.getSource().sendSuccess(() -> Component.literal("成功将图 " + graphId + " 绑定到全局服务器。"), true);
                                             return 1;
@@ -121,6 +126,9 @@ public class ServerGraphCommand {
                         )
         );
 
+        // =====================================================================
+        // 指令: /unbind_graph
+        // =====================================================================
         dispatcher.register(
                 Commands.literal("unbind_graph")
                         .requires(source -> source.hasPermission(2))
@@ -134,11 +142,11 @@ public class ServerGraphCommand {
                                             context.getSource().sendSuccess(() -> Component.literal("成功解绑 " + targets.size() + " 个实体上的所有图。"), true);
                                             return targets.size();
                                         })
-                                        .then(Commands.argument("graph_id", ResourceLocationArgument.id())
+                                        .then(Commands.argument("graph_id", StringArgumentType.greedyString())
                                                 .suggests(SUGGEST_GRAPHS)
                                                 .executes(context -> {
                                                     Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
-                                                    String graphId = ResourceLocationArgument.getId(context, "graph_id").toString();
+                                                    String graphId = StringArgumentType.getString(context, "graph_id");
                                                     for (Entity entity : targets) {
                                                         GraphEngine.unbindGraph(entity, graphId);
                                                     }
@@ -154,10 +162,10 @@ public class ServerGraphCommand {
                                     context.getSource().sendSuccess(() -> Component.literal("成功解绑全局服务器上的所有图。"), true);
                                     return 1;
                                 })
-                                .then(Commands.argument("graph_id", ResourceLocationArgument.id())
+                                .then(Commands.argument("graph_id", StringArgumentType.greedyString())
                                         .suggests(SUGGEST_GRAPHS)
                                         .executes(context -> {
-                                            String graphId = ResourceLocationArgument.getId(context, "graph_id").toString();
+                                            String graphId = StringArgumentType.getString(context, "graph_id");
                                             GraphEngine.unbindGlobalGraph(context.getSource().getLevel(), graphId);
                                             context.getSource().sendSuccess(() -> Component.literal("成功解绑全局服务器上的图: " + graphId), true);
                                             return 1;
@@ -166,38 +174,55 @@ public class ServerGraphCommand {
                         )
         );
 
+        // =====================================================================
+        // 指令: /list_graphs server (分类打印)
+        // =====================================================================
         dispatcher.register(
                 Commands.literal("list_graphs")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.literal("server")
                                 .executes(context -> {
-                                    java.util.Set<String> allGraphs = new java.util.HashSet<>();
-                                    allGraphs.addAll(GraphResourceManager.getInstance().getAllGraphIds());
-                                    allGraphs.addAll(DynamicGraphManager.getAllDynamicGraphIds());
+                                    Set<String> dynamicGraphs = DynamicGraphManager.getAllDynamicGraphIds();
+                                    Set<String> datapackGraphs = GraphResourceManager.getInstance().getAllGraphIds();
 
-                                    if (allGraphs.isEmpty()) {
-                                        context.getSource().sendSuccess(() -> Component.literal("§e[云端]§r 服务器上没有图纸。"), false);
+                                    CommandSourceStack source = context.getSource();
+
+                                    // 打印动态上传图纸
+                                    if (dynamicGraphs.isEmpty()) {
+                                        source.sendSuccess(() -> Component.literal("§e[云端图纸 - 动态上传]§r 无"), false);
                                     } else {
-                                        String list = String.join("\n- ", allGraphs);
-                                        context.getSource().sendSuccess(() -> Component.literal("§b[云端图纸列表]§r\n- " + list), false);
+                                        String list = String.join("\n- ", dynamicGraphs);
+                                        source.sendSuccess(() -> Component.literal("§a[云端图纸 - 动态上传]§r\n- " + list), false);
                                     }
-                                    return allGraphs.size();
+
+                                    // 打印数据包图纸
+                                    if (datapackGraphs.isEmpty()) {
+                                        source.sendSuccess(() -> Component.literal("§e[云端图纸 - 数据包内置]§r 无"), false);
+                                    } else {
+                                        String list = String.join("\n- ", datapackGraphs);
+                                        source.sendSuccess(() -> Component.literal("§b[云端图纸 - 数据包内置]§r\n- " + list), false);
+                                    }
+
+                                    return dynamicGraphs.size() + datapackGraphs.size();
                                 })
                         )
         );
 
+        // =====================================================================
+        // 指令: /download_graph (使用 GraphIdMapper 定位文件)
+        // =====================================================================
         dispatcher.register(
                 Commands.literal("download_graph")
                         .requires(source -> source.hasPermission(2))
-                        .then(Commands.argument("graph_id", ResourceLocationArgument.id())
+                        .then(Commands.argument("graph_id", StringArgumentType.greedyString())
                                 .suggests(SUGGEST_GRAPHS)
                                 .executes(context -> {
                                     net.minecraft.server.level.ServerPlayer player = context.getSource().getPlayerOrException();
-                                    String graphId = ResourceLocationArgument.getId(context, "graph_id").toString();
+                                    String graphId = StringArgumentType.getString(context, "graph_id");
 
                                     try {
-                                        java.io.File folder = player.getServer().getWorldPath(DynamicGraphManager.GRAPH_DIR).toFile();
-                                        java.io.File file = new java.io.File(folder, graphId + ".json");
+                                        java.nio.file.Path folder = player.getServer().getWorldPath(DynamicGraphManager.GRAPH_DIR);
+                                        java.io.File file = folder.resolve(GraphIdMapper.idToRelativePath(graphId)).toFile();
 
                                         if (file.exists()) {
                                             String json = java.nio.file.Files.readString(file.toPath());
@@ -205,7 +230,7 @@ public class ServerGraphCommand {
                                                     new com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload(graphId, json));
                                             context.getSource().sendSuccess(() -> Component.literal("§a正在下发图纸: " + graphId), false);
                                         } else {
-                                            context.getSource().sendFailure(Component.literal("找不到动态图纸文件，可能是内置数据包图纸。"));
+                                            context.getSource().sendFailure(Component.literal("找不到动态图纸文件，可能是内置数据包图纸，或路径错误。"));
                                         }
                                     } catch (Exception e) {
                                         context.getSource().sendFailure(Component.literal("服务器读取文件失败: " + e.getMessage()));

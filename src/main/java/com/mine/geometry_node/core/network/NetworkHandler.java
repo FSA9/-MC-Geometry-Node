@@ -2,12 +2,8 @@ package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
 import com.mine.geometry_node.core.network.packet.PacketSpawnVisual;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRequestDownload;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRequestFileList;
 import com.mine.geometry_node.core.network.packet.c2s.PacketSyncUpload;
-import com.mine.geometry_node.core.network.packet.s2c.PacketSendFileList;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncResponse;
 import dev.architectury.networking.NetworkManager;
@@ -22,7 +18,6 @@ import java.util.List;
 public class NetworkHandler {
 
     public static void init() {
-        // [现有的] 注册 S2C: 视觉效果包
         NetworkManager.registerReceiver(
                 NetworkManager.Side.S2C,
                 PacketSpawnVisual.TYPE,
