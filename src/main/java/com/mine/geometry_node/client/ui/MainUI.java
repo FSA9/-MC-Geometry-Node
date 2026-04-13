@@ -329,6 +329,8 @@ public class MainUI extends Fragment {
         System.setProperty("java.awt.headless", "true");
         Configurator.setRootLevel(Level.DEBUG);
 
+        com.mine.geometry_node.client.ui.persistence.ConfigManager.INSTANCE.initOrLoad();
+
         NodeRegistry.INSTANCE.init();
 
         try (ModernUI app = new ModernUI()) {

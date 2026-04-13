@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionManager;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.KeyManager;
+import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.core.node.NodeData;
 
@@ -314,7 +315,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     private void drawInfiniteGrid(Canvas canvas) {
-        float scaledGrid = UIConstants.GRID_SIZE * mCurrentScale;
+        float scaledGrid = ConfigManager.INSTANCE.getConfig().viewport.gridSize * mCurrentScale;
         if (scaledGrid < 5f) return;
 
         float w = getWidth();

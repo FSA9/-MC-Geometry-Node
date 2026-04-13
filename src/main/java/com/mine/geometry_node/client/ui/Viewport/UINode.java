@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.Viewport.UIHints.HintRendererFactory;
 import com.mine.geometry_node.client.ui.Viewport.UIHints.UIHintRenderer;
+import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -280,7 +281,7 @@ public class UINode extends FrameLayout {
         float h = getHeight() > 0 ? getHeight() : mTotalHeight;
 
         // 统一将 dp 尺寸乘以密度，转换为物理像素
-        float scaledRadius = UIConstants.Node.CORNER_RADIUS * d;
+        float scaledRadius = ConfigManager.INSTANCE.getConfig().node.cornerRadius * d;
         float scaledHeaderHeight = UIConstants.Node.HEADER_HEIGHT;
 
         // --- 1. 绘制节点主体背景 (四个角全部圆角) ---

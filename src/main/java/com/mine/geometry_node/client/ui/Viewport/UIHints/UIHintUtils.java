@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.Viewport.UIHints;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import icyllis.modernui.graphics.drawable.ColorDrawable;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.widget.EditText;
@@ -18,7 +19,7 @@ public class UIHintUtils {
 
         ShapeDrawable bgDrawable = new ShapeDrawable();
         bgDrawable.setColor(0xFF252525);
-        bgDrawable.setCornerRadius(UIConstants.Node.CORNER_RADIUS * UIConstants.mDensity);
+        bgDrawable.setCornerRadius(ConfigManager.INSTANCE.getConfig().node.cornerRadius * UIConstants.mDensity);
         bgDrawable.setStroke((int) (UIConstants.mDensity), 0xFF333333);
 
         et.setBackground(bgDrawable);

@@ -36,7 +36,7 @@ public class UIConstants {
     // ==========================================
     // 基础尺寸模数 (Base Module System)
     // ==========================================
-    public static final int GRID_SIZE = 15;                  // 基础网格模数大小 (px)
+    public static int GRID_SIZE = 15;                  // 基础网格模数大小 (px)
 
     // ==========================================
     // 模块特定配置 (Module Configurations)
@@ -76,7 +76,7 @@ public class UIConstants {
         public static final int ROW_HEIGHT = 2 * GRID_SIZE;                       // 节点单行高度
         public static final int HEADER_HEIGHT = 2 * GRID_SIZE;                    // 节点标题栏高度
 
-        public static final float CORNER_RADIUS = 1.5f;                           // 节点圆角半径
+        public static float CORNER_RADIUS = 1.5f;                           // 节点圆角半径
         public static final float STROKE_WIDTH_NORMAL = 1.5f;                     // 节点普通状态边框线宽
         public static final float STROKE_WIDTH_SELECTED = 2.5f;                   // 节点选中状态边框线宽
 

@@ -2,7 +2,9 @@ package com.mine.geometry_node.client.ui.AssetLibrary;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.Viewport.UINode;
+import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
+import com.mine.geometry_node.client.ui.persistence.PathUtils;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.core.node.NodeData;
@@ -11,11 +13,14 @@ import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 
 import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Canvas;
+import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
+import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
@@ -26,59 +31,101 @@ import icyllis.modernui.widget.TextView;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.List;
 
 public class AssetBrowserPanel extends LinearLayout {
 
-    private final LinearLayout mLeftSidebar;
-    private final LinearLayout mRightContent;
+    private final QuickAccessListLayout mLeftSidebar;
+    private final LinearLayout mRightContent; // 声明 final
     private final LinearLayout mFileListContainer;
     private final EditText mPathInput;
-
     private File mCurrentDirectory;
+    private final float mTouchSlop;
 
     public AssetBrowserPanel(Context context) {
         super(context);
         setOrientation(LinearLayout.HORIZONTAL);
         setBackground(createColorDrawable(UIConstants.MainUI.BG_TIMELINE));
+        mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
         // ==========================================
-        // 1. 左侧：快捷访问栏 (Drives & Shortcuts)
+        // 1. 优先实例化所有核心容器
         // ==========================================
-        mLeftSidebar = new LinearLayout(context);
+        mLeftSidebar = new QuickAccessListLayout(context);
         mLeftSidebar.setOrientation(LinearLayout.VERTICAL);
         mLeftSidebar.setBackground(createColorDrawable(0xFF1E1E1E));
 
-        LayoutParams leftParams = new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT);
-        leftParams.weight = 0.2f;
-        addView(mLeftSidebar, leftParams);
-
-        // ==========================================
-        // 2. 动态分割线 (复用 UIConstants 配置)
-        // ==========================================
-        addView(createDraggableSplitter(context));
-
-        // ==========================================
-        // 3. 右侧：文件浏览区
-        // ==========================================
         mRightContent = new LinearLayout(context);
         mRightContent.setOrientation(LinearLayout.VERTICAL);
 
-        LayoutParams rightParams = new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT);
-        rightParams.weight = 0.8f;
-        addView(mRightContent, rightParams);
+        // ==========================================
+        // 2. 按视觉从左到右的顺序 addView
+        // ==========================================
 
-        // 3.1 右侧顶部：路径导航栏
+        // A. 添加左侧
+        addView(mLeftSidebar, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.2f));
+
+        // B. 初始化并添加中间分割线
+        FrameLayout splitterContainer = new FrameLayout(context);
+        int hitboxSize = UIConstants.MainUI.SPLITTER_HITBOX_SIZE;
+        splitterContainer.setLayoutParams(new LayoutParams(hitboxSize, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        View visualLine = new View(context);
+        visualLine.setBackground(createColorDrawable(UIConstants.MainUI.BG_SPLITTER));
+        int visualSize = UIConstants.MainUI.SPLITTER_VISUAL_SIZE;
+        FrameLayout.LayoutParams lineParams = new FrameLayout.LayoutParams(visualSize, ViewGroup.LayoutParams.MATCH_PARENT);
+        lineParams.gravity = Gravity.CENTER;
+        splitterContainer.addView(visualLine, lineParams);
+
+        final float[] splitterLastX = {0};
+        splitterContainer.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    splitterLastX[0] = event.getRawX();
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    float dx = event.getRawX() - splitterLastX[0];
+                    // 此时 mRightContent 已经被实例化，可以安全调用
+                    float totalWidth = mLeftSidebar.getWidth() + mRightContent.getWidth();
+                    if (totalWidth > 0) {
+                        LayoutParams leftParams = (LayoutParams) mLeftSidebar.getLayoutParams();
+                        LayoutParams rightParams = (LayoutParams) mRightContent.getLayoutParams();
+                        float totalWeight = leftParams.weight + rightParams.weight;
+                        float dWeight = (dx / totalWidth) * totalWeight;
+
+                        leftParams.weight += dWeight;
+                        rightParams.weight -= dWeight;
+
+                        if (leftParams.weight < 0.05f) {
+                            rightParams.weight -= (0.05f - leftParams.weight);
+                            leftParams.weight = 0.05f;
+                        } else if (rightParams.weight < 0.05f) {
+                            leftParams.weight -= (0.05f - rightParams.weight);
+                            rightParams.weight = 0.05f;
+                        }
+                        mLeftSidebar.requestLayout();
+                        mRightContent.requestLayout();
+                    }
+                    splitterLastX[0] = event.getRawX();
+                    return true;
+            }
+            return false;
+        });
+        addView(splitterContainer);
+
+        // C. 添加右侧内容区
+        addView(mRightContent, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.8f));
+
+        // ==========================================
+        // 3. 构建右侧内部的 UI (导航栏 + 文件列表)
+        // ==========================================
         LinearLayout navBar = new LinearLayout(context);
         navBar.setOrientation(LinearLayout.HORIZONTAL);
+        navBar.setGravity(Gravity.CENTER_VERTICAL);
         navBar.setBackground(createColorDrawable(0xFF2A2A2A));
         mRightContent.addView(navBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 40));
 
-        TextView btnUp = new TextView(context);
-        btnUp.setText("⬆ 向上");
-        btnUp.setTextColor(0xFFDDDDDD);
-        btnUp.setBackground(createColorDrawable(0xFF444444));
-        btnUp.setPadding(16, 0, 16, 0);
-        btnUp.setGravity(Gravity.CENTER);
+        TextView btnUp = createNavButton(context, "⬆ 向上");
         btnUp.setOnClickListener(v -> navigateUp());
         navBar.addView(btnUp, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -89,125 +136,45 @@ public class AssetBrowserPanel extends LinearLayout {
         mPathInput.setGravity(Gravity.CENTER_VERTICAL);
         mPathInput.setBackground(null);
         mPathInput.setSingleLine(true);
-
         mPathInput.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
-                String inputPath = mPathInput.getText().toString().trim();
-                File targetDir = new File(inputPath);
-
-                if (targetDir.exists() && targetDir.isDirectory()) {
-                    navigateTo(targetDir);
-                    mPathInput.clearFocus();
-                } else {
-                    if (mCurrentDirectory != null) {
-                        mPathInput.setText(mCurrentDirectory.getAbsolutePath());
-                    }
+                File dir = new File(mPathInput.getText().toString().trim());
+                if (dir.exists() && dir.isDirectory()) {
+                    navigateTo(dir);
+                } else if (mCurrentDirectory != null) {
+                    mPathInput.setText(mCurrentDirectory.getAbsolutePath());
                 }
+                mPathInput.clearFocus();
                 return true;
             }
             return false;
         });
+        navBar.addView(mPathInput, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
-        navBar.addView(mPathInput, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        TextView btnAdd = createNavButton(context, "＋");
+        btnAdd.setTextSize(16);
+        btnAdd.setBackground(createColorDrawable(0xFF3A3A3A));
+        btnAdd.setOnClickListener(v -> {
+            String path = mPathInput.getText().toString().trim();
+            if (!path.isEmpty() && new File(path).isDirectory()) {
+                if (!ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.contains(path)) {
+                    ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.add(path);
+                    ConfigManager.INSTANCE.save();
+                    buildSidebar(context);
+                }
+            }
+        });
+        navBar.addView(btnAdd, new LayoutParams(40, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 3.2 右侧主体：可滚动的文件列表
         ScrollView scrollView = new ScrollView(context);
         mFileListContainer = new LinearLayout(context);
         mFileListContainer.setOrientation(LinearLayout.VERTICAL);
         scrollView.addView(mFileListContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         mRightContent.addView(scrollView, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // ==========================================
-        // 初始化加载
-        // ==========================================
+        // 触发初始化
         buildSidebar(context);
-
-        File defaultDir = getLocalDraftsFolder();
-        if (!defaultDir.exists()) defaultDir.mkdirs();
-        navigateTo(defaultDir);
-    }
-
-    // ==========================================
-    // 界面交互逻辑
-    // ==========================================
-
-    /**
-     * 创建基于常量的动态分割线
-     */
-    private View createDraggableSplitter(Context context) {
-        FrameLayout container = new FrameLayout(context);
-
-        int hitSize = UIConstants.MainUI.SPLITTER_HITBOX_SIZE;
-        container.setLayoutParams(new LinearLayout.LayoutParams(hitSize, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        View visualLine = new View(context);
-        visualLine.setBackground(createColorDrawable(UIConstants.MainUI.BG_SPLITTER));
-
-        int visualSize = UIConstants.MainUI.SPLITTER_VISUAL_SIZE;
-        FrameLayout.LayoutParams lineParams = new FrameLayout.LayoutParams(visualSize, ViewGroup.LayoutParams.MATCH_PARENT);
-        lineParams.gravity = Gravity.CENTER;
-
-        container.addView(visualLine, lineParams);
-
-        // 拖拽控制逻辑
-        final float[] lastX = {0};
-        final boolean[] isDragging = {false};
-
-        container.setOnTouchListener((v, event) -> {
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    isDragging[0] = true;
-                    lastX[0] = event.getRawX();
-                    return true;
-                case MotionEvent.ACTION_MOVE:
-                    if (!isDragging[0]) return false;
-                    float dx = event.getRawX() - lastX[0];
-                    performSplitterResize(dx);
-                    lastX[0] = event.getRawX();
-                    return true;
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    isDragging[0] = false;
-                    return true;
-            }
-            return false;
-        });
-
-        return container;
-    }
-
-    /**
-     * 处理左右侧 Weight 权重的动态调整
-     */
-    private void performSplitterResize(float dx) {
-        LinearLayout.LayoutParams leftParams = (LinearLayout.LayoutParams) mLeftSidebar.getLayoutParams();
-        LinearLayout.LayoutParams rightParams = (LinearLayout.LayoutParams) mRightContent.getLayoutParams();
-
-        if (leftParams.weight > 0 && rightParams.weight > 0) {
-            float totalWeight = leftParams.weight + rightParams.weight;
-            float totalWidth = mLeftSidebar.getWidth() + mRightContent.getWidth();
-
-            if (totalWidth <= 0) return;
-
-            // 根据物理偏移量计算出占比权重的变化量
-            float dWeight = (dx / totalWidth) * totalWeight;
-            leftParams.weight += dWeight;
-            rightParams.weight -= dWeight;
-
-            // 约束最小权重，防止面板被彻底拉没 (复用 MainUI 的最小比例配置)
-            float minW = UIConstants.MainUI.WEIGHT_MIN;
-            if (leftParams.weight < minW) {
-                rightParams.weight -= (minW - leftParams.weight);
-                leftParams.weight = minW;
-            }
-            if (rightParams.weight < minW) {
-                leftParams.weight -= (minW - rightParams.weight);
-                rightParams.weight = minW;
-            }
-
-            mLeftSidebar.requestLayout();
-            mRightContent.requestLayout();
-        }
+        navigateTo(PathUtils.getLocalDraftsDir());
     }
 
     private void buildSidebar(Context context) {
@@ -219,22 +186,136 @@ public class AssetBrowserPanel extends LinearLayout {
         title.setPadding(10, 10, 10, 10);
         mLeftSidebar.addView(title);
 
-        TextView btnDrafts = createButton(context, "📂 本地草稿箱 (Local Drafts)", 0xFF2A2A2A);
-        btnDrafts.setOnClickListener(v -> {
-            File drafts = getLocalDraftsFolder();
-            if (!drafts.exists()) drafts.mkdirs();
-            navigateTo(drafts);
-        });
-        mLeftSidebar.addView(btnDrafts);
-
-        File[] roots = File.listRoots();
-        if (roots != null) {
-            for (File root : roots) {
-                TextView btnRoot = createButton(context, "💽 " + root.getAbsolutePath(), 0xFF2A2A2A);
-                btnRoot.setOnClickListener(v -> navigateTo(root));
-                mLeftSidebar.addView(btnRoot);
-            }
+        for (String pathStr : ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths) {
+            mLeftSidebar.addView(createQuickAccessRow(context, pathStr));
         }
+    }
+
+    private LinearLayout createQuickAccessRow(Context context, String pathStr) {
+        File file = new File(pathStr);
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(createColorDrawable(0xFF2A2A2A));
+
+        LayoutParams rowParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 34);
+        rowParams.setMargins(0, 0, 0, 2);
+        row.setLayoutParams(rowParams);
+
+        TextView dragHandle = new TextView(context);
+        dragHandle.setText(" ⋮⋮ ");
+        dragHandle.setTextColor(0xFF666666);
+        dragHandle.setGravity(Gravity.CENTER);
+        dragHandle.setTextSize(12);
+        row.addView(dragHandle, new LayoutParams(24, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        final float[] startY = {0};
+        final boolean[] isDragging = {false};
+
+        dragHandle.setOnTouchListener((v, event) -> {
+            int action = event.getActionMasked();
+            switch (action) {
+                case MotionEvent.ACTION_DOWN:
+                    startY[0] = event.getRawY();
+                    isDragging[0] = false;
+                    return true;
+
+                case MotionEvent.ACTION_MOVE:
+                    float dy = event.getRawY() - startY[0];
+                    if (!isDragging[0] && Math.abs(dy) > mTouchSlop) {
+                        isDragging[0] = true;
+                        row.setAlpha(0.4f);
+                    }
+                    if (isDragging[0]) {
+                        int[] loc = new int[2];
+                        mLeftSidebar.getLocationOnScreen(loc);
+                        float dropY = event.getRawY() - loc[1];
+
+                        int indicatorY = mLeftSidebar.getHeight();
+                        if (mLeftSidebar.getChildCount() > 1) {
+                            View lastChild = mLeftSidebar.getChildAt(mLeftSidebar.getChildCount() - 1);
+                            indicatorY = lastChild.getBottom();
+                        }
+
+                        for (int i = 1; i < mLeftSidebar.getChildCount(); i++) {
+                            View child = mLeftSidebar.getChildAt(i);
+                            float centerY = child.getTop() + child.getHeight() / 2f;
+                            if (dropY < centerY) {
+                                indicatorY = child.getTop();
+                                break;
+                            }
+                        }
+                        mLeftSidebar.updateIndicator(indicatorY);
+                    }
+                    break;
+
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (isDragging[0]) {
+                        int[] loc = new int[2];
+                        mLeftSidebar.getLocationOnScreen(loc);
+                        float dropY = event.getRawY() - loc[1];
+
+                        int targetIdx = mLeftSidebar.getChildCount() - 1;
+                        for (int i = 1; i < mLeftSidebar.getChildCount(); i++) {
+                            View child = mLeftSidebar.getChildAt(i);
+                            if (dropY < child.getTop() + child.getHeight() / 2f) {
+                                targetIdx = i - 1;
+                                break;
+                            }
+                        }
+
+                        List<String> list = ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths;
+                        int currentIndex = list.indexOf(pathStr);
+
+                        if (targetIdx > currentIndex) {
+                            targetIdx--;
+                        }
+
+                        if (targetIdx != currentIndex && targetIdx >= 0) {
+                            String item = list.remove(currentIndex);
+                            list.add(targetIdx, item);
+                            ConfigManager.INSTANCE.save();
+                            row.post(() -> buildSidebar(context));
+                        }
+                    }
+                    row.setAlpha(1.0f);
+                    mLeftSidebar.hideIndicator();
+                    break;
+            }
+            return true;
+        });
+
+        String displayName = file.getName().isEmpty() ? file.getAbsolutePath() : file.getName();
+        TextView btnPath = new TextView(context);
+        btnPath.setText("📂 " + displayName);
+        btnPath.setPadding(6, 0, 15, 0);
+        btnPath.setGravity(Gravity.CENTER_VERTICAL);
+        btnPath.setTextColor(0xFFDDDDDD);
+        btnPath.setOnClickListener(v -> navigateTo(file));
+        row.addView(btnPath, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+
+        TextView btnDel = new TextView(context);
+        btnDel.setText("－");
+        btnDel.setTextSize(14);
+        btnDel.setTextColor(0xFFCC4444);
+        btnDel.setGravity(Gravity.CENTER);
+        btnDel.setBackground(createColorDrawable(0xFF3A3A3A));
+
+        btnDel.setOnHoverListener((v, event) -> {
+            btnDel.setBackground(createColorDrawable(event.getAction() == MotionEvent.ACTION_HOVER_ENTER ? 0xFF882222 : 0xFF3A3A3A));
+            return true;
+        });
+
+        btnDel.setOnClickListener(v -> {
+            ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.remove(pathStr);
+            ConfigManager.INSTANCE.save();
+            buildSidebar(context);
+        });
+
+        row.addView(btnDel, new LayoutParams(34, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        return row;
     }
 
     private void navigateUp() {
@@ -267,31 +348,22 @@ public class AssetBrowserPanel extends LinearLayout {
         for (File file : files) {
             if (!file.isDirectory() && !file.getName().toLowerCase().endsWith(".json")) continue;
 
-            String icon = file.isDirectory() ? "📁 " : "📄 ";
-            int color = file.isDirectory() ? 0xFFDDAA00 : 0xFF88CCFF;
-
             TextView item = new TextView(context);
-            item.setText(icon + file.getName());
-            item.setTextColor(color);
-            item.setPadding(10, 10, 10, 10);
-            item.setTextSize(16);
+            item.setText((file.isDirectory() ? "📁 " : "📄 ") + file.getName());
+            item.setTextColor(file.isDirectory() ? 0xFFDDAA00 : 0xFF88CCFF);
+            item.setPadding(12, 10, 12, 10);
+            item.setTextSize(15);
 
-            item.setBackground(createColorDrawable(0x00000000));
+            item.setBackground(createColorDrawable(0));
             item.setOnHoverListener((v, event) -> {
-                if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                    item.setBackground(createColorDrawable(0xFF333333));
-                } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                    item.setBackground(createColorDrawable(0x00000000));
-                }
+                item.setBackground(createColorDrawable(event.getAction() == MotionEvent.ACTION_HOVER_ENTER ? 0xFF333333 : 0));
                 return true;
             });
 
             final long[] lastClickTime = {0};
             item.setOnClickListener(v -> {
                 long now = System.currentTimeMillis();
-                if (now - lastClickTime[0] < 300) {
-                    handleDoubleClick(file);
-                }
+                if (now - lastClickTime[0] < 300) handleDoubleClick(file);
                 lastClickTime[0] = now;
             });
 
@@ -302,28 +374,19 @@ public class AssetBrowserPanel extends LinearLayout {
     private void handleDoubleClick(File file) {
         if (file.isDirectory()) {
             navigateTo(file);
-        } else {
-            String name = file.getName().toLowerCase();
-            if (name.endsWith(".json")) {
-                openGraphFile(file);
-            }
+        } else if (file.getName().toLowerCase().endsWith(".json")) {
+            openGraphFile(file);
         }
     }
 
     private void openGraphFile(File file) {
         try {
-            String jsonContent = Files.readString(file.toPath()).trim();
-            NodeGraph graph;
+            String content = Files.readString(file.toPath()).trim();
+            NodeGraph graph = (content.isEmpty() || content.equals("{}"))
+                    ? new NodeGraph(file.getName())
+                    : GraphJsonIO.fromJson(content);
 
-            if (jsonContent.isEmpty() || jsonContent.equals("{}")) {
-                graph = new NodeGraph(file.getName());
-            } else {
-                graph = GraphJsonIO.fromJson(jsonContent);
-            }
-
-            String tabName = file.getName();
-            GraphSession session = new GraphSession(getContext(), file.getAbsolutePath(), tabName, graph);
-
+            GraphSession session = new GraphSession(getContext(), file.getAbsolutePath(), file.getName(), graph);
             if (graph.nodes != null) {
                 for (NodeData data : graph.nodes.values()) {
                     NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(data);
@@ -331,31 +394,22 @@ public class AssetBrowserPanel extends LinearLayout {
                         UINode uiNode = new UINode(getContext(), data, def, session.editorContext);
                         uiNode.setTranslationX(data.getX());
                         uiNode.setTranslationY(data.getY());
-
                         session.nodeViews.put(data.id, uiNode);
                         session.nodeLayer.addView(uiNode);
                     }
                 }
             }
-
             DocumentManager.INSTANCE.openSession(session);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
-    private TextView createButton(Context context, String text, int bgColor) {
+    private TextView createNavButton(Context context, String text) {
         TextView btn = new TextView(context);
         btn.setText(text);
         btn.setTextColor(0xFFDDDDDD);
-        btn.setBackground(createColorDrawable(bgColor));
-        btn.setPadding(15, 10, 15, 10);
-        btn.setGravity(Gravity.CENTER_VERTICAL);
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, 0, 2);
-        btn.setLayoutParams(lp);
-
+        btn.setPadding(16, 0, 16, 0);
+        btn.setGravity(Gravity.CENTER);
+        btn.setBackground(createColorDrawable(0xFF444444));
         return btn;
     }
 
@@ -365,17 +419,38 @@ public class AssetBrowserPanel extends LinearLayout {
         return drawable;
     }
 
-    private File getLocalDraftsFolder() {
-        File baseDir;
-        try {
-            if (net.minecraft.client.Minecraft.getInstance() != null && net.minecraft.client.Minecraft.getInstance().gameDirectory != null) {
-                baseDir = net.minecraft.client.Minecraft.getInstance().gameDirectory;
-            } else {
-                baseDir = new File(System.getProperty("user.dir"));
-            }
-        } catch (Throwable t) {
-            baseDir = new File(System.getProperty("user.dir"));
+    private static class QuickAccessListLayout extends LinearLayout {
+        private int mIndicatorY = -1;
+        private final Paint mIndicatorPaint;
+
+        public QuickAccessListLayout(Context context) {
+            super(context);
+            setWillNotDraw(false);
+            mIndicatorPaint = new Paint();
+            mIndicatorPaint.setColor(0xFF00AAFF); // IDE 经典蓝
         }
-        return baseDir.toPath().resolve("geometry_nodes").resolve("local_drafts").toFile();
+
+        public void updateIndicator(int y) {
+            if (mIndicatorY != y) {
+                mIndicatorY = y;
+                invalidate();
+            }
+        }
+
+        public void hideIndicator() {
+            if (mIndicatorY != -1) {
+                mIndicatorY = -1;
+                invalidate();
+            }
+        }
+
+        @Override
+        protected void dispatchDraw(Canvas canvas) {
+            super.dispatchDraw(canvas);
+            if (mIndicatorY >= 0) {
+                int drawY = Math.max(2, Math.min(getHeight() - 2, mIndicatorY));
+                canvas.drawRect(0, drawY - 2, getWidth(), drawY + 2, mIndicatorPaint);
+            }
+        }
     }
 }
