@@ -13,7 +13,12 @@ import com.mine.geometry_node.core.node.nodes.NodeDef;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
+import icyllis.modernui.view.KeyEvent;
+import icyllis.modernui.view.MotionEvent;
+import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
+import icyllis.modernui.widget.EditText;
+import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
@@ -27,7 +32,7 @@ public class AssetBrowserPanel extends LinearLayout {
     private final LinearLayout mLeftSidebar;
     private final LinearLayout mRightContent;
     private final LinearLayout mFileListContainer;
-    private final TextView mPathText;
+    private final EditText mPathInput;
 
     private File mCurrentDirectory;
 
@@ -47,13 +52,13 @@ public class AssetBrowserPanel extends LinearLayout {
         leftParams.weight = 0.2f;
         addView(mLeftSidebar, leftParams);
 
-        // 分割线
-        icyllis.modernui.view.View splitter = new icyllis.modernui.view.View(context);
-        splitter.setBackground(createColorDrawable(0xFF111111));
-        addView(splitter, new LayoutParams(2, ViewGroup.LayoutParams.MATCH_PARENT));
+        // ==========================================
+        // 2. 动态分割线 (复用 UIConstants 配置)
+        // ==========================================
+        addView(createDraggableSplitter(context));
 
         // ==========================================
-        // 2. 右侧：文件浏览区
+        // 3. 右侧：文件浏览区
         // ==========================================
         mRightContent = new LinearLayout(context);
         mRightContent.setOrientation(LinearLayout.VERTICAL);
@@ -62,23 +67,50 @@ public class AssetBrowserPanel extends LinearLayout {
         rightParams.weight = 0.8f;
         addView(mRightContent, rightParams);
 
-        // 2.1 右侧顶部：路径导航栏
+        // 3.1 右侧顶部：路径导航栏
         LinearLayout navBar = new LinearLayout(context);
         navBar.setOrientation(LinearLayout.HORIZONTAL);
         navBar.setBackground(createColorDrawable(0xFF2A2A2A));
-        mRightContent.addView(navBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 30));
+        mRightContent.addView(navBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 40));
 
-        TextView btnUp = createButton(context, "[向上 返回]", 0xFF444444);
+        TextView btnUp = new TextView(context);
+        btnUp.setText("⬆ 向上");
+        btnUp.setTextColor(0xFFDDDDDD);
+        btnUp.setBackground(createColorDrawable(0xFF444444));
+        btnUp.setPadding(16, 0, 16, 0);
+        btnUp.setGravity(Gravity.CENTER);
         btnUp.setOnClickListener(v -> navigateUp());
         navBar.addView(btnUp, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        mPathText = new TextView(context);
-        mPathText.setTextColor(0xFFAAAAAA);
-        mPathText.setGravity(Gravity.CENTER_VERTICAL);
-        mPathText.setPadding(10, 0, 0, 0);
-        navBar.addView(mPathText, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mPathInput = new EditText(context);
+        mPathInput.setTextColor(0xFFCCCCCC);
+        mPathInput.setTextSize(14);
+        mPathInput.setPadding(12, 0, 12, 0);
+        mPathInput.setGravity(Gravity.CENTER_VERTICAL);
+        mPathInput.setBackground(null);
+        mPathInput.setSingleLine(true);
 
-        // 2.2 右侧主体：可滚动的文件列表
+        mPathInput.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
+                String inputPath = mPathInput.getText().toString().trim();
+                File targetDir = new File(inputPath);
+
+                if (targetDir.exists() && targetDir.isDirectory()) {
+                    navigateTo(targetDir);
+                    mPathInput.clearFocus();
+                } else {
+                    if (mCurrentDirectory != null) {
+                        mPathInput.setText(mCurrentDirectory.getAbsolutePath());
+                    }
+                }
+                return true;
+            }
+            return false;
+        });
+
+        navBar.addView(mPathInput, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // 3.2 右侧主体：可滚动的文件列表
         ScrollView scrollView = new ScrollView(context);
         mFileListContainer = new LinearLayout(context);
         mFileListContainer.setOrientation(LinearLayout.VERTICAL);
@@ -86,31 +118,107 @@ public class AssetBrowserPanel extends LinearLayout {
         mRightContent.addView(scrollView, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         // ==========================================
-        // 3. 初始化加载
+        // 初始化加载
         // ==========================================
         buildSidebar(context);
 
-        // 默认跳转到 local_drafts 目录
         File defaultDir = getLocalDraftsFolder();
         if (!defaultDir.exists()) defaultDir.mkdirs();
         navigateTo(defaultDir);
     }
 
     // ==========================================
-    // 逻辑方法
+    // 界面交互逻辑
     // ==========================================
+
+    /**
+     * 创建基于常量的动态分割线
+     */
+    private View createDraggableSplitter(Context context) {
+        FrameLayout container = new FrameLayout(context);
+
+        int hitSize = UIConstants.MainUI.SPLITTER_HITBOX_SIZE;
+        container.setLayoutParams(new LinearLayout.LayoutParams(hitSize, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        View visualLine = new View(context);
+        visualLine.setBackground(createColorDrawable(UIConstants.MainUI.BG_SPLITTER));
+
+        int visualSize = UIConstants.MainUI.SPLITTER_VISUAL_SIZE;
+        FrameLayout.LayoutParams lineParams = new FrameLayout.LayoutParams(visualSize, ViewGroup.LayoutParams.MATCH_PARENT);
+        lineParams.gravity = Gravity.CENTER;
+
+        container.addView(visualLine, lineParams);
+
+        // 拖拽控制逻辑
+        final float[] lastX = {0};
+        final boolean[] isDragging = {false};
+
+        container.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    isDragging[0] = true;
+                    lastX[0] = event.getRawX();
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (!isDragging[0]) return false;
+                    float dx = event.getRawX() - lastX[0];
+                    performSplitterResize(dx);
+                    lastX[0] = event.getRawX();
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    isDragging[0] = false;
+                    return true;
+            }
+            return false;
+        });
+
+        return container;
+    }
+
+    /**
+     * 处理左右侧 Weight 权重的动态调整
+     */
+    private void performSplitterResize(float dx) {
+        LinearLayout.LayoutParams leftParams = (LinearLayout.LayoutParams) mLeftSidebar.getLayoutParams();
+        LinearLayout.LayoutParams rightParams = (LinearLayout.LayoutParams) mRightContent.getLayoutParams();
+
+        if (leftParams.weight > 0 && rightParams.weight > 0) {
+            float totalWeight = leftParams.weight + rightParams.weight;
+            float totalWidth = mLeftSidebar.getWidth() + mRightContent.getWidth();
+
+            if (totalWidth <= 0) return;
+
+            // 根据物理偏移量计算出占比权重的变化量
+            float dWeight = (dx / totalWidth) * totalWeight;
+            leftParams.weight += dWeight;
+            rightParams.weight -= dWeight;
+
+            // 约束最小权重，防止面板被彻底拉没 (复用 MainUI 的最小比例配置)
+            float minW = UIConstants.MainUI.WEIGHT_MIN;
+            if (leftParams.weight < minW) {
+                rightParams.weight -= (minW - leftParams.weight);
+                leftParams.weight = minW;
+            }
+            if (rightParams.weight < minW) {
+                leftParams.weight -= (minW - rightParams.weight);
+                rightParams.weight = minW;
+            }
+
+            mLeftSidebar.requestLayout();
+            mRightContent.requestLayout();
+        }
+    }
 
     private void buildSidebar(Context context) {
         mLeftSidebar.removeAllViews();
 
-        // 标题
         TextView title = new TextView(context);
         title.setText("快速访问");
         title.setTextColor(0xFF888888);
         title.setPadding(10, 10, 10, 10);
         mLeftSidebar.addView(title);
 
-        // 默认草稿目录按钮
         TextView btnDrafts = createButton(context, "📂 本地草稿箱 (Local Drafts)", 0xFF2A2A2A);
         btnDrafts.setOnClickListener(v -> {
             File drafts = getLocalDraftsFolder();
@@ -119,7 +227,6 @@ public class AssetBrowserPanel extends LinearLayout {
         });
         mLeftSidebar.addView(btnDrafts);
 
-        // 系统磁盘根目录 (C:, D: 等)
         File[] roots = File.listRoots();
         if (roots != null) {
             for (File root : roots) {
@@ -139,7 +246,7 @@ public class AssetBrowserPanel extends LinearLayout {
     private void navigateTo(File directory) {
         if (directory == null || !directory.exists() || !directory.isDirectory()) return;
         mCurrentDirectory = directory;
-        mPathText.setText(directory.getAbsolutePath());
+        mPathInput.setText(directory.getAbsolutePath());
         refreshFileList();
     }
 
@@ -150,7 +257,6 @@ public class AssetBrowserPanel extends LinearLayout {
         File[] files = mCurrentDirectory.listFiles();
         if (files == null) return;
 
-        // 排序：文件夹在前，文件在后；然后按字母排序
         Arrays.sort(files, (f1, f2) -> {
             if (f1.isDirectory() && !f2.isDirectory()) return -1;
             if (!f1.isDirectory() && f2.isDirectory()) return 1;
@@ -159,11 +265,10 @@ public class AssetBrowserPanel extends LinearLayout {
 
         Context context = getContext();
         for (File file : files) {
-            // 我们只显示文件夹和 .json 文件
             if (!file.isDirectory() && !file.getName().toLowerCase().endsWith(".json")) continue;
 
             String icon = file.isDirectory() ? "📁 " : "📄 ";
-            int color = file.isDirectory() ? 0xFFDDAA00 : 0xFF88CCFF; // 文件夹黄色，JSON 蓝色
+            int color = file.isDirectory() ? 0xFFDDAA00 : 0xFF88CCFF;
 
             TextView item = new TextView(context);
             item.setText(icon + file.getName());
@@ -171,22 +276,20 @@ public class AssetBrowserPanel extends LinearLayout {
             item.setPadding(10, 10, 10, 10);
             item.setTextSize(16);
 
-            // 鼠标悬停变色 (简易实现)
             item.setBackground(createColorDrawable(0x00000000));
             item.setOnHoverListener((v, event) -> {
-                if (event.getAction() == icyllis.modernui.view.MotionEvent.ACTION_HOVER_ENTER) {
+                if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
                     item.setBackground(createColorDrawable(0xFF333333));
-                } else if (event.getAction() == icyllis.modernui.view.MotionEvent.ACTION_HOVER_EXIT) {
+                } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
                     item.setBackground(createColorDrawable(0x00000000));
                 }
                 return true;
             });
 
-            // 监听双击事件
             final long[] lastClickTime = {0};
             item.setOnClickListener(v -> {
                 long now = System.currentTimeMillis();
-                if (now - lastClickTime[0] < 300) { // 300ms 内连点视为双击
+                if (now - lastClickTime[0] < 300) {
                     handleDoubleClick(file);
                 }
                 lastClickTime[0] = now;
@@ -197,77 +300,50 @@ public class AssetBrowserPanel extends LinearLayout {
     }
 
     private void handleDoubleClick(File file) {
-        System.out.println("[AssetBrowser] 双击检测: " + file.getName() + " (文件夹: " + file.isDirectory() + ")");
-
         if (file.isDirectory()) {
             navigateTo(file);
         } else {
-            // 修复：使用 toLowerCase() 处理后缀，防止 .JSON (大写) 无法匹配
             String name = file.getName().toLowerCase();
             if (name.endsWith(".json")) {
-                System.out.println("[AssetBrowser] 识别为图纸文件，开始执行加载流程...");
                 openGraphFile(file);
-            } else {
-                System.out.println("[AssetBrowser] 识别为普通文件，忽略操作。");
             }
         }
     }
 
-    // ==========================================
-    // 核心：读取 JSON 并载入编辑器
-    // ==========================================
     private void openGraphFile(File file) {
         try {
-            // 1. 读取文本并去除首尾空白
             String jsonContent = Files.readString(file.toPath()).trim();
             NodeGraph graph;
 
-            // 2. 智能反序列化：如果是空文件或空对象，直接初始化一张白纸
             if (jsonContent.isEmpty() || jsonContent.equals("{}")) {
-                System.out.println("[AssetBrowser] 检测到空文件: " + file.getName() + "，已自动初始化为空白图纸。");
                 graph = new NodeGraph(file.getName());
             } else {
                 graph = GraphJsonIO.fromJson(jsonContent);
-                System.out.println("[AssetBrowser] 成功解析图纸: " + graph.graphName + "，包含节点数: " + graph.nodes.size());
             }
 
-            // 3. 创建全新的 Session
             String tabName = file.getName();
             GraphSession session = new GraphSession(getContext(), file.getAbsolutePath(), tabName, graph);
 
-            // 4. 重建 UI 节点 (如果是空图纸，这里的循环会自动跳过，安全无痛)
             if (graph.nodes != null) {
                 for (NodeData data : graph.nodes.values()) {
                     NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(data);
                     if (def != null) {
-                        // 创建 UINode
                         UINode uiNode = new UINode(getContext(), data, def, session.editorContext);
-                        // 恢复位置
                         uiNode.setTranslationX(data.getX());
                         uiNode.setTranslationY(data.getY());
 
-                        // 存入 Session 的专属画布
                         session.nodeViews.put(data.id, uiNode);
                         session.nodeLayer.addView(uiNode);
-                    } else {
-                        System.err.println("[AssetBrowser] 警告：找不到节点定义: " + data.type);
                     }
                 }
             }
 
-            // 5. 提交给 DocumentManager，系统会自动渲染并画出所有连线！
             DocumentManager.INSTANCE.openSession(session);
-            System.out.println("[AssetBrowser] 图纸已提交至 DocumentManager 并激活。");
-
         } catch (Exception e) {
-            System.err.println("[AssetBrowser] 无法打开文件 " + file.getName() + ": " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    // ==========================================
-    // 辅助 UI 工具
-    // ==========================================
     private TextView createButton(Context context, String text, int bgColor) {
         TextView btn = new TextView(context);
         btn.setText(text);
@@ -276,7 +352,6 @@ public class AssetBrowserPanel extends LinearLayout {
         btn.setPadding(15, 10, 15, 10);
         btn.setGravity(Gravity.CENTER_VERTICAL);
 
-        // 增加一点边距
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.setMargins(0, 0, 0, 2);
         btn.setLayoutParams(lp);
@@ -290,9 +365,6 @@ public class AssetBrowserPanel extends LinearLayout {
         return drawable;
     }
 
-    /**
-     * 安全地获取本地草稿箱目录 (兼容游戏内环境与独立 UI 测试环境)
-     */
     private File getLocalDraftsFolder() {
         File baseDir;
         try {
@@ -303,7 +375,6 @@ public class AssetBrowserPanel extends LinearLayout {
             }
         } catch (Throwable t) {
             baseDir = new File(System.getProperty("user.dir"));
-            System.err.println("[AssetBrowserPanel::getLocalDraftsFolder]Error: Failed to get folder!");
         }
         return baseDir.toPath().resolve("geometry_nodes").resolve("local_drafts").toFile();
     }
