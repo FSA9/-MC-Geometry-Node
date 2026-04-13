@@ -84,26 +84,22 @@ public class SelectHintRenderer implements UIHintRenderer {
             }
 
             if (parent instanceof Viewport viewport) {
-                // 1. 获取按钮在屏幕上的绝对物理像素坐标
                 int[] btnLoc = new int[2];
                 v.getLocationOnScreen(btnLoc);
-
-                // 2. 获取 Viewport 在屏幕上的绝对物理像素坐标
                 int[] vpLoc = new int[2];
                 viewport.getLocationOnScreen(vpLoc);
 
-                // 3. 计算按钮左上角相对于 Viewport 的物理像素坐标
                 float relX = btnLoc[0] - vpLoc[0];
                 float relY = btnLoc[1] - vpLoc[1];
 
-                // 4. 获取当前画布的缩放比例 (极其关键)
+                // 核心获取缩放比例
                 float currentScale = viewport.getCurrentScale();
 
-                // 实例化内部类菜单
-                DropdownSearchMenu menu = new DropdownSearchMenu(context, resolvedOptions, selectedVal -> {
-                    dropdownBtn.setText(selectedVal + " ▼"); // 更新UI
+                // 【修改点】：计算按钮在当前缩放下的实际物理宽度
+                float scaledTargetWidth = v.getWidth() * currentScale;
 
-                    // 执行数据变更命令
+                DropdownSearchMenu menu = new DropdownSearchMenu(context, resolvedOptions, selectedVal -> {
+                    dropdownBtn.setText(selectedVal + " ▼");
                     if (editorContext != null) {
                         if (propKey != null) {
                             Object oldVal = nodeData.properties.get(propKey);
@@ -125,9 +121,7 @@ public class SelectHintRenderer implements UIHintRenderer {
                     }
                 });
 
-                // 5. 弹窗在按钮正下方显示
-                // 注意：由于整个节点图层被缩放，按钮实际渲染在屏幕上的高度是 原始高度 * 缩放比例
-                menu.showAt(relX, relY + (v.getHeight() * currentScale), viewport);
+                menu.showAt(relX, relY + (v.getHeight() * currentScale), viewport, scaledTargetWidth, currentScale);
             }
         });
 
@@ -167,6 +161,9 @@ public class SelectHintRenderer implements UIHintRenderer {
         private final List<String> mOptions;
         private final Consumer<String> mOnSelect;
 
+        // 【新增】：用于保存当前的缩放比例，默认 1.0
+        private float mCurrentScale = 1.0f;
+
         public DropdownSearchMenu(Context context, List<String> options, Consumer<String> onSelect) {
             super(context);
             this.mOptions = options;
@@ -187,17 +184,17 @@ public class SelectHintRenderer implements UIHintRenderer {
             mContentLayout.setPadding(4, 4, 4, 4);
             mContentLayout.setOnClickListener(v -> {}); // 拦截点击
 
+            // 初始宽度随便给一个，showAt 时会动态修正
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(220, LayoutParams.WRAP_CONTENT);
             mContentLayout.setLayoutParams(lp);
 
             // 搜索框
             mSearchBox = new EditText(context);
             mSearchBox.setHint("Search...");
-            float searchFontSize = UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * (float)UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
-            mSearchBox.setTextSize(0, searchFontSize);
             mSearchBox.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
             mSearchBox.setHintTextColor(0xFF666666);
             mSearchBox.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.SEARCH_BG_COLOR, 4));
+            // 内边距稍作调整，这里不严格缩放问题也不大
             mSearchBox.setPadding(10, 0, 10, 0);
 
             mSearchBox.addTextChangedListener(new TextWatcher() {
@@ -222,15 +219,19 @@ public class SelectHintRenderer implements UIHintRenderer {
             addView(mContentLayout);
         }
 
+        // 【核心修改】：renderList 现在会读取 mCurrentScale 来决定字体和高度
         private void renderList(List<String> items) {
             mListContainer.removeAllViews();
             for (String item : items) {
                 TextView tv = new TextView(getContext());
                 tv.setText(item);
-                float fontSize = UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * (float)UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
+
+                // 字体大小乘以缩放系数
+                float fontSize = UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * (float)UIConstants.ViewPort.NodeMenu.TEXT_SIZE * mCurrentScale;
                 tv.setTextSize(0, fontSize);
                 tv.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR);
-                tv.setPadding(12, 0, 12, 0);
+                // 左右 padding 也可以根据需要乘以 mCurrentScale，这里简单处理
+                tv.setPadding((int)(12 * mCurrentScale), 0, (int)(12 * mCurrentScale), 0);
                 tv.setGravity(Gravity.CENTER_VERTICAL);
 
                 tv.setOnClickListener(v -> {
@@ -249,8 +250,10 @@ public class SelectHintRenderer implements UIHintRenderer {
                     return false;
                 });
 
+                // Item 的高度乘以缩放系数
+                int itemHeight = (int)(UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * mCurrentScale);
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT);
+                        ViewGroup.LayoutParams.MATCH_PARENT, itemHeight);
                 lp.setMargins(2, 1, 2, 1);
                 mListContainer.addView(tv, lp);
             }
@@ -269,17 +272,34 @@ public class SelectHintRenderer implements UIHintRenderer {
             renderList(filtered);
         }
 
-        public void showAt(float x, float y, ViewGroup parent) {
+        // 【核心修改】：showAt 接收目标宽度和缩放系数，并更新 UI
+        public void showAt(float x, float y, ViewGroup parent, float targetWidth, float scale) {
+            // 1. 记录当前缩放比例
+            this.mCurrentScale = scale;
+
+            // 2. 更新容器位置与宽度
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
             lp.leftMargin = (int) x;
             lp.topMargin = (int) y;
+            lp.width = (int) Math.max(targetWidth, 150 * scale); // 宽度严格对齐，保底 150*scale 防止太窄
 
             if (parent != null) {
-                if (x + 220 > parent.getWidth()) lp.leftMargin = (int) (parent.getWidth() - 220);
-                if (y + 300 > parent.getHeight()) lp.topMargin = (int) (parent.getHeight() - 300);
+                if (x + lp.width > parent.getWidth()) lp.leftMargin = (int) (parent.getWidth() - lp.width);
+                if (y + (300 * scale) > parent.getHeight()) lp.topMargin = (int) (parent.getHeight() - (300 * scale));
             }
             mContentLayout.setLayoutParams(lp);
 
+            // 3. 更新搜索框高度和字体大小
+            float scaledSearchFontSize = UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * (float)UIConstants.ViewPort.NodeMenu.TEXT_SIZE * scale;
+            mSearchBox.setTextSize(0, scaledSearchFontSize);
+            LinearLayout.LayoutParams searchLp = (LinearLayout.LayoutParams) mSearchBox.getLayoutParams();
+            searchLp.height = (int) (UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * scale);
+            mSearchBox.setLayoutParams(searchLp);
+
+            // 4. 重绘一次列表以应用新的缩放比例
+            renderList(mOptions);
+
+            // 5. 显示到父容器
             if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
             parent.addView(this);
 

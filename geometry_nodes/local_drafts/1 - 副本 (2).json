@@ -1,0 +1,18 @@
+{
+  "graph_name": "1 - 副本 (2).json",
+  "version": "1.0",
+  "nodes": {
+    "85fcd3ac-d458-4504-bdfc-4468b1845ff7": {
+      "node_type": "math_operation",
+      "UI_pos": [
+        168.5,
+        189.0
+      ],
+      "properties": {},
+      "inputs": {},
+      "execution": {},
+      "outputs": {},
+      "id": "85fcd3ac-d458-4504-bdfc-4468b1845ff7"
+    }
+  }
+}
