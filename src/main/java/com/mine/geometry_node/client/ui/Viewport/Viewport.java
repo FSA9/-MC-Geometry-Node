@@ -59,8 +59,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
     // ==========================================
     // 3. 视图映射缓存
     // ==========================================
-    private List<UINode> mSelectedNodes = new ArrayList<>();
-    private Map<String, UINode> mNodeViews = new HashMap<>();
+    private final List<UINode> mSelectedNodes = new ArrayList<>();
+    private final Map<String, UINode> mNodeViews = new HashMap<>();
 
     // ==========================================
     // 4. 事件缓存
@@ -123,43 +123,77 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     public void bindSession(GraphSession session) {
-        if (this.mCurrentSession != null) {
-            this.mCurrentSession.viewportX = mViewportX;
-            this.mCurrentSession.viewportY = mViewportY;
-            this.mCurrentSession.currentScale = mCurrentScale;
-            removeView(this.mCurrentSession.nodeLayer);
+        // 1. 切换前，先把当前正在看的状态存回旧的 Session
+        saveCurrentSessionState();
+
+        if (mNodeLayer != null) {
+            removeView(mNodeLayer);
         }
+        mNodeViews.clear();
+        mSelectedNodes.clear();
 
         this.mCurrentSession = session;
 
         if (session != null) {
             mEmptyHint.setVisibility(View.GONE);
 
+            // 2. 恢复相机状态
             mViewportX = session.viewportX;
             mViewportY = session.viewportY;
             mCurrentScale = session.currentScale;
 
-            mNodeLayer = session.nodeLayer;
-            mNodeViews = session.nodeViews;
-            mSelectedNodes = session.selectedNodes;
-
-            // 核心修改：确保 LayoutParams 正确，并强行请求布局
+            // 3. 创建渲染层
+            mNodeLayer = new FrameLayout(getContext());
+            mNodeLayer.setClipChildren(false);
+            mNodeLayer.setPivotX(0);
+            mNodeLayer.setPivotY(0);
             addView(mNodeLayer, 0, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
             mController.setEditorContext(session.editorContext);
 
-            // 强行刷新：由于是动态切换 Layer，必须请求重新测量和绘图
-            requestLayout();
+            // 4. 重建 UINode
+            rebuildNodesFromData(session);
+
+            updateTransform();
         } else {
             mEmptyHint.setVisibility(View.VISIBLE);
-            mNodeLayer = null;
-            mNodeViews = new HashMap<>();
-            mSelectedNodes = new ArrayList<>();
             mController.setEditorContext(null);
         }
+        requestLayout();
+        invalidate();
+    }
 
-        updateTransform();
-        invalidate(); // 确保重绘网格和连线
+    private void rebuildNodesFromData(GraphSession session) {
+        com.mine.geometry_node.core.node.NodeGraph graph = session.editorContext.getGraph();
+        if (graph == null || graph.nodes == null) return;
+
+        // 调用 Controller 循环创建所有节点 UI
+        for (NodeData data : graph.nodes.values()) {
+            mController.onNodeAdded(data);
+        }
+
+        // 根据记录的 ID 恢复选中状态
+        updateSelectionState(session.selectedNodeIds);
+    }
+
+    private void saveCurrentSessionState() {
+        if (mCurrentSession != null) {
+            mCurrentSession.viewportX = mViewportX;
+            mCurrentSession.viewportY = mViewportY;
+            mCurrentSession.currentScale = mCurrentScale;
+
+            // 记录当前选中的节点 ID
+            mCurrentSession.selectedNodeIds.clear();
+            for (UINode node : mSelectedNodes) {
+                mCurrentSession.selectedNodeIds.add(node.getNodeData().id);
+            }
+        }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        saveCurrentSessionState();
+        super.onDetachedFromWindow();
     }
 
     // ==========================================

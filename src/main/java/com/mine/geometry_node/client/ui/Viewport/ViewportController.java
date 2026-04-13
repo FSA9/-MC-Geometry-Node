@@ -54,6 +54,7 @@ public class ViewportController implements EditorContext.EditorListener {
         UINode uiNode = new UINode(mViewport.getContext(), nodeData, def, mEditorContext);
         uiNode.setTranslationX(nodeData.getX());
         uiNode.setTranslationY(nodeData.getY());
+
         mViewport.addNodeView(nodeData.id, uiNode);
     }
 

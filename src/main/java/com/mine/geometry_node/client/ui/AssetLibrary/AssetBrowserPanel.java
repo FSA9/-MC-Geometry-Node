@@ -386,19 +386,10 @@ public class AssetBrowserPanel extends LinearLayout {
                     ? new NodeGraph(file.getName())
                     : GraphJsonIO.fromJson(content);
 
-            GraphSession session = new GraphSession(getContext(), file.getAbsolutePath(), file.getName(), graph);
-            if (graph.nodes != null) {
-                for (NodeData data : graph.nodes.values()) {
-                    NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(data);
-                    if (def != null) {
-                        UINode uiNode = new UINode(getContext(), data, def, session.editorContext);
-                        uiNode.setTranslationX(data.getX());
-                        uiNode.setTranslationY(data.getY());
-                        session.nodeViews.put(data.id, uiNode);
-                        session.nodeLayer.addView(uiNode);
-                    }
-                }
-            }
+            // 现在是 3 个参数了，非常干净
+            GraphSession session = new GraphSession(file.getAbsolutePath(), file.getName(), graph);
+
+            // 剩下的事情全交给 DocumentManager 和 Viewport 处理
             DocumentManager.INSTANCE.openSession(session);
         } catch (Exception e) { e.printStackTrace(); }
     }
