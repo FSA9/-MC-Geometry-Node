@@ -35,6 +35,12 @@ public class MainUI extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container, DataSet savedInstanceState) {
         Context context = getContext();
 
+        if ("true".equals(System.getProperty("gn.standalone"))) {
+            UIConstants.mDensity = 2.0f;
+        } else {
+            UIConstants.mDensity = context.getResources().getDisplayMetrics().density;
+        }
+
         // 1. 创建根布局 (垂直排列)
         LinearLayout rootLayout = createRootLayout(context);
 
@@ -327,6 +333,7 @@ public class MainUI extends Fragment {
      */
     public static void main(String[] args) {
         System.setProperty("java.awt.headless", "true");
+        System.setProperty("gn.standalone", "true");
         Configurator.setRootLevel(Level.DEBUG);
 
         com.mine.geometry_node.client.ui.persistence.ConfigManager.INSTANCE.initOrLoad();

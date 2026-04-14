@@ -31,7 +31,7 @@ public class UIConstants {
     public static final int CLR_HOVER_WHITE = 0x40FFFFFF;    // 悬停覆盖色 (半透白)
 
     // --- 屏幕显示 ---
-    public static final float mDensity = 2.0f;               // 屏幕像素密度
+    public static float mDensity = 2.0f;               // 屏幕像素密度
 
     // ==========================================
     // 基础尺寸模数 (Base Module System)
