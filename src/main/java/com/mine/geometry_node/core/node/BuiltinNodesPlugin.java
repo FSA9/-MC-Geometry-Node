@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.api.GeometryNodePlugin;
-import com.mine.geometry_node.core.node.nodes.actions.*;
 import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
 import com.mine.geometry_node.core.node.nodes.actions.player.*;
@@ -9,7 +8,6 @@ import com.mine.geometry_node.core.node.nodes.actions.visual.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.attribution.*;
-import com.mine.geometry_node.core.node.nodes.data.type.*;
 import com.mine.geometry_node.core.node.nodes.events.block.*;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
@@ -28,7 +26,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         System.out.println("[GeometryNode] 正在注册全量内置节点...");
 
         // --- ACTIONS ---
-        registry.register("actions", new BoxOverlapWithRotation());
 //        registry.register("actions", new CreateForceField());
 //        registry.register("actions", new ExecuteCommand());
 //        registry.register("actions", new LaunchProjectile());
@@ -130,6 +127,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // Data/Entity
         registry.register("data/entity", new GetEntitiesByAABB());
         registry.register("data/entity", new GetEntitiesByRadius());
+        registry.register("data/entity", new GetEntitiesbyRotationBox());
 
         // Data/Entity/Attribution
         registry.register("data/entity/attribution", new GetEntityDimension());

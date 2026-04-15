@@ -38,7 +38,6 @@ public class TeleportEntityToPos extends BaseNode {
             }
         }
 
-        // 继续传递执行流
         return next(StandardPorts.FLOW_OUT.getId());
     }
 }

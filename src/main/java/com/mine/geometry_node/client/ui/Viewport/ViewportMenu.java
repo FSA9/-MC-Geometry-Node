@@ -111,7 +111,7 @@ public class ViewportMenu extends FrameLayout {
             if (x + 200 > parent.getWidth()) {
                 lp.leftMargin = (int) (parent.getWidth() - 220);
             }
-            if (y + 350 > parent.getHeight()) { // 假设菜单最大高度约 350
+            if (y + 350 > parent.getHeight()) {
                 lp.topMargin = (int) (parent.getHeight() - 360);
             }
         }
@@ -168,7 +168,7 @@ public class ViewportMenu extends FrameLayout {
 
         // 根目录渲染特有功能 (如保存)
         if (mCurrentFolder == NodeRegistry.INSTANCE.ROOT) {
-            addClickItem("💾 保存项目 (Save JSON)", 0xFF44AAFF, v -> {
+            addClickItem("💾 Save", 0xFF44AAFF, v -> {
                 saveGraphAction();
                 // 延迟移除 View，避免在事件分发循环内发生视图层级改变导致死锁/定格
                 post(this::dismiss);

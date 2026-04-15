@@ -97,7 +97,7 @@
   "geometry_node.port.rotation": "旋转",
   "geometry_node.port.size_3": "三维尺寸",
 
-  "geometry_node.port.any_value": "任意值",
+  "geometry_node.port.any_value": "任意",
 
 
 
@@ -122,7 +122,6 @@
   "geometry_node.node.create_force_field": "创建力场",
   "geometry_node.node.execute_command": "执行指令",
   "geometry_node.node.launch_projectile": "发射投射物",
-  "geometry_node.node.raycast": "射线检测",
   "geometry_node.node.spawn_hitbox": "生成碰撞箱",
 
   "--- ACTIONS/AI ---": "--- AI 动作 ---",
@@ -163,7 +162,7 @@
   "geometry_node.node.set_invulnerable": "设置无敌状态",
   "geometry_node.node.set_invulnerable_ticks": "设置无敌时间",
   "geometry_node.node.spawn_entity": "生成实体",
-  "geometry_node.node.teleport_entity": "传送实体",
+  "geometry_node.node.teleport_entity_to_pos": "传送实体至坐标",
   "geometry_node.node.unleash_entity": "解开拴绳",
   "geometry_node.node.use_item": "使用物品",
 
@@ -193,12 +192,13 @@
   "geometry_node.node.set_fly_speed": "设置飞行速度",
   "geometry_node.node.set_game_mode": "设置游戏模式",
   "geometry_node.node.set_walk_speed": "设置走路速度",
-  "geometry_node.node.show_title": "显示标题(Title)",
+  "geometry_node.node.show_title": "显示标题",
   "geometry_node.node.teleport_player": "传送玩家",
 
   "--- ACTIONS/VISUAL ---": "--- 视觉动作 ---",
   "geometry_node.node.draw_debug_line": "绘制调试线",
   "geometry_node.node.draw_laser_beam": "绘制激光束",
+  "geometry_node.node.raycast": "射线检测",
 
   "--- ACTIONS/WORLD ---": "--- 世界动作 ---",
   "geometry_node.node.break_block": "方块破坏",
@@ -207,7 +207,7 @@
   "geometry_node.node.place_block": "放置方块",
   "geometry_node.node.play_sound": "播放环境声音",
   "geometry_node.node.set_block_state": "设置方块状态",
-  "geometry_node.node.spawn_falling_block": "生成掉落沙",
+  "geometry_node.node.spawn_falling_block": "生成掉落方块",
   "geometry_node.node.strike_lightning": "召唤闪电",
 
   "--- DATA ---": "--- 数据处理 ---",
@@ -217,6 +217,7 @@
   "geometry_node.node.set_entity_attribute": "设置实体属性",
   "geometry_node.node.set_scope_attribute": "设置作用域属性值",
   "geometry_node.node.get_entities_by_aabb": "获取实体(AABB)",
+  "geometry_node.node.get_entities_by_rotation_box": "获取实体(rotation box)",
   "geometry_node.node.get_entities_by_radius": "获取实体(r)",
 
   "--- DATA/ATTRIBUTION ---": "--- 实体数值读取 ---",

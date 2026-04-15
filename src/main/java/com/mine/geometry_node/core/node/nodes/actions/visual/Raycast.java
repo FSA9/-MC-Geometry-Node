@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes.actions;
+package com.mine.geometry_node.core.node.nodes.actions.visual;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.ExecutionResult;

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes.actions;
+package com.mine.geometry_node.core.node.nodes.data.entity;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.ExecutionResult;
@@ -16,13 +16,13 @@ import org.joml.Vector3f;
 import java.util.ArrayList;
 import java.util.List;
 
-public class BoxOverlapWithRotation extends BaseNode {
+public class GetEntitiesbyRotationBox extends BaseNode {
 
-    public static final String TYPE_ID = "box_overlap_rotated";
+    public static final String TYPE_ID = "get_entities_by_rotation_box";
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.box_overlap_rotated"))
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.get_entities_by_rotation_box"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.CENTER.toInput(), null, UIHint.VECTOR, null, null))

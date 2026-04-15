@@ -17,18 +17,13 @@ public class NodeRegistry {
     // 唯一保留的前端根目录
     public final NodeCategory ROOT = new NodeCategory("geometry_node.menu.root");
 
-    // 路径分隔符
-    private static final String PATH_SEPARATOR = "/";
-
     private NodeRegistry() {}
 
     public void init() {
-        System.out.println("[GeometryNode] 开始检索并加载节点插件 (基于 Java SPI)...");
+        System.out.println("[GeometryNode] 开始检索并加载节点插件...");
 
-        // 核心魔法：纯 Java 原生的服务发现机制，通杀所有平台！
         ServiceLoader<GeometryNodePlugin> loader = ServiceLoader.load(GeometryNodePlugin.class);
 
-        // 挨个调用它们的注册方法
         for (GeometryNodePlugin plugin : loader) {
             System.out.println("[GeometryNode] 发现节点插件: " + plugin.getClass().getSimpleName());
             try {
@@ -39,16 +34,14 @@ public class NodeRegistry {
             }
         }
 
-        System.out.println("[GeometryNode] 插件加载完毕，当前共注册了 " + registry.size() + " 个节点。");
+        System.out.println("[GeometryNode] 加载完毕，当前共注册 " + registry.size() + " 个节点。");
     }
 
-    // 增加一个便捷注册方法，直接吃字符串路径
     public void register(String path, BaseNode node) {
         NodeCategory category = getOrCreateCategory(path);
-        register(category, node); // 调用你原来那个完整的 register 方法
+        register(category, node);
     }
 
-    // 更新：完美实现你的 Translation Key 级联拼接逻辑
     public NodeCategory getOrCreateCategory(String path) {
         if (path == null || path.trim().isEmpty()) {
             return ROOT;
