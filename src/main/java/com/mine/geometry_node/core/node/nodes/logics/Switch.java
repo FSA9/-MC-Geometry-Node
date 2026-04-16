@@ -33,7 +33,6 @@ public class Switch extends BaseNode {
     public NodeDef getDefinition(NodeData instanceData) {
         int branchCount = DEFAULT_BRANCH_COUNT;
 
-        // 核心修改：不再遍历 execution，而是直接读取我们保存的属性状态
         if (instanceData != null && instanceData.properties.containsKey(PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id())) {
             Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id());
             // 兼容强转防御：防止从某些 JSON 库反序列化回来后变成了 String
