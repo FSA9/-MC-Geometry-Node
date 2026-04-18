@@ -17,55 +17,57 @@ public class CmdRemoveBranch implements ICommand {
     private final String mNodeId;
     private final String mPropertyKey;
     private final int mOldCount;
-    private final int mNewCount;
+    private final String mRefId;
 
-    // 1. 本节点输出出去的数据连线备份
+    // --- 全量快照备份 ---
+    // 移位删除会改变多个属性和输入值，所以直接深拷贝备份字典
+    private final Map<String, Object> mBackupProperties = new HashMap<>();
+    private final Map<String, Object> mBackupInputs = new HashMap<>();
+
+    // 连线备份
     private final Map<String, List<Connection>> mBackupOutputs = new HashMap<>();
-    // 2. 本节点输出出去的执行流连线备份
     private final Map<String, String> mBackupExecution = new HashMap<>();
-    // 3. 其他节点连接到本节点失效端口的连线备份 (谁 -> 连到了本节点的哪个端口)
     private final List<InboundConnectionBackup> mBackupInbounds = new ArrayList<>();
 
     private record InboundConnectionBackup(String sourceNodeId, String sourcePortId, String targetPortId) {}
 
-    public CmdRemoveBranch(GraphController controller, NodeGraph graph, String nodeId, String propertyKey, int currentCount) {
+    // 【修复点 1】：新增 refId 参数
+    public CmdRemoveBranch(GraphController controller, NodeGraph graph, String nodeId, String propertyKey, int currentCount, String refId) {
         this.mController = controller;
         this.mGraph = graph;
         this.mNodeId = nodeId;
         this.mPropertyKey = propertyKey;
         this.mOldCount = currentCount;
-        this.mNewCount = currentCount - 1;
+        this.mRefId = refId;
 
-        backupConnectionsBeforeRemoval();
+        backupFullState();
     }
 
-    private void backupConnectionsBeforeRemoval() {
+    private void backupFullState() {
         NodeData targetNode = mGraph.getNode(mNodeId);
         if (targetNode == null) return;
 
-        // 针对当前即将被删除的序号 (mOldCount)
-        String deadInputPort = "case_" + mOldCount;
-        String deadOutputPort = "flow_out_" + mOldCount;
+        // 1. 备份所有属性和输入值
+        mBackupProperties.putAll(targetNode.properties);
+        mBackupInputs.putAll(targetNode.inputs);
 
-        // 1. 备份本节点的输出数据连线 (目前 Switch 没有，但为了代码通用性写上)
-        if (targetNode.outputs.containsKey(deadOutputPort)) {
-            mBackupOutputs.put(deadOutputPort, new ArrayList<>(targetNode.outputs.get(deadOutputPort)));
+        // 2. 备份本节点发出的所有数据连线
+        for (Map.Entry<String, List<Connection>> entry : targetNode.outputs.entrySet()) {
+            mBackupOutputs.put(entry.getKey(), new ArrayList<>(entry.getValue()));
         }
 
-        // 2. 备份本节点的执行流连线
-        if (targetNode.execution.containsKey(deadOutputPort)) {
-            mBackupExecution.put(deadOutputPort, targetNode.execution.get(deadOutputPort));
-        }
+        // 3. 备份本节点发出的所有执行流连线
+        mBackupExecution.putAll(targetNode.execution);
 
-        // 3. 遍历全图，寻找连接到 deadInputPort 的线
+        // 4. 【关键修复】遍历全图，备份所有指向本节点（不管什么端口）的连线
         for (NodeData otherNode : mGraph.nodes.values()) {
             if (otherNode.id.equals(mNodeId)) continue;
 
             for (Map.Entry<String, List<Connection>> entry : otherNode.outputs.entrySet()) {
                 String outPortId = entry.getKey();
                 for (Connection link : entry.getValue()) {
-                    if (link.targetNodeId().equals(mNodeId) && link.targetPortName().equals(deadInputPort)) {
-                        mBackupInbounds.add(new InboundConnectionBackup(otherNode.id, outPortId, deadInputPort));
+                    if (link.targetNodeId().equals(mNodeId)) {
+                        mBackupInbounds.add(new InboundConnectionBackup(otherNode.id, outPortId, link.targetPortName()));
                     }
                 }
             }
@@ -74,33 +76,59 @@ public class CmdRemoveBranch implements ICommand {
 
     @Override
     public void execute() {
-        // 直接降维打击，Controller 会自动通过 setNodeProperty 斩断连线并刷新 UI
-        mController.setNodeProperty(mNodeId, mPropertyKey, mNewCount);
+        // 【修复点 2】：不再是简单的 -1，而是调用我们在 GraphController 写好的移位删除逻辑
+        mController.removeDynamicBranch(mNodeId, mRefId);
     }
 
     @Override
     public void undo() {
-        // 1. 恢复端口数量 (UI 会重新长出这个端口)
-        mController.setNodeProperty(mNodeId, mPropertyKey, mOldCount);
-
         NodeData targetNode = mGraph.getNode(mNodeId);
         if (targetNode == null) return;
 
-        // 2. 恢复输出数据连线
+        // --- 撤销移位带来的破坏：先斩断现有关系，再用快照全量覆盖 ---
+
+        // 1. 斩断当前全图中所有指向本节点的连线 (因为这些线现在的 targetPort 可能是移位后的错误端口)
+        for (NodeData otherNode : mGraph.nodes.values()) {
+            if (otherNode.id.equals(mNodeId)) continue;
+            for (String outPort : new ArrayList<>(otherNode.outputs.keySet())) {
+                for (Connection link : new ArrayList<>(otherNode.getConnections(outPort))) {
+                    if (link.targetNodeId().equals(mNodeId)) {
+                        mController.removeConnection(otherNode.id, outPort, mNodeId, link.targetPortName());
+                    }
+                }
+            }
+        }
+
+        // 2. 清理本节点发出的所有残留连线
+        for (String outPort : new ArrayList<>(targetNode.outputs.keySet())) {
+            for (Connection link : new ArrayList<>(targetNode.getConnections(outPort))) {
+                mController.removeConnection(mNodeId, outPort, link.targetNodeId(), link.targetPortName());
+            }
+        }
+        for (String execPort : new ArrayList<>(targetNode.execution.keySet())) {
+            mController.removeExecutionConnection(mNodeId, execPort);
+        }
+
+        // 3. 恢复节点的内部状态 (属性与输入值)
+        targetNode.properties.clear();
+        targetNode.properties.putAll(mBackupProperties);
+        targetNode.inputs.clear();
+        targetNode.inputs.putAll(mBackupInputs);
+
+        // 4. 重建原本的所有连线
         for (Map.Entry<String, List<Connection>> entry : mBackupOutputs.entrySet()) {
             for (Connection link : entry.getValue()) {
                 mController.addConnection(mNodeId, entry.getKey(), link.targetNodeId(), link.targetPortName());
             }
         }
-
-        // 3. 恢复执行流连线
         for (Map.Entry<String, String> entry : mBackupExecution.entrySet()) {
             mController.addExecutionConnection(mNodeId, entry.getKey(), entry.getValue());
         }
-
-        // 4. 恢复外来连线
         for (InboundConnectionBackup inbound : mBackupInbounds) {
             mController.addConnection(inbound.sourceNodeId, inbound.sourcePortId, mNodeId, inbound.targetPortId);
         }
+
+        // 5. 强制触发 UI 刷新 (向总数属性写入旧值)
+        mController.setNodeProperty(mNodeId, mPropertyKey, mOldCount);
     }
 }

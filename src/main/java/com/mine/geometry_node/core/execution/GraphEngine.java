@@ -151,8 +151,11 @@ public class GraphEngine {
     // ==========================================
 
     public static void bindGraph(Entity entity, String graphId) {
-        RuntimeGraphIndex index = GraphResourceManager.getInstance().getIndex(graphId);
-        if (index == null) return;
+        RuntimeGraphIndex index = getGraphIndex(graphId);
+        if (index == null) {
+            log("  -> [Warning] Failed to bind: Graph '" + graphId + "' not found.");
+            return;
+        }
 
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
@@ -207,9 +210,10 @@ public class GraphEngine {
     private static void triggerAndMountEvent(ServerLevel level, @Nullable Entity target, String graphId, String eventNodeId,
                                              @Nullable Consumer<GraphProcess> initializer, Consumer<GraphProcess> mountAction) {
 
-        RuntimeGraphIndex index = GraphResourceManager.getInstance().getIndex(graphId);
+        // 【核心修改】：同样替换为双轨制路由
+        RuntimeGraphIndex index = getGraphIndex(graphId);
         if (index == null) {
-            log("  -> Graph '" + graphId + "' not found in ResourceManager.");
+            log("  -> Graph '" + graphId + "' not found in Memory or Datapack.");
             return;
         }
 

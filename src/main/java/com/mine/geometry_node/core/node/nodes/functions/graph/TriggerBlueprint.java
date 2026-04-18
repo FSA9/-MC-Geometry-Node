@@ -12,17 +12,15 @@ public class TriggerBlueprint extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.trigger"))
-                // 频率输入框
-                .addRow(new PortRow(
-                        PortDef.create("frequency", "geometry_node.port.frequency", PortType.STRING, ""),
-                        null, UIHint.INPUT, null, null
-                ))
-                // 完整的执行流贯穿
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.trigger_blueprint"))
                 .addRow(new PortRow(
                         StandardPorts.FLOW_IN.toExec(),
                         StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null
+                ))
+                .addRow(new PortRow(
+                        PortDef.create("frequency", "geometry_node.port.frequency", PortType.STRING, ""),
+                        null, UIHint.INPUT, null, null
                 ))
                 .build();
     }

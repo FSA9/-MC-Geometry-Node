@@ -18,7 +18,7 @@ import java.util.Map;
 
 public class Switch extends BaseNode {
 
-    public static final String TYPE_ID = "flow_switch";
+    public static final String TYPE_ID = "switch";
 
     // 默认数量与最大上限
     private static final int DEFAULT_BRANCH_COUNT = 1;
@@ -51,7 +51,7 @@ public class Switch extends BaseNode {
     }
 
     private NodeDef buildDef(int branchCount) {
-        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.flow_switch"));
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.switch"));
 
         builder.addMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT, MAX_BRANCH_COUNT);
 

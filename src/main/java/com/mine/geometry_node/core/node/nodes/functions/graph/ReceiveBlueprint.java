@@ -12,15 +12,15 @@ public class ReceiveBlueprint extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node.receive"))
-                .addRow(new PortRow(
-                        PortDef.create("frequency", "geometry_node.port.frequency", PortType.STRING, ""),
-                        null, UIHint.INPUT, null, null
-                ))
+        return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node.receive_blueprint"))
                 .addRow(new PortRow(
                         null,
                         StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null
+                ))
+                .addRow(new PortRow(
+                        PortDef.create("frequency", "geometry_node.port.frequency", PortType.STRING, ""),
+                        null, UIHint.INPUT, null, null
                 ))
                 .build();
     }

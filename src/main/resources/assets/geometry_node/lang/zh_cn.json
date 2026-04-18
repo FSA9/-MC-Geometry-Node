@@ -211,6 +211,7 @@
   "geometry_node.node.strike_lightning": "召唤闪电",
 
   "--- DATA ---": "--- 数据处理 ---",
+  "geometry_node.node.geometry_node.node.target_selector": "目标选择器",
   "geometry_node.node.get_entity_attribute": "获取实体属性",
   "geometry_node.node.get_list_len": "获取列表长度",
   "geometry_node.node.get_scope_attribute": "获取作用域属性值",
@@ -343,7 +344,7 @@
   "geometry_node.node.contain": "包含",
   "geometry_node.node.equal": "等于",
   "geometry_node.node.for_each": "For Each",
-  "geometry_node.node.if": "If",
+  "geometry_node.node.if_branch": "If",
   "geometry_node.node.switch": "Switch",
 
   "--- MATHS ---": "--- 数学运算 ---",

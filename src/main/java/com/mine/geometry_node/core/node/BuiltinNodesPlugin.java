@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
 import com.mine.geometry_node.core.node.nodes.actions.player.*;
 import com.mine.geometry_node.core.node.nodes.actions.visual.*;
+import com.mine.geometry_node.core.node.nodes.actions.world.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.attribution.*;
@@ -107,7 +108,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/visual", new DrawDebugLine());
         registry.register("actions/visual", new DrawLaserBeam());
 
-        // Actions/World
+//        // Actions/World
 //        registry.register("actions/world", new BreakBlock());
 //        registry.register("actions/world", new CreateExplosion());
 //        registry.register("actions/world", new FillBlock());
@@ -118,6 +119,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 //        registry.register("actions/world", new StrikeLightning());
 
         // --- DATA ---
+        registry.register("data", new TargetSelector());
         registry.register("data", new GetEntityAttribute());
 //        registry.register("data", new GetListLen());
         registry.register("data", new GetScopeAttribute());

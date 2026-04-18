@@ -33,17 +33,17 @@ public class ServerGraphCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 
         // =====================================================================
-        // 指令: /bind_graph
+        // 指令: /graph_bind
         // =====================================================================
         dispatcher.register(
-                Commands.literal("bind_graph")
+                Commands.literal("graph_bind")
                         .requires(source -> source.hasPermission(2))
 
                         // --- 1.1 实体局部图 (target) ---
                         .then(Commands.literal("target")
                                 .then(Commands.argument("targets", EntityArgument.entities())
 
-                                        // 默认动作 (什么都不输入): /bind_graph target <targets> -> 列出绑定的图
+                                        // 默认动作 (什么都不输入): /graph_bind target <targets> -> 列出绑定的图
                                         .executes(context -> {
                                             Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
                                             for (Entity entity : targets) {
@@ -55,7 +55,7 @@ public class ServerGraphCommand {
                                             return targets.size();
                                         })
 
-                                        // 显式 list: /bind_graph target <targets> list -> 列出绑定的图
+                                        // 显式 list: /graph_bind target <targets> list -> 列出绑定的图
                                         .then(Commands.literal("list")
                                                 .executes(context -> {
                                                     Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
@@ -69,7 +69,7 @@ public class ServerGraphCommand {
                                                 })
                                         )
 
-                                        // 绑定特定图: /bind_graph target <targets> <graph_id>
+                                        // 绑定特定图: /graph_bind target <targets> <graph_id>
                                         .then(Commands.argument("graph_id", StringArgumentType.greedyString())
                                                 .suggests(SUGGEST_GRAPHS)
                                                 .executes(context -> {
@@ -93,7 +93,7 @@ public class ServerGraphCommand {
                         // --- 1.2 全局图 (global) ---
                         .then(Commands.literal("global")
 
-                                // 默认动作 (什么都不输入): /bind_graph global -> 列出全局绑定的图
+                                // 默认动作 (什么都不输入): /graph_bind global -> 列出全局绑定的图
                                 .executes(context -> {
                                     java.util.Set<String> graphs = GraphEngine.getGlobalBoundGraphs(context.getSource().getLevel());
                                     context.getSource().sendSuccess(() -> Component.literal(
@@ -102,7 +102,7 @@ public class ServerGraphCommand {
                                     return 1;
                                 })
 
-                                // 显式 list: /bind_graph global list -> 列出全局绑定的图
+                                // 显式 list: /graph_bind global list -> 列出全局绑定的图
                                 .then(Commands.literal("list")
                                         .executes(context -> {
                                             java.util.Set<String> graphs = GraphEngine.getGlobalBoundGraphs(context.getSource().getLevel());
@@ -113,7 +113,7 @@ public class ServerGraphCommand {
                                         })
                                 )
 
-                                // 绑定特定图: /bind_graph global <graph_id>
+                                // 绑定特定图: /graph_bind global <graph_id>
                                 .then(Commands.argument("graph_id", StringArgumentType.greedyString())
                                         .suggests(SUGGEST_GRAPHS)
                                         .executes(context -> {
@@ -127,10 +127,10 @@ public class ServerGraphCommand {
         );
 
         // =====================================================================
-        // 指令: /unbind_graph
+        // 指令: /graph_unbind
         // =====================================================================
         dispatcher.register(
-                Commands.literal("unbind_graph")
+                Commands.literal("graph_unbind")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.literal("target")
                                 .then(Commands.argument("targets", EntityArgument.entities())
@@ -175,10 +175,10 @@ public class ServerGraphCommand {
         );
 
         // =====================================================================
-        // 指令: /list_graphs server (分类打印)
+        // 指令: /graph_list server (分类打印)
         // =====================================================================
         dispatcher.register(
-                Commands.literal("list_graphs")
+                Commands.literal("graph_list")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.literal("server")
                                 .executes(context -> {
@@ -209,10 +209,10 @@ public class ServerGraphCommand {
         );
 
         // =====================================================================
-        // 指令: /download_graph (使用 GraphIdMapper 定位文件)
+        // 指令: /graph_download (使用 GraphIdMapper 定位文件)
         // =====================================================================
         dispatcher.register(
-                Commands.literal("download_graph")
+                Commands.literal("graph_download")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("graph_id", StringArgumentType.greedyString())
                                 .suggests(SUGGEST_GRAPHS)

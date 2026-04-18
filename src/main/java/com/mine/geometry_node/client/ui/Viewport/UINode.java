@@ -240,10 +240,20 @@ public class UINode extends FrameLayout {
             }
 
             // --- 6. 预计算动态按钮碰撞判定区 (Hitbox) ---
+            // --- 6. 预计算动态按钮碰撞判定区 (Hitbox) ---
             if (isDynamicRow(row)) {
                 boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
                 metrics.isAddBtn = isLast;
-                metrics.refPortId = row.leftPort() != null ? row.leftPort().id() : (row.rightPort() != null ? row.rightPort().id() : "");
+
+                String refId = "";
+                if (row.leftPort() != null) {
+                    refId = row.leftPort().id();
+                } else if (row.rightPort() != null) {
+                    refId = row.rightPort().id();
+                } else if (row.hintParams() != null && row.hintParams().containsKey(PortMetaKeys.BIND_PROPERTY)) {
+                    refId = row.hintParams().get(PortMetaKeys.BIND_PROPERTY).toString();
+                }
+                metrics.refPortId = refId;
 
                 float rowBottomDp = (currentY + rowHeight) / UIConstants.mDensity;
                 float cxDp, cyDp;

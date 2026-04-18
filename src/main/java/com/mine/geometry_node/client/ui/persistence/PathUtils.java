@@ -10,11 +10,15 @@ public class PathUtils {
     public static File getWorkspaceRoot() {
         try {
             if (net.minecraft.client.Minecraft.getInstance() != null && net.minecraft.client.Minecraft.getInstance().gameDirectory != null) {
-                return net.minecraft.client.Minecraft.getInstance().gameDirectory;
+                return net.minecraft.client.Minecraft.getInstance().gameDirectory.getCanonicalFile();
             }
         } catch (Throwable ignored) {}
-        // 独立测试环境降级
-        return new File(System.getProperty("user.dir"));
+
+        try {
+            return new File(System.getProperty("user.dir")).getCanonicalFile();
+        } catch (Exception e) {
+            return new File(System.getProperty("user.dir"));
+        }
     }
 
     /**

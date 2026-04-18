@@ -176,4 +176,100 @@ public class GraphController {
 
         return node.connectedInputs.contains(targetPortId);
     }
+
+    /**
+     * 移除指定的动态分支，并将其后的所有分支数据向前位移
+     */
+    public void removeDynamicBranch(String nodeId, String refPortId) {
+        NodeData node = mContext.getGraph().getNode(nodeId);
+        if (node == null || refPortId == null || refPortId.isEmpty()) return;
+
+        // 1. 解析要删除的索引 (例如从 "filter_type_2" 或 "center_2" 中提取 2)
+        int lastUnderscore = refPortId.lastIndexOf('_');
+        if (lastUnderscore == -1) return;
+        int removeIndex;
+        try {
+            removeIndex = Integer.parseInt(refPortId.substring(lastUnderscore + 1));
+        } catch (NumberFormatException e) {
+            return; // 提取索引失败，退出
+        }
+
+        // 2. 获取当前总行数
+        int totalCount = 1;
+        Object countObj = node.properties.get("dynamic_branch_input_count"); // 替换为你的 PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id()
+        if (countObj instanceof Number n) totalCount = n.intValue();
+
+        if (removeIndex < 1 || removeIndex > totalCount) return;
+
+        // 3. 执行位移 (Shift)
+        // 从 removeIndex 开始，把后面的数据依次往前挪一位
+        for (int i = removeIndex; i < totalCount; i++) {
+            String oldSuffix = "_" + (i + 1);
+            String newSuffix = "_" + i;
+
+            shiftMapData(node.properties, oldSuffix, newSuffix);
+            shiftMapData(node.inputs, oldSuffix, newSuffix);
+            shiftConnections(nodeId, oldSuffix, newSuffix);
+        }
+
+        // 4. 彻底清理最后一行的残留数据
+        String lastSuffix = "_" + totalCount;
+        node.properties.keySet().removeIf(k -> k.endsWith(lastSuffix));
+        node.inputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
+
+        // 斩断指向最后一行的所有连线
+        shiftConnections(nodeId, lastSuffix, null);
+
+        // 5. 更新总行数并触发 UI 重构
+        node.properties.put("dynamic_branch_input_count", totalCount - 1);
+
+        // 由于结构发生了改变，强制进行 NodeDef 刷新逻辑
+        setNodeProperty(nodeId, "dynamic_branch_input_count", totalCount - 1);
+    }
+
+    // --- 内部辅助方法：处理字典数据的位移 ---
+    private void shiftMapData(java.util.Map<String, Object> map, String oldSuffix, String newSuffix) {
+        // 先清理目标槽位，防止旧类型残留
+        map.keySet().removeIf(k -> k.endsWith(newSuffix));
+
+        java.util.Map<String, Object> toMove = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, Object> entry : map.entrySet()) {
+            if (entry.getKey().endsWith(oldSuffix)) {
+                String newKey = entry.getKey().substring(0, entry.getKey().length() - oldSuffix.length()) + newSuffix;
+                toMove.put(newKey, entry.getValue());
+            }
+        }
+
+        map.keySet().removeIf(k -> k.endsWith(oldSuffix));
+        map.putAll(toMove);
+    }
+
+    // --- 内部辅助方法：处理外部指向该节点连线的位移 ---
+    private void shiftConnections(String targetNodeId, String oldSuffix, String newSuffix) {
+        List<Runnable> connectionUpdates = new ArrayList<>();
+
+        for (NodeData otherNode : mContext.getGraph().nodes.values()) {
+            for (String outPort : otherNode.outputs.keySet()) {
+                for (Connection link : otherNode.getConnections(outPort)) {
+                    if (link.targetNodeId().equals(targetNodeId) && link.targetPortName().endsWith(oldSuffix)) {
+                        connectionUpdates.add(() -> {
+                            // 先移除旧连线
+                            removeConnection(otherNode.id, outPort, targetNodeId, link.targetPortName());
+
+                            // 如果 newSuffix 不为空，建立新连线
+                            if (newSuffix != null) {
+                                String newPortName = link.targetPortName().substring(0, link.targetPortName().length() - oldSuffix.length()) + newSuffix;
+                                addConnection(otherNode.id, outPort, targetNodeId, newPortName);
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        // 延迟执行以避免 ConcurrentModificationException
+        for (Runnable r : connectionUpdates) {
+            r.run();
+        }
+    }
 }

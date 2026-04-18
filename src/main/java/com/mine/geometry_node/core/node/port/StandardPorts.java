@@ -15,6 +15,9 @@ public enum StandardPorts {
 
     // Int
     INT("int", PortType.INTEGER),
+    MIN_INT("min_int", PortType.INTEGER),
+    MAX_INT("max_int", PortType.INTEGER),
+    LIMIT("limit", PortType.INTEGER),
     INDEX("index", PortType.INTEGER),
     TICK("tick", PortType.INTEGER),
     COLOR("color", PortType.INTEGER),
@@ -27,6 +30,8 @@ public enum StandardPorts {
 
     // Float
     VALUE("value", PortType.FLOAT),
+    MIN_FLOAT("min_float", PortType.FLOAT),
+    MAX_FLOAT("max_float", PortType.FLOAT),
     DIST("distance", PortType.FLOAT),
     RADIUS("radius", PortType.FLOAT),
     SIZE_1("size_1", PortType.FLOAT),
@@ -35,6 +40,10 @@ public enum StandardPorts {
     // String
     NAME("name", PortType.STRING),
     TYPE("type", PortType.STRING),
+    GAMEMODE("gamemode", PortType.STRING),
+    SORT("sort", PortType.STRING),
+    TAG("tag", PortType.STRING),
+    TEAM("team", PortType.STRING),
 
     SCOPE("scope", PortType.STRING),
     EXPRESSION("expression", PortType.STRING),

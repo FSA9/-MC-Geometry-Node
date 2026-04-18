@@ -26,7 +26,7 @@ public class ClientGraphCommand {
     private static <S> void buildAndRegister(CommandDispatcher<S> dispatcher) {
         // 1. 本地列表指令
         dispatcher.register(
-                LiteralArgumentBuilder.<S>literal("list_graphs")
+                LiteralArgumentBuilder.<S>literal("graph_list")
                         .then(LiteralArgumentBuilder.<S>literal("client")
                                 .executes(context -> {
                                     List<String> drafts = LocalDraftManager.getAllDraftNames();
@@ -39,7 +39,7 @@ public class ClientGraphCommand {
 
         // 2. 本地上传指令
         dispatcher.register(
-                LiteralArgumentBuilder.<S>literal("upload_graph")
+                LiteralArgumentBuilder.<S>literal("graph_upload")
                         .executes(context -> {
                             // 批量上传所有本地图纸
                             List<String> drafts = LocalDraftManager.getAllDraftNames();

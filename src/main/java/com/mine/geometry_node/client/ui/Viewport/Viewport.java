@@ -681,6 +681,23 @@ public class Viewport extends FrameLayout implements InteractionContext {
         return super.dispatchKeyEvent(event);
     }
 
+    // 检查点击位置是否落在了浮层（如下拉菜单遮罩）上
+    private boolean isHitOverlay(float x, float y) {
+        // 从最顶层往下遍历 Viewport 的直接子 View
+        for (int i = getChildCount() - 1; i >= 0; i--) {
+            View child = getChildAt(i);
+            // 排除底层的节点层和空提示文本
+            if (child == mNodeLayer || child == mEmptyHint || child.getVisibility() != View.VISIBLE) {
+                continue;
+            }
+            // 检查坐标是否落在该覆盖层的物理边界内
+            if (x >= child.getLeft() && x <= child.getRight() && y >= child.getTop() && y <= child.getBottom()) {
+                return true; // 命中覆盖层！
+            }
+        }
+        return false;
+    }
+
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         int action = ev.getActionMasked();
@@ -693,6 +710,11 @@ public class Viewport extends FrameLayout implements InteractionContext {
                 mHintCaptureUsesLogical = false;
             }
             return r;
+        }
+
+        // 如果当前点在下拉菜单等浮层上，直接走系统原生的分发逻辑（让菜单自行处理点击或关闭），跳过底层节点的判断。
+        if (isHitOverlay(ev.getX(), ev.getY())) {
+            return super.dispatchTouchEvent(ev);
         }
 
         if (ev.getPointerCount() == 1) {
@@ -728,6 +750,10 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent ev) {
+        if (isHitOverlay(ev.getX(), ev.getY())) {
+            return super.dispatchGenericMotionEvent(ev);
+        }
+
         int action = ev.getActionMasked();
         if (action == MotionEvent.ACTION_HOVER_MOVE
                 || action == MotionEvent.ACTION_HOVER_ENTER

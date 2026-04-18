@@ -1,13 +1,11 @@
 package com.mine.geometry_node.client.ui.Viewport.Interaction;
 
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdConnect;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdMoveNode;
+import com.mine.geometry_node.client.ui.UICommand.commands.*;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.Viewport.UINode;
 import com.mine.geometry_node.client.ui.Viewport.Viewport;
 import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.meta.PropertyKeys;
-import com.mine.geometry_node.core.node.meta.SchemaKeys;
+import com.mine.geometry_node.core.node.meta.*;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
@@ -188,11 +186,13 @@ public class InteractionManager {
                     }
                 } else {
                     if (currentCount > 1) {
-                        com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch cmd =
-                                new com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch(
+                        String refId = btnInfo.referencePortId();
+
+                        CmdRemoveBranch cmd =
+                                new CmdRemoveBranch(
                                         mContext.getEditorContext().getGraphController(),
                                         mContext.getEditorContext().getGraph(),
-                                        nodeData.id, propertyKey, currentCount);
+                                        nodeData.id, propertyKey, currentCount, refId); // <-- 把 refId 传进命令里
                         mContext.getEditorContext().getCommandManager().execute(cmd);
                     }
                 }
