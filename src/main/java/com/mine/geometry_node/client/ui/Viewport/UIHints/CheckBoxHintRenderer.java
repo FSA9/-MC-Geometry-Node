@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.Viewport.UIHints;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.UIUtils;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
@@ -35,18 +36,16 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
                 if (propKey != null) {
                     Object oldVal = nodeData.properties.get(propKey);
                     if (!Boolean.valueOf(isChecked).equals(oldVal)) {
-                        CmdChangeProperty cmd = new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, isChecked);
-                        editorContext.getCommandManager().execute(cmd);
+                        editorContext.getCommandManager().execute(new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, isChecked));
                     }
                 } else if (row.leftPort() != null) {
                     String portId = row.leftPort().id();
                     Object oldVal = nodeData.inputs.get(portId);
                     if (!Boolean.valueOf(isChecked).equals(oldVal)) {
-                        CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, isChecked);
-                        editorContext.getCommandManager().execute(cmd);
+                        editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, isChecked));
                     }
                 }
-            } else { // 兜底逻辑
+            } else {
                 if (propKey != null) nodeData.properties.put(propKey, isChecked);
                 else if (row.leftPort() != null) nodeData.inputs.put(row.leftPort().id(), isChecked);
             }
@@ -56,22 +55,17 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        // 提前测量一下控件获取真实宽高，为垂直居中做准备
-        view.measure(
-                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
-                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-        );
-        int cbHeight = view.getMeasuredHeight() > 0 ? view.getMeasuredHeight() : 16;
+        view.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
+        int cbHeightPx = view.getMeasuredHeight() > 0 ? view.getMeasuredHeight() : UIUtils.dp2pxInt(16);
+        float cbHeightDp = UIUtils.px2dp(cbHeightPx);
 
         LayoutParams lp = (LayoutParams) view.getLayoutParams();
         lp.width = LayoutParams.WRAP_CONTENT;
         lp.height = LayoutParams.WRAP_CONTENT;
         lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
 
-        // 1. 勾选框的左 padding 设为 x
-        lp.leftMargin = UIConstants.Node.LABEL_MARGIN_PORT - 5;
-        // 2. 垂直居中偏移 (行高减去控件高度除以2)
-        lp.topMargin = (int) currentY + Math.max(0, (UIConstants.Node.ROW_HEIGHT - cbHeight) / 2);
+        lp.leftMargin = UIUtils.dp2pxInt(UIConstants.Node.LABEL_MARGIN_PORT - 5);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + Math.max(0, (UIConstants.Node.ROW_HEIGHT - cbHeightDp) / 2));
         view.setLayoutParams(lp);
     }
 }

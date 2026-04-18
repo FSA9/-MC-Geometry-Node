@@ -3,11 +3,11 @@ package com.mine.geometry_node.client.ui.Viewport.UIHints;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.UIUtils; // 引入工具类
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ColorDrawable;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
@@ -35,11 +35,9 @@ public class VectorHintRenderer implements UIHintRenderer {
             final int index = i;
             EditText et = new EditText(context);
 
-            // 使用工具类安全提取坐标
             float currentVal = UIHintUtils.getSafeVectorComponent(rawVal, index);
             et.setText(String.valueOf(currentVal));
 
-            // 使用工具类应用样式
             UIHintUtils.applyStandardInputStyle(et);
             container.addView(et, UIHintUtils.getStandardInputLayoutParams());
 
@@ -78,11 +76,18 @@ public class VectorHintRenderer implements UIHintRenderer {
         float topOffset = hasLabel ? UIConstants.Node.ROW_HEIGHT : 0;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
-        lp.width = (int) (endX - startX);
-        lp.height = (UIConstants.Node.ROW_HEIGHT) * 3;
+
+        // --- 核心修正：所有的宽高和 Margin 统一包裹 dp2pxInt ---
+        if (lp == null) {
+            lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(endX - startX), UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT * 3));
+        } else {
+            lp.width = UIUtils.dp2pxInt(endX - startX);
+            lp.height = UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT * 3);
+        }
+
         lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
-        lp.leftMargin = (int) startX;
-        lp.topMargin = (int) currentY + (int) topOffset;
+        lp.leftMargin = UIUtils.dp2pxInt(startX);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset);
         view.setLayoutParams(lp);
     }
 }

@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.UIUtils; // 引入
 import com.mine.geometry_node.client.ui.Viewport.Viewport;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.RegistryDataManager;
@@ -35,7 +36,6 @@ public class SelectHintRenderer implements UIHintRenderer {
         String propKey = row.hintParams() != null ? (String) row.hintParams().get(PortMetaKeys.BIND_PROPERTY) : null;
         List<String> resolvedOptions = new ArrayList<>();
 
-        // 解析选项
         if (row.hintParams() != null) {
             String[] staticOptions = (String[]) row.hintParams().get(PortMetaKeys.OPTIONS);
             if (staticOptions != null && staticOptions.length > 0) {
@@ -44,58 +44,40 @@ public class SelectHintRenderer implements UIHintRenderer {
                 String dynamicRegistryId = (String) row.hintParams().get(PortMetaKeys.DYNAMIC_REGISTRY_ID);
                 if (dynamicRegistryId != null) {
                     var mc = net.minecraft.client.Minecraft.getInstance();
-                    if (mc.level != null) {
-                        resolvedOptions.addAll(RegistryDataManager.getDynamicOptions(dynamicRegistryId, mc.level.registryAccess()));
-                    }
+                    if (mc.level != null) resolvedOptions.addAll(RegistryDataManager.getDynamicOptions(dynamicRegistryId, mc.level.registryAccess()));
                 }
             }
         }
 
         Object val = null;
-        if (propKey != null) {
-            val = nodeData.properties.get(propKey);
-        } else if (row.leftPort() != null) {
-            val = nodeData.inputs.containsKey(row.leftPort().id()) ? nodeData.inputs.get(row.leftPort().id()) : row.leftPort().defaultValue();
-        }
+        if (propKey != null) val = nodeData.properties.get(propKey);
+        else if (row.leftPort() != null) val = nodeData.inputs.containsKey(row.leftPort().id()) ? nodeData.inputs.get(row.leftPort().id()) : row.leftPort().defaultValue();
 
-        // --- 使用伪造的按钮替代 Spinner ---
         TextView dropdownBtn = new TextView(context);
         String displayVal = val != null ? val.toString() : (resolvedOptions.isEmpty() ? "" : resolvedOptions.get(0));
 
-        // 加上一个小倒三角表示下拉
         dropdownBtn.setText(displayVal + " ▼");
         dropdownBtn.setTextColor(UIConstants.CLR_GRAY_LABEL);
         dropdownBtn.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
         dropdownBtn.setGravity(Gravity.CENTER_VERTICAL);
-        dropdownBtn.setPadding(8, 0, 8, 0);
+        dropdownBtn.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
 
         ShapeDrawable borderBg = new ShapeDrawable();
         borderBg.setColor(0x05FFFFFF);
-        borderBg.setCornerRadius(3);
-        borderBg.setStroke(1, 0xFF555555);
+        borderBg.setCornerRadius(UIUtils.dp2px(3));
+        borderBg.setStroke(UIUtils.dp2pxInt(1), 0xFF555555);
         dropdownBtn.setBackground(borderBg);
 
-        // 点击按钮唤起带搜索的弹窗
         dropdownBtn.setOnClickListener(v -> {
-            // 向上寻找 Viewport
             icyllis.modernui.view.ViewParent parent = v.getParent();
-            while (parent != null && !(parent instanceof Viewport)) {
-                parent = parent.getParent();
-            }
+            while (parent != null && !(parent instanceof Viewport)) parent = parent.getParent();
 
             if (parent instanceof Viewport viewport) {
-                int[] btnLoc = new int[2];
-                v.getLocationOnScreen(btnLoc);
-                int[] vpLoc = new int[2];
-                viewport.getLocationOnScreen(vpLoc);
-
+                int[] btnLoc = new int[2]; v.getLocationOnScreen(btnLoc);
+                int[] vpLoc = new int[2]; viewport.getLocationOnScreen(vpLoc);
                 float relX = btnLoc[0] - vpLoc[0];
                 float relY = btnLoc[1] - vpLoc[1];
-
-                // 核心获取缩放比例
                 float currentScale = viewport.getCurrentScale();
-
-                // 【修改点】：计算按钮在当前缩放下的实际物理宽度
                 float scaledTargetWidth = v.getWidth() * currentScale;
 
                 DropdownSearchMenu menu = new DropdownSearchMenu(context, resolvedOptions, selectedVal -> {
@@ -103,28 +85,20 @@ public class SelectHintRenderer implements UIHintRenderer {
                     if (editorContext != null) {
                         if (propKey != null) {
                             Object oldVal = nodeData.properties.get(propKey);
-                            if (oldVal == null || !selectedVal.equals(oldVal.toString())) {
-                                CmdChangeProperty cmd = new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, selectedVal);
-                                editorContext.getCommandManager().execute(cmd);
-                            }
+                            if (oldVal == null || !selectedVal.equals(oldVal.toString())) editorContext.getCommandManager().execute(new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, selectedVal));
                         } else if (row.leftPort() != null) {
                             String portId = row.leftPort().id();
                             Object oldVal = nodeData.inputs.get(portId);
-                            if (oldVal == null || !selectedVal.equals(oldVal.toString())) {
-                                CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, selectedVal);
-                                editorContext.getCommandManager().execute(cmd);
-                            }
+                            if (oldVal == null || !selectedVal.equals(oldVal.toString())) editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, selectedVal));
                         }
                     } else {
                         if (propKey != null) nodeData.properties.put(propKey, selectedVal);
                         else if (row.leftPort() != null) nodeData.inputs.put(row.leftPort().id(), selectedVal);
                     }
                 });
-
                 menu.showAt(relX, relY + (v.getHeight() * currentScale), viewport, scaledTargetWidth, currentScale);
             }
         });
-
         return dropdownBtn;
     }
 
@@ -132,70 +106,52 @@ public class SelectHintRenderer implements UIHintRenderer {
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
         int leftMargin = (row.leftPort() != null) ? (int)(nodeWidth * 0.45f) : UIConstants.Node.LABEL_MARGIN_PORT;
         int rightMargin = (row.rightPort() != null) ? UIConstants.Node.ROW_HEIGHT : UIConstants.Node.LABEL_MARGIN_PORT;
-
         int targetWidth = nodeWidth - leftMargin - rightMargin;
         if (targetWidth < 10) targetWidth = 10;
         int targetHeight = UIConstants.Node.ROW_HEIGHT - 4;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
-        if (lp == null) lp = new FrameLayout.LayoutParams(targetWidth, targetHeight);
-        else {
-            lp.width = targetWidth;
-            lp.height = targetHeight;
-        }
+        if (lp == null) lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(targetWidth), UIUtils.dp2pxInt(targetHeight));
+        else { lp.width = UIUtils.dp2pxInt(targetWidth); lp.height = UIUtils.dp2pxInt(targetHeight); }
 
         lp.gravity = Gravity.LEFT | Gravity.TOP;
-        lp.leftMargin = leftMargin;
-        lp.topMargin = (int) currentY + 2;
+        lp.leftMargin = UIUtils.dp2pxInt(leftMargin);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + 2);
         view.setLayoutParams(lp);
     }
 
-    // ==========================================
-    // 私有内部类：带搜索的下拉菜单
-    // ==========================================
     private static class DropdownSearchMenu extends FrameLayout {
         private LinearLayout mContentLayout;
         private LinearLayout mListContainer;
         private EditText mSearchBox;
-
         private final List<String> mOptions;
         private final Consumer<String> mOnSelect;
-
-        // 【新增】：用于保存当前的缩放比例，默认 1.0
         private float mCurrentScale = 1.0f;
 
         public DropdownSearchMenu(Context context, List<String> options, Consumer<String> onSelect) {
-            super(context);
-            this.mOptions = options;
-            this.mOnSelect = onSelect;
-            initUI(context);
-            renderList(options);
+            super(context); this.mOptions = options; this.mOnSelect = onSelect;
+            initUI(context); renderList(options);
         }
 
         private void initUI(Context context) {
             this.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-            this.setOnClickListener(v -> dismiss()); // 点击遮罩关闭
+            this.setOnClickListener(v -> dismiss());
 
             mContentLayout = new LinearLayout(context);
             mContentLayout.setOrientation(LinearLayout.VERTICAL);
-            mContentLayout.setBackground(createRectDrawable(
-                    UIConstants.ViewPort.NodeMenu.BG_COLOR,
-                    UIConstants.ViewPort.NodeMenu.BORDER_RADIUS));
-            mContentLayout.setPadding(4, 4, 4, 4);
-            mContentLayout.setOnClickListener(v -> {}); // 拦截点击
+            mContentLayout.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.BG_COLOR, UIConstants.ViewPort.NodeMenu.BORDER_RADIUS));
+            mContentLayout.setPadding(UIUtils.dp2pxInt(4), UIUtils.dp2pxInt(4), UIUtils.dp2pxInt(4), UIUtils.dp2pxInt(4));
+            mContentLayout.setOnClickListener(v -> {});
 
-            // 初始宽度随便给一个，showAt 时会动态修正
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(220, LayoutParams.WRAP_CONTENT);
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(220), LayoutParams.WRAP_CONTENT);
             mContentLayout.setLayoutParams(lp);
 
-            // 搜索框
             mSearchBox = new EditText(context);
             mSearchBox.setHint("Search...");
             mSearchBox.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
             mSearchBox.setHintTextColor(0xFF666666);
             mSearchBox.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.SEARCH_BG_COLOR, 4));
-            // 内边距稍作调整，这里不严格缩放问题也不大
-            mSearchBox.setPadding(10, 0, 10, 0);
+            mSearchBox.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
 
             mSearchBox.addTextChangedListener(new TextWatcher() {
                 @Override public void afterTextChanged(Editable s) { performSearch(s.toString()); }
@@ -203,42 +159,31 @@ public class SelectHintRenderer implements UIHintRenderer {
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             });
 
-            LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX);
-            searchLp.setMargins(4, 4, 4, 6);
+            LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX));
+            searchLp.setMargins(UIUtils.dp2pxInt(4), UIUtils.dp2pxInt(4), UIUtils.dp2pxInt(4), UIUtils.dp2pxInt(6));
             mContentLayout.addView(mSearchBox, searchLp);
 
-            // 滚动列表区
             ScrollView sv = new ScrollView(context);
             mListContainer = new LinearLayout(context);
             mListContainer.setOrientation(LinearLayout.VERTICAL);
-            sv.addView(mListContainer, new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            sv.addView(mListContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-            mContentLayout.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 250));
+            mContentLayout.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(250)));
             addView(mContentLayout);
         }
 
-        // 【核心修改】：renderList 现在会读取 mCurrentScale 来决定字体和高度
         private void renderList(List<String> items) {
             mListContainer.removeAllViews();
             for (String item : items) {
                 TextView tv = new TextView(getContext());
                 tv.setText(item);
-
-                // 字体大小乘以缩放系数
                 float fontSize = UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * (float)UIConstants.ViewPort.NodeMenu.TEXT_SIZE * mCurrentScale;
                 tv.setTextSize(0, fontSize);
                 tv.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR);
-                // 左右 padding 也可以根据需要乘以 mCurrentScale，这里简单处理
-                tv.setPadding((int)(12 * mCurrentScale), 0, (int)(12 * mCurrentScale), 0);
+                tv.setPadding((int)UIUtils.dp2px(12 * mCurrentScale), 0, (int)UIUtils.dp2px(12 * mCurrentScale), 0);
                 tv.setGravity(Gravity.CENTER_VERTICAL);
 
-                tv.setOnClickListener(v -> {
-                    mOnSelect.accept(item);
-                    post(this::dismiss);
-                });
-
+                tv.setOnClickListener(v -> { mOnSelect.accept(item); post(this::dismiss); });
                 tv.setOnHoverListener((v, event) -> {
                     if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
                         tv.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.HOVER_COLOR, 4));
@@ -250,74 +195,48 @@ public class SelectHintRenderer implements UIHintRenderer {
                     return false;
                 });
 
-                // Item 的高度乘以缩放系数
-                int itemHeight = (int)(UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * mCurrentScale);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, itemHeight);
-                lp.setMargins(2, 1, 2, 1);
+                int itemHeight = (int)UIUtils.dp2px(UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * mCurrentScale);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, itemHeight);
+                lp.setMargins(UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(1), UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(1));
                 mListContainer.addView(tv, lp);
             }
         }
 
         private void performSearch(String query) {
-            if (query.trim().isEmpty()) {
-                renderList(mOptions);
-                return;
-            }
+            if (query.trim().isEmpty()) { renderList(mOptions); return; }
             String q = query.toLowerCase().trim();
             List<String> filtered = new ArrayList<>();
-            for (String opt : mOptions) {
-                if (opt.toLowerCase().contains(q)) filtered.add(opt);
-            }
+            for (String opt : mOptions) if (opt.toLowerCase().contains(q)) filtered.add(opt);
             renderList(filtered);
         }
 
-        // 【核心修改】：showAt 接收目标宽度和缩放系数，并更新 UI
         public void showAt(float x, float y, ViewGroup parent, float targetWidth, float scale) {
-            // 1. 记录当前缩放比例
             this.mCurrentScale = scale;
-
-            // 2. 更新容器位置与宽度
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
             lp.leftMargin = (int) x;
             lp.topMargin = (int) y;
-            lp.width = (int) Math.max(targetWidth, 150 * scale); // 宽度严格对齐，保底 150*scale 防止太窄
+            lp.width = (int) Math.max(targetWidth, UIUtils.dp2px(150 * scale));
 
             if (parent != null) {
                 if (x + lp.width > parent.getWidth()) lp.leftMargin = (int) (parent.getWidth() - lp.width);
-                if (y + (300 * scale) > parent.getHeight()) lp.topMargin = (int) (parent.getHeight() - (300 * scale));
+                if (y + UIUtils.dp2px(300 * scale) > parent.getHeight()) lp.topMargin = (int) (parent.getHeight() - UIUtils.dp2px(300 * scale));
             }
             mContentLayout.setLayoutParams(lp);
 
-            // 3. 更新搜索框高度和字体大小
             float scaledSearchFontSize = UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * (float)UIConstants.ViewPort.NodeMenu.TEXT_SIZE * scale;
             mSearchBox.setTextSize(0, scaledSearchFontSize);
             LinearLayout.LayoutParams searchLp = (LinearLayout.LayoutParams) mSearchBox.getLayoutParams();
-            searchLp.height = (int) (UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * scale);
+            searchLp.height = (int) UIUtils.dp2px(UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * scale);
             mSearchBox.setLayoutParams(searchLp);
 
-            // 4. 重绘一次列表以应用新的缩放比例
             renderList(mOptions);
-
-            // 5. 显示到父容器
             if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
             parent.addView(this);
 
-            mSearchBox.post(() -> {
-                mSearchBox.setText("");
-                mSearchBox.requestFocus();
-            });
+            mSearchBox.post(() -> { mSearchBox.setText(""); mSearchBox.requestFocus(); });
         }
 
-        public void dismiss() {
-            if (getParent() != null) ((ViewGroup) getParent()).removeView(this);
-        }
-
-        private ShapeDrawable createRectDrawable(int color, int radius) {
-            ShapeDrawable d = new ShapeDrawable();
-            d.setColor(color);
-            d.setCornerRadius(radius);
-            return d;
-        }
+        public void dismiss() { if (getParent() != null) ((ViewGroup) getParent()).removeView(this); }
+        private ShapeDrawable createRectDrawable(int color, int radius) { ShapeDrawable d = new ShapeDrawable(); d.setColor(color); d.setCornerRadius(UIUtils.dp2px(radius)); return d; }
     }
 }

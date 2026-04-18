@@ -72,16 +72,16 @@ public class UIConstants {
      * Node 节点内部布局配置
      */
     public static class Node {
-        public static final int NODE_WIDTH = 12 * GRID_SIZE;                      // 节点总宽度
-        public static final int ROW_HEIGHT = 2 * GRID_SIZE;                       // 节点单行高度
-        public static final int HEADER_HEIGHT = 2 * GRID_SIZE;                    // 节点标题栏高度
+        public static final int NODE_WIDTH = 6 * GRID_SIZE;                      // 节点总宽度
+        public static final int ROW_HEIGHT = GRID_SIZE;                       // 节点单行高度
+        public static final int HEADER_HEIGHT = GRID_SIZE;                    // 节点标题栏高度
 
         public static float CORNER_RADIUS = 1.5f;                           // 节点圆角半径
         public static final float STROKE_WIDTH_NORMAL = 1.5f;                     // 节点普通状态边框线宽
         public static final float STROKE_WIDTH_SELECTED = 2.5f;                   // 节点选中状态边框线宽
 
         // --- 文本标签与复选框排版参数 ---
-        public static final int LABEL_MARGIN_PORT = 16;                           // 端口与标签文本之间的基础间距
+        public static final int LABEL_MARGIN_PORT = 5;                           // 端口与标签文本之间的基础间距
         public static final int MARGIN_CHECKBOX_OFFSET = 5;                       // 有复选框时的左侧缩进补偿
         public static final int MARGIN_CHECKBOX_GAP = 3;                          // 复选框与文本标签间的间距
         public static final int CHECKBOX_DEFAULT_WIDTH = 16;                      // 复选框控件的默认宽度
@@ -150,9 +150,8 @@ public class UIConstants {
             public static final int TEXT_COLOR_SEARCH = CLR_WHITE;  // 搜索框输入文字颜色
             public static final int HOVER_COLOR = CLR_HOVER_WHITE;  // 菜单项悬停背景覆盖色
 
-            public static final int HEIGHT_SEARCH_BOX = 36;         // 搜索框高度 (dp)
-            public static final int ITEM_HEIGHT = 30;               // 单个菜单项高度 (dp)
-            public static final int ITEM_WEIGHT = 180;              // 菜单整体宽度 (dp)
+            public static final int HEIGHT_SEARCH_BOX = GRID_SIZE;         // 搜索框高度 (dp)
+            public static final int ITEM_HEIGHT = GRID_SIZE;               // 单个菜单项高度 (dp)
             public static final int BORDER_RADIUS = 0;              // 菜单边缘圆角 (dp)
             public static final double TEXT_SIZE = 0.5;             // 菜单项字体比例系数
         }
