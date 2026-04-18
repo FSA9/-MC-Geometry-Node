@@ -2,7 +2,9 @@
   "required": true,
   "package": "com.mine.geometry_node.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": [],
+  "mixins": [
+    "ProjectileMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   },

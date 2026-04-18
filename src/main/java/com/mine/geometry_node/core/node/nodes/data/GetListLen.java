@@ -26,15 +26,12 @@ public class GetListLen extends BaseNode {
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        // 确保请求的是我们的输出端口
         if (!StandardPorts.INT.getId().equals(portName)) {
             return null;
         }
 
-        // 获取列表数据，由于只计算长度，泛型使用 Object.class 即可
         List<Object> list = getInputList(context, StandardPorts.LIST.getId(), Object.class);
 
-        // 返回列表的尺寸（如果没有连接或转换失败，getInputList 保证会返回空列表，因此 size() 安全）
         return list.size();
     }
 }

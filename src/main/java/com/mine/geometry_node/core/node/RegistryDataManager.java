@@ -8,11 +8,6 @@ import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 
-/**
- * [注册表数据管理器]
- * 采用代理门面模式 (Facade)，为 UI 渲染或逻辑层提供统一的数据获取接口。
- * 屏蔽底层的物理端差异，并提供优雅的兜底降级处理。
- */
 public class RegistryDataManager {
 
     // 静态类型

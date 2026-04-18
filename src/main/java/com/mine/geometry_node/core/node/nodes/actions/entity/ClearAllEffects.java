@@ -14,7 +14,7 @@ import net.minecraft.world.entity.LivingEntity;
 
 import java.util.List;
 
-public class ClearAllPotionEffects extends BaseNode {
+public class ClearAllEffects extends BaseNode {
 
     public static final String TYPE_ID = "clear_all_potion_effects";
 
