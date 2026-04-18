@@ -82,9 +82,8 @@ public class UIConstants {
 
         // --- 文本标签与复选框排版参数 ---
         public static final int LABEL_MARGIN_PORT = 5;                           // 端口与标签文本之间的基础间距
-        public static final int MARGIN_CHECKBOX_OFFSET = 5;                       // 有复选框时的左侧缩进补偿
         public static final int MARGIN_CHECKBOX_GAP = 3;                          // 复选框与文本标签间的间距
-        public static final int CHECKBOX_DEFAULT_WIDTH = 16;                      // 复选框控件的默认宽度
+        public static final int CHECKBOX_DEFAULT_WIDTH = 10;                      // 复选框控件的默认宽度
         public static final int TEXT_SIZE_HEADER = 10;                            // 节点标题字体大小
         public static final int TEXT_SIZE_LABEL = 10;                             // 节点内端口标签字体大小
 

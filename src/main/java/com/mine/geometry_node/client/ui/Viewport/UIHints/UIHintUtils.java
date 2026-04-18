@@ -13,13 +13,10 @@ import icyllis.modernui.widget.LinearLayout;
 
 public class UIHintUtils {
 
-    // 【修改】增加 expectedType 参数
     public static void applyStandardInputStyle(EditText et, PortType expectedType) {
         et.setTextColor(UIConstants.CLR_GRAY_LABEL);
         et.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
         et.setGravity(icyllis.modernui.view.Gravity.RIGHT | icyllis.modernui.view.Gravity.CENTER_VERTICAL);
-
-        // 【新增】强制单行，彻底屏蔽回车键产生的换行符
         et.setSingleLine(true);
 
         ShapeDrawable bgDrawable = new ShapeDrawable();
@@ -28,17 +25,17 @@ public class UIHintUtils {
         bgDrawable.setStroke(UIUtils.dp2pxInt(1), 0xFF333333);
 
         et.setBackground(bgDrawable);
-        et.setPadding(UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(2));
 
-        // 【新增】基于端点类型，挂载输入过滤器拦截非法字符
+        // 【核心修复】将上下 Padding 设为 0，把所有垂直空间留给字体渲染
+        et.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
+
         if (expectedType == PortType.INTEGER) {
-            // 整数：仅允许可选的负号开头，后续全为数字
             et.addTextChangedListener(createRegexWatcher(et, "^-?\\d*$"));
         } else if (expectedType == PortType.FLOAT || expectedType == PortType.XYZ) {
-            // 浮点数：允许可选的负号，数字，以及最多一个小数点
             et.addTextChangedListener(createRegexWatcher(et, "^-?\\d*\\.?\\d*$"));
         }
     }
+
 
     // 【新增】生成正则拦截器的工厂方法
     private static TextWatcher createRegexWatcher(EditText et, String regex) {
@@ -73,12 +70,20 @@ public class UIHintUtils {
         };
     }
 
+
     public static LinearLayout.LayoutParams getStandardInputLayoutParams() {
+        float inputHeight = UIConstants.Node.ROW_HEIGHT - 2.0f;
+
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT - 4)
+                UIUtils.dp2pxInt(inputHeight)
         );
-        lp.bottomMargin = UIUtils.dp2pxInt(4);
+
+        // 上下留白
+        int verticalMargin = UIUtils.dp2pxInt((UIConstants.Node.ROW_HEIGHT - inputHeight) / 2.0f);
+        lp.topMargin = verticalMargin;
+        lp.bottomMargin = verticalMargin;
+
         return lp;
     }
 

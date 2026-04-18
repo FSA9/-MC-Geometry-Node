@@ -7,13 +7,21 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
+
 import icyllis.modernui.core.Context;
-import icyllis.modernui.view.MeasureSpec;
+import icyllis.modernui.graphics.Canvas;
+import icyllis.modernui.graphics.Paint;
+import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
-import icyllis.modernui.widget.CheckBox;
-import icyllis.modernui.widget.FrameLayout.LayoutParams;
+import icyllis.modernui.widget.FrameLayout;
 
 public class CheckBoxHintRenderer implements UIHintRenderer {
+
+    @Override
+    public float getRequiredExtraRows(PortRow row) {
+        return 0.0f; // CheckBox 通常与 Label 同行，不需要额外行
+    }
+
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
         String propKey = row.hintParams() != null ? (String) row.hintParams().get("properties") : null;
@@ -24,26 +32,61 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
             val = nodeData.inputs.containsKey(row.leftPort().id()) ? nodeData.inputs.get(row.leftPort().id()) : row.leftPort().defaultValue();
         }
 
-        CheckBox cb = new CheckBox(context);
-        cb.setChecked(String.valueOf(val).equalsIgnoreCase("true"));
-        cb.setBackground(null);
-        cb.setMinimumWidth(0);
-        cb.setMinimumHeight(0);
-        cb.setPadding(0, 0, 0, 0);
+        boolean initialCheck = String.valueOf(val).equalsIgnoreCase("true");
 
-        cb.setOnCheckedChangeListener((buttonView, isChecked) -> {
+        View cb = new View(context) {
+            private final Paint mPaint = new Paint();
+
+            @Override
+            protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                boolean isChecked = getTag() != null && (Boolean) getTag();
+                float w = getWidth();
+                float h = getHeight();
+                float r = w * 0f;
+                mPaint.setAntiAlias(true);
+
+                // 【核心修正】计算线宽，并向内缩进半个线宽，防止边缘被切！
+                float strokeWidth = Math.max(1.0f, w * 0.08f);
+                float offset = strokeWidth / 2.0f;
+
+                mPaint.setStyle(Paint.Style.FILL);
+                mPaint.setColor(isChecked ? 0xFF3B82F6 : 0xFF252525);
+                // 填充区域同样缩进，避免漏出毛边
+                canvas.drawRoundRect(offset, offset, w - offset, h - offset, r, (int) r, mPaint);
+
+                mPaint.setStyle(Paint.Style.STROKE);
+                mPaint.setStrokeWidth(strokeWidth);
+                mPaint.setColor(0xFF555555);
+                canvas.drawRoundRect(offset, offset, w - offset, h - offset, r, (int) r, mPaint);
+
+                if (isChecked) {
+                    mPaint.setColor(0xFFFFFFFF);
+                    mPaint.setStrokeWidth(Math.max(1.5f, w * 0.12f));
+                    mPaint.setStrokeCap(Paint.Cap.ROUND);
+                    mPaint.setStrokeJoin(Paint.Join.ROUND);
+
+                    canvas.drawLine(w * 0.25f, h * 0.5f, w * 0.45f, h * 0.7f, mPaint);
+                    canvas.drawLine(w * 0.45f, h * 0.7f, w * 0.75f, h * 0.3f, mPaint);
+                }
+            }
+        };
+
+        cb.setTag(initialCheck);
+        cb.setOnClickListener(v -> {
+            boolean current = cb.getTag() != null && (Boolean) cb.getTag();
+            boolean isChecked = !current;
+            cb.setTag(isChecked);
+            cb.invalidate();
+
             if (editorContext != null) {
                 if (propKey != null) {
                     Object oldVal = nodeData.properties.get(propKey);
-                    if (!Boolean.valueOf(isChecked).equals(oldVal)) {
-                        editorContext.getCommandManager().execute(new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, isChecked));
-                    }
+                    editorContext.getCommandManager().execute(new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, isChecked));
                 } else if (row.leftPort() != null) {
                     String portId = row.leftPort().id();
                     Object oldVal = nodeData.inputs.get(portId);
-                    if (!Boolean.valueOf(isChecked).equals(oldVal)) {
-                        editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, isChecked));
-                    }
+                    editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, isChecked));
                 }
             } else {
                 if (propKey != null) nodeData.properties.put(propKey, isChecked);
@@ -55,17 +98,15 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        view.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
-        int cbHeightPx = view.getMeasuredHeight() > 0 ? view.getMeasuredHeight() : UIUtils.dp2pxInt(16);
-        float cbHeightDp = UIUtils.px2dp(cbHeightPx);
+        int cbSizePx = UIUtils.dp2pxInt(UIConstants.Node.CHECKBOX_DEFAULT_WIDTH);
 
-        LayoutParams lp = (LayoutParams) view.getLayoutParams();
-        lp.width = LayoutParams.WRAP_CONTENT;
-        lp.height = LayoutParams.WRAP_CONTENT;
-        lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(cbSizePx, cbSizePx);
+        lp.gravity = Gravity.LEFT | Gravity.TOP;
+        lp.leftMargin = UIUtils.dp2pxInt(UIConstants.Node.LABEL_MARGIN_PORT);
 
-        lp.leftMargin = UIUtils.dp2pxInt(UIConstants.Node.LABEL_MARGIN_PORT - 5);
-        lp.topMargin = UIUtils.dp2pxInt(currentY + Math.max(0, (UIConstants.Node.ROW_HEIGHT - cbHeightDp) / 2));
+        int rowHeightPx = UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT);
+        lp.topMargin = UIUtils.dp2pxInt(currentY) + (rowHeightPx - cbSizePx) / 2;
+
         view.setLayoutParams(lp);
     }
 }

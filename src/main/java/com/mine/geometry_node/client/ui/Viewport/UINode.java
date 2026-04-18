@@ -159,9 +159,9 @@ public class UINode extends FrameLayout {
                     tv.setLayoutParams(lp);
 
                     // 限制最大宽度
-                    int maxLabelWidth = (UIConstants.Node.NODE_WIDTH / 2) - leftMargin - 4;
-                    tv.setMaxWidth(UIUtils.dp2pxInt(Math.max(10, maxLabelWidth)));
-                    tv.setSingleLine(true); // 保证单行，避免换行撑破节点
+//                    int maxLabelWidth = (UIConstants.Node.NODE_WIDTH / 2) - leftMargin - 4;
+//                    tv.setMaxWidth(UIUtils.dp2pxInt(Math.max(10, maxLabelWidth)));
+                    tv.setSingleLine(true);
                 }
             }
 
@@ -177,8 +177,8 @@ public class UINode extends FrameLayout {
                     tv.setLayoutParams(lp);
 
                     // 限制最大宽度
-                    int maxLabelWidth = (UIConstants.Node.NODE_WIDTH / 2) - UIConstants.Node.LABEL_MARGIN_PORT - 4;
-                    tv.setMaxWidth(UIUtils.dp2pxInt(Math.max(10, maxLabelWidth)));
+//                    int maxLabelWidth = (UIConstants.Node.NODE_WIDTH / 2) - UIConstants.Node.LABEL_MARGIN_PORT - 4;
+//                    tv.setMaxWidth(UIUtils.dp2pxInt(Math.max(10, maxLabelWidth)));
                     tv.setSingleLine(true);
                 }
             }

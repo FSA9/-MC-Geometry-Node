@@ -78,17 +78,22 @@ public class VectorHintRenderer implements UIHintRenderer {
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
 
-        // --- 核心修正：所有的宽高和 Margin 统一包裹 dp2pxInt ---
+        int targetWidth = UIUtils.dp2pxInt(endX - startX);
+        int targetHeight = FrameLayout.LayoutParams.WRAP_CONTENT;
+
         if (lp == null) {
-            lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(endX - startX), UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT * 3));
+            lp = new FrameLayout.LayoutParams(targetWidth, targetHeight);
         } else {
-            lp.width = UIUtils.dp2pxInt(endX - startX);
-            lp.height = UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT * 3);
+            lp.width = targetWidth;
+            lp.height = targetHeight;
         }
 
         lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
         lp.leftMargin = UIUtils.dp2pxInt(startX);
+
+        // 外部容器直接顶着当前行的起始点即可，因为 LinearLayout 内部的子项已经自带了居中的上下 Margin
         lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset);
+
         view.setLayoutParams(lp);
     }
 }

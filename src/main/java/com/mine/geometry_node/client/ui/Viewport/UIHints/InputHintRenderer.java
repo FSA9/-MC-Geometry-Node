@@ -4,16 +4,16 @@ import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.utils.UIUtils; // 引入工具类
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 
 import icyllis.modernui.core.Context;
+import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
-import icyllis.modernui.widget.LinearLayout;
 
 public class InputHintRenderer implements UIHintRenderer {
 
@@ -38,14 +38,11 @@ public class InputHintRenderer implements UIHintRenderer {
         final Object finalOldVal = val;
         final PortType finalExpectedType = expectedType;
 
-        LinearLayout container = new LinearLayout(context);
-        container.setOrientation(LinearLayout.VERTICAL);
-
+        // 【优化】直接使用 EditText，不使用 LinearLayout 包裹，避免 Margin 冲突
         EditText et = new EditText(context);
         et.setText(val != null ? val.toString() : "");
 
         UIHintUtils.applyStandardInputStyle(et, finalExpectedType);
-        container.addView(et, UIHintUtils.getStandardInputLayoutParams());
 
         et.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus && editorContext != null) {
@@ -79,30 +76,34 @@ public class InputHintRenderer implements UIHintRenderer {
                 }
             }
         });
-        return container;
+        return et;
     }
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
         float startX = UIConstants.Node.LABEL_MARGIN_PORT;
         float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
-
         boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
         float topOffset = hasLabel ? UIConstants.Node.ROW_HEIGHT : 0;
 
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
+        // 【居中核心算法】输入框高度比行高小 4，剩余空间均分给上下 Margin
+        float inputBoxHeight = UIConstants.Node.ROW_HEIGHT - 4.0f;
+        float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
 
-        // --- 核心修正：所有的宽高和 Margin 统一包裹 dp2pxInt ---
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
         if (lp == null) {
-            lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(endX - startX), UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT));
+            lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(endX - startX), UIUtils.dp2pxInt(inputBoxHeight));
         } else {
             lp.width = UIUtils.dp2pxInt(endX - startX);
-            lp.height = UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT);
+            lp.height = UIUtils.dp2pxInt(inputBoxHeight);
         }
 
-        lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
+        lp.gravity = Gravity.LEFT | Gravity.TOP;
         lp.leftMargin = UIUtils.dp2pxInt(startX);
-        lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset);
+
+        // 绝对完美的 Y 轴对齐：当前行 Y 坐标起点 + 行偏移 + 居中留白
+        lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
+
         view.setLayoutParams(lp);
     }
 }
