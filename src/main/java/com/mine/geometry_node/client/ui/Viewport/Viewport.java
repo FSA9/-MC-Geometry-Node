@@ -38,6 +38,9 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     private static final int TOOL_TYPE_MOUSE = 1;
 
+    private float mLastMouseScreenX = 0;
+    private float mLastMouseScreenY = 0;
+
     // ==========================================
     // 1. 核心组件
     // ==========================================
@@ -698,8 +701,14 @@ public class Viewport extends FrameLayout implements InteractionContext {
         return false;
     }
 
+    public float getLastMouseUiX() { return screenToUIX(mLastMouseScreenX); }
+    public float getLastMouseUiY() { return screenToUIY(mLastMouseScreenY); }
+
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
+        mLastMouseScreenX = ev.getX();
+        mLastMouseScreenY = ev.getY();
+
         int action = ev.getActionMasked();
 
         if (mCapturedHintView != null) {
@@ -750,6 +759,9 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent ev) {
+        mLastMouseScreenX = ev.getX();
+        mLastMouseScreenY = ev.getY();
+
         if (isHitOverlay(ev.getX(), ev.getY())) {
             return super.dispatchGenericMotionEvent(ev);
         }

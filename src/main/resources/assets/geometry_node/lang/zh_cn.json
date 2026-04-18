@@ -333,7 +333,7 @@
   "geometry_node.node.on_weather_change": "当天气改变时",
 
   "--- FUNCTIONS ---": "--- 功能函数 ---",
-  "geometry_node.node.cancel_event": "取消事件",
+  "geometry_node.node.finish_graph": "结束图",
   "geometry_node.node.receive_blueprint": "接收蓝图信号",
   "geometry_node.node.trigger_blueprint": "触发蓝图信号",
   "geometry_node.node.function_delay_s": "延迟(秒)",

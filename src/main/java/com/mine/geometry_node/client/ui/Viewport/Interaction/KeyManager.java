@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdPasteNodes;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveNodes;
 import com.mine.geometry_node.client.ui.Viewport.UINode;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
+import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
 import icyllis.modernui.view.KeyEvent;
@@ -81,11 +82,14 @@ public class KeyManager {
     private void performPaste() {
         if (sClipboardJson == null || sClipboardJson.isEmpty()) return;
 
-        // 执行粘贴命令，传入 30 像素的偏移量，防止节点重叠
+        // 从 Context 中拉取鼠标最后的逻辑坐标 (需要你将 InteractionContext 转型为 Viewport 或者补充接口)
+        float uiX = ((com.mine.geometry_node.client.ui.Viewport.Viewport)mContext).getLastMouseUiX();
+        float uiY = ((com.mine.geometry_node.client.ui.Viewport.Viewport)mContext).getLastMouseUiY();
+
         CmdPasteNodes cmd = new CmdPasteNodes(
                 mContext.getEditorContext().getGraphController(),
                 sClipboardJson,
-                30.0f
+                uiX, uiY  // 传入真实鼠标坐标
         );
         mContext.getEditorContext().getCommandManager().execute(cmd);
 
@@ -120,13 +124,6 @@ public class KeyManager {
     private void performSaveJSON() {
         mContext.requestViewportFocus();
 
-        // 1. 获取当前图纸对象
-        com.mine.geometry_node.core.node.NodeGraph graph = mContext.getEditorContext().getGraph();
-
-        // 2. 转换为 JSON
-        String jsonOutput = GraphJsonIO.toJson(graph);
-
-        // 3. 调用本地保存 (传入图纸名字和 JSON 内容)
-        com.mine.geometry_node.client.ui.persistence.LocalDraftManager.saveDraft(graph.graphName, jsonOutput);
+        DocumentManager.INSTANCE.saveSession(DocumentManager.INSTANCE.getActiveSession());
     }
 }

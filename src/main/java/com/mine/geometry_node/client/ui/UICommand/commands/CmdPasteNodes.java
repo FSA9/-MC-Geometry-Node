@@ -14,49 +14,57 @@ public class CmdPasteNodes implements ICommand {
     private final List<NodeData> mPastedNodes = new ArrayList<>();
 
     /**
-     * @param controller 图控制器
-     * @param json 剪贴板中复制的子图 JSON
-     * @param offset 粘贴时为了避免完全重合，给的一个像素偏移量
+     * @param targetUiX 鼠标所在的 UI 逻辑坐标 X
+     * @param targetUiY 鼠标所在的 UI 逻辑坐标 Y
      */
-    public CmdPasteNodes(GraphController controller, String json, float offset) {
+    public CmdPasteNodes(GraphController controller, String json, float targetUiX, float targetUiY) {
         this.mController = controller;
-
-        // 1. 利用现有的 JSON 工具，把 JSON 当作一个临时的 Graph 读出来
         NodeGraph tempGraph = GraphJsonIO.fromJson(json);
 
-        // 2. ID 重映射表：Old ID -> New ID
         Map<String, String> oldToNewIdMap = new HashMap<>();
 
-        // 3. 生成新 ID，并处理位置偏移
+        // 1. 计算被复制节点群的整体包围盒左上角（用于计算相对偏移排列）
+        float minX = Float.MAX_VALUE;
+        float minY = Float.MAX_VALUE;
         for (NodeData oldNode : tempGraph.nodes.values()) {
-            String newId = UUID.randomUUID().toString(); // 生成全新ID
+            if (oldNode.uiPos[0] < minX) minX = oldNode.uiPos[0];
+            if (oldNode.uiPos[1] < minY) minY = oldNode.uiPos[1];
+        }
+        if (minX == Float.MAX_VALUE) { minX = 0; minY = 0; }
+
+        // 2. 生成新 ID，并根据鼠标位置计算绝对偏移
+        for (NodeData oldNode : tempGraph.nodes.values()) {
+            String newId = UUID.randomUUID().toString();
             oldToNewIdMap.put(oldNode.id, newId);
             oldNode.id = newId;
 
-            // 稍微偏移一下坐标，防止粘贴的节点和原节点完全叠在一起看不见
-            oldNode.uiPos[0] += offset;
-            oldNode.uiPos[1] += offset;
+            // 保持相对阵型，整体移动到鼠标位置
+            float relativeX = oldNode.uiPos[0] - minX;
+            float relativeY = oldNode.uiPos[1] - minY;
+            oldNode.uiPos[0] = targetUiX + relativeX;
+            oldNode.uiPos[1] = targetUiY + relativeY;
 
             mPastedNodes.add(oldNode);
         }
 
-        // 4. 重映射连线：把内部互相连接的旧 ID 替换成新 ID
+        // 3. 重映射连线并彻底清除外部残留连线
         for (NodeData node : mPastedNodes) {
+
             // 修复数据连线
             Map<String, List<Connection>> newOutputs = new HashMap<>();
             for (Map.Entry<String, List<Connection>> entry : node.outputs.entrySet()) {
                 List<Connection> newLinks = new ArrayList<>();
                 for (Connection oldLink : entry.getValue()) {
                     String targetId = oldLink.targetNodeId();
-                    // 如果连接的目标也在本次复制的节点中，更新为它的新 ID
+                    // 【核心修改】：只保留复制群体内部的连线，丢弃对外部原图节点的连线
                     if (oldToNewIdMap.containsKey(targetId)) {
                         newLinks.add(new Connection(oldToNewIdMap.get(targetId), oldLink.targetPortName()));
-                    } else {
-                        // 如果连接的目标不在复制集合中，保留对原图外部节点的引用（或者你想断开也可以直接 drop 掉）
-                        newLinks.add(oldLink);
                     }
                 }
-                newOutputs.put(entry.getKey(), newLinks);
+                // 只有非空时才保存，确保干净
+                if (!newLinks.isEmpty()) {
+                    newOutputs.put(entry.getKey(), newLinks);
+                }
             }
             node.outputs = newOutputs;
 
@@ -64,23 +72,29 @@ public class CmdPasteNodes implements ICommand {
             Map<String, String> newExec = new HashMap<>();
             for (Map.Entry<String, String> entry : node.execution.entrySet()) {
                 String targetId = entry.getValue();
-                newExec.put(entry.getKey(), oldToNewIdMap.getOrDefault(targetId, targetId));
+                // 同理，只保留内部互连
+                if (oldToNewIdMap.containsKey(targetId)) {
+                    newExec.put(entry.getKey(), oldToNewIdMap.get(targetId));
+                }
             }
             node.execution = newExec;
 
-            // 清空已连接输入状态，因为这是新节点，稍后由 Controller 重新计算
-            node.connectedInputs.clear();
+            // 【核心修改】：彻底清空残留的被动输入连接状态
+            if (node.connectedInputs != null) {
+                node.connectedInputs.clear();
+            } else {
+                node.connectedInputs = new HashSet<>();
+            }
         }
     }
 
     @Override
     public void execute() {
-        // 先把节点加进去
         for (NodeData node : mPastedNodes) {
             mController.addNode(node);
         }
 
-        // 节点就绪后，再发送连线事件更新 UI
+        // 恢复内部互连
         for (NodeData node : mPastedNodes) {
             for (Map.Entry<String, List<Connection>> entry : node.outputs.entrySet()) {
                 for (Connection link : entry.getValue()) {
@@ -95,7 +109,6 @@ public class CmdPasteNodes implements ICommand {
 
     @Override
     public void undo() {
-        // 撤销粘贴很简单：直接把这些新生成的节点删掉即可
         for (NodeData node : mPastedNodes) {
             mController.removeNode(node.id);
         }

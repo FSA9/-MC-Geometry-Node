@@ -115,7 +115,7 @@ public class ViewportPanel extends LinearLayout {
         closeBtn.setPadding(8, 0, 8, 0);
         closeBtn.setTextColor(isActive ? 0xFFCCCCCC : 0xFF888888);
         closeBtn.setOnClickListener(v -> {
-            saveSession(session);
+            DocumentManager.INSTANCE.saveSession(session);
             v.post(() -> docMgr.closeSession(session));
         });
         contentArea.addView(closeBtn);
@@ -204,14 +204,6 @@ public class ViewportPanel extends LinearLayout {
             final int finalTarget = targetIdx;
             mTabBar.post(() -> docMgr.moveSession(currentIndex, finalTarget));
         }
-    }
-
-    private void saveSession(GraphSession session) {
-        try {
-            String json = GraphJsonIO.toJson(session.editorContext.getGraph());
-            Files.writeString(Path.of(session.fileId), json);
-            session.isDirty = false;
-        } catch (Exception e) { e.printStackTrace(); }
     }
 
     private ShapeDrawable createColorDrawable(int color) {

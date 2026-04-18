@@ -380,7 +380,9 @@ public class InteractionManager {
                 String inNodeId = input.node.getNodeData().id;
 
                 CmdConnect cmd = new CmdConnect(
-                        mContext.getEditorContext().getGraphController(), outNodeId, output.portId, inNodeId, input.portId);
+                        mContext.getEditorContext().getGraphController(),
+                        mContext.getEditorContext().getGraph(),
+                        outNodeId, output.portId, inNodeId, input.portId);
                 mContext.getEditorContext().getCommandManager().execute(cmd);
             }
         }

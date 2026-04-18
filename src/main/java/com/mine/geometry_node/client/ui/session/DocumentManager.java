@@ -1,5 +1,9 @@
 package com.mine.geometry_node.client.ui.session;
 
+import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,6 +71,30 @@ public class DocumentManager {
             if (mOnTabChangedListener != null) {
                 mOnTabChangedListener.run();
             }
+        }
+    }
+
+    public void saveSession(GraphSession session) {
+        if (session == null) return;
+        try {
+            // 1. 序列化当前图纸
+            String json = GraphJsonIO.toJson(session.editorContext.getGraph());
+
+            // 2. 写入文件 (继承你之前在 ViewportPanel 中的逻辑)
+            Files.writeString(Path.of(session.fileId), json);
+
+            // 3. 清除脏标记
+            session.isDirty = false;
+
+            // 4. 触发 UI 刷新 (消除 Tab 上的星号)
+            if (mOnTabChangedListener != null) {
+                mOnTabChangedListener.run();
+            }
+
+            System.out.println("[DocumentManager] 成功保存文件: " + session.fileId);
+        } catch (Exception e) {
+            System.err.println("[DocumentManager] 保存失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
