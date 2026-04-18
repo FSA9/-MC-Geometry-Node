@@ -151,7 +151,7 @@ public class UIConstants {
 
             public static final int HEIGHT_SEARCH_BOX = GRID_SIZE;         // 搜索框高度 (dp)
             public static final int ITEM_HEIGHT = GRID_SIZE;               // 单个菜单项高度 (dp)
-            public static final int BORDER_RADIUS = 0;              // 菜单边缘圆角 (dp)
+            public static final int BORDER_RADIUS = 1;              // 菜单边缘圆角 (dp)
             public static final double TEXT_SIZE = 0.5;             // 菜单项字体比例系数
         }
     }
