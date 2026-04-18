@@ -83,25 +83,28 @@ public class InputHintRenderer implements UIHintRenderer {
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
         float startX = UIConstants.Node.LABEL_MARGIN_PORT;
         float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
+
         boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
         float topOffset = hasLabel ? UIConstants.Node.ROW_HEIGHT : 0;
 
-        // 【居中核心算法】输入框高度比行高小 4，剩余空间均分给上下 Margin
-        float inputBoxHeight = UIConstants.Node.ROW_HEIGHT - 4.0f;
+        // 直接调用工具类获取高度
+        float inputBoxHeight = UIHintUtils.getStandardInputHeight();
+        // 居中偏移也基于工具类的高度来算
         float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
+        int widthPx = UIUtils.dp2pxInt(endX - startX);
+        int heightPx = UIUtils.dp2pxInt(inputBoxHeight);
+
         if (lp == null) {
-            lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(endX - startX), UIUtils.dp2pxInt(inputBoxHeight));
+            lp = new FrameLayout.LayoutParams(widthPx, heightPx);
         } else {
-            lp.width = UIUtils.dp2pxInt(endX - startX);
-            lp.height = UIUtils.dp2pxInt(inputBoxHeight);
+            lp.width = widthPx;
+            lp.height = heightPx;
         }
 
         lp.gravity = Gravity.LEFT | Gravity.TOP;
         lp.leftMargin = UIUtils.dp2pxInt(startX);
-
-        // 绝对完美的 Y 轴对齐：当前行 Y 坐标起点 + 行偏移 + 居中留白
         lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
 
         view.setLayoutParams(lp);

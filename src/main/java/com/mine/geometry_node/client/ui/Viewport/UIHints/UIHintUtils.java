@@ -13,6 +13,12 @@ import icyllis.modernui.widget.LinearLayout;
 
 public class UIHintUtils {
 
+    public static final float INPUT_HEIGHT_OFFSET = 2.0f;
+
+    public static float getStandardInputHeight() {
+        return UIConstants.Node.ROW_HEIGHT - INPUT_HEIGHT_OFFSET;
+    }
+
     public static void applyStandardInputStyle(EditText et, PortType expectedType) {
         et.setTextColor(UIConstants.CLR_GRAY_LABEL);
         et.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
@@ -72,19 +78,11 @@ public class UIHintUtils {
 
 
     public static LinearLayout.LayoutParams getStandardInputLayoutParams() {
-        float inputHeight = UIConstants.Node.ROW_HEIGHT - 2.0f;
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+        // 统一使用像素转换
+        return new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(inputHeight)
+                UIUtils.dp2pxInt(getStandardInputHeight())
         );
-
-        // 上下留白
-        int verticalMargin = UIUtils.dp2pxInt((UIConstants.Node.ROW_HEIGHT - inputHeight) / 2.0f);
-        lp.topMargin = verticalMargin;
-        lp.bottomMargin = verticalMargin;
-
-        return lp;
     }
 
     public static float getSafeVectorComponent(Object rawVal, int index) {
