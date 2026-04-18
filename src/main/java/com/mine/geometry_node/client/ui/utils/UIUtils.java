@@ -1,4 +1,6 @@
-package com.mine.geometry_node.client.ui;
+package com.mine.geometry_node.client.ui.utils;
+
+import com.mine.geometry_node.client.ui.UIConstants;
 
 /**
  * 坐标与单位转换工具类

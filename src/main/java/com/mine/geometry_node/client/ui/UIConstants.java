@@ -58,8 +58,8 @@ public class UIConstants {
         public static final int HEIGHT_HEADER = 30;              // 顶部栏高度 (dp)
         public static final int HEIGHT_BOTTOM_DEFAULT = 150;     // 底部栏默认高度 (dp)
         public static final int HEIGHT_BOTTOM_MIN = 50;          // 底部栏最小高度 (dp)
-        public static final int SPLITTER_HITBOX_SIZE = 4;        // 分割线触摸触发区粗细 (dp)
-        public static final int SPLITTER_VISUAL_SIZE = 2;        // 分割线视觉粗细 (dp)
+        public static final int SPLITTER_HITBOX_SIZE = 2;        // 分割线触摸触发区粗细 (dp)
+        public static final int SPLITTER_VISUAL_SIZE = 1;        // 分割线视觉粗细 (dp)
         public static final int TEXT_SIZE = 14;                  // 全局默认字体大小 (sp)
 
         public static final float WEIGHT_LEFT = 0.2f;            // 左侧面板初始宽度权重

@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.Viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.UIUtils;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.Viewport.UIHints.HintRendererFactory;
 import com.mine.geometry_node.client.ui.Viewport.UIHints.UIHintRenderer;
 import com.mine.geometry_node.client.ui.persistence.ConfigManager;
@@ -10,7 +10,6 @@ import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.UIHint;
 
 import icyllis.modernui.core.Context;

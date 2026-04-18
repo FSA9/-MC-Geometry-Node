@@ -3,10 +3,11 @@ package com.mine.geometry_node.client.ui.Viewport.UIHints;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.UIUtils; // 引入工具类
+import com.mine.geometry_node.client.ui.utils.UIUtils; // 引入工具类
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 
+import com.mine.geometry_node.core.node.port.PortType;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;
@@ -38,7 +39,7 @@ public class VectorHintRenderer implements UIHintRenderer {
             float currentVal = UIHintUtils.getSafeVectorComponent(rawVal, index);
             et.setText(String.valueOf(currentVal));
 
-            UIHintUtils.applyStandardInputStyle(et);
+            UIHintUtils.applyStandardInputStyle(et, PortType.FLOAT);
             container.addView(et, UIHintUtils.getStandardInputLayoutParams());
 
             et.setOnFocusChangeListener((v, hasFocus) -> {

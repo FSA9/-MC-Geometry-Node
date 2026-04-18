@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.UIUtils; // 引入工具类
+import com.mine.geometry_node.client.ui.utils.UIUtils; // 引入工具类
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
@@ -44,7 +44,7 @@ public class InputHintRenderer implements UIHintRenderer {
         EditText et = new EditText(context);
         et.setText(val != null ? val.toString() : "");
 
-        UIHintUtils.applyStandardInputStyle(et);
+        UIHintUtils.applyStandardInputStyle(et, finalExpectedType);
         container.addView(et, UIHintUtils.getStandardInputLayoutParams());
 
         et.setOnFocusChangeListener((v, hasFocus) -> {

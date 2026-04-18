@@ -1,16 +1,13 @@
 package com.mine.geometry_node.client.ui.AssetLibrary;
 
+import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.Viewport.UINode;
 import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.persistence.PathUtils;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
-import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
-import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -23,7 +20,6 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
-import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
@@ -65,53 +61,8 @@ public class AssetBrowserPanel extends LinearLayout {
         // A. 添加左侧
         addView(mLeftSidebar, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.2f));
 
-        // B. 初始化并添加中间分割线
-        FrameLayout splitterContainer = new FrameLayout(context);
-        int hitboxSize = UIConstants.MainUI.SPLITTER_HITBOX_SIZE;
-        splitterContainer.setLayoutParams(new LayoutParams(hitboxSize, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        View visualLine = new View(context);
-        visualLine.setBackground(createColorDrawable(UIConstants.MainUI.BG_SPLITTER));
-        int visualSize = UIConstants.MainUI.SPLITTER_VISUAL_SIZE;
-        FrameLayout.LayoutParams lineParams = new FrameLayout.LayoutParams(visualSize, ViewGroup.LayoutParams.MATCH_PARENT);
-        lineParams.gravity = Gravity.CENTER;
-        splitterContainer.addView(visualLine, lineParams);
-
-        final float[] splitterLastX = {0};
-        splitterContainer.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    splitterLastX[0] = event.getRawX();
-                    return true;
-                case MotionEvent.ACTION_MOVE:
-                    float dx = event.getRawX() - splitterLastX[0];
-                    // 此时 mRightContent 已经被实例化，可以安全调用
-                    float totalWidth = mLeftSidebar.getWidth() + mRightContent.getWidth();
-                    if (totalWidth > 0) {
-                        LayoutParams leftParams = (LayoutParams) mLeftSidebar.getLayoutParams();
-                        LayoutParams rightParams = (LayoutParams) mRightContent.getLayoutParams();
-                        float totalWeight = leftParams.weight + rightParams.weight;
-                        float dWeight = (dx / totalWidth) * totalWeight;
-
-                        leftParams.weight += dWeight;
-                        rightParams.weight -= dWeight;
-
-                        if (leftParams.weight < 0.05f) {
-                            rightParams.weight -= (0.05f - leftParams.weight);
-                            leftParams.weight = 0.05f;
-                        } else if (rightParams.weight < 0.05f) {
-                            leftParams.weight -= (0.05f - rightParams.weight);
-                            rightParams.weight = 0.05f;
-                        }
-                        mLeftSidebar.requestLayout();
-                        mRightContent.requestLayout();
-                    }
-                    splitterLastX[0] = event.getRawX();
-                    return true;
-            }
-            return false;
-        });
-        addView(splitterContainer);
+        // B. 使用公共组件添加中间分割线
+        addView(PanelSplitter.create(context, true, null));
 
         // C. 添加右侧内容区
         addView(mRightContent, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.8f));

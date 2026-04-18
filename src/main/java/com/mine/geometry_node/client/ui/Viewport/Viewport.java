@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.Viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.UIUtils;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.InteractionManager;
 import com.mine.geometry_node.client.ui.Viewport.Interaction.KeyManager;

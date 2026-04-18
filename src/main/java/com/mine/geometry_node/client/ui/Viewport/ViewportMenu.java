@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.Viewport;
 
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.UIUtils; // 引用工具类
+import com.mine.geometry_node.client.ui.utils.UIUtils; // 引用工具类
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.core.node.NodeCategory;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -10,10 +10,7 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
-import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
-import icyllis.modernui.view.View;
-import icyllis.modernui.view.ViewGroup;
+import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
 
@@ -47,21 +44,25 @@ public class ViewportMenu extends FrameLayout {
                 UIConstants.ViewPort.NodeMenu.BG_COLOR,
                 UIConstants.ViewPort.NodeMenu.BORDER_RADIUS));
 
-        int menuPadding = UIUtils.dp2pxInt(4); // 4dp
+        int menuPadding = UIUtils.dp2pxInt(4);
         mContentLayout.setPadding(menuPadding, menuPadding, menuPadding, menuPadding);
         mContentLayout.setOnClickListener(v -> {});
 
+        // 1. 约束绝对位置在左上角
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                UIUtils.dp2pxInt(200), LayoutParams.WRAP_CONTENT); // 假设宽度 200dp
+                UIUtils.dp2pxInt(100), LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.TOP | Gravity.LEFT;
         mContentLayout.setLayoutParams(lp);
 
         // 搜索框
         mSearchBox = new EditText(context);
         mSearchBox.setHint(Component.translatable("menu.node.search").getString());
 
-        // 字体计算：高度 * 比例，保持逻辑一致
-        float searchFontSize = UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * (float) UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
-        mSearchBox.setTextSize(0, searchFontSize);
+
+
+        // 2. 移除乘法，直接给定安全的字体像素大小进行测试
+        float searchFontSizeDp = UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * (float) UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
+        mSearchBox.setTextSize(0, UIUtils.dp2px(searchFontSizeDp));
         mSearchBox.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
         mSearchBox.setHintTextColor(0xFF666666);
         mSearchBox.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.SEARCH_BG_COLOR, 4));
@@ -79,7 +80,7 @@ public class ViewportMenu extends FrameLayout {
         searchLp.setMargins(menuPadding, menuPadding, menuPadding, UIUtils.dp2pxInt(6));
         mContentLayout.addView(mSearchBox, searchLp);
 
-        // 列表
+        // 列表容器
         ScrollView sv = new ScrollView(context);
         mListContainer = new LinearLayout(context);
         mListContainer.setOrientation(LinearLayout.VERTICAL);
@@ -87,8 +88,10 @@ public class ViewportMenu extends FrameLayout {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
 
+        // 3. 取消 weight 约束，改为 WRAP_CONTENT，靠内部元素自然撑开
         mContentLayout.addView(sv, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(300))); // 300dp 滚动区
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
 
         addView(mContentLayout);
     }
@@ -102,21 +105,34 @@ public class ViewportMenu extends FrameLayout {
         mMenuY = y;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
+
+        // 【修复1】显式声明左上角对齐，防止 FrameLayout 默认居中策略干扰
+        lp.gravity = Gravity.TOP | Gravity.LEFT;
+
         lp.leftMargin = (int) x;
         lp.topMargin = (int) y;
 
-        // 边界防溢出 (使用工具类转换临界值)
+        // 【修复2】动态计算真实物理边界，抛弃写死的 350dp 防溢出
         if (parent != null) {
-            int checkW = UIUtils.dp2pxInt(230);
-            int safeW = UIUtils.dp2pxInt(250);
-            int checkH = UIUtils.dp2pxInt(350);
-            int safeH = UIUtils.dp2pxInt(360);
+            // 让容器主动测量自己在当前内容下的真实物理宽高
+            int widthSpec = MeasureSpec.makeMeasureSpec(UIUtils.dp2pxInt(200), MeasureSpec.EXACTLY);
+            int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+            mContentLayout.measure(widthSpec, heightSpec);
 
-            if (x + checkW > parent.getWidth()) {
-                lp.leftMargin = (int) (parent.getWidth() - safeW);
+            int actualW = mContentLayout.getMeasuredWidth();
+            int actualH = mContentLayout.getMeasuredHeight();
+
+            // 兜底：如果还没渲染出来拿不到，给个保守的物理像素估值
+            if (actualW == 0) actualW = UIUtils.dp2pxInt(200);
+            if (actualH == 0) actualH = UIUtils.dp2pxInt(300);
+
+            // 溢出纠偏：超右边缘，就贴紧右边缘
+            if (x + actualW > parent.getWidth()) {
+                lp.leftMargin = Math.max(0, parent.getWidth() - actualW);
             }
-            if (y + checkH > parent.getHeight()) {
-                lp.topMargin = (int) (parent.getHeight() - safeH);
+            // 溢出纠偏：超下边缘，就贴紧下边缘
+            if (y + actualH > parent.getHeight()) {
+                lp.topMargin = Math.max(0, parent.getHeight() - actualH);
             }
         }
         mContentLayout.setLayoutParams(lp);
@@ -216,10 +232,11 @@ public class ViewportMenu extends FrameLayout {
         TextView tv = new TextView(getContext());
         tv.setText(text);
 
-        float fontSize = UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * (float) UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
-        tv.setTextSize(0, fontSize);
+        // 同样移除复杂的乘法计算，给一个安全的绝对字号
+        float itemFontSizeDp = UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * (float) UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
+        tv.setTextSize(0, UIUtils.dp2px(itemFontSizeDp));
         tv.setTextColor(color);
-        tv.setPadding(UIUtils.dp2pxInt(12), 0, UIUtils.dp2pxInt(12), 0);
+        tv.setPadding(UIUtils.dp2pxInt(3), 0, UIUtils.dp2pxInt(3), 0);
         tv.setGravity(Gravity.CENTER_VERTICAL);
         tv.setOnClickListener(listener);
 
