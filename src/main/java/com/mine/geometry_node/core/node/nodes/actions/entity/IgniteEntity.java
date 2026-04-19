@@ -29,11 +29,11 @@ public class IgniteEntity extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        Float time = getInput(context, StandardPorts.TIME.getId(), Float.class);
+        Integer ticks = getInput(context, StandardPorts.TICK.getId(), Integer.class);
 
-        if (time != null && time > 0 && !entities.isEmpty()) {
+        if (ticks != null && ticks > 0 && !entities.isEmpty()) {
             for (Entity entity : entities) {
-                entity.setRemainingFireTicks(Math.round(time));
+                entity.igniteForTicks(ticks);
             }
         }
 

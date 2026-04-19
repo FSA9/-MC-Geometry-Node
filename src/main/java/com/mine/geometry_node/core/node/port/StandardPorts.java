@@ -27,6 +27,8 @@ public enum StandardPorts {
     DEBUG("debug", PortType.BOOLEAN),
     CASE("case", PortType.BOOLEAN),
     IS_HIT("is_hit", PortType.BOOLEAN),
+    IS_BLOCK_BREAK("is_block_break", PortType.BOOLEAN),
+    IS_FIRE_GEN("is_fire_gen", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
@@ -36,6 +38,8 @@ public enum StandardPorts {
     RADIUS("radius", PortType.FLOAT),
     SIZE_1("size_1", PortType.FLOAT),
     TIME("time", PortType.FLOAT),
+    VOLUME("volume", PortType.FLOAT),
+    PITCH("pitch", PortType.FLOAT),
 
     // String
     NAME("name", PortType.STRING),

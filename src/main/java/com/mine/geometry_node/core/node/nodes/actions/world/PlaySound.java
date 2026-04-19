@@ -37,8 +37,8 @@ public class PlaySound extends BaseNode {
                                 PortMetaKeys.OPTIONS, RegistryDataManager.getAllSounds().toArray(new String[0])
                         )
                 ))
-                .addRow(new PortRow(StandardPorts.VALUE.toInputWithIndex(0, 1.0f), null, UIHint.SLIDER, null, null)) // Volume
-                .addRow(new PortRow(StandardPorts.VALUE.toInputWithIndex(1, 1.0f), null, UIHint.SLIDER, null, null)) // Pitch
+                .addRow(new PortRow(StandardPorts.VOLUME.toInputWithIndex(0, 1.0f), null, UIHint.SLIDER, null, null)) // Volume [0, 1]
+                .addRow(new PortRow(StandardPorts.PITCH.toInputWithIndex(1, 1.0f), null, UIHint.SLIDER, null, null)) // Pitch [0.5, 2]
                 .build();
     }
 
@@ -46,11 +46,10 @@ public class PlaySound extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Vec3 pos = getInput(context, StandardPorts.XYZ.getId(), Vec3.class);
         String soundId = (String) context.getNodeProperty(PROPERTY_SOUND);
-        Float volume = getInput(context, StandardPorts.VALUE.getIdWithIndex(0), Float.class);
-        Float pitch = getInput(context, StandardPorts.VALUE.getIdWithIndex(1), Float.class);
+        Float volume = getInput(context, StandardPorts.VOLUME.getIdWithIndex(0), Float.class);
+        Float pitch = getInput(context, StandardPorts.PITCH.getIdWithIndex(1), Float.class);
 
         if (pos != null && soundId != null && context.getLevel() instanceof ServerLevel level) {
-            // 修复点：使用 tryParse 替代 new ResourceLocation
             ResourceLocation rl = ResourceLocation.tryParse(soundId);
 
             if (rl != null) {

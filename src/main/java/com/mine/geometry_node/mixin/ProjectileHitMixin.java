@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Projectile.class)
-public abstract class ProjectileMixin {
+public abstract class ProjectileHitMixin {
     @Inject(method = "onHit", at = @At("HEAD"))
     private void geometryNode$onProjectileHit(HitResult result, CallbackInfo ci) {
         Projectile projectile = (Projectile) (Object) this;
@@ -30,6 +30,8 @@ public abstract class ProjectileMixin {
         ServerLevel serverLevel = (ServerLevel) projectile.level();
         Entity owner = projectile.getOwner();
         Vec3 hitPos = result.getLocation();
+
+        Vec3 impactVelocity = projectile.getDeltaMovement();
 
         Entity hitEntity = null;
         BlockState hitBlock = null;
@@ -51,6 +53,7 @@ public abstract class ProjectileMixin {
         GraphEngine.dispatchEvent(serverLevel, dispatchTarget, OnProjectileHit.TYPE_ID, process -> {
             process.setEventData(StandardPorts.ENTITY.getId(), projectile);
             process.setEventData(StandardPorts.XYZ.getId(), hitPos);
+            process.setEventData(StandardPorts.VECTOR.getId(), impactVelocity);
 
             if (finalOwner != null) {
                 process.setEventData(StandardPorts.SOURCE_ENTITY.getId(), finalOwner);

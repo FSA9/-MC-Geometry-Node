@@ -49,11 +49,12 @@ public class ClearEffect extends BaseNode {
         if (!entities.isEmpty() && effectId != null) {
             ResourceLocation rl = ResourceLocation.tryParse(effectId);
             if (rl != null) {
-                MobEffect effect = BuiltInRegistries.MOB_EFFECT.get(rl);
-                if (effect != null) {
+                var effectHolder = BuiltInRegistries.MOB_EFFECT.getHolder(rl);
+                if (effectHolder.isPresent()) {
                     for (Entity entity : entities) {
                         if (entity instanceof LivingEntity living) {
-                            living.removeEffect((Holder<MobEffect>) effect);
+                            // 直接传入获取到的 Holder，不再强转
+                            living.removeEffect(effectHolder.get());
                         }
                     }
                 }

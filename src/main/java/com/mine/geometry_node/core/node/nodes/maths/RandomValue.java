@@ -9,11 +9,11 @@ import net.minecraft.network.chat.Component;
 
 public class RandomValue extends BaseNode {
 
-    public static final String TYPE_ID = "math_random";
+    public static final String TYPE_ID = "random_value";
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.math_random"))
+        return NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.random_value"))
                 // 第一行：输出端口 (随机生成的结果)
                 .addRow(new PortRow(
                         null,

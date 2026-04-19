@@ -22,6 +22,8 @@ public class OnProjectileHit extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.SOURCE_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 // 击中的实体 (如果是击中方块，此项为 null)
                 .addRow(new PortRow(null, StandardPorts.TRIGGER_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
+                // 碰撞瞬间的投掷物运动矢量
+                .addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.DEFAULT, null, null))
                 // 击中位置的精准坐标
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))
                 // 击中的方块状态 (如果是击中实体，此项为 null)

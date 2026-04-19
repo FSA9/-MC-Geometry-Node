@@ -54,14 +54,15 @@ public class AddEffect extends BaseNode {
         if (!entities.isEmpty() && effectId != null) {
             ResourceLocation rl = ResourceLocation.tryParse(effectId);
             if (rl != null) {
-                MobEffect effect = BuiltInRegistries.MOB_EFFECT.get(rl);
-                if (effect != null) {
+                var effectHolder = BuiltInRegistries.MOB_EFFECT.getHolder(rl);
+                if (effectHolder.isPresent()) {
                     int dur = duration != null ? duration : 600;
                     int amp = amplifier != null ? amplifier : 0;
 
                     for (Entity entity : entities) {
                         if (entity instanceof LivingEntity living) {
-                            living.addEffect(new MobEffectInstance((Holder<MobEffect>) effect, dur, amp));
+                            // 直接传入 Holder，不再强转
+                            living.addEffect(new MobEffectInstance(effectHolder.get(), dur, amp));
                         }
                     }
                 }

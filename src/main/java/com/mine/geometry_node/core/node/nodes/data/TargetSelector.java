@@ -37,11 +37,13 @@ public class TargetSelector extends BaseNode {
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
-        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA, Component.literal("geometry_node.node.target_selector"))
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.target_selector"))
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 30);
 
         // 输出端口
         builder.addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null));
+
+        builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null));
 
         // 基础选择器 (@e, @a...)
         builder.addRow(new PortRow(
@@ -201,8 +203,44 @@ public class TargetSelector extends BaseNode {
         }
 
         String finalSelector = selectorBuilder.toString();
-        // 此处你可以根据生成的 finalSelector 字符串去获取实体列表
-        System.out.println("[TargetSelector] 生成指令: " + finalSelector);
+
+        try {
+            System.out.println("123131231231231312");
+            // 1. 尝试获取连线传入的显式实体
+            net.minecraft.world.entity.Entity explicitEntity = getInput(context, StandardPorts.ENTITY.getId(), net.minecraft.world.entity.Entity.class);
+
+            net.minecraft.commands.CommandSourceStack source;
+
+            // --- 严格按照“输入实体 > 绑定对象”的优先级构建执行源 ---
+            if (explicitEntity != null) {
+                // 优先级 1：显式传入的实体为主语
+                source = explicitEntity.createCommandSourceStack();
+            }
+            else if (context.getEntity() != null) {
+                // 优先级 2：未传入实体，回退到图绑定的【实体】
+                source = context.getEntity().createCommandSourceStack();
+            }
+            else if (context.getLevel() != null) {
+                // 优先级 3：未传入且无绑定实体，回退到图绑定的【维度】或【服务器】
+                // 默认使用该维度的原点坐标作为执行中心
+                net.minecraft.server.level.ServerLevel serverLevel = context.getLevel();
+                source = serverLevel.getServer().createCommandSourceStack().withLevel(serverLevel);
+            }
+            else {
+                System.err.println("[TargetSelector] 无法获取任何有效的执行主体 (主语为空)");
+                return java.util.List.of();
+            }
+
+            // 解析选择器并执行搜索
+            com.mojang.brigadier.StringReader reader = new com.mojang.brigadier.StringReader(finalSelector);
+            net.minecraft.commands.arguments.selector.EntitySelector selector =
+                    new net.minecraft.commands.arguments.selector.EntitySelectorParser(reader, true).parse();
+
+            return selector.findEntities(source);
+
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+            System.err.println("[TargetSelector] 目标选择器语法错误: " + finalSelector);
+        }
 
         return List.of();
     }

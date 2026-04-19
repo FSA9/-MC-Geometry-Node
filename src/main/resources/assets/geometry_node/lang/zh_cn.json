@@ -64,12 +64,18 @@
   "geometry_node.port.debug": "调试",
   "geometry_node.port.case": "匹配",
   "geometry_node.port.is_hit": "是否命中",
+  "geometry_node.port.is_block_break": "是否破坏方块",
+  "geometry_node.port.is_fire_gen": "是否产生火焰",
 
   "geometry_node.port.value": "值",
+  "geometry_node.port.min_float": "最小值(F)",
+  "geometry_node.port.max_float": "最大值(F)",
   "geometry_node.port.distance": "距离",
   "geometry_node.port.radius": "半径",
   "geometry_node.port.size_1": "尺寸",
   "geometry_node.port.time": "时间",
+  "geometry_node.port.volume": "音量",
+  "geometry_node.port.pitch": "频率",
 
   "geometry_node.port.name": "名称",
   "geometry_node.port.type": "类型",
@@ -211,7 +217,7 @@
   "geometry_node.node.strike_lightning": "召唤闪电",
 
   "--- DATA ---": "--- 数据处理 ---",
-  "geometry_node.node.geometry_node.node.target_selector": "目标选择器",
+  "geometry_node.node.target_selector": "目标选择器",
   "geometry_node.node.get_entity_attribute": "获取实体属性",
   "geometry_node.node.get_list_len": "获取列表长度",
   "geometry_node.node.get_scope_attribute": "获取作用域属性值",
@@ -257,6 +263,7 @@
 
   "--- EVENTS ---": "--- 事件监听 ---",
   "geometry_node.node.on_projectile_hit": "当投射物击中时",
+  "geometry_node.node.on_projectile_shoot": "当投射物发射时",
   "geometry_node.node.on_block_break": "当方块被破坏时",
   "geometry_node.node.on_block_ignite": "当方块被点燃时",
   "geometry_node.node.on_block_place": "当方块被放置时",
@@ -282,7 +289,6 @@
   "geometry_node.node.on_entity_spawn": "当实体生成时",
   "geometry_node.node.on_entity_tame": "当实体被驯服时",
   "geometry_node.node.on_entity_teleport": "当实体传送时",
-  "geometry_node.node.on_projectile_shoot": "当投射物发射时",
   "geometry_node.node.on_sheep_sheared": "当羊被剪毛时",
   "geometry_node.node.on_slime_split": "当史莱姆分裂时",
   "geometry_node.node.on_target_change": "当追踪目标改变时",
@@ -348,7 +354,7 @@
   "geometry_node.node.switch": "Switch",
 
   "--- MATHS ---": "--- 数学运算 ---",
-  "geometry_node.node.random": "随机数",
+  "geometry_node.node.random_value": "随机数",
   "geometry_node.node.math_expression": "数学表达式",
   "geometry_node.node.math_operation": "运算"
 

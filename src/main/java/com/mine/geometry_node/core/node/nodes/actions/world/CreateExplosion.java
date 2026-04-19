@@ -22,9 +22,9 @@ public class CreateExplosion extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.create_explosion"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.RADIUS.toInput(4.0f), null, UIHint.SLIDER, null, null))
-                .addRow(new PortRow(StandardPorts.BOOL.toInputWithIndex(0, true), null, UIHint.CHECKBOX, null, null)) // 是否破坏方块
-                .addRow(new PortRow(StandardPorts.BOOL.toInputWithIndex(1, false), null, UIHint.CHECKBOX, null, null)) // 是否产生火焰
+                .addRow(new PortRow(StandardPorts.RADIUS.toInput(4.0f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.IS_BLOCK_BREAK.toInputWithIndex(0, true), null, UIHint.CHECKBOX, null, null)) // 是否破坏方块
+                .addRow(new PortRow(StandardPorts.IS_FIRE_GEN.toInputWithIndex(1, false), null, UIHint.CHECKBOX, null, null)) // 是否产生火焰
                 .build();
     }
 
@@ -32,8 +32,8 @@ public class CreateExplosion extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Vec3 pos = getInput(context, StandardPorts.XYZ.getId(), Vec3.class);
         Float radius = getInput(context, StandardPorts.RADIUS.getId(), Float.class);
-        Boolean destroyBlocks = getInput(context, StandardPorts.BOOL.getIdWithIndex(0), Boolean.class);
-        Boolean causeFire = getInput(context, StandardPorts.BOOL.getIdWithIndex(1), Boolean.class);
+        Boolean destroyBlocks = getInput(context, StandardPorts.IS_BLOCK_BREAK.getIdWithIndex(0), Boolean.class);
+        Boolean causeFire = getInput(context, StandardPorts.IS_FIRE_GEN.getIdWithIndex(1), Boolean.class);
 
         if (pos != null && radius != null && context.getLevel() instanceof ServerLevel level) {
             Level.ExplosionInteraction interaction = (destroyBlocks != null && destroyBlocks)
