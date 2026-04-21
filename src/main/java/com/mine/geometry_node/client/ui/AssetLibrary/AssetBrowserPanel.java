@@ -62,7 +62,7 @@ public class AssetBrowserPanel extends LinearLayout {
         addView(mLeftSidebar, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.2f));
 
         // B. 使用公共组件添加中间分割线
-        addView(PanelSplitter.create(context, true, null));
+        addView(PanelSplitter.create(context, true));
 
         // C. 添加右侧内容区
         addView(mRightContent, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.8f));

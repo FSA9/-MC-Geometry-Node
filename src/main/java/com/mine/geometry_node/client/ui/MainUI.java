@@ -68,13 +68,13 @@ public class MainUI extends Fragment {
         View leftPanel = createPanel(context, "Outliner", UIConstants.MainUI.BG_OUTLINER);
         middleContainer.addView(leftPanel, createWeightParams(UIConstants.MainUI.WEIGHT_LEFT));
 
-        middleContainer.addView(PanelSplitter.create(context, true, null));
+        middleContainer.addView(PanelSplitter.create(context, true));
 
         ViewportPanel centerPanel = new ViewportPanel(context);
         middleContainer.addView(centerPanel, createWeightParams(UIConstants.MainUI.WEIGHT_CENTER));
 
         // 替换此处
-        middleContainer.addView(PanelSplitter.create(context, true, null));
+        middleContainer.addView(PanelSplitter.create(context, true));
 
         View rightPanel = createPanel(context, "Properties", UIConstants.MainUI.BG_PROPERTIES);
         middleContainer.addView(rightPanel, createWeightParams(UIConstants.MainUI.WEIGHT_RIGHT));
@@ -90,7 +90,7 @@ public class MainUI extends Fragment {
                 UIUtils.dp2pxInt(UIConstants.MainUI.HEIGHT_BOTTOM_DEFAULT)
         );
 
-        root.addView(PanelSplitter.create(context, false, bottomPanel));
+        root.addView(PanelSplitter.create(context, false));
         root.addView(bottomPanel, bottomParams);
     }
 

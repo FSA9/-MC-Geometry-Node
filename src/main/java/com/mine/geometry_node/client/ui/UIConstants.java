@@ -66,6 +66,9 @@ public class UIConstants {
         public static final float WEIGHT_CENTER = 0.6f;          // 中间视口初始宽度权重
         public static final float WEIGHT_RIGHT = 0.2f;           // 右侧面板初始宽度权重
         public static final float WEIGHT_MIN = 0.05f;            // 面板可缩放的最小权重边界
+
+        public static final float WEIGHT_MIDDLE_VERTICAL = 0.75f; // 中间视口初始占垂直剩余空间的 75%
+        public static final float WEIGHT_BOTTOM_VERTICAL = 0.25f; // 底部资产栏初始占垂直剩余空间的 25%
     }
 
     /**
