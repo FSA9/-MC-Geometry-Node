@@ -97,4 +97,10 @@ public class DocumentManager {
             e.printStackTrace();
         }
     }
+
+    public void notifyTabChanged() {
+        if (mOnTabChangedListener != null) {
+            mOnTabChangedListener.run();
+        }
+    }
 }

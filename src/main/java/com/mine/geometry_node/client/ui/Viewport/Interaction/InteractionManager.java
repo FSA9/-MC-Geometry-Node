@@ -29,6 +29,8 @@ public class InteractionManager {
     private final InteractionContext mContext;
     private int mCurrentMode = MODE_NONE;
 
+    private float mDownScreenX, mDownScreenY;
+
     private float mLastScreenX, mLastScreenY;
     private boolean mHasMovedSignificantly = false;
 
@@ -87,6 +89,8 @@ public class InteractionManager {
     private void handleActionDown(MotionEvent event, float screenX, float screenY) {
         mLastScreenX = screenX;
         mLastScreenY = screenY;
+        mDownScreenX = screenX;
+        mDownScreenY = screenY;
         mHasMovedSignificantly = false;
 
         float uiX = mContext.screenToUIX(screenX);
@@ -144,9 +148,11 @@ public class InteractionManager {
         float dx = screenX - mLastScreenX;
         float dy = screenY - mLastScreenY;
 
-        // 防抖判定：转换 TOUCH_SLOP 为物理像素
+        float totalDx = screenX - mDownScreenX;
+        float totalDy = screenY - mDownScreenY;
         float touchSlopPx = UIUtils.dp2px(UIConstants.ViewPort.Interaction.TOUCH_SLOP);
-        if (Math.abs(dx) > touchSlopPx || Math.abs(dy) > touchSlopPx) {
+
+        if (Math.abs(totalDx) > touchSlopPx || Math.abs(totalDy) > touchSlopPx) {
             mHasMovedSignificantly = true;
         }
 
@@ -237,7 +243,6 @@ public class InteractionManager {
     }
 
     private void finalizeNodeDragging(float endUiX, float endUiY) {
-        if (!mHasMovedSignificantly) return;
         float totalUiDx = endUiX - mDragStartUiX;
         float totalUiDy = endUiY - mDragStartUiY;
 
@@ -246,6 +251,12 @@ public class InteractionManager {
             for (UINode node : mContext.getSelectedNodes()) selectedIds.add(node.getNodeData().id);
             CmdMoveNode cmd = new CmdMoveNode(mContext.getEditorContext().getGraphController(), selectedIds, totalUiDx, totalUiDy);
             mContext.getEditorContext().getCommandManager().execute(cmd);
+        } else {
+            for (UINode node : mContext.getSelectedNodes()) {
+                node.setTranslationX(node.getNodeData().getX());
+                node.setTranslationY(node.getNodeData().getY());
+            }
+            mContext.invalidate();
         }
     }
 
