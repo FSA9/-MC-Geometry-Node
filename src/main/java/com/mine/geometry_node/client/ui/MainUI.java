@@ -10,6 +10,7 @@ import icyllis.modernui.audio.AudioManager;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.fragment.Fragment;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
+import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.util.DataSet;
 import icyllis.modernui.view.LayoutInflater;
 import icyllis.modernui.view.View;
@@ -20,6 +21,8 @@ import icyllis.modernui.widget.TextView;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
 
+import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
+
 public class MainUI extends Fragment {
 
     @Override
@@ -27,11 +30,18 @@ public class MainUI extends Fragment {
         Context context = getContext();
 
         // 密度初始化
+        float BASE_HEIGHT = 1080.0f;
+        float physicalHeight;
+
         if ("true".equals(System.getProperty("gn.standalone"))) {
-            UIConstants.mDensity = 2.0f;
+            physicalHeight = 1080.0f;
         } else {
-            UIConstants.mDensity = context.getResources().getDisplayMetrics().density;
+            physicalHeight = net.minecraft.client.Minecraft.getInstance().getWindow().getHeight();
         }
+
+//        UIConstants.mDensity = physicalHeight / BASE_HEIGHT;
+
+        UIConstants.mDensity = context.getResources().getDisplayMetrics().density;
 
         LinearLayout rootLayout = createRootLayout(context);
         setupHeader(context, rootLayout);
@@ -52,7 +62,7 @@ public class MainUI extends Fragment {
         RelativeLayout header = createPanel(context, "Header / Menu", UIConstants.MainUI.BG_HEADER);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(UIConstants.MainUI.HEIGHT_HEADER) // 使用工具类
+                UIUtils.dp2pxInt(UIConstants.MainUI.HEIGHT_HEADER)
         );
         root.addView(header, params);
     }
@@ -73,7 +83,6 @@ public class MainUI extends Fragment {
         ViewportPanel centerPanel = new ViewportPanel(context);
         middleContainer.addView(centerPanel, createWeightParams(UIConstants.MainUI.WEIGHT_CENTER));
 
-        // 替换此处
         middleContainer.addView(PanelSplitter.create(context, true));
 
         View rightPanel = createPanel(context, "Properties", UIConstants.MainUI.BG_PROPERTIES);
@@ -98,9 +107,10 @@ public class MainUI extends Fragment {
         RelativeLayout panel = new RelativeLayout(context);
         panel.setBackground(createColorDrawable(colorHex));
 
+        // 【修改点】使用 COMPLEX_UNIT_PX 锁定字体大小
         TextView textView = new TextView(context);
         textView.setText(title);
-        textView.setTextSize(UIConstants.MainUI.TEXT_SIZE);
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(UIConstants.MainUI.TEXT_SIZE));
         textView.setTextColor(UIConstants.MainUI.TEXT_COLOR);
 
         RelativeLayout.LayoutParams textParams = new RelativeLayout.LayoutParams(

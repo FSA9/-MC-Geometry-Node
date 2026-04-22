@@ -8,11 +8,13 @@ import com.mine.geometry_node.client.ui.persistence.PathUtils;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
+import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
@@ -29,10 +31,28 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
+import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
+
 public class AssetBrowserPanel extends LinearLayout {
 
+    // ==========================================
+    // 局部 UI 尺寸常量 (单位: DP)
+    // ==========================================
+    private static final float NAV_BAR_HEIGHT = 40.0f;
+    private static final float BTN_ADD_WIDTH = 40.0f;
+    private static final float ROW_HEIGHT = 34.0f;
+    private static final float DRAG_HANDLE_WIDTH = 24.0f;
+
+    private static final float TEXT_SIZE_NAV = 14.0f;
+    private static final float TEXT_SIZE_TITLE = 16.0f;
+    private static final float TEXT_SIZE_PATH = 14.0f;
+    private static final float TEXT_SIZE_HANDLE = 12.0f;
+    private static final float TEXT_SIZE_LIST_ITEM = 15.0f;
+    private static final float TEXT_SIZE_BTN_ADD = 16.0f;
+
     private final QuickAccessListLayout mLeftSidebar;
-    private final LinearLayout mRightContent; // 声明 final
+    private final LinearLayout mRightContent;
     private final LinearLayout mFileListContainer;
     private final EditText mPathInput;
     private File mCurrentDirectory;
@@ -44,9 +64,6 @@ public class AssetBrowserPanel extends LinearLayout {
         setBackground(createColorDrawable(UIConstants.MainUI.BG_TIMELINE));
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
-        // ==========================================
-        // 1. 优先实例化所有核心容器
-        // ==========================================
         mLeftSidebar = new QuickAccessListLayout(context);
         mLeftSidebar.setOrientation(LinearLayout.VERTICAL);
         mLeftSidebar.setBackground(createColorDrawable(0xFF1E1E1E));
@@ -54,27 +71,15 @@ public class AssetBrowserPanel extends LinearLayout {
         mRightContent = new LinearLayout(context);
         mRightContent.setOrientation(LinearLayout.VERTICAL);
 
-        // ==========================================
-        // 2. 按视觉从左到右的顺序 addView
-        // ==========================================
-
-        // A. 添加左侧
         addView(mLeftSidebar, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.2f));
-
-        // B. 使用公共组件添加中间分割线
         addView(PanelSplitter.create(context, true));
-
-        // C. 添加右侧内容区
         addView(mRightContent, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.8f));
 
-        // ==========================================
-        // 3. 构建右侧内部的 UI (导航栏 + 文件列表)
-        // ==========================================
         LinearLayout navBar = new LinearLayout(context);
         navBar.setOrientation(LinearLayout.HORIZONTAL);
         navBar.setGravity(Gravity.CENTER_VERTICAL);
         navBar.setBackground(createColorDrawable(0xFF2A2A2A));
-        mRightContent.addView(navBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 40));
+        mRightContent.addView(navBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(NAV_BAR_HEIGHT)));
 
         TextView btnUp = createNavButton(context, "⬆ 向上");
         btnUp.setOnClickListener(v -> navigateUp());
@@ -82,8 +87,8 @@ public class AssetBrowserPanel extends LinearLayout {
 
         mPathInput = new EditText(context);
         mPathInput.setTextColor(0xFFCCCCCC);
-        mPathInput.setTextSize(14);
-        mPathInput.setPadding(12, 0, 12, 0);
+        mPathInput.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(TEXT_SIZE_NAV));
+        mPathInput.setPadding(dp2pxInt(12), 0, dp2pxInt(12), 0);
         mPathInput.setGravity(Gravity.CENTER_VERTICAL);
         mPathInput.setBackground(null);
         mPathInput.setSingleLine(true);
@@ -103,7 +108,7 @@ public class AssetBrowserPanel extends LinearLayout {
         navBar.addView(mPathInput, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
         TextView btnAdd = createNavButton(context, "＋");
-        btnAdd.setTextSize(16);
+        btnAdd.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(TEXT_SIZE_BTN_ADD));
         btnAdd.setBackground(createColorDrawable(0xFF3A3A3A));
         btnAdd.setOnClickListener(v -> {
             String path = mPathInput.getText().toString().trim();
@@ -115,7 +120,7 @@ public class AssetBrowserPanel extends LinearLayout {
                 }
             }
         });
-        navBar.addView(btnAdd, new LayoutParams(40, ViewGroup.LayoutParams.MATCH_PARENT));
+        navBar.addView(btnAdd, new LayoutParams(dp2pxInt(BTN_ADD_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
         ScrollView scrollView = new ScrollView(context);
         mFileListContainer = new LinearLayout(context);
@@ -123,7 +128,6 @@ public class AssetBrowserPanel extends LinearLayout {
         scrollView.addView(mFileListContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         mRightContent.addView(scrollView, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 触发初始化
         buildSidebar(context);
         navigateTo(PathUtils.getLocalDraftsDir());
     }
@@ -131,10 +135,8 @@ public class AssetBrowserPanel extends LinearLayout {
     private void buildSidebar(Context context) {
         mLeftSidebar.removeAllViews();
 
-        TextView title = new TextView(context);
-        title.setText("快速访问");
-        title.setTextColor(0xFF888888);
-        title.setPadding(10, 10, 10, 10);
+        TextView title = UIUtils.createLockedTextView(context, "快速访问", TEXT_SIZE_TITLE, 0xFF888888);
+        title.setPadding(dp2pxInt(10), dp2pxInt(10), dp2pxInt(10), dp2pxInt(10));
         mLeftSidebar.addView(title);
 
         for (String pathStr : ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths) {
@@ -149,16 +151,13 @@ public class AssetBrowserPanel extends LinearLayout {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setBackground(createColorDrawable(0xFF2A2A2A));
 
-        LayoutParams rowParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 34);
-        rowParams.setMargins(0, 0, 0, 2);
+        LayoutParams rowParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
+        rowParams.setMargins(0, 0, 0, dp2pxInt(2));
         row.setLayoutParams(rowParams);
 
-        TextView dragHandle = new TextView(context);
-        dragHandle.setText(" ⋮⋮ ");
-        dragHandle.setTextColor(0xFF666666);
+        TextView dragHandle = UIUtils.createLockedTextView(context, " ⋮⋮ ", TEXT_SIZE_HANDLE, 0xFF666666);
         dragHandle.setGravity(Gravity.CENTER);
-        dragHandle.setTextSize(12);
-        row.addView(dragHandle, new LayoutParams(24, ViewGroup.LayoutParams.MATCH_PARENT));
+        row.addView(dragHandle, new LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
         final float[] startY = {0};
         final boolean[] isDragging = {false};
@@ -238,18 +237,13 @@ public class AssetBrowserPanel extends LinearLayout {
         });
 
         String displayName = file.getName().isEmpty() ? file.getAbsolutePath() : file.getName();
-        TextView btnPath = new TextView(context);
-        btnPath.setText("📂 " + displayName);
-        btnPath.setPadding(6, 0, 15, 0);
+        TextView btnPath = UIUtils.createLockedTextView(context, "📂 " + displayName, TEXT_SIZE_PATH, 0xFFDDDDDD);
+        btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
         btnPath.setGravity(Gravity.CENTER_VERTICAL);
-        btnPath.setTextColor(0xFFDDDDDD);
         btnPath.setOnClickListener(v -> navigateTo(file));
         row.addView(btnPath, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
-        TextView btnDel = new TextView(context);
-        btnDel.setText("－");
-        btnDel.setTextSize(14);
-        btnDel.setTextColor(0xFFCC4444);
+        TextView btnDel = UIUtils.createLockedTextView(context, "－", TEXT_SIZE_NAV, 0xFFCC4444);
         btnDel.setGravity(Gravity.CENTER);
         btnDel.setBackground(createColorDrawable(0xFF3A3A3A));
 
@@ -264,7 +258,7 @@ public class AssetBrowserPanel extends LinearLayout {
             buildSidebar(context);
         });
 
-        row.addView(btnDel, new LayoutParams(34, ViewGroup.LayoutParams.MATCH_PARENT));
+        row.addView(btnDel, new LayoutParams(dp2pxInt(ROW_HEIGHT), ViewGroup.LayoutParams.MATCH_PARENT));
 
         return row;
     }
@@ -299,11 +293,9 @@ public class AssetBrowserPanel extends LinearLayout {
         for (File file : files) {
             if (!file.isDirectory() && !file.getName().toLowerCase().endsWith(".json")) continue;
 
-            TextView item = new TextView(context);
-            item.setText((file.isDirectory() ? "📁 " : "📄 ") + file.getName());
-            item.setTextColor(file.isDirectory() ? 0xFFDDAA00 : 0xFF88CCFF);
-            item.setPadding(12, 10, 12, 10);
-            item.setTextSize(15);
+            int color = file.isDirectory() ? 0xFFDDAA00 : 0xFF88CCFF;
+            TextView item = UIUtils.createLockedTextView(context, (file.isDirectory() ? "📁 " : "📄 ") + file.getName(), TEXT_SIZE_LIST_ITEM, color);
+            item.setPadding(dp2pxInt(12), dp2pxInt(10), dp2pxInt(12), dp2pxInt(10));
 
             item.setBackground(createColorDrawable(0));
             item.setOnHoverListener((v, event) -> {
@@ -337,19 +329,14 @@ public class AssetBrowserPanel extends LinearLayout {
                     ? new NodeGraph(file.getName())
                     : GraphJsonIO.fromJson(content);
 
-            // 现在是 3 个参数了，非常干净
             GraphSession session = new GraphSession(file.getAbsolutePath(), file.getName(), graph);
-
-            // 剩下的事情全交给 DocumentManager 和 Viewport 处理
             DocumentManager.INSTANCE.openSession(session);
         } catch (Exception e) { e.printStackTrace(); }
     }
 
     private TextView createNavButton(Context context, String text) {
-        TextView btn = new TextView(context);
-        btn.setText(text);
-        btn.setTextColor(0xFFDDDDDD);
-        btn.setPadding(16, 0, 16, 0);
+        TextView btn = UIUtils.createLockedTextView(context, text, TEXT_SIZE_NAV, 0xFFDDDDDD);
+        btn.setPadding(dp2pxInt(16), 0, dp2pxInt(16), 0);
         btn.setGravity(Gravity.CENTER);
         btn.setBackground(createColorDrawable(0xFF444444));
         return btn;
@@ -369,7 +356,7 @@ public class AssetBrowserPanel extends LinearLayout {
             super(context);
             setWillNotDraw(false);
             mIndicatorPaint = new Paint();
-            mIndicatorPaint.setColor(0xFF00AAFF); // IDE 经典蓝
+            mIndicatorPaint.setColor(0xFF00AAFF);
         }
 
         public void updateIndicator(int y) {
@@ -390,8 +377,9 @@ public class AssetBrowserPanel extends LinearLayout {
         protected void dispatchDraw(Canvas canvas) {
             super.dispatchDraw(canvas);
             if (mIndicatorY >= 0) {
-                int drawY = Math.max(2, Math.min(getHeight() - 2, mIndicatorY));
-                canvas.drawRect(0, drawY - 2, getWidth(), drawY + 2, mIndicatorPaint);
+                int indicatorHalfHeight = dp2pxInt(2);
+                int drawY = Math.max(indicatorHalfHeight, Math.min(getHeight() - indicatorHalfHeight, mIndicatorY));
+                canvas.drawRect(0, drawY - indicatorHalfHeight, getWidth(), drawY + indicatorHalfHeight, mIndicatorPaint);
             }
         }
     }

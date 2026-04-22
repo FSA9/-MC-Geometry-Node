@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.utils;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import icyllis.modernui.core.Context;
+import icyllis.modernui.resources.TypedValue;
+import icyllis.modernui.widget.TextView;
 
 /**
  * 坐标与单位转换工具类
@@ -26,5 +29,19 @@ public class UIUtils {
      */
     public static float px2dp(float px) {
         return px / UIConstants.mDensity;
+    }
+
+    /**
+     * 创建一个彻底无视游戏 GUI 比例的 TextView
+     * 强行锁定其物理像素尺寸
+     */
+    public static TextView createLockedTextView(Context context, String text, float dpSize, int colorHex) {
+        TextView tv = new TextView(context);
+        tv.setText(text);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(dpSize));
+        if (colorHex != 0) {
+            tv.setTextColor(colorHex);
+        }
+        return tv;
     }
 }
