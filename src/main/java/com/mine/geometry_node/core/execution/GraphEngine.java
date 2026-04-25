@@ -10,7 +10,12 @@ import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -19,128 +24,184 @@ import java.util.function.Consumer;
  * 负责协调事件触发、图查找、虚拟机实例化以及进程挂载。
  */
 public class GraphEngine {
+
+    // ==========================================
+    // 高性能事件总线 (Pub/Sub Registry)
+    // ==========================================
+
     /**
-     * [事件触发 - 实体快捷版] 兼容以实体为主体触发的事件。
+     * [事件订阅字典] 频段名称 (Frequency) -> 监听该频段的弱引用实体集合
+     * 采用 WeakHashMap 包装的 Set，当实体被卸载或销毁时，会自动从字典中被垃圾回收，避免内存泄漏。
      */
+    private static final Map<String, Set<Entity>> eventSubscribers = new ConcurrentHashMap<>();
+
+    private static void addSubscriber(String frequency, Entity entity) {
+        eventSubscribers.computeIfAbsent(frequency, k -> Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>())))
+                .add(entity);
+    }
+
+    private static void removeSubscriber(String frequency, Entity entity) {
+        Set<Entity> set = eventSubscribers.get(frequency);
+        if (set != null) {
+            set.remove(entity);
+        }
+    }
+
+    /**
+     * [扫描注册] 扫描给定的蓝图图纸，找出所有的 receive_blueprint 节点并将其静态频段注册到字典。
+     */
+    private static void registerEntityForGraph(Entity entity, String graphId) {
+        RuntimeGraphIndex index = getGraphIndex(graphId);
+        if (index == null) return;
+
+        List<Integer> nodes = index.findNodesByType("receive_blueprint");
+        for (int nodeId : nodes) {
+            Object freqObj = index.getNodeStaticInput(nodeId, "frequency");
+            String freq = freqObj != null ? String.valueOf(freqObj) : "";
+            if (!freq.trim().isEmpty()) {
+                addSubscriber(freq, entity);
+            }
+        }
+    }
+
+    /**
+     * [扫描注销] 反向解除绑定
+     */
+    private static void unregisterEntityForGraph(Entity entity, String graphId) {
+        RuntimeGraphIndex index = getGraphIndex(graphId);
+        if (index == null) return;
+
+        List<Integer> nodes = index.findNodesByType("receive_blueprint");
+        for (int nodeId : nodes) {
+            Object freqObj = index.getNodeStaticInput(nodeId, "frequency");
+            String freq = freqObj != null ? String.valueOf(freqObj) : "";
+            if (!freq.trim().isEmpty()) {
+                removeSubscriber(freq, entity);
+            }
+        }
+    }
+
+    /**
+     * [公开接口] 初始化实体时调用。扫描实体身上绑定的所有蓝图并注册监听器。
+     */
+    public static void registerEntityListeners(Entity entity) {
+        EntityGraphAttachment attachment = getAttachment(entity);
+        if (attachment == null || attachment.getBoundGraphs().isEmpty()) return;
+
+        for (String graphId : attachment.getBoundGraphs()) {
+            registerEntityForGraph(entity, graphId);
+        }
+    }
+
+    // ==========================================
+    // 核心触发逻辑
+    // ==========================================
+
     public static void dispatchEvent(@NotNull Entity target, String eventNodeId, @Nullable Consumer<GraphProcess> initializer) {
         if (target.level().isClientSide) return;
         dispatchEvent((ServerLevel) target.level(), target, eventNodeId, initializer);
     }
 
-    /**
-     * [事件触发 - 核心引擎] 支持有实体或无实体的事件分发。
-     * <p>
-     * - 全局图将被挂载到所在维度的 LevelGraphAttachment 中。
-     * - 局部图将被挂载到触发实体的 EntityGraphAttachment 中。
-     *
-     * @param level       事件发生的维度世界
-     * @param target      事件的主体实体 (如果纯世界事件如天气变化，可传入 null)
-     * @param eventNodeId 触发的起始节点类型
-     * @param initializer 初始数据注入器
-     */
     public static void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId, @Nullable Consumer<GraphProcess> initializer) {
-        // 触发全局绑定图
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
 
         for (String graphId : storage.getGraphs()) {
-            triggerAndMountEvent(level, target, graphId, eventNodeId, initializer, process -> {
-                levelAttachment.addProcess(process);
-            });
+            triggerAndMountEvent(level, target, graphId, eventNodeId, initializer, levelAttachment::addProcess);
         }
 
-        // 触发局部绑定图 (放入触发实体背包)
         if (target != null) {
             EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
                 for (String graphId : entityAttachment.getBoundGraphs()) {
                     triggerAndMountEvent(level, target, graphId, eventNodeId, initializer, process -> {
-                        // 挂载到实体，并唤醒该实体的Tick驱动
                         entityAttachment.addProcess(process);
                         GraphEventHandler.markActive(target);
                     });
                 }
-            } else {
-                log("  -> [Warning] Entity has no attachment. Local graph dropped for: " + target.getName().getString());
             }
         }
     }
 
     /**
-     * [自定义事件分发] 专门用于跨蓝图通信。
-     * 只有静态配置的 "frequency" 与发送端相匹配的接收节点才会被唤醒。
-     *
-     * @param level       事件发生的维度世界
-     * @param target      事件的主体实体
-     * @param frequency   目标频率名称
-     * @param initializer 初始数据注入器（方便后续扩展传参）
+     * [自定义事件分发] O(1) 极速广播架构
      */
-    public static void dispatchCustomEvent(@NotNull ServerLevel level, @Nullable Entity target, String frequency, @Nullable Consumer<GraphProcess> initializer) {
+    public static void dispatchCustomEvent(@NotNull ServerLevel currentLevel, @Nullable Entity source, String frequency, @Nullable Consumer<GraphProcess> initializer) {
         if (frequency == null || frequency.trim().isEmpty()) return;
 
-        String targetEventType = "communication_receive_blueprint";
+        String targetEventType = "receive_blueprint";
 
-        // 1. 触发全局绑定图 (当前维度)
-        GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
-        LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
-
-        for (String graphId : storage.getGraphs()) {
-            triggerAndMountCustomEvent(level, target, graphId, targetEventType, frequency, initializer, process -> {
-                levelAttachment.addProcess(process);
-            });
+        // 1. 全局维度作用域：直接遍历所有维度的全局绑定图 (维度数量极少，直接遍历即可)
+        GlobalGraphStorage storage = GlobalGraphStorage.get(currentLevel.getServer().overworld());
+        for (ServerLevel level : currentLevel.getServer().getAllLevels()) {
+            LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
+            for (String graphId : storage.getGraphs()) {
+                triggerAndMountCustomEvent(level, null, graphId, targetEventType, frequency, initializer, levelAttachment::addProcess);
+            }
         }
 
-        // 2. 触发局部绑定图 (目标实体)
-        if (target != null) {
-            EntityGraphAttachment entityAttachment = getAttachment(target);
-            if (entityAttachment != null) {
-                for (String graphId : entityAttachment.getBoundGraphs()) {
-                    triggerAndMountCustomEvent(level, target, graphId, targetEventType, frequency, initializer, process -> {
-                        entityAttachment.addProcess(process);
-                        GraphEventHandler.markActive(target);
-                    });
+        // 2. 局部实体作用域：使用字典进行 O(1) 获取，避开全服遍历
+        Set<Entity> entities = eventSubscribers.get(frequency);
+        if (entities != null) {
+            // 利用迭代器安全遍历，避开已被标记删除或无效的实体
+            for (Entity target : entities) {
+                if (target.isRemoved()) continue;
+
+                if (target.level() instanceof ServerLevel targetLevel) {
+                    EntityGraphAttachment entityAttachment = getAttachment(target);
+                    if (entityAttachment != null) {
+                        for (String graphId : entityAttachment.getBoundGraphs()) {
+                            triggerAndMountCustomEvent(targetLevel, target, graphId, targetEventType, frequency, initializer, process -> {
+                                entityAttachment.addProcess(process);
+                                GraphEventHandler.markActive(target);
+                            });
+                        }
+                    }
                 }
-            } else {
-                log("  -> [Warning] Entity has no attachment. Local custom event dropped for: " + target.getName().getString());
             }
         }
     }
 
-    /**
-     * [带过滤的挂载逻辑] 在实例化虚拟机之前，前置读取节点的静态输入进行匹配。
-     */
     private static void triggerAndMountCustomEvent(ServerLevel level, @Nullable Entity target, String graphId, String eventNodeId,
                                                    String targetFrequency, @Nullable Consumer<GraphProcess> initializer, Consumer<GraphProcess> mountAction) {
         RuntimeGraphIndex index = getGraphIndex(graphId);
         if (index == null) return;
 
-        List<Integer> startNodeIds = index.findNodesByType(eventNodeId); // 这里变成了 int
+        List<Integer> startNodeIds = index.findNodesByType(eventNodeId);
 
         for (int startNodeId : startNodeIds) {
             Object staticFreqObj = index.getNodeStaticInput(startNodeId, "frequency");
+            String nodeFrequency = staticFreqObj != null ? String.valueOf(staticFreqObj) : "";
 
-            String nodeFrequency = "";
-
-            if (staticFreqObj instanceof String s) {
-                nodeFrequency = s;
-            } else if (staticFreqObj != null) {
-                nodeFrequency = String.valueOf(staticFreqObj);
-            }
-
+            // 二次校验，防止同一图纸内混入其他频段节点
             if (!targetFrequency.equals(nodeFrequency)) {
                 continue;
             }
 
-            // 频率匹配&实例化
             GraphProcess newProcess = new GraphProcess(graphId, index, startNodeId);
             newProcess.setEnvironment(level, target);
 
-            // 注入初始参数
-            if (initializer != null) {
-                initializer.accept(newProcess);
-            }
+            if (initializer != null) initializer.accept(newProcess);
+            mountAction.accept(newProcess);
+            newProcess.tick(level.getGameTime());
+        }
+    }
 
-            // 执行挂载回调并启动首帧
+    private static void triggerAndMountEvent(ServerLevel level, @Nullable Entity target, String graphId, String eventNodeId,
+                                             @Nullable Consumer<GraphProcess> initializer, Consumer<GraphProcess> mountAction) {
+
+        RuntimeGraphIndex index = getGraphIndex(graphId);
+        if (index == null) {
+            log("  -> Graph '" + graphId + "' not found in Memory or Datapack.");
+            return;
+        }
+
+        List<Integer> startNodeIds = index.findNodesByType(eventNodeId);
+        for (int startNodeId : startNodeIds) {
+            GraphProcess newProcess = new GraphProcess(graphId, index, startNodeId);
+            newProcess.setEnvironment(level, target);
+
+            if (initializer != null) initializer.accept(newProcess);
             mountAction.accept(newProcess);
             newProcess.tick(level.getGameTime());
         }
@@ -160,6 +221,7 @@ public class GraphEngine {
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
             attachment.bindGraph(graphId);
+            registerEntityForGraph(entity, graphId); // 绑定时自动注册到高频字典
         }
     }
 
@@ -172,6 +234,7 @@ public class GraphEngine {
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
             attachment.unbindGraph(graphId);
+            unregisterEntityForGraph(entity, graphId); // 解绑时从字典移出
         }
     }
 
@@ -183,6 +246,9 @@ public class GraphEngine {
     public static void unbindAllGraphs(Entity entity) {
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
+            for (String graphId : attachment.getBoundGraphs()) {
+                unregisterEntityForGraph(entity, graphId);
+            }
             attachment.clearGraphs();
         }
     }
@@ -202,56 +268,18 @@ public class GraphEngine {
         return storage.getGraphs();
     }
 
+    // ==========================================
     // Internal Helpers
-
-    /**
-     * 统一的实例化与挂载逻辑
-     */
-    private static void triggerAndMountEvent(ServerLevel level, @Nullable Entity target, String graphId, String eventNodeId,
-                                             @Nullable Consumer<GraphProcess> initializer, Consumer<GraphProcess> mountAction) {
-
-        // 【核心修改】：同样替换为双轨制路由
-        RuntimeGraphIndex index = getGraphIndex(graphId);
-        if (index == null) {
-            log("  -> Graph '" + graphId + "' not found in Memory or Datapack.");
-            return;
-        }
-
-        List<Integer> startNodeIds = index.findNodesByType(eventNodeId);
-        for (int startNodeId : startNodeIds) {
-            GraphProcess newProcess = new GraphProcess(graphId, index, startNodeId);
-
-            newProcess.setEnvironment(level, target);
-
-            // 注入初始参数
-            if (initializer != null) {
-                initializer.accept(newProcess);
-            }
-
-            // 执行挂载回调
-            mountAction.accept(newProcess);
-
-            newProcess.tick(level.getGameTime());
-        }
-    }
+    // ==========================================
 
     private static EntityGraphAttachment getAttachment(Entity entity) {
         return entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
     }
 
-    /**
-     * [双轨制查找] 核心图纸解析路由
-     * 优先级：动态内存热更图 > 静态数据包图
-     */
     @Nullable
     public static RuntimeGraphIndex getGraphIndex(String graphId) {
-        // 1. 优先去动态图管理器中查找 (玩家 UI 实时保存的)
         RuntimeGraphIndex dynamicIndex = com.mine.geometry_node.core.execution.storage.DynamicGraphManager.getIndex(graphId);
-        if (dynamicIndex != null) {
-            return dynamicIndex;
-        }
-
-        // 2. 兜底去数据包资源管理器中查找 (模组自带或外部数据包)
+        if (dynamicIndex != null) return dynamicIndex;
         return GraphResourceManager.getInstance().getIndex(graphId);
     }
 

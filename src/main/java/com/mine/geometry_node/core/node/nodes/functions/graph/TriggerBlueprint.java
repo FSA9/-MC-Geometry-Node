@@ -35,7 +35,7 @@ public class TriggerBlueprint extends BaseNode {
                     context.getLevel(),
                     context.getEntity(),
                     frequency,
-                    null // 暂不需要传参，传null即可
+                    null
             );
         }
 

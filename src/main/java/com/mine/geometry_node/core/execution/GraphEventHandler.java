@@ -95,6 +95,17 @@ public class GraphEventHandler {
     // Physical Event Listeners
 
     private static void registerPhysicalEvents() {
+        EntityEvent.ADD.register((entity, level) -> {
+            if (!level.isClientSide() && level instanceof ServerLevel serverLevel) {
+                GraphEngine.registerEntityListeners(entity);
+                GraphEngine.dispatchEvent(serverLevel, entity, OnEntitySpawn.TYPE_ID, process -> {
+                    process.setEventData(StandardPorts.ENTITY.getId(), entity);
+                    process.setEventData(StandardPorts.XYZ.getId(), entity.position());
+                });
+            }
+            return EventResult.pass();
+        });
+
         // 破坏方块事件
         BlockEvent.BREAK.register((level, pos, state, player, xp) -> {
             if (!level.isClientSide()) {
@@ -232,16 +243,6 @@ public class GraphEventHandler {
                 });
             }
             return CompoundEventResult.pass();
-        });
-
-        EntityEvent.ADD.register((entity, level) -> {
-            if (!level.isClientSide() && level instanceof ServerLevel serverLevel) {
-                GraphEngine.dispatchEvent(serverLevel, entity, OnEntitySpawn.TYPE_ID, process -> {
-                    process.setEventData(StandardPorts.ENTITY.getId(), entity);
-                    process.setEventData(StandardPorts.XYZ.getId(), entity.position());
-                });
-            }
-            return EventResult.pass();
         });
 
         // 以下事件使用 NeoForge 原生事件总线 (1.21.1)
