@@ -41,17 +41,18 @@ public class AssetBrowserPanel extends LinearLayout {
     // ==========================================
     private static final float NAV_BAR_HEIGHT = 40.0f;
     private static final float BTN_ADD_WIDTH = 40.0f;
-    private static final float ROW_HEIGHT = 34.0f;
+    private static final float ROW_HEIGHT = 40.0f;
     private static final float DRAG_HANDLE_WIDTH = 24.0f;
 
     private static final float TEXT_SIZE_NAV = 14.0f;
-    private static final float TEXT_SIZE_TITLE = 16.0f;
+    private static final float TEXT_SIZE_TITLE = 14.0f;
     private static final float TEXT_SIZE_PATH = 14.0f;
     private static final float TEXT_SIZE_HANDLE = 12.0f;
-    private static final float TEXT_SIZE_LIST_ITEM = 15.0f;
-    private static final float TEXT_SIZE_BTN_ADD = 16.0f;
+    private static final float TEXT_SIZE_LIST_ITEM = 14.0f;
+    private static final float TEXT_SIZE_BTN_ADD = 14.0f;
 
     private final QuickAccessListLayout mLeftSidebar;
+    private final ScrollView mLeftScrollView;
     private final LinearLayout mRightContent;
     private final LinearLayout mFileListContainer;
     private final EditText mPathInput;
@@ -71,7 +72,9 @@ public class AssetBrowserPanel extends LinearLayout {
         mRightContent = new LinearLayout(context);
         mRightContent.setOrientation(LinearLayout.VERTICAL);
 
-        addView(mLeftSidebar, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.2f));
+        mLeftScrollView = new ScrollView(context);
+        mLeftScrollView.addView(mLeftSidebar, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        addView(mLeftScrollView, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.2f));
         addView(PanelSplitter.create(context, true));
         addView(mRightContent, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.8f));
 
@@ -107,7 +110,7 @@ public class AssetBrowserPanel extends LinearLayout {
         });
         navBar.addView(mPathInput, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
-        TextView btnAdd = createNavButton(context, "＋");
+        TextView btnAdd = createNavButton(context, "+");
         btnAdd.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(TEXT_SIZE_BTN_ADD));
         btnAdd.setBackground(createColorDrawable(0xFF3A3A3A));
         btnAdd.setOnClickListener(v -> {
@@ -168,6 +171,7 @@ public class AssetBrowserPanel extends LinearLayout {
                 case MotionEvent.ACTION_DOWN:
                     startY[0] = event.getRawY();
                     isDragging[0] = false;
+                    mLeftScrollView.requestDisallowInterceptTouchEvent(true);
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
@@ -231,6 +235,7 @@ public class AssetBrowserPanel extends LinearLayout {
                     }
                     row.setAlpha(1.0f);
                     mLeftSidebar.hideIndicator();
+                    mLeftScrollView.requestDisallowInterceptTouchEvent(false);
                     break;
             }
             return true;

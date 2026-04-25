@@ -95,9 +95,9 @@ public class MainUI extends Fragment {
         AssetBrowserPanel bottomPanel = new AssetBrowserPanel(context);
 
         LinearLayout.LayoutParams bottomParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(UIConstants.MainUI.HEIGHT_BOTTOM_DEFAULT)
+                ViewGroup.LayoutParams.MATCH_PARENT, 0
         );
+        bottomParams.weight = 0.3f;
 
         root.addView(PanelSplitter.create(context, false));
         root.addView(bottomPanel, bottomParams);
