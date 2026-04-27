@@ -10,6 +10,7 @@ import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
 import com.mine.geometry_node.core.utils.ASTNode;
+import com.mine.geometry_node.core.utils.ASTNodes;
 import com.mine.geometry_node.core.utils.ExpressionCompiler;
 import net.minecraft.network.chat.Component;
 
@@ -94,148 +95,66 @@ public class MathExpression extends BaseNode {
 
         String mainExpr = getInput(context, StandardPorts.EXPRESSION.getId(), String.class);
         if (mainExpr == null || mainExpr.trim().isEmpty()) {
-            mainExpr = "0"; // 防止没填表达式时崩溃
+            mainExpr = "0";
         }
 
-        Map<String, Double> evalVars = new HashMap<>();     // 物理计算用
-        Map<String, String> mergedBindings = new HashMap<>(); // 视觉协议用
-        String finalFormula = mainExpr;
+        // 1. 编译或获取主公式 AST (修复缓存失效 Bug)
+        // 缓存 Key 包含公式 Hash，确保公式改了能自动重编译
+        String cacheKey = "AST_" + context.getCurrentNodeId() + "_" + mainExpr.hashCode();
+        ASTNode mainAst = (ASTNode) context.getTempData(cacheKey);
+        if (mainAst == null) {
+            mainAst = ExpressionCompiler.compile(mainExpr);
+            context.setTempData(cacheKey, mainAst);
+        }
+
+        Map<String, Double> evalVars = new HashMap<>();     // 物理计算变量表
+        Map<String, ASTNode> substitutions = new HashMap<>(); // AST 嫁接表
+        Map<String, String> mergedBindings = new HashMap<>(); // 视觉协议表
 
         double serverTick = context.getLevel() != null ? context.getLevel().getGameTime() : 0.0;
         evalVars.put("tick", serverTick);
 
-        // 【关键修改】：去掉 hasPort，无论如何都去要一次数据
+        // 2. 遍历 A-Z 端口，进行数据采集与子树准备
         for (char c = 'A'; c <= 'Z'; c++) {
             String varName = String.valueOf(c);
 
-            // 1. 尝试获取活公式
-            ExpressionData inputExpr = getInput(context, varName, ExpressionData.class);
-            // 2. 尝试获取死数字 (如果没连线，会返回 null)
+            // 【修复 1】：坚决去掉 hasPort() 检查！顺应你的原始设计，无论如何都要去拉取数据
+            // 物理数值采集
             Float val = getInput(context, varName, Float.class);
+            double numVal = val != null ? val.doubleValue() : 0.0;
+            evalVars.put(varName, numVal);
 
-            // 存入字典。如果没连线 val 就是 null，兜底存入 0.0，彻底告别 unactivated 报错！
-            evalVars.put(varName, val != null ? val.doubleValue() : 0.0);
+            // 视觉协议采集 (ExpressionData)
+            ExpressionData inputExpr = getInput(context, varName, ExpressionData.class);
 
-            // 如果连线了，并且传来了公式，就进行字符串嵌套
             if (inputExpr != null && inputExpr.formula() != null && !inputExpr.formula().isEmpty() && !inputExpr.formula().equals("0")) {
-                finalFormula = finalFormula.replace(varName, "(" + inputExpr.formula() + ")");
+                // 将上游的活公式编译为子 AST
+                ASTNode subAst = ExpressionCompiler.compile(inputExpr.formula());
+                substitutions.put(varName, subAst);
+                // 合并绑定协议
                 mergedBindings.putAll(inputExpr.bindings());
+            } else {
+                // 【修复 2】：兜底保护！
+                // 如果连线传来的是死数字，或者是没连线，必须将其转为常量节点嫁接进去！
+                // 否则生成的公式里会残留字母 (例如 "A")，导致客户端找不到变量从而解析成 0.0！
+                substitutions.put(varName, new ASTNodes.ConstantNode(numVal));
             }
         }
 
         try {
-            // 【核心优化】：服务端 AST 缓存复用机制
-            // 利用当前节点的运行时 ID 作为黑板 Key，确保 AST 树与图进程同生共死
-            String cacheKey = "AST_" + context.getCurrentNodeId();
+            // 3. 执行物理层计算（直接用主树跑，因为它不依赖字符串）
+            double resultValue = mainAst.evaluate(evalVars);
 
-            // 尝试从图进程的临时黑板中获取已经编译好的 AST 树
-            // 注意：这里的 ASTNode 必须是你移到 core 包之后的那个！
-            ASTNode ast = (ASTNode) context.getTempData(cacheKey);
+            // 4. 执行视觉层嫁接（生成最终发往客户端的公式）
+            // 彻底废弃 finalFormula.replace，改用 AST 嫁接还原
+            ASTNode graftedAst = mainAst.substitute(substitutions);
+            String finalFormula = graftedAst.toFormulaString();
 
-            if (ast == null) {
-                // 如果没有，说明是本图进程第一次走到这个节点，触发编译并塞入黑板缓存
-                ast = ExpressionCompiler.compile(mainExpr);
-                context.setTempData(cacheKey, ast);
-            }
-
-            // 物理层面的 20FPS 运算：直接跑 AST 树，极速完成
-            double resultValue = ast.evaluate(evalVars);
-
-            // 视觉层面的 动态公式打包
             return new DynamicData((float) resultValue, new ExpressionData(finalFormula, mergedBindings));
 
         } catch (Exception e) {
-            System.err.println("[MathExpression] Compute Error: '" + mainExpr + "' -> " + e.getMessage());
+            System.err.println("[MathExpression] Compute Error: " + e.getMessage());
             return new DynamicData(0.0f, ExpressionData.ZERO);
         }
-    }
-
-    // 经典的递归下降解析器
-    private double eval(final String str, final Map<String, Double> vars) {
-        return new Object() {
-            int pos = -1, ch;
-
-            void nextChar() {
-                ch = (++pos < str.length()) ? str.charAt(pos) : -1;
-            }
-
-            boolean eat(int charToEat) {
-                while (ch == ' ') nextChar();
-                if (ch == charToEat) {
-                    nextChar();
-                    return true;
-                }
-                return false;
-            }
-
-            double parse() {
-                nextChar();
-                double x = parseExpression();
-                if (pos < str.length()) throw new RuntimeException("未知字符: " + (char) ch);
-                return x;
-            }
-
-            double parseExpression() {
-                double x = parseTerm();
-                for (;;) {
-                    if      (eat('+')) x += parseTerm(); // 加
-                    else if (eat('-')) x -= parseTerm(); // 减
-                    else return x;
-                }
-            }
-
-            double parseTerm() {
-                double x = parseFactor();
-                for (;;) {
-                    if      (eat('*')) x *= parseFactor(); // 乘
-                    else if (eat('/')) x /= parseFactor(); // 除
-                    else return x;
-                }
-            }
-
-            double parseFactor() {
-                if (eat('+')) return parseFactor(); // 正号
-                if (eat('-')) return -parseFactor(); // 负号
-
-                double x;
-                int startPos = this.pos;
-                if (eat('(')) { // 括号
-                    x = parseExpression();
-                    eat(')');
-                } else if ((ch >= '0' && ch <= '9') || ch == '.') { // 数字
-                    while ((ch >= '0' && ch <= '9') || ch == '.') nextChar();
-                    x = Double.parseDouble(str.substring(startPos, this.pos));
-                } else if (ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z') { // 函数或变量
-                    while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_') {
-                        nextChar();
-                    }
-                    String func = str.substring(startPos, this.pos);
-
-                    // 1. 拦截内置的时间变量 tick (忽略大小写)
-                    if (func.equalsIgnoreCase("tick")) {
-                        x = vars.getOrDefault("tick", 0.0);
-                    }
-                    // 2. 拦截单一大写字母 (A-Z 端口变量)
-                    else if (func.length() == 1 && Character.isUpperCase(func.charAt(0))) {
-                        x = vars.getOrDefault(func, 0.0);
-                    }
-                    // 3. 解析标准数学函数 (这部分必须有括号和后续参数)
-                    else {
-                        x = parseFactor();
-                        if (func.equals("sqrt")) x = Math.sqrt(x);
-                        else if (func.equals("sin")) x = Math.sin(x);
-                        else if (func.equals("cos")) x = Math.cos(x);
-                        else if (func.equals("tan")) x = Math.tan(x);
-                        else if (func.equals("abs")) x = Math.abs(x);
-                        else throw new RuntimeException("未知的函数名: " + func);
-                    }
-                } else {
-                    throw new RuntimeException("Illegal expression detect: " + (char) ch);
-                }
-
-                if (eat('^')) x = Math.pow(x, parseFactor());
-                return x;
-            }
-        }.parse();
     }
 }

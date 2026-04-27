@@ -8,7 +8,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
-public class DebugLineEffect extends AbstractVisualEffect {
+public class DebugLineEffect extends DirectedVisualEffect {
 
     // 1. 构造函数改为直接接收网络包，并交给父类处理 AST 编译
     public DebugLineEffect(PacketSpawnDynamicVisual packet) {
@@ -19,7 +19,7 @@ public class DebugLineEffect extends AbstractVisualEffect {
     @Override
     public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos, float partialTick) {
         // 3. 获取当前帧动态计算后的起点和终点
-        DynamicAnchors anchors = getDynamicAnchors(partialTick);
+        DirectedAnchors anchors = computeAnchors(partialTick);
 
         VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderType.lines());
         Matrix4f matrix = poseStack.last().pose();

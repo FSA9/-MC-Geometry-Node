@@ -9,7 +9,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
-public class LaserBeamEffect extends AbstractVisualEffect {
+public class LaserBeamEffect extends DirectedVisualEffect {
 
     public LaserBeamEffect(PacketSpawnDynamicVisual packet) {
         super(packet);
@@ -18,7 +18,7 @@ public class LaserBeamEffect extends AbstractVisualEffect {
     @Override
     public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos, float partialTick) {
         // 1. 获取当前帧被公式驱动后的最新坐标与粗细
-        DynamicAnchors anchors = getDynamicAnchors(partialTick);
+        DirectedAnchors anchors = computeAnchors(partialTick);
 
         VertexConsumer laserBuffer = bufferSource.getBuffer(RenderType.lightning());
         Matrix4f matrix = poseStack.last().pose();
