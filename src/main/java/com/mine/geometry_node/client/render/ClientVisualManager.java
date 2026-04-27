@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.render;
 import com.mine.geometry_node.client.render.effects.AbstractVisualEffect;
 import com.mine.geometry_node.client.render.effects.DebugLineEffect;
 import com.mine.geometry_node.client.render.effects.LaserBeamEffect;
-import com.mine.geometry_node.core.network.packet.PacketSpawnVisual;
+import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -20,24 +20,20 @@ public class ClientVisualManager {
 
     private static final List<AbstractVisualEffect> ACTIVE_EFFECTS = new CopyOnWriteArrayList<>();
 
-    private static final Map<String, Function<PacketSpawnVisual, AbstractVisualEffect>> EFFECT_FACTORIES = new HashMap<>();
+    private static final Map<String, Function<PacketSpawnDynamicVisual, AbstractVisualEffect>> EFFECT_FACTORIES = new HashMap<>();
 
-    // 注册机制 (在客户端 Init 阶段调用)
+    // 注册
     public static void init() {
-        registerFactory("debug_line", packet -> new DebugLineEffect(
-                packet.startPos(), packet.endPos(), packet.color(), packet.durationTicks()
-        ));
-        registerFactory("laser_beam", packet -> new LaserBeamEffect(
-                packet.startPos(), packet.endPos(), packet.color(), packet.size(), packet.durationTicks()
-        ));
+        registerFactory("debug_line", DebugLineEffect::new);
+        registerFactory("laser_beam", LaserBeamEffect::new);
     }
 
-    public static void registerFactory(String effectType, Function<PacketSpawnVisual, AbstractVisualEffect> factory) {
+    public static void registerFactory(String effectType, Function<PacketSpawnDynamicVisual, AbstractVisualEffect> factory) {
         EFFECT_FACTORIES.put(effectType, factory);
     }
 
-    public static void spawnEffectFromPacket(PacketSpawnVisual payload) {
-        Function<PacketSpawnVisual, AbstractVisualEffect> factory = EFFECT_FACTORIES.get(payload.effectType());
+    public static void spawnEffectFromPacket(PacketSpawnDynamicVisual payload) {
+        Function<PacketSpawnDynamicVisual, AbstractVisualEffect> factory = EFFECT_FACTORIES.get(payload.effectType());
 
         if (factory != null) {
             ACTIVE_EFFECTS.add(factory.apply(payload));
@@ -56,11 +52,13 @@ public class ClientVisualManager {
         if (ACTIVE_EFFECTS.isEmpty()) return;
 
         Vec3 camPos = camera.getPosition();
+        float partialTick = (float) Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
+
         MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
 
         poseStack.pushPose();
         for (AbstractVisualEffect effect : ACTIVE_EFFECTS) {
-            effect.render(poseStack, bufferSource, camPos);
+            effect.render(poseStack, bufferSource, camPos, partialTick);
         }
         poseStack.popPose();
     }

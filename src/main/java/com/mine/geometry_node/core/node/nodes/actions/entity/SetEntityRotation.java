@@ -34,10 +34,18 @@ public class SetEntityRotation extends BaseNode {
 
         if (rotation != null && !entities.isEmpty()) {
             for (Entity entity : entities) {
-                entity.setXRot((float) rotation.x);
-                entity.setYRot((float) rotation.y);
-                entity.setYBodyRot((float) rotation.y); // 同步身体旋转，避免扭脖子
-                entity.setYHeadRot((float) rotation.y);
+                if (entity instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                    serverPlayer.connection.teleport(
+                            serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
+                            (float) rotation.y, (float) rotation.x
+                    );
+                } else {
+                    // 如果是普通实体：直接赋值即可
+                    entity.setXRot((float) rotation.x);
+                    entity.setYRot((float) rotation.y);
+                    entity.setYBodyRot((float) rotation.y);
+                    entity.setYHeadRot((float) rotation.y);
+                }
             }
         }
 

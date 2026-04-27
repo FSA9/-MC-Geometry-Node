@@ -2,8 +2,10 @@ package com.mine.geometry_node.core.execution;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -205,4 +207,11 @@ public interface ExecutionContext {
     void broadcastVisual(String effectType, int sourceEntityId, net.minecraft.world.phys.Vec3 startPos,
                          int targetEntityId, net.minecraft.world.phys.Vec3 endPos,
                          int color, float size, int durationTicks);
+
+
+    void broadcastDynamicVisual(String effectType, int sourceEntityId, Vec3 baseStartPos,
+                                int targetEntityId, Vec3 baseEndPos,
+                                int color, float baseSize, int durationTicks,
+                                Map<String, String> expressions,
+                                Map<String, String> bindings);
 }

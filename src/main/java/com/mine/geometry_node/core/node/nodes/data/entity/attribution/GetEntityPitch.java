@@ -32,6 +32,7 @@ public class GetEntityPitch extends BaseNode {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return null;
 
-        return entities.getFirst().getXRot();
+        Entity target = entities.getFirst();
+        return bindDynamic(target.getXRot(), target, "pitch");
     }
 }

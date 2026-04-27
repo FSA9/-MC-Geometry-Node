@@ -18,6 +18,7 @@ public class RegistryDataManager {
     private static List<String> ENTITY_TYPE_CACHE = null;  // 实体类型
     private static List<String> EFFECT_CACHE = null;  // 效果
     private static List<String> SOUND_CACHE = null;  // 音效
+    private static List<String> PARTICLE_CACHE = null;
 
     public static List<String> getAllBlocks() {
         if (BLOCK_CACHE == null) {
@@ -61,6 +62,14 @@ public class RegistryDataManager {
         return SOUND_CACHE;
     }
 
+    public static List<String> getAllParticles() {
+        if (PARTICLE_CACHE == null) {
+            PARTICLE_CACHE = BuiltInRegistries.PARTICLE_TYPE.keySet().stream()
+                    .map(ResourceLocation::toString).sorted().toList();
+        }
+        return PARTICLE_CACHE;
+    }
+
     // 动态类型
 
     public static List<String> getDamageTypes(RegistryAccess access) {
@@ -72,7 +81,27 @@ public class RegistryDataManager {
     }
 
     public static List<String> getDimensions(RegistryAccess access) {
-        return getDynamicRegistryKeys(access, Registries.DIMENSION);
+        List<String> dims = new java.util.ArrayList<>();
+
+        // 1. 注入我们的特殊作用域
+        dims.add("global");
+        dims.add("all_dimensions");
+
+        try {
+            if (net.minecraft.client.Minecraft.getInstance().getConnection() != null) {
+                List<String> dynamicDims = net.minecraft.client.Minecraft.getInstance().getConnection().levels()
+                        .stream()
+                        .map(key -> key.location().toString())
+                        .sorted()
+                        .toList();
+
+                dims.addAll(dynamicDims);
+            }
+        } catch (NoClassDefFoundError | Exception e) {
+            System.err.println("[RegistryDataManager] Fail to get Dimensions from client: " + e.getMessage());
+        }
+
+        return dims;
     }
 
     /**

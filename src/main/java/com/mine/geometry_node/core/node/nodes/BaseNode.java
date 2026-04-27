@@ -2,11 +2,16 @@ package com.mine.geometry_node.core.node.nodes;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.ExecutionResult;
+import com.mine.geometry_node.core.execution.datatypes.DynamicData;
+import com.mine.geometry_node.core.execution.datatypes.ExpressionData;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.TypeConverter;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * [逻辑定义层] 节点行为基类
@@ -82,6 +87,47 @@ public abstract class BaseNode {
 
         System.err.println("[BaseNode] 警告：端口 " + portName + " 期望 List<" + elementType.getSimpleName() + ">，但收到了无法转换的单体数据：" + raw.getClass().getSimpleName());
         return List.of();
+    }
+
+    /**
+     * 将普通数据包装为“可溯源”的动态数据，使客户端能够实时追踪该属性。
+     * @param value 当前的物理数值
+     * @param target 绑定的目标实体
+     * @param propertyName 属性名 (如 "speed", "yaw", "health")
+     */
+    protected Object bindDynamic(Object value, Entity target, String propertyName) {
+        if (target == null) return value;
+
+        // 生成唯一的变量标识符，防止多个实体混淆
+        String varKey = "env_" + target.getId() + "_" + propertyName;
+        // 定义绑定协议：客户端看到这个 key，就知道去查对应实体的属性
+        Map<String, String> bindings = Map.of(varKey, "entity:" + target.getId() + ":" + propertyName);
+
+        return new DynamicData(value, new ExpressionData(varKey, bindings));
+    }
+
+    /**
+     * 将 Vec3 包装为可被“分离 XYZ”节点解析的动态矢量协议
+     */
+    protected Object bindDynamicVector(Vec3 value, Entity target, String propertyPrefix) {
+        if (target == null) return value;
+
+        // 生成三个轴的变量名
+        String xKey = "env_" + target.getId() + "_" + propertyPrefix + "_x";
+        String yKey = "env_" + target.getId() + "_" + propertyPrefix + "_y";
+        String zKey = "env_" + target.getId() + "_" + propertyPrefix + "_z";
+
+        // 生成三个轴的独立抓取协议
+        Map<String, String> bindings = Map.of(
+                xKey, "entity:" + target.getId() + ":" + propertyPrefix + "_x",
+                yKey, "entity:" + target.getId() + ":" + propertyPrefix + "_y",
+                zKey, "entity:" + target.getId() + ":" + propertyPrefix + "_z"
+        );
+
+        // 组装特有的矢量公式协议，例如 "vec3(env_123_vel_x, env_123_vel_y, env_123_vel_z)"
+        String vectorFormula = "vec3(" + xKey + "," + yKey + "," + zKey + ")";
+
+        return new DynamicData(value, new ExpressionData(vectorFormula, bindings));
     }
 
     // ==========================================

@@ -155,4 +155,8 @@ public class LevelGraphAttachment extends SavedData {
         }
         return tag;
     }
+
+    public List<GraphProcess> getProcesses() {
+        return this.processes;
+    }
 }

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.render.effects;
 
+import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -9,12 +10,17 @@ import org.joml.Matrix4f;
 
 public class DebugLineEffect extends AbstractVisualEffect {
 
-    public DebugLineEffect(Vec3 start, Vec3 end, int color, int durationTicks) {
-        super(start, end, color, durationTicks);
+    // 1. 构造函数改为直接接收网络包，并交给父类处理 AST 编译
+    public DebugLineEffect(PacketSpawnDynamicVisual packet) {
+        super(packet);
     }
 
+    // 2. 渲染方法加上 partialTick 参数
     @Override
-    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos) {
+    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos, float partialTick) {
+        // 3. 获取当前帧动态计算后的起点和终点
+        DynamicAnchors anchors = getDynamicAnchors(partialTick);
+
         VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderType.lines());
         Matrix4f matrix = poseStack.last().pose();
 
@@ -23,11 +29,16 @@ public class DebugLineEffect extends AbstractVisualEffect {
         int g = (color >> 8) & 0xFF;
         int b = color & 0xFF;
 
-        Vec3 dir = end.subtract(start).normalize();
+        // 注意：使用 anchors 的动态坐标，而不是被废弃的 start 和 end
+        Vec3 dir = anchors.end().subtract(anchors.start());
+        if (dir.lengthSqr() < 1e-5) return; // 容错：防止起点和终点重合导致法线归一化崩溃
+
+        dir = dir.normalize();
         float nx = (float) dir.x, ny = (float) dir.y, nz = (float) dir.z;
 
-        Vec3 relStart = getRelativePos(start, camPos);
-        Vec3 relEnd = getRelativePos(end, camPos);
+        // 计算相对坐标
+        Vec3 relStart = anchors.start().subtract(camPos);
+        Vec3 relEnd = anchors.end().subtract(camPos);
 
         vertexConsumer.addVertex(matrix, (float)relStart.x, (float)relStart.y, (float)relStart.z)
                 .setColor(r, g, b, a).setNormal(poseStack.last(), nx, ny, nz);

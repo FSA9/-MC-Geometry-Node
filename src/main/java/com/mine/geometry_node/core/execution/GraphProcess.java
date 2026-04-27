@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.execution.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.execution.variables.VariableRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.PacketSpawnVisual;
+import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
@@ -468,6 +468,10 @@ public class GraphProcess {
         return scope;
     }
 
+    public void terminate() {
+        this.state = State.FINISHED;
+    }
+
 
     // ================================
     // 7. 内部执行上下文
@@ -695,9 +699,12 @@ public class GraphProcess {
             int radius = 128;  // 广播半径
 
             // 组装通用视觉网络包
-            PacketSpawnVisual payload =
-                    new PacketSpawnVisual(
-                            effectType, sourceEntityId, startPos, targetEntityId, endPos, color, size, durationTicks
+            PacketSpawnDynamicVisual payload =
+                    new PacketSpawnDynamicVisual(
+                            effectType, sourceEntityId, startPos, targetEntityId, endPos,
+                            color, size, durationTicks,
+                            java.util.Collections.emptyMap(), // expressions
+                            java.util.Collections.emptyMap()  // initialVars
                     );
 
             // 广播范围筛选
@@ -705,6 +712,32 @@ public class GraphProcess {
                     GraphProcess.this.level.getPlayers(
                             player -> player.position().distanceToSqr(startPos) < radius * radius
                     );
+
+            if (!nearbyPlayers.isEmpty()) {
+                NetworkHandler.sendToPlayers(nearbyPlayers, payload);
+            }
+        }
+
+        @Override
+        public void broadcastDynamicVisual(String effectType, int sourceEntityId, Vec3 baseStartPos,
+                                           int targetEntityId, Vec3 baseEndPos,
+                                           int color, float baseSize, int durationTicks,
+                                           Map<String, String> expressions,
+                                           Map<String, String> bindings) { // <--- 签名修改
+
+            if (GraphProcess.this.level == null) return;
+
+            int radius = 128;
+
+            // 组装全新的动态网络包
+            PacketSpawnDynamicVisual payload = new PacketSpawnDynamicVisual(
+                    effectType, sourceEntityId, baseStartPos, targetEntityId, baseEndPos,
+                    color, baseSize, durationTicks, expressions, bindings // <--- 传入 bindings
+            );
+
+            List<ServerPlayer> nearbyPlayers = GraphProcess.this.level.getPlayers(
+                    player -> player.position().distanceToSqr(baseStartPos) < radius * radius
+            );
 
             if (!nearbyPlayers.isEmpty()) {
                 NetworkHandler.sendToPlayers(nearbyPlayers, payload);

@@ -6,7 +6,7 @@
   "geometry_node.menu.functions": "函数",
   "geometry_node.menu.logics": "逻辑",
   "geometry_node.menu.maths": "数学",
-  "geometry_node.menu.texture": "纹理",
+  "geometry_node.menu.client": "客户端节点",
 
   "--- 二级菜单: 动作 (Actions) ---": "",
   "geometry_node.menu.actions.ai": "AI",
@@ -15,7 +15,6 @@
   "geometry_node.menu.actions.inventory": "背包",
   "geometry_node.menu.actions.item": "物品",
   "geometry_node.menu.actions.player": "玩家",
-  "geometry_node.menu.actions.visual": "视觉",
   "geometry_node.menu.actions.world": "世界",
 
   "--- 二级菜单: 数据 (Data) ---": "",
@@ -24,7 +23,7 @@
   "geometry_node.menu.data.type": "类型",
 
   "--- 三级菜单: 数据/实体 (Data/Entity) ---": "",
-  "geometry_node.menu.data.entity.attribution": "属性数值",
+  "geometry_node.menu.data.entity.attribution": "属性",
 
   "--- 二级菜单: 事件 (Events) ---": "",
   "geometry_node.menu.events.block": "方块",
@@ -45,6 +44,8 @@
   "geometry_node.menu.maths.matrix": "矩阵",
   "geometry_node.menu.maths.operation": "基础运算",
 
+  "--- 二级菜单: 客户端节点 (Client) ---": "",
+  "geometry_node.menu.client.visual": "视觉",
 
 
   "--- 端口 (Ports) ---": "",
@@ -76,6 +77,9 @@
   "geometry_node.port.time": "时间",
   "geometry_node.port.volume": "音量",
   "geometry_node.port.pitch": "频率",
+  "geometry_node.port.X": "X",
+  "geometry_node.port.Y": "Y",
+  "geometry_node.port.Z": "Z",
 
   "geometry_node.port.name": "名称",
   "geometry_node.port.type": "类型",
@@ -102,6 +106,7 @@
   "geometry_node.port.vector": "向量",
   "geometry_node.port.rotation": "旋转",
   "geometry_node.port.size_3": "三维尺寸",
+  "geometry_node.port.velocity": "速度",
 
   "geometry_node.port.any_value": "任意",
 
@@ -206,15 +211,16 @@
   "geometry_node.node.show_title": "显示标题",
   "geometry_node.node.teleport_player": "传送玩家",
 
-  "--- ACTIONS/VISUAL ---": "--- 视觉动作 ---",
-  "geometry_node.node.draw_debug_line": "绘制调试线",
-  "geometry_node.node.draw_laser_beam": "绘制激光束",
-  "geometry_node.node.raycast": "射线检测",
-
   "--- ACTIONS/WORLD ---": "--- 世界动作 ---",
   "geometry_node.node.create_explosion": "创建爆炸",
   "geometry_node.node.play_sound": "播放环境声音",
   "geometry_node.node.strike_lightning": "召唤闪电",
+
+  "--- CLIENT ---": "--- 客户端节点 ---",
+  "geometry_node.node.draw_debug_line": "绘制调试线",
+  "geometry_node.node.draw_laser_beam": "绘制激光束",
+  "geometry_node.node.raycast": "射线检测",
+  "geometry_node.node.SnapshotValue": "数值快照",
 
   "--- DATA ---": "--- 数据处理 ---",
   "geometry_node.node.target_selector": "目标选择器",
@@ -236,7 +242,7 @@
   "geometry_node.node.get_entity_position": "获取实体坐标",
   "geometry_node.node.get_entity_tags": "获取实体标签列表",
   "geometry_node.node.get_entity_uuid": "获取实体UUID",
-  "geometry_node.node.get_entity_velocity": "获取实体动能",
+  "geometry_node.node.get_entity_velocity": "获取实体速率",
   "geometry_node.node.get_entity_visible_name": "获取实体显示名称",
   "geometry_node.node.get_entity_yaw": "获取实体偏航角",
   "geometry_node.node.get_experience_level": "获取经验等级",
@@ -356,7 +362,9 @@
   "--- MATHS ---": "--- 数学运算 ---",
   "geometry_node.node.random_value": "随机数",
   "geometry_node.node.math_expression": "数学表达式",
-  "geometry_node.node.math_operation": "运算"
+  "geometry_node.node.math_operation": "运算",
+  "geometry_node.node.separate_xyz": "分离XYZ",
+  "geometry_node.node.combine_xyz": "合并XYZ"
 
 
 }

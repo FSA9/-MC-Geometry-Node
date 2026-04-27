@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
 import com.mine.geometry_node.core.node.nodes.actions.item.*;
 import com.mine.geometry_node.core.node.nodes.actions.player.*;
-import com.mine.geometry_node.core.node.nodes.actions.visual.*;
+import com.mine.geometry_node.core.node.nodes.client.visual.*;
 import com.mine.geometry_node.core.node.nodes.actions.world.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
@@ -18,7 +18,7 @@ import com.mine.geometry_node.core.node.nodes.events.player.*;
 import com.mine.geometry_node.core.node.nodes.events.world.*;
 import com.mine.geometry_node.core.node.nodes.functions.graph.*;
 import com.mine.geometry_node.core.node.nodes.functions.time.*;
-import com.mine.geometry_node.core.node.nodes.functions.vector.*;
+import com.mine.geometry_node.core.node.nodes.maths.vector.*;
 import com.mine.geometry_node.core.node.nodes.logics.*;
 import com.mine.geometry_node.core.node.nodes.maths.*;
 import com.mine.geometry_node.core.node.nodes.maths.operation.*;
@@ -112,15 +112,16 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/player", new SetWalkSpeed());
 //        registry.register("actions/player", new ShowTitle());
 
-        // Actions/Visual
-        registry.register("actions/visual", new DrawDebugLine());
-        registry.register("actions/visual", new DrawLaserBeam());
-
 //        // Actions/World
 
         registry.register("actions/world", new CreateExplosion());
         registry.register("actions/world", new PlaySound());
         registry.register("actions/world", new StrikeLightning());
+        registry.register("actions/world", new SpawnParticle());
+
+        // Client/Visual
+        registry.register("client/visual", new DrawDebugLine());
+        registry.register("client/visual", new DrawLaserBeam());
 
         // --- DATA ---
         registry.register("data", new TargetSelector());
@@ -252,8 +253,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("functions/time", new Function_Delay_s());
         registry.register("functions/time", new Function_Delay_tick());
 
-        registry.register("functions/vector", new VectorAdd());
-
         // --- LOGICS ---
 //        registry.register("logics", new Contain());
 //        registry.register("logics", new Equal());
@@ -265,6 +264,9 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("maths", new RandomValue());
         registry.register("maths/operation", new MathExpression());
         registry.register("maths/operation", new MathOperation());
+        registry.register("maths/vector", new VectorAdd());
+        registry.register("maths/vector", new SeparateXYZ());
+        registry.register("maths/vector", new CombineXYZ());
 
         System.out.println("[GeometryNode] 内置节点注册完成！");
     }

@@ -20,6 +20,8 @@ public class MathOperation extends BaseNode {
     private static final String[] ALL_OPERATORS = {
             // 二元运算
             "+", "-", "*", "/", "%", "^", "min", "max", "atan2",
+            // 比较运算
+            ">", "<", "==", ">=", "<=", "!=",
             // 一元运算
             "sin", "cos", "tan", "asin", "acos", "atan",
             "sqrt", "abs", "ceil", "floor", "round", "log", "log10"
@@ -53,7 +55,7 @@ public class MathOperation extends BaseNode {
         // 第一个输入值 (所有运算都需要)
         builder.addRow(new PortRow(StandardPorts.VALUE.toInputWithIndex(1), null, UIHint.INPUT, null, null));
 
-        // 如果是二元运算，才显示第二个输入端口
+        // 如果是二元运算或比较运算，才显示第二个输入端口
         if (isBinaryOperator(operator)) {
             builder.addRow(new PortRow(
                     StandardPorts.VALUE.toInputWithIndex(2),
@@ -72,19 +74,27 @@ public class MathOperation extends BaseNode {
         String operator = (String) context.getNodeProperty(PropertyKeys.SELECTION.id());
         if (operator == null) operator = "+";
 
-        // 获取第一个输入值
-        Float v1 = getInput(context, StandardPorts.VALUE.getIdWithIndex(1), Float.class);
-        if (v1 == null) v1 = 0.0f;
-
-        // 如果是二元运算，获取第二个输入值
-        Float v2 = 0.0f;
+        // 获取原始输入值（不急着赋默认值，用于比较运算的 null 检测）
+        Float rawV1 = getInput(context, StandardPorts.VALUE.getIdWithIndex(1), Float.class);
+        Float rawV2 = null;
         if (isBinaryOperator(operator)) {
-            v2 = getInput(context, StandardPorts.VALUE.getIdWithIndex(2), Float.class);
-            if (v2 == null) v2 = 0.0f;
+            rawV2 = getInput(context, StandardPorts.VALUE.getIdWithIndex(2), Float.class);
         }
+
+        // 常规运算的回落值
+        float v1 = rawV1 != null ? rawV1 : 0.0f;
+        float v2 = rawV2 != null ? rawV2 : 0.0f;
 
         // 执行计算
         return switch (operator) {
+            // --- 比较运算 (任一为 null 直接返回 0.0f，否则计算真假返回 1.0f / 0.0f) ---
+            case ">"  -> (rawV1 != null && rawV2 != null && v1 > v2)  ? 1.0f : 0.0f;
+            case "<"  -> (rawV1 != null && rawV2 != null && v1 < v2)  ? 1.0f : 0.0f;
+            case "==" -> (rawV1 != null && rawV2 != null && v1 == v2) ? 1.0f : 0.0f;
+            case ">=" -> (rawV1 != null && rawV2 != null && v1 >= v2) ? 1.0f : 0.0f;
+            case "<=" -> (rawV1 != null && rawV2 != null && v1 <= v2) ? 1.0f : 0.0f;
+            case "!=" -> (rawV1 != null && rawV2 != null && v1 != v2) ? 1.0f : 0.0f;
+
             // --- 二元运算 ---
             case "+" -> v1 + v2;
             case "-" -> v1 - v2;
@@ -115,12 +125,10 @@ public class MathOperation extends BaseNode {
         };
     }
 
-    /**
-     * 判断是否为二元运算（需要两个输入值）
-     */
     private boolean isBinaryOperator(String op) {
         return switch (op) {
-            case "+", "-", "*", "/", "%", "^", "min", "max", "atan2" -> true;
+            case "+", "-", "*", "/", "%", "^", "min", "max", "atan2",
+                 ">", "<", "==", ">=", "<=", "!=" -> true;
             default -> false;
         };
     }

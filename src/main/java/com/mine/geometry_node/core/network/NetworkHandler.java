@@ -2,26 +2,21 @@ package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.network.packet.PacketSpawnVisual;
-import com.mine.geometry_node.core.network.packet.c2s.PacketSyncUpload;
-import com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload;
-import com.mine.geometry_node.core.network.packet.s2c.PacketSyncResponse;
+import com.mine.geometry_node.core.network.packet.c2s.*;
+import com.mine.geometry_node.core.network.packet.s2c.*;
 import dev.architectury.networking.NetworkManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class NetworkHandler {
 
     public static void init() {
         NetworkManager.registerReceiver(
                 NetworkManager.Side.S2C,
-                PacketSpawnVisual.TYPE,
-                PacketSpawnVisual.STREAM_CODEC,
+                PacketSpawnDynamicVisual.TYPE,
+                PacketSpawnDynamicVisual.STREAM_CODEC,
                 (payload, context) -> {
                     context.queue(() -> ClientVisualManager.spawnEffectFromPacket(payload));
                 }

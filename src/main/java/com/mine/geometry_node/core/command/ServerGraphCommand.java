@@ -124,6 +124,58 @@ public class ServerGraphCommand {
                                         })
                                 )
                         )
+
+                        // graph_bind look
+                        .then(Commands.literal("look")
+                                .then(Commands.argument("graph_id", StringArgumentType.greedyString())
+                                        .suggests(SUGGEST_GRAPHS)
+                                        .executes(context -> {
+                                            net.minecraft.server.level.ServerPlayer player = context.getSource().getPlayerOrException();
+                                            String graphId = StringArgumentType.getString(context, "graph_id");
+
+                                            // 1. 定义射线追踪的参数
+                                            double reachDistance = 5.0; // 最大交互距离（5格）
+                                            net.minecraft.world.phys.Vec3 eyePosition = player.getEyePosition();
+                                            net.minecraft.world.phys.Vec3 lookVector = player.getViewVector(1.0F);
+                                            net.minecraft.world.phys.Vec3 traceEnd = eyePosition.add(
+                                                    lookVector.x * reachDistance,
+                                                    lookVector.y * reachDistance,
+                                                    lookVector.z * reachDistance
+                                            );
+
+                                            // 2. 划定一个粗略的搜索范围框，以提升性能
+                                            net.minecraft.world.phys.AABB searchBox = player.getBoundingBox()
+                                                    .expandTowards(lookVector.scale(reachDistance))
+                                                    .inflate(1.0D, 1.0D, 1.0D);
+
+                                            // 3. 使用原版的 ProjectileUtil 进行精确的实体碰撞箱射线检测
+                                            net.minecraft.world.phys.EntityHitResult hitResult = net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(
+                                                    player,
+                                                    eyePosition,
+                                                    traceEnd,
+                                                    searchBox,
+                                                    entity -> !entity.isSpectator() && entity.isPickable(), // 过滤掉旁观者和不可选中的实体
+                                                    reachDistance * reachDistance
+                                            );
+
+                                            // 4. 处理检测结果
+                                            if (hitResult != null && hitResult.getEntity() != null) {
+                                                Entity targetEntity = hitResult.getEntity();
+
+                                                // 执行绑定逻辑
+                                                GraphEngine.bindGraph(targetEntity, graphId);
+
+                                                context.getSource().sendSuccess(() -> Component.literal(
+                                                        "§a成功将图纸 " + graphId + " 绑定到: " + targetEntity.getName().getString()
+                                                ), true);
+                                                return 1;
+                                            } else {
+                                                context.getSource().sendFailure(Component.literal("§c未发现实体！请靠近并对准目标。"));
+                                                return 0;
+                                            }
+                                        })
+                                )
+                        )
         );
 
         // =====================================================================

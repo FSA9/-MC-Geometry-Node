@@ -32,9 +32,18 @@ public class SendMessage extends BaseNode {
         String message = getInput(context, StandardPorts.MESSAGE.getId(), String.class);
         if (message == null) message = "";
 
-        for (Entity target : targets) {
-            if (target instanceof Player player) {
-                player.sendSystemMessage(Component.literal(message));
+        if (targets.isEmpty()) {
+            if (context.getLevel() != null) {
+                for (Player player : context.getLevel().getServer().getPlayerList().getPlayers()) {
+                    player.sendSystemMessage(Component.literal(message));
+                }
+            }
+        }
+        else {
+            for (Entity target : targets) {
+                if (target instanceof Player player) {
+                    player.sendSystemMessage(Component.literal(message));
+                }
             }
         }
 

@@ -1,12 +1,16 @@
 package com.mine.geometry_node.core.node.nodes.maths.operation;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
+import com.mine.geometry_node.core.execution.datatypes.DynamicData;
+import com.mine.geometry_node.core.execution.datatypes.ExpressionData;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.PropertyKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
+import com.mine.geometry_node.core.utils.ASTNode;
+import com.mine.geometry_node.core.utils.ExpressionCompiler;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -88,27 +92,61 @@ public class MathExpression extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!StandardPorts.VALUE.getId().equals(portName)) return null;
 
-        // 获取公式字符串
-        String expr = getInput(context, StandardPorts.EXPRESSION.getId(), String.class);
-        if (expr == null || expr.trim().isEmpty()) return 0.0f;
+        String mainExpr = getInput(context, StandardPorts.EXPRESSION.getId(), String.class);
+        if (mainExpr == null || mainExpr.trim().isEmpty()) {
+            mainExpr = "0"; // 防止没填表达式时崩溃
+        }
 
-        // 收集变量值
-        Map<String, Double> vars = new HashMap<>();
+        Map<String, Double> evalVars = new HashMap<>();     // 物理计算用
+        Map<String, String> mergedBindings = new HashMap<>(); // 视觉协议用
+        String finalFormula = mainExpr;
+
+        double serverTick = context.getLevel() != null ? context.getLevel().getGameTime() : 0.0;
+        evalVars.put("tick", serverTick);
+
+        // 【关键修改】：去掉 hasPort，无论如何都去要一次数据
         for (char c = 'A'; c <= 'Z'; c++) {
             String varName = String.valueOf(c);
-            if (context.hasPort(varName)) {
-                Float val = getInput(context, varName, Float.class);
-                vars.put(varName, val != null ? val.doubleValue() : 0.0);
+
+            // 1. 尝试获取活公式
+            ExpressionData inputExpr = getInput(context, varName, ExpressionData.class);
+            // 2. 尝试获取死数字 (如果没连线，会返回 null)
+            Float val = getInput(context, varName, Float.class);
+
+            // 存入字典。如果没连线 val 就是 null，兜底存入 0.0，彻底告别 unactivated 报错！
+            evalVars.put(varName, val != null ? val.doubleValue() : 0.0);
+
+            // 如果连线了，并且传来了公式，就进行字符串嵌套
+            if (inputExpr != null && inputExpr.formula() != null && !inputExpr.formula().isEmpty() && !inputExpr.formula().equals("0")) {
+                finalFormula = finalFormula.replace(varName, "(" + inputExpr.formula() + ")");
+                mergedBindings.putAll(inputExpr.bindings());
             }
         }
 
-        // 执行数学解析
         try {
-            double res = eval(expr, vars);
-            return (float) res;
+            // 【核心优化】：服务端 AST 缓存复用机制
+            // 利用当前节点的运行时 ID 作为黑板 Key，确保 AST 树与图进程同生共死
+            String cacheKey = "AST_" + context.getCurrentNodeId();
+
+            // 尝试从图进程的临时黑板中获取已经编译好的 AST 树
+            // 注意：这里的 ASTNode 必须是你移到 core 包之后的那个！
+            ASTNode ast = (ASTNode) context.getTempData(cacheKey);
+
+            if (ast == null) {
+                // 如果没有，说明是本图进程第一次走到这个节点，触发编译并塞入黑板缓存
+                ast = ExpressionCompiler.compile(mainExpr);
+                context.setTempData(cacheKey, ast);
+            }
+
+            // 物理层面的 20FPS 运算：直接跑 AST 树，极速完成
+            double resultValue = ast.evaluate(evalVars);
+
+            // 视觉层面的 动态公式打包
+            return new DynamicData((float) resultValue, new ExpressionData(finalFormula, mergedBindings));
+
         } catch (Exception e) {
-            System.err.println("[MathExpression] Expression analysis failed: '" + expr + "' -> " + e.getMessage());
-            return 0.0f;
+            System.err.println("[MathExpression] Compute Error: '" + mainExpr + "' -> " + e.getMessage());
+            return new DynamicData(0.0f, ExpressionData.ZERO);
         }
     }
 
@@ -168,19 +206,21 @@ public class MathExpression extends BaseNode {
                     while ((ch >= '0' && ch <= '9') || ch == '.') nextChar();
                     x = Double.parseDouble(str.substring(startPos, this.pos));
                 } else if (ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z') { // 函数或变量
-                    while (ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z') nextChar();
+                    while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_') {
+                        nextChar();
+                    }
                     String func = str.substring(startPos, this.pos);
 
-                    // 如果是单一大写字母 (A-Z)
-                    if (func.length() == 1 && Character.isUpperCase(func.charAt(0))) {
-                        if (!vars.containsKey(func)) {
-                            System.err.println("[MathExpression] Error: unactivated variable detect: " + func);
-                            x = 0.0;
-                        } else {
-                            x = vars.get(func);
-                        }
-                    } else {
-                        // 标准数学函数
+                    // 1. 拦截内置的时间变量 tick (忽略大小写)
+                    if (func.equalsIgnoreCase("tick")) {
+                        x = vars.getOrDefault("tick", 0.0);
+                    }
+                    // 2. 拦截单一大写字母 (A-Z 端口变量)
+                    else if (func.length() == 1 && Character.isUpperCase(func.charAt(0))) {
+                        x = vars.getOrDefault(func, 0.0);
+                    }
+                    // 3. 解析标准数学函数 (这部分必须有括号和后续参数)
+                    else {
                         x = parseFactor();
                         if (func.equals("sqrt")) x = Math.sqrt(x);
                         else if (func.equals("sin")) x = Math.sin(x);

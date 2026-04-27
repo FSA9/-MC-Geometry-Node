@@ -21,6 +21,7 @@ public enum StandardPorts {
     INDEX("index", PortType.INTEGER),
     TICK("tick", PortType.INTEGER),
     COLOR("color", PortType.INTEGER),
+    COUNT("count", PortType.INTEGER),
 
     // Bool
     BOOL("bool", PortType.BOOLEAN),
@@ -39,7 +40,11 @@ public enum StandardPorts {
     SIZE_1("size_1", PortType.FLOAT),
     TIME("time", PortType.FLOAT),
     VOLUME("volume", PortType.FLOAT),
+    SPEED("speed", PortType.FLOAT),
     PITCH("pitch", PortType.FLOAT),
+    X("X", PortType.FLOAT),
+    Y("Y", PortType.FLOAT),
+    Z("Z", PortType.FLOAT),
 
     // String
     NAME("name", PortType.STRING),
@@ -48,7 +53,7 @@ public enum StandardPorts {
     SORT("sort", PortType.STRING),
     TAG("tag", PortType.STRING),
     TEAM("team", PortType.STRING),
-
+    PARTICLE("particle", PortType.STRING),
     SCOPE("scope", PortType.STRING),
     EXPRESSION("expression", PortType.STRING),
     MESSAGE("message", PortType.STRING),
@@ -73,6 +78,7 @@ public enum StandardPorts {
 
     // LIST
     LIST("list", PortType.LIST),
+    LIST_XYZ("list_xyz", PortType.LIST),
 
     // XYZ
     XYZ("xyz", PortType.XYZ),
@@ -82,6 +88,7 @@ public enum StandardPorts {
     VECTOR("vector", PortType.XYZ),
     ROTATION("rotation", PortType.XYZ),
     SIZE_3("size_3", PortType.XYZ),
+    SPREAD("spread", PortType.XYZ),
 
     // ANY
 

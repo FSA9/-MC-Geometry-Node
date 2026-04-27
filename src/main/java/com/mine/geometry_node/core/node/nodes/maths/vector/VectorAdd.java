@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes.functions.vector;
+package com.mine.geometry_node.core.node.nodes.maths.vector;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.nodes.*;
@@ -16,8 +16,8 @@ public class VectorAdd extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.vector_add"))
                 .addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.VECTOR.toInputWithIndex(1), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.VECTOR.toInputWithIndex(2), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.VECTOR.toInputWithIndex(1), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.VECTOR.toInputWithIndex(2), null, UIHint.VECTOR, null, null))
                 .build();
     }
 

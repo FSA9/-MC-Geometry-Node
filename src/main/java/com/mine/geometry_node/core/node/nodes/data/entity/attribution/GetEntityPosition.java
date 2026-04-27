@@ -32,6 +32,8 @@ public class GetEntityPosition extends BaseNode {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return null;
 
-        return entities.getFirst().position(); // 返回 Vec3
+        Entity target = entities.getFirst();
+
+        return bindDynamicVector(target.position(), target, "pos");
     }
 }

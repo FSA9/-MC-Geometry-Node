@@ -147,19 +147,21 @@ public class TargetSelector extends BaseNode {
 
             switch (filterType) {
                 case "center" -> {
-                    List<Float> pos = getInputList(context, StandardPorts.CENTER.getIdWithIndex(i), Float.class);
-                    if (pos != null && pos.size() >= 3) {
-                        arguments.add("x=" + formatNum(pos.get(0)));
-                        arguments.add("y=" + formatNum(pos.get(1)));
-                        arguments.add("z=" + formatNum(pos.get(2)));
+                    // 【修复2】: VECTOR 端口传递的是 Vec3 对象，不能用 getInputList 强转为 List<Float>
+                    net.minecraft.world.phys.Vec3 pos = getInput(context, StandardPorts.CENTER.getIdWithIndex(i), net.minecraft.world.phys.Vec3.class);
+                    if (pos != null) {
+                        arguments.add("x=" + formatNum(pos.x));
+                        arguments.add("y=" + formatNum(pos.y));
+                        arguments.add("z=" + formatNum(pos.z));
                     }
                 }
                 case "volume" -> {
-                    List<Float> dim = getInputList(context, StandardPorts.SIZE_3.getIdWithIndex(i), Float.class);
-                    if (dim != null && dim.size() >= 3) {
-                        arguments.add("dx=" + formatNum(dim.get(0)));
-                        arguments.add("dy=" + formatNum(dim.get(1)));
-                        arguments.add("dz=" + formatNum(dim.get(2)));
+                    // 【修复2】: 同上，改用 Vec3 接收
+                    net.minecraft.world.phys.Vec3 dim = getInput(context, StandardPorts.SIZE_3.getIdWithIndex(i), net.minecraft.world.phys.Vec3.class);
+                    if (dim != null) {
+                        arguments.add("dx=" + formatNum(dim.x));
+                        arguments.add("dy=" + formatNum(dim.y));
+                        arguments.add("dz=" + formatNum(dim.z));
                     }
                 }
                 case "distance", "x_rotation", "y_rotation" -> {
@@ -179,7 +181,6 @@ public class TargetSelector extends BaseNode {
                     if (limit != null) arguments.add("limit=" + limit);
                 }
                 default -> {
-                    // 处理所有简单的字符串匹配参数 (type, tag, team, name, gamemode, sort)
                     StandardPorts port = switch (filterType) {
                         case "type" -> StandardPorts.TYPE;
                         case "tag" -> StandardPorts.TAG;
@@ -205,26 +206,20 @@ public class TargetSelector extends BaseNode {
         String finalSelector = selectorBuilder.toString();
 
         try {
-            System.out.println("123131231231231312");
-            // 1. 尝试获取连线传入的显式实体
             net.minecraft.world.entity.Entity explicitEntity = getInput(context, StandardPorts.ENTITY.getId(), net.minecraft.world.entity.Entity.class);
-
             net.minecraft.commands.CommandSourceStack source;
 
             // --- 严格按照“输入实体 > 绑定对象”的优先级构建执行源 ---
             if (explicitEntity != null) {
-                // 优先级 1：显式传入的实体为主语
-                source = explicitEntity.createCommandSourceStack();
+                // 【修复1】: 强制提权到 Permission Level 4，否则普通玩家/实体作为 Source 无法执行 @a/@e
+                source = explicitEntity.createCommandSourceStack().withPermission(4);
             }
             else if (context.getEntity() != null) {
-                // 优先级 2：未传入实体，回退到图绑定的【实体】
-                source = context.getEntity().createCommandSourceStack();
+                source = context.getEntity().createCommandSourceStack().withPermission(4);
             }
             else if (context.getLevel() != null) {
-                // 优先级 3：未传入且无绑定实体，回退到图绑定的【维度】或【服务器】
-                // 默认使用该维度的原点坐标作为执行中心
                 net.minecraft.server.level.ServerLevel serverLevel = context.getLevel();
-                source = serverLevel.getServer().createCommandSourceStack().withLevel(serverLevel);
+                source = serverLevel.getServer().createCommandSourceStack().withLevel(serverLevel).withPermission(4);
             }
             else {
                 System.err.println("[TargetSelector] 无法获取任何有效的执行主体 (主语为空)");
@@ -239,7 +234,8 @@ public class TargetSelector extends BaseNode {
             return selector.findEntities(source);
 
         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
-            System.err.println("[TargetSelector] 目标选择器语法错误: " + finalSelector);
+            // 【优化】: 打印具体的 e.getMessage()，以后如果参数写错了(如队伍名不存在)，就能看到具体原因，而不是只看到一个 "@e[...]"
+            System.err.println("[TargetSelector] 目标选择器语法错误: " + finalSelector + " | 详细原因: " + e.getMessage());
         }
 
         return List.of();

@@ -1,6 +1,8 @@
 package com.mine.geometry_node.core.node.port;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
+import com.mine.geometry_node.core.execution.datatypes.DynamicData;
+import com.mine.geometry_node.core.execution.datatypes.ExpressionData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -31,6 +33,20 @@ public class TypeConverter {
     @Nullable
     public static <T> T convert(@Nullable Object val, Class<T> type, ExecutionContext ctx) {
         if (val == null) return null;
+
+        // ==========================================
+        // 双模数字与公式协议的智能拆解
+        // ==========================================
+        if (val instanceof DynamicData dyn) {
+            // 目标索要公式，直接交出活公式
+            if (type == ExpressionData.class) {
+                return type.cast(dyn.expression());
+            }
+            // 目标索要普通数值，剥离包装，让里面的浮点数继续往下走常规转换
+            val = dyn.value();
+        } else if (type == ExpressionData.class && val instanceof Number num) {
+            return type.cast(new ExpressionData(String.valueOf(num.floatValue()), java.util.Map.of()));
+        }
 
         // 1. 完美匹配：本身就是目标类型或其子类
         if (type.isInstance(val)) {
@@ -82,6 +98,17 @@ public class TypeConverter {
 
         // 6. 字符串反向解析 (反序列化)
         if (val instanceof String s) {
+
+            // 解析数值 (Integer, Float, Double)
+            if (type == Integer.class || type == Float.class || type == Double.class) {
+                try {
+                    // 先统一解析为 Double 以兼容 "1.5" 这种格式，然后再向下转型
+                    double d = Double.parseDouble(s);
+                    if (type == Integer.class) return type.cast((int) d);
+                    if (type == Float.class) return type.cast((float) d);
+                    return type.cast(d);
+                } catch (NumberFormatException ignored) {}
+            }
 
             // 解析 Entity (UUID)
             if (type == Entity.class) {

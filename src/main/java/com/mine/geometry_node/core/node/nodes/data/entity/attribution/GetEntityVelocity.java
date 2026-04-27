@@ -30,6 +30,7 @@ public class GetEntityVelocity extends BaseNode {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return null;
 
-        return entities.getFirst().getDeltaMovement();
+        Entity target = entities.getFirst();
+        return bindDynamic(target.getDeltaMovement(), target, "velocity");
     }
 }
