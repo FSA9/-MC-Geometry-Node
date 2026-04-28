@@ -26,8 +26,8 @@ public class DrawLaserBeam extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 【修复3】：必须在节点定义里暴露出这两个实体输入端口，否则玩家无法连线
                 // 注意：如果你的 StandardPorts 里没有 SOURCE_ENTITY，请去那里注册一下，或者直接用自定义 PortDef
-                .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.TARGET_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
 
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.END_POS.toInput(), null, UIHint.VECTOR, null, null))
@@ -41,7 +41,7 @@ public class DrawLaserBeam extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         // 读取实体端口
         Entity sourceEntity = getInput(context, StandardPorts.SOURCE_ENTITY.getId(), Entity.class);
-        Entity targetEntity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+        Entity targetEntity = getInput(context, StandardPorts.TARGET_ENTITY.getId(), Entity.class);
 
         int sourceId = sourceEntity != null ? sourceEntity.getId() : -1;
         int targetId = targetEntity != null ? targetEntity.getId() : -1;

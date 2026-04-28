@@ -64,6 +64,7 @@ public enum StandardPorts {
     ENTITY("entity", PortType.ENTITY),
     TRIGGER_ENTITY("trigger_entity", PortType.ENTITY),
     SOURCE_ENTITY("source_entity", PortType.ENTITY),
+    TARGET_ENTITY("target_entity", PortType.ENTITY),
     ATTACK_SOURCE("attack_source", PortType.ENTITY),
     DIRECT_SOURCE("direct_source", PortType.ENTITY),
 

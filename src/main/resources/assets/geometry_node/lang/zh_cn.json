@@ -92,6 +92,7 @@
   "geometry_node.port.entity": "实体",
   "geometry_node.port.trigger_entity": "触发实体",
   "geometry_node.port.source_entity": "源实体",
+  "geometry_node.port.target_entity": "目标实体",
   "geometry_node.port.attack_source": "攻击源",
   "geometry_node.port.direct_source": "直接来源",
 
