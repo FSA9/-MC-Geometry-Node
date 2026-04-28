@@ -75,11 +75,7 @@ public class FinishGraph extends BaseNode {
             ServerLevel currentLevel = context.getLevel();
             if (currentLevel == null) return next(StandardPorts.FLOW_OUT.getId());
 
-            if ("all_dimensions".equals(scope)) {
-                for (ServerLevel sl : currentLevel.getServer().getAllLevels()) {
-                    terminateMatchingProcesses(LevelGraphAttachment.get(sl).getProcesses(), targetGraphId);
-                }
-            } else if ("global".equals(scope) || scope == null) {
+            if ("global".equals(scope) || scope == null) {
                 // 默认全局通常在主世界容器中
                 terminateMatchingProcesses(LevelGraphAttachment.get(currentLevel.getServer().overworld()).getProcesses(), targetGraphId);
             } else {

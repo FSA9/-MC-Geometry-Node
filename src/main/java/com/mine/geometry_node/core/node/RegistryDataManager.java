@@ -85,7 +85,6 @@ public class RegistryDataManager {
 
         // 1. 注入我们的特殊作用域
         dims.add("global");
-        dims.add("all_dimensions");
 
         try {
             if (net.minecraft.client.Minecraft.getInstance().getConnection() != null) {
