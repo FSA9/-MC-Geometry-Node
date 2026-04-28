@@ -69,7 +69,8 @@ public class Switch extends BaseNode {
                     StandardPorts.FLOW_OUT.toExecWithIndex(i),
                     UIHint.CHECKBOX,
                     null,
-                    Map.of(PortMetaKeys.IS_DYNAMIC, true)
+                    Map.of(PortMetaKeys.IS_DYNAMIC, true,
+                            PortMetaKeys.DYNAMIC_INDEX, i)
             ));
         }
 

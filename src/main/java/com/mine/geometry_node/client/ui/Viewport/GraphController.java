@@ -177,63 +177,38 @@ public class GraphController {
         return node.connectedInputs.contains(targetPortId);
     }
 
-    /**
-     * 移除指定的动态分支，并将其后的所有分支数据向前位移
-     */
-    public void removeDynamicBranch(String nodeId, String refPortId) {
+    public void removeDynamicBranch(String nodeId, String propertyKey, int removeIndex, int totalCount) {
         NodeData node = mContext.getGraph().getNode(nodeId);
-        if (node == null || refPortId == null || refPortId.isEmpty()) return;
-
-        // 1. 解析要删除的索引 (例如从 "filter_type_2" 或 "center_2" 中提取 2)
-        int lastUnderscore = refPortId.lastIndexOf('_');
-        if (lastUnderscore == -1) return;
-        int removeIndex;
-        try {
-            removeIndex = Integer.parseInt(refPortId.substring(lastUnderscore + 1));
-        } catch (NumberFormatException e) {
-            return; // 提取索引失败，退出
-        }
-
-        // 2. 获取当前总行数
-        int totalCount = 1;
-        Object countObj = node.properties.get("dynamic_branch_input_count"); // 替换为你的 PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id()
-        if (countObj instanceof Number n) totalCount = n.intValue();
+        if (node == null) return;
 
         if (removeIndex < 1 || removeIndex > totalCount) return;
 
-        // 3. 执行位移 (Shift)
-        // 从 removeIndex 开始，把后面的数据依次往前挪一位
         for (int i = removeIndex; i < totalCount; i++) {
             String oldSuffix = "_" + (i + 1);
             String newSuffix = "_" + i;
-
             shiftMapData(node.properties, oldSuffix, newSuffix);
             shiftMapData(node.inputs, oldSuffix, newSuffix);
+            shiftMapData(node.outputs, oldSuffix, newSuffix);
+            shiftMapData(node.execution, oldSuffix, newSuffix);
             shiftConnections(nodeId, oldSuffix, newSuffix);
         }
 
-        // 4. 彻底清理最后一行的残留数据
         String lastSuffix = "_" + totalCount;
         node.properties.keySet().removeIf(k -> k.endsWith(lastSuffix));
         node.inputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
-
-        // 斩断指向最后一行的所有连线
+        node.outputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
+        node.execution.keySet().removeIf(k -> k.endsWith(lastSuffix));
         shiftConnections(nodeId, lastSuffix, null);
 
-        // 5. 更新总行数并触发 UI 重构
-        node.properties.put("dynamic_branch_input_count", totalCount - 1);
-
-        // 由于结构发生了改变，强制进行 NodeDef 刷新逻辑
-        setNodeProperty(nodeId, "dynamic_branch_input_count", totalCount - 1);
+        node.properties.put(propertyKey, totalCount - 1);
+        setNodeProperty(nodeId, propertyKey, totalCount - 1);
     }
 
-    // --- 内部辅助方法：处理字典数据的位移 ---
-    private void shiftMapData(java.util.Map<String, Object> map, String oldSuffix, String newSuffix) {
-        // 先清理目标槽位，防止旧类型残留
+    private <V> void shiftMapData(java.util.Map<String, V> map, String oldSuffix, String newSuffix) {
         map.keySet().removeIf(k -> k.endsWith(newSuffix));
 
-        java.util.Map<String, Object> toMove = new java.util.HashMap<>();
-        for (java.util.Map.Entry<String, Object> entry : map.entrySet()) {
+        java.util.Map<String, V> toMove = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, V> entry : map.entrySet()) {
             if (entry.getKey().endsWith(oldSuffix)) {
                 String newKey = entry.getKey().substring(0, entry.getKey().length() - oldSuffix.length()) + newSuffix;
                 toMove.put(newKey, entry.getValue());

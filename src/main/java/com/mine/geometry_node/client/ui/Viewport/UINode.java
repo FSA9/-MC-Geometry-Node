@@ -8,6 +8,8 @@ import com.mine.geometry_node.client.ui.Viewport.UIHints.UIHintRenderer;
 import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.meta.PropertyKeys;
+import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.UIHint;
@@ -43,17 +45,8 @@ public class UINode extends FrameLayout {
     private final Map<String, TextView> mPortLabels = new HashMap<>();
     private final Map<Integer, View> mHintViews = new HashMap<>();
 
-    public record DynamicActionInfo(boolean isAdd, String referencePortId) {}
-
-    private static class RowLayoutMetrics {
-        float topY;        // DP
-        float height;      // DP
-        RectF btnHitbox;   // DP
-        boolean isAddBtn;
-        String refPortId;
-    }
-
-    private final List<RowLayoutMetrics> mRowMetrics = new ArrayList<>();
+    private View mAddButton;
+    private final Map<String, View> mRemoveButtons = new HashMap<>();
 
     public UINode(Context context, NodeData nodeData, NodeDef nodeDef, EditorContext editorContext) {
         super(context);
@@ -102,7 +95,68 @@ public class UINode extends FrameLayout {
                     }
                 }
             }
+
+            if (isDynamicRow(row)) {
+                String portId = row.leftPort() != null ? row.leftPort().id() : (row.rightPort() != null ? row.rightPort().id() : "");
+                Integer removeIndex = row.hintParams() != null ? (Integer) row.hintParams().get(PortMetaKeys.DYNAMIC_INDEX) : null;
+
+                if (removeIndex != null) {
+                    View btn = createDynamicButton(context, "-", false, portId, removeIndex);
+                    mRemoveButtons.put(portId, btn);
+                    addView(btn);
+                }
+            }
         }
+
+        boolean isInputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
+        boolean isOutputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT).isPresent();
+        if (isInputDynamic || isOutputDynamic) {
+            mAddButton = createDynamicButton(context, "+ Add Item", true, null, null);
+            addView(mAddButton);
+        }
+    }
+
+    private View createDynamicButton(Context context, String text, boolean isAdd, String refPortId, Integer removeIndex) {
+        TextView btn = new TextView(context);
+        btn.setText(text);
+        btn.setGravity(icyllis.modernui.view.Gravity.CENTER);
+        btn.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
+        btn.setTextColor(UIConstants.CLR_WHITE);
+
+        icyllis.modernui.graphics.drawable.ShapeDrawable bgDrawable = new icyllis.modernui.graphics.drawable.ShapeDrawable();
+        bgDrawable.setColor(0xFF333333);
+        bgDrawable.setCornerRadius(UIUtils.dp2px(com.mine.geometry_node.client.ui.persistence.ConfigManager.INSTANCE.getConfig().node.cornerRadius));
+        bgDrawable.setStroke(UIUtils.dp2pxInt(1), 0xFF444444);
+        btn.setBackground(bgDrawable);
+
+        btn.setOnClickListener(v -> {
+            if (mEditorContext == null) return;
+
+            boolean isInputDynamic = mNodeDef.getMeta(com.mine.geometry_node.core.node.meta.SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
+            String propertyKey = isInputDynamic ? com.mine.geometry_node.core.node.meta.PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id() : com.mine.geometry_node.core.node.meta.PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
+
+            int currentCount = 1;
+            Object countObj = mNodeData.properties.get(propertyKey);
+            if (countObj instanceof Number num) {
+                currentCount = num.intValue();
+            } else if (countObj instanceof String str) {
+                try { currentCount = Integer.parseInt(str); } catch (Exception ignored) {}
+            }
+
+            if (isAdd) {
+                int maxCount = isInputDynamic ? mNodeDef.getMetaOrDefault(com.mine.geometry_node.core.node.meta.SchemaKeys.MAX_DYNAMIC_INPUT, 10) : mNodeDef.getMetaOrDefault(com.mine.geometry_node.core.node.meta.SchemaKeys.MAX_DYNAMIC_OUTPUT, 10);
+                if (currentCount < maxCount) {
+                    com.mine.geometry_node.client.ui.UICommand.commands.CmdAddBranch cmd = new com.mine.geometry_node.client.ui.UICommand.commands.CmdAddBranch(mEditorContext.getGraphController(), mNodeData.id, propertyKey, currentCount);
+                    mEditorContext.getCommandManager().execute(cmd);
+                }
+            } else {
+                if (currentCount > 1 && removeIndex != null) {
+                    com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch cmd = new com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch(mEditorContext.getGraphController(), mEditorContext.getGraph(), mNodeData.id, propertyKey, currentCount, removeIndex);
+                    mEditorContext.getCommandManager().execute(cmd);
+                }
+            }
+        });
+        return btn;
     }
 
     private TextView createLabel(Context context, String text, int gravity) {
@@ -119,7 +173,6 @@ public class UINode extends FrameLayout {
     public void updateNodeLayout() {
         mInputPortY.clear();
         mOutputPortY.clear();
-        mRowMetrics.clear();
 
         float currentY = UIConstants.Node.HEADER_HEIGHT; // DP
 
@@ -128,21 +181,14 @@ public class UINode extends FrameLayout {
             float rowHeight = calculateRowHeight(row); // 返回 DP
             float portCenterY = currentY + UIConstants.Node.ROW_HEIGHT / 2.0f;
 
-            RowLayoutMetrics metrics = new RowLayoutMetrics();
-            metrics.topY = currentY;
-            metrics.height = rowHeight;
-
             // --- 3. 左侧标签排版 ---
             if (row.leftPort() != null) {
                 mInputPortY.put(row.leftPort().id(), portCenterY);
                 TextView tv = mPortLabels.get(row.leftPort().id());
                 if (tv != null) {
                     LayoutParams lp = (LayoutParams) tv.getLayoutParams();
-
-                    // 修复1：默认左边距严格对齐右边距
                     int leftMargin = UIConstants.Node.LABEL_MARGIN_PORT;
 
-                    // 仅当明确是未连接的 CheckBox 时，才增加左边距留出框的位置
                     if (row.uiHint() == UIHint.CHECKBOX && !mNodeData.isInputConnected(row.leftPort().id())) {
                         View cbView = mHintViews.get(i);
                         int cbWidthDp = UIConstants.Node.CHECKBOX_DEFAULT_WIDTH;
@@ -157,10 +203,6 @@ public class UINode extends FrameLayout {
                     lp.leftMargin = UIUtils.dp2pxInt(leftMargin);
                     lp.topMargin = UIUtils.dp2pxInt(currentY);
                     tv.setLayoutParams(lp);
-
-                    // 限制最大宽度
-//                    int maxLabelWidth = (UIConstants.Node.NODE_WIDTH / 2) - leftMargin - 4;
-//                    tv.setMaxWidth(UIUtils.dp2pxInt(Math.max(10, maxLabelWidth)));
                     tv.setSingleLine(true);
                 }
             }
@@ -175,10 +217,6 @@ public class UINode extends FrameLayout {
                     lp.rightMargin = UIUtils.dp2pxInt(UIConstants.Node.LABEL_MARGIN_PORT);
                     lp.topMargin = UIUtils.dp2pxInt(currentY);
                     tv.setLayoutParams(lp);
-
-                    // 限制最大宽度
-//                    int maxLabelWidth = (UIConstants.Node.NODE_WIDTH / 2) - UIConstants.Node.LABEL_MARGIN_PORT - 4;
-//                    tv.setMaxWidth(UIUtils.dp2pxInt(Math.max(10, maxLabelWidth)));
                     tv.setSingleLine(true);
                 }
             }
@@ -190,20 +228,47 @@ public class UINode extends FrameLayout {
                 if (renderer != null) renderer.updateLayout(hintView, row, currentY, UIConstants.Node.NODE_WIDTH);
             }
 
+            // --- 新增：排版动态删除按钮 ---
             if (isDynamicRow(row)) {
-                boolean isLast = (i == mNodeDef.rows().size() - 1) || !isDynamicRow(mNodeDef.rows().get(i + 1));
-                metrics.isAddBtn = isLast;
-                String refId = row.leftPort() != null ? row.leftPort().id() : (row.rightPort() != null ? row.rightPort().id() : "");
-                metrics.refPortId = refId;
+                String portId = row.leftPort() != null ? row.leftPort().id() : (row.rightPort() != null ? row.rightPort().id() : "");
+                View btn = mRemoveButtons.get(portId);
+                if (btn != null) {
+                    int btnSize = UIUtils.dp2pxInt(16);
+                    LayoutParams lp = new LayoutParams(btnSize, btnSize);
+                    lp.topMargin = UIUtils.dp2pxInt(currentY + (UIConstants.Node.ROW_HEIGHT - 16) / 2f);
 
-                float cx, cy, rowBottom = currentY + rowHeight;
-                if (isLast) { cx = UIConstants.Node.NODE_WIDTH / 2.0f; cy = rowBottom; }
-                else { cx = UIConstants.Node.NODE_WIDTH - (UIConstants.Node.DYNAMIC_BTN_OFFSET_DP / UIConstants.mDensity); cy = rowBottom - (UIConstants.Node.ROW_HEIGHT / 2.0f); }
-                float tol = UIConstants.Node.DYNAMIC_BTN_HITBOX_TOLERANCE_DP;
-                metrics.btnHitbox = new RectF(cx - tol, cy - tol, cx + tol, cy + tol);
+                    if (row.leftPort() != null) {
+                        lp.gravity = icyllis.modernui.view.Gravity.TOP | icyllis.modernui.view.Gravity.RIGHT;
+                        lp.rightMargin = UIUtils.dp2pxInt(8);
+                    } else {
+                        lp.gravity = icyllis.modernui.view.Gravity.TOP | icyllis.modernui.view.Gravity.LEFT;
+                        lp.leftMargin = UIUtils.dp2pxInt(8);
+                    }
+                    btn.setLayoutParams(lp);
+                }
             }
-            mRowMetrics.add(metrics);
             currentY += rowHeight;
+        }
+
+        // --- 新增：排版底部的 Add 按钮 ---
+        if (mAddButton != null) {
+            float inputBoxHeight = com.mine.geometry_node.client.ui.Viewport.UIHints.UIHintUtils.getStandardInputHeight();
+            float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
+
+            float startX = UIConstants.Node.LABEL_MARGIN_PORT;
+            float endX = UIConstants.Node.NODE_WIDTH - UIConstants.Node.LABEL_MARGIN_PORT;
+
+            LayoutParams lp = new LayoutParams(
+                    UIUtils.dp2pxInt(endX - startX),
+                    UIUtils.dp2pxInt(inputBoxHeight)
+            );
+
+            lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
+            lp.leftMargin = UIUtils.dp2pxInt(startX);
+            lp.topMargin = UIUtils.dp2pxInt(currentY + verticalMargin);
+            mAddButton.setLayoutParams(lp);
+
+            currentY += UIConstants.Node.ROW_HEIGHT;
         }
 
         mTotalHeight = (int) currentY;
@@ -216,68 +281,49 @@ public class UINode extends FrameLayout {
         float w = getWidth();
         float h = getHeight() > 0 ? getHeight() : UIUtils.dp2px(mTotalHeight);
 
-        float scaledRadius = UIUtils.dp2px(ConfigManager.INSTANCE.getConfig().node.cornerRadius);
+        float scaledRadius = UIUtils.dp2px(com.mine.geometry_node.client.ui.persistence.ConfigManager.INSTANCE.getConfig().node.cornerRadius);
         float scaledHeaderH = UIUtils.dp2px(UIConstants.Node.HEADER_HEIGHT);
 
+        // 画节点背景
         mPaint.setStyle(Paint.Style.FILL);
         mPaint.setColor(UIConstants.CLR_BG_NODE_BODY);
         mTempRect.set(0, 0, w, h);
         canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, scaledRadius, scaledRadius, mPaint);
 
+        // 画节点头部
         mPaint.setColor(mNodeDef.category().getColor());
         mTempRect.set(0, 0, w, scaledHeaderH);
         canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, 0f, 0f, mPaint);
 
+        // 画节点边框
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(mIsSelected ? UIConstants.Node.STROKE_WIDTH_SELECTED : UIConstants.Node.STROKE_WIDTH_NORMAL);
         mPaint.setColor(mIsSelected ? UIConstants.CLR_WHITE : UIConstants.CLR_NODE_OUTLINE);
         mTempRect.set(0, 0, w, h);
         canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, scaledRadius, scaledRadius, mPaint);
 
+        // 画输入/输出端口的彩色圆点
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
-            RowLayoutMetrics metrics = mRowMetrics.get(i);
-            float centerYpx = UIUtils.dp2px(metrics.topY + UIConstants.Node.ROW_HEIGHT / 2.0f);
 
             if (row.leftPort() != null) {
-                mPaint.setStyle(Paint.Style.FILL);
-                mPaint.setColor(row.leftPort().type().getColor());
-                canvas.drawCircle(0, centerYpx, UIUtils.dp2px(UIConstants.Node.PORT_VISUAL_RADIUS), mPaint);
+                Float yDp = mInputPortY.get(row.leftPort().id());
+                if (yDp != null) {
+                    mPaint.setStyle(Paint.Style.FILL);
+                    mPaint.setColor(row.leftPort().type().getColor());
+                    canvas.drawCircle(0, UIUtils.dp2px(yDp), UIUtils.dp2px(UIConstants.Node.PORT_VISUAL_RADIUS), mPaint);
+                }
             }
             if (row.rightPort() != null) {
-                mPaint.setStyle(Paint.Style.FILL);
-                mPaint.setColor(row.rightPort().type().getColor());
-                canvas.drawCircle(w, centerYpx, UIUtils.dp2px(UIConstants.Node.PORT_VISUAL_RADIUS), mPaint);
-            }
-            if (metrics.btnHitbox != null) {
-                float cx = metrics.isAddBtn ? (w / 2.0f) : (w - UIUtils.dp2px(UIConstants.Node.DYNAMIC_BTN_OFFSET_DP));
-                float cypx = UIUtils.dp2px(metrics.topY + metrics.height);
-                if (!metrics.isAddBtn) cypx -= UIUtils.dp2px(UIConstants.Node.ROW_HEIGHT / 2.0f);
-                drawDynamicButton(canvas, cx, cypx, metrics.isAddBtn);
+                Float yDp = mOutputPortY.get(row.rightPort().id());
+                if (yDp != null) {
+                    mPaint.setStyle(Paint.Style.FILL);
+                    mPaint.setColor(row.rightPort().type().getColor());
+                    canvas.drawCircle(w, UIUtils.dp2px(yDp), UIUtils.dp2px(UIConstants.Node.PORT_VISUAL_RADIUS), mPaint);
+                }
             }
         }
         super.onDraw(canvas);
-    }
-
-    private void drawDynamicButton(Canvas canvas, float cx, float cy, boolean isAdd) {
-        float halfSize = UIUtils.dp2px(UIConstants.Node.DYNAMIC_BTN_SIZE_DP / 2.0f);
-        float iconHalf = UIUtils.dp2px(UIConstants.Node.DYNAMIC_BTN_ICON_SIZE_DP / 2.0f);
-
-        mPaint.setColor(UIConstants.Node.CLR_DYNAMIC_BTN_BG);
-        mPaint.setStyle(Paint.Style.FILL);
-        canvas.drawRect(cx - halfSize, cy - halfSize, cx + halfSize, cy + halfSize, mPaint);
-
-        mPaint.setColor(UIConstants.Node.CLR_DYNAMIC_BTN_FG);
-        mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(UIConstants.Node.DYNAMIC_BTN_STROKE_WIDTH);
-        canvas.drawRect(cx - halfSize, cy - halfSize, cx + halfSize, cy + halfSize, mPaint);
-
-        if (isAdd) {
-            canvas.drawLine(cx - iconHalf, cy, cx + iconHalf, cy, mPaint);
-            canvas.drawLine(cx, cy - iconHalf, cx, cy + iconHalf, mPaint);
-        } else {
-            canvas.drawLine(cx - iconHalf, cy, cx + iconHalf, cy, mPaint);
-        }
     }
 
     private boolean isDynamicRow(PortRow row) { return row.hintParams() != null && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC)); }
@@ -296,7 +342,16 @@ public class UINode extends FrameLayout {
     }
 
     public View findInteractiveViewAt(float localXpx, float localYpx) {
+        // 检测输入框等 Hint
         for (View v : mHintViews.values()) {
+            if (v.getVisibility() == View.VISIBLE && localXpx >= v.getLeft() && localXpx < v.getRight() && localYpx >= v.getTop() && localYpx < v.getBottom()) return v;
+        }
+        // 新增：检测 Add 按钮
+        if (mAddButton != null && mAddButton.getVisibility() == View.VISIBLE && localXpx >= mAddButton.getLeft() && localXpx < mAddButton.getRight() && localYpx >= mAddButton.getTop() && localYpx < mAddButton.getBottom()) {
+            return mAddButton;
+        }
+        // 新增：检测 Remove 按钮
+        for (View v : mRemoveButtons.values()) {
             if (v.getVisibility() == View.VISIBLE && localXpx >= v.getLeft() && localXpx < v.getRight() && localYpx >= v.getTop() && localYpx < v.getBottom()) return v;
         }
         return null;
@@ -314,14 +369,6 @@ public class UINode extends FrameLayout {
             if (distSq <= thresholdSq && distSq < bestDistSq) { bestDistSq = distSq; best = entry.getKey(); }
         }
         return best;
-    }
-
-    public DynamicActionInfo hitTestDynamicButton(float localXdp, float localYdp) {
-        float toleranceDp = UIConstants.Node.DYNAMIC_BTN_TOUCH_TOLERANCE_DP;
-        for (RowLayoutMetrics metrics : mRowMetrics) {
-            if (metrics.btnHitbox != null && metrics.btnHitbox.contains(localXdp, localYdp)) return new DynamicActionInfo(metrics.isAddBtn, metrics.refPortId);
-        }
-        return null;
     }
 
     private float calculateRowHeight(PortRow row) {

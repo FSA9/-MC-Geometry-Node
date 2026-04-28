@@ -99,47 +99,21 @@ public class InteractionManager {
         if (isMiddleMouse(event)) { mCurrentMode = MODE_PANNING; return; }
         if (isRightMouse(event)) return;
 
-        UINode target = mContext.findNodeAt(uiX, uiY);
-
-        if (target != null) {
-            float localX = uiX - target.getTranslationX();
-            float localY = uiY - target.getTranslationY();
-            UINode.DynamicActionInfo btnInfo = target.hitTestDynamicButton(localX, localY);
-
-            if (btnInfo != null) {
-                NodeData nodeData = target.getNodeData();
-                NodeDef nodeDef = target.getNodeDef();
-
-                boolean isInputDynamic = nodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
-                String propertyKey = isInputDynamic ? PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id() : PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
-                int maxCount = isInputDynamic ? nodeDef.getMetaOrDefault(SchemaKeys.MAX_DYNAMIC_INPUT, 10) : nodeDef.getMetaOrDefault(SchemaKeys.MAX_DYNAMIC_OUTPUT, 10);
-
-                int currentCount = 1;
-                if (nodeData.properties.containsKey(propertyKey)) {
-                    Object countObj = nodeData.properties.get(propertyKey);
-                    if (countObj instanceof Number num) currentCount = num.intValue();
-                    else if (countObj instanceof String str) { try { currentCount = Integer.parseInt(str); } catch (Exception ignored) {} }
-                }
-
-                if (btnInfo.isAdd()) {
-                    if (currentCount < maxCount) {
-                        CmdAddBranch cmd = new CmdAddBranch(mContext.getEditorContext().getGraphController(), nodeData.id, propertyKey, currentCount);
-                        mContext.getEditorContext().getCommandManager().execute(cmd);
-                    }
-                } else {
-                    if (currentCount > 1) {
-                        CmdRemoveBranch cmd = new CmdRemoveBranch(mContext.getEditorContext().getGraphController(), mContext.getEditorContext().getGraph(), nodeData.id, propertyKey, currentCount, btnInfo.referencePortId());
-                        mContext.getEditorContext().getCommandManager().execute(cmd);
-                    }
-                }
-                return;
-            }
-        }
-
         Viewport.PortInfo port = mContext.findPortAt(uiX, uiY);
         if (port != null) { enterConnectingMode(port, uiX, uiY); return; }
 
-        if (target != null) { enterDraggingMode(target, uiX, uiY); return; }
+        UINode target = mContext.findNodeAt(uiX, uiY);
+        if (target != null) {
+            // 如果点到了节点内部的实际控件（输入框、+ 按钮、- 按钮），直接 return 放行，让 View 自己触发 onClick
+            float localXpx = UIUtils.dp2px(uiX - target.getTranslationX());
+            float localYpx = UIUtils.dp2px(uiY - target.getTranslationY());
+            if (target.findInteractiveViewAt(localXpx, localYpx) != null) {
+                return;
+            }
+
+            enterDraggingMode(target, uiX, uiY);
+            return;
+        }
 
         enterSelectingMode(uiX, uiY);
     }

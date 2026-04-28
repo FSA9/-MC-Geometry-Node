@@ -6,6 +6,8 @@ public class PortMetaKeys {
      */
     public static final MetaKey<Boolean> IS_DYNAMIC = new MetaKey<>("is_dynamic");
 
+    public static final MetaKey<Integer> DYNAMIC_INDEX = new MetaKey<>("dynamic_index");
+
     /**
      * 下拉框控件关联的 Property 键名
      */
