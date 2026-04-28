@@ -342,16 +342,16 @@ public class UINode extends FrameLayout {
     }
 
     public View findInteractiveViewAt(float localXpx, float localYpx) {
-        // 检测输入框等 Hint
-        for (View v : mHintViews.values()) {
-            if (v.getVisibility() == View.VISIBLE && localXpx >= v.getLeft() && localXpx < v.getRight() && localYpx >= v.getTop() && localYpx < v.getBottom()) return v;
-        }
-        // 新增：检测 Add 按钮
+        // 检测 Add 按钮
         if (mAddButton != null && mAddButton.getVisibility() == View.VISIBLE && localXpx >= mAddButton.getLeft() && localXpx < mAddButton.getRight() && localYpx >= mAddButton.getTop() && localYpx < mAddButton.getBottom()) {
             return mAddButton;
         }
-        // 新增：检测 Remove 按钮
+        // 检测 Remove 按钮
         for (View v : mRemoveButtons.values()) {
+            if (v.getVisibility() == View.VISIBLE && localXpx >= v.getLeft() && localXpx < v.getRight() && localYpx >= v.getTop() && localYpx < v.getBottom()) return v;
+        }
+        // 检测输入框等 Hint
+        for (View v : mHintViews.values()) {
             if (v.getVisibility() == View.VISIBLE && localXpx >= v.getLeft() && localXpx < v.getRight() && localYpx >= v.getTop() && localYpx < v.getBottom()) return v;
         }
         return null;

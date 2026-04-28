@@ -209,9 +209,12 @@ public interface ExecutionContext {
                          int color, float size, int durationTicks);
 
 
-    void broadcastDynamicVisual(String effectType, int sourceEntityId, Vec3 baseStartPos,
-                                int targetEntityId, Vec3 baseEndPos,
-                                int color, float baseSize, int durationTicks,
+    /**
+     * [重构后] 视觉特效广播
+     * @param extraData 动态物理数据夹 (包含起点、终点等任意定制化数据)
+     */
+    void broadcastDynamicVisual(String effectType, int color, int durationTicks,
                                 Map<String, String> expressions,
-                                Map<String, String> bindings);
+                                Map<String, String> bindings,
+                                net.minecraft.nbt.CompoundTag extraData);
 }

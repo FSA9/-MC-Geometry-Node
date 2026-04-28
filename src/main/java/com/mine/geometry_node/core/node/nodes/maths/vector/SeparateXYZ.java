@@ -8,6 +8,9 @@ import com.mine.geometry_node.core.node.port.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class SeparateXYZ extends BaseNode {
 
     public static final String TYPE_ID = "separate_xyz";
@@ -24,10 +27,11 @@ public class SeparateXYZ extends BaseNode {
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
+        // 1. 获取物理层数值
         Vec3 physicalVec = getInput(context, StandardPorts.VECTOR.getId(), Vec3.class);
         float physicalOut = 0f;
 
-        // 【修复1】：忽略大小写，并兼容标准端口 ID
+        // 识别当前请求的轴端口
         boolean isX = portName.equalsIgnoreCase("x") || portName.equals(StandardPorts.X.getId());
         boolean isY = portName.equalsIgnoreCase("y") || portName.equals(StandardPorts.Y.getId());
 
@@ -35,22 +39,47 @@ public class SeparateXYZ extends BaseNode {
             physicalOut = isX ? (float) physicalVec.x : (isY ? (float) physicalVec.y : (float) physicalVec.z);
         }
 
+        // 2. 获取协议层公式
         ExpressionData inExpr = getInput(context, StandardPorts.VECTOR.getId(), ExpressionData.class);
         ExpressionData outExpr = ExpressionData.ZERO;
 
         if (inExpr != null && inExpr.formula() != null) {
             String f = inExpr.formula().trim();
+
+            // 检查是否为标准的动态向量协议
             if (f.startsWith("vec3(") && f.endsWith(")")) {
-                String[] parts = f.substring(5, f.length() - 1).split(",");
-                if (parts.length == 3) {
-                    // 【修复2】：同步使用安全的布尔判断提取公式
-                    String targetFormula = isX ? parts[0].trim() : (isY ? parts[1].trim() : parts[2].trim());
+                String inner = f.substring(5, f.length() - 1);
+
+                // 【核心修复】：安全的分量提取算法
+                // 通过记录括号层级，确保函数内部的逗号（如 max(a,b)）不会触发错误的切分
+                List<String> parts = new ArrayList<>();
+                int bracketLevel = 0;
+                StringBuilder currentStr = new StringBuilder();
+
+                for (char c : inner.toCharArray()) {
+                    if (c == '(') bracketLevel++;
+                    else if (c == ')') bracketLevel--;
+                    else if (c == ',' && bracketLevel == 0) {
+                        parts.add(currentStr.toString().trim());
+                        currentStr.setLength(0);
+                        continue;
+                    }
+                    currentStr.append(c);
+                }
+                parts.add(currentStr.toString().trim());
+
+                if (parts.size() >= 3) {
+                    // 根据请求的端口返回对应的分量公式，并透传变量绑定关系
+                    String targetFormula = isX ? parts.get(0) : (isY ? parts.get(1) : parts.get(2));
                     outExpr = new ExpressionData(targetFormula, inExpr.bindings());
                 }
             } else {
+                // 如果输入不是向量协议（例如死坐标或单一变量），则作为标量直接透传公式
                 outExpr = new ExpressionData(f, inExpr.bindings());
             }
         }
+
+        // 重新包装为 DynamicData 输出
         return new DynamicData(physicalOut, outExpr);
     }
 }

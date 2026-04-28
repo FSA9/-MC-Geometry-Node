@@ -3,7 +3,9 @@ package com.mine.geometry_node.client.render.effects;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.phys.Vec3;
+
 import java.util.Map;
 
 public abstract class DirectedVisualEffect extends AbstractVisualEffect {
@@ -15,11 +17,21 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
 
     public DirectedVisualEffect(PacketSpawnDynamicVisual packet) {
         super(packet);
-        this.sourceEntityId = packet.sourceEntityId();
-        this.baseStart = packet.baseStartPos();
-        this.targetEntityId = packet.targetEntityId();
-        this.baseEnd = packet.baseEndPos();
-        this.baseSize = packet.baseSize();
+        CompoundTag data = packet.extraData();
+
+        if (data != null) {
+            this.sourceEntityId = data.contains("sourceId") ? data.getInt("sourceId") : -1;
+            this.baseStart = new Vec3(data.getDouble("startX"), data.getDouble("startY"), data.getDouble("startZ"));
+            this.targetEntityId = data.contains("targetId") ? data.getInt("targetId") : -1;
+            this.baseEnd = new Vec3(data.getDouble("endX"), data.getDouble("endY"), data.getDouble("endZ"));
+            this.baseSize = data.contains("size") ? data.getFloat("size") : 1.0f;
+        } else {
+            this.sourceEntityId = -1;
+            this.baseStart = Vec3.ZERO;
+            this.targetEntityId = -1;
+            this.baseEnd = Vec3.ZERO;
+            this.baseSize = 1.0f;
+        }
     }
 
     protected DirectedAnchors computeAnchors(float partialTick) {

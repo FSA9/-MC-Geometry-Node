@@ -1,26 +1,21 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public record PacketSpawnDynamicVisual(
         String effectType,
-        int sourceEntityId,
-        Vec3 baseStartPos,
-        int targetEntityId,
-        Vec3 baseEndPos,
         int color,
-        float baseSize,
         int durationTicks,
-
-        Map<String, String> expressions, // 表达式
-        Map<String, String> bindings     // <--- 必须是 String！
+        Map<String, String> expressions,
+        Map<String, String> bindings,
+        CompoundTag extraData // <--- 核心修改：统一的动态数据夹
 ) implements CustomPacketPayload {
 
     public static final Type<PacketSpawnDynamicVisual> TYPE = new Type<>(
@@ -36,36 +31,20 @@ public record PacketSpawnDynamicVisual(
         this(
                 buf.readUtf(),
                 buf.readInt(),
-                new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble()),
-                buf.readInt(),
-                new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble()),
-                buf.readInt(),
-                buf.readFloat(),
                 buf.readInt(),
                 readStringMap(buf),
-                readStringMap(buf) // <--- 读取也用 StringMap
+                readStringMap(buf),
+                (CompoundTag) buf.readNbt() // 从流中读取 NBT
         );
     }
 
     public void write(RegistryFriendlyByteBuf buf) {
         buf.writeUtf(this.effectType);
-
-        buf.writeInt(this.sourceEntityId);
-        buf.writeDouble(this.baseStartPos.x());
-        buf.writeDouble(this.baseStartPos.y());
-        buf.writeDouble(this.baseStartPos.z());
-
-        buf.writeInt(this.targetEntityId);
-        buf.writeDouble(this.baseEndPos.x());
-        buf.writeDouble(this.baseEndPos.y());
-        buf.writeDouble(this.baseEndPos.z());
-
         buf.writeInt(this.color);
-        buf.writeFloat(this.baseSize);
         buf.writeInt(this.durationTicks);
-
         writeStringMap(buf, this.expressions);
-        writeStringMap(buf, this.bindings); // <--- 写入
+        writeStringMap(buf, this.bindings);
+        buf.writeNbt(this.extraData); // 将 NBT 写入流
     }
 
     private static Map<String, String> readStringMap(RegistryFriendlyByteBuf buf) {

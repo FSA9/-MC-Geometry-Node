@@ -698,49 +698,72 @@ public class GraphProcess {
 
             int radius = 128;  // 广播半径
 
-            // 组装通用视觉网络包
-            PacketSpawnDynamicVisual payload =
-                    new PacketSpawnDynamicVisual(
-                            effectType, sourceEntityId, startPos, targetEntityId, endPos,
-                            color, size, durationTicks,
-                            java.util.Collections.emptyMap(), // expressions
-                            java.util.Collections.emptyMap()  // initialVars
-                    );
+            // 1. 将原有的静态坐标与 ID 打包进 NBT 数据夹
+            net.minecraft.nbt.CompoundTag extraData = new net.minecraft.nbt.CompoundTag();
+            extraData.putInt("sourceId", sourceEntityId);
+            if (startPos != null) {
+                extraData.putDouble("startX", startPos.x);
+                extraData.putDouble("startY", startPos.y);
+                extraData.putDouble("startZ", startPos.z);
+            }
+            extraData.putInt("targetId", targetEntityId);
+            if (endPos != null) {
+                extraData.putDouble("endX", endPos.x);
+                extraData.putDouble("endY", endPos.y);
+                extraData.putDouble("endZ", endPos.z);
+            }
+            extraData.putFloat("size", size);
 
-            // 广播范围筛选
-            List<ServerPlayer> nearbyPlayers =
+            // 2. 组装重构后的视觉网络包
+            PacketSpawnDynamicVisual payload = new PacketSpawnDynamicVisual(
+                    effectType, color, durationTicks,
+                    java.util.Collections.emptyMap(), // 没有动态表达式
+                    java.util.Collections.emptyMap(), // 没有动态变量绑定
+                    extraData
+            );
+
+            // 3. 广播范围筛选 (以起点为中心)
+            Vec3 center = startPos != null ? startPos : Vec3.ZERO;
+            List<net.minecraft.server.level.ServerPlayer> nearbyPlayers =
                     GraphProcess.this.level.getPlayers(
-                            player -> player.position().distanceToSqr(startPos) < radius * radius
+                            player -> player.position().distanceToSqr(center) < radius * radius
                     );
 
             if (!nearbyPlayers.isEmpty()) {
-                NetworkHandler.sendToPlayers(nearbyPlayers, payload);
+                com.mine.geometry_node.core.network.NetworkHandler.sendToPlayers(nearbyPlayers, payload);
             }
         }
 
         @Override
-        public void broadcastDynamicVisual(String effectType, int sourceEntityId, Vec3 baseStartPos,
-                                           int targetEntityId, Vec3 baseEndPos,
-                                           int color, float baseSize, int durationTicks,
+        public void broadcastDynamicVisual(String effectType, int color, int durationTicks,
                                            Map<String, String> expressions,
-                                           Map<String, String> bindings) { // <--- 签名修改
+                                           Map<String, String> bindings,
+                                           net.minecraft.nbt.CompoundTag extraData) {
 
             if (GraphProcess.this.level == null) return;
 
-            int radius = 128;
-
-            // 组装全新的动态网络包
-            PacketSpawnDynamicVisual payload = new PacketSpawnDynamicVisual(
-                    effectType, sourceEntityId, baseStartPos, targetEntityId, baseEndPos,
-                    color, baseSize, durationTicks, expressions, bindings // <--- 传入 bindings
+            PacketSpawnDynamicVisual packet = new PacketSpawnDynamicVisual(
+                    effectType, color, durationTicks, expressions, bindings, extraData
             );
 
-            List<ServerPlayer> nearbyPlayers = GraphProcess.this.level.getPlayers(
-                    player -> player.position().distanceToSqr(baseStartPos) < radius * radius
+            // 尝试从动态数据中获取起点坐标，用作广播中心点判定
+            Vec3 center = Vec3.ZERO;
+            if (extraData != null && extraData.contains("startX")) {
+                center = new Vec3(
+                        extraData.getDouble("startX"),
+                        extraData.getDouble("startY"),
+                        extraData.getDouble("startZ")
+                );
+            }
+
+            int radius = 128;
+            final Vec3 finalCenter = center;
+            List<net.minecraft.server.level.ServerPlayer> nearbyPlayers = GraphProcess.this.level.getPlayers(
+                    player -> player.position().distanceToSqr(finalCenter) < radius * radius
             );
 
             if (!nearbyPlayers.isEmpty()) {
-                NetworkHandler.sendToPlayers(nearbyPlayers, payload);
+                com.mine.geometry_node.core.network.NetworkHandler.sendToPlayers(nearbyPlayers, packet);
             }
         }
     }

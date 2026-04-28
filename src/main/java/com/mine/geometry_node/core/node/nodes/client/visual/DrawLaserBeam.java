@@ -8,9 +8,12 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class DrawLaserBeam extends BaseNode {
@@ -21,6 +24,11 @@ public class DrawLaserBeam extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.draw_laser_beam"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
+                // 【修复3】：必须在节点定义里暴露出这两个实体输入端口，否则玩家无法连线
+                // 注意：如果你的 StandardPorts 里没有 SOURCE_ENTITY，请去那里注册一下，或者直接用自定义 PortDef
+                .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.INPUT, null, null))
+
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.END_POS.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.COLOR.toInput(), null, UIHint.INPUT, null, null))
@@ -31,6 +39,13 @@ public class DrawLaserBeam extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        // 读取实体端口
+        Entity sourceEntity = getInput(context, StandardPorts.SOURCE_ENTITY.getId(), Entity.class);
+        Entity targetEntity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+
+        int sourceId = sourceEntity != null ? sourceEntity.getId() : -1;
+        int targetId = targetEntity != null ? targetEntity.getId() : -1;
+
         // 1. 获取基础物理数据 (20FPS的死坐标和死数值)
         Vec3 baseStart = getInput(context, StandardPorts.START_POS.getId(), Vec3.class);
         Vec3 baseEnd = getInput(context, StandardPorts.END_POS.getId(), Vec3.class);
@@ -62,8 +77,23 @@ public class DrawLaserBeam extends BaseNode {
         ExpressionData endExpr = getInput(context, StandardPorts.END_POS.getId(), ExpressionData.class);
         extractVec3(endExpr, "end", expressions, bindings);
 
-        // 5. 广播
-        context.broadcastDynamicVisual("laser_beam", -1, baseStart, -1, baseEnd, color, baseSize, duration, expressions, bindings);
+        // 5. 组装动态数据夹 (NBT)
+        net.minecraft.nbt.CompoundTag extraData = new net.minecraft.nbt.CompoundTag();
+        extraData.putInt("sourceId", sourceId);
+        extraData.putInt("targetId", targetId);
+
+        extraData.putDouble("startX", baseStart.x);
+        extraData.putDouble("startY", baseStart.y);
+        extraData.putDouble("startZ", baseStart.z);
+
+        extraData.putDouble("endX", baseEnd.x);
+        extraData.putDouble("endY", baseEnd.y);
+        extraData.putDouble("endZ", baseEnd.z);
+
+        extraData.putFloat("size", baseSize);
+
+        // 6. 广播
+        context.broadcastDynamicVisual("laser_beam", color, duration, expressions, bindings, extraData);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }
@@ -71,20 +101,40 @@ public class DrawLaserBeam extends BaseNode {
     /**
      * 专属协议解析器：把 "vec3(X, Y, Z)" 切割成三个轴的偏移公式
      */
-    private void extractVec3(ExpressionData expr, String axisPrefix, Map<String, String> expressions, Map<String, String> bindings) {
-        if (expr != null && expr.formula() != null) {
-            String f = expr.formula().trim();
-            if (f.startsWith("vec3(") && f.endsWith(")")) {
-                String[] parts = f.substring(5, f.length() - 1).split(",");
-                if (parts.length >= 3) {
-                    // 只把有实际内容的公式发给客户端，过滤掉纯粹的 "0" 减少计算开销
-                    if (!"0".equals(parts[0].trim())) expressions.put(axisPrefix + "X", parts[0].trim());
-                    if (!"0".equals(parts[1].trim())) expressions.put(axisPrefix + "Y", parts[1].trim());
-                    if (!"0".equals(parts[2].trim())) expressions.put(axisPrefix + "Z", parts[2].trim());
+    protected void extractVec3(ExpressionData expr, String prefix, Map<String, String> expressions, Map<String, String> bindings) {
+        if (expr == null || expr.formula() == null || expr.formula().isEmpty()) return;
 
-                    bindings.putAll(expr.bindings());
+        String f = expr.formula().trim();
+        // 【修复1】：必须先验证并剥离 vec3(...) 外壳，拿到 inner！
+        if (f.startsWith("vec3(") && f.endsWith(")")) {
+            String inner = f.substring(5, f.length() - 1);
+
+            List<String> parts = new ArrayList<>();
+            int bracketLevel = 0;
+            StringBuilder currentStr = new StringBuilder();
+
+            for (char c : inner.toCharArray()) {
+                if (c == '(') bracketLevel++;
+                else if (c == ')') bracketLevel--;
+                else if (c == ',' && bracketLevel == 0) {
+                    parts.add(currentStr.toString().trim());
+                    currentStr.setLength(0);
+                    continue;
                 }
+                currentStr.append(c);
             }
+            parts.add(currentStr.toString().trim());
+
+            if (parts.size() >= 3) {
+                expressions.put(prefix + "X", parts.get(0));
+                expressions.put(prefix + "Y", parts.get(1));
+                expressions.put(prefix + "Z", parts.get(2));
+            }
+        }
+
+        // 【修复2】：不要忘了把表达式绑定的变量（比如环境里的实体数据）传递下去
+        if (expr.bindings() != null) {
+            bindings.putAll(expr.bindings());
         }
     }
 }
