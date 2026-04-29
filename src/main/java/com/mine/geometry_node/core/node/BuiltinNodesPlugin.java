@@ -102,7 +102,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/item", new AddEnchantment());
         registry.register("actions/item", new GiveItemStackToPlayer());
         registry.register("actions/item", new SetItemName());
-//        registry.register("actions/item", new _RemoveEnchantment());
+//        registry.register("actions/item", new RemoveEnchantment());
 
 
         // Actions/Player

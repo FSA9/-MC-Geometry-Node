@@ -20,21 +20,21 @@ public class NodeRegistry {
     private NodeRegistry() {}
 
     public void init() {
-        System.out.println("[GeometryNode] 开始检索并加载节点插件...");
+        System.out.println("[GeometryNode] Start node registry");
 
         ServiceLoader<GeometryNodePlugin> loader = ServiceLoader.load(GeometryNodePlugin.class);
 
         for (GeometryNodePlugin plugin : loader) {
-            System.out.println("[GeometryNode] 发现节点插件: " + plugin.getClass().getSimpleName());
+            System.out.println("[GeometryNode] Find node: " + plugin.getClass().getSimpleName());
             try {
                 plugin.registerNodes(this);
             } catch (Exception e) {
-                System.err.println("[GeometryNode] 插件加载失败: " + plugin.getClass().getName());
+                System.err.println("[GeometryNode] Fail to load node: " + plugin.getClass().getName());
                 e.printStackTrace();
             }
         }
 
-        System.out.println("[GeometryNode] 加载完毕，当前共注册 " + registry.size() + " 个节点。");
+        System.out.println("[GeometryNode] Load finished，Total nodes: " + registry.size());
     }
 
     public void register(String path, BaseNode node) {
