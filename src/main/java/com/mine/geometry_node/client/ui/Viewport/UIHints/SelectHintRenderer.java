@@ -102,19 +102,30 @@ public class SelectHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        int leftMargin = (row.leftPort() != null) ? (int)(nodeWidth * 0.45f) : UIConstants.Node.LABEL_MARGIN_PORT;
-        int rightMargin = (row.rightPort() != null) ? UIConstants.Node.ROW_HEIGHT : UIConstants.Node.LABEL_MARGIN_PORT;
-        int targetWidth = nodeWidth - leftMargin - rightMargin;
-        if (targetWidth < 10) targetWidth = 10;
-        int targetHeight = UIConstants.Node.ROW_HEIGHT - 2;
+        float startX = UIConstants.Node.LABEL_MARGIN_PORT;
+        float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
+
+        boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
+        float topOffset = hasLabel ? UIConstants.Node.ROW_HEIGHT : 0;
+
+        float inputBoxHeight = UIHintUtils.getStandardInputHeight();
+        float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
-        if (lp == null) lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(targetWidth), UIUtils.dp2pxInt(targetHeight));
-        else { lp.width = UIUtils.dp2pxInt(targetWidth); lp.height = UIUtils.dp2pxInt(targetHeight); }
+        int widthPx = UIUtils.dp2pxInt(endX - startX);
+        int heightPx = UIUtils.dp2pxInt(inputBoxHeight);
+
+        if (lp == null) {
+            lp = new FrameLayout.LayoutParams(widthPx, heightPx);
+        } else {
+            lp.width = widthPx;
+            lp.height = heightPx;
+        }
 
         lp.gravity = Gravity.LEFT | Gravity.TOP;
-        lp.leftMargin = UIUtils.dp2pxInt(leftMargin);
-        lp.topMargin = UIUtils.dp2pxInt(currentY + 2);
+        lp.leftMargin = UIUtils.dp2pxInt(startX);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
+
         view.setLayoutParams(lp);
     }
 
@@ -183,9 +194,11 @@ public class SelectHintRenderer implements UIHintRenderer {
                 TextView tv = new TextView(getContext());
                 tv.setText(item);
 
-                float fontSize = UIConstants.Node.TEXT_SIZE_LABEL * mCurrentScale;
+                // 【修改1：缩小字号并强制单行，防止挤爆】
+                float fontSize = 12f * mCurrentScale; // 指定为 12 逻辑像素
                 tv.setTextSize(0, UIUtils.dp2px(fontSize));
                 tv.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR);
+                tv.setSingleLine(true); // 强制单行显示，超长自动截断
 
                 int padH = (int)UIUtils.dp2px(8 * mCurrentScale);
                 int padV = (int)UIUtils.dp2px(2 * mCurrentScale);
@@ -206,8 +219,21 @@ public class SelectHintRenderer implements UIHintRenderer {
 
                 int itemHeight = (int)UIUtils.dp2px(20 * mCurrentScale);
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, itemHeight);
+                // 上下各 1dp Margin，总占据 22dp
                 lp.setMargins(UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(1), UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(1));
                 mListContainer.addView(tv, lp);
+            }
+
+            // 【修改2：动态计算 ScrollView 高度，最多允许 5 个元素】
+            int visibleItems = Math.min(mFilteredOptions.size(), 5);
+            if (visibleItems == 0) visibleItems = 1; // 至少保留 1 个元素的高度用于空显示
+            int itemTotalHeightDp = 22; // 20(height) + 2(margin)
+            int targetHeightPx = (int) UIUtils.dp2px(visibleItems * itemTotalHeightDp * mCurrentScale);
+
+            LinearLayout.LayoutParams svLp = (LinearLayout.LayoutParams) mScrollView.getLayoutParams();
+            if (svLp.height != targetHeightPx) {
+                svLp.height = targetHeightPx;
+                mScrollView.setLayoutParams(svLp);
             }
         }
 
@@ -260,7 +286,6 @@ public class SelectHintRenderer implements UIHintRenderer {
             float newScale = mViewport.getCurrentScale();
             this.mCurrentScale = newScale;
 
-            // 1. 如果检测到缩放比例变化，动态刷新所有 UI 尺寸 (包含容器高度)
             if (Math.abs(mLastRenderedScale - mCurrentScale) > 0.001f) {
                 mContentLayout.setPadding(
                         (int)UIUtils.dp2px(4 * mCurrentScale),
@@ -269,7 +294,7 @@ public class SelectHintRenderer implements UIHintRenderer {
                         (int)UIUtils.dp2px(4 * mCurrentScale)
                 );
 
-                float scaledSearchFontSize = UIConstants.Node.TEXT_SIZE_LABEL * mCurrentScale;
+                float scaledSearchFontSize = 12f * mCurrentScale;
                 mSearchBox.setTextSize(0, UIUtils.dp2px(scaledSearchFontSize));
                 mSearchBox.setPadding((int)UIUtils.dp2px(10 * mCurrentScale), 0, (int)UIUtils.dp2px(10 * mCurrentScale), 0);
 
@@ -283,23 +308,20 @@ public class SelectHintRenderer implements UIHintRenderer {
                 );
                 mSearchBox.setLayoutParams(searchLp);
 
-                // 【核心修复】让滚动容器的最大高度也跟着缩放！
-                LinearLayout.LayoutParams svLp = (LinearLayout.LayoutParams) mScrollView.getLayoutParams();
-                svLp.height = (int) UIUtils.dp2px(250 * mCurrentScale);
-                mScrollView.setLayoutParams(svLp);
-
+                // 删除原来硬编码的 250dp 缩放高度逻辑，将其全权交给 renderList 接管
                 renderList();
                 mLastRenderedScale = mCurrentScale;
             }
 
-            // 2. 实时计算物理坐标
             int[] btnLoc = new int[2]; mAnchor.getLocationOnScreen(btnLoc);
             int[] vpLoc = new int[2]; mViewport.getLocationOnScreen(vpLoc);
 
             float relX = btnLoc[0] - vpLoc[0];
             float relY = btnLoc[1] - vpLoc[1];
 
-            float scaledTargetWidth = mAnchor.getWidth() * mCurrentScale;
+            // 【修改3：给予面板最小宽度，突破锚点按钮的物理挤压】
+            float minMenuWidth = UIUtils.dp2px(200 * mCurrentScale);
+            float scaledTargetWidth = Math.max(mAnchor.getWidth() * mCurrentScale, minMenuWidth);
             float scaledHeight = mAnchor.getHeight() * mCurrentScale;
 
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
@@ -309,22 +331,20 @@ public class SelectHintRenderer implements UIHintRenderer {
             int targetX = (int) relX;
             int targetY = (int) (relY + scaledHeight);
 
-            // 实时测量真实高度，防止写死的推断高度导致提前触发越界保护
             int widthSpec = MeasureSpec.makeMeasureSpec(lp.width, MeasureSpec.EXACTLY);
             int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
             mContentLayout.measure(widthSpec, heightSpec);
             int contentHeight = mContentLayout.getMeasuredHeight();
 
-            // 动态边界安全检查：如果下方超出屏幕边缘，则翻转到按钮上方弹出
             if (targetX + lp.width > mViewport.getWidth()) {
                 targetX = Math.max(0, mViewport.getWidth() - lp.width);
             }
             if (targetY + contentHeight > mViewport.getHeight()) {
                 int popUpY = (int) (relY - contentHeight);
                 if (popUpY > 0) {
-                    targetY = popUpY; // 上翻
+                    targetY = popUpY;
                 } else {
-                    targetY = Math.max(0, mViewport.getHeight() - contentHeight); // 强行贴底
+                    targetY = Math.max(0, mViewport.getHeight() - contentHeight);
                 }
             }
 
