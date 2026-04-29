@@ -13,17 +13,17 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
-public class DamageItem extends BaseNode {
+public class DamageItemStack extends BaseNode {
 
-    public static final String TYPE_ID = "damage_item";
+    public static final String TYPE_ID = "damage_item_stack";
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.damage_item"))
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.damage_item_stack"))
                 // 1. 执行流
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                // 2. 目标物品栈 (此处建议你后续改为 StandardPorts.ITEM_STACK)
-                .addRow(new PortRow(StandardPorts.ITEM.toInput(), null, UIHint.DEFAULT, null, null))
+                // 2. 目标物品栈
+                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
                 // 3. 伤害数值
                 .addRow(new PortRow(StandardPorts.INT.toInput(1), null, UIHint.INPUT, null, null))
                 // 4. 责任实体 (可选，用于播放物品破碎效果)
@@ -33,7 +33,7 @@ public class DamageItem extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        ItemStack stack = getInput(context, StandardPorts.ITEM.getId(), ItemStack.class);
+        ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         Integer amount = getInput(context, StandardPorts.INT.getId(), Integer.class);
         LivingEntity owner = getInput(context, StandardPorts.ENTITY.getId(), LivingEntity.class);
 

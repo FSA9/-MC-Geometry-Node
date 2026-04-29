@@ -11,15 +11,15 @@ import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
-public class RepairItem extends BaseNode {
+public class RepairItemStack extends BaseNode {
 
-    public static final String TYPE_ID = "repair_item";
+    public static final String TYPE_ID = "repair_item_stack";
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.repair_item"))
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.repair_item_stack"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
                 // 修复量
                 .addRow(new PortRow(StandardPorts.INT.toInput(1), null, UIHint.INPUT, null, null))
                 .build();
@@ -27,7 +27,7 @@ public class RepairItem extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        ItemStack stack = getInput(context, StandardPorts.ITEM.getId(), ItemStack.class);
+        ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         Integer amount = getInput(context, StandardPorts.INT.getId(), Integer.class);
 
         if (stack != null && !stack.isEmpty() && amount != null && amount > 0 && stack.isDamaged()) {

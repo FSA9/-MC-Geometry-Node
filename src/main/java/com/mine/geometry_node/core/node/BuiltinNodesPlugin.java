@@ -11,7 +11,9 @@ import com.mine.geometry_node.core.node.nodes.actions.world.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.attribution.*;
+import com.mine.geometry_node.core.node.nodes.data.player.IsKeyPressed;
 import com.mine.geometry_node.core.node.nodes.data.type.*;
+import com.mine.geometry_node.core.node.nodes.data.world.TargetSelector;
 import com.mine.geometry_node.core.node.nodes.events.block.*;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
@@ -95,10 +97,13 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 //        registry.register("actions/inventory", new _TakeItem());
 
         // Actions/Item
-        registry.register("actions/item", new DamageItem());
-//        registry.register("actions/item", new _EnchantItem());
+        registry.register("actions/item", new DamageItemStack());
+        registry.register("actions/item", new RepairItemStack());
+        registry.register("actions/item", new AddEnchantment());
+        registry.register("actions/item", new GiveItemStackToPlayer());
+        registry.register("actions/item", new SetItemName());
 //        registry.register("actions/item", new _RemoveEnchantment());
-        registry.register("actions/item", new RepairItem());
+
 
         // Actions/Player
         registry.register("actions/player", new AddExperience());
@@ -130,6 +135,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data", new GetScopeAttribute());
         registry.register("data", new SetEntityAttribute());
         registry.register("data", new SetScopeAttribute());
+        registry.register("data", new IsKeyPressed());
 
         // Data/Entity
         registry.register("data/entity", new GetEntitiesByAABB());
@@ -167,6 +173,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/type", new GetEffect());
         registry.register("data/type", new GetEntityType());
         registry.register("data/type", new GetItemType());
+        registry.register("data/type", new GetItemStack());
         registry.register("data/type", new GetSound());
 
         // --- EVENTS ---
@@ -232,6 +239,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/player", new OnPlayerSleep());
         registry.register("events/player", new OnPlayerTick());
         registry.register("events/player", new OnPlayerWakeUp());
+        registry.register("events/player", new OnPlayerKeyEvent());
 
         // Events/Server
 //        registry.register("events/server", new OnServerTick());

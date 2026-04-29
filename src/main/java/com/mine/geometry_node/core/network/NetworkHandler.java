@@ -92,6 +92,23 @@ public class NetworkHandler {
                     });
                 }
         );
+
+        // ==========================================
+        // 7. 注册 C2S: 客户端按键输入 -> 服务端处理
+        // ==========================================
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketPlayerInput.TYPE,
+                PacketPlayerInput.STREAM_CODEC,
+                (payload, context) -> {
+                    context.queue(() -> {
+                        if (context.getPlayer() instanceof ServerPlayer player) {
+                            // 将数据包直接甩给状态管家处理
+                            com.mine.geometry_node.core.execution.state.PlayerInputStateManager.handleInput(player, payload);
+                        }
+                    });
+                }
+        );
     }
 
     // ==========================================

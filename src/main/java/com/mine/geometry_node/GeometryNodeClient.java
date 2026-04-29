@@ -1,5 +1,6 @@
 package com.mine.geometry_node;
 
+import com.mine.geometry_node.client.key.ClientBlueprintInputManager;
 import com.mine.geometry_node.core.command.ClientGraphCommand;
 import com.mine.geometry_node.client.key.KeyBindings;
 import com.mine.geometry_node.client.render.ClientVisualManager;
@@ -41,6 +42,8 @@ public class GeometryNodeClient {
         }
 
         ClientVisualManager.tick();
+
+        ClientBlueprintInputManager.tick();
     }
 
     private void onRenderLevelStage(RenderLevelStageEvent event) {

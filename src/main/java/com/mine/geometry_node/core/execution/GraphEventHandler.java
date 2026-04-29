@@ -507,6 +507,9 @@ public class GraphEventHandler {
         // 3. 玩家登出/退出服务器
         bus.addListener((net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
+                // 清理玩家按键状态内存
+                com.mine.geometry_node.core.execution.state.PlayerInputStateManager.clearPlayer(event.getEntity().getUUID());
+
                 ServerLevel level = (ServerLevel) event.getEntity().level();
                 GraphEngine.dispatchEvent(level, event.getEntity(), OnPlayerQuit.TYPE_ID, process -> {
                     process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());

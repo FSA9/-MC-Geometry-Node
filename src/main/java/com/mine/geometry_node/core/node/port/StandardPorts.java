@@ -59,6 +59,8 @@ public enum StandardPorts {
     MESSAGE("message", PortType.STRING),
     DIMENSION("dimension", PortType.STRING),
     DAMAGE_TYPE("damage_type", PortType.STRING),
+    SOUND_TYPE("sound_type", PortType.STRING),
+    ITEM_TYPE("item_type", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),

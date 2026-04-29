@@ -88,6 +88,8 @@
   "geometry_node.port.message": "消息",
   "geometry_node.port.dimension": "维度",
   "geometry_node.port.damage_type": "伤害类型",
+  "geometry_node.port.sound_type": "声音类型",
+  "geometry_node.port.item_type": "物品类型",
 
   "geometry_node.port.entity": "实体",
   "geometry_node.port.trigger_entity": "触发实体",
@@ -98,6 +100,7 @@
 
   "geometry_node.port.block_state": "方块状态",
   "geometry_node.port.item": "物品",
+  "geometry_node.port.item_stack": "物品对象",
   "geometry_node.port.list": "列表",
 
   "geometry_node.port.xyz": "坐标",
@@ -195,10 +198,12 @@
   "geometry_node.node.take_item": "取走物品",
 
   "--- ACTIONS/ITEM ---": "--- 物品动作 ---",
-  "geometry_node.node.damage_item": "消耗物品耐久",
-  "geometry_node.node.enchant_item": "附魔物品",
+  "geometry_node.node.damage_item_stack": "破坏物品",
+  "geometry_node.node.repair_item_stack": "修复物品",
+  "geometry_node.node.add_enchantment": "附魔物品",
   "geometry_node.node.remove_enchantment": "移除附魔",
-  "geometry_node.node.repair_item": "修复物品",
+  "geometry_node.node.give_item_stack_to_player": "给予玩家物品",
+  "geometry_node.node.set_item_name": "设置物品名称",
 
   "--- ACTIONS/PLAYER ---": "--- 玩家动作 ---",
   "geometry_node.node.add_experience": "增加经验",
@@ -233,6 +238,7 @@
   "geometry_node.node.get_entities_by_aabb": "获取实体(AABB)",
   "geometry_node.node.get_entities_by_rotation_box": "获取实体(rotation box)",
   "geometry_node.node.get_entities_by_radius": "获取实体(r)",
+  "geometry_node.node.is_key_pressed": "是否使用按键",
 
   "--- DATA/ATTRIBUTION ---": "--- 实体数值读取 ---",
   "geometry_node.node.get_entity_dimension": "获取实体所在维度",
@@ -266,6 +272,7 @@
   "geometry_node.node.get_effect": "获取效果类型",
   "geometry_node.node.get_entity_type": "获取实体类型",
   "geometry_node.node.get_item_type": "获取物品类型",
+  "geometry_node.node.get_item_stack": "获取物品对象",
   "geometry_node.node.get_sound": "获取声音类型",
 
   "--- EVENTS ---": "--- 事件监听 ---",
@@ -344,6 +351,7 @@
   "geometry_node.node.on_spawner_spawn": "当刷怪笼生成时",
   "geometry_node.node.on_structure_generate": "当生成结构时",
   "geometry_node.node.on_weather_change": "当天气改变时",
+  "geometry_node.node.on_player_key_event": "当玩家使用按键时",
 
   "--- FUNCTIONS ---": "--- 功能函数 ---",
   "geometry_node.node.finish_graph": "结束图",

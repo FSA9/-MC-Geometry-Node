@@ -19,7 +19,7 @@ public class GetSound extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_sound"))
-                .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), null, null, null))
+                .addRow(new PortRow(null, StandardPorts.SOUND_TYPE.toOutput(), null, null, null))
                 .addRow(new PortRow(
                         null,
                         null,
@@ -35,7 +35,7 @@ public class GetSound extends BaseNode {
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (StandardPorts.TYPE.getId().equals(portName)) {
+        if (StandardPorts.SOUND_TYPE.getId().equals(portName)) {
             return context.getNodeProperty(PROPERTY_SELECTED);
         }
         return null;

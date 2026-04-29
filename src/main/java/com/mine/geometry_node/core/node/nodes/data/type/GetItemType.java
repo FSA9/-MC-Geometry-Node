@@ -19,7 +19,7 @@ public class GetItemType extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_item_type"))
-                .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), null, null, null))
+                .addRow(new PortRow(null, StandardPorts.ITEM_TYPE.toOutput(), null, null, null))
                 .addRow(new PortRow(
                         null,
                         null,
@@ -35,7 +35,7 @@ public class GetItemType extends BaseNode {
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (StandardPorts.TYPE.getId().equals(portName)) {
+        if (StandardPorts.ITEM_TYPE.getId().equals(portName)) {
             return context.getNodeProperty(PROPERTY_SELECTED);
         }
         return null;

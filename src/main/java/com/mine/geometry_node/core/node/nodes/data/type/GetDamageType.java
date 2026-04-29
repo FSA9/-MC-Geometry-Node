@@ -19,7 +19,7 @@ public class GetDamageType extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_damage_type"))
-                .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), null, null, null))
+                .addRow(new PortRow(null, StandardPorts.DAMAGE_TYPE.toOutput(), null, null, null))
                 .addRow(new PortRow(
                         null,
                         null,

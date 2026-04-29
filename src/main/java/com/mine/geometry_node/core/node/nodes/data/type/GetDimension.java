@@ -18,7 +18,7 @@ public class GetDimension extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_dimension"))
-                .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), null, null, null))
+                .addRow(new PortRow(null, StandardPorts.DIMENSION.toOutput(), null, null, null))
                 .addRow(new PortRow(
                         null,
                         null,

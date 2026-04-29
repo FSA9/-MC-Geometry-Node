@@ -46,11 +46,30 @@ public abstract class BaseNode {
      */
     @Nullable
     protected Object getRawInput(ExecutionContext ctx, String portName) {
+        // 1. 尝试获取连线输入
         Object val = ctx.getInputValue(portName);
-        if (val == null) {
-            val = ctx.getStaticInput(portName);
+        if (val != null) return val;
+
+        // 2. 尝试获取实例化的静态配置 (JSON 存储的值)
+        val = ctx.getStaticInput(portName);
+        if (val != null) return val;
+
+        // 3. 如果前两者都为空，则从节点定义的默认值中提取
+        NodeDef def = getDefaultDefinition();
+        if (def != null) {
+            for (var row : def.rows()) {
+                // 检查左侧输入端口
+                if (row.leftPort() != null && row.leftPort().id().equals(portName)) {
+                    return row.leftPort().defaultValue();
+                }
+                // 检查右侧输出端口 (虽然通常不会在输入时查输出，但为了严谨性)
+                if (row.rightPort() != null && row.rightPort().id().equals(portName)) {
+                    return row.rightPort().defaultValue();
+                }
+            }
         }
-        return val;
+
+        return null;
     }
 
     /**
