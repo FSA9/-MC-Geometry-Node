@@ -361,6 +361,7 @@
   "geometry_node.node.switch": "Switch",
 
   "--- MATHS ---": "--- 数学运算 ---",
+  "geometry_node.node.snapshot_value": "数值快照",
   "geometry_node.node.random_value": "随机数",
   "geometry_node.node.math_expression": "数学表达式",
   "geometry_node.node.math_operation": "运算",

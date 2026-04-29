@@ -261,6 +261,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("logics", new Switch());
 
         // --- MATHS ---
+        registry.register("maths", new SnapshotValue());
         registry.register("maths", new RandomValue());
         registry.register("maths/operation", new MathExpression());
         registry.register("maths/operation", new MathOperation());

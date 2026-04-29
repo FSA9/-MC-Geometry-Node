@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes.client;
+package com.mine.geometry_node.core.node.nodes.maths;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.datatypes.DynamicData;
