@@ -78,8 +78,7 @@ public class VariableRegistry {
             }
         });
 
-        // [新增] ItemStack 支持
-        // 注意：根据你的 MC 版本 (1.20.5+ 或以下)，save 方法可能叫 saveOptional 或 save
+        // ItemStack
         register(new VariableSerializer<ItemStack>() {
             @Override public String getTypeId() { return "item_stack"; }
             @Override public Class<ItemStack> getTargetClass() { return ItemStack.class; }
@@ -113,7 +112,7 @@ public class VariableRegistry {
         if (value instanceof String s) return StringTag.valueOf(s);
         if (value instanceof Boolean b) return ByteTag.valueOf(b);
 
-        // --- 核心修改：安全的 List 序列化 ---
+        // List
         if (value instanceof List<?> list) {
             CompoundTag wrapper = new CompoundTag();
             wrapper.putString(TYPE_KEY, "_gn_list"); // 专用 ID
@@ -129,6 +128,24 @@ public class VariableRegistry {
                 }
             }
             wrapper.put(DATA_KEY, nbtList);
+            return wrapper;
+        }
+
+        // Dict
+        if (value instanceof Map<?, ?> map) {
+            CompoundTag wrapper = new CompoundTag();
+            wrapper.putString(TYPE_KEY, "_gn_dict"); // 专用 ID
+            CompoundTag dataTag = new CompoundTag();
+
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() instanceof String key) {
+                    Tag elementTag = toTag(entry.getValue(), provider); // 递归序列化 Value
+                    if (elementTag != null) {
+                        dataTag.put(key, elementTag);
+                    }
+                }
+            }
+            wrapper.put(DATA_KEY, dataTag);
             return wrapper;
         }
 
@@ -162,7 +179,7 @@ public class VariableRegistry {
         if (tag instanceof CompoundTag compound && compound.contains(TYPE_KEY, Tag.TAG_STRING)) {
             String typeId = compound.getString(TYPE_KEY);
 
-            // 拦截特判：List 反序列化
+            // List
             if ("_gn_list".equals(typeId) && compound.contains(DATA_KEY, Tag.TAG_LIST)) {
                 ListTag nbtList = compound.getList(DATA_KEY, Tag.TAG_COMPOUND);
                 List<Object> resultList = new ArrayList<>();
@@ -171,6 +188,15 @@ public class VariableRegistry {
                     resultList.add(fromTag(elementWrapper.get("v"), provider));
                 }
                 return resultList;
+            }
+            // Dict
+            if ("_gn_dict".equals(typeId) && compound.contains(DATA_KEY, Tag.TAG_COMPOUND)) {
+                CompoundTag dataTag = compound.getCompound(DATA_KEY);
+                Map<String, Object> resultMap = new HashMap<>();
+                for (String key : dataTag.getAllKeys()) {
+                    resultMap.put(key, fromTag(dataTag.get(key), provider)); // 递归反序列化 Value
+                }
+                return resultMap;
             }
 
             VariableSerializer<?> serializer = ID_TO_SERIALIZER.get(typeId);
@@ -187,7 +213,8 @@ public class VariableRegistry {
     public static boolean isSupported(Object value) {
         if (value == null) return false;
         if (value instanceof Entity || value instanceof Number ||
-                value instanceof String || value instanceof Boolean || value instanceof List) return true;
+                value instanceof String || value instanceof Boolean ||
+                value instanceof List || value instanceof Map) return true;
 
         for (Class<?> supportedClass : CLASS_TO_SERIALIZER.keySet()) {
             if (supportedClass.isInstance(value)) return true;

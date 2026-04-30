@@ -82,11 +82,6 @@ public abstract class BaseNode {
         return TypeConverter.convert(raw, type, ctx);
     }
 
-    /**
-     * [严格列表获取]
-     * 不再进行自动装箱！只接收真正的 List 类型数据。
-     * 如果传入的不是 List，直接返回空列表（避免制造内存垃圾）。
-     */
     protected <T> List<T> getInputList(ExecutionContext ctx, String portName, Class<T> elementType) {
         Object raw = getRawInput(ctx, portName);
         if (raw == null) return List.of();
@@ -104,8 +99,22 @@ public abstract class BaseNode {
             return List.of(converted);
         }
 
-        System.err.println("[BaseNode] 警告：端口 " + portName + " 期望 List<" + elementType.getSimpleName() + ">，但收到了无法转换的单体数据：" + raw.getClass().getSimpleName());
+        System.err.println("[BaseNode] Error： " + portName + " expect List<" + elementType.getSimpleName() + ">，but received：" + raw.getClass().getSimpleName());
         return List.of();
+    }
+
+    protected Map<String, Object> getInputDict(ExecutionContext ctx, String portName) {
+        Object raw = getRawInput(ctx, portName);
+        if (raw == null) return new java.util.HashMap<>();
+
+        if (raw instanceof Map<?, ?> map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> castedMap = (Map<String, Object>) map;
+            return castedMap;
+        }
+
+        System.err.println("[BaseNode] Error：" + portName + " expect DICT (Map), but received：" + raw.getClass().getSimpleName());
+        return new java.util.HashMap<>();
     }
 
     /**
