@@ -72,6 +72,10 @@ public class RegistryDataManager {
 
     // 动态类型
 
+    public static List<String> getAttributes(RegistryAccess access) {
+        return getDynamicRegistryKeys(access, Registries.ATTRIBUTE);
+    }
+
     public static List<String> getDamageTypes(RegistryAccess access) {
         return getDynamicRegistryKeys(access, Registries.DAMAGE_TYPE);
     }
@@ -113,6 +117,7 @@ public class RegistryDataManager {
             case "minecraft:dimension" -> getDimensions(access);
             case "minecraft:enchantment" -> getEnchantments(access);
             case "minecraft:damage_type" -> getDamageTypes(access);
+            case "minecraft:attribute" -> getAttributes(access);
             default -> {
                 System.err.println("[RegistryDataManager] 未知的动态注册表 ID: " + registryId);
                 yield List.of();
