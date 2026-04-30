@@ -185,6 +185,12 @@
   "geometry_node.node.teleport_entity_to_pos": "传送实体至坐标",
   "geometry_node.node.unleash_entity": "解开拴绳",
   "geometry_node.node.use_item": "使用物品",
+  "geometry_node.node.set_entity_gravity": "设置实体重力",
+  "geometry_node.node.set_entity_invisible": "设置实体隐身",
+  "geometry_node.node.set_entity_glowing": "设置实体发光",
+  "geometry_node.node.set_entity_silent": "设置实体静音",
+  "geometry_node.node.set_entity_move_speed": "设置移动速度",
+  "geometry_node.node.set_entity_step_height": "设置实体步高",
 
   "--- ACTIONS/INVENTORY ---": "--- 背包动作 ---",
   "geometry_node.node.clear_inventory": "清空背包",
@@ -227,6 +233,7 @@
   "geometry_node.node.set_walk_speed": "设置走路速度",
   "geometry_node.node.show_title": "显示标题",
   "geometry_node.node.teleport_player": "传送玩家",
+
 
   "--- ACTIONS/WORLD ---": "--- 世界动作 ---",
   "geometry_node.node.create_explosion": "创建爆炸",

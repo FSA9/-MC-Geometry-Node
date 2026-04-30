@@ -72,6 +72,13 @@ public class RegistryDataManager {
 
     // 动态类型
 
+    public static List<String> getEntityTypes() {
+        return BuiltInRegistries.ENTITY_TYPE.keySet().stream()
+                .map(ResourceLocation::toString)
+                .sorted()
+                .toList();
+    }
+
     public static List<String> getAttributes(RegistryAccess access) {
         return getDynamicRegistryKeys(access, Registries.ATTRIBUTE);
     }
@@ -118,6 +125,7 @@ public class RegistryDataManager {
             case "minecraft:enchantment" -> getEnchantments(access);
             case "minecraft:damage_type" -> getDamageTypes(access);
             case "minecraft:attribute" -> getAttributes(access);
+            case "minecraft:entity_type" -> getEntityTypes();
             default -> {
                 System.err.println("[RegistryDataManager] 未知的动态注册表 ID: " + registryId);
                 yield List.of();

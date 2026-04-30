@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.node.nodes.actions.player.*;
 import com.mine.geometry_node.core.node.nodes.client.visual.*;
 import com.mine.geometry_node.core.node.nodes.actions.world.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
+import com.mine.geometry_node.core.node.nodes.data.container.GetListLen;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.attribution.*;
 import com.mine.geometry_node.core.node.nodes.data.player.IsKeyPressed;
@@ -80,10 +81,15 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 //        registry.register("actions/entity", new SetEquipment());
 //        registry.register("actions/entity", new SetInvulnerable());
         registry.register("actions/entity", new SetInvulnerableTicks());
-//        registry.register("actions/entity", new _SpawnEntity());
+//        registry.register("actions/entity", new SpawnEntity());
         registry.register("actions/entity", new TeleportEntityToPos());
 //        registry.register("actions/entity", new _UnleashEntity());
 //        registry.register("actions/entity", new _UseItem());
+        registry.register("actions/entity", new SetEntityGlowing());
+        registry.register("actions/entity", new SetEntitySilent());
+        registry.register("actions/entity", new SetEntityMoveSpeed());
+        registry.register("actions/entity", new SetEntityStepHeight());
+        registry.register("actions/entity", new SetEntityInvisible());
 
         // Actions/Inventory
         registry.register("actions/inventory", new ClearInventory());
@@ -100,9 +106,19 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/item", new DamageItemStack());
         registry.register("actions/item", new RepairItemStack());
         registry.register("actions/item", new AddEnchantment());
+        registry.register("actions/item", new RemoveEnchantment());
+        registry.register("actions/item", new ClearAllEnchantments());
         registry.register("actions/item", new GiveItemStackToPlayer());
         registry.register("actions/item", new SetItemName());
-//        registry.register("actions/item", new RemoveEnchantment());
+        registry.register("actions/item", new AddAttributeModifier());
+        registry.register("actions/item", new AddStoredEnchantment());
+        registry.register("actions/item", new ClearAllStoredEnchantments());
+        registry.register("actions/item", new SetDamage());
+        registry.register("actions/item", new SetEnchantmentGlintOverride());
+        registry.register("actions/item", new SetMaxDamage());
+        registry.register("actions/item", new SetMaxStackSize());
+        registry.register("actions/item", new SetRepairCost());
+        registry.register("actions/item", new SetUnbreakable());
 
 
         // Actions/Player
@@ -111,7 +127,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 //        registry.register("actions/player", new PlayScreenShake());
 //        registry.register("actions/player", new PlaySoundForPlayer());
         registry.register("actions/player", new SendMessage());
-//        registry.register("actions/player", new SetCameraTarget());
+        registry.register("actions/player", new SetCameraTarget());
 //        registry.register("actions/player", new SetFlySpeed());
         registry.register("actions/player", new SetGameMode());
         registry.register("actions/player", new SetWalkSpeed());
