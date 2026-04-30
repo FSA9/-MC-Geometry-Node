@@ -38,28 +38,36 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
         Map<String, Double> vars = buildVariableTable(partialTick);
         ClientLevel level = Minecraft.getInstance().level;
 
-        Vec3 start = (level != null && sourceEntityId != -1) ?
-                level.getEntity(sourceEntityId).getPosition(partialTick).add(baseStart) : baseStart;
-        Vec3 end = (level != null && targetEntityId != -1) ?
-                level.getEntity(targetEntityId).getPosition(partialTick).add(baseEnd) : baseEnd;
+        // 1. 获取实体基准坐标（如果没有实体，或者实体死了，就以原点 0,0,0 为基准）
+        Vec3 sourceEntityPos = (level != null && sourceEntityId != -1 && level.getEntity(sourceEntityId) != null) ?
+                level.getEntity(sourceEntityId).getPosition(partialTick) : Vec3.ZERO;
 
+        Vec3 targetEntityPos = (level != null && targetEntityId != -1 && level.getEntity(targetEntityId) != null) ?
+                level.getEntity(targetEntityId).getPosition(partialTick) : Vec3.ZERO;
+
+        // 2. 计算起点 Offset (动态表达式优先，死数值 baseStart 兜底)
         double dynStartX = eval("startX", vars, Double.NaN);
         double dynStartY = eval("startY", vars, Double.NaN);
         double dynStartZ = eval("startZ", vars, Double.NaN);
-        start = new Vec3(
-                Double.isNaN(dynStartX) ? start.x : dynStartX,
-                Double.isNaN(dynStartY) ? start.y : dynStartY,
-                Double.isNaN(dynStartZ) ? start.z : dynStartZ
+        Vec3 startOffset = new Vec3(
+                Double.isNaN(dynStartX) ? baseStart.x : dynStartX,
+                Double.isNaN(dynStartY) ? baseStart.y : dynStartY,
+                Double.isNaN(dynStartZ) ? baseStart.z : dynStartZ
         );
 
+        // 3. 计算终点 Offset
         double dynEndX = eval("endX", vars, Double.NaN);
         double dynEndY = eval("endY", vars, Double.NaN);
         double dynEndZ = eval("endZ", vars, Double.NaN);
-        end = new Vec3(
-                Double.isNaN(dynEndX) ? end.x : dynEndX,
-                Double.isNaN(dynEndY) ? end.y : dynEndY,
-                Double.isNaN(dynEndZ) ? end.z : dynEndZ
+        Vec3 endOffset = new Vec3(
+                Double.isNaN(dynEndX) ? baseEnd.x : dynEndX,
+                Double.isNaN(dynEndY) ? baseEnd.y : dynEndY,
+                Double.isNaN(dynEndZ) ? baseEnd.z : dynEndZ
         );
+
+        // 4. 最终渲染坐标 = 实体真实坐标 + 动态/静态偏移量
+        Vec3 start = sourceEntityPos.add(startOffset);
+        Vec3 end = targetEntityPos.add(endOffset);
 
         float size = (float) eval("size", vars, baseSize);
         return new DirectedAnchors(start, end, Math.max(0.01f, size));

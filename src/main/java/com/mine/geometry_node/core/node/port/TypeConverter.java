@@ -148,6 +148,10 @@ public class TypeConverter {
             }
         }
 
+        if (type == ExpressionData.class && (val instanceof List || val instanceof Vec3)) {
+            return null;
+        }
+
         System.err.println("[TypeConverter] Failed to convert " + val.getClass().getSimpleName() + " to " + type.getSimpleName());
         return null;
     }
