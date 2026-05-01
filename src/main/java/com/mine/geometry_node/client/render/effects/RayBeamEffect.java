@@ -27,11 +27,13 @@ public class RayBeamEffect extends AbstractVisualEffect {
 
     private final int sourceEntityId;
     private final Vec3 posOffset;
-    private final float pitchOffset, yawOffset, length, radius;
-
-    // 物理规则缓存
+    private final float pitchOffset, yawOffset, maxLength, radius;
     private final boolean penSolid, penTrans, penEnt;
     private final int maxEnt;
+
+    // 【核心优化】：缓存上一帧和当前帧的实际碰撞距离，用于平滑插值
+    private float currentHitDistance;
+    private float prevHitDistance;
 
     public RayBeamEffect(PacketSpawnDynamicVisual packet) {
         super(packet);
@@ -41,7 +43,7 @@ public class RayBeamEffect extends AbstractVisualEffect {
             this.posOffset = new Vec3(data.getDouble("offX"), data.getDouble("offY"), data.getDouble("offZ"));
             this.pitchOffset = data.getFloat("offPitch");
             this.yawOffset = data.getFloat("offYaw");
-            this.length = data.getFloat("length");
+            this.maxLength = data.getFloat("length");
             this.radius = data.getFloat("radius");
 
             this.penSolid = data.getBoolean("penSolid");
@@ -49,30 +51,42 @@ public class RayBeamEffect extends AbstractVisualEffect {
             this.penEnt = data.getBoolean("penEnt");
             this.maxEnt = data.getInt("maxEnt");
         } else {
-            // ... 默认值兜底略
             this.sourceEntityId = -1; this.posOffset = Vec3.ZERO;
-            this.pitchOffset = 0; this.yawOffset = 0; this.length = 20; this.radius = 0.1f;
+            this.pitchOffset = 0; this.yawOffset = 0; this.maxLength = 20; this.radius = 0.1f;
             this.penSolid = false; this.penTrans = true; this.penEnt = false; this.maxEnt = 1;
         }
+
+        this.currentHitDistance = this.maxLength;
+        this.prevHitDistance = this.maxLength;
     }
 
+    // 【核心优化】：将沉重的物理计算转移到 20Hz 的 Tick 中
     @Override
-    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos, float partialTick) {
+    public boolean tick() {
+        // 先调用父类的 tick 处理寿命
+        boolean isDead = super.tick();
+        if (isDead) return true;
+
         ClientLevel level = Minecraft.getInstance().level;
-        if (level == null || sourceEntityId == -1) return;
+        if (level == null || sourceEntityId == -1) return false;
 
         Entity source = level.getEntity(sourceEntityId);
-        if (source == null) return;
+        if (source == null) return false;
 
-        // 1. 获取绝对平滑的起点和方向
-        Vec3 startPos = source.getEyePosition(partialTick).add(posOffset);
-        float currentPitch = source.getViewXRot(partialTick) + pitchOffset;
-        float currentYaw = source.getViewYRot(partialTick) + yawOffset;
+        // 记录上一刻的距离，用于渲染插值
+        this.prevHitDistance = this.currentHitDistance;
+
+        // 获取不带 partialTick 的绝对坐标 (因为在 tick 里)
+        Vec3 startPos = source.getEyePosition().add(posOffset);
+        float currentPitch = source.getXRot() + pitchOffset;
+        float currentYaw = source.getYRot() + yawOffset;
         Vec3 dir = Vec3.directionFromRotation(currentPitch, currentYaw);
-        Vec3 maxEnd = startPos.add(dir.scale(length));
+        Vec3 maxEnd = startPos.add(dir.scale(maxLength));
         Vec3 actualEnd = maxEnd;
 
-        // 2. [客户端高频物理计算] 方块碰撞
+        // --- 以下是 20Hz 执行的物理检测（极其省性能） ---
+
+        // 1. 方块检测
         if (!penSolid) {
             Vec3 currentStart = startPos;
             while (true) {
@@ -83,10 +97,10 @@ public class RayBeamEffect extends AbstractVisualEffect {
                     BlockState hitState = level.getBlockState(blockHit.getBlockPos());
                     if (!hitState.canOcclude() && penTrans) {
                         currentStart = blockHit.getLocation().add(dir.scale(0.01));
-                        if (currentStart.distanceToSqr(startPos) >= length * length) break;
+                        if (currentStart.distanceToSqr(startPos) >= maxLength * maxLength) break;
                         continue;
                     } else {
-                        actualEnd = blockHit.getLocation(); // 撞到实心墙，折断激光！
+                        actualEnd = blockHit.getLocation();
                         break;
                     }
                 }
@@ -94,10 +108,9 @@ public class RayBeamEffect extends AbstractVisualEffect {
             }
         }
 
-        // 3. [客户端高频物理计算] 实体碰撞
+        // 2. 实体检测
         double actualDistSqr = startPos.distanceToSqr(actualEnd);
         AABB broadBox = new AABB(startPos, actualEnd).inflate(radius + 1.0);
-        // 注意：客户端这里只为了视觉折断，不需要复杂的逻辑判定，碰谁折谁
         List<Entity> entities = level.getEntities(source, broadBox, e -> !e.isSpectator() && e.isPickable());
 
         List<Entity> hitList = new ArrayList<>();
@@ -116,16 +129,41 @@ public class RayBeamEffect extends AbstractVisualEffect {
                 AABB firstAABB = firstHit.getBoundingBox().inflate(firstHit.getPickRadius() + radius);
                 actualEnd = firstAABB.clip(startPos, actualEnd).orElse(actualEnd);
             } else if (maxEnt > 0 && hitList.size() > maxEnt) {
-                // 如果穿透数量达到上限，折断在最后一个允许穿透的实体身上
                 Entity lastHit = hitList.get(maxEnt - 1);
                 AABB lastAABB = lastHit.getBoundingBox().inflate(lastHit.getPickRadius() + radius);
                 actualEnd = lastAABB.clip(startPos, actualEnd).orElse(actualEnd);
             }
         }
 
-        // 4. 开始用实际算出来的折断点 actualEnd 进行几何绘制！
+        // 计算并缓存最终的碰撞距离
+        this.currentHitDistance = (float) Math.sqrt(startPos.distanceToSqr(actualEnd));
+        return false;
+    }
+
+    // 【核心优化】：Render 彻底变成纯数学绘图，144Hz 跑起来毫无压力
+    @Override
+    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos, float partialTick) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null || sourceEntityId == -1) return;
+
+        Entity source = level.getEntity(sourceEntityId);
+        if (source == null) return;
+
+        // 1. 视角依然是 144Hz 极致丝滑插值
+        Vec3 startPos = source.getEyePosition(partialTick).add(posOffset);
+        float currentPitch = source.getViewXRot(partialTick) + pitchOffset;
+        float currentYaw = source.getViewYRot(partialTick) + yawOffset;
+        Vec3 dir = Vec3.directionFromRotation(currentPitch, currentYaw);
+
+        // 2. 距离采用缓存值的平滑插值 (防止激光在前后缩短时产生阶梯感)
+        float lerpedDistance = this.prevHitDistance + (this.currentHitDistance - this.prevHitDistance) * partialTick;
+
+        // 3. 计算终点
+        Vec3 endPos = startPos.add(dir.scale(lerpedDistance));
+
+        // 4. 纯几何渲染 (相对相机坐标)
         Vec3 startRel = startPos.subtract(camPos);
-        Vec3 endRel = actualEnd.subtract(camPos);
+        Vec3 endRel = endPos.subtract(camPos);
         Vec3 d = endRel.subtract(startRel);
 
         if (d.lengthSqr() < 1e-5) return;
