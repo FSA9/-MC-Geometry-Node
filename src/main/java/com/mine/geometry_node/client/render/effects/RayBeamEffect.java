@@ -33,7 +33,6 @@ public class RayBeamEffect extends AbstractVisualEffect {
 
     // 【核心优化】：缓存上一帧和当前帧的实际碰撞距离，用于平滑插值
     private float currentHitDistance;
-    private float prevHitDistance;
 
     public RayBeamEffect(PacketSpawnDynamicVisual packet) {
         super(packet);
@@ -57,7 +56,6 @@ public class RayBeamEffect extends AbstractVisualEffect {
         }
 
         this.currentHitDistance = this.maxLength;
-        this.prevHitDistance = this.maxLength;
     }
 
     // 【核心优化】：将沉重的物理计算转移到 20Hz 的 Tick 中
@@ -72,9 +70,6 @@ public class RayBeamEffect extends AbstractVisualEffect {
 
         Entity source = level.getEntity(sourceEntityId);
         if (source == null) return false;
-
-        // 记录上一刻的距离，用于渲染插值
-        this.prevHitDistance = this.currentHitDistance;
 
         // 获取不带 partialTick 的绝对坐标 (因为在 tick 里)
         Vec3 startPos = source.getEyePosition().add(posOffset);
@@ -155,11 +150,7 @@ public class RayBeamEffect extends AbstractVisualEffect {
         float currentYaw = source.getViewYRot(partialTick) + yawOffset;
         Vec3 dir = Vec3.directionFromRotation(currentPitch, currentYaw);
 
-        // 2. 距离采用缓存值的平滑插值 (防止激光在前后缩短时产生阶梯感)
-        float lerpedDistance = this.prevHitDistance + (this.currentHitDistance - this.prevHitDistance) * partialTick;
-
-        // 3. 计算终点
-        Vec3 endPos = startPos.add(dir.scale(lerpedDistance));
+        Vec3 endPos = startPos.add(dir.scale(this.currentHitDistance));
 
         // 4. 纯几何渲染 (相对相机坐标)
         Vec3 startRel = startPos.subtract(camPos);
