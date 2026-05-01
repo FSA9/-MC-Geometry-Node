@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
 import com.mine.geometry_node.core.node.nodes.actions.item.*;
 import com.mine.geometry_node.core.node.nodes.actions.player.*;
-import com.mine.geometry_node.core.node.nodes.client.visual.*;
+import com.mine.geometry_node.core.node.nodes.actions.visual.*;
 import com.mine.geometry_node.core.node.nodes.actions.world.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
 import com.mine.geometry_node.core.node.nodes.data.container.GetListLen;
@@ -36,7 +36,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 //        registry.register("actions", new CreateForceField());
 //        registry.register("actions", new ExecuteCommand());
 //        registry.register("actions", new LaunchProjectile());
-        registry.register("actions", new Raycast());
+        registry.register("actions/visual", new Raycast());
+        registry.register("actions/visual", new MultiRaycast());
 //        registry.register("actions", new SpawnHitbox());
 
         // Actions/AI

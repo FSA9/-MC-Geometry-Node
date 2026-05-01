@@ -30,6 +30,9 @@ public enum StandardPorts {
     IS_HIT("is_hit", PortType.BOOLEAN),
     IS_BLOCK_BREAK("is_block_break", PortType.BOOLEAN),
     IS_FIRE_GEN("is_fire_gen", PortType.BOOLEAN),
+    PENETRATE_SOLID("penetrate_solid", PortType.BOOLEAN),
+    PENETRATE_TRANS("penetrate_trans", PortType.BOOLEAN),
+    PENETRATE_ENTITIES("penetrate_entities", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
@@ -42,6 +45,7 @@ public enum StandardPorts {
     VOLUME("volume", PortType.FLOAT),
     SPEED("speed", PortType.FLOAT),
     PITCH("pitch", PortType.FLOAT),
+    YAW("yaw", PortType.FLOAT),
     X("X", PortType.FLOAT),
     Y("Y", PortType.FLOAT),
     Z("Z", PortType.FLOAT),
