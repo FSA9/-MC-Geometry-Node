@@ -247,7 +247,8 @@
 
   "--- CLIENT ---": "--- 客户端节点 ---",
   "geometry_node.node.draw_debug_line": "绘制调试线",
-  "geometry_node.node.draw_laser_beam": "绘制激光束",
+  "geometry_node.node.draw_laser_beam": "绘制激光束(AB)",
+  "geometry_node.node.draw_ray_beam": "绘制激光束(r)",
   "geometry_node.node.raycast": "射线检测",
   "geometry_node.node.multi_raycast": "高级射线检测",
   "geometry_node.node.SnapshotValue": "数值快照",

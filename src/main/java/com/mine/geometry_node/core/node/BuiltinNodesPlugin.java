@@ -38,6 +38,9 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 //        registry.register("actions", new LaunchProjectile());
         registry.register("actions/visual", new Raycast());
         registry.register("actions/visual", new MultiRaycast());
+        registry.register("actions/visual", new DrawDebugLine());
+        registry.register("actions/visual", new DrawLaserBeam());
+        registry.register("actions/visual", new DrawRayBeam());
 //        registry.register("actions", new SpawnHitbox());
 
         // Actions/AI
@@ -142,8 +145,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/world", new SpawnParticle());
 
         // Client/Visual
-        registry.register("client/visual", new DrawDebugLine());
-        registry.register("client/visual", new DrawLaserBeam());
 
         // --- DATA ---
         registry.register("data", new TargetSelector());
