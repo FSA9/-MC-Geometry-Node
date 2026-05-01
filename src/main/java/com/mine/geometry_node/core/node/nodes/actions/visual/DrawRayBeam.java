@@ -10,7 +10,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
-
 import java.util.HashMap;
 
 public class DrawRayBeam extends BaseNode {
@@ -21,26 +20,27 @@ public class DrawRayBeam extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.draw_ray_beam"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-
-                // 核心输入源
                 .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.PITCH.toInput(0.0f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.YAW.toInput(0.0f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.DIST.toInput(20.0f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.COLOR.toInput(-1), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.RADIUS.toInput(0.1f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInput(2), null, UIHint.INPUT, null, null))
 
-                // 偏移量与射线属性
-                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null)) // 位置偏移
-                .addRow(new PortRow(StandardPorts.PITCH.toInput(), null, UIHint.INPUT, null, null))  // 俯仰角偏移
-                .addRow(new PortRow(StandardPorts.YAW.toInput(), null, UIHint.INPUT, null, null))    // 偏航角偏移
-
-                .addRow(new PortRow(StandardPorts.DIST.toInput(), null, UIHint.INPUT, null, null))  // 射线长度
-                .addRow(new PortRow(StandardPorts.COLOR.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.RADIUS.toInput(), null, UIHint.INPUT, null, null)) // 半径/粗细
-                .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null, null))     // 存活时间
+                // 【新增】：把物理检测规则也传进去
+                .addRow(new PortRow(StandardPorts.PENETRATE_SOLID.toInput(false), null, UIHint.CHECKBOX, null, null))
+                .addRow(new PortRow(StandardPorts.PENETRATE_TRANS.toInput(true), null, UIHint.CHECKBOX, null, null))
+                .addRow(new PortRow(StandardPorts.PENETRATE_ENTITIES.toInput(false), null, UIHint.CHECKBOX, null, null))
+                .addRow(new PortRow(StandardPorts.LIMIT.toInput(1), null, UIHint.INPUT, null, null))
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         Entity sourceEntity = getInput(context, StandardPorts.SOURCE_ENTITY.getId(), Entity.class);
-        int sourceId = sourceEntity != null ? sourceEntity.getId() : -1;
+        if (sourceEntity == null) return next(StandardPorts.FLOW_OUT.getId());
 
         Vec3 posOffset = getInput(context, StandardPorts.START_POS.getId(), Vec3.class);
         Float pitchOffset = getInput(context, StandardPorts.PITCH.getId(), Float.class);
@@ -50,31 +50,29 @@ public class DrawRayBeam extends BaseNode {
         Float radius = getInput(context, StandardPorts.RADIUS.getId(), Float.class);
         Integer duration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
 
-        if (posOffset == null) posOffset = Vec3.ZERO;
-        if (pitchOffset == null) pitchOffset = 0.0f;
-        if (yawOffset == null) yawOffset = 0.0f;
-        if (length == null) length = 20.0f;
-        if (color == null) color = 0xFFFFFFFF;
-        if (radius == null) radius = 0.1f;
-        if (duration == null) duration = 20;
+        Boolean penetrateSolid = getInput(context, StandardPorts.PENETRATE_SOLID.getId(), Boolean.class);
+        Boolean penetrateTrans = getInput(context, StandardPorts.PENETRATE_TRANS.getId(), Boolean.class);
+        Boolean penetrateEntities = getInput(context, StandardPorts.PENETRATE_ENTITIES.getId(), Boolean.class);
+        Integer limit = getInput(context, StandardPorts.LIMIT.getId(), Integer.class);
 
-        // 打包静态数据到 ExtraData (由于是纯视觉跟随，这里不使用动态 AST，直接利用客户端插值)
+        // NBT 封包
         CompoundTag extraData = new CompoundTag();
-        extraData.putInt("sourceId", sourceId);
+        extraData.putInt("sourceId", sourceEntity.getId());
+        extraData.putDouble("offX", posOffset != null ? posOffset.x : 0);
+        extraData.putDouble("offY", posOffset != null ? posOffset.y : 0);
+        extraData.putDouble("offZ", posOffset != null ? posOffset.z : 0);
+        extraData.putFloat("offPitch", pitchOffset != null ? pitchOffset : 0);
+        extraData.putFloat("offYaw", yawOffset != null ? yawOffset : 0);
+        extraData.putFloat("length", length != null ? length : 20f);
+        extraData.putFloat("radius", radius != null ? radius : 0.1f);
 
-        extraData.putDouble("offX", posOffset.x);
-        extraData.putDouble("offY", posOffset.y);
-        extraData.putDouble("offZ", posOffset.z);
+        // 【新增】：封装物理规则
+        extraData.putBoolean("penSolid", penetrateSolid != null ? penetrateSolid : false);
+        extraData.putBoolean("penTrans", penetrateTrans != null ? penetrateTrans : true);
+        extraData.putBoolean("penEnt", penetrateEntities != null ? penetrateEntities : false);
+        extraData.putInt("maxEnt", limit != null ? limit : 1);
 
-        extraData.putFloat("offPitch", pitchOffset);
-        extraData.putFloat("offYaw", yawOffset);
-
-        extraData.putFloat("length", length);
-        extraData.putFloat("radius", radius);
-
-        // 发送网络包给客户端
-        context.broadcastDynamicVisual("ray_beam", color, duration, new HashMap<>(), new HashMap<>(), extraData);
-
+        context.broadcastDynamicVisual("ray_beam", color != null ? color : -1, duration != null ? duration : 2, new HashMap<>(), new HashMap<>(), extraData);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 }
