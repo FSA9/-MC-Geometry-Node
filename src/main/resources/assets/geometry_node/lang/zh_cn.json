@@ -124,6 +124,8 @@
 
   "geometry_node.port.any_value": "任意",
 
+  "geometry_node.port.dict": "Dict",
+
 
 
 
@@ -418,6 +420,18 @@
   "geometry_node.node.bool_value": "布尔值",
   "geometry_node.node.make_list": "构建列表",
   "geometry_node.node.get_list_value": "获取列表元素",
+  "geometry_node.node.get_dict_value": "获取字典元素",
   "geometry_node.node.get_length": "获取输入长度",
-  "geometry_node.node.get_port_type": "获取端口类型"
+  "geometry_node.node.get_port_type": "获取端口类型",
+  "geometry_node.node.set_entity_persistence": "设置实体防刷新",
+  "geometry_node.node.set_entity_can_pick_up_loot": "设置实体能拾取战利品",
+  "geometry_node.node.set_entity_no_ai": "设置实体无AI",
+  "geometry_node.node.set_entity_no_gravity": "设置实体无重力",
+  "geometry_node.node.set_entity_invulnerable": "设置实体无敌",
+  "geometry_node.node.add_entity_tag": "添加实体标签",
+  "geometry_node.node.remove_entity_tag": "移除实体标签",
+  "geometry_node.node.clear_entity_tags": "清空实体标签",
+  "geometry_node.node.list_has_value": "包含值(List)",
+  "geometry_node.node.dict_has_value": "包含值(Dict)",
+  "geometry_node.node.dict_has_key": "包含键(Dict)"
 }

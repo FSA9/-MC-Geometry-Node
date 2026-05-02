@@ -96,6 +96,14 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/entity", new SetEntityMoveSpeed());
         registry.register("actions/entity", new SetEntityStepHeight());
         registry.register("actions/entity", new SetEntityInvisible());
+        registry.register("actions/entity", new AddEntityTag());
+        registry.register("actions/entity", new ClearEntityTags());
+        registry.register("actions/entity", new RemoveEntityTag());
+        registry.register("actions/entity", new SetEntityCanPickUpLoot());
+        registry.register("actions/entity", new SetEntityInvulnerable());
+        registry.register("actions/entity", new SetEntityNoAI());
+        registry.register("actions/entity", new SetEntityNoGravity());
+        registry.register("actions/entity", new SetEntityPersistence());
 
         // Actions/Inventory
         registry.register("actions/inventory", new ClearInventory());
@@ -200,9 +208,12 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/container", new GetInputDataType());
         registry.register("data/container", new GetLength());
         registry.register("data/container", new MakeList());
-        registry.register("data/container", new GetListValue());
         registry.register("data/container", new MakeDict());
+        registry.register("data/container", new GetListValue());
         registry.register("data/container", new GetDictValue());
+        registry.register("data/container", new ListHasValue());
+        registry.register("data/container", new DictHasKey());
+        registry.register("data/container", new DictHasValue());
 
         // Data/Value
         registry.register("data/value", new StringValue());
