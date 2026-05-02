@@ -9,12 +9,13 @@ import com.mine.geometry_node.core.node.nodes.actions.player.*;
 import com.mine.geometry_node.core.node.nodes.actions.visual.*;
 import com.mine.geometry_node.core.node.nodes.actions.world.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
-import com.mine.geometry_node.core.node.nodes.data.container.GetListLen;
+import com.mine.geometry_node.core.node.nodes.data.container.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.attribution.*;
-import com.mine.geometry_node.core.node.nodes.data.player.IsKeyPressed;
+import com.mine.geometry_node.core.node.nodes.data.player.*;
 import com.mine.geometry_node.core.node.nodes.data.type.*;
-import com.mine.geometry_node.core.node.nodes.data.world.TargetSelector;
+import com.mine.geometry_node.core.node.nodes.data.value.*;
+import com.mine.geometry_node.core.node.nodes.data.world.*;
 import com.mine.geometry_node.core.node.nodes.events.block.*;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
@@ -149,7 +150,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // --- DATA ---
         registry.register("data", new TargetSelector());
         registry.register("data", new GetEntityAttribute());
-        registry.register("data", new GetListLen());
         registry.register("data", new GetScopeAttribute());
         registry.register("data", new SetEntityAttribute());
         registry.register("data", new SetScopeAttribute());
@@ -193,6 +193,18 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/type", new GetItemType());
         registry.register("data/type", new GetItemStack());
         registry.register("data/type", new GetSound());
+
+        // Data/Container
+        registry.register("data/container", new GetListLen());
+        registry.register("data/container", new MakeDict());
+        registry.register("data/container", new GetInputDataType());
+        registry.register("data/container", new GetDictValue());
+
+        // Data/Value
+        registry.register("data/value", new StringValue());
+        registry.register("data/value", new IntValue());
+        registry.register("data/value", new FloatValue());
+        registry.register("data/value", new BoolValue());
 
         // --- EVENTS ---
 

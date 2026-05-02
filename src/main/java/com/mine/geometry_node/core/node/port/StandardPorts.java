@@ -36,6 +36,7 @@ public enum StandardPorts {
 
     // Float
     VALUE("value", PortType.FLOAT),
+    FLOAT("float", PortType.FLOAT),
     MIN_FLOAT("min_float", PortType.FLOAT),
     MAX_FLOAT("max_float", PortType.FLOAT),
     DIST("distance", PortType.FLOAT),
@@ -52,6 +53,7 @@ public enum StandardPorts {
 
     // String
     NAME("name", PortType.STRING),
+    STRING("string", PortType.STRING),
     TYPE("type", PortType.STRING),
     GAMEMODE("gamemode", PortType.STRING),
     SORT("sort", PortType.STRING),
@@ -65,6 +67,8 @@ public enum StandardPorts {
     DAMAGE_TYPE("damage_type", PortType.STRING),
     SOUND_TYPE("sound_type", PortType.STRING),
     ITEM_TYPE("item_type", PortType.STRING),
+    PREDICATE("predicate", PortType.STRING),
+    KEY("key", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),
@@ -86,6 +90,9 @@ public enum StandardPorts {
     // LIST
     LIST("list", PortType.LIST),
     LIST_XYZ("list_xyz", PortType.LIST),
+
+    // DICT
+    DICT("dict", PortType.DICT),
 
     // XYZ
     XYZ("xyz", PortType.XYZ),

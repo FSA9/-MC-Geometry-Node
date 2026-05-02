@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node;
 
+import com.mine.geometry_node.core.node.port.PortType;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -72,6 +73,14 @@ public class RegistryDataManager {
 
     // 动态类型
 
+    public static List<String> getPortTypes() {
+        return java.util.Arrays.stream(PortType.values())
+                // 过滤 EXECUTION和 ANY
+                .filter(t -> t != PortType.EXECUTION && t != PortType.ANY)
+                .map(Enum::name) // 输出大写名字，如 "FLOAT", "DICT"
+                .toList();
+    }
+
     public static List<String> getEntityTypes() {
         return BuiltInRegistries.ENTITY_TYPE.keySet().stream()
                 .map(ResourceLocation::toString)
@@ -126,6 +135,7 @@ public class RegistryDataManager {
             case "minecraft:damage_type" -> getDamageTypes(access);
             case "minecraft:attribute" -> getAttributes(access);
             case "minecraft:entity_type" -> getEntityTypes();
+            case "geometry_node:port_types" -> getPortTypes();
             default -> {
                 System.err.println("[RegistryDataManager] 未知的动态注册表 ID: " + registryId);
                 yield List.of();

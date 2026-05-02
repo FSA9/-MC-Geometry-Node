@@ -109,4 +109,22 @@ public enum PortType {
 
         return false;
     }
+
+    /**
+     * 根据 Java 对象的实际类型，反推它的几何节点端口类型
+     */
+    public static PortType getTypeOf(Object value) {
+        if (value == null) return ANY;
+        if (value instanceof Integer) return INTEGER;
+        if (value instanceof Float || value instanceof Double) return FLOAT;
+        if (value instanceof Boolean) return BOOLEAN;
+        if (value instanceof String) return STRING;
+        if (value instanceof net.minecraft.world.entity.Entity) return ENTITY;
+        if (value instanceof net.minecraft.world.item.ItemStack) return ITEM_STACK;
+        if (value instanceof java.util.List) return LIST;
+        if (value instanceof java.util.Map) return DICT;
+        if (value instanceof net.minecraft.world.phys.Vec3) return XYZ;
+        // 如果都不是，默认返回 ANY
+        return ANY;
+    }
 }

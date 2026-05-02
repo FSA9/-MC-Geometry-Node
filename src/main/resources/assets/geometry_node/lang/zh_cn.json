@@ -21,6 +21,8 @@
   "geometry_node.menu.data.block": "方块",
   "geometry_node.menu.data.entity": "实体",
   "geometry_node.menu.data.type": "类型",
+  "geometry_node.menu.data.container": "容器",
+  "geometry_node.menu.data.value": "值",
 
   "--- 三级菜单: 数据/实体 (Data/Entity) ---": "",
   "geometry_node.menu.data.entity.attribution": "属性",
@@ -56,12 +58,12 @@
   "geometry_node.port.flow_true": "True",
   "geometry_node.port.flow_false": "False",
 
-  "geometry_node.port.int": "整数",
+  "geometry_node.port.int": "Int",
   "geometry_node.port.index": "索引",
   "geometry_node.port.tick": "刻",
   "geometry_node.port.color": "颜色",
 
-  "geometry_node.port.bool": "布尔值",
+  "geometry_node.port.bool": "Bool",
   "geometry_node.port.debug": "调试",
   "geometry_node.port.case": "匹配",
   "geometry_node.port.is_hit": "是否命中",
@@ -72,6 +74,7 @@
   "geometry_node.port.penetrate_entities": "穿透实体",
 
   "geometry_node.port.value": "值",
+  "geometry_node.port.float": "Float",
   "geometry_node.port.min_float": "最小值(F)",
   "geometry_node.port.max_float": "最大值(F)",
   "geometry_node.port.distance": "距离",
@@ -86,6 +89,7 @@
   "geometry_node.port.Z": "Z",
 
   "geometry_node.port.name": "名称",
+  "geometry_node.port.string": "String",
   "geometry_node.port.type": "类型",
   "geometry_node.port.scope": "作用域",
   "geometry_node.port.expression": "表达式",
@@ -94,6 +98,8 @@
   "geometry_node.port.damage_type": "伤害类型",
   "geometry_node.port.sound_type": "声音类型",
   "geometry_node.port.item_type": "物品类型",
+  "geometry_node.port.predicate": "谓词",
+  "geometry_node.port.key": "关键字",
 
   "geometry_node.port.entity": "实体",
   "geometry_node.port.trigger_entity": "触发实体",
@@ -289,6 +295,8 @@
   "geometry_node.node.is_sprinting": "是否在疾跑",
   "geometry_node.node.is_swimming": "是否在游泳",
 
+  "--- DATA/CONTAINER ---": "--- 容器 ---",
+  "geometry_node.node.make_dict": "构建字典",
 
   "--- DATA/TYPE ---": "--- 类型转换 ---",
   "geometry_node.node.get_block_type": "获取方块类型",
@@ -399,7 +407,13 @@
   "geometry_node.node.math_expression": "数学表达式",
   "geometry_node.node.math_operation": "运算",
   "geometry_node.node.separate_xyz": "分离XYZ",
-  "geometry_node.node.combine_xyz": "合并XYZ"
+  "geometry_node.node.combine_xyz": "合并XYZ",
 
 
+  "geometry_node.node.get_input_data_type": "获取输入数据类型",
+
+  "geometry_node.node.string_value": "字符串",
+  "geometry_node.node.int_value": "整数",
+  "geometry_node.node.float_value": "浮点数",
+  "geometry_node.node.bool_value": "布尔值"
 }
