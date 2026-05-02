@@ -415,5 +415,9 @@
   "geometry_node.node.string_value": "字符串",
   "geometry_node.node.int_value": "整数",
   "geometry_node.node.float_value": "浮点数",
-  "geometry_node.node.bool_value": "布尔值"
+  "geometry_node.node.bool_value": "布尔值",
+  "geometry_node.node.make_list": "构建列表",
+  "geometry_node.node.get_list_value": "获取列表元素",
+  "geometry_node.node.get_length": "获取输入长度",
+  "geometry_node.node.get_port_type": "获取端口类型"
 }

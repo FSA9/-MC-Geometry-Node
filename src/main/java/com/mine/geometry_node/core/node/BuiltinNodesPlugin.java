@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.node.nodes.actions.player.*;
 import com.mine.geometry_node.core.node.nodes.actions.visual.*;
 import com.mine.geometry_node.core.node.nodes.actions.world.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
+import com.mine.geometry_node.core.node.nodes.data.MakeList;
 import com.mine.geometry_node.core.node.nodes.data.container.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.attribution.*;
@@ -193,11 +194,14 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/type", new GetItemType());
         registry.register("data/type", new GetItemStack());
         registry.register("data/type", new GetSound());
+        registry.register("data/type", new GetPortType());
 
         // Data/Container
-        registry.register("data/container", new GetListLen());
-        registry.register("data/container", new MakeDict());
         registry.register("data/container", new GetInputDataType());
+        registry.register("data/container", new GetLength());
+        registry.register("data/container", new MakeList());
+        registry.register("data/container", new GetListValue());
+        registry.register("data/container", new MakeDict());
         registry.register("data/container", new GetDictValue());
 
         // Data/Value
