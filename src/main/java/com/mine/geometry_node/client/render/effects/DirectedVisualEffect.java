@@ -6,8 +6,6 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Map;
-
 public abstract class DirectedVisualEffect extends AbstractVisualEffect {
     protected final int sourceEntityId;
     protected final Vec3 baseStart;
@@ -35,41 +33,42 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
     }
 
     protected DirectedAnchors computeAnchors(float partialTick) {
-        Map<String, Double> vars = buildVariableTable(partialTick);
+        // 【核心修改 1】：抛弃极其耗性能的 buildVariableTable 字典构建
+        // 直接调用父类的新方法，将最新数据极速写入底层 double[] 数组
+        updateVariables(partialTick);
+
         ClientLevel level = Minecraft.getInstance().level;
 
-        // 1. 获取实体基准坐标（如果没有实体，或者实体死了，就以原点 0,0,0 为基准）
         Vec3 sourceEntityPos = (level != null && sourceEntityId != -1 && level.getEntity(sourceEntityId) != null) ?
                 level.getEntity(sourceEntityId).getPosition(partialTick) : Vec3.ZERO;
 
         Vec3 targetEntityPos = (level != null && targetEntityId != -1 && level.getEntity(targetEntityId) != null) ?
                 level.getEntity(targetEntityId).getPosition(partialTick) : Vec3.ZERO;
 
-        // 2. 计算起点 Offset (动态表达式优先，死数值 baseStart 兜底)
-        double dynStartX = eval("startX", vars, Double.NaN);
-        double dynStartY = eval("startY", vars, Double.NaN);
-        double dynStartZ = eval("startZ", vars, Double.NaN);
+        // 【核心修改 2】：eval 不再需要传入 vars 字典，它会直接去读底层的 double[] 数组
+        double dynStartX = eval("startX", Double.NaN);
+        double dynStartY = eval("startY", Double.NaN);
+        double dynStartZ = eval("startZ", Double.NaN);
         Vec3 startOffset = new Vec3(
                 Double.isNaN(dynStartX) ? baseStart.x : dynStartX,
                 Double.isNaN(dynStartY) ? baseStart.y : dynStartY,
                 Double.isNaN(dynStartZ) ? baseStart.z : dynStartZ
         );
 
-        // 3. 计算终点 Offset
-        double dynEndX = eval("endX", vars, Double.NaN);
-        double dynEndY = eval("endY", vars, Double.NaN);
-        double dynEndZ = eval("endZ", vars, Double.NaN);
+        double dynEndX = eval("endX", Double.NaN);
+        double dynEndY = eval("endY", Double.NaN);
+        double dynEndZ = eval("endZ", Double.NaN);
         Vec3 endOffset = new Vec3(
                 Double.isNaN(dynEndX) ? baseEnd.x : dynEndX,
                 Double.isNaN(dynEndY) ? baseEnd.y : dynEndY,
                 Double.isNaN(dynEndZ) ? baseEnd.z : dynEndZ
         );
 
-        // 4. 最终渲染坐标 = 实体真实坐标 + 动态/静态偏移量
         Vec3 start = sourceEntityPos.add(startOffset);
         Vec3 end = targetEntityPos.add(endOffset);
 
-        float size = (float) eval("size", vars, baseSize);
+        // 同理，直接调用 eval
+        float size = (float) eval("size", baseSize);
         return new DirectedAnchors(start, end, Math.max(0.01f, size));
     }
 

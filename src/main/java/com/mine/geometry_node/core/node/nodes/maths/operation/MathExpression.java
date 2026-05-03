@@ -12,16 +12,18 @@ import com.mine.geometry_node.core.node.port.*;
 import com.mine.geometry_node.core.utils.ASTNode;
 import com.mine.geometry_node.core.utils.ASTNodes;
 import com.mine.geometry_node.core.utils.ExpressionCompiler;
+import com.mine.geometry_node.core.utils.VariableRegistry;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class MathExpression extends BaseNode {
 
     public static final String TYPE_ID = "math_expression";
+
+    // 【新增】：用于缓存编译后的树与它的专属注册表
+    private record CachedAST(ASTNode node, VariableRegistry registry) {}
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -89,19 +91,33 @@ public class MathExpression extends BaseNode {
             mainExpr = "0";
         }
 
+        // 1. 获取或编译主表达式的 AST 和 Registry
         String cacheKey = "AST_" + context.getCurrentNodeId() + "_" + mainExpr.hashCode();
-        ASTNode mainAst = (ASTNode) context.getTempData(cacheKey);
-        if (mainAst == null) {
-            mainAst = ExpressionCompiler.compile(mainExpr);
-            context.setTempData(cacheKey, mainAst);
+        CachedAST cache = (CachedAST) context.getTempData(cacheKey);
+
+        if (cache == null) {
+            VariableRegistry newRegistry = new VariableRegistry();
+            ASTNode newNode = ExpressionCompiler.compile(mainExpr, newRegistry);
+            cache = new CachedAST(newNode, newRegistry);
+            context.setTempData(cacheKey, cache);
         }
 
-        Map<String, Double> evalVars = new HashMap<>();
+        ASTNode mainAst = cache.node();
+        VariableRegistry mainRegistry = cache.registry();
+        Map<String, Integer> indexMapping = mainRegistry.getMapping();
+
+        // 2. 准备服务端求值用的极速数组
+        double[] evalVars = new double[mainRegistry.getVarCount()];
+
+        // 写入 tick (如果表达式里写了的话)
+        int tickIdx = indexMapping.getOrDefault("tick", -1);
+        if (tickIdx >= 0) {
+            double serverTick = context.getLevel() != null ? context.getLevel().getGameTime() : 0.0;
+            evalVars[tickIdx] = serverTick;
+        }
+
         Map<String, ASTNode> substitutions = new HashMap<>();
         Map<String, String> mergedBindings = new HashMap<>();
-
-        double serverTick = context.getLevel() != null ? context.getLevel().getGameTime() : 0.0;
-        evalVars.put("tick", serverTick);
 
         int portCount = 1;
         Object countObj = context.getNodeProperty(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
@@ -112,26 +128,36 @@ public class MathExpression extends BaseNode {
         }
         portCount = Math.max(1, Math.min(portCount, 26));
 
+        // 3. 处理动态输入分支
         for (int i = 1; i <= portCount; i++) {
             char varName = (char) ('A' + (i - 1));
             String portId = "var_" + i;
+            String varKey = String.valueOf(varName);
 
             Float val = getInput(context, portId, Float.class);
             double numVal = val != null ? val.doubleValue() : 0.0;
-            evalVars.put(String.valueOf(varName), numVal);
+
+            // 如果该变量在表达式中存在，填入对应的数组索引中
+            int varIdx = indexMapping.getOrDefault(varKey, -1);
+            if (varIdx >= 0) {
+                evalVars[varIdx] = numVal;
+            }
 
             ExpressionData inputExpr = getInput(context, portId, ExpressionData.class);
 
             if (inputExpr != null && inputExpr.formula() != null && !inputExpr.formula().isEmpty() && !inputExpr.formula().equals("0")) {
-                ASTNode subAst = ExpressionCompiler.compile(inputExpr.formula());
-                substitutions.put(String.valueOf(varName), subAst);
+                // 子表达式仅用于嫁接和拼接字符串，不需要真实求值，给它一个一次性的 Dummy Registry 即可
+                VariableRegistry dummyRegistry = new VariableRegistry();
+                ASTNode subAst = ExpressionCompiler.compile(inputExpr.formula(), dummyRegistry);
+                substitutions.put(varKey, subAst);
                 mergedBindings.putAll(inputExpr.bindings());
             } else {
-                substitutions.put(String.valueOf(varName), new ASTNodes.ConstantNode(numVal));
+                substitutions.put(varKey, new ASTNodes.ConstantNode(numVal));
             }
         }
 
         try {
+            // 4. 服务端求值 与 协议字符串嫁接
             double resultValue = mainAst.evaluate(evalVars);
             ASTNode graftedAst = mainAst.substitute(substitutions);
             String finalFormula = graftedAst.toFormulaString();

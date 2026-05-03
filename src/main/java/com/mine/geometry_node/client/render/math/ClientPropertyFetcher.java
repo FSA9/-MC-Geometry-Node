@@ -1,16 +1,13 @@
 package com.mine.geometry_node.client.render.math;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.Entity;
 
 public class ClientPropertyFetcher {
 
-    // 1. 新增：预编译协议载体
-    public record ParsedBinding(int entityId, String property, double fallback) {}
+    // 增加 index 字段，指定该数据写入 double[] 数组的具体位置
+    public record ParsedBinding(int index, int entityId, String property, double fallback) {}
 
-    // 2. 新增：只在初始化时调用【一次】的解析器
-    public static ParsedBinding parseProtocol(String bindingProtocol) {
+    public static ParsedBinding parseProtocol(String bindingProtocol, int targetIndex) {
         if (bindingProtocol == null || bindingProtocol.isEmpty()) return null;
 
         String[] parts = bindingProtocol.split(":");
@@ -20,20 +17,14 @@ public class ClientPropertyFetcher {
             int entityId = Integer.parseInt(parts[1]);
             String property = parts[2];
             double fallback = parts.length >= 4 ? Double.parseDouble(parts[3]) : 0.0;
-            return new ParsedBinding(entityId, property, fallback);
+            return new ParsedBinding(targetIndex, entityId, property, fallback);
         } catch (NumberFormatException e) {
             return null;
         }
     }
 
-    // 3. 核心改进：高频渲染帧专用的极速抓取器（彻底消灭 String.split）
-    public static double fetchFast(ParsedBinding binding, float partialTick) {
-        if (binding == null) return 0.0;
-
-        ClientLevel level = Minecraft.getInstance().level;
-        if (level == null) return binding.fallback;
-
-        Entity entity = level.getEntity(binding.entityId);
+    // 剥离实体查询逻辑，Entity 从外部传入
+    public static double fetchFast(ParsedBinding binding, Entity entity, float partialTick) {
         if (entity == null) return binding.fallback;
 
         return switch (binding.property) {

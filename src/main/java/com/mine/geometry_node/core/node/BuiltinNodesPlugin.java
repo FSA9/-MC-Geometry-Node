@@ -308,7 +308,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // --- LOGICS ---
 //        registry.register("logics", new Contain());
-//        registry.register("logics", new Equal());
+        registry.register("logics", new Equal());
         registry.register("logics", new ForEach());
         registry.register("logics", new IF());
         registry.register("logics", new Switch());

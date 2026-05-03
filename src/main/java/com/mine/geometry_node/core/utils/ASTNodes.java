@@ -6,38 +6,39 @@ public class ASTNodes {
 
     public record ConstantNode(double value) implements ASTNode {
         @Override
-        public double evaluate(Map<String, Double> vars) { return value; }
+        public double evaluate(double[] vars) { return value; } // 修改参数
 
         @Override
         public ASTNode substitute(Map<String, ASTNode> substitutions) { return this; }
 
         @Override
         public String toFormulaString() {
-            // 去掉多余的小数点（如 1.0 -> 1）
             if (value == (long) value) return String.valueOf((long) value);
             return String.valueOf(value);
         }
     }
 
-    public record VariableNode(String name) implements ASTNode {
+    // 【核心修改】：VariableNode 增加 index 字段，并根据 index 极速读取
+    public record VariableNode(int index, String originalName) implements ASTNode {
         @Override
-        public double evaluate(Map<String, Double> vars) {
-            return vars.getOrDefault(name, 0.0);
+        public double evaluate(double[] vars) {
+            // 数组越界保护，安全极速读取
+            return (index >= 0 && index < vars.length) ? vars[index] : 0.0;
         }
 
         @Override
         public ASTNode substitute(Map<String, ASTNode> substitutions) {
-            // 如果命中替换表，返回嫁接的子树；否则返回自己
-            return substitutions.getOrDefault(name, this);
+            // 替换逻辑依然需要用到原始名称，所以保留了 originalName 字段
+            return substitutions.getOrDefault(originalName, this);
         }
 
         @Override
-        public String toFormulaString() { return name; }
+        public String toFormulaString() { return originalName; }
     }
 
     public record BinaryNode(char operator, ASTNode left, ASTNode right) implements ASTNode {
         @Override
-        public double evaluate(Map<String, Double> vars) {
+        public double evaluate(double[] vars) { // 修改参数
             double l = left.evaluate(vars);
             double r = right.evaluate(vars);
             return switch (operator) {
@@ -57,14 +58,13 @@ public class ASTNodes {
 
         @Override
         public String toFormulaString() {
-            // 递归构建字符串，强制加括号保证优先级绝对正确
             return "(" + left.toFormulaString() + operator + right.toFormulaString() + ")";
         }
     }
 
     public record UnaryNode(char operator, ASTNode child) implements ASTNode {
         @Override
-        public double evaluate(Map<String, Double> vars) {
+        public double evaluate(double[] vars) { // 修改参数
             double v = child.evaluate(vars);
             return operator == '-' ? -v : v;
         }
@@ -82,7 +82,7 @@ public class ASTNodes {
 
     public record FunctionNode(String funcName, ASTNode child) implements ASTNode {
         @Override
-        public double evaluate(Map<String, Double> vars) {
+        public double evaluate(double[] vars) { // 修改参数
             double v = child.evaluate(vars);
             return switch (funcName) {
                 case "sin" -> Math.sin(v);
