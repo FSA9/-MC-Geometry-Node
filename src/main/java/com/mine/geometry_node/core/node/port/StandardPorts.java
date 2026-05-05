@@ -22,6 +22,13 @@ public enum StandardPorts {
     TICK("tick", PortType.INTEGER),
     COLOR("color", PortType.INTEGER),
     COUNT("count", PortType.INTEGER),
+    TELEPORT_DURATION("teleport_duration", PortType.INTEGER),
+    INTERPOLATION_DURATION("interpolation_duration", PortType.INTEGER),
+    BRIGHTNESS("brightness", PortType.INTEGER),
+    START_INTERPOLATION("start_interpolation", PortType.INTEGER),
+    GLOW_COLOR("glow_color", PortType.INTEGER),
+    TEXT_LINE_WIDTH("text_line_width", PortType.INTEGER),
+    BACKGROUND_COLOR("background_color", PortType.INTEGER),
 
     // Bool
     BOOL("bool", PortType.BOOLEAN),
@@ -33,6 +40,8 @@ public enum StandardPorts {
     PENETRATE_SOLID("penetrate_solid", PortType.BOOLEAN),
     PENETRATE_TRANS("penetrate_trans", PortType.BOOLEAN),
     PENETRATE_ENTITIES("penetrate_entities", PortType.BOOLEAN),
+    SEE_THROUGH("see_through", PortType.BOOLEAN),
+    TEXT_SHADOW("text_shadow", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
@@ -50,6 +59,12 @@ public enum StandardPorts {
     X("X", PortType.FLOAT),
     Y("Y", PortType.FLOAT),
     Z("Z", PortType.FLOAT),
+    SHADOW_RADIUS("shadow_radius", PortType.FLOAT),
+    SHADOW_STRENGTH("shadow_strength", PortType.FLOAT),
+    VIEW_RANGE("view_range", PortType.FLOAT),
+    WIDTH("width", PortType.FLOAT),
+    TEXT_OPACITY("text_opacity", PortType.FLOAT),
+    HEIGHT("height", PortType.FLOAT),
 
     // String
     NAME("name", PortType.STRING),
@@ -69,6 +84,7 @@ public enum StandardPorts {
     ITEM_TYPE("item_type", PortType.STRING),
     PREDICATE("predicate", PortType.STRING),
     KEY("key", PortType.STRING),
+    BILLBOARD("billboard", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),
@@ -103,6 +119,7 @@ public enum StandardPorts {
     ROTATION("rotation", PortType.XYZ),
     SIZE_3("size_3", PortType.XYZ),
     SPREAD("spread", PortType.XYZ),
+    TRANSLATION("translation", PortType.XYZ),
 
     // ANY
 

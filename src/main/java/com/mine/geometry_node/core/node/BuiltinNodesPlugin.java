@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.api.GeometryNodePlugin;
 import com.mine.geometry_node.core.node.nodes.actions.block.*;
+import com.mine.geometry_node.core.node.nodes.actions.display_entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
 import com.mine.geometry_node.core.node.nodes.actions.item.*;
@@ -104,6 +105,15 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/entity", new SetEntityNoAI());
         registry.register("actions/entity", new SetEntityNoGravity());
         registry.register("actions/entity", new SetEntityPersistence());
+
+        // Action/DisplayEntity
+        registry.register("actions/display_entity", new SpawnBlockDisplayEntity());
+        registry.register("actions/display_entity", new SpawnItemDisplayEntity());
+        registry.register("actions/display_entity", new SpawnTextDisplayEntity());
+        registry.register("actions/display_entity", new SetBlockDisplayState());
+        registry.register("actions/display_entity", new SetDisplayStyle());
+        registry.register("actions/display_entity", new SetDisplayTransform());
+        registry.register("actions/display_entity", new SetDisplayPosition());
 
         // Actions/Inventory
         registry.register("actions/inventory", new ClearInventory());
