@@ -1,9 +1,6 @@
 package com.mine.geometry_node.client.render;
 
-import com.mine.geometry_node.client.render.effects.AbstractVisualEffect;
-import com.mine.geometry_node.client.render.effects.DebugLineEffect;
-import com.mine.geometry_node.client.render.effects.LaserBeamEffect;
-import com.mine.geometry_node.client.render.effects.RayBeamEffect;
+import com.mine.geometry_node.client.render.effects.*;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
@@ -33,6 +30,7 @@ public class ClientVisualManager {
         registerFactory("debug_line", DebugLineEffect::new);
         registerFactory("laser_beam", LaserBeamEffect::new);
         registerFactory("ray_beam", RayBeamEffect::new);
+        registerFactory("item_visual", ItemVisualEffect::new);
     }
 
     public static void registerFactory(String effectType, Function<PacketSpawnDynamicVisual, AbstractVisualEffect> factory) {

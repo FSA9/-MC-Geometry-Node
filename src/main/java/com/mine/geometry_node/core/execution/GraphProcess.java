@@ -746,9 +746,21 @@ public class GraphProcess {
                     effectType, color, durationTicks, expressions, bindings, extraData
             );
 
-            // 尝试从动态数据中获取起点坐标，用作广播中心点判定
-            Vec3 center = Vec3.ZERO;
-            if (extraData != null && extraData.contains("startX")) {
+            Vec3 center = null;
+
+            // 1. 优先尝试从绑定的实体获取最新鲜的中心点
+            if (extraData != null && extraData.contains("sourceId")) {
+                int sourceId = extraData.getInt("sourceId");
+                if (sourceId != -1) {
+                    net.minecraft.world.entity.Entity sourceEntity = GraphProcess.this.level.getEntity(sourceId);
+                    if (sourceEntity != null) {
+                        center = sourceEntity.position();
+                    }
+                }
+            }
+
+            // 2. 如果没有绑定实体，或者实体已经超出了服务端的加载范围（获取为 null），则使用数据包里提供的静态坐标
+            if (center == null && extraData != null && extraData.contains("startX")) {
                 center = new Vec3(
                         extraData.getDouble("startX"),
                         extraData.getDouble("startY"),
@@ -756,14 +768,26 @@ public class GraphProcess {
                 );
             }
 
-            int radius = 128;
-            final Vec3 finalCenter = center;
-            List<net.minecraft.server.level.ServerPlayer> nearbyPlayers = GraphProcess.this.level.getPlayers(
-                    player -> player.position().distanceToSqr(finalCenter) < radius * radius
-            );
+            // 3. 终极容错：如果还是拿不到，才回落到 0,0,0
+            if (center == null) {
+                center = Vec3.ZERO;
+            }
 
-            if (!nearbyPlayers.isEmpty()) {
-                com.mine.geometry_node.core.network.NetworkHandler.sendToPlayers(nearbyPlayers, packet);
+            // 统一的安全大范围距离过滤 (彻底避免了原生 broadcastAndSend 的强制转型崩溃问题)
+            int radius = 128; // 可以视情况放大，比如 256
+            double radiusSqr = (double) radius * radius;
+
+            List<net.minecraft.server.level.ServerPlayer> targetPlayers = new java.util.ArrayList<>();
+
+            for (net.minecraft.server.level.ServerPlayer player : GraphProcess.this.level.players()) {
+                if (player.position().distanceToSqr(center) < radiusSqr) {
+                    targetPlayers.add(player);
+                }
+            }
+
+            // 使用你自己写的、安全的网络层发送自定义载荷
+            if (!targetPlayers.isEmpty()) {
+                com.mine.geometry_node.core.network.NetworkHandler.sendToPlayers(targetPlayers, packet);
             }
         }
     }

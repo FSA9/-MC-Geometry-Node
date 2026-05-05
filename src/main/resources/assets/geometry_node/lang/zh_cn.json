@@ -441,6 +441,7 @@
   "geometry_node.node.set_display_position": "设置展示绝对位置(移动)",
   "geometry_node.node.spawn_item_display_entity": "生成物品展示",
   "geometry_node.node.spawn_text_display_entity": "生成文本展示",
+  "geometry_node.node.draw_item_visual": "绘制物品",
 
   "geometry_node.port.text_line_width": "最大行宽(像素)",
   "geometry_node.port.background_color": "背景颜色(ARGB)",
