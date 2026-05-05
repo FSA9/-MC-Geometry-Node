@@ -72,15 +72,23 @@ public class ExpressionCompiler {
                     }
                     String name = str.substring(startPos, this.pos);
 
-                    // 拦截内置函数
-                    if (name.equals("sin") || name.equals("cos") || name.equals("tan") ||
+                    // 1. 拦截数学常数 (编译期直接替换为常量节点，性能最高)
+                    if (name.equalsIgnoreCase("pi")) {
+                        node = new ASTNodes.ConstantNode(Math.PI);
+                    } else if (name.equalsIgnoreCase("e")) {
+                        node = new ASTNodes.ConstantNode(Math.E);
+                    }
+                    // 2. 拦截内置函数[cite: 23]
+                    else if (name.equals("sin") || name.equals("cos") || name.equals("tan") ||
                             name.equals("sqrt") || name.equals("abs")) {
                         node = new ASTNodes.FunctionNode(name, parseFactor());
-                    } else {
-                        // 统一走注册表获取数组索引
+                    }
+                    // 3. 处理普通变量[cite: 23]
+                    else {
+                        // 统一走注册表获取数组索引[cite: 23]
                         String varName = name.equalsIgnoreCase("tick") ? "tick" : name;
-                        int index = registry.registerOrGet(varName);
-                        node = new ASTNodes.VariableNode(index, varName);
+                        int index = registry.registerOrGet(varName); //[cite: 23]
+                        node = new ASTNodes.VariableNode(index, varName); //[cite: 23]
                     }
                 } else {
                     System.err.println("[ExpressionCompiler] Illegal character: " + (char) ch);

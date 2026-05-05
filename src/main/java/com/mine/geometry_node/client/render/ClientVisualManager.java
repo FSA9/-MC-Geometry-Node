@@ -30,6 +30,7 @@ public class ClientVisualManager {
         registerFactory("debug_line", DebugLineEffect::new);
         registerFactory("laser_beam", LaserBeamEffect::new);
         registerFactory("ray_beam", RayBeamEffect::new);
+        registerFactory("debug_box", DebugBoxEffect::new);
         registerFactory("item_visual", ItemVisualEffect::new);
     }
 

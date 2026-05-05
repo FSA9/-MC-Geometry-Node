@@ -146,7 +146,7 @@ public interface ExecutionContext {
 
     /**
      * [缓存控制] 清空当前帧的数据运算缓存。
-     * 通常由循环节点（如 ForEach）在每次迭代开始时调用，强制下游运算节点重新求值，
+     * 通常由循环节点（如 ForEachLoop）在每次迭代开始时调用，强制下游运算节点重新求值，
      * 避免同一 Tick 内循环读取到陈旧的缓存数据。
      */
     void clearFrameCache();
@@ -154,7 +154,7 @@ public interface ExecutionContext {
     /**
      * [同步分支执行] 挂起当前节点的执行流，立即将指定的输出分支压入子栈并同步跑完。
      * 只有当该分支（及其所有的后续连线）彻底触底结束后，此方法才会返回 (阻塞式调用)。
-     * 专用于 ForEach 等需要往复执行的循环节点。
+     * 专用于 ForEachLoop 等需要往复执行的循环节点。
      *
      * @param portName 当前节点的输出执行端口名 (如 "loop")
      */

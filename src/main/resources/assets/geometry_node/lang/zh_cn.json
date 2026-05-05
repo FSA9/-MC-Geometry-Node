@@ -399,7 +399,8 @@
   "--- LOGICS ---": "--- 逻辑控制 ---",
   "geometry_node.node.contain": "包含",
   "geometry_node.node.equal": "等于",
-  "geometry_node.node.for_each": "For Each",
+  "geometry_node.node.for_each_loop": "For Each Loop",
+  "geometry_node.node.for_loop": "For Loop",
   "geometry_node.node.if_branch": "If",
   "geometry_node.node.switch": "Switch",
 
