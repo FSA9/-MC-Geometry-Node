@@ -32,9 +32,6 @@ public class GraphEventHandler {
 
     // Lifecycle & Initialization
 
-    /**
-     * 在模组初始化阶段调用，注册所有事件监听器。
-     */
     public static void init() {
         // 监听服务端 Tick
         TickEvent.SERVER_LEVEL_POST.register(GraphEventHandler::onLevelTick);
@@ -550,11 +547,10 @@ public class GraphEventHandler {
         });
 
         // 7. 玩家 Tick
-        // 注意：PlayerTickEvent 有 Pre 和 Post，通常建议在 Post 结算完原版逻辑后再派发自定义蓝图事件。
-        bus.addListener((net.neoforged.neoforge.event.tick.PlayerTickEvent.Post event) -> {
+        bus.addListener((net.neoforged.neoforge.event.tick.EntityTickEvent.Post event) -> {
             if (!event.getEntity().level().isClientSide()) {
                 ServerLevel level = (ServerLevel) event.getEntity().level();
-                GraphEngine.dispatchEvent(level, event.getEntity(), OnPlayerTick.TYPE_ID, process -> {
+                GraphEngine.dispatchEvent(level, event.getEntity(), OnEntityTick.TYPE_ID, process -> {
                     process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
                 });
             }

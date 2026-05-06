@@ -443,7 +443,10 @@
   "geometry_node.node.spawn_item_display_entity": "生成物品展示",
   "geometry_node.node.spawn_text_display_entity": "生成文本展示",
   "geometry_node.node.draw_item_visual": "绘制物品",
+  "geometry_node.node.on_entity_tick": "实体刻",
 
+  "geometry_node.port.interval": "间隔",
+  "geometry_node.port.offset": "偏移",
   "geometry_node.port.text_line_width": "最大行宽(像素)",
   "geometry_node.port.background_color": "背景颜色(ARGB)",
   "geometry_node.port.text_opacity": "文字不透明度(0-1)",

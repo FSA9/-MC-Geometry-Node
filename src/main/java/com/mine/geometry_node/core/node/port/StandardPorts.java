@@ -22,6 +22,8 @@ public enum StandardPorts {
     TICK("tick", PortType.INTEGER),
     COLOR("color", PortType.INTEGER),
     COUNT("count", PortType.INTEGER),
+    INTERVAL("interval", PortType.INTEGER),
+    OFFSET("offset", PortType.INTEGER),
     TELEPORT_DURATION("teleport_duration", PortType.INTEGER),
     INTERPOLATION_DURATION("interpolation_duration", PortType.INTEGER),
     BRIGHTNESS("brightness", PortType.INTEGER),
