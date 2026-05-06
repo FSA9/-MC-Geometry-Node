@@ -65,8 +65,9 @@ public enum StandardPorts {
     SHADOW_STRENGTH("shadow_strength", PortType.FLOAT),
     VIEW_RANGE("view_range", PortType.FLOAT),
     WIDTH("width", PortType.FLOAT),
-    TEXT_OPACITY("text_opacity", PortType.FLOAT),
     HEIGHT("height", PortType.FLOAT),
+    TEXT_OPACITY("text_opacity", PortType.FLOAT),
+
 
     // String
     NAME("name", PortType.STRING),
