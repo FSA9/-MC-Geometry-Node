@@ -108,6 +108,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/entity", new SetEntityPersistence());
 
         // Action/DisplayEntity
+        registry.register("actions/display_entity", new SpawnInteractionEntity());
+        registry.register("actions/display_entity", new SpawnMarkerEntity());
         registry.register("actions/display_entity", new SpawnBlockDisplayEntity());
         registry.register("actions/display_entity", new SpawnItemDisplayEntity());
         registry.register("actions/display_entity", new SpawnTextDisplayEntity());
@@ -176,7 +178,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data", new IsKeyPressed());
 
         // Data/Entity
-        registry.register("data/entity", new GetEntitiesByAABB());
         registry.register("data/entity", new GetEntitiesByRadius());
         registry.register("data/entity", new GetEntitiesbyRotationBox());
 
@@ -266,6 +267,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/entity", new OnVillagerCure());
         registry.register("events/entity", new OnVillagerTrade());
         registry.register("events/entity", new OnProjectileHit());
+        registry.register("events/entity", new OnEntityTick());
 
         // Events/Inventory
 //        registry.register("events/inventory", new OnContainerClose());
@@ -293,7 +295,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/player", new OnPlayerQuit());
         registry.register("events/player", new OnPlayerRespawn());
         registry.register("events/player", new OnPlayerSleep());
-        registry.register("events/player", new OnPlayerTick());
         registry.register("events/player", new OnPlayerWakeUp());
         registry.register("events/player", new OnPlayerKeyEvent());
 

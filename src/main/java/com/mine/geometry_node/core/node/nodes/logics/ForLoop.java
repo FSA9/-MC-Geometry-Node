@@ -19,9 +19,7 @@ public class ForLoop extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.LOOP.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COMPLETED.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.INDEX.toOutput(), UIHint.DEFAULT, null, null))
-                // 起始索引 (默认 0)
                 .addRow(new PortRow(StandardPorts.MIN_INT.toInput(0), null, UIHint.INPUT, null, null))
-                // 结束索引（包含）
                 .addRow(new PortRow(StandardPorts.MAX_INT.toInput(0), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null, null))
                 .build();
@@ -43,7 +41,6 @@ public class ForLoop extends BaseNode {
         Object savedCursorObj = context.getTempData(cursorKey);
         int currentIndex = (savedCursorObj instanceof Integer i) ? i : start;
 
-        // 终止条件：支持正向和逆向循环过界判断
         if ((start <= end && currentIndex > end) || (start > end && currentIndex < end)) {
             context.removeTempData(indexKey);
             context.removeTempData(cursorKey);
@@ -53,15 +50,13 @@ public class ForLoop extends BaseNode {
         int delay = (tickInterval != null) ? tickInterval : 0;
         int step = start <= end ? 1 : -1; // 根据起始和结束大小自动决定步长
 
-        if (delay > 0) {
-            // 异步跨帧模式
+        if (delay > 0) { // 异步跨帧模式
             context.setTempData(indexKey, currentIndex);
             context.clearFrameCache();
             context.setTempData(cursorKey, currentIndex + step);
             context.scheduleNode(myNodeId, delay);
             return next(StandardPorts.LOOP.getId());
-        } else {
-            // 瞬间同步模式
+        } else { // 瞬间同步模式
             int iterations = 0;
             for (int i = currentIndex; (step > 0 ? i <= end : i >= end); i += step) {
                 if (iterations++ > 10000) break;

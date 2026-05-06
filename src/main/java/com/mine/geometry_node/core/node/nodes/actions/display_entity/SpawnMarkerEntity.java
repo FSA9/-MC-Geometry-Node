@@ -27,7 +27,6 @@ public class SpawnMarkerEntity extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_marker_entity"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-
                 .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.TAG.toInput(""), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.DATA.toInput(), null, UIHint.DEFAULT, null, null))
@@ -53,7 +52,6 @@ public class SpawnMarkerEntity extends BaseNode {
                 marker.addTag(tag.trim());
             }
 
-            // 【重构】：直接调用工具类，一行代码完成降维打击
             if (dataDict != null && !dataDict.isEmpty()) {
                 CompoundTag nbt = new CompoundTag();
                 marker.saveWithoutId(nbt);

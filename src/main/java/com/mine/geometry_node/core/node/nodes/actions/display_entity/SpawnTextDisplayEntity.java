@@ -31,11 +31,9 @@ public class SpawnTextDisplayEntity extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_text_display_entity"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-
                 // 核心文本内容
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.MESSAGE.toInput("Hello World"), null, UIHint.INPUT, null, null))
-
                 // 文本排版样式
                 .addRow(new PortRow(
                         null, null, UIHint.SELECT, null,
@@ -49,12 +47,10 @@ public class SpawnTextDisplayEntity extends BaseNode {
                 .addRow(new PortRow(StandardPorts.TEXT_OPACITY.toInput(1.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TEXT_SHADOW.toInput(true), null, UIHint.CHECKBOX, null, null))
                 .addRow(new PortRow(StandardPorts.SEE_THROUGH.toInput(false), null, UIHint.CHECKBOX, null, null))
-
                 // 矩阵变换
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
-
                 // 动画插值
                 .addRow(new PortRow(StandardPorts.TELEPORT_DURATION.toInput(0), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.INTERPOLATION_DURATION.toInput(0), null, UIHint.INPUT, null, null))
@@ -116,7 +112,7 @@ public class SpawnTextDisplayEntity extends BaseNode {
             }
             if (bgColor != null) {
                 nbt.putInt("background", bgColor);
-                nbt.putBoolean("default_background", false); // 开启自定义颜色时必须关闭默认聊天框背景
+                nbt.putBoolean("default_background", false);
             } else {
                 nbt.putBoolean("default_background", true);
             }

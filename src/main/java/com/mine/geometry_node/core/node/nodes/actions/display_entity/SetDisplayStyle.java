@@ -27,8 +27,7 @@ public class SetDisplayStyle extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.set_display_style"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-
-                // 1. 朝向与亮度
+                // 朝向与亮度
                 .addRow(new PortRow(
                         StandardPorts.BILLBOARD.toInput(), null, UIHint.SELECT, null,
                         Map.of(
@@ -37,17 +36,14 @@ public class SetDisplayStyle extends BaseNode {
                         )
                 ))
                 .addRow(new PortRow(StandardPorts.BRIGHTNESS.toInput(-1), null, UIHint.INPUT, null, null)) // -1 代表跟随环境光
-
-                // 2. 阴影系统
+                // 阴影系统
                 .addRow(new PortRow(StandardPorts.SHADOW_RADIUS.toInput(0.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.SHADOW_STRENGTH.toInput(1.0f), null, UIHint.INPUT, null, null))
-
-                // 3. 渲染剔除与视距 (新增)
+                // 渲染剔除与视距
                 .addRow(new PortRow(StandardPorts.VIEW_RANGE.toInput(1.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.WIDTH.toInput(0.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.HEIGHT.toInput(0.0f), null, UIHint.INPUT, null, null))
-
-                // 4. 发光轮廓颜色 (新增)
+                // 发光轮廓颜色
                 .addRow(new PortRow(StandardPorts.GLOW_COLOR.toInput(-1), null, UIHint.INPUT, null, null)) // -1 代表无强制覆写
                 .build();
     }

@@ -146,7 +146,6 @@ public class MathExpression extends BaseNode {
             ExpressionData inputExpr = getInput(context, portId, ExpressionData.class);
 
             if (inputExpr != null && inputExpr.formula() != null && !inputExpr.formula().isEmpty() && !inputExpr.formula().equals("0")) {
-                // 子表达式仅用于嫁接和拼接字符串，不需要真实求值，给它一个一次性的 Dummy Registry 即可
                 VariableRegistry dummyRegistry = new VariableRegistry();
                 ASTNode subAst = ExpressionCompiler.compile(inputExpr.formula(), dummyRegistry);
                 substitutions.put(varKey, subAst);

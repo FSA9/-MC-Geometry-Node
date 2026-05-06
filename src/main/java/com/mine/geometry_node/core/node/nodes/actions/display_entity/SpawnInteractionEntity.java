@@ -10,7 +10,6 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Interaction;
 import net.minecraft.world.level.Level;
@@ -25,7 +24,6 @@ public class SpawnInteractionEntity extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_interaction_entity"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-
                 .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.WIDTH.toInput(1.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.HEIGHT.toInput(1.0f), null, UIHint.INPUT, null, null))
@@ -49,7 +47,6 @@ public class SpawnInteractionEntity extends BaseNode {
         if (interaction != null) {
             interaction.setPos(pos.x, pos.y, pos.z);
 
-            // 利用 NBT 完美兼容所有版本映射，注入核心参数
             CompoundTag nbt = new CompoundTag();
             interaction.saveWithoutId(nbt);
             nbt.putFloat("width", width != null ? width : 1.0f);

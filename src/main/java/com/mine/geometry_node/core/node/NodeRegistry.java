@@ -14,7 +14,7 @@ public class NodeRegistry {
     private final Map<String, BaseNode> registry = new HashMap<>();
     private final Map<String, NodeDef> defaultDefCache = new LinkedHashMap<>();
 
-    // 唯一保留的前端根目录
+    // 前端根目录
     public final NodeCategory ROOT = new NodeCategory("geometry_node.menu.root");
 
     private NodeRegistry() {}

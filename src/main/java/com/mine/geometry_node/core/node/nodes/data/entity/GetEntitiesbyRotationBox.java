@@ -24,7 +24,6 @@ public class GetEntitiesbyRotationBox extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        // 彻底移除动态属性逻辑，直接暴露所有端口
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.get_entities_by_rotation_box"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null))

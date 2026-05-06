@@ -39,8 +39,6 @@ public class NodeCategory {
         return this;
     }
 
-    // --- 只读获取方法 ---
-
     public NodeCategory getChild(String translationKey) {
         return this.children.get(translationKey);
     }

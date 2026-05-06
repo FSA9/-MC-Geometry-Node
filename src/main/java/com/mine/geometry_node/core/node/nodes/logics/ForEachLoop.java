@@ -23,7 +23,6 @@ public class ForEachLoop extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.INDEX.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.LIST.toInput(), null, UIHint.DEFAULT, null, null))
-                // 将原先的 INT 替换为语意更准确的 LIMIT[cite: 19]
                 .addRow(new PortRow(StandardPorts.LIMIT.toInput(), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null, null))
                 .build();
@@ -37,7 +36,6 @@ public class ForEachLoop extends BaseNode {
 
         int listSize = list.size();
 
-        // 【绝对真理】：以 listSize 为基石，LIMIT 只用来做安全上限截断，绝不替代空列表的长度
         int targetIterations = (limitInt != null && limitInt > 0) ? Math.min(listSize, limitInt) : listSize;
 
         int myNodeId = context.getCurrentNodeId();
@@ -57,8 +55,7 @@ public class ForEachLoop extends BaseNode {
 
         int delay = (tickInterval != null) ? tickInterval : 0;
 
-        if (delay > 0) {
-            // 异步跨帧模式
+        if (delay > 0) { // 异步跨帧模式
             Object currentElement = list.get(currentIndex);
 
             context.setTempData(indexKey, currentIndex);
@@ -68,8 +65,7 @@ public class ForEachLoop extends BaseNode {
 
             context.scheduleNode(myNodeId, delay);
             return next(StandardPorts.LOOP.getId());
-        } else {
-            // 瞬间同步模式
+        } else { // 瞬间同步模式
             for (int i = currentIndex; i < targetIterations; i++) {
                 Object currentElement = list.get(i);
                 context.setTempData(indexKey, i);

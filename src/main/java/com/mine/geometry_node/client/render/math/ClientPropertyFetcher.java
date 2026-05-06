@@ -3,8 +3,6 @@ package com.mine.geometry_node.client.render.math;
 import net.minecraft.world.entity.Entity;
 
 public class ClientPropertyFetcher {
-
-    // 增加 index 字段，指定该数据写入 double[] 数组的具体位置
     public record ParsedBinding(int index, int entityId, String property, double fallback) {}
 
     public static ParsedBinding parseProtocol(String bindingProtocol, int targetIndex) {

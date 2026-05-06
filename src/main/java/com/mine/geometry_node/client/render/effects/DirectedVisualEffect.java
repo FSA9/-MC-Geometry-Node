@@ -33,8 +33,6 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
     }
 
     protected DirectedAnchors computeAnchors(float partialTick) {
-        // 【核心修改 1】：抛弃极其耗性能的 buildVariableTable 字典构建
-        // 直接调用父类的新方法，将最新数据极速写入底层 double[] 数组
         updateVariables(partialTick);
 
         ClientLevel level = Minecraft.getInstance().level;
@@ -45,7 +43,6 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
         Vec3 targetEntityPos = (level != null && targetEntityId != -1 && level.getEntity(targetEntityId) != null) ?
                 level.getEntity(targetEntityId).getPosition(partialTick) : Vec3.ZERO;
 
-        // 【核心修改 2】：eval 不再需要传入 vars 字典，它会直接去读底层的 double[] 数组
         double dynStartX = eval("startX", Double.NaN);
         double dynStartY = eval("startY", Double.NaN);
         double dynStartZ = eval("startZ", Double.NaN);
@@ -67,7 +64,6 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
         Vec3 start = sourceEntityPos.add(startOffset);
         Vec3 end = targetEntityPos.add(endOffset);
 
-        // 同理，直接调用 eval
         float size = (float) eval("size", baseSize);
         return new DirectedAnchors(start, end, Math.max(0.01f, size));
     }

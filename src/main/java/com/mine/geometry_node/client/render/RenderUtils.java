@@ -15,7 +15,6 @@ public class RenderUtils {
         };
     }
 
-    // 抽离：画四边形（Quad）
     public static void drawQuad(VertexConsumer buffer, Matrix4f matrix,
                                 Vec3 v1, Vec3 v2, Vec3 v3, Vec3 v4,
                                 int r, int g, int b, int a) {

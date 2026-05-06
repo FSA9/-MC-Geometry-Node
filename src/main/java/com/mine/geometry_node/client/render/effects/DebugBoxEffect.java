@@ -53,8 +53,6 @@ public class DebugBoxEffect extends AbstractVisualEffect {
         );
         poseStack.mulPose(rotationQuat);
 
-        // 【核心修复】：绝对不可以使用 poseStack.scale！
-        // 提取当前的纯旋转和位移矩阵，我们手动放大顶点
         PoseStack.Pose pose = poseStack.last();
         Matrix4f matrix = pose.pose();
 
@@ -88,8 +86,6 @@ public class DebugBoxEffect extends AbstractVisualEffect {
         drawLine(buffer, pose, matrix, minX, minY, maxZ, minX, maxY, maxZ, r, g, b, a);
 
         poseStack.popPose();
-
-        // 【核心修复 2】：彻底移除了 flush 相关的 endBatch 代码
     }
 
     /**

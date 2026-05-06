@@ -34,15 +34,10 @@ public class SpawnBlockDisplayEntity extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_block_display_entity"))
-                // --- 1. 执行流与实体输出 ---
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-
-                // --- 2. 核心状态：坐标与方块 ---
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
-                // 动态方块输入端口
                 .addRow(new PortRow(StandardPorts.BLOCK_STATE.toInput(), null, UIHint.DEFAULT, null, null))
-                // 静态下拉框 (参考 GetBlockType)
                 .addRow(new PortRow(
                         null, null, UIHint.SELECT, null,
                         Map.of(
@@ -50,13 +45,11 @@ public class SpawnBlockDisplayEntity extends BaseNode {
                                 PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0])
                         )
                 ))
-
-                // --- 3. 矩阵形变 (初始姿态) ---
+                // --- 矩阵形变 (初始姿态) ---
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null)) // X=Pitch, Y=Yaw, Z=Roll
                 .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
-
-                // --- 4. 初始动画插值 (默认 0) ---
+                // --- 初始动画插值 (默认 0) ---
                 .addRow(new PortRow(StandardPorts.TELEPORT_DURATION.toInput(0), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.INTERPOLATION_DURATION.toInput(0), null, UIHint.INPUT, null, null))
                 .build();
@@ -67,11 +60,9 @@ public class SpawnBlockDisplayEntity extends BaseNode {
         Level level = context.getLevel();
         if (level == null) return next(StandardPorts.FLOW_OUT.getId());
 
-        // --- 1. 坐标与状态获取 ---
         Vec3 pos = getInput(context, StandardPorts.START_POS.getId(), Vec3.class);
         if (pos == null) pos = Vec3.ZERO;
 
-        // 【双轨制读取方块】：先尝试读取连线输入，如果没有，则读取下拉框！
         BlockState blockState = getInput(context, StandardPorts.BLOCK_STATE.getId(), BlockState.class);
         if (blockState == null) {
             String selectedBlockId = context.getConfig(PROPERTY_SELECTED, String.class, "");
@@ -80,7 +71,7 @@ public class SpawnBlockDisplayEntity extends BaseNode {
                 blockState = TypeConverter.convert(selectedBlockId, BlockState.class, context);
             }
         }
-        // 如果啥都没选，给个保底石头，防止崩溃
+
         if (blockState == null) blockState = Blocks.STONE.defaultBlockState();
 
         // --- 2. 形变与动画数据 ---
