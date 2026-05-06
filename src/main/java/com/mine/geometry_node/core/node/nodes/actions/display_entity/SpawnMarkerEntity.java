@@ -1,0 +1,80 @@
+package com.mine.geometry_node.core.node.nodes.actions.display_entity;
+
+import com.mine.geometry_node.core.execution.ExecutionContext;
+import com.mine.geometry_node.core.execution.ExecutionResult;
+import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.nodes.NodeType;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.NbtDictConverter; // 引入我们的工具类
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Marker;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+
+import java.util.Map;
+
+public class SpawnMarkerEntity extends BaseNode {
+
+    public static final String TYPE_ID = "spawn_marker_entity";
+
+    @Override
+    public NodeDef getDefaultDefinition() {
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_marker_entity"))
+                .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
+
+                .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.TAG.toInput(""), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.DATA.toInput(), null, UIHint.DEFAULT, null, null))
+                .build();
+    }
+
+    @Override
+    public ExecutionResult execute(ExecutionContext context) {
+        Level level = context.getLevel();
+        if (level == null || level.isClientSide) return next(StandardPorts.FLOW_OUT.getId());
+
+        Vec3 pos = getInput(context, StandardPorts.XYZ.getId(), Vec3.class);
+        if (pos == null) pos = Vec3.ZERO;
+
+        String tag = getInput(context, StandardPorts.TAG.getId(), String.class);
+        Map<String, Object> dataDict = getInputDict(context, StandardPorts.DATA.getId());
+
+        Marker marker = EntityType.MARKER.create(level);
+        if (marker != null) {
+            marker.setPos(pos.x, pos.y, pos.z);
+
+            if (tag != null && !tag.trim().isEmpty()) {
+                marker.addTag(tag.trim());
+            }
+
+            // 【重构】：直接调用工具类，一行代码完成降维打击
+            if (dataDict != null && !dataDict.isEmpty()) {
+                CompoundTag nbt = new CompoundTag();
+                marker.saveWithoutId(nbt);
+
+                nbt.put("data", NbtDictConverter.dictToNbt(dataDict, level.registryAccess()));
+
+                marker.load(nbt);
+            }
+
+            level.addFreshEntity(marker);
+            context.setTempData("spawned_marker_" + context.getCurrentNodeId(), marker);
+        }
+
+        return next(StandardPorts.FLOW_OUT.getId());
+    }
+
+    @Override
+    public Object compute(ExecutionContext context, String portName) {
+        if (StandardPorts.ENTITY.getId().equals(portName)) {
+            return context.getTempData("spawned_marker_" + context.getCurrentNodeId());
+        }
+        return null;
+    }
+}

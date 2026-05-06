@@ -44,6 +44,7 @@ public enum StandardPorts {
     PENETRATE_ENTITIES("penetrate_entities", PortType.BOOLEAN),
     SEE_THROUGH("see_through", PortType.BOOLEAN),
     TEXT_SHADOW("text_shadow", PortType.BOOLEAN),
+    RESPONSIVE("responsive", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
@@ -112,6 +113,7 @@ public enum StandardPorts {
 
     // DICT
     DICT("dict", PortType.DICT),
+    DATA("data", PortType.DICT),
 
     // XYZ
     XYZ("xyz", PortType.XYZ),
