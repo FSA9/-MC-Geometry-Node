@@ -38,7 +38,6 @@ public class SetBlockState extends BaseNode {
 
         if (posVec != null && state != null && context.getLevel() instanceof ServerLevel level) {
             BlockPos pos = BlockPos.containing(posVec);
-            // Flag 3: 更新邻近方块 + 同步给客户端
             level.setBlock(pos, state, 3);
         }
 

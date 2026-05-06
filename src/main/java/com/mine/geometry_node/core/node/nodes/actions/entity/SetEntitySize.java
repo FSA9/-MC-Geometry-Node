@@ -21,11 +21,8 @@ public class SetEntitySize extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.set_entity_size"))
-                // 第一行：执行流
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                // 第二行：目标实体
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                // 第三行：缩放倍数 (浮点数，比如 2.0 代表放大两倍)
                 .addRow(new PortRow(StandardPorts.VALUE.toInput(), null, UIHint.INPUT, null, null))
                 .build();
     }
@@ -38,7 +35,6 @@ public class SetEntitySize extends BaseNode {
         if (scaleFactor != null && scaleFactor > 0.0f && !entities.isEmpty()) {
             for (Entity entity : entities) {
                 if (entity instanceof LivingEntity living) {
-                    // 1.21.1 支持的原生缩放属性
                     AttributeInstance scaleAttr = living.getAttribute(Attributes.SCALE);
                     if (scaleAttr != null) {
                         scaleAttr.setBaseValue(scaleFactor);
