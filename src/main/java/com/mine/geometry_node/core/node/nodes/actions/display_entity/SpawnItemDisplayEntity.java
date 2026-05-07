@@ -12,6 +12,7 @@ import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntityType;
@@ -87,8 +88,7 @@ public class SpawnItemDisplayEntity extends BaseNode {
             displayEntity.saveWithoutId(nbt);
 
             // 写入物品专有属性
-            CompoundTag itemTag = new CompoundTag();
-            itemStack.save(level.registryAccess(), itemTag); // 1.20.5+ 需要 registryAccess，如果是旧版本直接 itemStack.save(itemTag)
+            Tag itemTag = itemStack.saveOptional(level.registryAccess());
             nbt.put("item", itemTag);
             nbt.putString("item_display", displayContext);
 
