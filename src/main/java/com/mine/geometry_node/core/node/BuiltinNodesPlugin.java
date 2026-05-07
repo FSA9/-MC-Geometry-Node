@@ -106,6 +106,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/entity", new SetEntityNoAI());
         registry.register("actions/entity", new SetEntityNoGravity());
         registry.register("actions/entity", new SetEntityPersistence());
+        registry.register("actions/entity", new ShootProjectile());
 
         // Action/DisplayEntity
         registry.register("actions/display_entity", new SpawnInteractionEntity());

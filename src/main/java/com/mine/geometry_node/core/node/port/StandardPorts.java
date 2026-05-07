@@ -45,6 +45,8 @@ public enum StandardPorts {
     SEE_THROUGH("see_through", PortType.BOOLEAN),
     TEXT_SHADOW("text_shadow", PortType.BOOLEAN),
     RESPONSIVE("responsive", PortType.BOOLEAN),
+    GRAVITY("gravity", PortType.BOOLEAN),
+    INVISIBLE("invisible", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
