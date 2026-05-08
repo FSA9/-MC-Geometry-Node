@@ -141,7 +141,7 @@ public interface ExecutionContext {
     Object getPersistentAttribute(@Nullable Object target, String name);
 
     // ==========================================
-    // 高级控制流与引擎特权 API (专供复杂逻辑节点使用)
+    // 高级控制流与引擎特权 API
     // ==========================================
 
     /**
