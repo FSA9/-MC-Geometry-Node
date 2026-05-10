@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.Viewport.UIHints;
+package com.mine.geometry_node.client.ui.viewport.UIHints;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 
@@ -24,7 +25,7 @@ public class InputHintRenderer implements UIHintRenderer {
 
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        String propKey = row.hintParams() != null ? (String) row.hintParams().get("properties") : null;
+        String propKey = row.hintParams() != null ? (String) row.hintParams().get(PortMetaKeys.BIND_PROPERTY) : null;
         Object val = null;
         PortType expectedType = PortType.ANY;
 

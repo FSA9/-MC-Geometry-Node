@@ -11,25 +11,26 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * [世界级运行容器]
+ * [世界级运行容器 - 重构版]
  * <p>
  * 绑定在 ServerLevel (特定维度) 上的“背包”，专门用于运行和持久化
  * 与特定实体无关的全局图进程 (Global Graph Processes)。
+ * 现已全面接入“常驻虚拟机”架构。
  */
 public class LevelGraphAttachment extends SavedData {
 
     private static final String DATA_NAME = "geometry_node_level_processes";
     private static final String TAG_PROCESSES = "ActiveProcesses";
 
-    // 活跃进程列表
-    private final List<GraphProcess> processes = new ArrayList<>();
+    // 【重构点】活跃进程字典：GraphId -> 常驻进程实例
+    private final Map<String, GraphProcess> processes = new HashMap<>();
 
-    private final java.util.Map<String, Object> attributes = new java.util.HashMap<>();
+    private final Map<String, Object> attributes = new HashMap<>();
 
     /**
      * 工厂实例，用于 SavedData 的创建和加载机制。
@@ -42,14 +43,15 @@ public class LevelGraphAttachment extends SavedData {
 
     // --- Static Access ---
 
-    /**
-     * 获取指定维度的世界图容器。
-     * 注意：每个维度 (主世界、下界、末地) 都有自己独立的容器！
-     * 这确保了在下界触发的图，能正确操作下界的方块。
-     */
     public static LevelGraphAttachment get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(FACTORY, DATA_NAME);
     }
+
+    // --- Constructor ---
+
+    public LevelGraphAttachment() {}
+
+    // --- Attribute Management ---
 
     public void setAttribute(String key, Object value) {
         if (value == null) {
@@ -64,15 +66,25 @@ public class LevelGraphAttachment extends SavedData {
         return this.attributes.get(key);
     }
 
-    // --- Constructor ---
-
-    public LevelGraphAttachment() {}
-
     // --- Process Management ---
 
     public void addProcess(GraphProcess process) {
-        this.processes.add(process);
-        this.setDirty();
+        this.processes.put(process.getGraphId(), process);
+        this.setDirty(); // 添加新进程时标记世界数据需要保存
+    }
+
+    public void removeProcess(String graphId) {
+        if (this.processes.remove(graphId) != null) {
+            this.setDirty();
+        }
+    }
+
+    public Collection<GraphProcess> getProcesses() {
+        return this.processes.values();
+    }
+
+    public GraphProcess getProcess(String graphId) {
+        return this.processes.get(graphId);
     }
 
     /**
@@ -81,27 +93,19 @@ public class LevelGraphAttachment extends SavedData {
     public void tick(ServerLevel level) {
         if (processes.isEmpty()) return;
 
-        boolean needsSave = false;
-        Iterator<GraphProcess> iterator = processes.iterator();
+        long currentTime = level.getGameTime();
 
-        while (iterator.hasNext()) {
-            GraphProcess process = iterator.next();
-
+        // 【重构点】遍历常驻进程，驱动协程等内部心跳，不再移除 isFinished 状态的进程
+        for (GraphProcess process : processes.values()) {
             // 1. 注入环境（only world）
             process.setEnvironment(level, null);
 
-            // 2. 驱动单次 Tick
-            process.tick(level.getGameTime());
+            // 2. 驱动单次 Tick (比如唤醒挂起的 Wait 节点)
+            process.tick(currentTime);
+        }
 
-            // 3. 清理已结束流程
-            if (process.isFinished()) {
-                iterator.remove();
-                needsSave = true;
-            }
-        }
-        if (needsSave) {
-            this.setDirty();
-        }
+        // 注意：进程内部的变量改变不会自动触发 setDirty()，这符合 MC 原生机制。
+        // 若要严格保证每帧变量都能存盘，可由全局自动保存机制接管，此处无需每 tick setDirty() 以节省 IO。
     }
 
     // --- NBT Serialization ---
@@ -118,7 +122,7 @@ public class LevelGraphAttachment extends SavedData {
                 RuntimeGraphIndex index = GraphResourceManager.getInstance().getIndex(graphId);
                 if (index != null) {
                     GraphProcess process = new GraphProcess(processTag, index, provider);
-                    attachment.processes.add(process);
+                    attachment.processes.put(graphId, process);
                 } else {
                     System.err.printf("[LevelGraphAttachment] Failed to restore global process '%s' - Graph not found.%n", graphId);
                 }
@@ -138,7 +142,7 @@ public class LevelGraphAttachment extends SavedData {
     public @NotNull CompoundTag save(@NotNull CompoundTag tag, HolderLookup.@NotNull Provider provider) {
         if (!processes.isEmpty()) {
             ListTag processList = new ListTag();
-            for (GraphProcess process : processes) {
+            for (GraphProcess process : processes.values()) {
                 CompoundTag processTag = new CompoundTag();
                 process.save(processTag, provider);
                 processList.add(processTag);
@@ -147,16 +151,12 @@ public class LevelGraphAttachment extends SavedData {
         }
         if (!attributes.isEmpty()) {
             CompoundTag attrTag = new CompoundTag();
-            for (java.util.Map.Entry<String, Object> entry : attributes.entrySet()) {
+            for (Map.Entry<String, Object> entry : attributes.entrySet()) {
                 net.minecraft.nbt.Tag t = com.mine.geometry_node.core.execution.variables.VariableRegistry.toTag(entry.getValue(), provider);
                 if (t != null) attrTag.put(entry.getKey(), t);
             }
             tag.put("Attributes", attrTag);
         }
         return tag;
-    }
-
-    public List<GraphProcess> getProcesses() {
-        return this.processes;
     }
 }

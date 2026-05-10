@@ -50,55 +50,12 @@ public class FinishGraph extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        String targetGraphId = getInput(context, StandardPorts.NAME.getId(), String.class);
-        String scope = (String) context.getNodeProperty(PROPERTY_SELECTED);
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
 
-        if (targetGraphId == null || targetGraphId.isEmpty()) return next(StandardPorts.FLOW_OUT.getId());
-
-        // 鲁棒性：自动修剪用户误填的 .json 后缀
-        if (targetGraphId.endsWith(".json")) {
-            targetGraphId = targetGraphId.substring(0, targetGraphId.length() - 5);
-        }
-
-        // 模式 A：如果连接了实体，优先结束实体上的进程
-        if (!entities.isEmpty()) {
-            for (Entity target : entities) {
-                EntityGraphAttachment attachment = target.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
-                if (attachment != null) {
-                    terminateMatchingProcesses(attachment.getProcesses(), targetGraphId);
-                }
-            }
-        }
-        // 模式 B：根据作用域结束环境进程
-        else {
-            ServerLevel currentLevel = context.getLevel();
-            if (currentLevel == null) return next(StandardPorts.FLOW_OUT.getId());
-
-            if ("global".equals(scope) || scope == null) {
-                // 默认全局通常在主世界容器中
-                terminateMatchingProcesses(LevelGraphAttachment.get(currentLevel.getServer().overworld()).getProcesses(), targetGraphId);
-            } else {
-                // 按具体维度 ID 结束
-                ResourceLocation dimLoc = ResourceLocation.tryParse(scope);
-                if (dimLoc != null) {
-                    ServerLevel targetLevel = currentLevel.getServer().getLevel(ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION, dimLoc));
-                    if (targetLevel != null) {
-                        terminateMatchingProcesses(LevelGraphAttachment.get(targetLevel).getProcesses(), targetGraphId);
-                    }
-                }
-            }
-        }
 
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     private void terminateMatchingProcesses(Iterable<GraphProcess> processes, String targetGraphId) {
-        if (processes == null) return;
-        for (GraphProcess process : processes) {
-            if (!process.isFinished() && targetGraphId.equals(process.getGraphId())) {
-                process.terminate();
-            }
-        }
+
     }
 }

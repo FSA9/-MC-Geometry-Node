@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.Viewport;
+package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdAddNode;

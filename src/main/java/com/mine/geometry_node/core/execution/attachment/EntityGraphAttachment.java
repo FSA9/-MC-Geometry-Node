@@ -14,61 +14,44 @@ import net.minecraft.world.entity.Entity;
 import java.util.*;
 
 /**
- * [数据附加层] 基于 Architectury Attachment API 实现。
- * <p>
- * 此类作为实体的附加数据组件，职责分为两部分：
- * <ol>
- *     <li><b>持久化绑定 (Bound Graphs):</b> 静态记录该实体被绑定了哪些蓝图 ID（存盘，永久有效）。</li>
- *     <li><b>运行时进程 (Active Processes):</b> 动态记录当前正在运行的蓝图执行线程（由 Tick 驱动）。</li>
- * </ol>
+ * [数据附加层 - 重构版]
+ * 职责：
+ * 1. 记录持久化绑定关系 (BoundGraphs)
+ * 2. 持有常驻虚拟机进程 (Processes Map)
  */
 public class EntityGraphAttachment {
 
-    // Fields
-
-    // 静态绑定的图 ID 集合
+    // 静态绑定的图 ID 集合 (存盘)
     private final Set<String> boundGraphs = new HashSet<>();
 
-    // 活跃进程列表
-    private final List<GraphProcess> processes = new ArrayList<>();
+    // 【重构点】常驻进程字典：GraphId -> 常驻进程实例
+    // 进程不再频繁销毁，而是随实体同生共死
+    private final Map<String, GraphProcess> processes = new HashMap<>();
 
-    // 持久化属性存储 (Attribute 节点)
-    private final java.util.Map<String, Object> attributes = new java.util.HashMap<>();
-
-    // Constructor
+    // 持久化属性存储
+    private final Map<String, Object> attributes = new HashMap<>();
 
     public EntityGraphAttachment() {}
 
-    // Logic Loop (Tick)
-
     /**
-     * [心跳驱动] 由 GraphEventHandler 每 Tick 调用，驱动所有挂载的虚拟机运行。
-     * @param entity 宿主实体
+     * [心跳驱动]
+     * 驱动所有常驻进程处理它们的内部逻辑（如唤醒延时线程）。
      */
     public void tick(Entity entity) {
-        if (processes.isEmpty()) return;
+        if (processes.isEmpty() || !(entity.level() instanceof ServerLevel serverLevel)) return;
 
-        // 仅在服务端运行
-        if (!(entity.level() instanceof ServerLevel serverLevel)) return;
+        long currentTime = serverLevel.getGameTime();
 
-        Iterator<GraphProcess> iterator = processes.iterator();
-        while (iterator.hasNext()) {
-            GraphProcess process = iterator.next();
-
-            // 运行时注入环境上下文
+        // 遍历所有常驻进程进行心跳
+        for (GraphProcess process : processes.values()) {
             process.setEnvironment(serverLevel, entity);
-
-            // 驱动单次 Tick 执行
-            process.tick(serverLevel.getGameTime());
-
-            // 清理已结束流程
-            if (process.isFinished()) {
-                iterator.remove();
-            }
+            process.tick(currentTime);
         }
+
+        // 注意：此处不再需要 iterator.remove() 逻辑，进程由 bind/unbind 显式管理
     }
 
-    // Graph Binding Management (Static API)
+    // --- 绑定管理 ---
 
     public void bindGraph(String graphId) {
         this.boundGraphs.add(graphId);
@@ -76,6 +59,7 @@ public class EntityGraphAttachment {
 
     public void unbindGraph(String graphId) {
         this.boundGraphs.remove(graphId);
+        this.processes.remove(graphId); // 显式移除进程
     }
 
     public Set<String> getBoundGraphs() {
@@ -84,59 +68,60 @@ public class EntityGraphAttachment {
 
     public void clearGraphs() {
         this.boundGraphs.clear();
+        this.processes.clear();
     }
 
-    // Process Management (Runtime API)
+    // --- 进程管理 ---
 
     public void addProcess(GraphProcess process) {
-        this.processes.add(process);
+        this.processes.put(process.getGraphId(), process);
     }
 
-    public List<GraphProcess> getProcesses() {
-        return processes;
+    public Collection<GraphProcess> getProcesses() {
+        return processes.values();
     }
 
+    public GraphProcess getProcess(String graphId) {
+        return processes.get(graphId);
+    }
 
-    // Attribute
+    // --- 属性管理 ---
 
     public void setAttribute(String key, Object value) {
         if (value == null) this.attributes.remove(key);
         else this.attributes.put(key, value);
     }
+
     public Object getAttribute(String key) {
         return this.attributes.get(key);
     }
 
-    // Serialization (NBT)
+    // --- 序列化 (适配新 GraphProcess) ---
 
-    /**
-     * 序列化逻辑：保存绑定关系以及当前挂起的进程状态。
-     */
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
-        // 保存绑定关系
+        // 1. 保存绑定关系
         if (!boundGraphs.isEmpty()) {
             ListTag boundList = new ListTag();
-            for (String graphId : boundGraphs) {
-                boundList.add(StringTag.valueOf(graphId));
-            }
+            for (String graphId : boundGraphs) boundList.add(StringTag.valueOf(graphId));
             tag.put("BoundGraphs", boundList);
         }
 
-        // 保存活跃进程
+        // 2. 保存常驻进程状态 (变量、挂起的线程等)
         if (!processes.isEmpty()) {
             ListTag processList = new ListTag();
-            for (GraphProcess process : processes) {
-                CompoundTag processTag = new CompoundTag();
-                process.save(processTag, provider);
-                processList.add(processTag);
+            for (GraphProcess process : processes.values()) {
+                CompoundTag pTag = new CompoundTag();
+                process.save(pTag, provider);
+                processList.add(pTag);
             }
             tag.put("ActiveProcesses", processList);
         }
 
+        // 3. 属性
         if (!attributes.isEmpty()) {
             CompoundTag attrTag = new CompoundTag();
-            for (java.util.Map.Entry<String, Object> entry : attributes.entrySet()) {
-                net.minecraft.nbt.Tag t = com.mine.geometry_node.core.execution.variables.VariableRegistry.toTag(entry.getValue(), provider);
+            for (Map.Entry<String, Object> entry : attributes.entrySet()) {
+                Tag t = com.mine.geometry_node.core.execution.variables.VariableRegistry.toTag(entry.getValue(), provider);
                 if (t != null) attrTag.put(entry.getKey(), t);
             }
             tag.put("Attributes", attrTag);
@@ -144,38 +129,27 @@ public class EntityGraphAttachment {
         return tag;
     }
 
-    /**
-     * 反序列化逻辑：恢复绑定关系和进程状态。
-     */
     public void load(CompoundTag tag, HolderLookup.Provider provider) {
         this.boundGraphs.clear();
         this.processes.clear();
 
-        // 恢复绑定关系
         if (tag.contains("BoundGraphs", Tag.TAG_LIST)) {
-            ListTag boundList = tag.getList("BoundGraphs", Tag.TAG_STRING);
-            for (int i = 0; i < boundList.size(); i++) {
-                this.boundGraphs.add(boundList.getString(i));
-            }
+            ListTag list = tag.getList("BoundGraphs", Tag.TAG_STRING);
+            for (int i = 0; i < list.size(); i++) this.boundGraphs.add(list.getString(i));
         }
 
-        // 恢复活跃进程
         if (tag.contains("ActiveProcesses", Tag.TAG_LIST)) {
-            ListTag processList = tag.getList("ActiveProcesses", Tag.TAG_COMPOUND);
-            for (int i = 0; i < processList.size(); i++) {
-                CompoundTag processTag = processList.getCompound(i);
-                String graphId = processTag.getString("GraphId");
-
+            ListTag list = tag.getList("ActiveProcesses", Tag.TAG_COMPOUND);
+            for (int i = 0; i < list.size(); i++) {
+                CompoundTag pTag = list.getCompound(i);
+                String graphId = pTag.getString("GraphId");
                 RuntimeGraphIndex index = GraphResourceManager.getInstance().getIndex(graphId);
-
                 if (index != null) {
-                    GraphProcess process = new GraphProcess(processTag, index, provider);
-                    this.processes.add(process);
-                } else {
-                    System.err.printf("[EntityGraphAttachment] Failed to restore process '%s' - Graph Index not found.%n", graphId);
+                    this.processes.put(graphId, new GraphProcess(pTag, index, provider));
                 }
             }
         }
+
         this.attributes.clear();
         if (tag.contains("Attributes", Tag.TAG_COMPOUND)) {
             CompoundTag attrTag = tag.getCompound("Attributes");

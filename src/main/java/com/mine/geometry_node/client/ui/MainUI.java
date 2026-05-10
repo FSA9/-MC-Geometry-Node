@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui;
 
 import com.mine.geometry_node.client.ui.AssetLibrary.AssetBrowserPanel;
-import com.mine.geometry_node.client.ui.Viewport.ViewportPanel;
+import com.mine.geometry_node.client.ui.viewport.ViewportPanel;
 import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -36,7 +36,7 @@ public class MainUI extends Fragment {
         if ("true".equals(System.getProperty("gn.standalone"))) {
             physicalHeight = 1080.0f;
         } else {
-            physicalHeight = net.minecraft.client.Minecraft.getInstance().getWindow().getHeight();
+//            physicalHeight = net.minecraft.client.Minecraft.getInstance().getWindow().getHeight();
         }
 
 //        UIConstants.mDensity = physicalHeight / BASE_HEIGHT;

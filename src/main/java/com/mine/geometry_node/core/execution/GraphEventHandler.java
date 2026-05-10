@@ -30,11 +30,7 @@ import net.neoforged.neoforge.event.entity.player.*;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Set;
-import java.util.WeakHashMap;
-
+import java.util.*;
 
 
 public class GraphEventHandler {
@@ -551,11 +547,49 @@ public class GraphEventHandler {
         });
 
         bus.addListener((EntityTickEvent.Post event) -> {
-            if (!event.getEntity().level().isClientSide()) {
-                ServerLevel level = (ServerLevel) event.getEntity().level();
-                GraphEngine.dispatchEvent(level, event.getEntity(), OnEntityTick.TYPE_ID, process -> {
-                    process.setEventData(StandardPorts.ENTITY.getId(), event.getEntity());
-                });
+            Entity entity = event.getEntity();
+            if (entity.level().isClientSide()) return;
+
+            ServerLevel level = (ServerLevel) entity.level();
+
+            // 1. O(1) 获取实体挂载的蓝图容器
+            EntityGraphAttachment attachment = getAttachmentFromEntity(entity);
+            if (attachment == null || attachment.getBoundGraphs().isEmpty()) return;
+
+            long currentTick = level.getGameTime();
+
+            for (String graphId : attachment.getBoundGraphs()) {
+                RuntimeGraphIndex index = GraphEngine.getGraphIndex(graphId);
+                if (index == null) continue;
+
+                List<Integer> tickNodes = index.findNodesByType(OnEntityTick.TYPE_ID);
+
+                for (int nodeId : tickNodes) {
+                    // 【属性预检】从 Node 的 Properties 中极速读取配置 (因为没有连线端口了)
+                    Object rawInterval = index.getNodeProperty(nodeId, "interval");
+                    Object rawOffset = index.getNodeProperty(nodeId, "offset");
+
+                    // 默认值兼容：如果在 UI 上没填，默认 1 Tick 和 0 偏移
+                    int interval = (rawInterval instanceof Number n) ? Math.max(1, n.intValue()) : 1;
+                    int offset = (rawOffset instanceof Number n) ? Math.max(0, n.intValue()) : 0;
+
+                    // 【海关拦截】如果时间没到，直接跳过，0 虚拟机开销
+                    if (interval == 1 || currentTick % interval == offset) {
+
+                        // 获取复用的常驻进程
+                        GraphProcess process = attachment.getProcess(graphId);
+                        if (process == null) {
+                            process = new GraphProcess(graphId, index);
+                            attachment.addProcess(process);
+                        }
+
+                        // 注入环境，分配轻量级线程执行
+                        process.setEnvironment(level, entity);
+                        process.executeEvent(nodeId, thread -> {
+                            thread.setEventData(StandardPorts.ENTITY.getId(), entity);
+                        });
+                    }
+                }
             }
         });
 

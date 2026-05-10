@@ -1,8 +1,8 @@
-package com.mine.geometry_node.client.ui.Viewport.Interaction;
+package com.mine.geometry_node.client.ui.viewport.interaction;
 
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdPasteNodes;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveNodes;
-import com.mine.geometry_node.client.ui.Viewport.UINode;
+import com.mine.geometry_node.client.ui.viewport.UINode;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.core.node.NodeData;
@@ -82,9 +82,9 @@ public class KeyManager {
     private void performPaste() {
         if (sClipboardJson == null || sClipboardJson.isEmpty()) return;
 
-        // 从 Context 中拉取鼠标最后的逻辑坐标 (需要你将 InteractionContext 转型为 Viewport 或者补充接口)
-        float uiX = ((com.mine.geometry_node.client.ui.Viewport.Viewport)mContext).getLastMouseUiX();
-        float uiY = ((com.mine.geometry_node.client.ui.Viewport.Viewport)mContext).getLastMouseUiY();
+        // 从 Context 中拉取鼠标最后的逻辑坐标 (需要你将 InteractionContext 转型为 viewport 或者补充接口)
+        float uiX = ((com.mine.geometry_node.client.ui.viewport.Viewport)mContext).getLastMouseUiX();
+        float uiY = ((com.mine.geometry_node.client.ui.viewport.Viewport)mContext).getLastMouseUiY();
 
         CmdPasteNodes cmd = new CmdPasteNodes(
                 mContext.getEditorContext().getGraphController(),

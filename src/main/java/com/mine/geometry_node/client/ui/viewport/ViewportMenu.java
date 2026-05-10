@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.Viewport;
+package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils; // 引用工具类

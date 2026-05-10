@@ -1,6 +1,5 @@
-package com.mine.geometry_node.client.ui.Viewport;
+package com.mine.geometry_node.client.ui.viewport;
 
-import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -17,14 +16,10 @@ import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 /**
- * 视口面板容器 (包含顶部的 Tab 栏 + 下方的 Viewport)
+ * 视口面板容器 (包含顶部的 Tab 栏 + 下方的 viewport)
  */
 public class ViewportPanel extends LinearLayout {
 

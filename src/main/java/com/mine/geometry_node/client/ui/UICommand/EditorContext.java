@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.UICommand;
 
-import com.mine.geometry_node.client.ui.Viewport.GraphController;
+import com.mine.geometry_node.client.ui.viewport.GraphController;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
 
@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * 编辑器全局上下文
- * 连接 UI 层（Viewport, Properties 等）与数据层的核心枢纽。
+ * 连接 UI 层（viewport, Properties 等）与数据层的核心枢纽。
  */
 public class EditorContext {
 
@@ -35,12 +35,12 @@ public class EditorContext {
 
     // ==========================================
     // 事件总线 (Event Bus)
-    // 用于通知 Viewport 和其他 UI 组件更新画面
+    // 用于通知 viewport 和其他 UI 组件更新画面
     // ==========================================
 
     /**
      * UI 监听器接口
-     * Viewport 会实现这个接口，以便在数据改变时自动增加/删除节点 View
+     * viewport 会实现这个接口，以便在数据改变时自动增加/删除节点 View
      */
     public interface EditorListener {
         default void onExecutionConnectionAdded(String outNode, String outPort, String inNode) {}

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.Viewport.UIHints;
+package com.mine.geometry_node.client.ui.viewport.UIHints;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
@@ -6,7 +6,7 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils; // 引入
-import com.mine.geometry_node.client.ui.Viewport.Viewport;
+import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;

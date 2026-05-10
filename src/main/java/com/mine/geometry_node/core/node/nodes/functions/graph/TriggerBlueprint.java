@@ -12,6 +12,7 @@ public class TriggerBlueprint extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
+        // 作为 Action 节点，保留输入端口是非常正确的设计，允许蓝图动态构建事件名
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.trigger_blueprint"))
                 .addRow(new PortRow(
                         StandardPorts.FLOW_IN.toExec(),
@@ -27,15 +28,15 @@ public class TriggerBlueprint extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        // 获取发送的频率名称 (支持连线动态传入，也支持输入框静态读取)
         String frequency = getInput(context, "frequency", String.class);
 
         if (frequency != null && !frequency.trim().isEmpty()) {
             com.mine.geometry_node.core.execution.GraphEngine.dispatchCustomEvent(
                     context.getLevel(),
-                    context.getEntity(),
                     frequency,
-                    null
+                    thread -> {
+                        thread.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), context.getEntity());
+                    }
             );
         }
 

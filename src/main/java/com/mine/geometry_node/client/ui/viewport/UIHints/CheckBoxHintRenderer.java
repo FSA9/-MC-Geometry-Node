@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.Viewport.UIHints;
+package com.mine.geometry_node.client.ui.viewport.UIHints;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;

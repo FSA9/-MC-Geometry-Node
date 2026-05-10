@@ -1,14 +1,12 @@
-package com.mine.geometry_node.client.ui.Viewport;
+package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.Viewport.UIHints.HintRendererFactory;
-import com.mine.geometry_node.client.ui.Viewport.UIHints.UIHintRenderer;
-import com.mine.geometry_node.client.ui.persistence.ConfigManager;
+import com.mine.geometry_node.client.ui.viewport.UIHints.HintRendererFactory;
+import com.mine.geometry_node.client.ui.viewport.UIHints.UIHintRenderer;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.meta.PropertyKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -24,9 +22,7 @@ import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.*;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class UINode extends FrameLayout {
@@ -252,7 +248,7 @@ public class UINode extends FrameLayout {
 
         // --- 新增：排版底部的 Add 按钮 ---
         if (mAddButton != null) {
-            float inputBoxHeight = com.mine.geometry_node.client.ui.Viewport.UIHints.UIHintUtils.getStandardInputHeight();
+            float inputBoxHeight = com.mine.geometry_node.client.ui.viewport.UIHints.UIHintUtils.getStandardInputHeight();
             float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
 
             float startX = UIConstants.Node.LABEL_MARGIN_PORT;

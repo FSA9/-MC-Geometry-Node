@@ -1,8 +1,8 @@
-package com.mine.geometry_node.client.ui.Viewport.Interaction;
+package com.mine.geometry_node.client.ui.viewport.interaction;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.Viewport.UINode;
-import com.mine.geometry_node.client.ui.Viewport.Viewport;
+import com.mine.geometry_node.client.ui.viewport.UINode;
+import com.mine.geometry_node.client.ui.viewport.Viewport;
 import java.util.List;
 
 public interface InteractionContext {
@@ -61,7 +61,7 @@ public interface InteractionContext {
     List<UINode> getSelectedNodes();
     void clearSelection();
     void addToSelection(UINode node);
-//    void addConnection(Viewport.Connection connection);
+//    void addConnection(viewport.Connection connection);
     boolean hasConnection(UINode outNode, String outPortId, UINode inNode, String inPortId);
     void showMenu(float screenX, float screenY);
 

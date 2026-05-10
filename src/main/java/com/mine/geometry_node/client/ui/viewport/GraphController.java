@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.Viewport;
+package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.core.node.Connection;
@@ -135,7 +135,7 @@ public class GraphController {
             }
         }
 
-        // 6. 无论有没有断线，只要属性变了都通知 Viewport 重新构建该节点的 UI
+        // 6. 无论有没有断线，只要属性变了都通知 viewport 重新构建该节点的 UI
         mContext.notifyNodeStructureChanged(node);
     }
 
