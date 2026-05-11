@@ -234,6 +234,35 @@ public class RuntimeGraphIndex {
         return propertyArray[nodeId].get(key);
     }
 
+    @SuppressWarnings("unchecked")
+    public <T> T getNodeStaticInput(int nodeId, String portId, Class<T> type, T defaultValue) {
+        Object raw = getNodeStaticInput(nodeId, portId);
+        if (raw == null) return defaultValue;
+
+        // 如果类型直接匹配，直接强转
+        if (type.isInstance(raw)) {
+            return (T) raw;
+        }
+
+        // 针对 Number 的通用处理 (解决 Integer 和 Double 在 JSON 里的互转问题)
+        if (raw instanceof Number n) {
+            if (type == Integer.class) return (T) Integer.valueOf(n.intValue());
+            if (type == Float.class) return (T) Float.valueOf(n.floatValue());
+            if (type == Double.class) return (T) Double.valueOf(n.doubleValue());
+            if (type == Long.class) return (T) Long.valueOf(n.longValue());
+        }
+
+        // 针对 String 强转数字的容错处理
+        if (raw instanceof String s) {
+            try {
+                if (type == Integer.class) return (T) Integer.valueOf(s);
+                if (type == Double.class) return (T) Double.valueOf(s);
+            } catch (NumberFormatException ignored) {}
+        }
+
+        return defaultValue;
+    }
+
     @Nullable
     public Object getNodeStaticInput(int nodeId, String portName) {
         if (nodeId < 0 || nodeId >= staticInputArray.length) return null;
@@ -291,7 +320,7 @@ public class RuntimeGraphIndex {
         // 对每个节点发起 DFS
         for (String nodeId : dependencyGraph.keySet()) {
             if (checkCycleDFS(nodeId, dependencyGraph, visited, recStack)) {
-                throw new IllegalStateException("Data flow cycle detected! Graph compilation failed at node: " + nodeId);
+                throw new IllegalStateException("[RuntimeGraphIndex] Data flow cycle detected! Graph compilation failed at node: " + nodeId);
             }
         }
     }

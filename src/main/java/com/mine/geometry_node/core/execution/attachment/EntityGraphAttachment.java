@@ -85,15 +85,14 @@ public class EntityGraphAttachment {
     public GraphProcess getProcess(String graphId) {
         GraphProcess process = processes.get(graphId);
 
-        RuntimeGraphIndex latestIndex = GraphResourceManager.getInstance().getIndex(graphId);
+        RuntimeGraphIndex latestIndex = GraphEngine.getGraphIndex(graphId);
 
         if (latestIndex != null) {
             if (process == null || process.getIndex() != latestIndex) {
                 process = new GraphProcess(graphId, latestIndex);
-                processes.put(graphId, process);
+                addProcess(process);
             }
         }
-
         return process;
     }
 

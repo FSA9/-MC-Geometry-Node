@@ -565,35 +565,19 @@ public class GraphEventHandler {
                 List<Integer> tickNodes = index.findNodesByType(OnEntityTick.TYPE_ID);
 
                 for (int nodeId : tickNodes) {
-                    // 【属性预检】从 Node 的 Properties 中极速读取配置 (因为没有连线端口了)
-                    Object rawInterval = index.getNodeProperty(nodeId, "interval");
-                    Object rawOffset = index.getNodeProperty(nodeId, "offset");
+                    int interval = index.getNodeStaticInput(nodeId, StandardPorts.INTERVAL.getId(), Integer.class, 1);
+                    int offset = index.getNodeStaticInput(nodeId, StandardPorts.OFFSET.getId(), Integer.class, 0);
 
-                    // 提取 interval (兼容数字和字符串)
-                    int interval = 1;
-                    if (rawInterval instanceof Number n) {
-                        interval = Math.max(1, n.intValue());
-                    } else if (rawInterval instanceof String s) {
-                        try { interval = Math.max(1, Integer.parseInt(s)); } catch (Exception ignored) {}
+                    if (interval < 1){
+                        interval = 1;
                     }
 
-                    // 提取 offset (兼容数字和字符串)
-                    int offset = 0;
-                    if (rawOffset instanceof Number n) {
-                        offset = Math.max(0, n.intValue());
-                    } else if (rawOffset instanceof String s) {
-                        try { offset = Math.max(0, Integer.parseInt(s)); } catch (Exception ignored) {}
-                    }
-
-                    // 【海关拦截】如果时间没到，直接跳过，0 虚拟机开销
                     if (interval == 1 || currentTick % interval == offset) {
 
-                        // 获取复用的常驻进程
                         GraphProcess process = attachment.getProcess(graphId);
-                        if (process == null) {
-                            process = new GraphProcess(graphId, index);
-                            attachment.addProcess(process);
-                        }
+
+                        // 防御性判断
+                        if (process == null) return;
 
                         // 注入环境，分配轻量级线程执行
                         process.setEnvironment(level, entity);

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.client.render.ClientVisualManager;
+import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.network.packet.c2s.*;
 import com.mine.geometry_node.core.network.packet.s2c.*;
@@ -80,8 +81,7 @@ public class NetworkHandler {
                             String graphId = payload.graphId();
                             String jsonContent = payload.jsonContent();
 
-                            // 调用客户端的本地草稿管理器，把服务端发来的数据直接保存到 C盘
-                            com.mine.geometry_node.client.ui.persistence.LocalDraftManager.saveDraft(graphId, jsonContent);
+                            LocalDraftManager.saveDraft(graphId, jsonContent);
 
                             // 弹出提示
                             context.getPlayer().displayClientMessage(

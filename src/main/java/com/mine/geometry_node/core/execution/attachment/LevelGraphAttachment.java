@@ -86,16 +86,14 @@ public class LevelGraphAttachment extends SavedData {
     public GraphProcess getProcess(String graphId) {
         GraphProcess process = this.processes.get(graphId);
 
-        RuntimeGraphIndex latestIndex = GraphResourceManager.getInstance().getIndex(graphId);
+        RuntimeGraphIndex latestIndex = GraphEngine.getGraphIndex(graphId);
 
         if (latestIndex != null) {
             if (process == null || process.getIndex() != latestIndex) {
                 process = new GraphProcess(graphId, latestIndex);
-                this.processes.put(graphId, process);
-                this.setDirty(); // 标记存盘
+                addProcess(process);
             }
         }
-
         return process;
     }
 
