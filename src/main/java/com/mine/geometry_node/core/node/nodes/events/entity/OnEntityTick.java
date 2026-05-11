@@ -30,6 +30,6 @@ public class OnEntityTick extends BaseEventNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        return next(StandardPorts.FLOW_OUT.getId());
+        return super.execute(context);
     }
 }
