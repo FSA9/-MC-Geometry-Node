@@ -52,7 +52,8 @@ public class GraphProcess {
     private final List<ExecutionThread> sleepingThreads = new ArrayList<>();  // 挂起的协程线程
     private boolean needsTimeRebase = false;                                  // 读档标记
 
-    private final java.util.concurrent.ConcurrentLinkedQueue<ExecutionThread> THREAD_POOL = new java.util.concurrent.ConcurrentLinkedQueue<>();
+//    private final java.util.concurrent.ConcurrentLinkedQueue<ExecutionThread> THREAD_POOL = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private final java.util.ArrayDeque<ExecutionThread> THREAD_POOL = new java.util.ArrayDeque<>();
 
     /**
      * 从池中借用一个线程，如果没有多余的才去 new (按需扩容)
@@ -83,7 +84,8 @@ public class GraphProcess {
     public GraphProcess(String graphId, RuntimeGraphIndex index) {
         this.graphId = graphId;
         this.index = index;
-        this.variableStack.push(new Object[16]); // 初始化全局作用域
+        int exactSize = index.getRegisterCount() + 8;
+        this.variableStack.push(new Object[exactSize]);
     }
 
     public void setEnvironment(ServerLevel level, @Nullable Entity entity) {
@@ -161,7 +163,7 @@ public class GraphProcess {
 
         // --- 线程私有寄存器 (Zero-Allocation 核心) ---
         private final IntArrayList executionStack = new IntArrayList();
-        private Object[] eventRegisters = new Object[16];
+        private Object[] eventRegisters = new Object[GraphProcess.this.index.getRegisterCount() + 8];
         private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>();
         private final IntOpenHashSet recursionGuard = new IntOpenHashSet();
 
@@ -528,14 +530,15 @@ public class GraphProcess {
 
         // 1. 恢复变量栈
         this.variableStack.clear();
+        int exactSize = index.getRegisterCount() + 8;
         if (tag.contains("VariableStack", Tag.TAG_LIST)) {
             ListTag list = tag.getList("VariableStack", Tag.TAG_COMPOUND);
             for (int i = 0; i < list.size(); i++) {
-                Object[] scope = loadVariablesFromTag(list.getCompound(i), new Object[16], provider);
+                Object[] scope = loadVariablesFromTag(list.getCompound(i), new Object[exactSize], provider);
                 this.variableStack.addLast(scope);
             }
         } else {
-            this.variableStack.push(new Object[16]);
+            this.variableStack.push(new Object[exactSize]);
         }
 
         // 2. 恢复线程

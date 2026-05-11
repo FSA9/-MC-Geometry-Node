@@ -386,4 +386,11 @@ public class RuntimeGraphIndex {
         }
         return null;
     }
+
+    /** * 获取蓝图编译期注册的变量/端口总数。
+     * 用于虚拟机启动时精准预分配内存，杜绝运行时扩容。
+     */
+    public int getRegisterCount() {
+        return dictionaryReverse.size();
+    }
 }
