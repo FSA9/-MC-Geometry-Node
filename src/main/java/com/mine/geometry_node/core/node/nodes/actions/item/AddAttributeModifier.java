@@ -72,7 +72,7 @@ public class AddAttributeModifier extends BaseNode {
         String slotStr = getInput(context, StandardPorts.TYPE.getIdWithIndex(2), String.class);
         String attrId = getInput(context, StandardPorts.TYPE.getId(), String.class);
         if (attrId == null || attrId.isEmpty()) {
-            attrId = (String) context.getNodeProperty(PROPERTY_SELECTED_ATTR);
+            attrId = (String) context.getStaticInput(PROPERTY_SELECTED_ATTR);
         }
 
         if (stack != null && !stack.isEmpty() && attrId != null && !attrId.isEmpty() && amount != null) {

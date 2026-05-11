@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.variables.VariableRegistry;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.meta.PropertyKeys;
+import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -24,11 +24,10 @@ public class TargetSelector extends BaseNode {
 
     private static final String[] BASE_TARGETS = {"@e", "@a", "@p", "@r", "@s"};
 
-    // 完美补齐 1.21.1 所有可用参数
     private static final List<String> ALL_FILTERS = List.of(
             "none", "center", "volume", "distance", "type", "tag", "team",
             "limit", "sort", "level", "gamemode", "name", "x_rotation", "y_rotation",
-            "nbt", "scores", "advancements", "predicate" // 【新增】四大核心关键字
+            "nbt", "scores", "advancements", "predicate"
     );
 
     private static final String[] SORT_OPTIONS = {"nearest", "furthest", "random", "arbitrary"};
@@ -41,58 +40,63 @@ public class TargetSelector extends BaseNode {
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
-//        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.target_selector"))
-//                .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 30);
-//
-//        builder.addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null));
-//        builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null));
-//
-//        builder.addRow(new PortRow(
-//                null, null, UIHint.SELECT, null,
-//                Map.of(PortMetaKeys.BIND_PROPERTY, "base_target", PortMetaKeys.OPTIONS, BASE_TARGETS)
-//        ));
-//
-//        int filterCount = 1;
-//        List<String> usedFilters = new ArrayList<>();
-//
-//        if (instanceData != null) {
-//            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
-//            if (countObj instanceof Number n) {
-//                filterCount = Math.max(1, n.intValue());
-//            }
-//            for (int i = 1; i <= filterCount; i++) {
-//                String f = (String) instanceData.properties.get("filter_type_" + i);
-//                if (f != null && !f.equals("none")) usedFilters.add(f);
-//            }
-//        }
-//
-//        for (int i = 1; i <= filterCount; i++) {
-//            String filterTypeProp = "filter_type_" + i;
-//            String currentFilter = instanceData != null
-//                    ? (String) instanceData.properties.getOrDefault(filterTypeProp, "none")
-//                    : "none";
-//
-//            // 保持 removeAll 逻辑，因为现在所有支持多选的字段都改为直接接收 LIST 端口了
-//            List<String> availableOptions = new ArrayList<>(ALL_FILTERS);
-//            availableOptions.removeAll(usedFilters);
-//            if (!availableOptions.contains(currentFilter)) availableOptions.add(currentFilter);
-//
-//            builder.addRow(new PortRow(
-//                    null, null, UIHint.SELECT, null,
-//                    Map.of(
-//                            PortMetaKeys.BIND_PROPERTY, filterTypeProp,
-//                            PortMetaKeys.OPTIONS, availableOptions.toArray(new String[0]),
-//                            PortMetaKeys.IS_DYNAMIC, true
-//                    )
-//            ));
-//
-//            for (PortRow row : createDataRows(currentFilter, i)) {
-//                builder.addRow(row);
-//            }
-//        }
-//
-//        return builder.build();
-        return null;
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.target_selector"))
+                .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 30);
+
+        builder.addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null));
+        builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null));
+
+        builder.addRow(new PortRow(
+                StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
+                Map.of(PortMetaKeys.OPTIONS, BASE_TARGETS)
+        ));
+
+        int filterCount = 1;
+        List<String> usedFilters = new ArrayList<>();
+
+        if (instanceData != null) {
+            Object countObj = instanceData.inputs.get(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+            if (countObj instanceof Number n) {
+                filterCount = Math.max(1, n.intValue());
+            } else if (countObj instanceof String str) {
+                try { filterCount = Math.max(1, Integer.parseInt(str)); } catch (NumberFormatException ignored) {}
+            }
+
+            for (int i = 1; i <= filterCount; i++) {
+                Object fObj = instanceData.inputs.get(StandardPorts.STRING.getIdWithIndex(i));
+                if (fObj instanceof String f && !f.equals("none") && !f.equals("type")) {
+                    usedFilters.add(f);
+                }
+            }
+        }
+
+        for (int i = 1; i <= filterCount; i++) {
+            String filterPortId = StandardPorts.STRING.getIdWithIndex(i);
+            String currentFilter = "none";
+
+            if (instanceData != null && instanceData.inputs.get(filterPortId) instanceof String f) {
+                currentFilter = f;
+            }
+
+            List<String> availableOptions = new ArrayList<>(ALL_FILTERS);
+            availableOptions.removeAll(usedFilters);
+            if (!availableOptions.contains(currentFilter)) availableOptions.add(currentFilter);
+
+            builder.addRow(new PortRow(
+                    StandardPorts.STRING.toInputWithIndex(i).hiddenPin(), null, UIHint.SELECT, null,
+                    Map.of(
+                            PortMetaKeys.OPTIONS, availableOptions.toArray(new String[0]),
+                            PortMetaKeys.IS_DYNAMIC, true,
+                            PortMetaKeys.DYNAMIC_INDEX, i
+                    )
+            ));
+
+            for (PortRow row : createDataRows(currentFilter, i)) {
+                builder.addRow(row);
+            }
+        }
+
+        return builder.build();
     }
 
     private List<PortRow> createDataRows(String type, int index) {
@@ -109,24 +113,20 @@ public class TargetSelector extends BaseNode {
                     new PortRow(StandardPorts.MAX_INT.toInputWithIndex(index), null, UIHint.INPUT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
             );
             case "type" -> List.of(
-                    // 【重构】使用下拉框选择类型，并在下方额外生成一个 Checkbox 用于取反
-                    new PortRow(StandardPorts.TYPE.toInputWithIndex(index), null, UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:entity_type")),
+                    new PortRow(StandardPorts.TYPE.toInputWithIndex(index).hiddenPin(), null, UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:entity_type")),
                     new PortRow(StandardPorts.BOOL.toInputWithIndex(index, false), null, UIHint.CHECKBOX, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
             );
-//            // 【重构】将支持多重堆叠的标识符统一改为接收 LIST
-//            case "tag", "name", "team" -> List.of(
-//                    new PortRow(new PortDef(type + "_" + index, Component.literal(type.toUpperCase() + " List"), PortType.LIST, List.of()), null, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
-//            );
-//            // 【新增】复合数据统一接收 DICT
-//            case "nbt", "scores", "advancements" -> List.of(
-//                    new PortRow(new PortDef(type + "_" + index, Component.literal(type.toUpperCase() + " Dict"), PortType.DICT, Map.of()), null, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
-//            );
-            // 【新增】谓词接收单行 PREDICATE
+            case "tag", "name", "team" -> List.of(
+                    new PortRow(StandardPorts.LIST.toInputWithIndex(index), null, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
+            );
+            case "nbt", "scores", "advancements" -> List.of(
+                    new PortRow(StandardPorts.DICT.toInputWithIndex(index), null, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
+            );
             case "predicate" -> List.of(
                     new PortRow(StandardPorts.PREDICATE.toInputWithIndex(index), null, UIHint.INPUT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
             );
-            case "sort" -> List.of(new PortRow(StandardPorts.SORT.toInputWithIndex(index), null, UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.OPTIONS, SORT_OPTIONS)));
-            case "gamemode" -> List.of(new PortRow(StandardPorts.GAMEMODE.toInputWithIndex(index), null, UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.OPTIONS, GAMEMODE_OPTIONS)));
+            case "sort" -> List.of(new PortRow(StandardPorts.SORT.toInputWithIndex(index).hiddenPin(), null, UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.OPTIONS, SORT_OPTIONS)));
+            case "gamemode" -> List.of(new PortRow(StandardPorts.GAMEMODE.toInputWithIndex(index).hiddenPin(), null, UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.OPTIONS, GAMEMODE_OPTIONS)));
             case "limit" -> List.of(new PortRow(StandardPorts.LIMIT.toInputWithIndex(index), null, UIHint.INPUT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true)));
             default -> List.of();
         };
@@ -136,16 +136,21 @@ public class TargetSelector extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!StandardPorts.LIST.getId().equals(portName)) return null;
 
-        String base = (String) context.getNodeProperty("base_target");
+        String base = getInput(context, StandardPorts.STRING.getId(), String.class);
         if (base == null) base = "@e";
 
         List<String> arguments = new ArrayList<>();
         int filterCount = 1;
-        Object countObj = context.getNodeProperty(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
-        if (countObj instanceof Number n) filterCount = Math.max(1, n.intValue());
+
+        Object countObj = context.getStaticInput(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+        if (countObj instanceof Number n) {
+            filterCount = Math.max(1, n.intValue());
+        } else if (countObj instanceof String str) {
+            try { filterCount = Math.max(1, Integer.parseInt(str)); } catch (NumberFormatException ignored) {}
+        }
 
         for (int i = 1; i <= filterCount; i++) {
-            String filterType = (String) context.getNodeProperty("filter_type_" + i);
+            String filterType = getInput(context, StandardPorts.STRING.getIdWithIndex(i), String.class);
             if (filterType == null || filterType.equals("none")) continue;
 
             switch (filterType) {
@@ -172,7 +177,6 @@ public class TargetSelector extends BaseNode {
                     if (limit != null) arguments.add("limit=" + limit);
                 }
                 case "type" -> {
-                    // 解析下拉框的类型值，以及下方复选框的布尔值
                     String typeVal = getInput(context, StandardPorts.TYPE.getIdWithIndex(i), String.class);
                     Boolean negate = getInput(context, StandardPorts.BOOL.getIdWithIndex(i), Boolean.class);
                     if (typeVal != null && !typeVal.isEmpty()) {
@@ -180,25 +184,22 @@ public class TargetSelector extends BaseNode {
                     }
                 }
                 case "tag", "name", "team" -> {
-                    // 动态获取输入的列表内容，并自动展开为多个独立的匹配项
-                    List<String> list = getInputList(context, filterType + "_" + i, String.class);
+                    List<String> list = getInputList(context, StandardPorts.LIST.getIdWithIndex(i), String.class);
                     for (String val : list) {
                         if (val != null && !val.isEmpty()) arguments.add(filterType + "=" + val);
                     }
                 }
                 case "nbt" -> {
-                    Map<String, Object> dict = getInputDict(context, "nbt_" + i);
+                    Map<String, Object> dict = getInputDict(context, StandardPorts.DICT.getIdWithIndex(i));
                     if (!dict.isEmpty() && context.getLevel() != null) {
-                        // 【NBT 字符串提取魔法】复用 VariableRegistry 将字典序列化，然后扒出内部的 CompoundTag
                         Tag gnTag = VariableRegistry.toTag(dict, context.getLevel().registryAccess());
                         if (gnTag instanceof CompoundTag c && c.contains("data", Tag.TAG_COMPOUND)) {
-                            // CompoundTag.toString() 天然就是 Minecraft 原版支持的标准 SNBT 格式！
                             arguments.add("nbt=" + c.getCompound("data").toString());
                         }
                     }
                 }
                 case "scores", "advancements" -> {
-                    Map<String, Object> dict = getInputDict(context, filterType + "_" + i);
+                    Map<String, Object> dict = getInputDict(context, StandardPorts.DICT.getIdWithIndex(i));
                     if (!dict.isEmpty()) {
                         List<String> entries = new ArrayList<>();
                         for (Map.Entry<String, Object> entry : dict.entrySet()) {

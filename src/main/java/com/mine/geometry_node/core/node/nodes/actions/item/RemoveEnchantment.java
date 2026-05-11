@@ -49,7 +49,7 @@ public class RemoveEnchantment extends BaseNode {
 
         String enchantId = getInput(context, StandardPorts.TYPE.getId(), String.class);
         if (enchantId == null || enchantId.isEmpty()) {
-            enchantId = (String) context.getNodeProperty(PROPERTY_SELECTED);
+            enchantId = (String) context.getStaticInput(PROPERTY_SELECTED);
         }
 
         if (stack != null && !stack.isEmpty() && enchantId != null && !enchantId.isEmpty()) {

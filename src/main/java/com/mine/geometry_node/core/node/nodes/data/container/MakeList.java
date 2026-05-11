@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.node.nodes.data.container;
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.meta.PropertyKeys;
+import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -31,8 +31,8 @@ public class MakeList extends BaseNode {
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
         int portCount = 1;
-        if (instanceData != null && instanceData.inputs.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
-            Object countObj = instanceData.inputs.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+        if (instanceData != null && instanceData.inputs.containsKey(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
+            Object countObj = instanceData.inputs.get(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
             if (countObj instanceof Number n) {
                 portCount = Math.max(1, n.intValue());
             } else if (countObj instanceof String s) {
@@ -79,7 +79,7 @@ public class MakeList extends BaseNode {
         }
 
         int portCount = 1;
-        Object countObj = context.getInputValue(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+        Object countObj = context.getInputValue(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
         if (countObj instanceof Number n) portCount = Math.max(1, n.intValue());
         else if (countObj instanceof String s) {
             try { portCount = Integer.parseInt(s); } catch (NumberFormatException ignored) {}

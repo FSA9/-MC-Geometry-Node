@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.meta;
 
-public class PropertyKeys {
+public class StaticKeys {
     public static final MetaKey<String> SELECTION = new MetaKey<>("selection");
 
     /**

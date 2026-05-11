@@ -3,7 +3,6 @@ package com.mine.geometry_node.core.node.nodes.maths.operation;
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.meta.PropertyKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -16,7 +15,6 @@ public class MathOperation extends BaseNode {
 
     public static final String TYPE_ID = "math_operation";
 
-    // 定义所有支持的数学运算
     private static final String[] ALL_OPERATORS = {
             // 二元运算
             "+", "-", "*", "/", "%", "^", "min", "max", "atan2",
@@ -34,18 +32,18 @@ public class MathOperation extends BaseNode {
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
-        String operator = (String) instanceData.inputs.getOrDefault(StandardPorts.STRING.toInput().id(), "+");
+        String operator = "+";
+        if (instanceData != null && instanceData.inputs.get(StandardPorts.STRING.getId()) instanceof String op) {
+            operator = op;
+        }
         return buildDef(operator);
     }
 
     private NodeDef buildDef(String operator) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.math_operation"));
-
-        // 输出端口
         builder.addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null));
-        // 下拉选择框
         builder.addRow(new PortRow(
-                StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
+                StandardPorts.STRING.toInput("+").hiddenPin(), null, UIHint.SELECT, null,
                 Map.of(PortMetaKeys.OPTIONS, ALL_OPERATORS)));
         builder.addRow(new PortRow(StandardPorts.VALUE.toInputWithIndex(1), null, UIHint.INPUT, null, null));
         if (isBinaryOperator(operator)) {
@@ -62,18 +60,15 @@ public class MathOperation extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (!StandardPorts.VALUE.getId().equals(portName)) return null;
 
-        // 获取操作符
-        String operator = (String) context.getNodeProperty(PropertyKeys.SELECTION.id());
+        String operator = getInput(context, StandardPorts.STRING.getId(), String.class);
         if (operator == null) operator = "+";
 
-        // 获取原始输入值（不急着赋默认值，用于比较运算的 null 检测）
         Float rawV1 = getInput(context, StandardPorts.VALUE.getIdWithIndex(1), Float.class);
         Float rawV2 = null;
         if (isBinaryOperator(operator)) {
             rawV2 = getInput(context, StandardPorts.VALUE.getIdWithIndex(2), Float.class);
         }
 
-        // 常规运算的回落值
         float v1 = rawV1 != null ? rawV1 : 0.0f;
         float v2 = rawV2 != null ? rawV2 : 0.0f;
 

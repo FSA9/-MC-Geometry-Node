@@ -44,7 +44,7 @@ public class AddStoredEnchantment extends BaseNode {
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         Integer level = getInput(context, StandardPorts.INT.getId(), Integer.class);
         String enchantId = getInput(context, StandardPorts.TYPE.getId(), String.class);
-        if (enchantId == null || enchantId.isEmpty()) enchantId = (String) context.getNodeProperty(PROPERTY_SELECTED);
+        if (enchantId == null || enchantId.isEmpty()) enchantId = (String) context.getStaticInput(PROPERTY_SELECTED);
 
         if (stack != null && !stack.isEmpty() && enchantId != null && level != null && level > 0 && context.getLevel() instanceof ServerLevel serverLevel) {
             ResourceLocation loc = ResourceLocation.tryParse(enchantId);

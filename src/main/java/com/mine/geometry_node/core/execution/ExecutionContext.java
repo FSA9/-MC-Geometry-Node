@@ -74,39 +74,6 @@ public interface ExecutionContext {
     Object getStaticInput(String portName);
 
     /**
-     * [配置获取] 获取当前执行节点的静态配置属性。
-     * 这些属性来自于 JSON 中的 "properties" 字段，在 RuntimeGraphIndex 构建时预加载。
-     * @param key 属性名
-     * @return 属性值 (原始类型: String, Number, Boolean, List 等)，若不存在返回 null。
-     */
-    @Nullable
-    Object getNodeProperty(String key);
-
-    /**
-     * [类型安全配置获取]
-     * 尝试获取配置并转换为指定类型，若失败或不存在则返回默认值。
-     */
-    default <T> T getConfig(String key, Class<T> type, T defaultValue) {
-        Object val = getNodeProperty(key);
-        if (val == null) return defaultValue;
-
-        // 简单的类型匹配
-        if (type.isInstance(val)) {
-            return type.cast(val);
-        }
-
-        // 数值类型宽容转换 (Integer -> Double 等)
-        if (val instanceof Number num) {
-            if (type == Integer.class) return type.cast(num.intValue());
-            if (type == Float.class) return type.cast(num.floatValue());
-            if (type == Double.class) return type.cast(num.doubleValue());
-            if (type == Long.class) return type.cast(num.longValue());
-        }
-
-        return defaultValue;
-    }
-
-    /**
      * [事件参数读取] 获取系统注入的底层物理事件参数（如方块坐标、伤害来源）。
      * 与普通的局部变量隔离，防止被同名变量覆盖。
      * @param key 参数名称 (例如 "evt_pos")

@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.ui.viewport.UIHints.UIHintRenderer;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
+import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.UIHint;
@@ -129,7 +130,7 @@ public class UINode extends FrameLayout {
             if (mEditorContext == null) return;
 
             boolean isInputDynamic = mNodeDef.getMeta(com.mine.geometry_node.core.node.meta.SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
-            String propertyKey = isInputDynamic ? com.mine.geometry_node.core.node.meta.PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id() : com.mine.geometry_node.core.node.meta.PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
+            String propertyKey = isInputDynamic ? StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id() : StaticKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
 
             int currentCount = 1;
             Object countObj = mNodeData.inputs.get(propertyKey);

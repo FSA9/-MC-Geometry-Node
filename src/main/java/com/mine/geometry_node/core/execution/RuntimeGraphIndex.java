@@ -228,12 +228,6 @@ public class RuntimeGraphIndex {
         return false;
     }
 
-    @Nullable
-    public Object getNodeProperty(int nodeId, String key) {
-        if (nodeId < 0 || nodeId >= propertyArray.length) return null;
-        return propertyArray[nodeId].get(key);
-    }
-
     @SuppressWarnings("unchecked")
     public <T> T getNodeStaticInput(int nodeId, String portId, Class<T> type, T defaultValue) {
         Object raw = getNodeStaticInput(nodeId, portId);

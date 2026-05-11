@@ -46,7 +46,7 @@ public class SpawnEntity extends BaseNode {
         Vec3 pos = getInput(context, StandardPorts.VECTOR.getId(), Vec3.class);
         String typeId = getInput(context, StandardPorts.TYPE.getId(), String.class);
         if (typeId == null || typeId.isEmpty()) {
-            typeId = (String) context.getNodeProperty(PROPERTY_SELECTED_TYPE);
+            typeId = (String) context.getStaticInput(PROPERTY_SELECTED_TYPE);
         }
 
         if (pos != null && typeId != null && !typeId.isEmpty() && context.getLevel() instanceof ServerLevel serverLevel) {

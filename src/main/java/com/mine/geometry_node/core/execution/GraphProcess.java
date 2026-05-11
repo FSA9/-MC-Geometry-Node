@@ -376,11 +376,6 @@ public class GraphProcess {
         }
 
         @Override
-        public Object getNodeProperty(String key) {
-            return (activeNodeId != -1) ? index.getNodeProperty(activeNodeId, key) : null;
-        }
-
-        @Override
         public boolean hasPort(String portName) {
             return activeNodeId != -1 && index.hasPort(activeNodeId, portName);
         }

@@ -3,23 +3,14 @@ package com.mine.geometry_node.core.node.nodes.actions.entity;
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.execution.ExecutionResult;
 import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.meta.PropertyKeys;
-import com.mine.geometry_node.core.node.meta.SchemaKeys;
+import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.nodes.NodeType;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
-import com.mine.geometry_node.core.node.port.UIHint;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 public class RemoveEntityTag extends BaseNode {
 
@@ -33,8 +24,8 @@ public class RemoveEntityTag extends BaseNode {
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
 //        int portCount = 1;
-//        if (instanceData != null && instanceData.properties.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
-//            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+//        if (instanceData != null && instanceData.properties.containsKey(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
+//            Object countObj = instanceData.properties.get(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
 //            if (countObj instanceof Number n) {
 //                portCount = Math.max(1, n.intValue());
 //            } else if (countObj instanceof String s) {
@@ -77,7 +68,7 @@ public class RemoveEntityTag extends BaseNode {
         // 提取所有动态输入的标签
         List<String> tagsToRemove = new ArrayList<>();
         int portCount = 1;
-        Object countObj = context.getNodeProperty(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+        Object countObj = context.getStaticInput(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
         if (countObj instanceof Number n) portCount = Math.max(1, n.intValue());
 
         for (int i = 1; i <= portCount; i++) {
