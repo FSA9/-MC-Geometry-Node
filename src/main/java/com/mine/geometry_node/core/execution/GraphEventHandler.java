@@ -569,9 +569,21 @@ public class GraphEventHandler {
                     Object rawInterval = index.getNodeProperty(nodeId, "interval");
                     Object rawOffset = index.getNodeProperty(nodeId, "offset");
 
-                    // 默认值兼容：如果在 UI 上没填，默认 1 Tick 和 0 偏移
-                    int interval = (rawInterval instanceof Number n) ? Math.max(1, n.intValue()) : 1;
-                    int offset = (rawOffset instanceof Number n) ? Math.max(0, n.intValue()) : 0;
+                    // 提取 interval (兼容数字和字符串)
+                    int interval = 1;
+                    if (rawInterval instanceof Number n) {
+                        interval = Math.max(1, n.intValue());
+                    } else if (rawInterval instanceof String s) {
+                        try { interval = Math.max(1, Integer.parseInt(s)); } catch (Exception ignored) {}
+                    }
+
+                    // 提取 offset (兼容数字和字符串)
+                    int offset = 0;
+                    if (rawOffset instanceof Number n) {
+                        offset = Math.max(0, n.intValue());
+                    } else if (rawOffset instanceof String s) {
+                        try { offset = Math.max(0, Integer.parseInt(s)); } catch (Exception ignored) {}
+                    }
 
                     // 【海关拦截】如果时间没到，直接跳过，0 虚拟机开销
                     if (interval == 1 || currentTick % interval == offset) {

@@ -26,7 +26,6 @@ import java.util.Optional;
 public class AddAttributeModifier extends BaseNode {
     public static final String TYPE_ID = "add_attribute_modifier";
 
-    // 用于持久化保存下拉框选中的属性 ID
     public static final String PROPERTY_SELECTED_ATTR = "selected_attribute";
 
     private static final String[] OPERATIONS = {"ADD_VALUE", "ADD_MULTIPLIED_BASE", "ADD_MULTIPLIED_TOTAL"};
@@ -42,15 +41,10 @@ public class AddAttributeModifier extends BaseNode {
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED_ATTR,
-                                PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:attribute"
-                        )
+                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:attribute")
                 ))
-
                 // 增量值
                 .addRow(new PortRow(StandardPorts.VALUE.toInput(1.0f), null, UIHint.INPUT, null, null))
-
                 // 运算方式下拉框
                 .addRow(new PortRow(
                         StandardPorts.TYPE.toInputWithIndex(1, "ADD_VALUE"),
@@ -59,7 +53,6 @@ public class AddAttributeModifier extends BaseNode {
                         null,
                         Map.of(PortMetaKeys.OPTIONS, OPERATIONS)
                 ))
-
                 // 生效槽位下拉框
                 .addRow(new PortRow(
                         StandardPorts.TYPE.toInputWithIndex(2, "MAINHAND"),
@@ -77,8 +70,6 @@ public class AddAttributeModifier extends BaseNode {
         Float amount = getInput(context, StandardPorts.VALUE.getId(), Float.class);
         String opStr = getInput(context, StandardPorts.TYPE.getIdWithIndex(1), String.class);
         String slotStr = getInput(context, StandardPorts.TYPE.getIdWithIndex(2), String.class);
-
-        // 【核心修改】：优先获取连线输入，如果未连线则从下拉框属性读取
         String attrId = getInput(context, StandardPorts.TYPE.getId(), String.class);
         if (attrId == null || attrId.isEmpty()) {
             attrId = (String) context.getNodeProperty(PROPERTY_SELECTED_ATTR);
@@ -87,7 +78,6 @@ public class AddAttributeModifier extends BaseNode {
         if (stack != null && !stack.isEmpty() && attrId != null && !attrId.isEmpty() && amount != null) {
             ResourceLocation loc = ResourceLocation.tryParse(attrId);
             if (loc != null) {
-                // 1.21中，部分原版属性依然可以通过 BuiltInRegistries 快速访问，兼容性良好
                 Optional<Holder.Reference<Attribute>> attrOpt = BuiltInRegistries.ATTRIBUTE.getHolder(loc);
 
                 attrOpt.ifPresent(attributeHolder -> {

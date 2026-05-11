@@ -32,41 +32,42 @@ public class AddEntityTag extends BaseNode {
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
-        int portCount = 1;
-        if (instanceData != null && instanceData.properties.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
-            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
-            if (countObj instanceof Number n) {
-                portCount = Math.max(1, n.intValue());
-            } else if (countObj instanceof String s) {
-                try { portCount = Integer.parseInt(s); } catch (NumberFormatException ignored) {}
-            }
-        }
-        portCount = Math.max(1, Math.min(portCount, 30));
+//        int portCount = 1;
+//        if (instanceData != null && instanceData.properties.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
+//            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+//            if (countObj instanceof Number n) {
+//                portCount = Math.max(1, n.intValue());
+//            } else if (countObj instanceof String s) {
+//                try { portCount = Integer.parseInt(s); } catch (NumberFormatException ignored) {}
+//            }
+//        }
+//        portCount = Math.max(1, Math.min(portCount, 30));
+//
+//        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.add_entity_tag"))
+//                .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 30);
+//
+//        // 1. 执行流
+//        builder.addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
+//        // 2. 目标实体
+//        builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null));
+//
+//        // 3. 动态标签输入行
+//        for (int i = 1; i <= portCount; i++) {
+//            PortDef tagPort = new PortDef("tag_" + i, Component.literal("Tag " + i), PortType.STRING, "");
+//            builder.addRow(new PortRow(
+//                    tagPort,
+//                    null,
+//                    UIHint.INPUT, // 允许玩家直接在节点上打字输入标签名
+//                    null,
+//                    Map.of(
+//                            PortMetaKeys.IS_DYNAMIC, true,
+//                            PortMetaKeys.DYNAMIC_INDEX, i
+//                    )
+//            ));
+//        }
 
-        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.add_entity_tag"))
-                .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 30);
-
-        // 1. 执行流
-        builder.addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
-        // 2. 目标实体
-        builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null));
-
-        // 3. 动态标签输入行
-        for (int i = 1; i <= portCount; i++) {
-            PortDef tagPort = new PortDef("tag_" + i, Component.literal("Tag " + i), PortType.STRING, "");
-            builder.addRow(new PortRow(
-                    tagPort,
-                    null,
-                    UIHint.INPUT, // 允许玩家直接在节点上打字输入标签名
-                    null,
-                    Map.of(
-                            PortMetaKeys.IS_DYNAMIC, true,
-                            PortMetaKeys.DYNAMIC_INDEX, i
-                    )
-            ));
-        }
-
-        return builder.build();
+//        return builder.build();
+        return null;
     }
 
     @Override

@@ -30,8 +30,8 @@ public class MakeDict extends BaseNode {
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
         int portCount = 1;
-        if (instanceData != null && instanceData.properties.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
-            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+        if (instanceData != null && instanceData.inputs.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
+            Object countObj = instanceData.inputs.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
             if (countObj instanceof Number n) {
                 portCount = Math.max(1, n.intValue());
             } else if (countObj instanceof String s) {
@@ -49,10 +49,8 @@ public class MakeDict extends BaseNode {
         builder.addRow(new PortRow(null, StandardPorts.DICT.toOutput(), UIHint.DEFAULT, null, null));
         builder.addRow(new PortRow(StandardPorts.DICT.toInput(), null, UIHint.DEFAULT, null, null));
 
-        // 3. 动态生成键值对双行输入
         for (int i = 1; i <= portCount; i++) {
-            // Key (STRING)
-            PortDef keyPort = new PortDef("dict_key_" + i, Component.literal("Key " + i), PortType.STRING, "");
+            PortDef keyPort = new PortDef("dict_key_" + i, Component.literal("Key " + i), PortType.STRING, "", true);
             builder.addRow(new PortRow(
                     keyPort,
                     null,
@@ -63,9 +61,7 @@ public class MakeDict extends BaseNode {
                             PortMetaKeys.DYNAMIC_INDEX, i
                     )
             ));
-
-            // Value (ANY)
-            PortDef valPort = new PortDef("dict_value_" + i, Component.literal("Value " + i), PortType.ANY, null);
+            PortDef valPort = new PortDef("dict_value_" + i, Component.literal("Value " + i), PortType.ANY, null, false);
             builder.addRow(new PortRow(
                     valPort,
                     null,
@@ -86,24 +82,19 @@ public class MakeDict extends BaseNode {
 
         Map<String, Object> resultDict = new HashMap<>();
 
-        // 1. 先吸收基础字典的数据（如果连入了基础字典的话）
         Map<String, Object> baseDict = getInputDict(context, StandardPorts.DICT.getId());
-        if (baseDict != null && !baseDict.isEmpty()) {
+        if (baseDict != null) {
             resultDict.putAll(baseDict);
         }
 
-        // 2. 获取动态条目数量
         int portCount = 1;
-        Object countObj = context.getNodeProperty(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+        Object countObj = context.getStaticInput(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
         if (countObj instanceof Number n) portCount = Math.max(1, n.intValue());
 
-        // 3. 逐个覆盖或新增动态键值对
         for (int i = 1; i <= portCount; i++) {
             String key = getInput(context, "dict_key_" + i, String.class);
-
             Object value = getRawInput(context, "dict_value_" + i);
 
-            // 只有当 Key 有效且 Value 连了线，才写入字典
             if (key != null && !key.trim().isEmpty() && value != null) {
                 resultDict.put(key.trim(), value);
             }

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.execution.attachment;
 
+import com.mine.geometry_node.core.execution.GraphEngine;
 import com.mine.geometry_node.core.execution.GraphProcess;
 import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
 import com.mine.geometry_node.core.execution.RuntimeGraphIndex;
@@ -20,14 +21,13 @@ import java.util.Map;
  * <p>
  * 绑定在 ServerLevel (特定维度) 上的“背包”，专门用于运行和持久化
  * 与特定实体无关的全局图进程 (Global Graph Processes)。
- * 现已全面接入“常驻虚拟机”架构。
  */
 public class LevelGraphAttachment extends SavedData {
 
     private static final String DATA_NAME = "geometry_node_level_processes";
     private static final String TAG_PROCESSES = "ActiveProcesses";
 
-    // 【重构点】活跃进程字典：GraphId -> 常驻进程实例
+    // 活跃进程字典：GraphId -> 常驻进程实例
     private final Map<String, GraphProcess> processes = new HashMap<>();
 
     private final Map<String, Object> attributes = new HashMap<>();
@@ -84,7 +84,19 @@ public class LevelGraphAttachment extends SavedData {
     }
 
     public GraphProcess getProcess(String graphId) {
-        return this.processes.get(graphId);
+        GraphProcess process = this.processes.get(graphId);
+
+        RuntimeGraphIndex latestIndex = GraphResourceManager.getInstance().getIndex(graphId);
+
+        if (latestIndex != null) {
+            if (process == null || process.getIndex() != latestIndex) {
+                process = new GraphProcess(graphId, latestIndex);
+                this.processes.put(graphId, process);
+                this.setDirty(); // 标记存盘
+            }
+        }
+
+        return process;
     }
 
     /**
@@ -95,17 +107,12 @@ public class LevelGraphAttachment extends SavedData {
 
         long currentTime = level.getGameTime();
 
-        // 【重构点】遍历常驻进程，驱动协程等内部心跳，不再移除 isFinished 状态的进程
+        // 遍历常驻进程，驱动协程等内部心跳，不再移除 isFinished 状态的进程
         for (GraphProcess process : processes.values()) {
-            // 1. 注入环境（only world）
             process.setEnvironment(level, null);
 
-            // 2. 驱动单次 Tick (比如唤醒挂起的 Wait 节点)
             process.tick(currentTime);
         }
-
-        // 注意：进程内部的变量改变不会自动触发 setDirty()，这符合 MC 原生机制。
-        // 若要严格保证每帧变量都能存盘，可由全局自动保存机制接管，此处无需每 tick setDirty() 以节省 IO。
     }
 
     // --- NBT Serialization ---
@@ -119,7 +126,7 @@ public class LevelGraphAttachment extends SavedData {
                 CompoundTag processTag = processList.getCompound(i);
                 String graphId = processTag.getString("GraphId");
 
-                RuntimeGraphIndex index = GraphResourceManager.getInstance().getIndex(graphId);
+                RuntimeGraphIndex index = GraphEngine.getGraphIndex(graphId);
                 if (index != null) {
                     GraphProcess process = new GraphProcess(processTag, index, provider);
                     attachment.processes.put(graphId, process);

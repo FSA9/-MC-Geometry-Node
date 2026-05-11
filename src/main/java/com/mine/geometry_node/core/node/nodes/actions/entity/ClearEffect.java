@@ -10,11 +10,9 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
-import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -24,7 +22,6 @@ import java.util.Map;
 public class ClearEffect extends BaseNode {
 
     public static final String TYPE_ID = "clear_effect";
-    public static final String PROPERTY_EFFECT = "effect_id";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -32,9 +29,11 @@ public class ClearEffect extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        null, null, UIHint.SELECT, null,
+                        StandardPorts.STRING.toInput().hiddenPin(),
+                        null,
+                        UIHint.SELECT,
+                        null,
                         Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_EFFECT,
                                 PortMetaKeys.OPTIONS, RegistryDataManager.getAllEffects().toArray(new String[0])
                         )
                 ))
@@ -44,7 +43,7 @@ public class ClearEffect extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        String effectId = (String) context.getNodeProperty(PROPERTY_EFFECT);
+        String effectId = getInput(context, StandardPorts.STRING.getId(), String.class);
 
         if (!entities.isEmpty() && effectId != null) {
             ResourceLocation rl = ResourceLocation.tryParse(effectId);
@@ -53,7 +52,6 @@ public class ClearEffect extends BaseNode {
                 if (effectHolder.isPresent()) {
                     for (Entity entity : entities) {
                         if (entity instanceof LivingEntity living) {
-                            // 直接传入获取到的 Holder，不再强转
                             living.removeEffect(effectHolder.get());
                         }
                     }

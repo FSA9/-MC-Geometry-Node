@@ -11,14 +11,4 @@ public record PortRow(
         UIHint uiHint,                    // 内联控件类型
         @Nullable String customWidgetId,  // CUSTOM 组件 ID
         @Nullable Map<MetaKey<?>, Object> hintParams // 额外静态参数
-) {
-    public static PortRow select(MetaKey<?> propertyKey, String[] options) {
-        return new PortRow(
-                null, null, UIHint.SELECT, null,
-                Map.of(
-                        PortMetaKeys.BIND_PROPERTY, propertyKey.id(),
-                        PortMetaKeys.OPTIONS, options
-                )
-        );
-    }
-}
+) { }

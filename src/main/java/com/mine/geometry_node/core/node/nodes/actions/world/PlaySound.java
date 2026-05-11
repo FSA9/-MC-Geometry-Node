@@ -23,7 +23,6 @@ import java.util.Map;
 public class PlaySound extends BaseNode {
 
     public static final String TYPE_ID = "play_sound";
-    public static final String PROPERTY_SOUND = "sound_id";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -31,27 +30,27 @@ public class PlaySound extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(
-                        null, null, UIHint.SELECT, null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SOUND,
-                                PortMetaKeys.OPTIONS, RegistryDataManager.getAllSounds().toArray(new String[0])
-                        )
+                        StandardPorts.STRING.toInput(),
+                        null,
+                        UIHint.SELECT,
+                        null,
+                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllSounds().toArray(new String[0]))
                 ))
-                .addRow(new PortRow(StandardPorts.VOLUME.toInputWithIndex(0, 1.0f), null, UIHint.SLIDER, null, null)) // Volume [0, 1]
-                .addRow(new PortRow(StandardPorts.PITCH.toInputWithIndex(1, 1.0f), null, UIHint.SLIDER, null, null)) // Pitch [0.5, 2]
+                // 音量与音调
+                .addRow(new PortRow(StandardPorts.VOLUME.toInputWithIndex(0, 1.0f), null, UIHint.SLIDER, null, null))
+                .addRow(new PortRow(StandardPorts.PITCH.toInputWithIndex(1, 1.0f), null, UIHint.SLIDER, null, null))
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         Vec3 pos = getInput(context, StandardPorts.XYZ.getId(), Vec3.class);
-        String soundId = (String) context.getNodeProperty(PROPERTY_SOUND);
+        String soundId = getInput(context, StandardPorts.STRING.getId(), String.class);
         Float volume = getInput(context, StandardPorts.VOLUME.getIdWithIndex(0), Float.class);
         Float pitch = getInput(context, StandardPorts.PITCH.getIdWithIndex(1), Float.class);
 
         if (pos != null && soundId != null && context.getLevel() instanceof ServerLevel level) {
             ResourceLocation rl = ResourceLocation.tryParse(soundId);
-
             if (rl != null) {
                 SoundEvent soundEvent = BuiltInRegistries.SOUND_EVENT.get(rl);
                 if (soundEvent != null) {

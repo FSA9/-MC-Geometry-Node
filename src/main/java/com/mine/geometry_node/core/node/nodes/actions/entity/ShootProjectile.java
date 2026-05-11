@@ -25,7 +25,6 @@ import java.util.Map;
 public class ShootProjectile extends BaseNode {
 
     public static final String TYPE_ID = "shoot_projectile";
-    public static final String PROPERTY_PHYSICS_TYPE = "physics_type";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -39,13 +38,13 @@ public class ShootProjectile extends BaseNode {
                 // 输入：运动参数
                 .addRow(new PortRow(StandardPorts.VECTOR.toInput(new Vec3(0, 0, 1)), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.SPEED.toInput(1.5f), null, UIHint.INPUT, null, null))
-                // 输入：物理基底与属性
+                // 【重构核心】使用 STRING 占位并隐藏针脚，通过 Options 渲染下拉框
                 .addRow(new PortRow(
-                        null, null, UIHint.SELECT, null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_PHYSICS_TYPE,
-                                PortMetaKeys.OPTIONS, new String[]{"snowball", "arrow"}
-                        )
+                        StandardPorts.STRING.toInput().hiddenPin(),
+                        null,
+                        UIHint.SELECT,
+                        null,
+                        Map.of(PortMetaKeys.OPTIONS, new String[]{"snowball", "arrow"})
                 ))
                 .addRow(new PortRow(StandardPorts.GRAVITY.toInput(true), null, UIHint.CHECKBOX, null, null))
                 .addRow(new PortRow(StandardPorts.INVISIBLE.toInput(false), null, UIHint.CHECKBOX, null, null))
@@ -64,7 +63,8 @@ public class ShootProjectile extends BaseNode {
 
         Boolean hasGravity = getInput(context, StandardPorts.GRAVITY.getId(), Boolean.class);
         Boolean isInvisible = getInput(context, StandardPorts.INVISIBLE.getId(), Boolean.class);
-        String physicsType = context.getConfig(PROPERTY_PHYSICS_TYPE, String.class, "snowball");
+        String physicsType = getInput(context, StandardPorts.STRING.getId(), String.class);
+        if (physicsType == null) physicsType = "snowball";
 
         if (pos == null) pos = Vec3.ZERO;
         if (dir == null) dir = new Vec3(0, 0, 1);

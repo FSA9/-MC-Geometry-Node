@@ -22,7 +22,7 @@ public class MathExpression extends BaseNode {
 
     public static final String TYPE_ID = "math_expression";
 
-    // 【新增】：用于缓存编译后的树与它的专属注册表
+    // 用于缓存编译后的树与它的专属注册表
     private record CachedAST(ASTNode node, VariableRegistry registry) {}
 
     @Override
@@ -34,8 +34,8 @@ public class MathExpression extends BaseNode {
     public NodeDef getDefinition(NodeData instanceData) {
         int portCount = 1;
 
-        if (instanceData != null && instanceData.properties.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
-            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+        if (instanceData != null && instanceData.inputs.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
+            Object countObj = instanceData.inputs.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
             if (countObj instanceof Number n) {
                 portCount = n.intValue();
             } else if (countObj instanceof String s) {
@@ -59,23 +59,18 @@ public class MathExpression extends BaseNode {
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 26);
 
         builder.addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null));
+
         builder.addRow(new PortRow(StandardPorts.EXPRESSION.toInput(), null, UIHint.INPUT, null, null));
 
         for (int i = 1; i <= portCount; i++) {
             char varName = (char) ('A' + (i - 1));
             String portId = "var_" + i;
 
-            PortDef dynamicPort = new PortDef(portId, Component.literal(String.valueOf(varName)), PortType.FLOAT, 0.0f);
+            PortDef dynamicPort = new PortDef(portId, Component.literal(String.valueOf(varName)), PortType.FLOAT, 0.0f, false);
 
             builder.addRow(new PortRow(
-                    dynamicPort,
-                    null,
-                    UIHint.DEFAULT,
-                    null,
-                    Map.of(
-                            PortMetaKeys.IS_DYNAMIC, true,
-                            PortMetaKeys.DYNAMIC_INDEX, i
-                    )
+                    dynamicPort, null, UIHint.DEFAULT, null,
+                    Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_INDEX, i)
             ));
         }
 

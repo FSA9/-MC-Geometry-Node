@@ -28,7 +28,7 @@ public class SetDisplayPosition extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 // 目标绝对坐标
-                .addRow(new PortRow(new PortDef("position", Component.translatable("geometry_node.port.position"), PortType.XYZ, Vec3.ZERO), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
                 // 位移专属插值
                 .addRow(new PortRow(StandardPorts.TELEPORT_DURATION.toInput(0), null, UIHint.INPUT, null, null))
                 .build();
@@ -39,7 +39,7 @@ public class SetDisplayPosition extends BaseNode {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return next(StandardPorts.FLOW_OUT.getId());
 
-        Vec3 targetPos = getInput(context, "position", Vec3.class);
+        Vec3 targetPos = getInput(context, StandardPorts.XYZ.getId(), Vec3.class);
         Integer tpDuration = getInput(context, StandardPorts.TELEPORT_DURATION.getId(), Integer.class);
 
         if (targetPos == null) return next(StandardPorts.FLOW_OUT.getId());

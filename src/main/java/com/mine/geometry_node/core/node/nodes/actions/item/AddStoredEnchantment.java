@@ -33,7 +33,7 @@ public class AddStoredEnchantment extends BaseNode {
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.TYPE.toInput("minecraft:sharpness"), null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED, PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:enchantment")
+                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:enchantment")
                 ))
                 .addRow(new PortRow(StandardPorts.INT.toInput(1), null, UIHint.INPUT, null, null))
                 .build();

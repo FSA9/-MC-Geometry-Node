@@ -14,21 +14,17 @@ import java.util.Map;
 public class GetEntityType extends BaseNode {
 
     public static final String TYPE_ID = "get_entity_type";
-    public static final String PROPERTY_SELECTED = PortMetaKeys.DYNAMIC_REGISTRY_ID.id();
 
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_type"))
-                .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), null, null, null))
+                .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        null,
+                        StandardPorts.STRING.toInput().hiddenPin(),
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED,
-                                PortMetaKeys.OPTIONS, RegistryDataManager.getAllEntityTypes().toArray(new String[0])
-                        )
+                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllEntityTypes().toArray(new String[0]))
                 ))
                 .build();
     }
@@ -36,7 +32,7 @@ public class GetEntityType extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.TYPE.getId().equals(portName)) {
-            return context.getNodeProperty(PROPERTY_SELECTED);
+            return getInput(context, StandardPorts.STRING.getId(), String.class);
         }
         return null;
     }

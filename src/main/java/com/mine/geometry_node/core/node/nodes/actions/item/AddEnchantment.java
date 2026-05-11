@@ -24,8 +24,6 @@ import java.util.Optional;
 public class AddEnchantment extends BaseNode {
 
     public static final String TYPE_ID = "add_enchantment";
-
-    // 如果你希望下拉框选中的值存入节点的 Property 中（兼容不连线的玩法）
     public static final String PROPERTY_SELECTED = PortMetaKeys.DYNAMIC_REGISTRY_ID.id();
 
     @Override
@@ -39,13 +37,8 @@ public class AddEnchantment extends BaseNode {
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED,
-                                PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:enchantment"
-                        )
+                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:enchantment")
                 ))
-
-                // 4. 附魔等级
                 .addRow(new PortRow(StandardPorts.INT.toInput(1), null, UIHint.INPUT, null, null))
                 .build();
     }
@@ -54,14 +47,10 @@ public class AddEnchantment extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         Integer level = getInput(context, StandardPorts.INT.getId(), Integer.class);
-
-        // 获取附魔 ID：优先看有没有连线传值，没有连线就读下拉框的 Property
         String enchantId = getInput(context, StandardPorts.TYPE.getId(), String.class);
         if (enchantId == null || enchantId.isEmpty()) {
             enchantId = (String) context.getNodeProperty(PROPERTY_SELECTED);
         }
-
-        // 核心逻辑：安全校验并应用附魔
         if (stack != null && !stack.isEmpty() && enchantId != null && level != null && level > 0) {
             ResourceLocation loc = ResourceLocation.tryParse(enchantId);
             if (loc != null && context.getLevel() instanceof ServerLevel serverLevel) {
@@ -72,8 +61,6 @@ public class AddEnchantment extends BaseNode {
                 enchantOpt.ifPresent(enchantmentHolder -> stack.enchant(enchantmentHolder, level));
             }
         }
-
-        // 存入缓存供下游获取
         if (stack != null) {
             context.setTempData(StandardPorts.ITEM_STACK.getId(), stack);
         }

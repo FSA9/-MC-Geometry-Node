@@ -2,11 +2,9 @@ package com.mine.geometry_node.client.ui.viewport.UIHints;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 
@@ -25,25 +23,16 @@ public class InputHintRenderer implements UIHintRenderer {
 
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        String propKey = row.hintParams() != null ? (String) row.hintParams().get(PortMetaKeys.BIND_PROPERTY) : null;
-        Object val = null;
-        PortType expectedType = PortType.ANY;
-
-        if (propKey != null) {
-            val = nodeData.properties.get(propKey);
-        } else if (row.leftPort() != null) {
-            val = nodeData.inputs.containsKey(row.leftPort().id()) ? nodeData.inputs.get(row.leftPort().id()) : row.leftPort().defaultValue();
-            expectedType = row.leftPort().type();
-        }
+        String portId = row.leftPort().id();
+        PortType expectedType = row.leftPort().type();
+        Object val = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
 
         final Object finalOldVal = val;
-        final PortType finalExpectedType = expectedType;
 
-        // 【优化】直接使用 EditText，不使用 LinearLayout 包裹，避免 Margin 冲突
         EditText et = new EditText(context);
         et.setText(val != null ? val.toString() : "");
 
-        UIHintUtils.applyStandardInputStyle(et, finalExpectedType);
+        UIHintUtils.applyStandardInputStyle(et, expectedType);
 
         et.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus && editorContext != null) {
@@ -51,29 +40,17 @@ public class InputHintRenderer implements UIHintRenderer {
                 Object parsedValue = currentText;
 
                 try {
-                    if (finalExpectedType == PortType.INTEGER) {
-                        parsedValue = Integer.parseInt(currentText);
-                    } else if (finalExpectedType == PortType.FLOAT) {
-                        parsedValue = Float.parseFloat(currentText);
-                    }
+                    if (expectedType == PortType.INTEGER) parsedValue = Integer.parseInt(currentText);
+                    else if (expectedType == PortType.FLOAT) parsedValue = Float.parseFloat(currentText);
                 } catch (NumberFormatException e) {
                     et.setText(finalOldVal != null ? finalOldVal.toString() : "");
                     return;
                 }
 
-                if (propKey != null) {
-                    Object oldVal = nodeData.properties.get(propKey);
-                    if (!parsedValue.equals(oldVal)) {
-                        CmdChangeProperty cmd = new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, parsedValue);
-                        editorContext.getCommandManager().execute(cmd);
-                    }
-                } else if (row.leftPort() != null) {
-                    String portId = row.leftPort().id();
-                    Object oldVal = nodeData.inputs.get(portId);
-                    if (!parsedValue.equals(oldVal)) {
-                        CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, parsedValue);
-                        editorContext.getCommandManager().execute(cmd);
-                    }
+                Object oldVal = nodeData.inputs.get(portId);
+                if (!parsedValue.equals(oldVal)) {
+                    CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, parsedValue);
+                    editorContext.getCommandManager().execute(cmd);
                 }
             }
         });

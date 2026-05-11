@@ -32,24 +32,20 @@ public class DrawItemVisual extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.draw_item_visual"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-
-                // 绑定核心实体 (有它 = 相对坐标，无它 = 绝对坐标)
+                // 绑定核心实体
                 .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        null, null, UIHint.SELECT, null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_DISPLAY_CONTEXT,
-                                PortMetaKeys.OPTIONS, new String[]{"fixed", "none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground"}
-                        )
+                        StandardPorts.STRING.toInput(),
+                        null,
+                        UIHint.SELECT,
+                        null,
+                        Map.of(PortMetaKeys.OPTIONS, new String[]{"fixed", "none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground"})
                 ))
-
-                // 核心三大动态矢量（注意：START_POS 已被彻底删除）
+                // 核心三大动态矢量
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
-
                 .addRow(new PortRow(StandardPorts.TICK.toInput(20), null, UIHint.INPUT, null, null))
                 .build();
     }
@@ -65,7 +61,8 @@ public class DrawItemVisual extends BaseNode {
         ItemStack itemStack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         if (itemStack == null || itemStack.isEmpty()) itemStack = new ItemStack(Items.STONE);
 
-        String displayContext = context.getConfig(PROPERTY_DISPLAY_CONTEXT, String.class, "fixed");
+        String displayContext = getInput(context, StandardPorts.STRING.getId(), String.class);
+        if (displayContext == null) displayContext = "fixed";
 
         // 获取基础的死数值偏移
         Vec3 baseTrans = getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class);
@@ -78,9 +75,6 @@ public class DrawItemVisual extends BaseNode {
         Integer duration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
         if (duration == null || duration <= 0) duration = 20;
 
-        // 【解决发包截断问题的核心思路】
-        // 计算出一个绝对的“物理中心点”，你可以把这个 center 传给你的 broadcast 方法（如果你的底层支持传参的话）
-        // 这样服务端就不会傻傻地在 0,0,0 发包了！
         Vec3 broadcastCenter = (sourceEntity != null) ? sourceEntity.position().add(baseTrans) : baseTrans;
 
         Map<String, String> expressions = new HashMap<>();

@@ -13,21 +13,17 @@ import java.util.Map;
 public class GetDimension extends BaseNode {
 
     public static final String TYPE_ID = "get_dimension";
-    public static final String PROPERTY_SELECTED = PortMetaKeys.DYNAMIC_REGISTRY_ID.id();
 
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_dimension"))
-                .addRow(new PortRow(null, StandardPorts.DIMENSION.toOutput(), null, null, null))
+                .addRow(new PortRow(null, StandardPorts.DIMENSION.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        null,
+                        StandardPorts.STRING.toInput().hiddenPin(),
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED,
-                                PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:dimension"
-                        )
+                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:dimension")
                 ))
                 .build();
     }
@@ -35,8 +31,7 @@ public class GetDimension extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.DIMENSION.getId().equals(portName)) {
-            String selectedDimension = (String) context.getNodeProperty(PROPERTY_SELECTED);
-
+            String selectedDimension = getInput(context, StandardPorts.STRING.getId(), String.class);
             return selectedDimension != null ? selectedDimension : "minecraft:overworld";
         }
         return null;

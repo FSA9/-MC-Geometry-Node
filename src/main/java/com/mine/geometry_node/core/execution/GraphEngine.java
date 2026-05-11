@@ -1,10 +1,8 @@
 package com.mine.geometry_node.core.execution;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
-import com.mine.geometry_node.core.execution.attachment.LevelGraphAttachment;
-import com.mine.geometry_node.core.execution.storage.GlobalGraphStorage;
-import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
+import com.mine.geometry_node.core.execution.attachment.*;
+import com.mine.geometry_node.core.execution.storage.*;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.NotNull;
@@ -137,7 +135,7 @@ public class GraphEngine {
 
         // 获取或创建常驻进程
         GraphProcess process = processFinder.apply(graphId);
-        if (process == null) {
+        if (process == null || process.getIndex() != index) {
             process = new GraphProcess(graphId, index);
             mountAction.accept(process);
         }
@@ -298,7 +296,8 @@ public class GraphEngine {
 
     @Nullable
     public static RuntimeGraphIndex getGraphIndex(String graphId) {
-        RuntimeGraphIndex dynamicIndex = com.mine.geometry_node.core.execution.storage.DynamicGraphManager.getIndex(graphId);
+        String finalId = GraphIdMapper.normalizeId(graphId);
+        RuntimeGraphIndex dynamicIndex = DynamicGraphManager.getIndex(finalId);
         if (dynamicIndex != null) return dynamicIndex;
         return GraphResourceManager.getInstance().getIndex(graphId);
     }

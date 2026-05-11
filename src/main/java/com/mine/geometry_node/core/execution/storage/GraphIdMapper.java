@@ -30,4 +30,13 @@ public class GraphIdMapper {
         // 直接返回原汁原味的相对路径，保留 .json 后缀
         return relativePath.toString().replace('\\', '/');
     }
+
+    public static String normalizeId(String id) {
+        if (id == null) return null;
+        String normalized = id.replace('\\', '/');
+        if (!normalized.endsWith(".json")) {
+            normalized += ".json";
+        }
+        return normalized;
+    }
 }

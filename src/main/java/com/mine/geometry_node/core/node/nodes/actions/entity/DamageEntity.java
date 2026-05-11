@@ -32,14 +32,11 @@ public class DamageEntity extends BaseNode {
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.VALUE.toInput(), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(
-                        StandardPorts.DAMAGE_TYPE.toInput(),
+                        StandardPorts.DAMAGE_TYPE.toInput().hiddenPin(),
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, StandardPorts.DAMAGE_TYPE.getId(), // 绑定到该端口的静态值
-                                PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:damage_type"
-                        )
+                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:damage_type")
                 ))
                 .build();
     }
@@ -66,7 +63,7 @@ public class DamageEntity extends BaseNode {
                         }
                     }
                 } catch (Exception e) {
-                    System.err.println("[DamageEntity] 无效的伤害类型 ID: " + damageTypeId);
+                    System.err.println("[DamageEntity] Illegal damage type ID: " + damageTypeId);
                 }
             }
 

@@ -29,7 +29,6 @@ import java.util.Map;
 public class SpawnBlockDisplayEntity extends BaseNode {
 
     public static final String TYPE_ID = "spawn_block_display_entity";
-    public static final String PROPERTY_SELECTED = PortMetaKeys.DYNAMIC_REGISTRY_ID.id();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -39,17 +38,12 @@ public class SpawnBlockDisplayEntity extends BaseNode {
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.BLOCK_STATE.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        null, null, UIHint.SELECT, null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED,
-                                PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0])
-                        )
+                        StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0]))
                 ))
-                // --- 矩阵形变 (初始姿态) ---
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null)) // X=Pitch, Y=Yaw, Z=Roll
+                .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
-                // --- 初始动画插值 (默认 0) ---
                 .addRow(new PortRow(StandardPorts.TELEPORT_DURATION.toInput(0), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.INTERPOLATION_DURATION.toInput(0), null, UIHint.INPUT, null, null))
                 .build();
@@ -65,16 +59,14 @@ public class SpawnBlockDisplayEntity extends BaseNode {
 
         BlockState blockState = getInput(context, StandardPorts.BLOCK_STATE.getId(), BlockState.class);
         if (blockState == null) {
-            String selectedBlockId = context.getConfig(PROPERTY_SELECTED, String.class, "");
+            String selectedBlockId = getInput(context, StandardPorts.STRING.getId(), String.class);
             if (selectedBlockId != null && !selectedBlockId.isEmpty()) {
-                // 完美利用你现成的 TypeConverter，把 "minecraft:stone" 变回 BlockState
                 blockState = TypeConverter.convert(selectedBlockId, BlockState.class, context);
             }
         }
 
         if (blockState == null) blockState = Blocks.STONE.defaultBlockState();
 
-        // --- 2. 形变与动画数据 ---
         Vec3 translation = getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class);
         if (translation == null) translation = Vec3.ZERO;
 
@@ -87,14 +79,12 @@ public class SpawnBlockDisplayEntity extends BaseNode {
         Integer tpDuration = getInput(context, StandardPorts.TELEPORT_DURATION.getId(), Integer.class);
         Integer interpDuration = getInput(context, StandardPorts.INTERPOLATION_DURATION.getId(), Integer.class);
 
-        // 欧拉角转四元数 (顺序: Yaw -> Pitch -> Roll)
         Quaternionf leftRotation = new Quaternionf().rotationYXZ(
                 (float) Math.toRadians(rotation.y),
                 (float) Math.toRadians(rotation.x),
                 (float) Math.toRadians(rotation.z)
         );
 
-        // --- 3. 实体生成与 NBT 覆写 ---
         Display.BlockDisplay displayEntity = EntityType.BLOCK_DISPLAY.create(level);
         if (displayEntity != null) {
             displayEntity.setPos(pos.x, pos.y, pos.z);
@@ -102,10 +92,8 @@ public class SpawnBlockDisplayEntity extends BaseNode {
             CompoundTag nbt = new CompoundTag();
             displayEntity.saveWithoutId(nbt);
 
-            // 写入方块
             nbt.put("block_state", NbtUtils.writeBlockState(blockState));
 
-            // 写入矩阵
             CompoundTag transTag = new CompoundTag();
             transTag.put("translation", createFloatList((float) translation.x, (float) translation.y, (float) translation.z));
             transTag.put("scale", createFloatList((float) scaleVec.x, (float) scaleVec.y, (float) scaleVec.z));
@@ -113,14 +101,12 @@ public class SpawnBlockDisplayEntity extends BaseNode {
             transTag.put("right_rotation", createFloatList(0f, 0f, 0f, 1f));
             nbt.put("transformation", transTag);
 
-            // 写入插值
             nbt.putInt("teleport_duration", tpDuration != null ? Math.max(0, tpDuration) : 0);
             nbt.putInt("interpolation_duration", interpDuration != null ? Math.max(0, interpDuration) : 0);
             nbt.putInt("start_interpolation", 0);
 
             displayEntity.load(nbt);
 
-            // --- 4. 生成并输出 ---
             level.addFreshEntity(displayEntity);
             context.setTempData("spawned_block_display", displayEntity);
         }

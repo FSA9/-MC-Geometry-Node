@@ -41,57 +41,58 @@ public class TargetSelector extends BaseNode {
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
-        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.target_selector"))
-                .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 30);
-
-        builder.addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null));
-
-        builder.addRow(new PortRow(
-                null, null, UIHint.SELECT, null,
-                Map.of(PortMetaKeys.BIND_PROPERTY, "base_target", PortMetaKeys.OPTIONS, BASE_TARGETS)
-        ));
-
-        int filterCount = 1;
-        List<String> usedFilters = new ArrayList<>();
-
-        if (instanceData != null) {
-            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
-            if (countObj instanceof Number n) {
-                filterCount = Math.max(1, n.intValue());
-            }
-            for (int i = 1; i <= filterCount; i++) {
-                String f = (String) instanceData.properties.get("filter_type_" + i);
-                if (f != null && !f.equals("none")) usedFilters.add(f);
-            }
-        }
-
-        for (int i = 1; i <= filterCount; i++) {
-            String filterTypeProp = "filter_type_" + i;
-            String currentFilter = instanceData != null
-                    ? (String) instanceData.properties.getOrDefault(filterTypeProp, "none")
-                    : "none";
-
-            // 保持 removeAll 逻辑，因为现在所有支持多选的字段都改为直接接收 LIST 端口了
-            List<String> availableOptions = new ArrayList<>(ALL_FILTERS);
-            availableOptions.removeAll(usedFilters);
-            if (!availableOptions.contains(currentFilter)) availableOptions.add(currentFilter);
-
-            builder.addRow(new PortRow(
-                    null, null, UIHint.SELECT, null,
-                    Map.of(
-                            PortMetaKeys.BIND_PROPERTY, filterTypeProp,
-                            PortMetaKeys.OPTIONS, availableOptions.toArray(new String[0]),
-                            PortMetaKeys.IS_DYNAMIC, true
-                    )
-            ));
-
-            for (PortRow row : createDataRows(currentFilter, i)) {
-                builder.addRow(row);
-            }
-        }
-
-        return builder.build();
+//        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.target_selector"))
+//                .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 30);
+//
+//        builder.addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null));
+//        builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null));
+//
+//        builder.addRow(new PortRow(
+//                null, null, UIHint.SELECT, null,
+//                Map.of(PortMetaKeys.BIND_PROPERTY, "base_target", PortMetaKeys.OPTIONS, BASE_TARGETS)
+//        ));
+//
+//        int filterCount = 1;
+//        List<String> usedFilters = new ArrayList<>();
+//
+//        if (instanceData != null) {
+//            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+//            if (countObj instanceof Number n) {
+//                filterCount = Math.max(1, n.intValue());
+//            }
+//            for (int i = 1; i <= filterCount; i++) {
+//                String f = (String) instanceData.properties.get("filter_type_" + i);
+//                if (f != null && !f.equals("none")) usedFilters.add(f);
+//            }
+//        }
+//
+//        for (int i = 1; i <= filterCount; i++) {
+//            String filterTypeProp = "filter_type_" + i;
+//            String currentFilter = instanceData != null
+//                    ? (String) instanceData.properties.getOrDefault(filterTypeProp, "none")
+//                    : "none";
+//
+//            // 保持 removeAll 逻辑，因为现在所有支持多选的字段都改为直接接收 LIST 端口了
+//            List<String> availableOptions = new ArrayList<>(ALL_FILTERS);
+//            availableOptions.removeAll(usedFilters);
+//            if (!availableOptions.contains(currentFilter)) availableOptions.add(currentFilter);
+//
+//            builder.addRow(new PortRow(
+//                    null, null, UIHint.SELECT, null,
+//                    Map.of(
+//                            PortMetaKeys.BIND_PROPERTY, filterTypeProp,
+//                            PortMetaKeys.OPTIONS, availableOptions.toArray(new String[0]),
+//                            PortMetaKeys.IS_DYNAMIC, true
+//                    )
+//            ));
+//
+//            for (PortRow row : createDataRows(currentFilter, i)) {
+//                builder.addRow(row);
+//            }
+//        }
+//
+//        return builder.build();
+        return null;
     }
 
     private List<PortRow> createDataRows(String type, int index) {
@@ -112,14 +113,14 @@ public class TargetSelector extends BaseNode {
                     new PortRow(StandardPorts.TYPE.toInputWithIndex(index), null, UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:entity_type")),
                     new PortRow(StandardPorts.BOOL.toInputWithIndex(index, false), null, UIHint.CHECKBOX, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
             );
-            // 【重构】将支持多重堆叠的标识符统一改为接收 LIST
-            case "tag", "name", "team" -> List.of(
-                    new PortRow(new PortDef(type + "_" + index, Component.literal(type.toUpperCase() + " List"), PortType.LIST, List.of()), null, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
-            );
-            // 【新增】复合数据统一接收 DICT
-            case "nbt", "scores", "advancements" -> List.of(
-                    new PortRow(new PortDef(type + "_" + index, Component.literal(type.toUpperCase() + " Dict"), PortType.DICT, Map.of()), null, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
-            );
+//            // 【重构】将支持多重堆叠的标识符统一改为接收 LIST
+//            case "tag", "name", "team" -> List.of(
+//                    new PortRow(new PortDef(type + "_" + index, Component.literal(type.toUpperCase() + " List"), PortType.LIST, List.of()), null, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
+//            );
+//            // 【新增】复合数据统一接收 DICT
+//            case "nbt", "scores", "advancements" -> List.of(
+//                    new PortRow(new PortDef(type + "_" + index, Component.literal(type.toUpperCase() + " Dict"), PortType.DICT, Map.of()), null, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
+//            );
             // 【新增】谓词接收单行 PREDICATE
             case "predicate" -> List.of(
                     new PortRow(StandardPorts.PREDICATE.toInputWithIndex(index), null, UIHint.INPUT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))

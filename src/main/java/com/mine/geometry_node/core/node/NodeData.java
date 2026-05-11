@@ -18,9 +18,6 @@ public class NodeData {
     @SerializedName("UI_pos")
     public float[] uiPos = new float[2];
 
-    @SerializedName("properties")
-    public Map<String, Object> properties = new HashMap<>();
-
     @SerializedName("inputs")
     public Map<String, Object> inputs = new HashMap<>();
 

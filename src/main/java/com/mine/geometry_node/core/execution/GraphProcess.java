@@ -52,10 +52,7 @@ public class GraphProcess {
     private final List<ExecutionThread> sleepingThreads = new ArrayList<>();  // 挂起的协程线程
     private boolean needsTimeRebase = false;                                  // 读档标记
 
-    // ================================
-    // 全局静态线程池 (Zero-Allocation 核心)
-    // ================================
-    private static final java.util.concurrent.ConcurrentLinkedQueue<ExecutionThread> THREAD_POOL = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private final java.util.concurrent.ConcurrentLinkedQueue<ExecutionThread> THREAD_POOL = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
     /**
      * 从池中借用一个线程，如果没有多余的才去 new (按需扩容)
@@ -75,7 +72,7 @@ public class GraphProcess {
     /**
      * 将用完的线程洗干净还回池子
      */
-    private static void recycleThread(ExecutionThread thread) {
+    private void recycleThread(ExecutionThread thread) {
         THREAD_POOL.offer(thread);
     }
 
@@ -238,8 +235,8 @@ public class GraphProcess {
             if (currentFlowId == -1 && executionStack.isEmpty() && state != State.WAITING) {
                 this.state = State.FINISHED;
 
-                // 【核心】用完自动还给对象池！
-                GraphProcess.recycleThread(this);
+                // 用完自动还给对象池！
+                GraphProcess.this.recycleThread(this);
             }
         }
 

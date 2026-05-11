@@ -51,7 +51,7 @@ public class GraphResourceManager extends SimpleJsonResourceReloadListener {
     }
 
     /**
-     * [重载触发] 当执行 /reload 或进入存档时，由 Minecraft 引擎异步调用。
+     * [重载触发]
      */
     @Override
     protected void apply(Map<ResourceLocation, JsonElement> object, ResourceManager resourceManager, ProfilerFiller profiler) {
@@ -61,24 +61,22 @@ public class GraphResourceManager extends SimpleJsonResourceReloadListener {
             try {
                 String graphId = location.toString();
                 if (json.isJsonObject() && json.getAsJsonObject().has("graph_name")) {
-                    // 如果 JSON 内写了自定义名字，可以用来作为别名或覆盖，这里依然推荐用 ResourceLocation 保证唯一
-                    // String customName = json.getAsJsonObject().get("graph_name").getAsString();
+
                 }
 
-                // 将 JsonElement 转化为 Reader，直接传递给 RuntimeGraphIndex
                 try (java.io.Reader reader = new java.io.StringReader(json.toString())) {
                     RuntimeGraphIndex index = RuntimeGraphIndex.build(reader);
                     newCache.put(graphId, index);
                 }
             } catch (Exception e) {
-                System.err.println("GraphResourceManager: Error parsing graph " + location);
+                System.err.println("[GraphResourceManager]: Error parsing graph " + location);
                 e.printStackTrace();
             }
         });
 
-        // 原子级替换缓存
+        // 缓存替换
         this.indexCache = Map.copyOf(newCache);
-        System.out.println("GraphResourceManager: Loaded " + indexCache.size() + " graph(s).");
+        System.out.println("[GraphResourceManager]: Loaded " + indexCache.size() + " graph(s).");
     }
 
     /**

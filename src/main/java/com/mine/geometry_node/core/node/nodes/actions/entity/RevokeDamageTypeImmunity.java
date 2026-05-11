@@ -19,7 +19,6 @@ import java.util.Map;
 public class RevokeDamageTypeImmunity extends BaseNode {
 
     public static final String TYPE_ID = "revoke_damage_type_immunity";
-    public static final String PROPERTY_SELECTED = PortMetaKeys.DYNAMIC_REGISTRY_ID.id();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -27,14 +26,11 @@ public class RevokeDamageTypeImmunity extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        StandardPorts.DAMAGE_TYPE.toInput(),
+                        StandardPorts.STRING.toInput(),
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED,
-                                PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:damage_type"
-                        )
+                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:damage_type")
                 ))
                 .build();
     }
@@ -42,15 +38,10 @@ public class RevokeDamageTypeImmunity extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-
-        String damageType = getInput(context, StandardPorts.DAMAGE_TYPE.getId(), String.class);
-        if (damageType == null || damageType.isEmpty()) {
-            damageType = (String) context.getNodeProperty(PROPERTY_SELECTED);
-        }
+        String damageType = getInput(context, StandardPorts.STRING.getId(), String.class);
 
         if (damageType != null && !damageType.isEmpty() && !entities.isEmpty()) {
             for (Entity entity : entities) {
-                // 调用免疫管理器移除免疫
                 EntityImmunityAttachment.revokeImmunity(entity, damageType);
             }
         }

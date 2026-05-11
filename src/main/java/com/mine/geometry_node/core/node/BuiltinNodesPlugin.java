@@ -10,7 +10,6 @@ import com.mine.geometry_node.core.node.nodes.actions.player.*;
 import com.mine.geometry_node.core.node.nodes.actions.visual.*;
 import com.mine.geometry_node.core.node.nodes.actions.world.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
-import com.mine.geometry_node.core.node.nodes.data.MakeList;
 import com.mine.geometry_node.core.node.nodes.data.container.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.attribution.*;
@@ -33,13 +32,13 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
     @Override
     public void registerNodes(NodeRegistry registry) {
-        System.out.println("[GeometryNode] 正在注册全量内置节点...");
+        System.out.println("[BuiltinNodesPlugin] Start to register Nodes...");
 
         // --- ACTIONS ---
 //        registry.register("actions", new CreateForceField());
 //        registry.register("actions", new ExecuteCommand());
 //        registry.register("actions", new LaunchProjectile());
-        registry.register("actions/visual", new Raycast());
+//        registry.register("actions/visual", new Raycast());
         registry.register("actions/visual", new MultiRaycast());
         registry.register("actions/visual", new DrawDebugLine());
         registry.register("actions/visual", new DrawLaserBeam());
@@ -336,6 +335,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("maths/vector", new SeparateXYZ());
         registry.register("maths/vector", new CombineXYZ());
 
-        System.out.println("[GeometryNode] 内置节点注册完成！");
+        System.out.println("[BuiltinNodesPlugin] Register Finished");
     }
 }

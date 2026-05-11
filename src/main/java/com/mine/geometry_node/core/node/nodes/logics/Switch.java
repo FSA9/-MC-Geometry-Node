@@ -33,9 +33,8 @@ public class Switch extends BaseNode {
     public NodeDef getDefinition(NodeData instanceData) {
         int branchCount = DEFAULT_BRANCH_COUNT;
 
-        if (instanceData != null && instanceData.properties.containsKey(PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id())) {
-            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id());
-            // 兼容强转防御：防止从某些 JSON 库反序列化回来后变成了 String
+        if (instanceData != null && instanceData.outputs.containsKey(PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id())) {
+            Object countObj = instanceData.outputs.get(PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id());
             if (countObj instanceof Number) {
                 branchCount = ((Number) countObj).intValue();
             } else if (countObj instanceof String) {
@@ -44,8 +43,6 @@ public class Switch extends BaseNode {
                 } catch (NumberFormatException ignored) {}
             }
         }
-
-        // 兜底保护，防止 JSON 被外部恶意篡改导致越界
         branchCount = Math.max(1, Math.min(branchCount, MAX_BRANCH_COUNT));
         return buildDef(branchCount);
     }

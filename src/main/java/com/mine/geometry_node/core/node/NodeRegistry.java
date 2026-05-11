@@ -20,21 +20,16 @@ public class NodeRegistry {
     private NodeRegistry() {}
 
     public void init() {
-        System.out.println("[GeometryNode] Start node registry");
+        System.out.println("[NodeRegistry] Start node registry");
 
         ServiceLoader<GeometryNodePlugin> loader = ServiceLoader.load(GeometryNodePlugin.class);
 
         for (GeometryNodePlugin plugin : loader) {
-            System.out.println("[GeometryNode] Find node: " + plugin.getClass().getSimpleName());
-            try {
-                plugin.registerNodes(this);
-            } catch (Exception e) {
-                System.err.println("[GeometryNode] Fail to load node: " + plugin.getClass().getName());
-                e.printStackTrace();
-            }
+            System.out.println("[NodeRegistry] Find node: " + plugin.getClass().getSimpleName());
+            plugin.registerNodes(this);
         }
 
-        System.out.println("[GeometryNode] Load finished，Total nodes: " + registry.size());
+        System.out.println("[NodeRegistry] Load finished. Total nodes: " + registry.size());
     }
 
     public void register(String path, BaseNode node) {
@@ -68,15 +63,30 @@ public class NodeRegistry {
     }
 
     public void register(NodeCategory category, BaseNode node) {
+        // 1. 基础校验
         if (node == null || category == null) {
-            throw new IllegalArgumentException("Cannot register null node or null category");
+            System.err.println("[NodeRegistry] Skip: Cannot register null node or null category");
+            return; // 跳过，不中断后续
         }
 
+        // 2. 获取定义并校验（防止 NPE）
         NodeDef def = node.getDefaultDefinition();
-        String typeId = def.typeId();
+        if (def == null) {
+            System.err.println("[NodeRegistry] Skip: Node " + node.getClass().getSimpleName() + " returned a null definition!");
+            return; // 跳过这个非法节点
+        }
 
+        // 3. 获取 ID 并校验
+        String typeId = def.typeId();
+        if (typeId == null || typeId.isEmpty()) {
+            System.err.println("[NodeRegistry] Skip: Node " + node.getClass().getSimpleName() + " has a null or empty typeId!");
+            return;
+        }
+
+        // 4. 重复检查
         if (registry.containsKey(typeId)) {
-            throw new IllegalStateException("Duplicate node type registered: " + typeId);
+            System.err.println("[NodeRegistry] Skip: Duplicate node type registered: " + typeId);
+            return;
         }
 
         registry.put(typeId, node);

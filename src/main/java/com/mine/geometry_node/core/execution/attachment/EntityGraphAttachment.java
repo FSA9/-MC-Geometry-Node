@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.execution.attachment;
 
+import com.mine.geometry_node.core.execution.GraphEngine;
 import com.mine.geometry_node.core.execution.GraphProcess;
 import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
 import com.mine.geometry_node.core.execution.RuntimeGraphIndex;
@@ -82,7 +83,18 @@ public class EntityGraphAttachment {
     }
 
     public GraphProcess getProcess(String graphId) {
-        return processes.get(graphId);
+        GraphProcess process = processes.get(graphId);
+
+        RuntimeGraphIndex latestIndex = GraphResourceManager.getInstance().getIndex(graphId);
+
+        if (latestIndex != null) {
+            if (process == null || process.getIndex() != latestIndex) {
+                process = new GraphProcess(graphId, latestIndex);
+                processes.put(graphId, process);
+            }
+        }
+
+        return process;
     }
 
     // --- 属性管理 ---
@@ -143,7 +155,7 @@ public class EntityGraphAttachment {
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag pTag = list.getCompound(i);
                 String graphId = pTag.getString("GraphId");
-                RuntimeGraphIndex index = GraphResourceManager.getInstance().getIndex(graphId);
+                RuntimeGraphIndex index = GraphEngine.getGraphIndex(graphId);
                 if (index != null) {
                     this.processes.put(graphId, new GraphProcess(pTag, index, provider));
                 }

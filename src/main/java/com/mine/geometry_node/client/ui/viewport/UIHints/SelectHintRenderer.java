@@ -2,10 +2,9 @@ package com.mine.geometry_node.client.ui.viewport.UIHints;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.ConfigManager;
-import com.mine.geometry_node.client.ui.utils.UIUtils; // 引入
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.RegistryDataManager;
@@ -31,9 +30,8 @@ public class SelectHintRenderer implements UIHintRenderer {
 
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        String propKey = row.hintParams() != null ? (String) row.hintParams().get(PortMetaKeys.BIND_PROPERTY) : null;
+        // 1. 获取选项列表 (保持原有逻辑，处理静态选项或动态注册表)
         List<String> resolvedOptions = new ArrayList<>();
-
         if (row.hintParams() != null) {
             String[] staticOptions = (String[]) row.hintParams().get(PortMetaKeys.OPTIONS);
             if (staticOptions != null && staticOptions.length > 0) {
@@ -47,9 +45,13 @@ public class SelectHintRenderer implements UIHintRenderer {
             }
         }
 
+        // 2. 新架构：统一使用 leftPort 的 ID 作为数据存储的 Key
+        String portId = row.leftPort() != null ? row.leftPort().id() : "";
         Object val = null;
-        if (propKey != null) val = nodeData.properties.get(propKey);
-        else if (row.leftPort() != null) val = nodeData.inputs.containsKey(row.leftPort().id()) ? nodeData.inputs.get(row.leftPort().id()) : row.leftPort().defaultValue();
+        if (row.leftPort() != null) {
+            // 从 inputs 字典中读取，如果没有则使用端口自带的默认值
+            val = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
+        }
 
         TextView dropdownBtn = new TextView(context);
         String displayVal = val != null ? val.toString() : (resolvedOptions.isEmpty() ? "" : resolvedOptions.get(0));
@@ -57,11 +59,8 @@ public class SelectHintRenderer implements UIHintRenderer {
         dropdownBtn.setText(displayVal + " ▼");
         dropdownBtn.setTextColor(UIConstants.CLR_GRAY_LABEL);
 
-        // 【核心修复1】明确指定为纯像素单位，防止系统 SP 缩放导致文字撑爆容器
         dropdownBtn.setTextSize(0, UIUtils.dp2px(UIConstants.Node.TEXT_SIZE_LABEL));
-        // 【核心修复2】强制单行排版，修正基线漂移问题
         dropdownBtn.setSingleLine(true);
-        // 明确声明水平靠左，垂直居中
         dropdownBtn.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         dropdownBtn.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
 
@@ -75,25 +74,22 @@ public class SelectHintRenderer implements UIHintRenderer {
             icyllis.modernui.view.ViewParent parent = v.getParent();
             while (parent != null && !(parent instanceof Viewport)) parent = parent.getParent();
 
-            if (parent instanceof Viewport viewport) {
+            if (parent instanceof Viewport viewport && !portId.isEmpty()) {
                 DropdownSearchMenu menu = new DropdownSearchMenu(context, resolvedOptions, selectedVal -> {
                     dropdownBtn.setText(selectedVal + " ▼");
-                    if (editorContext != null) {
-                        if (propKey != null) {
-                            Object oldVal = nodeData.properties.get(propKey);
-                            if (oldVal == null || !selectedVal.equals(oldVal.toString())) editorContext.getCommandManager().execute(new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, selectedVal));
-                        } else if (row.leftPort() != null) {
-                            String portId = row.leftPort().id();
-                            Object oldVal = nodeData.inputs.get(portId);
-                            if (oldVal == null || !selectedVal.equals(oldVal.toString())) editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, selectedVal));
+
+                    Object oldVal = nodeData.inputs.get(portId);
+                    if (oldVal == null || !selectedVal.equals(oldVal.toString())) {
+                        if (editorContext != null) {
+                            // 【核心改动】统一派发 CmdChangeInputValue 指令
+                            editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, selectedVal));
+                        } else {
+                            // 无 Context 时直接写入 inputs 字典
+                            nodeData.inputs.put(portId, selectedVal);
                         }
-                    } else {
-                        if (propKey != null) nodeData.properties.put(propKey, selectedVal);
-                        else if (row.leftPort() != null) nodeData.inputs.put(row.leftPort().id(), selectedVal);
                     }
                 });
 
-                // 【核心修改】直接把按钮本身 (v) 交给菜单，让菜单自己去实时追踪它的坐标
                 menu.showAt(v, viewport);
             }
         });

@@ -132,7 +132,7 @@ public class UINode extends FrameLayout {
             String propertyKey = isInputDynamic ? com.mine.geometry_node.core.node.meta.PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id() : com.mine.geometry_node.core.node.meta.PropertyKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
 
             int currentCount = 1;
-            Object countObj = mNodeData.properties.get(propertyKey);
+            Object countObj = mNodeData.inputs.get(propertyKey);
             if (countObj instanceof Number num) {
                 currentCount = num.intValue();
             } else if (countObj instanceof String str) {
@@ -179,6 +179,10 @@ public class UINode extends FrameLayout {
 
             // --- 3. 左侧标签排版 ---
             if (row.leftPort() != null) {
+                if (!row.leftPort().hidePin()) {
+                    mInputPortY.put(row.leftPort().id(), portCenterY);
+                }
+
                 mInputPortY.put(row.leftPort().id(), portCenterY);
                 TextView tv = mPortLabels.get(row.leftPort().id());
                 if (tv != null) {
@@ -302,7 +306,7 @@ public class UINode extends FrameLayout {
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
 
-            if (row.leftPort() != null) {
+            if (row.leftPort() != null && !row.leftPort().hidePin()) {
                 Float yDp = mInputPortY.get(row.leftPort().id());
                 if (yDp != null) {
                     mPaint.setStyle(Paint.Style.FILL);

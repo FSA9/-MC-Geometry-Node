@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes.data;
+package com.mine.geometry_node.core.node.nodes.data.container;
 
 import com.mine.geometry_node.core.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.NodeData;
@@ -25,14 +25,14 @@ public class MakeList extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return getDefinition(null);
+        return buildDef(1);
     }
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
         int portCount = 1;
-        if (instanceData != null && instanceData.properties.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
-            Object countObj = instanceData.properties.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+        if (instanceData != null && instanceData.inputs.containsKey(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id())) {
+            Object countObj = instanceData.inputs.get(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
             if (countObj instanceof Number n) {
                 portCount = Math.max(1, n.intValue());
             } else if (countObj instanceof String s) {
@@ -49,9 +49,8 @@ public class MakeList extends BaseNode {
 
         builder.addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null));
         builder.addRow(new PortRow(StandardPorts.LIST.toInput(), null, UIHint.DEFAULT, null, null));
-
         for (int i = 1; i <= portCount; i++) {
-            PortDef itemPort = new PortDef("list_item_" + i, Component.literal("Item " + i), PortType.ANY, null);
+            PortDef itemPort = new PortDef("list_item_" + i, Component.literal("Item " + i), PortType.ANY, null, false);
 
             builder.addRow(new PortRow(
                     itemPort,
@@ -80,12 +79,14 @@ public class MakeList extends BaseNode {
         }
 
         int portCount = 1;
-        Object countObj = context.getNodeProperty(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+        Object countObj = context.getInputValue(PropertyKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
         if (countObj instanceof Number n) portCount = Math.max(1, n.intValue());
+        else if (countObj instanceof String s) {
+            try { portCount = Integer.parseInt(s); } catch (NumberFormatException ignored) {}
+        }
 
         for (int i = 1; i <= portCount; i++) {
             Object value = getRawInput(context, "list_item_" + i);
-
             if (value != null) {
                 resultList.add(value);
             }

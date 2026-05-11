@@ -27,7 +27,6 @@ import java.util.Map;
 public class SpawnItemDisplayEntity extends BaseNode {
 
     public static final String TYPE_ID = "spawn_item_display_entity";
-    public static final String PROPERTY_DISPLAY_CONTEXT = "item_display_context";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -37,11 +36,8 @@ public class SpawnItemDisplayEntity extends BaseNode {
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        null, null, UIHint.SELECT, null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_DISPLAY_CONTEXT,
-                                PortMetaKeys.OPTIONS, new String[]{"none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground", "fixed"}
-                        )
+                        StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.OPTIONS, new String[]{"none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground", "fixed"})
                 ))
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
@@ -60,9 +56,10 @@ public class SpawnItemDisplayEntity extends BaseNode {
         if (pos == null) pos = Vec3.ZERO;
 
         ItemStack itemStack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
-        if (itemStack == null || itemStack.isEmpty()) itemStack = new ItemStack(Items.STONE); // 默认保底
+        if (itemStack == null || itemStack.isEmpty()) itemStack = new ItemStack(Items.STONE);
 
-        String displayContext = context.getConfig(PROPERTY_DISPLAY_CONTEXT, String.class, "fixed");
+        String displayContext = getInput(context, StandardPorts.STRING.getId(), String.class);
+        if (displayContext == null) displayContext = "fixed";
 
         Vec3 translation = getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class);
         Vec3 rotation = getInput(context, StandardPorts.ROTATION.getId(), Vec3.class);
@@ -87,12 +84,10 @@ public class SpawnItemDisplayEntity extends BaseNode {
             CompoundTag nbt = new CompoundTag();
             displayEntity.saveWithoutId(nbt);
 
-            // 写入物品专有属性
             Tag itemTag = itemStack.saveOptional(level.registryAccess());
             nbt.put("item", itemTag);
             nbt.putString("item_display", displayContext);
 
-            // 矩阵与插值
             CompoundTag transTag = new CompoundTag();
             transTag.put("translation", createFloatList((float) translation.x, (float) translation.y, (float) translation.z));
             transTag.put("scale", createFloatList((float) scaleVec.x, (float) scaleVec.y, (float) scaleVec.z));

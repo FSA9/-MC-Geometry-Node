@@ -25,7 +25,6 @@ import java.util.Map;
 public class AddEffect extends BaseNode {
 
     public static final String TYPE_ID = "add_effect";
-    public static final String PROPERTY_EFFECT = "effect_id";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -33,12 +32,13 @@ public class AddEffect extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        null, null, UIHint.SELECT, null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_EFFECT,
-                                PortMetaKeys.OPTIONS, RegistryDataManager.getAllEffects().toArray(new String[0])
-                        )
+                        StandardPorts.STRING.toInput().hiddenPin(),
+                        null,
+                        UIHint.SELECT,
+                        null,
+                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllEffects().toArray(new String[0]))
                 ))
+
                 .addRow(new PortRow(StandardPorts.TICK.toInput(600), null, UIHint.DEFAULT, null, null)) // 时长 (默认30秒)
                 .addRow(new PortRow(StandardPorts.INT.toInput(0), null, UIHint.DEFAULT, null, null))   // 等级 (Amplifier)
                 .build();
@@ -47,7 +47,9 @@ public class AddEffect extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        String effectId = (String) context.getNodeProperty(PROPERTY_EFFECT);
+
+        String effectId = getInput(context, StandardPorts.STRING.getId(), String.class);
+
         Integer duration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
         Integer amplifier = getInput(context, StandardPorts.INT.getId(), Integer.class);
 
@@ -61,7 +63,6 @@ public class AddEffect extends BaseNode {
 
                     for (Entity entity : entities) {
                         if (entity instanceof LivingEntity living) {
-                            // 直接传入 Holder，不再强转
                             living.addEffect(new MobEffectInstance(effectHolder.get(), dur, amp));
                         }
                     }

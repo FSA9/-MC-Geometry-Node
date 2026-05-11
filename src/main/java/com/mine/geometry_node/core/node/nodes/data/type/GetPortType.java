@@ -15,21 +15,17 @@ import java.util.Map;
 public class GetPortType extends BaseNode {
 
     public static final String TYPE_ID = "get_port_type";
-    public static final String PROPERTY_SELECTED = PortMetaKeys.DYNAMIC_REGISTRY_ID.id();
 
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_port_type"))
-                .addRow(new PortRow(null, StandardPorts.STRING.toOutput(), null, null, null))
+                .addRow(new PortRow(null, StandardPorts.STRING.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        null,
+                        StandardPorts.STRING.toInput().hiddenPin(),
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED,
-                                PortMetaKeys.DYNAMIC_REGISTRY_ID, "geometry_node:port_types"
-                        )
+                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "geometry_node:port_types")
                 ))
                 .build();
     }
@@ -37,7 +33,7 @@ public class GetPortType extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.STRING.getId().equals(portName)) {
-            return context.getNodeProperty(PROPERTY_SELECTED);
+            return getInput(context, StandardPorts.STRING.getId(), String.class);
         }
         return null;
     }

@@ -9,11 +9,6 @@ public class PortMetaKeys {
     public static final MetaKey<Integer> DYNAMIC_INDEX = new MetaKey<>("dynamic_index");
 
     /**
-     * 下拉框控件关联的 Property 键名
-     */
-    public static final MetaKey<String> BIND_PROPERTY = new MetaKey<>("properties");
-
-    /**
      * 下拉框控件的可选列表
      */
     public static final MetaKey<String[]> OPTIONS = new MetaKey<>("options");

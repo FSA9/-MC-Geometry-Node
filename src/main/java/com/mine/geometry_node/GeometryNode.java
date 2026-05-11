@@ -17,6 +17,7 @@ import net.minecraft.server.packs.PackType;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.attachment.IAttachmentHolder;
 import net.neoforged.neoforge.attachment.IAttachmentSerializer;
+import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.registries.*;
 import org.slf4j.Logger;
 
@@ -99,8 +100,11 @@ public class GeometryNode {
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        LOGGER.info("[GeometryNode] Server starting, ready to process graphs!");
-        // 启动时从世界存档加载动态蓝图
+    }
+
+    @SubscribeEvent
+    public void onServerAboutToStart(ServerAboutToStartEvent event) {
+        LOGGER.info("[GeometryNode] Server about to start, loading dynamic graphs...");
         DynamicGraphManager.loadAllFromDisk(event.getServer());
     }
 }

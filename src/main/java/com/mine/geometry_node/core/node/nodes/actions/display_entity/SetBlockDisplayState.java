@@ -24,7 +24,6 @@ import java.util.Map;
 public class SetBlockDisplayState extends BaseNode {
 
     public static final String TYPE_ID = "set_block_display_state";
-    public static final String PROPERTY_SELECTED = PortMetaKeys.DYNAMIC_REGISTRY_ID.id();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -33,11 +32,8 @@ public class SetBlockDisplayState extends BaseNode {
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.BLOCK_STATE.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        null, null, UIHint.SELECT, null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED,
-                                PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0])
-                        )
+                        StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0]))
                 ))
                 .build();
     }
@@ -47,18 +43,16 @@ public class SetBlockDisplayState extends BaseNode {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return next(StandardPorts.FLOW_OUT.getId());
 
-        // 双轨制读取：优先连线，后下拉框
         BlockState blockState = getInput(context, StandardPorts.BLOCK_STATE.getId(), BlockState.class);
         if (blockState == null) {
-            String selectedBlockId = context.getConfig(PROPERTY_SELECTED, String.class, "");
-            if (!selectedBlockId.isEmpty()) {
+            String selectedBlockId = getInput(context, StandardPorts.STRING.getId(), String.class);
+            if (selectedBlockId != null && !selectedBlockId.isEmpty()) {
                 blockState = TypeConverter.convert(selectedBlockId, BlockState.class, context);
             }
         }
         if (blockState == null) return next(StandardPorts.FLOW_OUT.getId());
 
         for (Entity entity : entities) {
-            // 严格拦截：不仅要是展示实体，还必须是方块展示实体！
             if (entity instanceof Display.BlockDisplay blockDisplayEntity) {
                 CompoundTag nbt = new CompoundTag();
                 blockDisplayEntity.saveWithoutId(nbt);

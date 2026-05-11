@@ -34,7 +34,7 @@ public class MathOperation extends BaseNode {
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
-        String operator = (String) instanceData.properties.getOrDefault(PropertyKeys.SELECTION.id(), "+");
+        String operator = (String) instanceData.inputs.getOrDefault(StandardPorts.STRING.toInput().id(), "+");
         return buildDef(operator);
     }
 
@@ -43,19 +43,11 @@ public class MathOperation extends BaseNode {
 
         // 输出端口
         builder.addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null));
-
-        // 下拉选择框：操作符选择
+        // 下拉选择框
         builder.addRow(new PortRow(
-                null, null, UIHint.SELECT, null,
-                Map.of(
-                        PortMetaKeys.BIND_PROPERTY, PropertyKeys.SELECTION.id(),
-                        PortMetaKeys.OPTIONS, ALL_OPERATORS
-                )));
-
-        // 第一个输入值 (所有运算都需要)
+                StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
+                Map.of(PortMetaKeys.OPTIONS, ALL_OPERATORS)));
         builder.addRow(new PortRow(StandardPorts.VALUE.toInputWithIndex(1), null, UIHint.INPUT, null, null));
-
-        // 如果是二元运算或比较运算，才显示第二个输入端口
         if (isBinaryOperator(operator)) {
             builder.addRow(new PortRow(
                     StandardPorts.VALUE.toInputWithIndex(2),

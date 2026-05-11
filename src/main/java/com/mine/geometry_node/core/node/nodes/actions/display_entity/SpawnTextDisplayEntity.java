@@ -24,34 +24,26 @@ import java.util.Map;
 public class SpawnTextDisplayEntity extends BaseNode {
 
     public static final String TYPE_ID = "spawn_text_display_entity";
-    public static final String PROPERTY_ALIGNMENT = "text_alignment";
 
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_text_display_entity"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                // 核心文本内容
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.MESSAGE.toInput("Hello World"), null, UIHint.INPUT, null, null))
-                // 文本排版样式
                 .addRow(new PortRow(
-                        null, null, UIHint.SELECT, null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_ALIGNMENT,
-                                PortMetaKeys.OPTIONS, new String[]{"center", "left", "right"}
-                        )
+                        StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.OPTIONS, new String[]{"center", "left", "right"})
                 ))
                 .addRow(new PortRow(StandardPorts.TEXT_LINE_WIDTH.toInput(200), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.BACKGROUND_COLOR.toInput(1073741824), null, UIHint.INPUT, null, null)) // 默认半透明黑 ARGB (0x40000000)
+                .addRow(new PortRow(StandardPorts.BACKGROUND_COLOR.toInput(1073741824), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TEXT_OPACITY.toInput(1.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TEXT_SHADOW.toInput(true), null, UIHint.CHECKBOX, null, null))
                 .addRow(new PortRow(StandardPorts.SEE_THROUGH.toInput(false), null, UIHint.CHECKBOX, null, null))
-                // 矩阵变换
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
-                // 动画插值
                 .addRow(new PortRow(StandardPorts.TELEPORT_DURATION.toInput(0), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.INTERPOLATION_DURATION.toInput(0), null, UIHint.INPUT, null, null))
                 .build();
@@ -68,7 +60,9 @@ public class SpawnTextDisplayEntity extends BaseNode {
         String message = getInput(context, StandardPorts.MESSAGE.getId(), String.class);
         if (message == null) message = "";
 
-        String alignment = context.getConfig(PROPERTY_ALIGNMENT, String.class, "center");
+        String alignment = getInput(context, StandardPorts.STRING.getId(), String.class);
+        if (alignment == null) alignment = "center";
+
         Integer lineWidth = getInput(context, StandardPorts.TEXT_LINE_WIDTH.getId(), Integer.class);
         Integer bgColor = getInput(context, StandardPorts.BACKGROUND_COLOR.getId(), Integer.class);
         Float opacity = getInput(context, StandardPorts.TEXT_OPACITY.getId(), Float.class);
@@ -98,14 +92,12 @@ public class SpawnTextDisplayEntity extends BaseNode {
             CompoundTag nbt = new CompoundTag();
             displayEntity.saveWithoutId(nbt);
 
-            // 写入文本专有属性
             nbt.putString("text", Component.Serializer.toJson(Component.literal(message), level.registryAccess()));
             nbt.putString("alignment", alignment);
             if (lineWidth != null) nbt.putInt("line_width", Math.max(1, lineWidth));
             if (shadow != null) nbt.putBoolean("shadow", shadow);
             if (seeThrough != null) nbt.putBoolean("see_through", seeThrough);
 
-            // 处理透明度和背景色
             if (opacity != null) {
                 byte byteOpacity = (byte) Math.max(0, Math.min(255, (int) (opacity * 255)));
                 nbt.putByte("text_opacity", byteOpacity);
@@ -117,7 +109,6 @@ public class SpawnTextDisplayEntity extends BaseNode {
                 nbt.putBoolean("default_background", true);
             }
 
-            // 矩阵与插值
             CompoundTag transTag = new CompoundTag();
             transTag.put("translation", createFloatList((float) translation.x, (float) translation.y, (float) translation.z));
             transTag.put("scale", createFloatList((float) scaleVec.x, (float) scaleVec.y, (float) scaleVec.z));

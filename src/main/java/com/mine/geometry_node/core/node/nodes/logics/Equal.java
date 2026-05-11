@@ -19,12 +19,13 @@ public class Equal extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.LOGIC, Component.translatable("geometry_node.node.equal"))
-                // 第一行：左侧输入 A，右侧输出结果 BOOL
-                .addRow(new PortRow(new PortDef("A", Component.literal("A"), PortType.ANY, null), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                // 第二行：左侧输入 B
-                .addRow(new PortRow(new PortDef("B", Component.literal("B"), PortType.ANY, null), null, UIHint.DEFAULT, null, null))
-                .build();
+//        return NodeDef.builder(TYPE_ID, NodeType.LOGIC, Component.translatable("geometry_node.node.equal"))
+//                // 第一行：左侧输入 A，右侧输出结果 BOOL
+//                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+//                // 第二行：左侧输入 B
+//                .addRow(new PortRow(new PortDef("B", Component.literal("B"), PortType.ANY, null), null, UIHint.DEFAULT, null, null))
+//                .build();
+        return null;
     }
 
     @Override

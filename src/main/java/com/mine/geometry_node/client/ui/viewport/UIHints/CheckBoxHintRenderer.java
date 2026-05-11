@@ -4,7 +4,6 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeProperty;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 
@@ -24,13 +23,8 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
 
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        String propKey = row.hintParams() != null ? (String) row.hintParams().get("properties") : null;
-        Object val = null;
-        if (propKey != null) {
-            val = nodeData.properties.get(propKey);
-        } else if (row.leftPort() != null) {
-            val = nodeData.inputs.containsKey(row.leftPort().id()) ? nodeData.inputs.get(row.leftPort().id()) : row.leftPort().defaultValue();
-        }
+        String portId = row.leftPort().id();
+        Object val = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
 
         boolean initialCheck = String.valueOf(val).equalsIgnoreCase("true");
 
@@ -46,13 +40,11 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
                 float r = w * 0f;
                 mPaint.setAntiAlias(true);
 
-                // 【核心修正】计算线宽，并向内缩进半个线宽，防止边缘被切！
                 float strokeWidth = Math.max(1.0f, w * 0.08f);
                 float offset = strokeWidth / 2.0f;
 
                 mPaint.setStyle(Paint.Style.FILL);
                 mPaint.setColor(isChecked ? 0xFF3B82F6 : 0xFF252525);
-                // 填充区域同样缩进，避免漏出毛边
                 canvas.drawRoundRect(offset, offset, w - offset, h - offset, r, (int) r, mPaint);
 
                 mPaint.setStyle(Paint.Style.STROKE);
@@ -80,17 +72,10 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
             cb.invalidate();
 
             if (editorContext != null) {
-                if (propKey != null) {
-                    Object oldVal = nodeData.properties.get(propKey);
-                    editorContext.getCommandManager().execute(new CmdChangeProperty(editorContext.getGraphController(), nodeData.id, propKey, oldVal, isChecked));
-                } else if (row.leftPort() != null) {
-                    String portId = row.leftPort().id();
-                    Object oldVal = nodeData.inputs.get(portId);
-                    editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, isChecked));
-                }
+                Object oldVal = nodeData.inputs.get(portId);
+                editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, isChecked));
             } else {
-                if (propKey != null) nodeData.properties.put(propKey, isChecked);
-                else if (row.leftPort() != null) nodeData.inputs.put(row.leftPort().id(), isChecked);
+                nodeData.inputs.put(portId, isChecked);
             }
         });
         return cb;

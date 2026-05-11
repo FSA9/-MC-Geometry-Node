@@ -15,14 +15,13 @@ public class CmdRemoveBranch implements ICommand {
     private final GraphController mController;
     private final NodeGraph mGraph;
     private final String mNodeId;
-    private final String mPropertyKey;
+    private final String mPropertyKey; // 现在这个 Key 对应 inputs 里的键
     private final int mOldCount;
 
-    // 【修改点 1】：废弃 String refId，直接接收确切的移除索引
     private final int mRemoveIndex;
 
     // --- 全量快照备份 ---
-    private final Map<String, Object> mBackupProperties = new HashMap<>();
+    // 【修改点 1】：彻底删除了 mBackupProperties
     private final Map<String, Object> mBackupInputs = new HashMap<>();
     private final Map<String, List<Connection>> mBackupOutputs = new HashMap<>();
     private final Map<String, String> mBackupExecution = new HashMap<>();
@@ -30,12 +29,11 @@ public class CmdRemoveBranch implements ICommand {
 
     private record InboundConnectionBackup(String sourceNodeId, String sourcePortId, String targetPortId) {}
 
-    // 【修改点 2】：构造函数参数改为 int removeIndex
     public CmdRemoveBranch(GraphController controller, NodeGraph graph, String nodeId, String propertyKey, int currentCount, int removeIndex) {
         this.mController = controller;
         this.mGraph = graph;
         this.mNodeId = nodeId;
-        this.mPropertyKey = propertyKey;
+        this.mPropertyKey = propertyKey; // 尽管叫 propertyKey，但在新架构里它是 Input 的 ID
         this.mOldCount = currentCount;
         this.mRemoveIndex = removeIndex;
 
@@ -46,7 +44,7 @@ public class CmdRemoveBranch implements ICommand {
         NodeData targetNode = mGraph.getNode(mNodeId);
         if (targetNode == null) return;
 
-        mBackupProperties.putAll(targetNode.properties);
+        // 【修改点 2】：不再备份 properties
         mBackupInputs.putAll(targetNode.inputs);
 
         for (Map.Entry<String, List<Connection>> entry : targetNode.outputs.entrySet()) {
@@ -70,7 +68,6 @@ public class CmdRemoveBranch implements ICommand {
 
     @Override
     public void execute() {
-        // 【修改点 3】：直接将解析好的数字传给 Controller，不需要传字符串了
         mController.removeDynamicBranch(mNodeId, mPropertyKey, mRemoveIndex, mOldCount);
     }
 
@@ -99,8 +96,7 @@ public class CmdRemoveBranch implements ICommand {
             mController.removeExecutionConnection(mNodeId, execPort);
         }
 
-        targetNode.properties.clear();
-        targetNode.properties.putAll(mBackupProperties);
+        // 【修改点 3】：不再清空和恢复 properties
         targetNode.inputs.clear();
         targetNode.inputs.putAll(mBackupInputs);
 
@@ -116,6 +112,7 @@ public class CmdRemoveBranch implements ICommand {
             mController.addConnection(inbound.sourceNodeId, inbound.sourcePortId, mNodeId, inbound.targetPortId);
         }
 
-        mController.setNodeProperty(mNodeId, mPropertyKey, mOldCount);
+        // 【修改点 4】：将 setNodeProperty 改为 setNodeInputValue，触发视图与底层数据更新
+        mController.setNodeInputValue(mNodeId, mPropertyKey, mOldCount);
     }
 }

@@ -31,7 +31,6 @@ public class DocumentManager {
 
     // 打开或新建一个图纸
     public void openSession(GraphSession session) {
-        // 如果已经打开了，直接切换过去
         for (GraphSession s : mSessions) {
             if (s.fileId.equals(session.fileId)) {
                 switchSession(s);
@@ -52,7 +51,6 @@ public class DocumentManager {
     }
 
     public void closeSession(GraphSession session) {
-        // TODO: 这里将在后续阶段接入 isDirty 的弹窗拦截逻辑
         mSessions.remove(session);
         if (mActiveSession == session) {
             mActiveSession = mSessions.isEmpty() ? null : mSessions.get(mSessions.size() - 1);
@@ -91,9 +89,9 @@ public class DocumentManager {
                 mOnTabChangedListener.run();
             }
 
-            System.out.println("[DocumentManager] 成功保存文件: " + session.fileId);
+            System.out.println("[DocumentManager] Save Success: " + session.fileId);
         } catch (Exception e) {
-            System.err.println("[DocumentManager] 保存失败: " + e.getMessage());
+            System.err.println("[DocumentManager] Save Failed: " + e.getMessage());
             e.printStackTrace();
         }
     }

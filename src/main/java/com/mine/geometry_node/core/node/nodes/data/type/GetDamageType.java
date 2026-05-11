@@ -14,21 +14,16 @@ public class GetDamageType extends BaseNode {
 
     public static final String TYPE_ID = "get_damage_type";
 
-    public static final String PROPERTY_SELECTED = PortMetaKeys.DYNAMIC_REGISTRY_ID.id();
-
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_damage_type"))
-                .addRow(new PortRow(null, StandardPorts.DAMAGE_TYPE.toOutput(), null, null, null))
+                .addRow(new PortRow(null, StandardPorts.DAMAGE_TYPE.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        null,
+                        StandardPorts.STRING.toInput().hiddenPin(),
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(
-                                PortMetaKeys.BIND_PROPERTY, PROPERTY_SELECTED,
-                                PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:damage_type"
-                        )
+                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:damage_type")
                 ))
                 .build();
     }
@@ -36,10 +31,7 @@ public class GetDamageType extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.DAMAGE_TYPE.getId().equals(portName)) {
-
-            String selectedType = (String) context.getNodeProperty(PROPERTY_SELECTED);
-
-            return selectedType;
+            return getInput(context, StandardPorts.STRING.getId(), String.class);
         }
         return null;
     }
