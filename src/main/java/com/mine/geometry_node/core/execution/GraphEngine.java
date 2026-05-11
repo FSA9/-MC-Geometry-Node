@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.execution;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.execution.attachment.*;
+import com.mine.geometry_node.core.execution.event_handler.GraphEventHandler;
 import com.mine.geometry_node.core.execution.storage.*;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;

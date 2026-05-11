@@ -2,7 +2,7 @@ package com.mine.geometry_node;
 
 import com.mine.geometry_node.core.command.ServerGraphCommand;
 import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
-import com.mine.geometry_node.core.execution.GraphEventHandler;
+import com.mine.geometry_node.core.execution.event_handler.GraphEventHandler;
 import com.mine.geometry_node.core.execution.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
