@@ -41,41 +41,14 @@ public abstract class BaseNode {
     // 核心数据泵
     // ==========================================
 
-    /**
-     * 仅负责找数据（连线 > 静态配置）
-     */
     @Nullable
     protected Object getRawInput(ExecutionContext ctx, String portName) {
-        // 1. 获取连线输入
         Object val = ctx.getInputValue(portName);
         if (val != null) return val;
 
-        // 2. 获取静态配置
-        val = ctx.getStaticInput(portName);
-        if (val != null) return val;
-
-        // 3. 获取默认值
-        NodeDef def = getDefaultDefinition();
-        if (def != null) {
-            for (var row : def.rows()) {
-                // 检查左侧输入端口
-                if (row.leftPort() != null && row.leftPort().id().equals(portName)) {
-                    return row.leftPort().defaultValue();
-                }
-//                // 检查右侧输出端口
-//                if (row.rightPort() != null && row.rightPort().id().equals(portName)) {
-//                    return row.rightPort().defaultValue();
-//                }
-            }
-        }
-
-        return null;
+        return ctx.getStaticInput(portName);
     }
 
-    /**
-     * [全能单体获取]
-     * 获取数据，并委派给 TypeConverter 变身为你想要的 Class。
-     */
     @Nullable
     protected <T> T getInput(ExecutionContext ctx, String portName, Class<T> type) {
         Object raw = getRawInput(ctx, portName);
@@ -126,9 +99,9 @@ public abstract class BaseNode {
     protected Object bindDynamic(Object value, Entity target, String propertyName) {
         if (target == null) return value;
 
-        // 生成唯一的变量标识符，防止多个实体混淆
+        // 生成唯一的变量标识符
         String varKey = "env_" + target.getId() + "_" + propertyName;
-        // 定义绑定协议：客户端看到这个 key，就知道去查对应实体的属性
+        // 定义绑定协议
         Map<String, String> bindings = Map.of(varKey, "entity:" + target.getId() + ":" + propertyName);
 
         return new DynamicData(value, new ExpressionData(varKey, bindings));

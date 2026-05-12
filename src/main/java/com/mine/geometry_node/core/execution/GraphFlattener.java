@@ -3,6 +3,10 @@ package com.mine.geometry_node.core.execution;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.port.PortRow;
 
 import java.util.*;
 
@@ -49,20 +53,19 @@ class GraphFlattener {
             // 1. 基础信息提取
             nodeDataLookup.put(globalId, nodeObj);
 
+            String type = "unknown";
             if (nodeObj.has("node_type")) {
-                String type = nodeObj.get("node_type").getAsString();
+                type = nodeObj.get("node_type").getAsString();
                 typeLookup.computeIfAbsent(type, k -> new ArrayList<>()).add(globalId);
 
-                // 特殊处理：如果是节点组，进行递归
+                // 节点组递归
                 if ("node_group".equals(type) && nodeObj.has("sub_nodes")) {
                     GroupBoundary boundary = parseGroupBoundary(globalId, nodeObj, prefix);
                     groupBoundaries.put(globalId, boundary);
 
-                    // 建立反向索引，方便后续 O(1) 查找父级
                     if (boundary.groupInId != null) internalToGroupMap.put(boundary.groupInId, globalId);
                     if (boundary.groupOutId != null) internalToGroupMap.put(boundary.groupOutId, globalId);
 
-                    // 递归进入下一层
                     flattenRecursive(globalId + "/", nodeObj.getAsJsonObject("sub_nodes"));
 
                     // Group 节点本身只是容器，不参与运算，但保留它在 DataLookup 中供调试
@@ -70,15 +73,34 @@ class GraphFlattener {
                 }
             }
 
-            // 2. 属性提取
+            // 2. 属性与静态输入提取 (含默认值烘焙优化)
             if (nodeObj.has("properties")) {
                 propertyLookup.put(globalId, RuntimeGraphIndex.parseValueMap(nodeObj.getAsJsonObject("properties")));
             }
-            if (nodeObj.has("inputs")) {
-                staticInputLookup.put(globalId, RuntimeGraphIndex.parseValueMap(nodeObj.getAsJsonObject("inputs")));
-            }
 
-            // 3. 执行流提取
+            // --- 烘焙(Baking) 核心逻辑 ---
+            Map<String, Object> bakedInputs = new HashMap<>();
+
+            // 引擎注册表获取该节点默认值
+            BaseNode logic = NodeRegistry.INSTANCE.get(type);
+            if (logic != null) {
+                NodeDef def = logic.getDefaultDefinition();
+                if (def != null) {
+                    for (PortRow row : def.rows()) {
+                        if (row.leftPort() != null && row.leftPort().defaultValue() != null) {
+                            bakedInputs.put(row.leftPort().id(), row.leftPort().defaultValue());
+                        }
+                    }
+                }
+            }
+            // JSON 静态值覆盖默认值
+            if (nodeObj.has("inputs")) {
+                bakedInputs.putAll(RuntimeGraphIndex.parseValueMap(nodeObj.getAsJsonObject("inputs")));
+            }
+            // 保存数据字典
+            staticInputLookup.put(globalId, bakedInputs);
+
+            // 执行流提取
             if (nodeObj.has("execution")) {
                 Map<String, String> flowMap = new HashMap<>();
                 JsonObject execObj = nodeObj.getAsJsonObject("execution");
@@ -91,7 +113,7 @@ class GraphFlattener {
                 flowOutputLookup.put(globalId, flowMap);
             }
 
-            // 4. 数据流提取 (反向索引)
+            // 数据流提取
             if (nodeObj.has("outputs")) {
                 JsonObject outObj = nodeObj.getAsJsonObject("outputs");
                 for (String sourcePort : outObj.keySet()) {
