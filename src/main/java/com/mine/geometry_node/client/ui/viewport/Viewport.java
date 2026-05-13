@@ -237,9 +237,17 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override
     public void updateTransform() {
         if (mNodeLayer != null) {
-            // 将视口的物理偏移转为逻辑偏移，因为 setTranslationX 的底层逻辑在 ModernUI 中通常与 density 挂钩
-            mNodeLayer.setTranslationX(UIUtils.px2dp(mViewportX));
-            mNodeLayer.setTranslationY(UIUtils.px2dp(mViewportY));
+            mNodeLayer.setTranslationX(0);
+            mNodeLayer.setTranslationY(0);
+
+            LayoutParams lp = (LayoutParams) mNodeLayer.getLayoutParams();
+            if (lp == null) {
+                lp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+            }
+            lp.leftMargin = (int) mViewportX;
+            lp.topMargin = (int) mViewportY;
+            mNodeLayer.setLayoutParams(lp);
+
             mNodeLayer.setScaleX(mCurrentScale);
             mNodeLayer.setScaleY(mCurrentScale);
         }
@@ -422,7 +430,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     @Override
-    public Viewport.PortInfo findPortAt(float uiX, float uiY) {
+    public PortInfo findPortAt(float uiX, float uiY) {
         if (mNodeLayer == null) return null;
         float dynamicMargin = UIConstants.Node.PORT_HITBOX_RADIUS;
 
@@ -561,7 +569,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
         return null;
     }
 
-    private boolean dispatchTransformedEvent(MotionEvent ev, View target, boolean isLogical, boolean skipEventToScreen, View.OnTouchListener dispatcher) {
+    private boolean dispatchTransformedEvent(MotionEvent ev, View target, boolean isLogical, boolean skipEventToScreen, OnTouchListener dispatcher) {
         float ox = ev.getX();
         float oy = ev.getY();
         float lx, ly;

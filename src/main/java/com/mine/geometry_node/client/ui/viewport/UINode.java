@@ -27,7 +27,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class UINode extends FrameLayout {
-
+    private float mLogicX = 0;
+    private float mLogicY = 0;
     private final NodeData mNodeData;
     private final NodeDef mNodeDef;
     private final EditorContext mEditorContext;
@@ -129,7 +130,7 @@ public class UINode extends FrameLayout {
         btn.setOnClickListener(v -> {
             if (mEditorContext == null) return;
 
-            boolean isInputDynamic = mNodeDef.getMeta(com.mine.geometry_node.core.node.meta.SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
+            boolean isInputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
             String propertyKey = isInputDynamic ? StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id() : StaticKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
 
             int currentCount = 1;
@@ -141,7 +142,7 @@ public class UINode extends FrameLayout {
             }
 
             if (isAdd) {
-                int maxCount = isInputDynamic ? mNodeDef.getMetaOrDefault(com.mine.geometry_node.core.node.meta.SchemaKeys.MAX_DYNAMIC_INPUT, 10) : mNodeDef.getMetaOrDefault(com.mine.geometry_node.core.node.meta.SchemaKeys.MAX_DYNAMIC_OUTPUT, 10);
+                int maxCount = isInputDynamic ? mNodeDef.getMetaOrDefault(SchemaKeys.MAX_DYNAMIC_INPUT, 10) : mNodeDef.getMetaOrDefault(SchemaKeys.MAX_DYNAMIC_OUTPUT, 10);
                 if (currentCount < maxCount) {
                     com.mine.geometry_node.client.ui.UICommand.commands.CmdAddBranch cmd = new com.mine.geometry_node.client.ui.UICommand.commands.CmdAddBranch(mEditorContext.getGraphController(), mNodeData.id, propertyKey, currentCount);
                     mEditorContext.getCommandManager().execute(cmd);
@@ -273,7 +274,10 @@ public class UINode extends FrameLayout {
         }
 
         mTotalHeight = (int) currentY;
-        setLayoutParams(new LayoutParams(UIUtils.dp2pxInt(UIConstants.Node.NODE_WIDTH), UIUtils.dp2pxInt(mTotalHeight)));
+        LayoutParams lp = new LayoutParams(UIUtils.dp2pxInt(UIConstants.Node.NODE_WIDTH), UIUtils.dp2pxInt(mTotalHeight));
+        lp.leftMargin = UIUtils.dp2pxInt(mLogicX);
+        lp.topMargin = UIUtils.dp2pxInt(mLogicY);
+        setLayoutParams(lp);
         invalidate();
     }
 
@@ -393,5 +397,41 @@ public class UINode extends FrameLayout {
     public NodeDef getNodeDef() { return mNodeDef; }
     public void setSelected(boolean selected) { if (mIsSelected != selected) { mIsSelected = selected; invalidate(); } }
     public boolean isSelected() { return mIsSelected; }
-    public void getLogicalBounds(RectF outRect) { outRect.set(getTranslationX(), getTranslationY(), getTranslationX() + UIConstants.Node.NODE_WIDTH, getTranslationY() + mTotalHeight); }
+
+    public void getLogicalBounds(RectF outRect) {
+        outRect.set(getTranslationX(), getTranslationY(), getTranslationX() + UIConstants.Node.NODE_WIDTH, getTranslationY() + mTotalHeight);
+    }
+
+    @Override
+    public void setTranslationX(float translationX) {
+        mLogicX = translationX;
+        super.setTranslationX(0);
+        updateMarginPos();
+    }
+
+    @Override
+    public void setTranslationY(float translationY) {
+        mLogicY = translationY;
+        super.setTranslationY(0);
+        updateMarginPos();
+    }
+
+    @Override
+    public float getTranslationX() {
+        return mLogicX;
+    }
+
+    @Override
+    public float getTranslationY() {
+        return mLogicY;
+    }
+
+    private void updateMarginPos() {
+        icyllis.modernui.view.ViewGroup.LayoutParams params = getLayoutParams();
+        if (params instanceof LayoutParams lp) {
+            lp.leftMargin = UIUtils.dp2pxInt(mLogicX);
+            lp.topMargin = UIUtils.dp2pxInt(mLogicY);
+            setLayoutParams(lp);
+        }
+    }
 }
