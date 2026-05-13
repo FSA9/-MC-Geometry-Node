@@ -12,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * [逻辑定义层] 节点行为基类
@@ -90,6 +91,9 @@ public abstract class BaseNode {
         return new java.util.HashMap<>();
     }
 
+    private static final ConcurrentHashMap<Integer, Map<String, ExpressionData>> DYNAMIC_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Integer, Map<String, ExpressionData>> VECTOR_CACHE = new ConcurrentHashMap<>();
+    
     /**
      * 将普通数据包装为“可溯源”的动态数据，使客户端能够实时追踪该属性。
      * @param value 当前的物理数值
@@ -99,12 +103,17 @@ public abstract class BaseNode {
     protected Object bindDynamic(Object value, Entity target, String propertyName) {
         if (target == null) return value;
 
-        // 生成唯一的变量标识符
-        String varKey = "env_" + target.getId() + "_" + propertyName;
-        // 定义绑定协议
-        Map<String, String> bindings = Map.of(varKey, "entity:" + target.getId() + ":" + propertyName);
+        int entityId = target.getId();
 
-        return new DynamicData(value, new ExpressionData(varKey, bindings));
+        Map<String, ExpressionData> entityCache = DYNAMIC_CACHE.computeIfAbsent(entityId, k -> new java.util.concurrent.ConcurrentHashMap<>());
+
+        ExpressionData cachedProtocol = entityCache.computeIfAbsent(propertyName, prop -> {
+            String varKey = "env_" + entityId + "_" + prop;
+            Map<String, String> bindings = Map.of(varKey, "entity:" + entityId + ":" + prop);
+            return new ExpressionData(varKey, bindings);
+        });
+
+        return new DynamicData(value, cachedProtocol);
     }
 
     /**
@@ -113,22 +122,26 @@ public abstract class BaseNode {
     protected Object bindDynamicVector(Vec3 value, Entity target, String propertyPrefix) {
         if (target == null) return value;
 
-        // 生成三个轴的变量名
-        String xKey = "env_" + target.getId() + "_" + propertyPrefix + "_x";
-        String yKey = "env_" + target.getId() + "_" + propertyPrefix + "_y";
-        String zKey = "env_" + target.getId() + "_" + propertyPrefix + "_z";
+        int entityId = target.getId();
 
-        // 生成三个轴的独立抓取协议
-        Map<String, String> bindings = Map.of(
-                xKey, "entity:" + target.getId() + ":" + propertyPrefix + "_x",
-                yKey, "entity:" + target.getId() + ":" + propertyPrefix + "_y",
-                zKey, "entity:" + target.getId() + ":" + propertyPrefix + "_z"
-        );
+        Map<String, ExpressionData> entityCache = VECTOR_CACHE.computeIfAbsent(entityId, k -> new java.util.concurrent.ConcurrentHashMap<>());
 
-        // 组装特有的矢量公式协议，例如 "vec3(env_123_vel_x, env_123_vel_y, env_123_vel_z)"
-        String vectorFormula = "vec3(" + xKey + "," + yKey + "," + zKey + ")";
+        ExpressionData cachedProtocol = entityCache.computeIfAbsent(propertyPrefix, prop -> {
+            String xKey = "env_" + entityId + "_" + prop + "_x";
+            String yKey = "env_" + entityId + "_" + prop + "_y";
+            String zKey = "env_" + entityId + "_" + prop + "_z";
 
-        return new DynamicData(value, new ExpressionData(vectorFormula, bindings));
+            Map<String, String> bindings = Map.of(
+                    xKey, "entity:" + entityId + ":" + prop + "_x",
+                    yKey, "entity:" + entityId + ":" + prop + "_y",
+                    zKey, "entity:" + entityId + ":" + prop + "_z"
+            );
+
+            String vectorFormula = "vec3(" + xKey + "," + yKey + "," + zKey + ")";
+            return new ExpressionData(vectorFormula, bindings);
+        });
+
+        return new DynamicData(value, cachedProtocol);
     }
 
     // ==========================================

@@ -22,8 +22,23 @@ public class MathExpression extends BaseNode {
 
     public static final String TYPE_ID = "math_expression";
 
-    // 用于缓存编译后的树与它的专属注册表
     private record CachedAST(ASTNode node, VariableRegistry registry) {}
+
+    // ==========================================
+    // 缓存池 (A-Z, 1-26)
+    // ==========================================
+    private static final String[] PORT_IDS = new String[27];
+    private static final String[] VAR_KEYS = new String[27];
+    private static final Component[] COMPONENT_KEYS = new Component[27];
+
+    static {
+        for (int i = 1; i <= 26; i++) {
+            char varName = (char) ('A' + (i - 1));
+            PORT_IDS[i] = "var_" + i;
+            VAR_KEYS[i] = String.valueOf(varName);
+            COMPONENT_KEYS[i] = Component.literal(VAR_KEYS[i]);
+        }
+    }
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -61,12 +76,8 @@ public class MathExpression extends BaseNode {
         builder.addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null));
 
         builder.addRow(new PortRow(StandardPorts.EXPRESSION.toInput(), null, UIHint.INPUT, null, null));
-
         for (int i = 1; i <= portCount; i++) {
-            char varName = (char) ('A' + (i - 1));
-            String portId = "var_" + i;
-
-            PortDef dynamicPort = new PortDef(portId, Component.literal(String.valueOf(varName)), PortType.FLOAT, 0.0f, false);
+            PortDef dynamicPort = new PortDef(PORT_IDS[i], COMPONENT_KEYS[i], PortType.FLOAT, 0.0f, false);
 
             builder.addRow(new PortRow(
                     dynamicPort, null, UIHint.DEFAULT, null,
@@ -101,10 +112,10 @@ public class MathExpression extends BaseNode {
         VariableRegistry mainRegistry = cache.registry();
         Map<String, Integer> indexMapping = mainRegistry.getMapping();
 
-        // 2. 准备服务端求值用的极速数组
+        // 2. 准备服务端求值用数组
         double[] evalVars = new double[mainRegistry.getVarCount()];
 
-        // 写入 tick (如果表达式里写了的话)
+        // 写入 tick
         int tickIdx = indexMapping.getOrDefault("tick", -1);
         if (tickIdx >= 0) {
             double serverTick = context.getLevel() != null ? context.getLevel().getGameTime() : 0.0;
@@ -125,9 +136,8 @@ public class MathExpression extends BaseNode {
 
         // 3. 处理动态输入分支
         for (int i = 1; i <= portCount; i++) {
-            char varName = (char) ('A' + (i - 1));
-            String portId = "var_" + i;
-            String varKey = String.valueOf(varName);
+            String portId = PORT_IDS[i];
+            String varKey = VAR_KEYS[i];
 
             Float val = getInput(context, portId, Float.class);
             double numVal = val != null ? val.doubleValue() : 0.0;
