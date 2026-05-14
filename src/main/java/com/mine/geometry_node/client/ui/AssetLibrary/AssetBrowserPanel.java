@@ -21,10 +21,7 @@ import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.EditText;
-import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.ScrollView;
-import icyllis.modernui.widget.TextView;
+import icyllis.modernui.widget.*;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -34,7 +31,9 @@ import java.util.List;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
-public class AssetBrowserPanel extends LinearLayout {
+public class AssetBrowserPanel extends FrameLayout {
+
+    private final LinearLayout mMainLayout;
 
     // ==========================================
     // 局部 UI 尺寸常量 (单位: DP)
@@ -59,34 +58,54 @@ public class AssetBrowserPanel extends LinearLayout {
     private File mCurrentDirectory;
     private final float mTouchSlop;
 
+    // 新增状态变量
+    private File mSelectedFile = null;
+    private View mSelectedView = null; // 用于控制高亮UI
+    private File mClipboardFile = null;
+    private boolean mIsCutOperation = false;
+
     public AssetBrowserPanel(Context context) {
         super(context);
-        setOrientation(LinearLayout.HORIZONTAL);
-        setBackground(createColorDrawable(UIConstants.MainUI.BG_TIMELINE));
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
+        // 初始化主容器（替代原有的 LinearLayout 行为）
+        mMainLayout = new LinearLayout(context);
+        mMainLayout.setOrientation(LinearLayout.HORIZONTAL);
+        mMainLayout.setBackground(createColorDrawable(UIConstants.MainUI.BG_TIMELINE));
+        // 将主容器铺满整个 FrameLayout
+        addView(mMainLayout, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // 左侧侧边栏初始化
         mLeftSidebar = new QuickAccessListLayout(context);
         mLeftSidebar.setOrientation(LinearLayout.VERTICAL);
         mLeftSidebar.setBackground(createColorDrawable(0xFF1E1E1E));
 
+        mLeftScrollView = new ScrollView(context);
+        mLeftScrollView.addView(mLeftSidebar, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        // 将组件添加到 mMainLayout 而不是 this
+        mMainLayout.addView(mLeftScrollView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.2f));
+        mMainLayout.addView(PanelSplitter.create(context, true));
+
+        // 右侧内容区初始化
         mRightContent = new LinearLayout(context);
         mRightContent.setOrientation(LinearLayout.VERTICAL);
+        mMainLayout.addView(mRightContent, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.8f));
 
-        mLeftScrollView = new ScrollView(context);
-        mLeftScrollView.addView(mLeftSidebar, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        addView(mLeftScrollView, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.2f));
-        addView(PanelSplitter.create(context, true));
-        addView(mRightContent, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.8f));
-
+        // 导航栏 (NavBar)
         LinearLayout navBar = new LinearLayout(context);
         navBar.setOrientation(LinearLayout.HORIZONTAL);
         navBar.setGravity(Gravity.CENTER_VERTICAL);
         navBar.setBackground(createColorDrawable(0xFF2A2A2A));
-        mRightContent.addView(navBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(NAV_BAR_HEIGHT)));
+        mRightContent.addView(navBar, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(NAV_BAR_HEIGHT)));
 
         TextView btnUp = createNavButton(context, "⬆ 向上");
         btnUp.setOnClickListener(v -> navigateUp());
-        navBar.addView(btnUp, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        navBar.addView(btnUp, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         mPathInput = new EditText(context);
         mPathInput.setTextColor(0xFFCCCCCC);
@@ -108,7 +127,7 @@ public class AssetBrowserPanel extends LinearLayout {
             }
             return false;
         });
-        navBar.addView(mPathInput, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+        navBar.addView(mPathInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
         TextView btnAdd = createNavButton(context, "+");
         btnAdd.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(TEXT_SIZE_BTN_ADD));
@@ -123,16 +142,105 @@ public class AssetBrowserPanel extends LinearLayout {
                 }
             }
         });
-        navBar.addView(btnAdd, new LayoutParams(dp2pxInt(BTN_ADD_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+        navBar.addView(btnAdd, new LinearLayout.LayoutParams(dp2pxInt(BTN_ADD_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
+        // 文件列表滚动区
         ScrollView scrollView = new ScrollView(context);
         mFileListContainer = new LinearLayout(context);
         mFileListContainer.setOrientation(LinearLayout.VERTICAL);
-        scrollView.addView(mFileListContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        mRightContent.addView(scrollView, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        scrollView.addView(mFileListContainer, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mRightContent.addView(scrollView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        OnTouchListener bgContextListener = (v, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN && isRightMouse(event)) {
+                int[] loc = new int[2];
+                this.getLocationOnScreen(loc);
+                // targetFile 传 null 代表点击的是背景
+                showContextMenu(event.getRawX() - loc[0], event.getRawY() - loc[1], null, null, null);
+                return true;
+            }
+            return false;
+        };
+
+// 保证点在列表项缝隙或完全空白的地方都能呼出菜单
+        scrollView.setOnTouchListener(bgContextListener);
+        mFileListContainer.setOnTouchListener(bgContextListener);
 
         buildSidebar(context);
         navigateTo(PathUtils.getLocalDraftsDir());
+    }
+
+    private void startInlineEdit(File targetFile, LinearLayout parentRow, TextView originalTextView, boolean isNewFolder, boolean isNewFile) {
+        originalTextView.setVisibility(View.GONE); // 隐藏原文字
+
+        EditText editInput = new EditText(getContext());
+        editInput.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(TEXT_SIZE_LIST_ITEM));
+        editInput.setTextColor(0xFFFFFFFF);
+        editInput.setBackground(createColorDrawable(0xFF444444));
+        editInput.setSingleLine(true);
+        editInput.setPadding(dp2pxInt(12), dp2pxInt(4), dp2pxInt(12), dp2pxInt(4));
+
+        // 默认文本
+        if (!isNewFolder && !isNewFile) {
+            editInput.setText(targetFile.getName());
+        }
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        parentRow.addView(editInput, parentRow.indexOfChild(originalTextView), lp);
+
+        editInput.requestFocus();
+        // 选中除了后缀名以外的文本
+        String name = editInput.getText().toString();
+        int dotIndex = name.lastIndexOf(".");
+        if (dotIndex > 0 && !targetFile.isDirectory()) {
+            editInput.setSelection(0, dotIndex);
+        } else {
+            editInput.setSelection(name.length());
+        }
+
+        // 替换原来的 commitAction 定义
+        Runnable commitAction = new Runnable() {
+            boolean isCommitted = false; // 状态锁
+
+            @Override
+            public void run() {
+                if (isCommitted) return;
+                isCommitted = true; // 确保仅执行一次
+
+                String newName = editInput.getText().toString().trim();
+                // 如果名字没填，或者名字根本没改，直接忽略
+                if (!newName.isEmpty() && (targetFile == null || !newName.equals(targetFile.getName()))) {
+                    try {
+                        if (isNewFolder) {
+                            new File(mCurrentDirectory, newName).mkdir();
+                        } else if (isNewFile) {
+                            new File(mCurrentDirectory, newName + (newName.endsWith(".json") ? "" : ".json")).createNewFile();
+                        } else if (targetFile != null) {
+                            targetFile.renameTo(new File(targetFile.getParentFile(), newName));
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                refreshFileList(); // 刷新列表，销毁临时输入框
+            }
+        };
+
+        // 监听回车键
+        editInput.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
+                commitAction.run();
+                return true;
+            }
+            return false;
+        });
+
+        // 失去焦点时自动确认
+        editInput.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) commitAction.run();
+        });
     }
 
     private void buildSidebar(Context context) {
@@ -147,6 +255,11 @@ public class AssetBrowserPanel extends LinearLayout {
         }
     }
 
+    private boolean isRightMouse(MotionEvent e) {
+        return (e.getButtonState() & MotionEvent.BUTTON_SECONDARY) != 0
+                || e.getActionButton() == MotionEvent.BUTTON_SECONDARY;
+    }
+
     private LinearLayout createQuickAccessRow(Context context, String pathStr) {
         File file = new File(pathStr);
         LinearLayout row = new LinearLayout(context);
@@ -154,17 +267,20 @@ public class AssetBrowserPanel extends LinearLayout {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setBackground(createColorDrawable(0xFF2A2A2A));
 
-        LayoutParams rowParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
+        // 修改：明确使用 LinearLayout.LayoutParams
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
         rowParams.setMargins(0, 0, 0, dp2pxInt(2));
         row.setLayoutParams(rowParams);
 
         TextView dragHandle = UIUtils.createLockedTextView(context, " ⋮⋮ ", TEXT_SIZE_HANDLE, 0xFF666666);
         dragHandle.setGravity(Gravity.CENTER);
-        row.addView(dragHandle, new LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+        // 修改：明确使用 LinearLayout.LayoutParams
+        row.addView(dragHandle, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
         final float[] startY = {0};
         final boolean[] isDragging = {false};
 
+        // 拖拽逻辑保持原样
         dragHandle.setOnTouchListener((v, event) -> {
             int action = event.getActionMasked();
             switch (action) {
@@ -246,7 +362,9 @@ public class AssetBrowserPanel extends LinearLayout {
         btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
         btnPath.setGravity(Gravity.CENTER_VERTICAL);
         btnPath.setOnClickListener(v -> navigateTo(file));
-        row.addView(btnPath, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+
+        // 修改：明确使用 LinearLayout.LayoutParams，并去掉错误的 (int) 转换，保留 1.0f 权重
+        row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
         TextView btnDel = UIUtils.createLockedTextView(context, "－", TEXT_SIZE_NAV, 0xFFCC4444);
         btnDel.setGravity(Gravity.CENTER);
@@ -263,7 +381,8 @@ public class AssetBrowserPanel extends LinearLayout {
             buildSidebar(context);
         });
 
-        row.addView(btnDel, new LayoutParams(dp2pxInt(ROW_HEIGHT), ViewGroup.LayoutParams.MATCH_PARENT));
+        // 修改：明确使用 LinearLayout.LayoutParams
+        row.addView(btnDel, new LinearLayout.LayoutParams(dp2pxInt(ROW_HEIGHT), ViewGroup.LayoutParams.MATCH_PARENT));
 
         return row;
     }
@@ -298,25 +417,138 @@ public class AssetBrowserPanel extends LinearLayout {
         for (File file : files) {
             if (!file.isDirectory() && !file.getName().toLowerCase().endsWith(".json")) continue;
 
-            int color = file.isDirectory() ? 0xFFDDAA00 : 0xFF88CCFF;
-            TextView item = UIUtils.createLockedTextView(context, (file.isDirectory() ? "📁 " : "📄 ") + file.getName(), TEXT_SIZE_LIST_ITEM, color);
-            item.setPadding(dp2pxInt(12), dp2pxInt(10), dp2pxInt(12), dp2pxInt(10));
+            // 使用 LinearLayout 包裹，方便我们后续替换里面的 TextView
+            LinearLayout itemRow = new LinearLayout(context);
+            itemRow.setOrientation(LinearLayout.HORIZONTAL);
+            itemRow.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-            item.setBackground(createColorDrawable(0));
-            item.setOnHoverListener((v, event) -> {
-                item.setBackground(createColorDrawable(event.getAction() == MotionEvent.ACTION_HOVER_ENTER ? 0xFF333333 : 0));
-                return true;
+            int color = file.isDirectory() ? 0xFFDDAA00 : 0xFF88CCFF;
+            TextView itemText = UIUtils.createLockedTextView(context, (file.isDirectory() ? "📁 " : "📄 ") + file.getName(), TEXT_SIZE_LIST_ITEM, color);
+            itemText.setPadding(dp2pxInt(12), dp2pxInt(10), dp2pxInt(12), dp2pxInt(10));
+            itemRow.addView(itemText, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            itemRow.setBackground(createColorDrawable(0));
+
+            // 交互逻辑
+            itemRow.setOnTouchListener((v, event) -> {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    // 1. 处理选中高亮状态
+                    if (mSelectedView != null && mSelectedView != itemRow) {
+                        mSelectedView.setBackground(createColorDrawable(0)); // 恢复上一个
+                    }
+                    mSelectedFile = file;
+                    mSelectedView = itemRow;
+                    itemRow.setBackground(createColorDrawable(0xFF445566)); // 选中色
+
+                    // 2. 完美修复：使用 InteractionManager 中的右键判定逻辑
+                    boolean isRightClick = (event.getButtonState() & MotionEvent.BUTTON_SECONDARY) != 0 ||
+                            event.getActionButton() == MotionEvent.BUTTON_SECONDARY;
+
+                    if (isRightClick) {
+                        // 计算相对于当前 AssetBrowserPanel 的局部坐标
+                        int[] loc = new int[2];
+                        this.getLocationOnScreen(loc);
+                        float localX = event.getRawX() - loc[0];
+                        float localY = event.getRawY() - loc[1];
+
+                        showContextMenu(localX, localY, file, itemRow, itemText);
+                        return true;
+                    }
+                }
+                return false;
             });
 
+            // 双击逻辑保持不变
             final long[] lastClickTime = {0};
-            item.setOnClickListener(v -> {
+            itemRow.setOnClickListener(v -> {
                 long now = System.currentTimeMillis();
                 if (now - lastClickTime[0] < 300) handleDoubleClick(file);
                 lastClickTime[0] = now;
             });
 
-            mFileListContainer.addView(item, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            mFileListContainer.addView(itemRow);
         }
+    }
+
+    // --- 替换原有的 showContextMenu ---
+    private void showContextMenu(float localX, float localY, File targetFile, LinearLayout itemRow, TextView itemText) {
+        FileContextMenu menu = new FileContextMenu(getContext());
+
+        if (targetFile != null) {
+            // --- 选中具体文件时的菜单 ---
+            menu.addMenuItem("复制", () -> { mClipboardFile = targetFile; mIsCutOperation = false; });
+            menu.addMenuItem("剪切", () -> { mClipboardFile = targetFile; mIsCutOperation = true; });
+            menu.addMenuItem("删除", () -> {
+                deleteRecursively(targetFile);
+                refreshFileList();
+            });
+            menu.addDivider();
+            menu.addMenuItem("重命名", () -> startInlineEdit(targetFile, itemRow, itemText, false, false));
+            menu.addDivider();
+        }
+
+        // --- 通用操作 (点空白处也能用) ---
+        if (mClipboardFile != null && mClipboardFile.exists()) {
+            menu.addMenuItem("粘贴", this::performPaste);
+            menu.addDivider();
+        }
+        menu.addMenuItem("新建文件夹", () -> triggerNewItem(true));
+        menu.addMenuItem("新建文件", () -> triggerNewItem(false));
+
+        menu.showAt(localX, localY, this);
+    }
+
+    // --- 新增：具体的文件 IO 方法 ---
+    private void performPaste() {
+        if (mClipboardFile == null || !mClipboardFile.exists() || mCurrentDirectory == null) return;
+        try {
+            File dest = new File(mCurrentDirectory, mClipboardFile.getName());
+
+            // 自动重命名防覆盖机制 (例如: name_1.json)
+            int counter = 1;
+            while (dest.exists()) {
+                String name = mClipboardFile.getName();
+                int dotIdx = name.lastIndexOf('.');
+                if (dotIdx > 0 && !mClipboardFile.isDirectory()) {
+                    dest = new File(mCurrentDirectory, name.substring(0, dotIdx) + "_" + counter + name.substring(dotIdx));
+                } else {
+                    dest = new File(mCurrentDirectory, name + "_" + counter);
+                }
+                counter++;
+            }
+
+            if (mIsCutOperation) {
+                mClipboardFile.renameTo(dest);
+                mClipboardFile = null; // 剪切只能用一次
+            } else {
+                Files.copy(mClipboardFile.toPath(), dest.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            refreshFileList();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void deleteRecursively(File file) {
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) {
+                for (File child : children) deleteRecursively(child);
+            }
+        }
+        file.delete();
+    }
+
+    // 触发新建时的占位逻辑
+    private void triggerNewItem(boolean isFolder) {
+        LinearLayout dummyRow = new LinearLayout(getContext());
+        dummyRow.setOrientation(LinearLayout.HORIZONTAL);
+        TextView dummyText = new TextView(getContext()); // 临时占位，马上被隐藏
+        dummyRow.addView(dummyText);
+        mFileListContainer.addView(dummyRow, 0); // 插在最前面
+
+        // 调用内联编辑
+        startInlineEdit(new File(""), dummyRow, dummyText, isFolder, !isFolder);
     }
 
     private void handleDoubleClick(File file) {
