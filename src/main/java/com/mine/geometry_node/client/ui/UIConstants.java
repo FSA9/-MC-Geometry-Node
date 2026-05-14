@@ -86,9 +86,9 @@ public class UIConstants {
         // --- 文本标签与复选框排版参数 ---
         public static final int LABEL_MARGIN_PORT = 5;                           // 端口与标签文本之间的基础间距
         public static final int MARGIN_CHECKBOX_GAP = 3;                          // 复选框与文本标签间的间距
-        public static final int CHECKBOX_DEFAULT_WIDTH = 10;                      // 复选框控件的默认宽度
-        public static final int TEXT_SIZE_HEADER = 10;                            // 节点标题字体大小
-        public static final int TEXT_SIZE_LABEL = 10;                             // 节点内端口标签字体大小
+        public static final int CHECKBOX_DEFAULT_WIDTH = 9;                      // 复选框控件的默认宽度
+        public static final int TEXT_SIZE_HEADER = 9;                            // 节点标题字体大小
+        public static final int TEXT_SIZE_LABEL = 9;                             // 节点内端口标签字体大小
 
         // --- 端口尺寸与判定参数 ---
         public static final float PORT_VISUAL_RADIUS = ROW_HEIGHT / 4.0f;         // 端口视觉圆点半径

@@ -597,7 +597,14 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override
     public boolean dispatchKeyEvent(icyllis.modernui.view.KeyEvent event) {
         if (event.isCtrlPressed() && event.getAction() == icyllis.modernui.view.KeyEvent.ACTION_DOWN) {
-            if (mKeyManager.onKeyDown(event)) return true;
+            View focusedView = findFocus();
+            if (focusedView instanceof EditText) {
+                return super.dispatchKeyEvent(event);
+            }
+
+            if (mKeyManager.onKeyDown(event)) {
+                return true;
+            }
         }
         return super.dispatchKeyEvent(event);
     }
