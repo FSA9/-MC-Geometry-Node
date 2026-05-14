@@ -1,3 +1,4 @@
+// --- START OF FILE ViewportController.java ---
 package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
@@ -38,8 +39,10 @@ public class ViewportController implements EditorContext.EditorListener {
         // 防御：白板模式下禁止操作
         if (mEditorContext == null) return;
 
-        float uiX = mViewport.screenToUIX(screenX);
-        float uiY = mViewport.screenToUIY(screenY);
+        // --- 修复：通过 Camera 进行坐标转换 ---
+        float uiX = mViewport.getCamera().screenToUIX(screenX);
+        float uiY = mViewport.getCamera().screenToUIY(screenY);
+
         String mockId = UUID.randomUUID().toString();
         NodeData data = new NodeData(mockId, typeId, uiX, uiY);
 
@@ -52,6 +55,8 @@ public class ViewportController implements EditorContext.EditorListener {
         NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(nodeData);
         if (def == null) return;
         UINode uiNode = new UINode(mViewport.getContext(), nodeData, def, mEditorContext);
+
+        // 注意：这里目前保持 setTranslationX 不变，等我们进行 UINode 性能优化时再统一改
         uiNode.setTranslationX(nodeData.getX());
         uiNode.setTranslationY(nodeData.getY());
 
@@ -116,3 +121,4 @@ public class ViewportController implements EditorContext.EditorListener {
         mViewport.invalidate();
     }
 }
+// --- END OF FILE ViewportController.java ---

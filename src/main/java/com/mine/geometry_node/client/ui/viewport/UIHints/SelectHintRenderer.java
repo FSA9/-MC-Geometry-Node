@@ -1,3 +1,4 @@
+// --- START OF FILE SelectHintRenderer.java ---
 package com.mine.geometry_node.client.ui.viewport.UIHints;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
@@ -5,7 +6,7 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.Viewport;
+import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext; // 引入接口
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -30,7 +31,7 @@ public class SelectHintRenderer implements UIHintRenderer {
 
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
-        // 1. 获取选项列表 (保持原有逻辑，处理静态选项或动态注册表)
+        // 1. 获取选项列表
         List<String> resolvedOptions = new ArrayList<>();
         if (row.hintParams() != null) {
             String[] staticOptions = (String[]) row.hintParams().get(PortMetaKeys.OPTIONS);
@@ -45,11 +46,10 @@ public class SelectHintRenderer implements UIHintRenderer {
             }
         }
 
-        // 2. 新架构：统一使用 leftPort 的 ID 作为数据存储的 Key
+        // 2. 统一使用 leftPort 的 ID 作为数据存储的 Key
         String portId = row.leftPort() != null ? row.leftPort().id() : "";
         Object val = null;
         if (row.leftPort() != null) {
-            // 从 inputs 字典中读取，如果没有则使用端口自带的默认值
             val = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
         }
 
@@ -72,25 +72,27 @@ public class SelectHintRenderer implements UIHintRenderer {
 
         dropdownBtn.setOnClickListener(v -> {
             icyllis.modernui.view.ViewParent parent = v.getParent();
-            while (parent != null && !(parent instanceof Viewport)) parent = parent.getParent();
 
-            if (parent instanceof Viewport viewport && !portId.isEmpty()) {
+            // 【架构优化】：向上寻找 InteractionContext 接口，而不是特定的 Viewport 类
+            while (parent != null && !(parent instanceof InteractionContext)) {
+                parent = parent.getParent();
+            }
+
+            if (parent instanceof InteractionContext interactionContext && !portId.isEmpty()) {
                 DropdownSearchMenu menu = new DropdownSearchMenu(context, resolvedOptions, selectedVal -> {
                     dropdownBtn.setText(selectedVal + " ▼");
 
                     Object oldVal = nodeData.inputs.get(portId);
                     if (oldVal == null || !selectedVal.equals(oldVal.toString())) {
                         if (editorContext != null) {
-                            // 【核心改动】统一派发 CmdChangeInputValue 指令
                             editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, selectedVal));
                         } else {
-                            // 无 Context 时直接写入 inputs 字典
                             nodeData.inputs.put(portId, selectedVal);
                         }
                     }
                 });
 
-                menu.showAt(v, viewport);
+                menu.showAt(v, interactionContext);
             }
         });
         return dropdownBtn;
@@ -138,7 +140,9 @@ public class SelectHintRenderer implements UIHintRenderer {
         private float mLastRenderedScale = -1.0f;
 
         private View mAnchor;
-        private Viewport mViewport;
+
+        // 【架构优化】：依赖抽象接口
+        private InteractionContext mContext;
         private boolean mIsTracking = false;
 
         public DropdownSearchMenu(Context context, List<String> options, Consumer<String> onSelect) {
@@ -190,11 +194,10 @@ public class SelectHintRenderer implements UIHintRenderer {
                 TextView tv = new TextView(getContext());
                 tv.setText(item);
 
-                // 【修改1：缩小字号并强制单行，防止挤爆】
-                float fontSize = 12f * mCurrentScale; // 指定为 12 逻辑像素
+                float fontSize = 12f * mCurrentScale;
                 tv.setTextSize(0, UIUtils.dp2px(fontSize));
                 tv.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR);
-                tv.setSingleLine(true); // 强制单行显示，超长自动截断
+                tv.setSingleLine(true);
 
                 int padH = (int)UIUtils.dp2px(8 * mCurrentScale);
                 int padV = (int)UIUtils.dp2px(2 * mCurrentScale);
@@ -215,15 +218,13 @@ public class SelectHintRenderer implements UIHintRenderer {
 
                 int itemHeight = (int)UIUtils.dp2px(20 * mCurrentScale);
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, itemHeight);
-                // 上下各 1dp Margin，总占据 22dp
                 lp.setMargins(UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(1), UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(1));
                 mListContainer.addView(tv, lp);
             }
 
-            // 【修改2：动态计算 ScrollView 高度，最多允许 5 个元素】
             int visibleItems = Math.min(mFilteredOptions.size(), 5);
-            if (visibleItems == 0) visibleItems = 1; // 至少保留 1 个元素的高度用于空显示
-            int itemTotalHeightDp = 22; // 20(height) + 2(margin)
+            if (visibleItems == 0) visibleItems = 1;
+            int itemTotalHeightDp = 22;
             int targetHeightPx = (int) UIUtils.dp2px(visibleItems * itemTotalHeightDp * mCurrentScale);
 
             LinearLayout.LayoutParams svLp = (LinearLayout.LayoutParams) mScrollView.getLayoutParams();
@@ -244,26 +245,26 @@ public class SelectHintRenderer implements UIHintRenderer {
             renderList();
         }
 
-        public void showAt(View anchor, Viewport viewport) {
+        // 【架构优化】：接收 InteractionContext
+        public void showAt(View anchor, InteractionContext context) {
             this.mAnchor = anchor;
-            this.mViewport = viewport;
+            this.mContext = context;
 
-            // 初次强制刷新排版
             updatePosition();
 
             if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
-            viewport.addView(this);
+
+            // Context 本质是画布 ViewGroup，直接强转添加 View
+            ((ViewGroup) context).addView(this);
 
             mSearchBox.post(() -> { mSearchBox.setText(""); mSearchBox.requestFocus(); });
 
-            // 启动实时追踪循环
             if (!mIsTracking) {
                 mIsTracking = true;
                 post(mTrackTask);
             }
         }
 
-        // 每帧追踪锚点位置的任务
         private final Runnable mTrackTask = new Runnable() {
             @Override
             public void run() {
@@ -277,9 +278,10 @@ public class SelectHintRenderer implements UIHintRenderer {
         };
 
         private void updatePosition() {
-            if (mAnchor == null || mViewport == null) return;
+            if (mAnchor == null || mContext == null) return;
 
-            float newScale = mViewport.getCurrentScale();
+            // 【架构优化】：向 Camera 要缩放比例
+            float newScale = mContext.getCamera().getScale();
             this.mCurrentScale = newScale;
 
             if (Math.abs(mLastRenderedScale - mCurrentScale) > 0.001f) {
@@ -304,18 +306,18 @@ public class SelectHintRenderer implements UIHintRenderer {
                 );
                 mSearchBox.setLayoutParams(searchLp);
 
-                // 删除原来硬编码的 250dp 缩放高度逻辑，将其全权交给 renderList 接管
                 renderList();
                 mLastRenderedScale = mCurrentScale;
             }
 
+            ViewGroup parentView = (ViewGroup) mContext;
+
             int[] btnLoc = new int[2]; mAnchor.getLocationOnScreen(btnLoc);
-            int[] vpLoc = new int[2]; mViewport.getLocationOnScreen(vpLoc);
+            int[] vpLoc = new int[2]; parentView.getLocationOnScreen(vpLoc);
 
             float relX = btnLoc[0] - vpLoc[0];
             float relY = btnLoc[1] - vpLoc[1];
 
-            // 【修改3：给予面板最小宽度，突破锚点按钮的物理挤压】
             float minMenuWidth = UIUtils.dp2px(200 * mCurrentScale);
             float scaledTargetWidth = Math.max(mAnchor.getWidth() * mCurrentScale, minMenuWidth);
             float scaledHeight = mAnchor.getHeight() * mCurrentScale;
@@ -332,15 +334,16 @@ public class SelectHintRenderer implements UIHintRenderer {
             mContentLayout.measure(widthSpec, heightSpec);
             int contentHeight = mContentLayout.getMeasuredHeight();
 
-            if (targetX + lp.width > mViewport.getWidth()) {
-                targetX = Math.max(0, mViewport.getWidth() - lp.width);
+            // 边缘溢出检测
+            if (targetX + lp.width > parentView.getWidth()) {
+                targetX = Math.max(0, parentView.getWidth() - lp.width);
             }
-            if (targetY + contentHeight > mViewport.getHeight()) {
+            if (targetY + contentHeight > parentView.getHeight()) {
                 int popUpY = (int) (relY - contentHeight);
                 if (popUpY > 0) {
                     targetY = popUpY;
                 } else {
-                    targetY = Math.max(0, mViewport.getHeight() - contentHeight);
+                    targetY = Math.max(0, parentView.getHeight() - contentHeight);
                 }
             }
 
@@ -362,3 +365,4 @@ public class SelectHintRenderer implements UIHintRenderer {
         }
     }
 }
+// --- END OF FILE SelectHintRenderer.java ---

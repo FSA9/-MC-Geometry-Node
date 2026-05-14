@@ -1,10 +1,12 @@
+// --- START OF FILE InteractionManager.java ---
 package com.mine.geometry_node.client.ui.viewport.interaction;
 
 import com.mine.geometry_node.client.ui.UICommand.commands.*;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.utils.UIUtils; // 引入工具类
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.UINode;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
+import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import icyllis.modernui.graphics.Canvas;
@@ -16,7 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class InteractionManager {
-
     private static final int MODE_NONE           = 0;
     private static final int MODE_PANNING        = 1;
     private static final int MODE_DRAGGING_NODES = 2;
@@ -27,7 +28,6 @@ public class InteractionManager {
     private int mCurrentMode = MODE_NONE;
 
     private float mDownScreenX, mDownScreenY;
-
     private float mLastScreenX, mLastScreenY;
     private boolean mHasMovedSignificantly = false;
 
@@ -51,27 +51,29 @@ public class InteractionManager {
     private void initPaints() {
         mSelectionFillPaint.setColor(UIConstants.ViewPort.Selection.CLR_FILL);
         mSelectionFillPaint.setStyle(Paint.Style.FILL);
-
         mSelectionBorderPaint.setColor(UIConstants.ViewPort.Selection.CLR_BORDER);
         mSelectionBorderPaint.setStyle(Paint.Style.STROKE);
-        // 线宽转换为物理像素
         mSelectionBorderPaint.setStrokeWidth(UIUtils.dp2px(UIConstants.ViewPort.Selection.STROKE_WIDTH));
-
         mDraftLinePaint.setAntiAlias(true);
         mDraftLinePaint.setStyle(Paint.Style.STROKE);
         mDraftLinePaint.setColor(UIConstants.ViewPort.Connection.CLR_DRAFT_LINE);
     }
 
     public boolean onGenericMotionEvent(MotionEvent event) {
+        if (mContext.getEditorContext() == null) return false;
+
         if (event.getAction() == MotionEvent.ACTION_SCROLL) {
             float scrollY = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
-            mContext.performZoom(scrollY > 0, event.getX(), event.getY());
+            // 委托给 Camera 处理缩放
+            mContext.getCamera().zoom(scrollY > 0, event.getX(), event.getY());
             return true;
         }
         return false;
     }
 
     public boolean onTouchEvent(MotionEvent event) {
+        if (mContext.getEditorContext() == null) return false;
+
         float x = event.getX();
         float y = event.getY();
 
@@ -90,8 +92,9 @@ public class InteractionManager {
         mDownScreenY = screenY;
         mHasMovedSignificantly = false;
 
-        float uiX = mContext.screenToUIX(screenX);
-        float uiY = mContext.screenToUIY(screenY);
+        ViewportCamera camera = mContext.getCamera();
+        float uiX = camera.screenToUIX(screenX);
+        float uiY = camera.screenToUIY(screenY);
 
         if (isMiddleMouse(event)) { mCurrentMode = MODE_PANNING; return; }
         if (isRightMouse(event)) return;
@@ -101,17 +104,14 @@ public class InteractionManager {
 
         UINode target = mContext.findNodeAt(uiX, uiY);
         if (target != null) {
-            // 如果点到了节点内部的实际控件（输入框、+ 按钮、- 按钮），直接 return 放行，让 View 自己触发 onClick
             float localXpx = UIUtils.dp2px(uiX - target.getTranslationX());
             float localYpx = UIUtils.dp2px(uiY - target.getTranslationY());
             if (target.findInteractiveViewAt(localXpx, localYpx) != null) {
                 return;
             }
-
             enterDraggingMode(target, uiX, uiY);
             return;
         }
-
         enterSelectingMode(uiX, uiY);
     }
 
@@ -127,16 +127,17 @@ public class InteractionManager {
             mHasMovedSignificantly = true;
         }
 
-        float uiX = mContext.screenToUIX(screenX);
-        float uiY = mContext.screenToUIY(screenY);
-        float lastUiX = mContext.screenToUIX(mLastScreenX);
-        float lastUiY = mContext.screenToUIY(mLastScreenY);
+        ViewportCamera camera = mContext.getCamera();
+        float uiX = camera.screenToUIX(screenX);
+        float uiY = camera.screenToUIY(screenY);
+        float lastUiX = camera.screenToUIX(mLastScreenX);
+        float lastUiY = camera.screenToUIY(mLastScreenY);
 
         float uiDx = uiX - lastUiX;
         float uiDy = uiY - lastUiY;
 
         switch (mCurrentMode) {
-            case MODE_PANNING: updateViewportPan(dx, dy); break;
+            case MODE_PANNING: mContext.getCamera().pan(dx, dy); break;
             case MODE_DRAGGING_NODES: updateNodeDragging(uiDx, uiDy); break;
             case MODE_SELECTING: updateBoxSelection(uiX, uiY); break;
             case MODE_CONNECTING: updateDraftLine(uiX, uiY); break;
@@ -147,8 +148,9 @@ public class InteractionManager {
     }
 
     private void handleActionUp(MotionEvent event, float screenX, float screenY) {
-        float uiX = mContext.screenToUIX(screenX);
-        float uiY = mContext.screenToUIY(screenY);
+        ViewportCamera camera = mContext.getCamera();
+        float uiX = camera.screenToUIX(screenX);
+        float uiY = camera.screenToUIY(screenY);
 
         if (isRightMouse(event) && !mHasMovedSignificantly) {
             mContext.showMenu(screenX, screenY);
@@ -189,13 +191,9 @@ public class InteractionManager {
         mSelectionRectUi.set(uiX, uiY, uiX, uiY);
     }
 
-    private void updateViewportPan(float screenDx, float screenDy) {
-        mContext.setViewportX(mContext.getViewportX() + screenDx);
-        mContext.setViewportY(mContext.getViewportY() + screenDy);
-        mContext.updateTransform();
+    private void updateNodeDragging(float uiDx, float uiDy) {
+        mContext.moveSelectedNodes(uiDx, uiDy);
     }
-
-    private void updateNodeDragging(float uiDx, float uiDy) { mContext.moveSelectedNodes(uiDx, uiDy); }
 
     private void updateBoxSelection(float currentUiX, float currentUiY) {
         float x = Math.min(mSelectionStartUiX, currentUiX);
@@ -247,18 +245,19 @@ public class InteractionManager {
     public void drawOverlay(Canvas canvas) {
         if (mCurrentMode == MODE_CONNECTING && mDraftStartPort != null) drawDraftLine(canvas);
         if (mCurrentMode == MODE_SELECTING) {
-            float l = mContext.uiToScreenX(mSelectionRectUi.left);
-            float t = mContext.uiToScreenY(mSelectionRectUi.top);
-            float r = mContext.uiToScreenX(mSelectionRectUi.right);
-            float b = mContext.uiToScreenY(mSelectionRectUi.bottom);
+            ViewportCamera camera = mContext.getCamera();
+            float l = camera.uiToScreenX(mSelectionRectUi.left);
+            float t = camera.uiToScreenY(mSelectionRectUi.top);
+            float r = camera.uiToScreenX(mSelectionRectUi.right);
+            float b = camera.uiToScreenY(mSelectionRectUi.bottom);
             canvas.drawRect(l, t, r, b, mSelectionFillPaint);
             canvas.drawRect(l, t, r, b, mSelectionBorderPaint);
         }
     }
 
     private void drawDraftLine(Canvas canvas) {
-        float currentScale = mContext.getCurrentScale();
-        // 线宽转换为物理像素
+        ViewportCamera camera = mContext.getCamera();
+        float currentScale = camera.getScale();
         float scaledLineWidth = UIUtils.dp2px(UIConstants.ViewPort.Connection.LINE_WIDTH_DRAFT) * currentScale;
         mDraftLinePaint.setStrokeWidth(scaledLineWidth);
 
@@ -266,10 +265,10 @@ public class InteractionManager {
         float startUiX = mDraftStartPort.node.getTranslationX() + mTempPos[0];
         float startUiY = mDraftStartPort.node.getTranslationY() + mTempPos[1];
 
-        float startScreenX = mContext.uiToScreenX(startUiX);
-        float startScreenY = mContext.uiToScreenY(startUiY);
-        float endScreenX = mContext.uiToScreenX(mDraftCurrentUiX);
-        float endScreenY = mContext.uiToScreenY(mDraftCurrentUiY);
+        float startScreenX = camera.uiToScreenX(startUiX);
+        float startScreenY = camera.uiToScreenY(startUiY);
+        float endScreenX = camera.uiToScreenX(mDraftCurrentUiX);
+        float endScreenY = camera.uiToScreenY(mDraftCurrentUiY);
 
         canvas.drawLine(startScreenX, startScreenY, endScreenX, endScreenY, mDraftLinePaint);
     }
@@ -293,3 +292,4 @@ public class InteractionManager {
     private boolean isRightMouse(MotionEvent e) { return (e.getButtonState() & MotionEvent.BUTTON_SECONDARY) != 0 || e.getActionButton() == MotionEvent.BUTTON_SECONDARY; }
     private boolean isMiddleMouse(MotionEvent e) { return (e.getButtonState() & MotionEvent.BUTTON_TERTIARY) != 0 || e.getActionButton() == MotionEvent.BUTTON_TERTIARY; }
 }
+// --- END OF FILE InteractionManager.java ---

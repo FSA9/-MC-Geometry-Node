@@ -27,6 +27,8 @@ public class KeyManager {
     }
 
     public boolean onKeyDown(KeyEvent event) {
+        if (mContext.getEditorContext() == null) return false;
+
         boolean isCtrl = event.isCtrlPressed();
         int keyCode = event.getKeyCode();
 
@@ -82,14 +84,13 @@ public class KeyManager {
     private void performPaste() {
         if (sClipboardJson == null || sClipboardJson.isEmpty()) return;
 
-        // 从 Context 中拉取鼠标最后的逻辑坐标 (需要你将 InteractionContext 转型为 viewport 或者补充接口)
-        float uiX = ((com.mine.geometry_node.client.ui.viewport.Viewport)mContext).getLastMouseUiX();
-        float uiY = ((com.mine.geometry_node.client.ui.viewport.Viewport)mContext).getLastMouseUiY();
+        float uiX = mContext.getLastMouseUiX();
+        float uiY = mContext.getLastMouseUiY();
 
         CmdPasteNodes cmd = new CmdPasteNodes(
                 mContext.getEditorContext().getGraphController(),
                 sClipboardJson,
-                uiX, uiY  // 传入真实鼠标坐标
+                uiX, uiY
         );
         mContext.getEditorContext().getCommandManager().execute(cmd);
 

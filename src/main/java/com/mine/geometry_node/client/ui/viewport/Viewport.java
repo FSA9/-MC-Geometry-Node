@@ -1,3 +1,4 @@
+// --- START OF FILE Viewport.java ---
 package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
@@ -34,27 +35,24 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     // 1. 核心组件
     private FrameLayout mNodeLayer;
+    private final ViewportCamera mCamera; // 新增：独立的摄像机模块
     private final InteractionManager mInteractionManager;
     private final KeyManager mKeyManager;
     private GraphSession mCurrentSession;
     private final ViewportController mController;
     private ViewportMenu mActiveMenu;
 
-    // 2. 视口状态 (物理像素 PX)
-    private float mViewportX = 0;
-    private float mViewportY = 0;
-    private float mCurrentScale = 1.0f;
     private boolean mFirstLayout = true;
 
-    // 3. 视图映射缓存
+    // 2. 视图映射缓存
     private final List<UINode> mSelectedNodes = new ArrayList<>();
     private final Map<String, UINode> mNodeViews = new HashMap<>();
 
-    // 4. 事件缓存
+    // 3. 事件缓存
     private View mCapturedHintView;
     private boolean mHintCaptureUsesLogical;
 
-    // 5. 渲染对象复用
+    // 4. 渲染对象复用
     private final icyllis.modernui.graphics.RectF mTmpNodeBounds = new icyllis.modernui.graphics.RectF();
     private final Paint mGridPaint = new Paint();
     private final Paint mBackgroundPaint = new Paint();
@@ -72,12 +70,19 @@ public class Viewport extends FrameLayout implements InteractionContext {
         initViewportProps();
         initPaints();
 
+        // 绑定摄像机，并传入更新回调
+        mCamera = new ViewportCamera(this::updateTransform);
         mInteractionManager = new InteractionManager(this);
         mKeyManager = new KeyManager(this);
         mController = new ViewportController(this, null);
 
         setFocusable(true);
         setFocusableInTouchMode(true);
+    }
+
+    @Override
+    public ViewportCamera getCamera() {
+        return mCamera;
     }
 
     private void initViewportProps() {
@@ -101,7 +106,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
         mGridPaint.setStyle(Paint.Style.STROKE);
         mConnectionPaint.setAntiAlias(true);
         mConnectionPaint.setStyle(Paint.Style.STROKE);
-        // 这里的 LINE_WIDTH 是逻辑单位，绘制时会处理
         mConnectionPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_CONNECTION);
         mConnectionPaint.setColor(0xFFE0E0E0);
     }
@@ -119,9 +123,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
         if (session != null) {
             mEmptyHint.setVisibility(View.GONE);
-            mViewportX = session.viewportX;
-            mViewportY = session.viewportY;
-            mCurrentScale = session.currentScale;
+            mCamera.setPosition(session.viewportX, session.viewportY);
+            mCamera.setScale(session.currentScale);
 
             mNodeLayer = new FrameLayout(getContext());
             mNodeLayer.setClipChildren(false);
@@ -152,9 +155,9 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     private void saveCurrentSessionState() {
         if (mCurrentSession != null) {
-            mCurrentSession.viewportX = mViewportX;
-            mCurrentSession.viewportY = mViewportY;
-            mCurrentSession.currentScale = mCurrentScale;
+            mCurrentSession.viewportX = mCamera.getX();
+            mCurrentSession.viewportY = mCamera.getY();
+            mCurrentSession.currentScale = mCamera.getScale();
             mCurrentSession.selectedNodeIds.clear();
             for (UINode node : mSelectedNodes) {
                 mCurrentSession.selectedNodeIds.add(node.getNodeData().id);
@@ -187,9 +190,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
         }
     }
 
-    public UINode getNodeView(String nodeId) {
-        return mNodeViews.get(nodeId);
-    }
+    public UINode getNodeView(String nodeId) { return mNodeViews.get(nodeId); }
 
     public boolean isNodeSelected(String nodeId) {
         UINode uiNode = mNodeViews.get(nodeId);
@@ -197,9 +198,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     public void updateSelectionState(List<String> selectedNodeIds) {
-        for (UINode node : mNodeViews.values()) {
-            node.setSelected(false);
-        }
+        for (UINode node : mNodeViews.values()) { node.setSelected(false); }
         mSelectedNodes.clear();
 
         for (String id : selectedNodeIds) {
@@ -215,7 +214,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     public void updateNodePosition(String nodeId, float x, float y) {
         UINode uiNode = mNodeViews.get(nodeId);
         if (uiNode != null) {
-            uiNode.setTranslationX(x); // x 为逻辑坐标 DP
+            uiNode.setTranslationX(x);
             uiNode.setTranslationY(y);
             invalidate();
         }
@@ -223,89 +222,33 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     public void notifyNodeLayoutUpdate(String nodeId) {
         UINode uiNode = mNodeViews.get(nodeId);
-        if (uiNode != null) {
-            uiNode.updateNodeLayout();
-        }
+        if (uiNode != null) uiNode.updateNodeLayout();
     }
 
-    public void addNode(float screenX, float screenY, String typeId) {
-        mController.executeAddNode(screenX, screenY, typeId);
-    }
+    // --- 视口变换与绘制同步 ---
 
-    // --- 视口变换与坐标系映射 ---
-
-    @Override
-    public void updateTransform() {
+    private void updateTransform() {
         if (mNodeLayer != null) {
             mNodeLayer.setTranslationX(0);
             mNodeLayer.setTranslationY(0);
 
             LayoutParams lp = (LayoutParams) mNodeLayer.getLayoutParams();
-            if (lp == null) {
-                lp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
-            }
-            lp.leftMargin = (int) mViewportX;
-            lp.topMargin = (int) mViewportY;
+            if (lp == null) lp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+            lp.leftMargin = (int) mCamera.getX();
+            lp.topMargin = (int) mCamera.getY();
             mNodeLayer.setLayoutParams(lp);
 
-            mNodeLayer.setScaleX(mCurrentScale);
-            mNodeLayer.setScaleY(mCurrentScale);
+            mNodeLayer.setScaleX(mCamera.getScale());
+            mNodeLayer.setScaleY(mCamera.getScale());
         }
         invalidate();
     }
 
     @Override
-    public void performZoom(boolean zoomIn, float pivotScreenX, float pivotScreenY) {
-        float oldScale = mCurrentScale;
-        float factor = zoomIn ? UIConstants.ViewPort.ZOOM_SENSITIVITY : -UIConstants.ViewPort.ZOOM_SENSITIVITY;
-
-        mCurrentScale = Math.max(UIConstants.ViewPort.ZOOM_MIN,
-                Math.min(UIConstants.ViewPort.ZOOM_MAX, oldScale + factor));
-
-        if (mCurrentScale == oldScale) return;
-
-        float ratio = mCurrentScale / oldScale;
-        mViewportX = pivotScreenX - (pivotScreenX - mViewportX) * ratio;
-        mViewportY = pivotScreenY - (pivotScreenY - mViewportY) * ratio;
-
-        updateTransform();
-    }
-
-    @Override
-    public float screenToUIX(float screenX) {
-        return UIUtils.px2dp((screenX - mViewportX) / mCurrentScale);
-    }
-
-    @Override
-    public float screenToUIY(float screenY) {
-        return UIUtils.px2dp((screenY - mViewportY) / mCurrentScale);
-    }
-
-    @Override
-    public float uiToScreenX(float uiX) {
-        return UIUtils.dp2px(uiX) * mCurrentScale + mViewportX;
-    }
-
-    @Override
-    public float uiToScreenY(float uiY) {
-        return UIUtils.dp2px(uiY) * mCurrentScale + mViewportY;
-    }
-
-    @Override public float getViewportX() { return mViewportX; }
-    @Override public float getViewportY() { return mViewportY; }
-    @Override public void setViewportX(float x) { mViewportX = x; }
-    @Override public void setViewportY(float y) { mViewportY = y; }
-    @Override public float getCurrentScale() { return mCurrentScale; }
-
-    // --- 渲染逻辑 ---
-
-    @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         if (mFirstLayout && w > 0 && h > 0) {
-            mViewportX = w / 2f;
-            mViewportY = h / 2f;
-            updateTransform();
+            mCamera.setPosition(w / 2f, h / 2f);
             mFirstLayout = false;
         }
     }
@@ -319,15 +262,18 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     private void drawInfiniteGrid(Canvas canvas) {
-        float scaledGrid = UIUtils.dp2px(ConfigManager.INSTANCE.getConfig().viewport.gridSize) * mCurrentScale;
+        float scale = mCamera.getScale();
+        float cx = mCamera.getX();
+        float cy = mCamera.getY();
+        float scaledGrid = UIUtils.dp2px(ConfigManager.INSTANCE.getConfig().viewport.gridSize) * scale;
         if (scaledGrid < 5f) return;
 
         float w = getWidth();
         float h = getHeight();
 
-        float startX = mViewportX % scaledGrid;
+        float startX = cx % scaledGrid;
         if (startX > 0) startX -= scaledGrid;
-        float startY = mViewportY % scaledGrid;
+        float startY = cy % scaledGrid;
         if (startY > 0) startY -= scaledGrid;
 
         mGridPaint.setColor(UIConstants.ViewPort.COLOR_GRID_LINE);
@@ -341,12 +287,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
         mGridPaint.setColor(UIConstants.ViewPort.COLOR_GRID_AXIS);
         mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_AXIS);
-        if (mViewportX >= 0 && mViewportX <= w) {
-            canvas.drawLine(mViewportX, 0, mViewportX, h, mGridPaint);
-        }
-        if (mViewportY >= 0 && mViewportY <= h) {
-            canvas.drawLine(0, mViewportY, w, mViewportY, mGridPaint);
-        }
+        if (cx >= 0 && cx <= w) canvas.drawLine(cx, 0, cx, h, mGridPaint);
+        if (cy >= 0 && cy <= h) canvas.drawLine(0, cy, w, cy, mGridPaint);
     }
 
     @Override
@@ -358,8 +300,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     private void drawAllConnections(Canvas canvas) {
         if (mCurrentSession == null || mCurrentSession.editorContext == null) return;
-
-        float scaledLineWidth = UIConstants.ViewPort.LINE_WIDTH_CONNECTION * mCurrentScale;
+        float scaledLineWidth = UIConstants.ViewPort.LINE_WIDTH_CONNECTION * mCamera.getScale();
         mConnectionPaint.setStrokeWidth(scaledLineWidth);
 
         com.mine.geometry_node.core.node.NodeGraph graph = mCurrentSession.editorContext.getGraph();
@@ -375,22 +316,17 @@ public class Viewport extends FrameLayout implements InteractionContext {
                     if (entry.getValue() == null) continue;
                     for (com.mine.geometry_node.core.node.Connection link : entry.getValue()) {
                         UINode inUi = mNodeViews.get(link.targetNodeId());
-                        if (inUi != null) {
-                            drawLine(canvas, outUi, outPortId, inUi, link.targetPortName());
-                        }
+                        if (inUi != null) drawLine(canvas, outUi, outPortId, inUi, link.targetPortName());
                     }
                 }
             }
-
             if (outData.execution != null) {
                 for (Map.Entry<String, String> entry : outData.execution.entrySet()) {
                     String execOutPortId = entry.getKey();
                     UINode inUi = mNodeViews.get(entry.getValue());
                     if (inUi != null) {
                         String targetExecPortId = findFirstExecInputPort(inUi);
-                        if (targetExecPortId != null) {
-                            drawLine(canvas, outUi, execOutPortId, inUi, targetExecPortId);
-                        }
+                        if (targetExecPortId != null) drawLine(canvas, outUi, execOutPortId, inUi, targetExecPortId);
                     }
                 }
             }
@@ -407,8 +343,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
         float inUiY = inUi.getTranslationY() + mTempInPos[1];
 
         canvas.drawLine(
-                uiToScreenX(outUiX), uiToScreenY(outUiY),
-                uiToScreenX(inUiX), uiToScreenY(inUiY),
+                mCamera.uiToScreenX(outUiX), mCamera.uiToScreenY(outUiY),
+                mCamera.uiToScreenX(inUiX), mCamera.uiToScreenY(inUiY),
                 mConnectionPaint
         );
     }
@@ -449,7 +385,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
                     String outPortId = node.hitTestPort(localX, localY, false, dynamicMargin);
                     if (outPortId != null) return new PortInfo(node, outPortId, false);
                 }
-
                 node.getLogicalBounds(mTmpNodeBounds);
                 if (mTmpNodeBounds.contains(uiX, uiY)) return null;
             }
@@ -467,9 +402,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
         for (int i = 0; i < mNodeLayer.getChildCount(); i++) {
             if (mNodeLayer.getChildAt(i) instanceof UINode n) {
                 n.getLogicalBounds(mTmpNodeBounds);
-                if (mTmpNodeBounds.intersects(uiX, uiY, selRight, selBottom)) {
-                    addToSelection(n);
-                }
+                if (mTmpNodeBounds.intersects(uiX, uiY, selRight, selBottom)) addToSelection(n);
             }
         }
     }
@@ -486,9 +419,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public void clearSelection() {
-        for (UINode node : mSelectedNodes) {
-            node.setSelected(false);
-        }
+        for (UINode node : mSelectedNodes) { node.setSelected(false); }
         mSelectedNodes.clear();
     }
 
@@ -517,6 +448,14 @@ public class Viewport extends FrameLayout implements InteractionContext {
         mActiveMenu.showAt(screenX, screenY, this);
     }
 
+    @Override
+    public void requestAddNode(float screenX, float screenY, String typeId) {
+        if (mController != null) {
+            mController.executeAddNode(screenX, screenY, typeId);
+        }
+    }
+
+    @Override
     public void closeMenu() {
         if (mActiveMenu != null) {
             if (mActiveMenu.getParent() == this) removeView(mActiveMenu);
@@ -525,14 +464,14 @@ public class Viewport extends FrameLayout implements InteractionContext {
         }
     }
 
-    @Override
-    public void addNodeToScene(UINode node) {
-        if (mNodeLayer != null) mNodeLayer.addView(node);
-    }
-
+    @Override public void addNodeToScene(UINode node) { if (mNodeLayer != null) mNodeLayer.addView(node); }
     @Override public Context getUIContext() { return getContext(); }
     @Override public EditorContext getEditorContext() { return mCurrentSession != null ? mCurrentSession.editorContext : null; }
     @Override public void requestViewportFocus() { requestFocus(); }
+
+    // 实现 KeyManager 要求的接口
+    @Override public float getLastMouseUiX() { return mCamera.screenToUIX(mLastMouseScreenX); }
+    @Override public float getLastMouseUiY() { return mCamera.screenToUIY(mLastMouseScreenY); }
 
     private String findFirstExecInputPort(UINode node) {
         for (PortRow row : node.getNodeDef().rows()) {
@@ -551,12 +490,11 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     private HintHitResult findInteractiveHint(MotionEvent ev) {
-        float uiX = screenToUIX(ev.getX());
-        float uiY = screenToUIY(ev.getY());
+        float uiX = mCamera.screenToUIX(ev.getX());
+        float uiY = mCamera.screenToUIY(ev.getY());
 
         UINode topNode = findNodeAt(uiX, uiY);
         if (topNode != null) {
-            // 内部控件查找，传入物理像素偏移（因为 findInteractiveViewAt 内部是基于物理像素的 View 边界）
             float localXpx = UIUtils.dp2px(uiX - topNode.getTranslationX());
             float localYpx = UIUtils.dp2px(uiY - topNode.getTranslationY());
 
@@ -576,16 +514,15 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
         if (isLogical) {
             if (!(target.getParent() instanceof UINode node)) return false;
-            float uiX = screenToUIX(ox);
-            float uiY = screenToUIY(oy);
-            // 转换为目标 View 的本地物理坐标
+            float uiX = mCamera.screenToUIX(ox);
+            float uiY = mCamera.screenToUIY(oy);
             lx = UIUtils.dp2px(uiX - node.getTranslationX()) - target.getLeft();
             ly = UIUtils.dp2px(uiY - node.getTranslationY()) - target.getTop();
         } else {
             if (!skipEventToScreen) eventToScreen(ev);
             target.getLocationOnScreen(mTmpTargetLoc);
-            lx = (mTmpEventScreen[0] - mTmpTargetLoc[0]) / mCurrentScale;
-            ly = (mTmpEventScreen[1] - mTmpTargetLoc[1]) / mCurrentScale;
+            lx = (mTmpEventScreen[0] - mTmpTargetLoc[0]) / mCamera.getScale();
+            ly = (mTmpEventScreen[1] - mTmpTargetLoc[1]) / mCamera.getScale();
         }
 
         ev.setLocation(lx, ly);
@@ -598,13 +535,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
     public boolean dispatchKeyEvent(icyllis.modernui.view.KeyEvent event) {
         if (event.isCtrlPressed() && event.getAction() == icyllis.modernui.view.KeyEvent.ACTION_DOWN) {
             View focusedView = findFocus();
-            if (focusedView instanceof EditText) {
-                return super.dispatchKeyEvent(event);
-            }
-
-            if (mKeyManager.onKeyDown(event)) {
-                return true;
-            }
+            if (focusedView instanceof EditText) return super.dispatchKeyEvent(event);
+            if (mKeyManager.onKeyDown(event)) return true;
         }
         return super.dispatchKeyEvent(event);
     }
@@ -617,9 +549,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
         }
         return false;
     }
-
-    public float getLastMouseUiX() { return screenToUIX(mLastMouseScreenX); }
-    public float getLastMouseUiY() { return screenToUIY(mLastMouseScreenY); }
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
@@ -702,3 +631,4 @@ public class Viewport extends FrameLayout implements InteractionContext {
         public PortInfo(UINode n, String id, boolean in) { this.node = n; this.portId = id; this.isInput = in; }
     }
 }
+// --- END OF FILE Viewport.java ---

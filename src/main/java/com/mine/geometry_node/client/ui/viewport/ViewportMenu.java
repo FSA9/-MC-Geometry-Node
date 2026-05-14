@@ -1,8 +1,10 @@
+// --- START OF FILE ViewportMenu.java ---
 package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.utils.UIUtils; // 引用工具类
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
+import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
 import com.mine.geometry_node.core.node.NodeCategory;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -22,7 +24,8 @@ public class ViewportMenu extends FrameLayout {
     private LinearLayout mListContainer;
     private EditText mSearchBox;
 
-    private Viewport mViewport;
+    // 架构优化：依赖抽象接口，不依赖具体 Viewport 类
+    private InteractionContext mContext;
     private float mMenuX, mMenuY; // 视口逻辑坐标
 
     private final Stack<NodeCategory> mHistory = new Stack<>();
@@ -48,19 +51,14 @@ public class ViewportMenu extends FrameLayout {
         mContentLayout.setPadding(menuPadding, menuPadding, menuPadding, menuPadding);
         mContentLayout.setOnClickListener(v -> {});
 
-        // 1. 约束绝对位置在左上角
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 UIUtils.dp2pxInt(100), LayoutParams.WRAP_CONTENT);
         lp.gravity = Gravity.TOP | Gravity.LEFT;
         mContentLayout.setLayoutParams(lp);
 
-        // 搜索框
         mSearchBox = new EditText(context);
         mSearchBox.setHint(Component.translatable("menu.node.search").getString());
 
-
-
-        // 2. 移除乘法，直接给定安全的字体像素大小进行测试
         float searchFontSizeDp = UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * (float) UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
         mSearchBox.setTextSize(0, UIUtils.dp2px(searchFontSizeDp));
         mSearchBox.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
@@ -80,7 +78,6 @@ public class ViewportMenu extends FrameLayout {
         searchLp.setMargins(menuPadding, menuPadding, menuPadding, UIUtils.dp2pxInt(6));
         mContentLayout.addView(mSearchBox, searchLp);
 
-        // 列表容器
         ScrollView sv = new ScrollView(context);
         mListContainer = new LinearLayout(context);
         mListContainer.setOrientation(LinearLayout.VERTICAL);
@@ -88,7 +85,6 @@ public class ViewportMenu extends FrameLayout {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // 3. 取消 weight 约束，改为 WRAP_CONTENT，靠内部元素自然撑开
         mContentLayout.addView(sv, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -96,25 +92,21 @@ public class ViewportMenu extends FrameLayout {
         addView(mContentLayout);
     }
 
-    public void showAt(float x, float y, ViewGroup parent) {
-        if (parent instanceof Viewport vp) {
-            mViewport = vp;
-        }
-
+    // 架构优化：传入 InteractionContext
+    public void showAt(float x, float y, InteractionContext context) {
+        this.mContext = context;
         mMenuX = x;
         mMenuY = y;
 
+        // 这里我们知道 context 本质上是 Viewport(ViewGroup)，所以强转以获取边界信息
+        ViewGroup parent = (ViewGroup) context;
+
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
-
-        // 【修复1】显式声明左上角对齐，防止 FrameLayout 默认居中策略干扰
         lp.gravity = Gravity.TOP | Gravity.LEFT;
-
         lp.leftMargin = (int) x;
         lp.topMargin = (int) y;
 
-        // 【修复2】动态计算真实物理边界，抛弃写死的 350dp 防溢出
         if (parent != null) {
-            // 让容器主动测量自己在当前内容下的真实物理宽高
             int widthSpec = MeasureSpec.makeMeasureSpec(UIUtils.dp2pxInt(200), MeasureSpec.EXACTLY);
             int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
             mContentLayout.measure(widthSpec, heightSpec);
@@ -122,15 +114,12 @@ public class ViewportMenu extends FrameLayout {
             int actualW = mContentLayout.getMeasuredWidth();
             int actualH = mContentLayout.getMeasuredHeight();
 
-            // 兜底：如果还没渲染出来拿不到，给个保守的物理像素估值
             if (actualW == 0) actualW = UIUtils.dp2pxInt(200);
             if (actualH == 0) actualH = UIUtils.dp2pxInt(300);
 
-            // 溢出纠偏：超右边缘，就贴紧右边缘
             if (x + actualW > parent.getWidth()) {
                 lp.leftMargin = Math.max(0, parent.getWidth() - actualW);
             }
-            // 溢出纠偏：超下边缘，就贴紧下边缘
             if (y + actualH > parent.getHeight()) {
                 lp.topMargin = Math.max(0, parent.getHeight() - actualH);
             }
@@ -149,8 +138,8 @@ public class ViewportMenu extends FrameLayout {
     }
 
     public void dismiss() {
-        if (mViewport != null) {
-            mViewport.closeMenu();
+        if (mContext != null) {
+            mContext.closeMenu();
         } else if (getParent() != null) {
             ((ViewGroup) getParent()).removeView(this);
         }
@@ -199,8 +188,9 @@ public class ViewportMenu extends FrameLayout {
         for (BaseNode node : mCurrentFolder.getNodes()) {
             String label = node.getDefaultDefinition().displayName().getString();
             addClickItem(label, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> {
-                if (mViewport != null) {
-                    mViewport.addNode(mMenuX, mMenuY, node.getTypeId());
+                if (mContext != null) {
+                    // 发出意图：在这里添加节点
+                    mContext.requestAddNode(mMenuX, mMenuY, node.getTypeId());
                 }
                 post(this::dismiss);
             });
@@ -219,8 +209,9 @@ public class ViewportMenu extends FrameLayout {
             String name = def.displayName().getString();
             if (name.toLowerCase().contains(q)) {
                 addClickItem(name, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> {
-                    if (mViewport != null) {
-                        mViewport.addNode(mMenuX, mMenuY, def.typeId());
+                    if (mContext != null) {
+                        // 发出意图：在这里添加节点
+                        mContext.requestAddNode(mMenuX, mMenuY, def.typeId());
                     }
                     post(this::dismiss);
                 });
@@ -232,7 +223,6 @@ public class ViewportMenu extends FrameLayout {
         TextView tv = new TextView(getContext());
         tv.setText(text);
 
-        // 同样移除复杂的乘法计算，给一个安全的绝对字号
         float itemFontSizeDp = UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * (float) UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
         tv.setTextSize(0, UIUtils.dp2px(itemFontSizeDp));
         tv.setTextColor(color);
@@ -267,3 +257,4 @@ public class ViewportMenu extends FrameLayout {
         return d;
     }
 }
+// --- END OF FILE ViewportMenu.java ---
