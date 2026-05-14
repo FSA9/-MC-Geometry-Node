@@ -66,6 +66,7 @@ public class ViewportController implements EditorContext.EditorListener {
     @Override
     public void onNodeRemoved(String nodeId) {
         mViewport.removeNodeView(nodeId);
+        mViewport.rebuildVisualConnections();
     }
 
     @Override
@@ -80,21 +81,22 @@ public class ViewportController implements EditorContext.EditorListener {
                 mViewport.addToSelection(rebuilt);
             }
         }
+        mViewport.rebuildVisualConnections();
     }
 
     @Override
     public void onGraphConnectionsRebuildRequested() {
-        mViewport.invalidate();
+        mViewport.rebuildVisualConnections();
     }
 
     @Override
     public void onExecutionConnectionAdded(String outNodeId, String outPortId, String inNodeId) {
-        mViewport.invalidate();
+        mViewport.rebuildVisualConnections();
     }
 
     @Override
     public void onExecutionConnectionRemoved(String outNodeId, String outPortId, String inNodeId) {
-        mViewport.invalidate();
+        mViewport.rebuildVisualConnections();
     }
 
     @Override
@@ -105,20 +107,21 @@ public class ViewportController implements EditorContext.EditorListener {
     @Override
     public void onNodeMoved(String nodeId, float x, float y) {
         mViewport.updateNodePosition(nodeId, x, y);
+        mViewport.updateConnectionsForNode(nodeId);
     }
 
     @Override
     public void onConnectionAdded(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         mViewport.notifyNodeLayoutUpdate(outNodeId);
         mViewport.notifyNodeLayoutUpdate(inNodeId);
-        mViewport.invalidate();
+        mViewport.rebuildVisualConnections();
     }
 
     @Override
     public void onConnectionRemoved(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         mViewport.notifyNodeLayoutUpdate(outNodeId);
         mViewport.notifyNodeLayoutUpdate(inNodeId);
-        mViewport.invalidate();
+        mViewport.rebuildVisualConnections();
     }
 }
 // --- END OF FILE ViewportController.java ---

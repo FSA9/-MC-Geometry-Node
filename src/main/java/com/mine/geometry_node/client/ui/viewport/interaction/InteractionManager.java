@@ -224,6 +224,10 @@ public class InteractionManager {
             for (UINode node : mContext.getSelectedNodes()) {
                 node.setTranslationX(node.getNodeData().getX());
                 node.setTranslationY(node.getNodeData().getY());
+
+                if (mContext instanceof Viewport) {
+                    ((Viewport) mContext).updateConnectionsForNode(node.getNodeData().id);
+                }
             }
             mContext.invalidate();
         }

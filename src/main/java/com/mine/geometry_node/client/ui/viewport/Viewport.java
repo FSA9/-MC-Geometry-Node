@@ -65,6 +65,39 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     private TextView mEmptyHint;
 
+    private final List<VisualConnection> mVisualConnections = new ArrayList<>();
+
+    private static class VisualConnection {
+        final UINode outNode;
+        final String outPortId;
+        final UINode inNode;
+        final String inPortId;
+        final boolean isExecution;
+
+        // 缓存逻辑坐标，避免绘制时重新计算
+        float startUiX, startUiY;
+        float endUiX, endUiY;
+
+        VisualConnection(UINode outNode, String outPortId, UINode inNode, String inPortId, boolean isExecution) {
+            this.outNode = outNode;
+            this.outPortId = outPortId;
+            this.inNode = inNode;
+            this.inPortId = inPortId;
+            this.isExecution = isExecution;
+        }
+
+        // 重新计算此连线的逻辑坐标
+        void updateUiCoordinates(float[] tempOutPos, float[] tempInPos) {
+            outNode.getPortPosition(outPortId, false, tempOutPos);
+            startUiX = outNode.getTranslationX() + tempOutPos[0];
+            startUiY = outNode.getTranslationY() + tempOutPos[1];
+
+            inNode.getPortPosition(inPortId, true, tempInPos);
+            endUiX = inNode.getTranslationX() + tempInPos[0];
+            endUiY = inNode.getTranslationY() + tempInPos[1];
+        }
+    }
+
     public Viewport(Context context) {
         super(context);
         initViewportProps();
@@ -148,9 +181,10 @@ public class Viewport extends FrameLayout implements InteractionContext {
         if (graph == null || graph.nodes == null) return;
 
         for (NodeData data : graph.nodes.values()) {
-            mController.onNodeAdded(data);
+            mController.onNodeAdded(data); // 内部会调用 addNodeView
         }
         updateSelectionState(session.selectedNodeIds);
+        rebuildVisualConnections();
     }
 
     private void saveCurrentSessionState() {
@@ -300,8 +334,27 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     private void drawAllConnections(Canvas canvas) {
         if (mCurrentSession == null || mCurrentSession.editorContext == null) return;
+
         float scaledLineWidth = UIConstants.ViewPort.LINE_WIDTH_CONNECTION * mCamera.getScale();
         mConnectionPaint.setStrokeWidth(scaledLineWidth);
+
+        for (int i = 0; i < mVisualConnections.size(); i++) {
+            VisualConnection vc = mVisualConnections.get(i);
+            canvas.drawLine(
+                    mCamera.uiToScreenX(vc.startUiX), mCamera.uiToScreenY(vc.startUiY),
+                    mCamera.uiToScreenX(vc.endUiX), mCamera.uiToScreenY(vc.endUiY),
+                    mConnectionPaint
+            );
+        }
+    }
+
+    /**
+     * 全量重建连线缓存。
+     * 只有在加载图、节点结构大变动、连线增删时调用。
+     */
+    public void rebuildVisualConnections() {
+        mVisualConnections.clear();
+        if (mCurrentSession == null || mCurrentSession.editorContext == null) return;
 
         com.mine.geometry_node.core.node.NodeGraph graph = mCurrentSession.editorContext.getGraph();
         if (graph == null) return;
@@ -310,26 +363,53 @@ public class Viewport extends FrameLayout implements InteractionContext {
             UINode outUi = mNodeViews.get(outData.id);
             if (outUi == null) continue;
 
+            // 处理数据连接
             if (outData.outputs != null) {
                 for (Map.Entry<String, List<com.mine.geometry_node.core.node.Connection>> entry : outData.outputs.entrySet()) {
                     String outPortId = entry.getKey();
                     if (entry.getValue() == null) continue;
                     for (com.mine.geometry_node.core.node.Connection link : entry.getValue()) {
                         UINode inUi = mNodeViews.get(link.targetNodeId());
-                        if (inUi != null) drawLine(canvas, outUi, outPortId, inUi, link.targetPortName());
+                        if (inUi != null) {
+                            VisualConnection vc = new VisualConnection(outUi, outPortId, inUi, link.targetPortName(), false);
+                            vc.updateUiCoordinates(mTempOutPos, mTempInPos);
+                            mVisualConnections.add(vc);
+                        }
                     }
                 }
             }
+
+            // 处理执行连接 (Execution)
             if (outData.execution != null) {
                 for (Map.Entry<String, String> entry : outData.execution.entrySet()) {
                     String execOutPortId = entry.getKey();
                     UINode inUi = mNodeViews.get(entry.getValue());
                     if (inUi != null) {
                         String targetExecPortId = findFirstExecInputPort(inUi);
-                        if (targetExecPortId != null) drawLine(canvas, outUi, execOutPortId, inUi, targetExecPortId);
+                        if (targetExecPortId != null) {
+                            VisualConnection vc = new VisualConnection(outUi, execOutPortId, inUi, targetExecPortId, true);
+                            vc.updateUiCoordinates(mTempOutPos, mTempInPos);
+                            mVisualConnections.add(vc);
+                        }
                     }
                 }
             }
+        }
+        invalidate();
+    }
+
+    public void updateConnectionsForNode(String nodeId) {
+        boolean needsInvalidate = false;
+        for (int i = 0; i < mVisualConnections.size(); i++) {
+            VisualConnection vc = mVisualConnections.get(i);
+            // 如果该连线的起点或终点是当前移动的节点，则重新计算坐标
+            if (vc.outNode.getNodeData().id.equals(nodeId) || vc.inNode.getNodeData().id.equals(nodeId)) {
+                vc.updateUiCoordinates(mTempOutPos, mTempInPos);
+                needsInvalidate = true;
+            }
+        }
+        if (needsInvalidate) {
+            invalidate();
         }
     }
 
@@ -412,6 +492,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
         for (UINode node : mSelectedNodes) {
             node.setTranslationX(node.getTranslationX() + uiDx);
             node.setTranslationY(node.getTranslationY() + uiDy);
+            updateConnectionsForNode(node.getNodeData().id);
         }
     }
 
