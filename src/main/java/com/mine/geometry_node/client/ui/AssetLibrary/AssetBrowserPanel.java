@@ -36,7 +36,7 @@ public class AssetBrowserPanel extends FrameLayout {
     private final LinearLayout mMainLayout;
 
     // ==========================================
-    // 局部 UI 尺寸常量 (单位: DP)
+    // 局部 UI 尺寸常量
     // ==========================================
     private static final float NAV_BAR_HEIGHT = 40.0f;
     private static final float BTN_ADD_WIDTH = 40.0f;
@@ -58,7 +58,6 @@ public class AssetBrowserPanel extends FrameLayout {
     private File mCurrentDirectory;
     private final float mTouchSlop;
 
-    // 新增状态变量
     private File mSelectedFile = null;
     private View mSelectedView = null; // 用于控制高亮UI
     private File mClipboardFile = null;
@@ -157,14 +156,12 @@ public class AssetBrowserPanel extends FrameLayout {
             if (event.getActionMasked() == MotionEvent.ACTION_DOWN && isRightMouse(event)) {
                 int[] loc = new int[2];
                 this.getLocationOnScreen(loc);
-                // targetFile 传 null 代表点击的是背景
                 showContextMenu(event.getRawX() - loc[0], event.getRawY() - loc[1], null, null, null);
                 return true;
             }
             return false;
         };
 
-// 保证点在列表项缝隙或完全空白的地方都能呼出菜单
         scrollView.setOnTouchListener(bgContextListener);
         mFileListContainer.setOnTouchListener(bgContextListener);
 
@@ -191,7 +188,6 @@ public class AssetBrowserPanel extends FrameLayout {
         parentRow.addView(editInput, parentRow.indexOfChild(originalTextView), lp);
 
         editInput.requestFocus();
-        // 选中除了后缀名以外的文本
         String name = editInput.getText().toString();
         int dotIndex = name.lastIndexOf(".");
         if (dotIndex > 0 && !targetFile.isDirectory()) {
@@ -200,17 +196,15 @@ public class AssetBrowserPanel extends FrameLayout {
             editInput.setSelection(name.length());
         }
 
-        // 替换原来的 commitAction 定义
         Runnable commitAction = new Runnable() {
             boolean isCommitted = false; // 状态锁
 
             @Override
             public void run() {
                 if (isCommitted) return;
-                isCommitted = true; // 确保仅执行一次
+                isCommitted = true;
 
                 String newName = editInput.getText().toString().trim();
-                // 如果名字没填，或者名字根本没改，直接忽略
                 if (!newName.isEmpty() && (targetFile == null || !newName.equals(targetFile.getName()))) {
                     try {
                         if (isNewFolder) {
@@ -267,20 +261,18 @@ public class AssetBrowserPanel extends FrameLayout {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setBackground(createColorDrawable(0xFF2A2A2A));
 
-        // 修改：明确使用 LinearLayout.LayoutParams
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
         rowParams.setMargins(0, 0, 0, dp2pxInt(2));
         row.setLayoutParams(rowParams);
 
         TextView dragHandle = UIUtils.createLockedTextView(context, " ⋮⋮ ", TEXT_SIZE_HANDLE, 0xFF666666);
         dragHandle.setGravity(Gravity.CENTER);
-        // 修改：明确使用 LinearLayout.LayoutParams
         row.addView(dragHandle, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
         final float[] startY = {0};
         final boolean[] isDragging = {false};
 
-        // 拖拽逻辑保持原样
+        // 拖拽逻辑
         dragHandle.setOnTouchListener((v, event) -> {
             int action = event.getActionMasked();
             switch (action) {
@@ -432,7 +424,7 @@ public class AssetBrowserPanel extends FrameLayout {
             // 交互逻辑
             itemRow.setOnTouchListener((v, event) -> {
                 if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                    // 1. 处理选中高亮状态
+                    // 1. 选中高亮状态
                     if (mSelectedView != null && mSelectedView != itemRow) {
                         mSelectedView.setBackground(createColorDrawable(0)); // 恢复上一个
                     }
@@ -440,12 +432,10 @@ public class AssetBrowserPanel extends FrameLayout {
                     mSelectedView = itemRow;
                     itemRow.setBackground(createColorDrawable(0xFF445566)); // 选中色
 
-                    // 2. 完美修复：使用 InteractionManager 中的右键判定逻辑
                     boolean isRightClick = (event.getButtonState() & MotionEvent.BUTTON_SECONDARY) != 0 ||
                             event.getActionButton() == MotionEvent.BUTTON_SECONDARY;
 
                     if (isRightClick) {
-                        // 计算相对于当前 AssetBrowserPanel 的局部坐标
                         int[] loc = new int[2];
                         this.getLocationOnScreen(loc);
                         float localX = event.getRawX() - loc[0];
@@ -458,7 +448,7 @@ public class AssetBrowserPanel extends FrameLayout {
                 return false;
             });
 
-            // 双击逻辑保持不变
+            // 双击逻辑
             final long[] lastClickTime = {0};
             itemRow.setOnClickListener(v -> {
                 long now = System.currentTimeMillis();
@@ -470,12 +460,10 @@ public class AssetBrowserPanel extends FrameLayout {
         }
     }
 
-    // --- 替换原有的 showContextMenu ---
     private void showContextMenu(float localX, float localY, File targetFile, LinearLayout itemRow, TextView itemText) {
         FileContextMenu menu = new FileContextMenu(getContext());
 
         if (targetFile != null) {
-            // --- 选中具体文件时的菜单 ---
             menu.addMenuItem("复制", () -> { mClipboardFile = targetFile; mIsCutOperation = false; });
             menu.addMenuItem("剪切", () -> { mClipboardFile = targetFile; mIsCutOperation = true; });
             menu.addMenuItem("删除", () -> {
@@ -487,7 +475,6 @@ public class AssetBrowserPanel extends FrameLayout {
             menu.addDivider();
         }
 
-        // --- 通用操作 (点空白处也能用) ---
         if (mClipboardFile != null && mClipboardFile.exists()) {
             menu.addMenuItem("粘贴", this::performPaste);
             menu.addDivider();
@@ -498,13 +485,11 @@ public class AssetBrowserPanel extends FrameLayout {
         menu.showAt(localX, localY, this);
     }
 
-    // --- 新增：具体的文件 IO 方法 ---
     private void performPaste() {
         if (mClipboardFile == null || !mClipboardFile.exists() || mCurrentDirectory == null) return;
         try {
             File dest = new File(mCurrentDirectory, mClipboardFile.getName());
 
-            // 自动重命名防覆盖机制 (例如: name_1.json)
             int counter = 1;
             while (dest.exists()) {
                 String name = mClipboardFile.getName();
@@ -539,15 +524,13 @@ public class AssetBrowserPanel extends FrameLayout {
         file.delete();
     }
 
-    // 触发新建时的占位逻辑
     private void triggerNewItem(boolean isFolder) {
         LinearLayout dummyRow = new LinearLayout(getContext());
         dummyRow.setOrientation(LinearLayout.HORIZONTAL);
-        TextView dummyText = new TextView(getContext()); // 临时占位，马上被隐藏
+        TextView dummyText = new TextView(getContext());
         dummyRow.addView(dummyText);
-        mFileListContainer.addView(dummyRow, 0); // 插在最前面
+        mFileListContainer.addView(dummyRow, 0);
 
-        // 调用内联编辑
         startInlineEdit(new File(""), dummyRow, dummyText, isFolder, !isFolder);
     }
 
