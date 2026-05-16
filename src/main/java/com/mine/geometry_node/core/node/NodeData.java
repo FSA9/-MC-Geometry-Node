@@ -21,8 +21,8 @@ public class NodeData {
     @SerializedName("inputs")
     public Map<String, Object> inputs = new HashMap<>();
 
-    @SerializedName("execution")
-    public Map<String, String> execution = new HashMap<>();
+    @SerializedName("exec_outputs")
+    public Map<String, Connection> execOutputs = new HashMap<>();
 
     @SerializedName("outputs")
     public Map<String, List<Connection>> outputs = new HashMap<>();
@@ -32,7 +32,8 @@ public class NodeData {
 
     public static class PortSettings {
         public Map<String, PortConfig> inputs = new HashMap<>();
-        public Map<String, PortConfig> execution = new HashMap<>();
+        public Map<String, PortConfig> execInputs = new HashMap<>();
+        public Map<String, PortConfig> execOutputs = new HashMap<>();
         public Map<String, PortConfig> outputs = new HashMap<>();
     }
 
@@ -47,7 +48,8 @@ public class NodeData {
 
         Map<String, PortConfig> targetMap = switch (category) {
             case "inputs" -> portSettings.inputs;
-            case "execution" -> portSettings.execution;
+            case "exec_inputs" -> portSettings.execInputs;
+            case "exec_outputs" -> portSettings.execOutputs;
             case "outputs" -> portSettings.outputs;
             default -> null;
         };
@@ -86,18 +88,18 @@ public class NodeData {
         this.uiPos[1] = y;
     }
 
-    public void setFlow(String port, String targetNodeId) {
-        this.execution.put(port, targetNodeId);
+    public void setFlow(String port, String targetNodeId, String targetPortName) {
+        this.execOutputs.put(port, new Connection(targetNodeId, targetPortName));
     }
 
     // --- 辅助方法 ---
 
-    public void addExecutionConnection(String outPort, String targetId) {
-        this.execution.put(outPort, targetId);
+    public void addExecutionConnection(String outPort, String targetId, String targetPortName) {
+        this.execOutputs.put(outPort, new Connection(targetId, targetPortName));
     }
 
     public void removeExecutionConnection(String outPort) {
-        this.execution.remove(outPort);
+        this.execOutputs.remove(outPort);
     }
 
     public void addDataConnection(String outPort, String targetId, String targetInPort) {

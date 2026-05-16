@@ -72,25 +72,6 @@ public class UINode extends FrameLayout {
         return null;
     }
 
-    public void refreshPortLabelText(String portId) {
-        TextView tv = mPortLabels.get(portId);
-        if (tv == null) return;
-
-        // 找出它是 left 还是 right
-        for (PortRow row : mNodeDef.rows()) {
-            if (row.leftPort() != null && row.leftPort().id().equals(portId)) {
-                String cat = getPortCategory(row.leftPort(), true);
-                tv.setText(mNodeData.getEffectivePortName(cat, portId, row.leftPort().displayName().getString()));
-                return;
-            }
-            if (row.rightPort() != null && row.rightPort().id().equals(portId)) {
-                String cat = getPortCategory(row.rightPort(), false);
-                tv.setText(mNodeData.getEffectivePortName(cat, portId, row.rightPort().displayName().getString()));
-                return;
-            }
-        }
-    }
-
     private void buildUIElements(Context context) {
         TextView titleView = new TextView(context);
         titleView.setText(mNodeDef.displayName().getString());

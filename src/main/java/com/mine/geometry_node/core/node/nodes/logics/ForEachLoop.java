@@ -34,8 +34,7 @@ public class ForEachLoop extends BaseNode {
         Integer limitInt = getInput(context, StandardPorts.LIMIT.getId(), Integer.class);
         Integer tickInterval = getInput(context, StandardPorts.TICK.getId(), Integer.class);
 
-        int listSize = list.size();
-
+        int listSize = list != null ? list.size() : 0;
         int targetIterations = (limitInt != null && limitInt > 0) ? Math.min(listSize, limitInt) : listSize;
 
         int myNodeId = context.getCurrentNodeId();
@@ -43,9 +42,19 @@ public class ForEachLoop extends BaseNode {
         String elementKey = "ForEach_" + myNodeId + "_element";
         String cursorKey = "ForEach_" + myNodeId + "_cursor";
 
-        Object savedCursorObj = context.getTempData(cursorKey);
-        int currentIndex = (savedCursorObj instanceof Integer i) ? i : 0;
+        boolean isInternalTick = "internal_loop_tick".equals(context.getEntryPort());
 
+        int currentIndex;
+        if (isInternalTick) {
+            // 如果是内部延迟唤醒，继续读取游标进度
+            Object savedCursorObj = context.getTempData(cursorKey);
+            currentIndex = (savedCursorObj instanceof Integer i) ? i : 0;
+        } else {
+            // 如果是外部重新触发，强行从头开始！
+            currentIndex = 0;
+        }
+
+        // 结束条件判断
         if (currentIndex >= targetIterations) {
             context.removeTempData(indexKey);
             context.removeTempData(elementKey);
@@ -55,7 +64,7 @@ public class ForEachLoop extends BaseNode {
 
         int delay = (tickInterval != null) ? tickInterval : 0;
 
-        if (delay > 0) { // 异步跨帧模式
+        if (delay > 0) { // --- 异步跨帧模式 ---
             Object currentElement = list.get(currentIndex);
 
             context.setTempData(indexKey, currentIndex);
@@ -63,9 +72,11 @@ public class ForEachLoop extends BaseNode {
             context.clearFrameCache();
             context.setTempData(cursorKey, currentIndex + 1);
 
-            context.scheduleNode(myNodeId, delay);
+            // 唤醒自己
+            context.scheduleNode(myNodeId, delay, "internal_loop_tick");
             return next(StandardPorts.LOOP.getId());
-        } else { // 瞬间同步模式
+
+        } else { // --- 瞬间同步模式 ---
             for (int i = currentIndex; i < targetIterations; i++) {
                 Object currentElement = list.get(i);
                 context.setTempData(indexKey, i);

@@ -79,7 +79,7 @@ public class MakeList extends BaseNode {
         }
 
         int portCount = 1;
-        Object countObj = context.getInputValue(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
+        Object countObj = context.getStaticInput(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());
         if (countObj instanceof Number n) portCount = Math.max(1, n.intValue());
         else if (countObj instanceof String s) {
             try { portCount = Integer.parseInt(s); } catch (NumberFormatException ignored) {}

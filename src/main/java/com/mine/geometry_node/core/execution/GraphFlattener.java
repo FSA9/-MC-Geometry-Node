@@ -18,20 +18,17 @@ import java.util.*;
 class GraphFlattener {
 
     // 扁平化后的最终数据容器
+    public record TargetConnection(String targetNodeId, String targetPortName) {}
     final Map<String, JsonObject> nodeDataLookup = new HashMap<>();
-    final Map<String, Map<String, String>> flowOutputLookup = new HashMap<>();
+    final Map<String, Map<String, TargetConnection>> flowOutputLookup = new HashMap<>();
     final Map<String, RuntimeGraphIndex.ConnectionSource> inputLookup = new HashMap<>();
     final Map<String, List<String>> typeLookup = new HashMap<>();
     final Map<String, Map<String, Object>> propertyLookup = new HashMap<>();
     final Map<String, Map<String, Object>> staticInputLookup = new HashMap<>();
 
-    // 暂存：节点组的边界映射 (用于最后一步的桥接)
-    // Key: GroupNodeID (全局ID) -> Info
     private final Map<String, GroupBoundary> groupBoundaries = new HashMap<>();
-
-    // 辅助索引：快速查找某个 group_in/group_out 属于哪个 Group
-    // Key: GroupIn/Out_NodeID (全局ID) -> Value: Group_NodeID (全局ID)
     private final Map<String, String> internalToGroupMap = new HashMap<>();
+
 
     /**
      * 执行展平逻辑
@@ -48,7 +45,7 @@ class GraphFlattener {
     private void flattenRecursive(String prefix, JsonObject nodesMap) {
         for (String localId : nodesMap.keySet()) {
             JsonObject nodeObj = nodesMap.getAsJsonObject(localId);
-            String globalId = prefix + localId; // 全局唯一 ID
+            String globalId = prefix + localId;
 
             // 1. 基础信息提取
             nodeDataLookup.put(globalId, nodeObj);
@@ -58,7 +55,6 @@ class GraphFlattener {
                 type = nodeObj.get("node_type").getAsString();
                 typeLookup.computeIfAbsent(type, k -> new ArrayList<>()).add(globalId);
 
-                // 节点组递归
                 if ("node_group".equals(type) && nodeObj.has("sub_nodes")) {
                     GroupBoundary boundary = parseGroupBoundary(globalId, nodeObj, prefix);
                     groupBoundaries.put(globalId, boundary);
@@ -67,21 +63,17 @@ class GraphFlattener {
                     if (boundary.groupOutId != null) internalToGroupMap.put(boundary.groupOutId, globalId);
 
                     flattenRecursive(globalId + "/", nodeObj.getAsJsonObject("sub_nodes"));
-
-                    // Group 节点本身只是容器，不参与运算，但保留它在 DataLookup 中供调试
                     continue;
                 }
             }
 
-            // 2. 属性与静态输入提取 (含默认值烘焙优化)
+            // 2. 属性与静态输入提取
             if (nodeObj.has("properties")) {
                 propertyLookup.put(globalId, RuntimeGraphIndex.parseValueMap(nodeObj.getAsJsonObject("properties")));
             }
 
             // --- 烘焙(Baking) 核心逻辑 ---
             Map<String, Object> bakedInputs = new HashMap<>();
-
-            // 引擎注册表获取该节点默认值
             BaseNode logic = NodeRegistry.INSTANCE.get(type);
             if (logic != null) {
                 NodeDef def = logic.getDefaultDefinition();
@@ -93,21 +85,30 @@ class GraphFlattener {
                     }
                 }
             }
-            // JSON 静态值覆盖默认值
             if (nodeObj.has("inputs")) {
                 bakedInputs.putAll(RuntimeGraphIndex.parseValueMap(nodeObj.getAsJsonObject("inputs")));
             }
-            // 保存数据字典
             staticInputLookup.put(globalId, bakedInputs);
 
-            // 执行流提取
-            if (nodeObj.has("execution")) {
-                Map<String, String> flowMap = new HashMap<>();
-                JsonObject execObj = nodeObj.getAsJsonObject("execution");
+            // --- [修改核心] 执行流提取 (适配新的 exec_outputs 格式) ---
+            // 注意：支持 JSON 字段平滑过渡，建议你的 JSON 统一改为 "exec_outputs"
+            String execKey = nodeObj.has("exec_outputs") ? "exec_outputs" : (nodeObj.has("execution") ? "execution" : null);
+            if (execKey != null) {
+                Map<String, TargetConnection> flowMap = new HashMap<>();
+                JsonObject execObj = nodeObj.getAsJsonObject(execKey);
+
                 for (String port : execObj.keySet()) {
-                    JsonElement targetId = execObj.get(port);
-                    if (!targetId.isJsonNull()) {
-                        flowMap.put(port, prefix + targetId.getAsString());
+                    JsonElement el = execObj.get(port);
+                    if (el.isJsonObject()) {
+                        // 新格式: "flow_out": { "target_node": "xxx", "target_port": "yyy" }
+                        JsonObject tObj = el.getAsJsonObject();
+                        String targetLocalId = tObj.get("target_node").getAsString();
+                        String targetPort = tObj.get("target_port").getAsString();
+                        flowMap.put(port, new TargetConnection(prefix + targetLocalId, targetPort));
+                    } else if (el.isJsonPrimitive()) {
+                        // [兼容旧格式] 以防你的老蓝图报错，默认接入目标的 "flow_in"
+                        String targetLocalId = el.getAsString();
+                        flowMap.put(port, new TargetConnection(prefix + targetLocalId, "flow_in"));
                     }
                 }
                 flowOutputLookup.put(globalId, flowMap);
@@ -137,42 +138,30 @@ class GraphFlattener {
      * 核心桥接逻辑：消除所有 NodeGroup、GroupIn、GroupOut 的中间商
      */
     private void bridgeGroups() {
-        // --- 1. 数据流重定向 (Data Flow - Pull Model) ---
-        // 目标：当节点请求数据时，必须追踪到真正的生产者，跳过 GroupOut(内部->外部) 和 GroupIn(外部->内部)
-
+        // --- 1. 数据流重定向 (Pull Model) ---
         Map<String, RuntimeGraphIndex.ConnectionSource> finalInputLookup = new HashMap<>();
-
         for (Map.Entry<String, RuntimeGraphIndex.ConnectionSource> entry : inputLookup.entrySet()) {
-            String targetKey = entry.getKey(); // Who needs data?
-            RuntimeGraphIndex.ConnectionSource source = entry.getValue(); // Who provides it?
-
-            // 尝试解析源头的真实身份
-            RuntimeGraphIndex.ConnectionSource resolvedSource = resolveDataSource(source);
-
-            // 只有当源头有效（非空）且不是死胡同的时候才保留
+            RuntimeGraphIndex.ConnectionSource resolvedSource = resolveDataSource(entry.getValue());
             if (resolvedSource != null) {
-                finalInputLookup.put(targetKey, resolvedSource);
+                finalInputLookup.put(entry.getKey(), resolvedSource);
             }
         }
         inputLookup.clear();
         inputLookup.putAll(finalInputLookup);
 
-
-        // --- 2. 执行流重定向 (Execution Flow - Push Model) ---
-        // 目标：当节点执行完毕跳转时，必须追踪到真正的下一个执行者，跳过 Group(外部->内部) 和 GroupOut(内部->外部)
-
+        // --- 2. [重写] 执行流重定向 (Push Model) ---
         for (String sourceId : new HashSet<>(flowOutputLookup.keySet())) {
-            Map<String, String> outputs = flowOutputLookup.get(sourceId);
+            Map<String, TargetConnection> outputs = flowOutputLookup.get(sourceId);
             if (outputs == null) continue;
 
-            Map<String, String> newOutputs = new HashMap<>();
-            for (Map.Entry<String, String> entry : outputs.entrySet()) {
-                String portName = entry.getKey();
-                String targetId = entry.getValue();
+            Map<String, TargetConnection> newOutputs = new HashMap<>();
+            for (Map.Entry<String, TargetConnection> entry : outputs.entrySet()) {
+                String outPortName = entry.getKey();
+                TargetConnection initialTarget = entry.getValue();
 
-                String resolvedTarget = resolveExecutionTarget(targetId, portName);
+                TargetConnection resolvedTarget = resolveExecutionTarget(initialTarget.targetNodeId(), initialTarget.targetPortName());
                 if (resolvedTarget != null) {
-                    newOutputs.put(portName, resolvedTarget);
+                    newOutputs.put(outPortName, resolvedTarget);
                 }
             }
             flowOutputLookup.put(sourceId, newOutputs);
@@ -231,28 +220,23 @@ class GraphFlattener {
     /**
      * [执行流解析] 给定一个跳转目标，如果是虚拟节点，则寻找其背后的真实目标
      */
-    private String resolveExecutionTarget(String targetId, String portName) {
+    private TargetConnection resolveExecutionTarget(String targetId, String targetPort) {
         // 情况 A: 目标是一个 Group 节点 (外部 -> 进内部)
         if (groupBoundaries.containsKey(targetId)) {
             GroupBoundary boundary = groupBoundaries.get(targetId);
-            if (boundary.groupInId == null) return null; // Group 无入口
+            if (boundary.groupInId == null) return null;
 
-            // 关键修正：不能返回 groupInId，而要返回 groupInId 指向的下一个节点！
-            // 假设 Group 的 "flow_in" 对应内部 group_in 的 "flow_out" (通常只有一个执行流)
-            // 这里我们假设端口名映射规则：外部 portName (e.g. "flow") -> 内部 "flow"
-            // 或者更简单的：group_in 通常只有一个名为 "flow_out" 或 similar 的输出。
-            // 按照规范，我们尝试查找 targetId=groupInId, port=portName 的输出
-
-            // 为了稳健，我们假设 group_in 直接透传端口名，或者如果没找到，尝试默认的 "flow_out"
-            Map<String, String> internalFlows = flowOutputLookup.get(boundary.groupInId);
+            Map<String, TargetConnection> internalFlows = flowOutputLookup.get(boundary.groupInId);
             if (internalFlows != null) {
-                // 1. 尝试同名端口穿透
-                if (internalFlows.containsKey(portName)) {
-                    return resolveExecutionTarget(internalFlows.get(portName), portName);
+                // 1. 外部连的是 Group 的 targetPort，对应 group_in 的输出端口也是 targetPort
+                if (internalFlows.containsKey(targetPort)) {
+                    TargetConnection nextHop = internalFlows.get(targetPort);
+                    return resolveExecutionTarget(nextHop.targetNodeId(), nextHop.targetPortName());
                 }
-                // 2. 尝试默认端口 "flow_out" (针对标准 flow_in -> flow_out)
+                // 2. 兼容回落
                 if (internalFlows.containsKey("flow_out")) {
-                    return resolveExecutionTarget(internalFlows.get("flow_out"), "flow_out");
+                    TargetConnection nextHop = internalFlows.get("flow_out");
+                    return resolveExecutionTarget(nextHop.targetNodeId(), nextHop.targetPortName());
                 }
             }
             return null; // 死胡同
@@ -264,24 +248,24 @@ class GraphFlattener {
             GroupBoundary boundary = groupBoundaries.get(ownerGroupId);
 
             if (targetId.equals(boundary.groupOutId)) {
-                // 查找 Group 节点本身的输出
-                Map<String, String> externalFlows = flowOutputLookup.get(ownerGroupId);
+                Map<String, TargetConnection> externalFlows = flowOutputLookup.get(ownerGroupId);
                 if (externalFlows != null) {
-                    // 同样，端口名穿透。内部 group_out 的输入端口名 = 外部 Group 的输出端口名
-                    if (externalFlows.containsKey(portName)) {
-                        return resolveExecutionTarget(externalFlows.get(portName), portName);
+                    // 内部连的是 group_out 的 targetPort，对应 Group 的输出端口也是 targetPort
+                    if (externalFlows.containsKey(targetPort)) {
+                        TargetConnection nextHop = externalFlows.get(targetPort);
+                        return resolveExecutionTarget(nextHop.targetNodeId(), nextHop.targetPortName());
                     }
-                    // 兼容默认 flow
                     if (externalFlows.containsKey("flow_out")) {
-                        return resolveExecutionTarget(externalFlows.get("flow_out"), "flow_out");
+                        TargetConnection nextHop = externalFlows.get("flow_out");
+                        return resolveExecutionTarget(nextHop.targetNodeId(), nextHop.targetPortName());
                     }
                 }
                 return null; // 流程在 Group 处终结
             }
         }
 
-        // 情况 C: 普通节点
-        return targetId;
+        // 情况 C: 普通节点，触底返回真实的节点与端口
+        return new TargetConnection(targetId, targetPort);
     }
 
     private GroupBoundary parseGroupBoundary(String groupId, JsonObject groupObj, String prefix) {
@@ -292,10 +276,8 @@ class GraphFlattener {
         for (String key : subNodes.keySet()) {
             JsonObject sub = subNodes.getAsJsonObject(key);
             if (!sub.has("node_type")) continue;
-
             String type = sub.get("node_type").getAsString();
             String globalKey = prefix + groupId + "/" + key;
-
             if ("group_in".equals(type)) inId = globalKey;
             if ("group_out".equals(type)) outId = globalKey;
         }

@@ -71,21 +71,21 @@ public class GraphController {
         }
     }
 
-    public void addExecutionConnection(String outNodeId, String outPortId, String inNodeId) {
+    public void addExecutionConnection(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         NodeData outNode = mContext.getGraph().getNode(outNodeId);
         if (outNode != null) {
-            outNode.addExecutionConnection(outPortId, inNodeId);
-            mContext.notifyExecutionConnectionAdded(outNodeId, outPortId, inNodeId);
+            outNode.addExecutionConnection(outPortId, inNodeId, inPortId);
+            mContext.notifyExecutionConnectionAdded(outNodeId, outPortId, inNodeId, inPortId);
         }
     }
 
     public void removeExecutionConnection(String outNodeId, String outPortId) {
         NodeData outNode = mContext.getGraph().getNode(outNodeId);
         if (outNode != null) {
-            String inNodeId = outNode.execution.get(outPortId);
-            if (inNodeId != null) {
+            Connection c = outNode.execOutputs.get(outPortId);
+            if (c != null) {
                 outNode.removeExecutionConnection(outPortId);
-                mContext.notifyExecutionConnectionRemoved(outNodeId, outPortId, inNodeId);
+                mContext.notifyExecutionConnectionRemoved(outNodeId, outPortId, c.targetNodeId(), c.targetPortName());
             }
         }
     }
@@ -130,7 +130,7 @@ public class GraphController {
 
         // 5. 清理当前节点失效的【执行流】连线
         List<String> invalidExecPorts = new ArrayList<>();
-        for (String execPort : node.execution.keySet()) {
+        for (String execPort : node.execOutputs.keySet()) {
             if (!validOutputs.contains(execPort)) {
                 invalidExecPorts.add(execPort);
             }
@@ -173,17 +173,16 @@ public class GraphController {
             String newSuffix = "_" + i;
             shiftMapData(node.inputs, oldSuffix, newSuffix);
             shiftMapData(node.outputs, oldSuffix, newSuffix);
-            shiftMapData(node.execution, oldSuffix, newSuffix);
+            shiftMapData(node.execOutputs, oldSuffix, newSuffix);
             shiftConnections(nodeId, oldSuffix, newSuffix);
         }
 
         String lastSuffix = "_" + totalCount;
         node.inputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
         node.outputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
-        node.execution.keySet().removeIf(k -> k.endsWith(lastSuffix));
+        node.execOutputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
         shiftConnections(nodeId, lastSuffix, null);
 
-        // 使用统一的 setNodeInputValue，它会自动触发 UI 刷新和清理
         setNodeInputValue(nodeId, propertyKey, totalCount - 1);
     }
 
@@ -234,7 +233,8 @@ public class GraphController {
         // 根据 category 获取对应的 Map
         java.util.Map<String, NodeData.PortConfig> targetMap = switch (category) {
             case "inputs" -> node.portSettings.inputs;
-            case "execution" -> node.portSettings.execution;
+            case "execInputs" -> node.portSettings.execInputs;
+            case "execOutputs" -> node.portSettings.execOutputs;
             case "outputs" -> node.portSettings.outputs;
             default -> null;
         };

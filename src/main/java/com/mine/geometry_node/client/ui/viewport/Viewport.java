@@ -380,18 +380,18 @@ public class Viewport extends FrameLayout implements InteractionContext {
                 }
             }
 
-            // 处理执行连接 (Execution)
-            if (outData.execution != null) {
-                for (Map.Entry<String, String> entry : outData.execution.entrySet()) {
+            // 【核心修改】处理执行连接 (Execution)
+            if (outData.execOutputs != null) {
+                for (Map.Entry<String, com.mine.geometry_node.core.node.Connection> entry : outData.execOutputs.entrySet()) {
                     String execOutPortId = entry.getKey();
-                    UINode inUi = mNodeViews.get(entry.getValue());
+                    com.mine.geometry_node.core.node.Connection link = entry.getValue();
+
+                    UINode inUi = mNodeViews.get(link.targetNodeId());
                     if (inUi != null) {
-                        String targetExecPortId = findFirstExecInputPort(inUi);
-                        if (targetExecPortId != null) {
-                            VisualConnection vc = new VisualConnection(outUi, execOutPortId, inUi, targetExecPortId, true);
-                            vc.updateUiCoordinates(mTempOutPos, mTempInPos);
-                            mVisualConnections.add(vc);
-                        }
+                        // 不再硬编码去找，而是直接使用 link 记录的目标端口！
+                        VisualConnection vc = new VisualConnection(outUi, execOutPortId, inUi, link.targetPortName(), true);
+                        vc.updateUiCoordinates(mTempOutPos, mTempInPos);
+                        mVisualConnections.add(vc);
                     }
                 }
             }
@@ -554,13 +554,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
     // 实现 KeyManager 要求的接口
     @Override public float getLastMouseUiX() { return mCamera.screenToUIX(mLastMouseScreenX); }
     @Override public float getLastMouseUiY() { return mCamera.screenToUIY(mLastMouseScreenY); }
-
-    private String findFirstExecInputPort(UINode node) {
-        for (PortRow row : node.getNodeDef().rows()) {
-            if (row.leftPort() != null && row.leftPort().type() == PortType.EXECUTION) return row.leftPort().id();
-        }
-        return "flow_in";
-    }
 
     // --- 事件分发 ---
 

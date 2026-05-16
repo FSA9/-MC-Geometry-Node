@@ -90,12 +90,12 @@ public class ViewportController implements EditorContext.EditorListener {
     }
 
     @Override
-    public void onExecutionConnectionAdded(String outNodeId, String outPortId, String inNodeId) {
+    public void onExecutionConnectionAdded(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         mViewport.rebuildVisualConnections();
     }
 
     @Override
-    public void onExecutionConnectionRemoved(String outNodeId, String outPortId, String inNodeId) {
+    public void onExecutionConnectionRemoved(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         mViewport.rebuildVisualConnections();
     }
 

@@ -444,10 +444,12 @@
   "geometry_node.node.spawn_text_display_entity": "生成文本展示",
   "geometry_node.node.draw_item_visual": "绘制物品",
   "geometry_node.node.on_entity_tick": "实体刻",
-  "geometry_node.node.spawn_interaction_entity": "生成交互箱 (Interaction)",
-  "geometry_node.node.spawn_marker_entity": "生成标记点 (Marker)",
-  "geometry_node.node.on_interaction": "交互箱触发 (Interaction)",
+  "geometry_node.node.spawn_interaction_entity": "生成交互箱",
+  "geometry_node.node.spawn_marker_entity": "生成标记点",
+  "geometry_node.node.on_interaction": "交互触发",
   "geometry_node.node.shoot_projectile": "发射投掷物",
+  "geometry_node.node.combine_flow": "合流",
+
 
   "geometry_node.port.gravity": "重力",
   "geometry_node.port.invisible": "隐形",

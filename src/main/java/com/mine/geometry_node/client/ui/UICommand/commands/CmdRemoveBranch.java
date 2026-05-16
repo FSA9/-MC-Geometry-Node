@@ -21,10 +21,10 @@ public class CmdRemoveBranch implements ICommand {
     private final int mRemoveIndex;
 
     // --- 全量快照备份 ---
-    // 【修改点 1】：彻底删除了 mBackupProperties
     private final Map<String, Object> mBackupInputs = new HashMap<>();
     private final Map<String, List<Connection>> mBackupOutputs = new HashMap<>();
-    private final Map<String, String> mBackupExecution = new HashMap<>();
+    // 修改为存储 Connection 对象的 Map
+    private final Map<String, Connection> mBackupExecution = new HashMap<>();
     private final List<InboundConnectionBackup> mBackupInbounds = new ArrayList<>();
 
     private record InboundConnectionBackup(String sourceNodeId, String sourcePortId, String targetPortId) {}
@@ -33,7 +33,7 @@ public class CmdRemoveBranch implements ICommand {
         this.mController = controller;
         this.mGraph = graph;
         this.mNodeId = nodeId;
-        this.mPropertyKey = propertyKey; // 尽管叫 propertyKey，但在新架构里它是 Input 的 ID
+        this.mPropertyKey = propertyKey;
         this.mOldCount = currentCount;
         this.mRemoveIndex = removeIndex;
 
@@ -44,14 +44,16 @@ public class CmdRemoveBranch implements ICommand {
         NodeData targetNode = mGraph.getNode(mNodeId);
         if (targetNode == null) return;
 
-        // 【修改点 2】：不再备份 properties
         mBackupInputs.putAll(targetNode.inputs);
 
         for (Map.Entry<String, List<Connection>> entry : targetNode.outputs.entrySet()) {
             mBackupOutputs.put(entry.getKey(), new ArrayList<>(entry.getValue()));
         }
 
-        mBackupExecution.putAll(targetNode.execution);
+        // 备份 execOutputs
+        if (targetNode.execOutputs != null) {
+            mBackupExecution.putAll(targetNode.execOutputs);
+        }
 
         for (NodeData otherNode : mGraph.nodes.values()) {
             if (otherNode.id.equals(mNodeId)) continue;
@@ -92,11 +94,13 @@ public class CmdRemoveBranch implements ICommand {
                 mController.removeConnection(mNodeId, outPort, link.targetNodeId(), link.targetPortName());
             }
         }
-        for (String execPort : new ArrayList<>(targetNode.execution.keySet())) {
-            mController.removeExecutionConnection(mNodeId, execPort);
+
+        if (targetNode.execOutputs != null) {
+            for (String execPort : new ArrayList<>(targetNode.execOutputs.keySet())) {
+                mController.removeExecutionConnection(mNodeId, execPort);
+            }
         }
 
-        // 【修改点 3】：不再清空和恢复 properties
         targetNode.inputs.clear();
         targetNode.inputs.putAll(mBackupInputs);
 
@@ -105,14 +109,17 @@ public class CmdRemoveBranch implements ICommand {
                 mController.addConnection(mNodeId, entry.getKey(), link.targetNodeId(), link.targetPortName());
             }
         }
-        for (Map.Entry<String, String> entry : mBackupExecution.entrySet()) {
-            mController.addExecutionConnection(mNodeId, entry.getKey(), entry.getValue());
+
+        // 恢复执行流备份
+        for (Map.Entry<String, Connection> entry : mBackupExecution.entrySet()) {
+            Connection link = entry.getValue();
+            mController.addExecutionConnection(mNodeId, entry.getKey(), link.targetNodeId(), link.targetPortName());
         }
+
         for (InboundConnectionBackup inbound : mBackupInbounds) {
             mController.addConnection(inbound.sourceNodeId, inbound.sourcePortId, mNodeId, inbound.targetPortId);
         }
 
-        // 【修改点 4】：将 setNodeProperty 改为 setNodeInputValue，触发视图与底层数据更新
         mController.setNodeInputValue(mNodeId, mPropertyKey, mOldCount);
     }
 }

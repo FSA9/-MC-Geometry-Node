@@ -68,16 +68,19 @@ public class CmdPasteNodes implements ICommand {
             }
             node.outputs = newOutputs;
 
-            // 修复执行流连线
-            Map<String, String> newExec = new HashMap<>();
-            for (Map.Entry<String, String> entry : node.execution.entrySet()) {
-                String targetId = entry.getValue();
-                // 同理，只保留内部互连
-                if (oldToNewIdMap.containsKey(targetId)) {
-                    newExec.put(entry.getKey(), oldToNewIdMap.get(targetId));
+            // 修复执行流连线 (全面拥抱 execOutputs 和 Connection)
+            Map<String, Connection> newExecOutputs = new HashMap<>();
+            if (node.execOutputs != null) {
+                for (Map.Entry<String, Connection> entry : node.execOutputs.entrySet()) {
+                    Connection oldLink = entry.getValue();
+                    String targetId = oldLink.targetNodeId();
+                    // 同理，只保留内部互连，并带上目标端口
+                    if (oldToNewIdMap.containsKey(targetId)) {
+                        newExecOutputs.put(entry.getKey(), new Connection(oldToNewIdMap.get(targetId), oldLink.targetPortName()));
+                    }
                 }
             }
-            node.execution = newExec;
+            node.execOutputs = newExecOutputs;
 
             // 【核心修改】：彻底清空残留的被动输入连接状态
             if (node.connectedInputs != null) {
@@ -101,8 +104,11 @@ public class CmdPasteNodes implements ICommand {
                     mController.addConnection(node.id, entry.getKey(), link.targetNodeId(), link.targetPortName());
                 }
             }
-            for (Map.Entry<String, String> entry : node.execution.entrySet()) {
-                mController.addExecutionConnection(node.id, entry.getKey(), entry.getValue());
+            if (node.execOutputs != null) {
+                for (Map.Entry<String, Connection> entry : node.execOutputs.entrySet()) {
+                    Connection link = entry.getValue();
+                    mController.addExecutionConnection(node.id, entry.getKey(), link.targetNodeId(), link.targetPortName());
+                }
             }
         }
     }

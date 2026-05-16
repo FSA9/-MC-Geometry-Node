@@ -50,6 +50,16 @@ public interface ExecutionContext {
     void setVariable(String name, Object value);
 
     /**
+     * 获取当前节点被激活时，对应的执行输入端口名。
+     * <p>
+     * 专为具有多个执行输入口（如 Gate, Sequence, Merge）的节点设计。
+     * 普通单输入节点无需调用此方法。
+     *
+     * @return 触发当前节点执行的输入端口名 (例如 "flow_in_A")
+     */
+    String getEntryPort();
+
+    /**
      * 获取当前运行的图 ID（用于调试或跨图调用）。
      */
     String getGraphId();
@@ -153,11 +163,15 @@ public interface ExecutionContext {
     int getCurrentNodeId();
 
     /**
-     * [异步调度] 将指定的节点加入延迟唤醒队列。
-     * @param nodeId 节点 ID
-     * @param delayTicks 延迟的刻数
+     * [异步调度] 将指定的节点加入延迟唤醒队列，并显式指定唤醒时的执行输入端口。
+     * <p>
+     * 完美支持多执行输入节点（如 Merge 节点）。当延迟结束时，虚拟机将脉冲精准注入指定的入口。
+     *
+     * @param nodeId 目标节点的运行时 ID
+     * @param delayTicks 延迟的刻数 (Ticks)
+     * @param entryPortName 唤醒时进入的执行输入端口名 (例如 "flow_in_A")
      */
-    void scheduleNode(int nodeId, long delayTicks);
+    void scheduleNode(int nodeId, long delayTicks, String entryPortName);
 
     /**
      * [视觉特效广播]

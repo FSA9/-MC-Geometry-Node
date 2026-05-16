@@ -68,9 +68,10 @@ public class GraphEngine {
                             id -> findProcess(entityAttachment.getProcesses(), id),
                             process -> {
                                 entityAttachment.addProcess(process);
-                                GraphEventHandler.markActive(target);
+                                // ❌ 原来在这里的 markActive 删掉
                             });
                 }
+                GraphEventHandler.markActive(target);
             }
         }
     }
@@ -107,9 +108,10 @@ public class GraphEngine {
                                     id -> findProcess(entityAttachment.getProcesses(), id),
                                     process -> {
                                         entityAttachment.addProcess(process);
-                                        GraphEventHandler.markActive(target);
+
                                     });
                         }
+                        GraphEventHandler.markActive(target);
                     }
                 }
             }

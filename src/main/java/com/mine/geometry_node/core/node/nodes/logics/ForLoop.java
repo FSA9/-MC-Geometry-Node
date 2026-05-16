@@ -38,8 +38,18 @@ public class ForLoop extends BaseNode {
         String indexKey = "ForLoop_" + myNodeId + "_index";
         String cursorKey = "ForLoop_" + myNodeId + "_cursor";
 
-        Object savedCursorObj = context.getTempData(cursorKey);
-        int currentIndex = (savedCursorObj instanceof Integer i) ? i : start;
+        // ✨ 关键修复点 1：通过进入端口，判断是谁触发了当前节点
+        boolean isInternalTick = "internal_loop_tick".equals(context.getEntryPort());
+
+        int currentIndex;
+        if (isInternalTick) {
+            // 是内部延迟到期唤醒的，接着读取上次保存的游标
+            Object savedCursorObj = context.getTempData(cursorKey);
+            currentIndex = (savedCursorObj instanceof Integer i) ? i : start;
+        } else {
+            // 是外部新触发的（比如重新放置方块），强行清零，从头开始
+            currentIndex = start;
+        }
 
         if ((start <= end && currentIndex > end) || (start > end && currentIndex < end)) {
             context.removeTempData(indexKey);
@@ -48,13 +58,14 @@ public class ForLoop extends BaseNode {
         }
 
         int delay = (tickInterval != null) ? tickInterval : 0;
-        int step = start <= end ? 1 : -1; // 根据起始和结束大小自动决定步长
+        int step = start <= end ? 1 : -1;
 
         if (delay > 0) { // 异步跨帧模式
             context.setTempData(indexKey, currentIndex);
             context.clearFrameCache();
             context.setTempData(cursorKey, currentIndex + step);
-            context.scheduleNode(myNodeId, delay);
+
+            context.scheduleNode(myNodeId, delay, "internal_loop_tick");
             return next(StandardPorts.LOOP.getId());
         } else { // 瞬间同步模式
             int iterations = 0;
