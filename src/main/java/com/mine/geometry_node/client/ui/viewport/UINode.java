@@ -60,6 +60,37 @@ public class UINode extends FrameLayout {
         updateNodeLayout();
     }
 
+    public String hitTestLabel(float localXpx, float localYpx) {
+        for (Map.Entry<String, TextView> entry : mPortLabels.entrySet()) {
+            View tv = entry.getValue();
+            if (tv.getVisibility() == View.VISIBLE &&
+                    localXpx >= tv.getLeft() && localXpx <= tv.getRight() &&
+                    localYpx >= tv.getTop() && localYpx <= tv.getBottom()) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    public void refreshPortLabelText(String portId) {
+        TextView tv = mPortLabels.get(portId);
+        if (tv == null) return;
+
+        // 找出它是 left 还是 right
+        for (PortRow row : mNodeDef.rows()) {
+            if (row.leftPort() != null && row.leftPort().id().equals(portId)) {
+                String cat = getPortCategory(row.leftPort(), true);
+                tv.setText(mNodeData.getEffectivePortName(cat, portId, row.leftPort().displayName().getString()));
+                return;
+            }
+            if (row.rightPort() != null && row.rightPort().id().equals(portId)) {
+                String cat = getPortCategory(row.rightPort(), false);
+                tv.setText(mNodeData.getEffectivePortName(cat, portId, row.rightPort().displayName().getString()));
+                return;
+            }
+        }
+    }
+
     private void buildUIElements(Context context) {
         TextView titleView = new TextView(context);
         titleView.setText(mNodeDef.displayName().getString());
@@ -73,12 +104,20 @@ public class UINode extends FrameLayout {
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
             if (row.leftPort() != null) {
-                TextView tv = createLabel(context, row.leftPort().displayName().getString(), icyllis.modernui.view.Gravity.LEFT);
+                String category = getPortCategory(row.leftPort(), true);
+                String defaultName = row.leftPort().displayName().getString();
+                String effectiveName = mNodeData.getEffectivePortName(category, row.leftPort().id(), defaultName);
+
+                TextView tv = createLabel(context, effectiveName, icyllis.modernui.view.Gravity.LEFT);
                 mPortLabels.put(row.leftPort().id(), tv);
                 addView(tv, new LayoutParams(LayoutParams.WRAP_CONTENT, UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT)));
             }
             if (row.rightPort() != null) {
-                TextView tv = createLabel(context, row.rightPort().displayName().getString(), icyllis.modernui.view.Gravity.RIGHT);
+                String category = getPortCategory(row.rightPort(), false);
+                String defaultName = row.rightPort().displayName().getString();
+                String effectiveName = mNodeData.getEffectivePortName(category, row.rightPort().id(), defaultName);
+
+                TextView tv = createLabel(context, effectiveName, icyllis.modernui.view.Gravity.RIGHT);
                 mPortLabels.put(row.rightPort().id(), tv);
                 addView(tv, new LayoutParams(LayoutParams.WRAP_CONTENT, UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT)));
             }
@@ -166,6 +205,13 @@ public class UINode extends FrameLayout {
         tv.setClickable(false);
         tv.setFocusable(false);
         return tv;
+    }
+
+    private String getPortCategory(com.mine.geometry_node.core.node.port.PortDef port, boolean isLeft) {
+        if (port.type() == com.mine.geometry_node.core.node.port.PortType.EXECUTION) {
+            return "execution";
+        }
+        return isLeft ? "inputs" : "outputs";
     }
 
     public void updateNodeLayout() {

@@ -225,4 +225,32 @@ public class GraphController {
             r.run();
         }
     }
+
+    // --- 新增：修改端口自定义名称 ---
+    public void setPortCustomName(String nodeId, String category, String portId, String newName) {
+        NodeData node = mContext.getGraph().getNode(nodeId);
+        if (node == null) return;
+
+        // 根据 category 获取对应的 Map
+        java.util.Map<String, NodeData.PortConfig> targetMap = switch (category) {
+            case "inputs" -> node.portSettings.inputs;
+            case "execution" -> node.portSettings.execution;
+            case "outputs" -> node.portSettings.outputs;
+            default -> null;
+        };
+
+        if (targetMap != null) {
+            NodeData.PortConfig config = targetMap.get(portId);
+            if (config == null) {
+                config = new NodeData.PortConfig();
+                targetMap.put(portId, config);
+            }
+
+            // 如果新名字为空，也可以选择删除这个配置或者置空，这里选择保留对象更新属性
+            config.customName = newName;
+
+            // 通知重新构建节点结构，这会自动刷新 UI 上的文字并重新计算排版宽度
+            mContext.notifyNodeStructureChanged(node);
+        }
+    }
 }

@@ -9,6 +9,7 @@ import com.mine.geometry_node.client.ui.viewport.interaction.InteractionManager;
 import com.mine.geometry_node.client.ui.viewport.interaction.KeyManager;
 import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.viewport.menu.ViewportMenu;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;

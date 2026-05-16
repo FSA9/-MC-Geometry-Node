@@ -7,12 +7,14 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.UINode;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
+import com.mine.geometry_node.client.ui.viewport.menu.PortMenu;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MotionEvent;
+import icyllis.modernui.widget.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -153,6 +155,18 @@ public class InteractionManager {
         float uiY = camera.screenToUIY(screenY);
 
         if (isRightMouse(event) && !mHasMovedSignificantly) {
+            UINode targetNode = mContext.findNodeAt(uiX, uiY);
+            if (targetNode != null) {
+                float localXpx = UIUtils.dp2px(uiX - targetNode.getTranslationX());
+                float localYpx = UIUtils.dp2px(uiY - targetNode.getTranslationY());
+
+                String clickedLabelPortId = targetNode.hitTestLabel(localXpx, localYpx);
+                if (clickedLabelPortId != null) {
+                    PortMenu.show(mContext, targetNode, clickedLabelPortId, screenX, screenY);
+                    mCurrentMode = MODE_NONE;
+                    return;
+                }
+            }
             mContext.showMenu(screenX, screenY);
         }
 

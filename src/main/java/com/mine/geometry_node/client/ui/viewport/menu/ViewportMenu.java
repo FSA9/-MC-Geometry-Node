@@ -1,5 +1,5 @@
 // --- START OF FILE ViewportMenu.java ---
-package com.mine.geometry_node.client.ui.viewport;
+package com.mine.geometry_node.client.ui.viewport.menu;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;

@@ -27,6 +27,43 @@ public class NodeData {
     @SerializedName("outputs")
     public Map<String, List<Connection>> outputs = new HashMap<>();
 
+    @SerializedName("port_settings")
+    public PortSettings portSettings = new PortSettings();
+
+    public static class PortSettings {
+        public Map<String, PortConfig> inputs = new HashMap<>();
+        public Map<String, PortConfig> execution = new HashMap<>();
+        public Map<String, PortConfig> outputs = new HashMap<>();
+    }
+
+    public static class PortConfig {
+        @SerializedName("custom_name")
+        public String customName;
+        public Boolean hidden;
+    }
+
+    public String getEffectivePortName(String category, String portId, String fallback) {
+        if (portSettings == null) return fallback;
+
+        Map<String, PortConfig> targetMap = switch (category) {
+            case "inputs" -> portSettings.inputs;
+            case "execution" -> portSettings.execution;
+            case "outputs" -> portSettings.outputs;
+            default -> null;
+        };
+
+        if (targetMap != null && targetMap.containsKey(portId)) {
+            String custom = targetMap.get(portId).customName;
+            if (custom != null && !custom.trim().isEmpty()) {
+                return custom;
+            }
+        }
+        return fallback;
+    }
+
+
+
+
     public transient Set<String> connectedInputs = new HashSet<>();
 
     // 支持节点组递归
