@@ -105,7 +105,6 @@ public class RuntimeGraphIndex {
 
         JsonObject[] nodeDataArray = new JsonObject[size];
         String[] typeArray = new String[size];
-        // [修改] 数组类型适配
         Map<String, IntFlowTarget>[] flowOutputArray = new Map[size];
         Map<String, IntConnectionSource>[] inputArray = new Map[size];
         Map<String, Object>[] propertyArray = new Map[size];
@@ -122,7 +121,6 @@ public class RuntimeGraphIndex {
             JsonObject node = nodeDataArray[i];
             typeArray[i] = (node != null && node.has("node_type")) ? node.get("node_type").getAsString() : "unknown";
 
-            // [修改核心] 执行流转换 (获取真实的 Int ID 和 Target Port)
             Map<String, GraphFlattener.TargetConnection> oldFlow = flattener.flowOutputLookup.get(strId);
             if (oldFlow != null) {
                 Map<String, IntFlowTarget> newFlow = new HashMap<>();
@@ -164,7 +162,14 @@ public class RuntimeGraphIndex {
             typeToIntList.put(entry.getKey(), List.copyOf(intList));
         }
 
-        return new RuntimeGraphIndex(idToString, stringToId, nodeDataArray, typeArray, flowOutputArray, inputArray, typeToIntList, propertyArray, staticInputArray);
+        RuntimeGraphIndex finalIndex = new RuntimeGraphIndex(idToString, stringToId, nodeDataArray, typeArray, flowOutputArray, inputArray, typeToIntList, propertyArray, staticInputArray);
+
+        // ✨ 核心修复：在这里将收集到的所有静态字符串注册进不可变字典中
+        for (String key : flattener.allStaticKeys) {
+            finalIndex.registerKey(key);
+        }
+
+        return finalIndex;
     }
 
 
@@ -182,15 +187,16 @@ public class RuntimeGraphIndex {
         return (id >= 0 && id < idToString.length) ? idToString[id] : null;
     }
 
-    /** * [寄存器分配器] 将任意 String 键映射为固定的 Int 寄存器 ID。
-     * 若该键首次出现，则自动扩容并分配一个全新的连续 ID。
-     */
-    public int getOrRegisterKey(String key) {
+    public int registerKey(String key) {
         return keyDictionary.computeIfAbsent(key, k -> {
             int id = dictionaryReverse.size();
             dictionaryReverse.add(k);
             return id;
         });
+    }
+
+    public int getKeyId(String key) {
+        return keyDictionary.getOrDefault(key, -1);
     }
 
     /** 将 Int 寄存器 ID 翻译回原始的 String (用于序列化保存) */

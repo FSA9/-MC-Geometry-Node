@@ -29,6 +29,7 @@ class GraphFlattener {
     private final Map<String, GroupBoundary> groupBoundaries = new HashMap<>();
     private final Map<String, String> internalToGroupMap = new HashMap<>();
 
+    final Set<String> allStaticKeys = new HashSet<>();
 
     /**
      * 执行展平逻辑
@@ -69,7 +70,12 @@ class GraphFlattener {
 
             // 2. 属性与静态输入提取
             if (nodeObj.has("properties")) {
-                propertyLookup.put(globalId, RuntimeGraphIndex.parseValueMap(nodeObj.getAsJsonObject("properties")));
+                Map<String, Object> props = RuntimeGraphIndex.parseValueMap(nodeObj.getAsJsonObject("properties"));
+                propertyLookup.put(globalId, props);
+                // ✨ 收集属性里的字符串值 (这通常包含了填写的“变量名”、“事件参数名”等)
+                for (Object val : props.values()) {
+                    if (val instanceof String s) allStaticKeys.add(s);
+                }
             }
 
             // --- 烘焙(Baking) 核心逻辑 ---
@@ -89,24 +95,26 @@ class GraphFlattener {
                 bakedInputs.putAll(RuntimeGraphIndex.parseValueMap(nodeObj.getAsJsonObject("inputs")));
             }
             staticInputLookup.put(globalId, bakedInputs);
+            // ✨ 收集所有的输入端口名
+            allStaticKeys.addAll(bakedInputs.keySet());
 
-            // --- [修改核心] 执行流提取 (适配新的 exec_outputs 格式) ---
-            // 注意：支持 JSON 字段平滑过渡，建议你的 JSON 统一改为 "exec_outputs"
+            // --- 执行流提取 ---
             String execKey = nodeObj.has("exec_outputs") ? "exec_outputs" : (nodeObj.has("execution") ? "execution" : null);
             if (execKey != null) {
                 Map<String, TargetConnection> flowMap = new HashMap<>();
                 JsonObject execObj = nodeObj.getAsJsonObject(execKey);
 
                 for (String port : execObj.keySet()) {
+                    // ✨ 收集执行输出端口名
+                    allStaticKeys.add(port);
+
                     JsonElement el = execObj.get(port);
                     if (el.isJsonObject()) {
-                        // 新格式: "flow_out": { "target_node": "xxx", "target_port": "yyy" }
                         JsonObject tObj = el.getAsJsonObject();
                         String targetLocalId = tObj.get("target_node").getAsString();
                         String targetPort = tObj.get("target_port").getAsString();
                         flowMap.put(port, new TargetConnection(prefix + targetLocalId, targetPort));
                     } else if (el.isJsonPrimitive()) {
-                        // [兼容旧格式] 以防你的老蓝图报错，默认接入目标的 "flow_in"
                         String targetLocalId = el.getAsString();
                         flowMap.put(port, new TargetConnection(prefix + targetLocalId, "flow_in"));
                     }
@@ -118,6 +126,9 @@ class GraphFlattener {
             if (nodeObj.has("outputs")) {
                 JsonObject outObj = nodeObj.getAsJsonObject("outputs");
                 for (String sourcePort : outObj.keySet()) {
+                    // ✨ 收集数据输出端口名
+                    allStaticKeys.add(sourcePort);
+
                     JsonArray targets = outObj.getAsJsonArray(sourcePort);
                     for (JsonElement t : targets) {
                         JsonObject tObj = t.getAsJsonObject();

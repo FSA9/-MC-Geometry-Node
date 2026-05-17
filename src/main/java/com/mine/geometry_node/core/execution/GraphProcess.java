@@ -44,8 +44,16 @@ public class GraphProcess {
     private ServerLevel level;
     private Entity entity;
 
-    // --- 内存模型 (进程级共享) ---
-    private final Deque<Object[]> variableStack = new LinkedList<>();         // 变量作用域栈
+    private static class VariableScope {
+        final Object[] statics;
+        Map<String, Object> dynamics = null; // 懒加载，没用到就不分配内存
+
+        VariableScope(int staticSize) {
+            this.statics = new Object[staticSize];
+        }
+    }
+
+    private final Deque<VariableScope> variableStack = new ArrayDeque<>(8);
 
     // --- 执行流管理 ---
     private final List<ExecutionThread> sleepingThreads = new ArrayList<>();  // 挂起的协程线程
@@ -53,6 +61,7 @@ public class GraphProcess {
 
 //    private final java.util.concurrent.ConcurrentLinkedQueue<ExecutionThread> THREAD_POOL = new java.util.concurrent.ConcurrentLinkedQueue<>();
     private final java.util.ArrayDeque<ExecutionThread> THREAD_POOL = new java.util.ArrayDeque<>();
+
 
     /**
      * 从池中借用一个线程，如果没有多余的才去 new (按需扩容)
@@ -84,7 +93,7 @@ public class GraphProcess {
         this.graphId = graphId;
         this.index = index;
         int exactSize = index.getRegisterCount() + 8;
-        this.variableStack.push(new Object[exactSize]);
+        this.variableStack.push(new VariableScope(exactSize));
     }
 
     public void setEnvironment(ServerLevel level, @Nullable Entity entity) {
@@ -175,7 +184,9 @@ public class GraphProcess {
         // --- 线程私有寄存器 (Zero-Allocation 核心) ---
         private final List<RuntimeGraphIndex.IntFlowTarget> executionStack = new ArrayList<>();
         private Object[] eventRegisters = new Object[GraphProcess.this.index.getRegisterCount() + 8];
+        private Map<String, Object> dynamicEventData = null;
         private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>();
+        private final Map<String, Object> dynamicFrameCache = new HashMap<>();
         private final IntOpenHashSet recursionGuard = new IntOpenHashSet();
         // ✨ 新增：线程私有的临时黑板
         public final Map<String, Object> tempData = new HashMap<>();
@@ -202,9 +213,11 @@ public class GraphProcess {
             this.runDepth = 0;
             this.executionStack.clear();
             this.frameCache.clear();
+            this.dynamicFrameCache.clear();
             this.recursionGuard.clear();
             this.tempData.clear();
             Arrays.fill(this.eventRegisters, null);
+            if (this.dynamicEventData != null) this.dynamicEventData.clear();
         }
 
         /**
@@ -315,11 +328,20 @@ public class GraphProcess {
         }
 
         private Object executeDataNode(int nodeId, String portName) {
-            int portId = index.getOrRegisterKey(portName);
-            long cacheKey = ((long) nodeId << 32) | (portId & 0xFFFFFFFFL);
-
-            if (frameCache.containsKey(cacheKey)) return frameCache.get(cacheKey);
             if (recursionGuard.contains(nodeId)) return null;
+
+            int portId = index.getKeyId(portName); // ✨ 纯查找，不注册
+            long cacheKey = 0;
+            String dynamicCacheKey = null;
+
+            // 查缓存
+            if (portId != -1) {
+                cacheKey = ((long) nodeId << 32) | (portId & 0xFFFFFFFFL);
+                if (frameCache.containsKey(cacheKey)) return frameCache.get(cacheKey);
+            } else {
+                dynamicCacheKey = nodeId + "#" + portName;
+                if (dynamicFrameCache.containsKey(dynamicCacheKey)) return dynamicFrameCache.get(dynamicCacheKey);
+            }
 
             recursionGuard.add(nodeId);
             int prevActive = this.activeNodeId;
@@ -331,7 +353,12 @@ public class GraphProcess {
                 this.activeNodeId = nodeId;
                 Object result = logic.compute(this, portName);
 
-                frameCache.put(cacheKey, result);
+                // 写缓存
+                if (portId != -1) {
+                    frameCache.put(cacheKey, result);
+                } else {
+                    dynamicFrameCache.put(dynamicCacheKey, result);
+                }
                 return result;
             } finally {
                 this.activeNodeId = prevActive;
@@ -354,10 +381,16 @@ public class GraphProcess {
 
         @Override
         public Object getVariable(String name) {
-            int id = index.getOrRegisterKey(name);
-            for (Object[] scope : GraphProcess.this.variableStack) {
-                if (id < scope.length && scope[id] != null) {
-                    Object val = scope[id];
+            int id = index.getKeyId(name);
+            for (VariableScope scope : GraphProcess.this.variableStack) {
+                Object val = null;
+                if (id != -1 && id < scope.statics.length && scope.statics[id] != null) {
+                    val = scope.statics[id];
+                } else if (id == -1 && scope.dynamics != null && scope.dynamics.containsKey(name)) {
+                    val = scope.dynamics.get(name);
+                }
+
+                if (val != null) {
                     if (val instanceof UUID uuid && level != null) {
                         Entity res = level.getEntity(uuid);
                         return (res == null || res.isRemoved()) ? null : res;
@@ -370,25 +403,32 @@ public class GraphProcess {
 
         @Override
         public void setVariable(String name, Object value) {
-            Object[] scope = GraphProcess.this.variableStack.peek();
+            VariableScope scope = GraphProcess.this.variableStack.peek();
             if (scope == null) return;
-            int id = index.getOrRegisterKey(name);
-            scope = ensureCapacity(scope, id);
-            if (value == null) {
-                scope[id] = null;
-            } else if (VariableRegistry.isSupported(value)) {
-                scope[id] = (value instanceof Entity ent) ? ent.getUUID() : value;
+
+            int id = index.getKeyId(name);
+            Object finalValue = (value instanceof Entity ent) ? ent.getUUID() : value;
+
+            if (id != -1) {
+                if (id < scope.statics.length) scope.statics[id] = finalValue;
+            } else {
+                if (scope.dynamics == null) scope.dynamics = new HashMap<>();
+                if (finalValue == null) scope.dynamics.remove(name);
+                else scope.dynamics.put(name, finalValue);
             }
-            // 弹出旧的压回扩容后的 (Zero-allocation 策略下此处可优化为固定大小数组)
-            GraphProcess.this.variableStack.pop();
-            GraphProcess.this.variableStack.push(scope);
         }
 
         @Override
         public Object getEventData(String key) {
-            int id = index.getOrRegisterKey(key);
-            if (id >= eventRegisters.length) return null;
-            Object val = eventRegisters[id];
+            int id = index.getKeyId(key);
+            Object val = null;
+
+            if (id != -1 && id < eventRegisters.length) {
+                val = eventRegisters[id];
+            } else if (id == -1 && dynamicEventData != null) {
+                val = dynamicEventData.get(key);
+            }
+
             if (val instanceof UUID uuid && level != null) {
                 Entity res = level.getEntity(uuid);
                 return (res == null || res.isRemoved()) ? null : res;
@@ -398,9 +438,15 @@ public class GraphProcess {
 
         @Override
         public void setEventData(String key, Object value) {
-            int id = index.getOrRegisterKey(key);
-            eventRegisters = ensureCapacity(eventRegisters, id);
-            eventRegisters[id] = (value instanceof Entity ent) ? ent.getUUID() : value;
+            int id = index.getKeyId(key);
+            Object finalValue = (value instanceof Entity ent) ? ent.getUUID() : value;
+
+            if (id != -1) {
+                if (id < eventRegisters.length) eventRegisters[id] = finalValue;
+            } else {
+                if (dynamicEventData == null) dynamicEventData = new HashMap<>();
+                dynamicEventData.put(key, finalValue);
+            }
         }
 
         @Override
@@ -446,7 +492,10 @@ public class GraphProcess {
         }
 
         @Override
-        public void clearFrameCache() { frameCache.clear(); }
+        public void clearFrameCache() {
+            frameCache.clear();
+            dynamicFrameCache.clear();
+        }
 
         @Override
         public void executeBranchSync(String portName) {
@@ -491,8 +540,11 @@ public class GraphProcess {
 
             System.arraycopy(this.eventRegisters, 0, delayThread.eventRegisters, 0, this.eventRegisters.length);
 
-            delayThread.tempData.putAll(this.tempData);
+            if (this.dynamicEventData != null) {
+                delayThread.dynamicEventData = new HashMap<>(this.dynamicEventData);
+            }
 
+            delayThread.tempData.putAll(this.tempData);
             GraphProcess.this.sleepingThreads.add(delayThread);
         }
 
@@ -513,13 +565,6 @@ public class GraphProcess {
     // 5. 辅助与持久化 (NBT)
     // ================================
 
-    private Object[] ensureCapacity(Object[] arr, int requiredIndex) {
-        if (requiredIndex >= arr.length) {
-            return Arrays.copyOf(arr, Math.max(arr.length * 2, requiredIndex + 1));
-        }
-        return arr;
-    }
-
     /**
      * [存档]
      * 只需要保存变量栈和那些正在休眠的 ExecutionThread。
@@ -527,12 +572,27 @@ public class GraphProcess {
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
         tag.putString("GraphId", graphId);
 
-        // 1. 保存变量栈 (由近及远)
+        // 1. 保存变量栈
         ListTag stackTag = new ListTag();
-        Iterator<Object[]> it = variableStack.descendingIterator();
+        Iterator<VariableScope> it = variableStack.descendingIterator();
         while (it.hasNext()) {
             CompoundTag scopeTag = new CompoundTag();
-            saveVariablesToTag(scopeTag, it.next(), provider);
+            VariableScope scope = it.next();
+            // 存静态
+            for (int i = 0; i < scope.statics.length; i++) {
+                if (scope.statics[i] != null) {
+                    String key = index.getKeyFromId(i);
+                    Tag s = VariableRegistry.toTag(scope.statics[i], provider);
+                    if (s != null && key != null) scopeTag.put(key, s);
+                }
+            }
+            // 存动态
+            if (scope.dynamics != null) {
+                for (Map.Entry<String, Object> entry : scope.dynamics.entrySet()) {
+                    Tag s = VariableRegistry.toTag(entry.getValue(), provider);
+                    if (s != null) scopeTag.put(entry.getKey(), s);
+                }
+            }
             stackTag.add(scopeTag);
         }
         tag.put("VariableStack", stackTag);
@@ -553,22 +613,34 @@ public class GraphProcess {
                     tTag.putString("ResumeNodeId", index.getIdToString(resumeTarget.targetNodeId()));
                     tTag.putString("ResumePortName", resumeTarget.targetPortName());
                 } else {
-                    tTag.putString("ResumeNodeId", "unknown"); // 理论上不会走到这
+                    tTag.putString("ResumeNodeId", "unknown");
                 }
 
+                // 存线程寄存器 (静态 + 动态)
                 CompoundTag regTag = new CompoundTag();
-                saveVariablesToTag(regTag, thread.eventRegisters, provider);
+                for (int i = 0; i < thread.eventRegisters.length; i++) {
+                    if (thread.eventRegisters[i] != null) {
+                        String key = index.getKeyFromId(i);
+                        Tag s = VariableRegistry.toTag(thread.eventRegisters[i], provider);
+                        if (s != null && key != null) regTag.put(key, s);
+                    }
+                }
+                if (thread.dynamicEventData != null) {
+                    for (Map.Entry<String, Object> entry : thread.dynamicEventData.entrySet()) {
+                        Tag s = VariableRegistry.toTag(entry.getValue(), provider);
+                        if (s != null) regTag.put(entry.getKey(), s);
+                    }
+                }
                 tTag.put("Registers", regTag);
                 threadsTag.add(tTag);
 
+                // 存临时黑板
                 CompoundTag tempTag = new CompoundTag();
                 for (Map.Entry<String, Object> entry : thread.tempData.entrySet()) {
                     Tag s = VariableRegistry.toTag(entry.getValue(), provider);
                     if (s != null) tempTag.put(entry.getKey(), s);
                 }
-                if (!tempTag.isEmpty()) {
-                    tTag.put("TempData", tempTag);
-                }
+                if (!tempTag.isEmpty()) tTag.put("TempData", tempTag);
             }
             tag.put("SleepingThreads", threadsTag);
         }
@@ -589,18 +661,19 @@ public class GraphProcess {
     public GraphProcess(CompoundTag tag, RuntimeGraphIndex index, HolderLookup.Provider provider) {
         this.index = index;
         this.graphId = tag.getString("GraphId");
+        int exactSize = index.getRegisterCount() + 8;
 
         // 1. 恢复变量栈
         this.variableStack.clear();
-        int exactSize = index.getRegisterCount() + 8;
         if (tag.contains("VariableStack", Tag.TAG_LIST)) {
             ListTag list = tag.getList("VariableStack", Tag.TAG_COMPOUND);
             for (int i = 0; i < list.size(); i++) {
-                Object[] scope = loadVariablesFromTag(list.getCompound(i), new Object[exactSize], provider);
+                VariableScope scope = new VariableScope(exactSize);
+                loadVariablesFromTag(list.getCompound(i), scope, provider);
                 this.variableStack.addLast(scope);
             }
         } else {
-            this.variableStack.push(new Object[exactSize]);
+            this.variableStack.push(new VariableScope(exactSize));
         }
 
         // 2. 恢复线程
@@ -609,8 +682,6 @@ public class GraphProcess {
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag tTag = list.getCompound(i);
                 int resumeId = index.getStringToId(tTag.getString("ResumeNodeId"));
-
-                // [修改] 提取存档的入口端口，兼容旧存档默认回退到 flow_in
                 String resumePort = tTag.getString("ResumePortName");
                 if (resumePort == null || resumePort.isEmpty()) resumePort = "flow_in";
 
@@ -618,7 +689,13 @@ public class GraphProcess {
                     ExecutionThread thread = new ExecutionThread(resumeId, resumePort);
                     thread.wakeUpTick = tTag.getLong("WaitRemaining");
                     thread.state = ExecutionThread.State.WAITING;
-                    loadVariablesFromTag(tTag.getCompound("Registers"), thread.eventRegisters, provider);
+
+                    // 借用 VariableScope 来复用反序列化逻辑
+                    VariableScope tempScope = new VariableScope(exactSize);
+                    loadVariablesFromTag(tTag.getCompound("Registers"), tempScope, provider);
+                    thread.eventRegisters = tempScope.statics;
+                    thread.dynamicEventData = tempScope.dynamics;
+
                     this.sleepingThreads.add(thread);
 
                     if (tTag.contains("TempData", Tag.TAG_COMPOUND)) {
@@ -634,15 +711,18 @@ public class GraphProcess {
         }
     }
 
-    private Object[] loadVariablesFromTag(CompoundTag tag, Object[] scope, HolderLookup.Provider provider) {
+    private void loadVariablesFromTag(CompoundTag tag, VariableScope scope, HolderLookup.Provider provider) {
         for (String key : tag.getAllKeys()) {
             Object obj = VariableRegistry.fromTag(tag.get(key), provider);
             if (obj != null) {
-                int id = index.getOrRegisterKey(key);
-                scope = ensureCapacity(scope, id);
-                scope[id] = obj;
+                int id = index.getKeyId(key);
+                if (id != -1 && id < scope.statics.length) {
+                    scope.statics[id] = obj;
+                } else {
+                    if (scope.dynamics == null) scope.dynamics = new HashMap<>();
+                    scope.dynamics.put(key, obj);
+                }
             }
         }
-        return scope;
     }
 }

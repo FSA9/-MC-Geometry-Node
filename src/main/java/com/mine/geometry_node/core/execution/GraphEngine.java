@@ -49,26 +49,25 @@ public class GraphEngine {
      * 逻辑：查找关联的常驻进程 -> 从进程中派发轻量级执行线程
      */
     public static void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId, @Nullable Consumer<GraphProcess.ExecutionThread> initializer) {
-        // 1. 处理全局图 (维度级)
+        // 处理全局图
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
 
         for (String graphId : storage.getGraphs()) {
             triggerOnProcess(level, target, graphId, eventNodeId, initializer,
-                    id -> findProcess(levelAttachment.getProcesses(), id),
+                    id -> levelAttachment.getProcess(id),
                     levelAttachment::addProcess);
         }
 
-        // 2. 处理局部图 (实体级)
+        // 处理局部图
         if (target != null) {
             EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
                 for (String graphId : entityAttachment.getBoundGraphs()) {
                     triggerOnProcess(level, target, graphId, eventNodeId, initializer,
-                            id -> findProcess(entityAttachment.getProcesses(), id),
+                            id -> entityAttachment.getProcess(id),
                             process -> {
                                 entityAttachment.addProcess(process);
-                                // ❌ 原来在这里的 markActive 删掉
                             });
                 }
                 GraphEventHandler.markActive(target);
@@ -90,7 +89,7 @@ public class GraphEngine {
             LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
             for (String graphId : storage.getGraphs()) {
                 triggerCustomOnProcess(level, null, graphId, targetEventType, frequency, initializer,
-                        id -> findProcess(levelAttachment.getProcesses(), id),
+                        id -> levelAttachment.getProcess(id),
                         levelAttachment::addProcess);
             }
         }
@@ -98,18 +97,19 @@ public class GraphEngine {
         // 实体作用域
         Set<Entity> entities = eventSubscribers.get(frequency);
         if (entities != null) {
-            for (Entity target : entities) {
+            Entity[] snapshot;
+            synchronized (entities) {
+                snapshot = entities.toArray(new Entity[0]);
+            }
+            for (Entity target : snapshot) {
                 if (target.isRemoved()) continue;
                 if (target.level() instanceof ServerLevel targetLevel) {
                     EntityGraphAttachment entityAttachment = getAttachment(target);
                     if (entityAttachment != null) {
                         for (String graphId : entityAttachment.getBoundGraphs()) {
                             triggerCustomOnProcess(targetLevel, target, graphId, targetEventType, frequency, initializer,
-                                    id -> findProcess(entityAttachment.getProcesses(), id),
-                                    process -> {
-                                        entityAttachment.addProcess(process);
-
-                                    });
+                                    id -> entityAttachment.getProcess(id),
+                                    entityAttachment::addProcess);
                         }
                         GraphEventHandler.markActive(target);
                     }
@@ -175,19 +175,8 @@ public class GraphEngine {
         }
     }
 
-    /**
-     * 【修复点】将 List 改为 Collection，兼容新版 Attachment 的 Map.values()
-     */
-    private static GraphProcess findProcess(Collection<GraphProcess> processes, String graphId) {
-        if (processes == null) return null;
-        for (GraphProcess p : processes) {
-            if (p.getGraphId().equals(graphId)) return p;
-        }
-        return null;
-    }
-
     // ==========================================
-    // 绑定管理 (优化：绑定即预热)
+    // 绑定管理 (绑定即预热)
     // ==========================================
 
     public static void bindGraph(Entity entity, String graphId) {
@@ -198,8 +187,7 @@ public class GraphEngine {
         if (attachment != null) {
             attachment.bindGraph(graphId);
 
-            // 【优化】预热进程：确保在绑定时就创建实例，避免第一次事件触发时的开销
-            if (findProcess(attachment.getProcesses(), graphId) == null) {
+            if (attachment.getProcess(graphId) == null) {
                 attachment.addProcess(new GraphProcess(graphId, index));
             }
 
@@ -211,11 +199,10 @@ public class GraphEngine {
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         storage.addGraph(graphId);
 
-        // 全局图也一并预热
         RuntimeGraphIndex index = getGraphIndex(graphId);
         if (index != null) {
             LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
-            if (findProcess(attachment.getProcesses(), graphId) == null) {
+            if (attachment.getProcess(graphId) == null) {
                 attachment.addProcess(new GraphProcess(graphId, index));
             }
         }
