@@ -1,10 +1,15 @@
 // --- START OF FILE ViewportMenu.java ---
 package com.mine.geometry_node.client.ui.viewport.menu;
 
+import com.mine.geometry_node.client.ui.UICommand.commands.CmdAddFrame;
+import com.mine.geometry_node.client.ui.UICommand.commands.CmdGroupIntoFrame;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
+import com.mine.geometry_node.client.ui.viewport.UINode;
+import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
+import com.mine.geometry_node.core.node.FrameData;
 import com.mine.geometry_node.core.node.NodeCategory;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -16,7 +21,10 @@ import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Stack;
+import java.util.UUID;
 
 public class ViewportMenu extends FrameLayout {
 
@@ -168,6 +176,38 @@ public class ViewportMenu extends FrameLayout {
                 DocumentManager.INSTANCE.saveSession(DocumentManager.INSTANCE.getActiveSession());
                 post(this::dismiss);
             });
+
+            addClickItem("📦 添加图框 (Add Frame)", 0xFF44AAFF, v -> {
+                if (mContext != null && mContext.getEditorContext() != null && mContext instanceof Viewport viewport) {
+                    // 菜单的 mMenuX/Y 是屏幕坐标，我们要转换成逻辑坐标作为图框的起始位置
+                    float uiX = viewport.getCamera().screenToUIX(mMenuX);
+                    float uiY = viewport.getCamera().screenToUIY(mMenuY);
+
+                    FrameData frameData = new FrameData(UUID.randomUUID().toString(), uiX, uiY);
+                    CmdAddFrame cmd = new CmdAddFrame(mContext.getEditorContext().getGraphController(), frameData);
+                    mContext.getEditorContext().getCommandManager().execute(cmd);
+                }
+                post(this::dismiss);
+            });
+
+            // ---> 新增：将选中节点并入新框 <---
+            addClickItem("🖇 并入新框 (Group into Frame)", 0xFF44AAFF, v -> {
+                if (mContext != null && mContext.getEditorContext() != null) {
+                    List<String> selectedIds = new ArrayList<>();
+                    for (UINode node : mContext.getSelectedNodes()) {
+                        selectedIds.add(node.getNodeData().id);
+                    }
+
+                    if (!selectedIds.isEmpty()) {
+                        CmdGroupIntoFrame cmd = new CmdGroupIntoFrame(mContext.getEditorContext().getGraphController(), selectedIds);
+                        mContext.getEditorContext().getCommandManager().execute(cmd);
+                        // 合并完毕后可选清空节点选择
+                        mContext.clearSelection();
+                    }
+                }
+                post(this::dismiss);
+            });
+
             View divider = new View(getContext());
             mListContainer.addView(divider, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1)));

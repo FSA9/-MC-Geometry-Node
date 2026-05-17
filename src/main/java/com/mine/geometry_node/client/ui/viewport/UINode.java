@@ -301,6 +301,11 @@ public class UINode extends FrameLayout {
         }
 
         mTotalHeight = (int) currentY;
+
+        if (mNodeData.uiSize == null) mNodeData.uiSize = new float[2];
+        mNodeData.uiSize[0] = UIConstants.Node.NODE_WIDTH;
+        mNodeData.uiSize[1] = mTotalHeight;
+
         LayoutParams lp = new LayoutParams(UIUtils.dp2pxInt(UIConstants.Node.NODE_WIDTH), UIUtils.dp2pxInt(mTotalHeight));
         lp.leftMargin = UIUtils.dp2pxInt(mLogicX);
         lp.topMargin = UIUtils.dp2pxInt(mLogicY);

@@ -32,6 +32,7 @@ public class EditorContext {
     public NodeGraph getGraph() { return mGraph; }
     public CommandManager getCommandManager() { return mCommandManager; }
     public GraphController getGraphController() { return mGraphController; }
+    public List<EditorListener> getListeners() { return mListeners; }
 
     // ==========================================
     // 事件总线 (Event Bus)
@@ -53,6 +54,10 @@ public class EditorContext {
         default void onConnectionRemoved(String outNode, String outPort, String inNode, String inPort) {}
         default void onNodeStructureChanged(NodeData nodeData) {}
         default void onGraphConnectionsRebuildRequested() {}
+        default void onFrameAdded(com.mine.geometry_node.core.node.FrameData frame) {}
+        default void onFrameRemoved(String frameId) {}
+        default void onFrameBoundsUpdated(String frameId, float x, float y, float w, float h) {}
+        default void onFrameTitleChanged(String frameId, String newTitle) {}
     }
 
     public void addListener(EditorListener listener) {

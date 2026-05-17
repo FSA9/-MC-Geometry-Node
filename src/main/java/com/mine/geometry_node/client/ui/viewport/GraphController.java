@@ -19,6 +19,10 @@ public class GraphController {
         this.mContext = context;
     }
 
+    public EditorContext getContext() {
+        return mContext;
+    }
+
     public void addNode(NodeData node) {
         mContext.getGraph().addNode(node);
         mContext.notifyNodeAdded(node);
@@ -39,6 +43,10 @@ public class GraphController {
         if (node != null) {
             node.setPosition(x, y);
             mContext.notifyNodeMoved(nodeId, x, y);
+
+            if (node.parentFrame != null) {
+                updateFrameBounds(node.parentFrame);
+            }
         }
     }
 
@@ -251,6 +259,149 @@ public class GraphController {
 
             // 通知重新构建节点结构，这会自动刷新 UI 上的文字并重新计算排版宽度
             mContext.notifyNodeStructureChanged(node);
+        }
+    }
+
+    private static final float FRAME_PADDING_P = 20f;
+    private static final float FRAME_MARGIN_K = 10f;
+    private static final float FRAME_HEADER_H1 = 30f; // 标题栏高度预留
+
+    public void addFrame(com.mine.geometry_node.core.node.FrameData frame) {
+        mContext.getGraph().addFrame(frame);
+        for (EditorContext.EditorListener l : mContext.getListeners()) {
+            l.onFrameAdded(frame);
+        }
+    }
+
+    public void removeFrame(String frameId) {
+        mContext.getGraph().removeFrame(frameId);
+        for (EditorContext.EditorListener l : mContext.getListeners()) {
+            l.onFrameRemoved(frameId);
+        }
+    }
+
+    /**
+     * 核心：更新元素的父图框，并触发对应图框的边界重算
+     */
+    public void setElementParentFrame(String elementId, boolean isNode, String newParentFrameId) {
+        String oldParentId = null;
+        if (isNode) {
+            NodeData node = mContext.getGraph().getNode(elementId);
+            if (node != null) {
+                oldParentId = node.parentFrame;
+                node.parentFrame = newParentFrameId;
+            }
+        } else {
+            com.mine.geometry_node.core.node.FrameData frame = mContext.getGraph().getFrame(elementId);
+            if (frame != null) {
+                oldParentId = frame.parentFrame;
+                frame.parentFrame = newParentFrameId;
+            }
+        }
+
+        // 重新计算受影响图框的边界
+        if (oldParentId != null && !oldParentId.equals(newParentFrameId)) {
+            updateFrameBounds(oldParentId);
+        }
+        if (newParentFrameId != null) {
+            updateFrameBounds(newParentFrameId);
+        }
+    }
+
+    /**
+     * 核心：根据内部节点重新计算图框边界 (Auto-Bounding Box)
+     */
+    public void updateFrameBounds(String frameId) {
+        com.mine.geometry_node.core.node.FrameData frame = mContext.getGraph().getFrame(frameId);
+        if (frame == null) return;
+
+        float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE;
+        float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
+        boolean hasChildren = false;
+
+        // 1. 遍历所有节点
+        for (NodeData node : mContext.getGraph().nodes.values()) {
+            if (frameId.equals(node.parentFrame)) {
+                hasChildren = true;
+                minX = Math.min(minX, node.uiPos[0]);
+                minY = Math.min(minY, node.uiPos[1]);
+
+                // 需要你在 NodeData 中补充 uiSize 字段，并在 UINode 排版后更新它
+                float w = (node.uiSize != null && node.uiSize[0] > 0) ? node.uiSize[0] : 150f; // 150f为fallback
+                float h = (node.uiSize != null && node.uiSize[1] > 0) ? node.uiSize[1] : 100f; // 100f为fallback
+
+                maxX = Math.max(maxX, node.uiPos[0] + w);
+                maxY = Math.max(maxY, node.uiPos[1] + h);
+            }
+        }
+
+        // 2. 遍历所有子图框 (支持嵌套)
+        for (com.mine.geometry_node.core.node.FrameData childFrame : mContext.getGraph().frames.values()) {
+            if (frameId.equals(childFrame.parentFrame)) {
+                hasChildren = true;
+                minX = Math.min(minX, childFrame.uiPos[0]);
+                minY = Math.min(minY, childFrame.uiPos[1]);
+                maxX = Math.max(maxX, childFrame.uiPos[0] + childFrame.uiSize[0]);
+                maxY = Math.max(maxY, childFrame.uiPos[1] + childFrame.uiSize[1]);
+            }
+        }
+
+        // 3. 应用计算结果
+        if (hasChildren) {
+            float newX = minX - FRAME_PADDING_P - FRAME_MARGIN_K;
+            // 顶部额外减去标题栏高度，保证标题栏在 P 区域内起步
+            float newY = minY - FRAME_PADDING_P - FRAME_MARGIN_K - FRAME_HEADER_H1;
+            float newW = (maxX - minX) + 2 * (FRAME_PADDING_P + FRAME_MARGIN_K);
+            float newH = (maxY - minY) + 2 * (FRAME_PADDING_P + FRAME_MARGIN_K) + FRAME_HEADER_H1;
+
+            frame.setPosition(newX, newY);
+            frame.setSize(newW, newH);
+        } else {
+            // 如果内部被清空了，维持最后的状态或重置为默认大小，这里选择不强制缩回
+            // frame.setSize(200f, 200f);
+        }
+
+        // 4. 通知 UI 层重绘该框
+        for (EditorContext.EditorListener l : mContext.getListeners()) {
+            l.onFrameBoundsUpdated(frameId, frame.uiPos[0], frame.uiPos[1], frame.uiSize[0], frame.uiSize[1]);
+        }
+
+        // 5. 递归：如果当前图框本身也被包在另一个图框里，大图框也要跟着变大
+        if (frame.parentFrame != null) {
+            updateFrameBounds(frame.parentFrame);
+        }
+    }
+
+    public void setFrameProperty(String frameId, String title, int color) {
+        com.mine.geometry_node.core.node.FrameData frame = mContext.getGraph().getFrame(frameId);
+        if (frame != null) {
+            frame.title = title;
+            frame.color = color;
+
+            // 通知 UI 层
+            for (EditorContext.EditorListener l : mContext.getListeners()) {
+                l.onFrameTitleChanged(frameId, title); // 也可以顺便把改色逻辑放进去，UIFrame接到后重绘即可
+            }
+        }
+    }
+
+    /**
+     * 设置图框的位置（主要用于移动空图框）
+     */
+    public void setFramePosition(String frameId, float x, float y) {
+        com.mine.geometry_node.core.node.FrameData frame = mContext.getGraph().getFrame(frameId);
+        if (frame != null) {
+            frame.setPosition(x, y);
+
+            // 通知 UI 层该框位置已改变
+            for (EditorContext.EditorListener l : mContext.getListeners()) {
+                l.onFrameBoundsUpdated(frameId, frame.uiPos[0], frame.uiPos[1], frame.uiSize[0], frame.uiSize[1]);
+            }
+
+            // 联动：如果这个空框自己是被包在一个大图框里的，它移动了，外层大图框也得跟着重算
+            if (frame.parentFrame != null) {
+                updateFrameBounds(frame.parentFrame);
+            }
         }
     }
 }

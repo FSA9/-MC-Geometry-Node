@@ -25,6 +25,10 @@ public class NodeGraph {
     @SerializedName("nodes")
     public Map<String, NodeData> nodes = new HashMap<>();
 
+    // 图框列表
+    @SerializedName("frames")
+    public Map<String, FrameData> frames = new HashMap<>();
+
     public NodeGraph() {}
 
     public NodeGraph(String graphName) {
@@ -33,8 +37,20 @@ public class NodeGraph {
     }
 
     /**
-     * 辅助方法：根据 UUID 查找节点数据
+     * 辅助方法
      */
+    public FrameData getFrame(String id) {
+        return frames.get(id);
+    }
+
+    public void addFrame(FrameData frame) {
+        this.frames.put(frame.id, frame);
+    }
+
+    public void removeFrame(String id) {
+        this.frames.remove(id);
+    }
+
     public NodeData getNode(String id) {
         return nodes.get(id);
     }

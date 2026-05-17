@@ -2,6 +2,7 @@
 package com.mine.geometry_node.client.ui.viewport.interaction;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.viewport.UIFrame;
 import com.mine.geometry_node.client.ui.viewport.UINode;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
@@ -17,6 +18,10 @@ public interface InteractionContext {
     ViewportCamera getCamera();
 
     // --- 节点与选择 (全部基于 UI 逻辑坐标 DP) ---
+
+    UIFrame findFrameAt(float uiX, float uiY);
+    UIFrame getSmallestContainingFrame(float uiX, float uiY);
+    void moveFrameAndChildren(String frameId, float dx, float dy);
 
     UINode findNodeAt(float uiX, float uiY);
     Viewport.PortInfo findPortAt(float uiX, float uiY);

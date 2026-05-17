@@ -4,9 +4,7 @@ package com.mine.geometry_node.client.ui.viewport.interaction;
 import com.mine.geometry_node.client.ui.UICommand.commands.*;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.UINode;
-import com.mine.geometry_node.client.ui.viewport.Viewport;
-import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
+import com.mine.geometry_node.client.ui.viewport.*;
 import com.mine.geometry_node.client.ui.viewport.menu.PortMenu;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
@@ -14,7 +12,6 @@ import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MotionEvent;
-import icyllis.modernui.widget.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +22,9 @@ public class InteractionManager {
     private static final int MODE_DRAGGING_NODES = 2;
     private static final int MODE_SELECTING      = 3;
     private static final int MODE_CONNECTING     = 4;
+    private static final int MODE_DRAGGING_FRAME = 5;
+
+    private UIFrame mDraggedFrame = null;
 
     private final InteractionContext mContext;
     private int mCurrentMode = MODE_NONE;
@@ -114,6 +114,17 @@ public class InteractionManager {
             enterDraggingMode(target, uiX, uiY);
             return;
         }
+
+        UIFrame targetFrame = mContext.findFrameAt(uiX, uiY);
+        if (targetFrame != null) {
+            mCurrentMode = MODE_DRAGGING_FRAME;
+            mDragStartUiX = uiX;
+            mDragStartUiY = uiY;
+            mDraggedFrame = targetFrame;
+            mContext.clearSelection();
+            return;
+        }
+
         enterSelectingMode(uiX, uiY);
     }
 
@@ -143,6 +154,14 @@ public class InteractionManager {
             case MODE_DRAGGING_NODES: updateNodeDragging(uiDx, uiDy); break;
             case MODE_SELECTING: updateBoxSelection(uiX, uiY); break;
             case MODE_CONNECTING: updateDraftLine(uiX, uiY); break;
+            case MODE_DRAGGING_FRAME:
+                // 这里传的是 totalUiDx，也就是 current - mDragStartUiX
+                float totalUiDx = uiX - mDragStartUiX;
+                float totalUiDy = uiY - mDragStartUiY;
+                if (mDraggedFrame != null) {
+                    ((Viewport) mContext).previewFrameMove(mDraggedFrame.getFrameData().id, totalUiDx, totalUiDy);
+                }
+                break;
         }
 
         mLastScreenX = screenX;
@@ -174,6 +193,7 @@ public class InteractionManager {
             case MODE_DRAGGING_NODES: finalizeNodeDragging(uiX, uiY); break;
             case MODE_CONNECTING: finalizeConnection(uiX, uiY); break;
             case MODE_SELECTING: mSelectionRectUi.setEmpty(); break;
+            case MODE_DRAGGING_FRAME: finalizeFrameDragging(uiX, uiY); break;
         }
 
         mCurrentMode = MODE_NONE;
@@ -229,22 +249,151 @@ public class InteractionManager {
         float totalUiDx = endUiX - mDragStartUiX;
         float totalUiDy = endUiY - mDragStartUiY;
 
-        if (Math.abs(totalUiDx) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE || Math.abs(totalUiDy) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE) {
+        if (Math.abs(totalUiDx) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE ||
+                Math.abs(totalUiDy) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE) {
+
             List<String> selectedIds = new ArrayList<>();
             for (UINode node : mContext.getSelectedNodes()) selectedIds.add(node.getNodeData().id);
-            CmdMoveNode cmd = new CmdMoveNode(mContext.getEditorContext().getGraphController(), selectedIds, totalUiDx, totalUiDy);
-            mContext.getEditorContext().getCommandManager().execute(cmd);
+
+            // 1. 执行移动命令 (替换原来的 CmdMoveNode)
+            CmdMoveElements cmdMove = new CmdMoveElements(mContext.getEditorContext().getGraphController(), selectedIds, new ArrayList<>(), totalUiDx, totalUiDy);
+            mContext.getEditorContext().getCommandManager().execute(cmdMove);
+
+            // 2. 自动并入判定 (Auto-Parenting)
+            UIFrame targetFrame = mContext.getSmallestContainingFrame(endUiX, endUiY);
+            String targetFrameId = (targetFrame != null) ? targetFrame.getFrameData().id : null;
+
+            // 找出真正需要变更父级的节点（避免无意义的命令入栈）
+            List<String> nodesToChange = new ArrayList<>();
+            for (UINode node : mContext.getSelectedNodes()) {
+                String currentParent = node.getNodeData().parentFrame;
+                if ((currentParent == null && targetFrameId != null) ||
+                        (currentParent != null && !currentParent.equals(targetFrameId))) {
+                    nodesToChange.add(node.getNodeData().id);
+                }
+            }
+
+            // 3. 执行父级变更命令
+            if (!nodesToChange.isEmpty()) {
+                CmdChangeParent cmdParent = new CmdChangeParent(mContext.getEditorContext().getGraphController(), nodesToChange, true, targetFrameId);
+                mContext.getEditorContext().getCommandManager().execute(cmdParent);
+            }
+
         } else {
+            // (原有的原路弹回逻辑保持不变)
             for (UINode node : mContext.getSelectedNodes()) {
                 node.setTranslationX(node.getNodeData().getX());
                 node.setTranslationY(node.getNodeData().getY());
-
                 if (mContext instanceof Viewport) {
                     ((Viewport) mContext).updateConnectionsForNode(node.getNodeData().id);
                 }
             }
             mContext.invalidate();
         }
+    }
+
+    /**
+     * 图框拖拽结束结算：实现大框嵌套自动吸附
+     */
+    private void finalizeFrameDragging(float endUiX, float endUiY) {
+        if (mDraggedFrame == null) return;
+
+        float totalUiDx = endUiX - mDragStartUiX;
+        float totalUiDy = endUiY - mDragStartUiY;
+
+        if (Math.abs(totalUiDx) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE ||
+                Math.abs(totalUiDy) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE) {
+
+            String draggedFrameId = mDraggedFrame.getFrameData().id;
+
+            // 1. 提交数据层移动命令（使所有下属元素坐标正式同步，计入历史栈）
+            CmdMoveElements cmdMove = new CmdMoveElements(
+                    mContext.getEditorContext().getGraphController(),
+                    new ArrayList<>(),
+                    List.of(draggedFrameId),
+                    totalUiDx,
+                    totalUiDy
+            );
+            mContext.getEditorContext().getCommandManager().execute(cmdMove);
+
+            // 2. 自动并入更大的图框判定 (Auto-Parenting for Frame)
+            UIFrame largerFrame = getSmallestContainingFrameForFrame(draggedFrameId, endUiX, endUiY);
+            String newParentId = (largerFrame != null) ? largerFrame.getFrameData().id : null;
+
+            String currentParent = mDraggedFrame.getFrameData().parentFrame;
+            if ((currentParent == null && newParentId != null) ||
+                    (currentParent != null && !currentParent.equals(newParentId))) {
+
+                // 3. 提交父级变更命令 (对图框做变更，isNode 传入 false)
+                CmdChangeParent cmdParent = new CmdChangeParent(
+                        mContext.getEditorContext().getGraphController(),
+                        List.of(draggedFrameId),
+                        false,
+                        newParentId
+                );
+                mContext.getEditorContext().getCommandManager().execute(cmdParent);
+            }
+        } else {
+            // 没达到拖拽阈值，按原始坐标弹回刷新
+            if (mContext instanceof Viewport) {
+                ((Viewport) mContext).updateFrameBounds(mDraggedFrame.getFrameData().id);
+            }
+        }
+
+        mDraggedFrame = null;
+    }
+
+    /**
+     * 辅助方法：寻找最适合嵌套当前图框的外部大图框（排除自身及子图框）
+     */
+    private UIFrame getSmallestContainingFrameForFrame(String draggedFrameId, float uiX, float uiY) {
+        UIFrame target = null;
+        float minArea = Float.MAX_VALUE;
+
+        if (mContext instanceof Viewport vp) {
+            GraphController controller = vp.getEditorContext().getGraphController();
+            for (UIFrame frame : vp.getFrameViews().values()) {
+                String fid = frame.getFrameData().id;
+
+                // 排除自身，且排除会导致循环引用的子孙图框
+                if (fid.equals(draggedFrameId) || isCyclicFrameReference(controller, draggedFrameId, fid)) {
+                    continue;
+                }
+
+                float x = frame.getFrameData().uiPos[0];
+                float y = frame.getFrameData().uiPos[1];
+                float w = frame.getFrameData().uiSize[0];
+                float h = frame.getFrameData().uiSize[1];
+
+                // 判定放手时的鼠标坐标是否在外部大框内
+                if (uiX >= x && uiX <= x + w && uiY >= y && uiY <= y + h) {
+                    float area = w * h;
+                    if (area < minArea) {
+                        minArea = area;
+                        target = frame; // 锁定制导深度最深、面积最小的直接外壳
+                    }
+                }
+            }
+        }
+        return target;
+    }
+
+    /**
+     * 核心安全校验：防止嵌套引发拓扑环
+     */
+    private boolean isCyclicFrameReference(GraphController controller, String draggedFrameId, String potentialParentId) {
+        if (potentialParentId == null) return false;
+        if (draggedFrameId.equals(potentialParentId)) return true;
+
+        // 沿着潜在父框的亲属链一路上溯，如果在其祖先里发现了当前拖拽框的ID，说明在开历史倒车，会形成死循环
+        com.mine.geometry_node.core.node.FrameData current = controller.getContext().getGraph().getFrame(potentialParentId);
+        while (current != null) {
+            if (draggedFrameId.equals(current.parentFrame)) {
+                return true;
+            }
+            current = controller.getContext().getGraph().getFrame(current.parentFrame);
+        }
+        return false;
     }
 
     private void finalizeConnection(float endUiX, float endUiY) {

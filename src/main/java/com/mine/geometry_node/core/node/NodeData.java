@@ -18,6 +18,9 @@ public class NodeData {
     @SerializedName("UI_pos")
     public float[] uiPos = new float[2];
 
+    @SerializedName("UI_size")
+    public float[] uiSize = new float[]{0, 0};
+
     @SerializedName("inputs")
     public Map<String, Object> inputs = new HashMap<>();
 
@@ -29,6 +32,9 @@ public class NodeData {
 
     @SerializedName("port_settings")
     public PortSettings portSettings = new PortSettings();
+
+    @SerializedName("parent_frame")
+    public String parentFrame;
 
     public static class PortSettings {
         public Map<String, PortConfig> inputs = new HashMap<>();

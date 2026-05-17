@@ -66,6 +66,9 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     private TextView mEmptyHint;
 
+    private FrameLayout mFrameLayer;
+    private final Map<String, UIFrame> mFrameViews = new HashMap<>();
+
     private final List<VisualConnection> mVisualConnections = new ArrayList<>();
 
     private static class VisualConnection {
@@ -151,11 +154,18 @@ public class Viewport extends FrameLayout implements InteractionContext {
             removeView(mNodeLayer);
         }
         mNodeViews.clear();
+        mFrameViews.clear();
         mSelectedNodes.clear();
 
         this.mCurrentSession = session;
 
         if (session != null) {
+            mFrameLayer = new FrameLayout(getContext());
+            mFrameLayer.setClipChildren(false);
+            mFrameLayer.setPivotX(0);
+            mFrameLayer.setPivotY(0);
+            addView(mFrameLayer, 0, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+
             mEmptyHint.setVisibility(View.GONE);
             mCamera.setPosition(session.viewportX, session.viewportY);
             mCamera.setScale(session.currentScale);
@@ -164,7 +174,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
             mNodeLayer.setClipChildren(false);
             mNodeLayer.setPivotX(0);
             mNodeLayer.setPivotY(0);
-            addView(mNodeLayer, 0, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+            addView(mNodeLayer, 1, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
             mController.setEditorContext(session.editorContext);
             rebuildNodesFromData(session);
@@ -180,6 +190,12 @@ public class Viewport extends FrameLayout implements InteractionContext {
     private void rebuildNodesFromData(GraphSession session) {
         com.mine.geometry_node.core.node.NodeGraph graph = session.editorContext.getGraph();
         if (graph == null || graph.nodes == null) return;
+
+        if (graph.frames != null) {
+            for (com.mine.geometry_node.core.node.FrameData frameData : graph.frames.values()) {
+                mController.onFrameAdded(frameData);
+            }
+        }
 
         for (NodeData data : graph.nodes.values()) {
             mController.onNodeAdded(data); // 内部会调用 addNodeView
@@ -275,8 +291,50 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
             mNodeLayer.setScaleX(mCamera.getScale());
             mNodeLayer.setScaleY(mCamera.getScale());
+
+            if (mFrameLayer != null) {
+                mFrameLayer.setTranslationX(0);
+                mFrameLayer.setTranslationY(0);
+                LayoutParams lpF = (LayoutParams) mFrameLayer.getLayoutParams();
+                if (lpF == null) lpF = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+                lpF.leftMargin = (int) mCamera.getX();
+                lpF.topMargin = (int) mCamera.getY();
+                mFrameLayer.setLayoutParams(lpF);
+                mFrameLayer.setScaleX(mCamera.getScale());
+                mFrameLayer.setScaleY(mCamera.getScale());
+            }
         }
         invalidate();
+    }
+
+    public void addFrameView(String frameId, UIFrame uiFrame) {
+        if (mFrameLayer != null) {
+            mFrameLayer.addView(uiFrame);
+            mFrameViews.put(frameId, uiFrame);
+            mFrameLayer.requestLayout();
+            invalidate();
+        }
+    }
+
+    public void removeFrameView(String frameId) {
+        UIFrame uiFrame = mFrameViews.remove(frameId);
+        if (uiFrame != null && mFrameLayer != null) {
+            mFrameLayer.removeView(uiFrame);
+            invalidate();
+        }
+    }
+
+    public void updateFrameBounds(String frameId) {
+        UIFrame uiFrame = mFrameViews.get(frameId);
+        if (uiFrame != null) {
+            uiFrame.updateBounds();
+            invalidate();
+        }
+    }
+
+    // 获取所有的 Frame 供后续拖拽判定使用
+    public Map<String, UIFrame> getFrameViews() {
+        return mFrameViews;
     }
 
     @Override
@@ -289,11 +347,159 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     @Override
+    public UIFrame findFrameAt(float uiX, float uiY) {
+        if (mFrameLayer == null) return null;
+        // 倒序遍历（优先命中显示在最上层的子图框）
+        for (int i = mFrameLayer.getChildCount() - 1; i >= 0; i--) {
+            View child = mFrameLayer.getChildAt(i);
+            if (child instanceof UIFrame frame) {
+                if (frame.hitTest(uiX, uiY)) {
+                    return frame;
+                }
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public UIFrame getSmallestContainingFrame(float uiX, float uiY) {
+        if (mFrameLayer == null) return null;
+        UIFrame target = null;
+        float minArea = Float.MAX_VALUE;
+
+        // 遍历所有图框，寻找包含坐标点且面积最小的那个（解决嵌套问题）
+        for (int i = 0; i < mFrameLayer.getChildCount(); i++) {
+            View child = mFrameLayer.getChildAt(i);
+            if (child instanceof UIFrame frame) {
+                float x = frame.getFrameData().uiPos[0];
+                float y = frame.getFrameData().uiPos[1];
+                float w = frame.getFrameData().uiSize[0];
+                float h = frame.getFrameData().uiSize[1];
+
+                if (uiX >= x && uiX <= x + w && uiY >= y && uiY <= y + h) {
+                    float area = w * h;
+                    if (area < minArea) {
+                        minArea = area;
+                        target = frame;
+                    }
+                }
+            }
+        }
+        return target;
+    }
+
+    @Override
+    public void moveFrameAndChildren(String frameId, float dx, float dy) {
+        UIFrame frameView = mFrameViews.get(frameId);
+        if (frameView == null) return;
+
+        // 1. 物理平移图框自身
+        frameView.offsetPosition(dx, dy);
+
+        // 2. 联动平移属于该图框的所有直接子节点
+        for (UINode node : mNodeViews.values()) {
+            if (frameId.equals(node.getNodeData().parentFrame)) {
+                node.setTranslationX(node.getTranslationX() + dx);
+                node.setTranslationY(node.getTranslationY() + dy);
+                updateConnectionsForNode(node.getNodeData().id); // 实时重绘导线
+            }
+        }
+
+        // 3. 递归联动所有嵌套的子图框
+        for (UIFrame childFrame : mFrameViews.values()) {
+            if (frameId.equals(childFrame.getFrameData().parentFrame)) {
+                moveFrameAndChildren(childFrame.getFrameData().id, dx, dy);
+            }
+        }
+    }
+
+    @Override
     protected void onDraw(Canvas canvas) {
         canvas.drawRect(0, 0, getWidth(), getHeight(), mBackgroundPaint);
         if (mCurrentSession == null) return;
         drawInfiniteGrid(canvas);
         super.onDraw(canvas);
+    }
+
+    /**
+     * 纯 UI 层的图框大小预览（用于拖拽过程中的实时反馈）
+     */
+    public void previewFrameBounds(String frameId) {
+        UIFrame uiFrame = mFrameViews.get(frameId);
+        if (uiFrame == null) return;
+
+        float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE;
+        float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
+        boolean hasChildren = false;
+
+        // 1. 收集直接属于该图框的子节点边界
+        for (Map.Entry<String, UINode> entry : mNodeViews.entrySet()) {
+            UINode node = entry.getValue();
+            if (frameId.equals(node.getNodeData().parentFrame)) {
+                hasChildren = true;
+                float nx = node.getTranslationX();
+                float ny = node.getTranslationY();
+                float nw = node.getWidth() > 0 ? UIUtils.px2dp(node.getWidth()) : (node.getNodeData().uiSize != null ? node.getNodeData().uiSize[0] : 150f);
+                float nh = node.getHeight() > 0 ? UIUtils.px2dp(node.getHeight()) : (node.getNodeData().uiSize != null ? node.getNodeData().uiSize[1] : 100f);
+
+                minX = Math.min(minX, nx);
+                minY = Math.min(minY, ny);
+                maxX = Math.max(maxX, nx + nw);
+                maxY = Math.max(maxY, ny + nh);
+            }
+        }
+
+        // 2. 收集直接属于该图框的子图框边界（核心修复：处理图框嵌套问题）
+        for (Map.Entry<String, UIFrame> entry : mFrameViews.entrySet()) {
+            UIFrame childFrame = entry.getValue();
+            if (!frameId.equals(childFrame.getFrameData().id) &&
+                    frameId.equals(childFrame.getFrameData().parentFrame)) {
+
+                hasChildren = true;
+                float fx = childFrame.getTranslationX();
+                float fy = childFrame.getTranslationY();
+
+                // 由于连续拖拽使得子图框可能只调用了 setLayoutParams 还没来得及走 layout 刷新，
+                // 优先从 LayoutParams 中读取最新实时宽高，取不到再兜底历史大小。
+                float fw = 0f, fh = 0f;
+                icyllis.modernui.view.ViewGroup.LayoutParams lp = childFrame.getLayoutParams();
+                if (lp != null && lp.width > 0) {
+                    fw = UIUtils.px2dp(lp.width);
+                    fh = UIUtils.px2dp(lp.height);
+                } else if (childFrame.getWidth() > 0) {
+                    fw = UIUtils.px2dp(childFrame.getWidth());
+                    fh = UIUtils.px2dp(childFrame.getHeight());
+                } else {
+                    fw = childFrame.getFrameData().uiSize[0];
+                    fh = childFrame.getFrameData().uiSize[1];
+                }
+
+                minX = Math.min(minX, fx);
+                minY = Math.min(minY, fy);
+                maxX = Math.max(maxX, fx + fw);
+                maxY = Math.max(maxY, fy + fh);
+            }
+        }
+
+        // 3. 计算最终大小并触发自身排版及父级递归刷新
+        if (hasChildren) {
+            float newX = minX - UIFrame.FRAME_PADDING_P - 10f;
+            float newY = minY - UIFrame.FRAME_PADDING_P - 10f - UIFrame.FRAME_HEADER_H1;
+            float newW = (maxX - minX) + 2 * (UIFrame.FRAME_PADDING_P + 10f);
+            float newH = (maxY - minY) + 2 * (UIFrame.FRAME_PADDING_P + 10f) + UIFrame.FRAME_HEADER_H1;
+
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(newW), UIUtils.dp2pxInt(newH));
+            uiFrame.setLayoutParams(lp);
+
+            uiFrame.setTranslationX(newX);
+            uiFrame.setTranslationY(newY);
+
+            // 递归往上通知包裹自身的父图框，由于先算完自身参数才调父级，父级能立刻拿到刚才赋给自身的 lp.width / height
+            if (uiFrame.getFrameData().parentFrame != null) {
+                previewFrameBounds(uiFrame.getFrameData().parentFrame);
+            }
+        }
+        invalidate();
     }
 
     private void drawInfiniteGrid(Canvas canvas) {
@@ -490,11 +696,65 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public void moveSelectedNodes(float uiDx, float uiDy) {
+        java.util.Set<String> affectedFrames = new java.util.HashSet<>();
+
         for (UINode node : mSelectedNodes) {
             node.setTranslationX(node.getTranslationX() + uiDx);
             node.setTranslationY(node.getTranslationY() + uiDy);
             updateConnectionsForNode(node.getNodeData().id);
+
+            if (node.getNodeData().parentFrame != null) {
+                affectedFrames.add(node.getNodeData().parentFrame);
+            }
         }
+
+        // ---> 触发图框实时预览 <---
+        for (String frameId : affectedFrames) {
+            previewFrameBounds(frameId);
+        }
+    }
+
+    /**
+     * 拖拽图框时的纯视觉预览（无累加误差）
+     */
+    public void previewFrameMove(String frameId, float totalUiDx, float totalUiDy) {
+        // 1. 移动图框本身 (基于数据的初始位置 + 总偏移量)
+        UIFrame uiFrame = mFrameViews.get(frameId);
+        if (uiFrame != null) {
+            float startX = uiFrame.getFrameData().uiPos[0];
+            float startY = uiFrame.getFrameData().uiPos[1];
+
+            uiFrame.setTranslationX(startX + totalUiDx);
+            uiFrame.setTranslationY(startY + totalUiDy);
+        }
+
+        // 2. 移动图框内部的所有节点 (同理：基于初始位置 + 总偏移量)
+        for (Map.Entry<String, UINode> entry : mNodeViews.entrySet()) {
+            UINode node = entry.getValue();
+            if (frameId.equals(node.getNodeData().parentFrame)) {
+                float startNx = node.getNodeData().getX();
+                float startNy = node.getNodeData().getY();
+
+                node.setTranslationX(startNx + totalUiDx);
+                node.setTranslationY(startNy + totalUiDy);
+                updateConnectionsForNode(node.getNodeData().id);
+            }
+        }
+
+        // 3. 递归移动子图框
+        for (Map.Entry<String, UIFrame> entry : mFrameViews.entrySet()) {
+            UIFrame childFrame = entry.getValue();
+            if (frameId.equals(childFrame.getFrameData().parentFrame)) {
+                previewFrameMove(childFrame.getFrameData().id, totalUiDx, totalUiDy);
+            }
+        }
+
+        // 4. 【补充修复】：如果该拖拽的子图框有父级大图框，由于位置变动，通知外层图框重新计算包围盒大小
+        if (uiFrame != null && uiFrame.getFrameData().parentFrame != null) {
+            previewFrameBounds(uiFrame.getFrameData().parentFrame);
+        }
+
+        invalidate();
     }
 
     @Override public List<UINode> getSelectedNodes() { return mSelectedNodes; }

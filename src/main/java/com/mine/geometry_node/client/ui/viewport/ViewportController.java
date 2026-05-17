@@ -51,6 +51,27 @@ public class ViewportController implements EditorContext.EditorListener {
     }
 
     @Override
+    public void onFrameAdded(com.mine.geometry_node.core.node.FrameData frame) {
+        UIFrame uiFrame = new UIFrame(mViewport.getContext(), frame);
+        mViewport.addFrameView(frame.id, uiFrame);
+    }
+
+    @Override
+    public void onFrameRemoved(String frameId) {
+        mViewport.removeFrameView(frameId);
+    }
+
+    @Override
+    public void onFrameBoundsUpdated(String frameId, float x, float y, float w, float h) {
+        mViewport.updateFrameBounds(frameId);
+    }
+
+    @Override
+    public void onFrameTitleChanged(String frameId, String newTitle) {
+        mViewport.updateFrameBounds(frameId); // updateBounds 附带了 invalidate()，会重绘文字
+    }
+
+    @Override
     public void onNodeAdded(NodeData nodeData) {
         NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(nodeData);
         if (def == null) return;
