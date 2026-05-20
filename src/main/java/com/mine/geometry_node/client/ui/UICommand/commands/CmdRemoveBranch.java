@@ -23,7 +23,6 @@ public class CmdRemoveBranch implements ICommand {
     // --- 全量快照备份 ---
     private final Map<String, Object> mBackupInputs = new HashMap<>();
     private final Map<String, List<Connection>> mBackupOutputs = new HashMap<>();
-    // 修改为存储 Connection 对象的 Map
     private final Map<String, Connection> mBackupExecution = new HashMap<>();
     private final List<InboundConnectionBackup> mBackupInbounds = new ArrayList<>();
 

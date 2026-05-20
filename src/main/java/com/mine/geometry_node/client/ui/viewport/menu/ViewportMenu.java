@@ -1,15 +1,8 @@
-// --- START OF FILE ViewportMenu.java ---
 package com.mine.geometry_node.client.ui.viewport.menu;
 
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdAddFrame;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdGroupIntoFrame;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.session.DocumentManager;
-import com.mine.geometry_node.client.ui.viewport.UINode;
-import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
-import com.mine.geometry_node.core.node.FrameData;
 import com.mine.geometry_node.core.node.NodeCategory;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -21,10 +14,7 @@ import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Stack;
-import java.util.UUID;
 
 public class ViewportMenu extends FrameLayout {
 
@@ -32,9 +22,8 @@ public class ViewportMenu extends FrameLayout {
     private LinearLayout mListContainer;
     private EditText mSearchBox;
 
-    // 架构优化：依赖抽象接口，不依赖具体 Viewport 类
     private InteractionContext mContext;
-    private float mMenuX, mMenuY; // 视口逻辑坐标
+    private float mMenuX, mMenuY;
 
     private final Stack<NodeCategory> mHistory = new Stack<>();
     private NodeCategory mCurrentFolder;
@@ -51,16 +40,13 @@ public class ViewportMenu extends FrameLayout {
 
         mContentLayout = new LinearLayout(context);
         mContentLayout.setOrientation(LinearLayout.VERTICAL);
-        mContentLayout.setBackground(createRectDrawable(
-                UIConstants.ViewPort.NodeMenu.BG_COLOR,
-                UIConstants.ViewPort.NodeMenu.BORDER_RADIUS));
+        mContentLayout.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.BG_COLOR, UIConstants.ViewPort.NodeMenu.BORDER_RADIUS));
 
         int menuPadding = UIUtils.dp2pxInt(4);
         mContentLayout.setPadding(menuPadding, menuPadding, menuPadding, menuPadding);
         mContentLayout.setOnClickListener(v -> {});
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                UIUtils.dp2pxInt(100), LayoutParams.WRAP_CONTENT);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(100), LayoutParams.WRAP_CONTENT);
         lp.gravity = Gravity.TOP | Gravity.LEFT;
         mContentLayout.setLayoutParams(lp);
 
@@ -80,35 +66,25 @@ public class ViewportMenu extends FrameLayout {
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
         });
 
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX));
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX));
         searchLp.setMargins(menuPadding, menuPadding, menuPadding, UIUtils.dp2pxInt(6));
         mContentLayout.addView(mSearchBox, searchLp);
 
         ScrollView sv = new ScrollView(context);
         mListContainer = new LinearLayout(context);
         mListContainer.setOrientation(LinearLayout.VERTICAL);
-        sv.addView(mListContainer, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
+        sv.addView(mListContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        mContentLayout.addView(sv, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
-
+        mContentLayout.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(mContentLayout);
     }
 
-    // 架构优化：传入 InteractionContext
     public void showAt(float x, float y, InteractionContext context) {
         this.mContext = context;
         mMenuX = x;
         mMenuY = y;
 
-        // 这里我们知道 context 本质上是 Viewport(ViewGroup)，所以强转以获取边界信息
         ViewGroup parent = (ViewGroup) context;
-
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
         lp.gravity = Gravity.TOP | Gravity.LEFT;
         lp.leftMargin = (int) x;
@@ -125,18 +101,12 @@ public class ViewportMenu extends FrameLayout {
             if (actualW == 0) actualW = UIUtils.dp2pxInt(200);
             if (actualH == 0) actualH = UIUtils.dp2pxInt(300);
 
-            if (x + actualW > parent.getWidth()) {
-                lp.leftMargin = Math.max(0, parent.getWidth() - actualW);
-            }
-            if (y + actualH > parent.getHeight()) {
-                lp.topMargin = Math.max(0, parent.getHeight() - actualH);
-            }
+            if (x + actualW > parent.getWidth()) lp.leftMargin = Math.max(0, parent.getWidth() - actualW);
+            if (y + actualH > parent.getHeight()) lp.topMargin = Math.max(0, parent.getHeight() - actualH);
         }
         mContentLayout.setLayoutParams(lp);
 
-        if (this.getParent() != null) {
-            ((ViewGroup) this.getParent()).removeView(this);
-        }
+        if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
         parent.addView(this);
 
         mSearchBox.post(() -> {
@@ -146,17 +116,12 @@ public class ViewportMenu extends FrameLayout {
     }
 
     public void dismiss() {
-        if (mContext != null) {
-            mContext.closeMenu();
-        } else if (getParent() != null) {
-            ((ViewGroup) getParent()).removeView(this);
-        }
+        if (mContext != null) mContext.closeMenu();
+        else if (getParent() != null) ((ViewGroup) getParent()).removeView(this);
     }
 
     private void navigateTo(NodeCategory folder) {
-        if (mCurrentFolder != null && folder != mCurrentFolder) {
-            mHistory.push(mCurrentFolder);
-        }
+        if (mCurrentFolder != null && folder != mCurrentFolder) mHistory.push(mCurrentFolder);
         mCurrentFolder = folder;
         renderCurrentFolder();
     }
@@ -173,44 +138,29 @@ public class ViewportMenu extends FrameLayout {
 
         if (mCurrentFolder == NodeRegistry.INSTANCE.ROOT) {
             addClickItem("💾 Save", 0xFF44AAFF, v -> {
-                DocumentManager.INSTANCE.saveSession(DocumentManager.INSTANCE.getActiveSession());
+                if (mContext != null) mContext.requestSave();
                 post(this::dismiss);
             });
 
-            addClickItem("📦 添加图框 (Add Frame)", 0xFF44AAFF, v -> {
-                if (mContext != null && mContext.getEditorContext() != null && mContext instanceof Viewport viewport) {
-                    // 菜单的 mMenuX/Y 是屏幕坐标，我们要转换成逻辑坐标作为图框的起始位置
-                    float uiX = viewport.getCamera().screenToUIX(mMenuX);
-                    float uiY = viewport.getCamera().screenToUIY(mMenuY);
-
-                    FrameData frameData = new FrameData(UUID.randomUUID().toString(), uiX, uiY);
-                    CmdAddFrame cmd = new CmdAddFrame(mContext.getEditorContext().getGraphController(), frameData);
-                    mContext.getEditorContext().getCommandManager().execute(cmd);
+            addClickItem("📦 添加图框", 0xFF44AAFF, v -> {
+                if (mContext != null) {
+                    float uiX = mContext.getCamera().screenToUIX(mMenuX);
+                    float uiY = mContext.getCamera().screenToUIY(mMenuY);
+                    mContext.requestAddFrame(uiX, uiY);
                 }
                 post(this::dismiss);
             });
 
-            // ---> 新增：将选中节点并入新框 <---
-            addClickItem("🖇 并入新框 (Group into Frame)", 0xFF44AAFF, v -> {
-                if (mContext != null && mContext.getEditorContext() != null) {
-                    List<String> selectedIds = new ArrayList<>();
-                    for (UINode node : mContext.getSelectedNodes()) {
-                        selectedIds.add(node.getNodeData().id);
-                    }
-
-                    if (!selectedIds.isEmpty()) {
-                        CmdGroupIntoFrame cmd = new CmdGroupIntoFrame(mContext.getEditorContext().getGraphController(), selectedIds);
-                        mContext.getEditorContext().getCommandManager().execute(cmd);
-                        // 合并完毕后可选清空节点选择
-                        mContext.clearSelection();
-                    }
+            addClickItem("🖇 并入图框", 0xFF44AAFF, v -> {
+                if (mContext != null) {
+                    mContext.requestGroupIntoFrame();
+                    mContext.clearSelection();
                 }
                 post(this::dismiss);
             });
 
             View divider = new View(getContext());
-            mListContainer.addView(divider, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1)));
+            mListContainer.addView(divider, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1)));
         }
 
         if (mCurrentFolder != NodeRegistry.INSTANCE.ROOT) {
@@ -219,29 +169,20 @@ public class ViewportMenu extends FrameLayout {
 
         for (NodeCategory sub : mCurrentFolder.getSubCategories()) {
             String label = Component.translatable(sub.translationKey).getString() + "  ›";
-            addClickItem(label, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> {
-                mSearchBox.setText("");
-                navigateTo(sub);
-            });
+            addClickItem(label, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> { mSearchBox.setText(""); navigateTo(sub); });
         }
 
         for (BaseNode node : mCurrentFolder.getNodes()) {
             String label = node.getDefaultDefinition().displayName().getString();
             addClickItem(label, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> {
-                if (mContext != null) {
-                    // 发出意图：在这里添加节点
-                    mContext.requestAddNode(mMenuX, mMenuY, node.getTypeId());
-                }
+                if (mContext != null) mContext.requestAddNode(mMenuX, mMenuY, node.getTypeId());
                 post(this::dismiss);
             });
         }
     }
 
     private void performSearch(String query) {
-        if (query.trim().isEmpty()) {
-            renderCurrentFolder();
-            return;
-        }
+        if (query.trim().isEmpty()) { renderCurrentFolder(); return; }
         mListContainer.removeAllViews();
         String q = query.toLowerCase().trim();
 
@@ -249,10 +190,7 @@ public class ViewportMenu extends FrameLayout {
             String name = def.displayName().getString();
             if (name.toLowerCase().contains(q)) {
                 addClickItem(name, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> {
-                    if (mContext != null) {
-                        // 发出意图：在这里添加节点
-                        mContext.requestAddNode(mMenuX, mMenuY, def.typeId());
-                    }
+                    if (mContext != null) mContext.requestAddNode(mMenuX, mMenuY, def.typeId());
                     post(this::dismiss);
                 });
             }
@@ -262,7 +200,6 @@ public class ViewportMenu extends FrameLayout {
     private void addClickItem(String text, int color, View.OnClickListener listener) {
         TextView tv = new TextView(getContext());
         tv.setText(text);
-
         float itemFontSizeDp = UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * (float) UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
         tv.setTextSize(0, UIUtils.dp2px(itemFontSizeDp));
         tv.setTextColor(color);
@@ -281,9 +218,7 @@ public class ViewportMenu extends FrameLayout {
             return false;
         });
 
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT));
         int marginV = UIUtils.dp2pxInt(1);
         int marginH = UIUtils.dp2pxInt(2);
         lp.setMargins(marginH, marginV, marginH, marginV);
@@ -297,4 +232,3 @@ public class ViewportMenu extends FrameLayout {
         return d;
     }
 }
-// --- END OF FILE ViewportMenu.java ---

@@ -79,7 +79,7 @@ public class ViewportPanel extends LinearLayout {
     private void refreshTabs() {
         mTabBar.removeAllViews();
         DocumentManager docMgr = DocumentManager.INSTANCE;
-        mViewport.bindSession(docMgr.getActiveSession());
+        mViewport.getController().bindSession(docMgr.getActiveSession());
 
         LinearLayout.LayoutParams tabParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,

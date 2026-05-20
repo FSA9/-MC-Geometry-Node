@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.AssetLibrary;
+package com.mine.geometry_node.client.ui.bottom_window.asset_library.menu;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -15,13 +15,10 @@ public class FileContextMenu extends FrameLayout {
         super(context);
         setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
-        // 点击外部透明区域关闭菜单
         setOnClickListener(v -> dismiss());
 
         mContentLayout = new LinearLayout(context);
         mContentLayout.setOrientation(LinearLayout.VERTICAL);
-
-        // 【关键修复】：拦截菜单本身的点击，防止事件穿透触发 dismiss()
         mContentLayout.setOnClickListener(v -> {});
 
         ShapeDrawable bg = new ShapeDrawable();
@@ -69,37 +66,30 @@ public class FileContextMenu extends FrameLayout {
     }
 
     public void showAt(float x, float y, ViewGroup parent) {
-        // 1. 强制进行预测量 (Measure)，获取菜单真实的宽高
-        int widthSpec = MeasureSpec.makeMeasureSpec(UIUtils.dp2pxInt(160), MeasureSpec.EXACTLY); // 强制宽度 160dp，解决宽度乱跑问题
-        int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED); // 高度由内容决定
+        int widthSpec = MeasureSpec.makeMeasureSpec(UIUtils.dp2pxInt(160), MeasureSpec.EXACTLY);
+        int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
         mContentLayout.measure(widthSpec, heightSpec);
 
         int menuWidth = mContentLayout.getMeasuredWidth();
         int menuHeight = mContentLayout.getMeasuredHeight();
 
-        // 容错处理（防止部分框架第一帧测不出来）
         if (menuWidth == 0) menuWidth = UIUtils.dp2pxInt(160);
         if (menuHeight == 0) menuHeight = UIUtils.dp2pxInt(200);
 
         int parentWidth = parent.getWidth();
         int parentHeight = parent.getHeight();
 
-        // 2. 边界碰撞检测算法 (类似于 Windows 菜单避让)
         float finalX = x;
         float finalY = y;
 
-        // 如果右侧放不下了，往左翻折
         if (finalX + menuWidth > parentWidth && parentWidth > 0) {
             finalX = Math.max(0, parentWidth - menuWidth);
         }
 
-        // 如果底部放不下了，往上翻折
         if (finalY + menuHeight > parentHeight && parentHeight > 0) {
-            // 将菜单显示在鼠标的上方
             finalY = Math.max(0, y - menuHeight);
         }
 
-        // 3. 应用修正后的坐标和尺寸
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(menuWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.gravity = Gravity.TOP | Gravity.LEFT;
         lp.setMargins((int) finalX, (int) finalY, 0, 0);

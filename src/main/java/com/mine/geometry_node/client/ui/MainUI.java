@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui;
 
-import com.mine.geometry_node.client.ui.AssetLibrary.AssetBrowserPanel;
+import com.mine.geometry_node.client.ui.bottom_window.BottomToolWindowManager;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
 import com.mine.geometry_node.client.ui.viewport.ViewportPanel;
 import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -92,7 +93,7 @@ public class MainUI extends Fragment {
     }
 
     private void setupBottomSection(Context context, LinearLayout root) {
-        AssetBrowserPanel bottomPanel = new AssetBrowserPanel(context);
+        BottomToolWindowManager bottomPanel = new BottomToolWindowManager(context);
 
         LinearLayout.LayoutParams bottomParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0
