@@ -449,6 +449,7 @@
   "geometry_node.node.on_interaction": "交互触发",
   "geometry_node.node.shoot_projectile": "发射投掷物",
   "geometry_node.node.combine_flow": "合流",
+  "geometry_node.node.get_item_slot": "获取物品槽",
 
 
   "geometry_node.port.gravity": "重力",

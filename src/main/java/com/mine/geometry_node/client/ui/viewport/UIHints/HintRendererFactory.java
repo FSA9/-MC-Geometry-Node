@@ -12,6 +12,7 @@ public class HintRendererFactory {
         RENDERERS.put(UIHint.INPUT, new InputHintRenderer());
         RENDERERS.put(UIHint.SELECT, new SelectHintRenderer());
         RENDERERS.put(UIHint.VECTOR, new VectorHintRenderer());
+        RENDERERS.put(UIHint.ITEM_SLOT, new ItemSlotHintRenderer());
     }
 
     public static UIHintRenderer getRenderer(UIHint hint) {

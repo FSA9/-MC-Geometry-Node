@@ -215,7 +215,7 @@ public class UINode extends FrameLayout {
                     View hintView = renderer.createView(context, mNodeData, row, mEditorContext);
                     if (hintView != null) {
                         mHintViews.put(i, hintView);
-                        addView(hintView, new LayoutParams(0, 0)); // 占位，由 renderer 内部 updateLayout 撑开
+                        addView(hintView, new LayoutParams(0, 0));
 
                         boolean isConnected = mNodeData.isInputConnected(row.leftPort() != null ? row.leftPort().id() : "");
                         hintView.setVisibility(isConnected ? View.GONE : View.VISIBLE);

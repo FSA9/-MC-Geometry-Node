@@ -15,6 +15,9 @@ import icyllis.modernui.widget.TextView;
 public class UIFrame extends FrameLayout {
     private final FrameData mFrameData;
 
+    private float mLogicX = 0;
+    private float mLogicY = 0;
+
     // 仅保留统一的标题栏高度 (逻辑单位 DP)
     public static final float FRAME_HEADER_H = 30f;
 
@@ -70,16 +73,19 @@ public class UIFrame extends FrameLayout {
      * 根据数据更新自己的位置和大小
      */
     public void updateBounds() {
-        float x = mFrameData.uiPos[0];
-        float y = mFrameData.uiPos[1];
+        mLogicX = mFrameData.uiPos[0];
+        mLogicY = mFrameData.uiPos[1];
+
         float w = mFrameData.uiSize[0];
         float h = mFrameData.uiSize[1];
 
         LayoutParams lp = new LayoutParams(UIUtils.dp2pxInt(w), UIUtils.dp2pxInt(h));
+        lp.leftMargin = UIUtils.dp2pxInt(mLogicX);
+        lp.topMargin = UIUtils.dp2pxInt(mLogicY);
         setLayoutParams(lp);
 
-        setTranslationX(x);
-        setTranslationY(y);
+        super.setTranslationX(0);
+        super.setTranslationY(0);
 
         invalidate();
     }
@@ -114,19 +120,16 @@ public class UIFrame extends FrameLayout {
     }
 
     /**
-     * 优化：事件穿透逻辑
      * 只有点击在标题栏内才拦截事件，点击下方主体区域直接放行给底下的节点和 Viewport。
      */
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         float ly = UIUtils.px2dp(ev.getY());
 
-        // 如果点击位置超过了标题栏高度，说明在内容区，不拦截
         if (ly > FRAME_HEADER_H) {
             return false;
         }
 
-        // 点击在标题栏内，由图框自身正常分发与响应（支持点击、拖拽等）
         return super.dispatchTouchEvent(ev);
     }
 
@@ -139,7 +142,6 @@ public class UIFrame extends FrameLayout {
     }
 
     /**
-     * 优化：图框交互区判定（用于 GraphController 中的点击/拖拽目标判定）
      * 判定逻辑坐标是否精准落在标题栏的矩形区域内
      */
     public boolean hitTest(float uiX, float uiY) {
@@ -147,7 +149,39 @@ public class UIFrame extends FrameLayout {
         float y = mFrameData.uiPos[1];
         float w = mFrameData.uiSize[0];
 
-        // 判定是否在标题栏的逻辑范围内
         return uiX >= x && uiX <= x + w && uiY >= y && uiY <= y + FRAME_HEADER_H;
+    }
+
+    @Override
+    public void setTranslationX(float translationX) {
+        mLogicX = translationX; // 核心修复：只修改视觉变量，绝对不碰 mFrameData
+        super.setTranslationX(0);
+        updateMarginPos();
+    }
+
+    @Override
+    public void setTranslationY(float translationY) {
+        mLogicY = translationY; // 核心修复：只修改视觉变量，绝对不碰 mFrameData
+        super.setTranslationY(0);
+        updateMarginPos();
+    }
+
+    @Override
+    public float getTranslationX() {
+        return mLogicX;
+    }
+
+    @Override
+    public float getTranslationY() {
+        return mLogicY;
+    }
+
+    private void updateMarginPos() {
+        icyllis.modernui.view.ViewGroup.LayoutParams params = getLayoutParams();
+        if (params instanceof LayoutParams lp) {
+            lp.leftMargin = UIUtils.dp2pxInt(mLogicX);
+            lp.topMargin = UIUtils.dp2pxInt(mLogicY);
+            setLayoutParams(lp);
+        }
     }
 }

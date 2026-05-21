@@ -213,6 +213,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/type", new GetEntityType());
         registry.register("data/type", new GetItemType());
         registry.register("data/type", new GetItemStack());
+        registry.register("data/type", new GetItemSlot());
         registry.register("data/type", new GetSound());
         registry.register("data/type", new GetPortType());
 
