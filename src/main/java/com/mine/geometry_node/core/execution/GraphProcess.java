@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -186,7 +187,8 @@ public class GraphProcess {
         private Object[] eventRegisters = new Object[GraphProcess.this.index.getRegisterCount() + 8];
         private Map<String, Object> dynamicEventData = null;
         private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>();
-        private final Map<String, Object> dynamicFrameCache = new HashMap<>();
+        private final Int2ObjectOpenHashMap<Map<String, Object>> dynamicFrameCache = new Int2ObjectOpenHashMap<>();
+        private static final Object CACHED_NULL = new Object();
         private final IntOpenHashSet recursionGuard = new IntOpenHashSet();
         // ✨ 新增：线程私有的临时黑板
         public final Map<String, Object> tempData = new HashMap<>();
@@ -330,40 +332,59 @@ public class GraphProcess {
         private Object executeDataNode(int nodeId, String portName) {
             if (recursionGuard.contains(nodeId)) return null;
 
-            int portId = index.getKeyId(portName); // ✨ 纯查找，不注册
+            int portId = index.getKeyId(portName);
             long cacheKey = 0;
-            String dynamicCacheKey = null;
+            Map<String, Object> nodeDynamicCache = null;
 
-            // 查缓存
+            // ==========================================
+            // 1. 查缓存 (单次查询 O(1) + 零字符串分配)
+            // ==========================================
             if (portId != -1) {
                 cacheKey = ((long) nodeId << 32) | (portId & 0xFFFFFFFFL);
-                if (frameCache.containsKey(cacheKey)) return frameCache.get(cacheKey);
+                Object cached = frameCache.get(cacheKey);
+                // 如果有值，判断是否是占位符
+                if (cached != null) return cached == CACHED_NULL ? null : cached;
             } else {
-                dynamicCacheKey = nodeId + "#" + portName;
-                if (dynamicFrameCache.containsKey(dynamicCacheKey)) return dynamicFrameCache.get(dynamicCacheKey);
+                nodeDynamicCache = dynamicFrameCache.get(nodeId);
+                if (nodeDynamicCache != null) {
+                    Object cached = nodeDynamicCache.get(portName);
+                    if (cached != null) return cached == CACHED_NULL ? null : cached;
+                }
             }
 
+            // ==========================================
+            // 2. 执行计算
+            // ==========================================
             recursionGuard.add(nodeId);
             int prevActive = this.activeNodeId;
+            Object result;
 
             try {
                 BaseNode logic = NodeRegistry.INSTANCE.get(index.getNodeType(nodeId));
                 if (logic == null) return null;
 
                 this.activeNodeId = nodeId;
-                Object result = logic.compute(this, portName);
-
-                // 写缓存
-                if (portId != -1) {
-                    frameCache.put(cacheKey, result);
-                } else {
-                    dynamicFrameCache.put(dynamicCacheKey, result);
-                }
-                return result;
+                result = logic.compute(this, portName);
             } finally {
                 this.activeNodeId = prevActive;
                 recursionGuard.remove(nodeId);
             }
+
+            // ==========================================
+            // 3. 写缓存 (使用 CACHED_NULL 占位)
+            // ==========================================
+            Object cacheValue = (result == null) ? CACHED_NULL : result;
+            if (portId != -1) {
+                frameCache.put(cacheKey, cacheValue);
+            } else {
+                if (nodeDynamicCache == null) {
+                    nodeDynamicCache = new HashMap<>();
+                    dynamicFrameCache.put(nodeId, nodeDynamicCache);
+                }
+                nodeDynamicCache.put(portName, cacheValue);
+            }
+
+            return result;
         }
 
         // ==========================================
@@ -494,7 +515,9 @@ public class GraphProcess {
         @Override
         public void clearFrameCache() {
             frameCache.clear();
-            dynamicFrameCache.clear();
+            for (Map<String, Object> map : dynamicFrameCache.values()) {
+                map.clear();
+            }
         }
 
         @Override

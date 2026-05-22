@@ -8,8 +8,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.Reader;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * [运行时图索引 / 蓝图字节码载体] (Immutable Graph Index)
@@ -28,6 +26,8 @@ public class RuntimeGraphIndex {
     /** 运行时核心结构：表示数据流连接的源头信息 (基于 Int 寄存器/索引) */
     public record IntConnectionSource(int sourceNodeId, String sourcePortName) {}
 
+    private final Map<String, Integer> keyDictionary;
+    private final List<String> dictionaryReverse;
 
     // ====================================================
     // 2. 核心索引结构
@@ -38,21 +38,15 @@ public class RuntimeGraphIndex {
     private final Map<String, Integer> stringToId;
 
     // --- 节点数据核心数组 (数组下标即为 int nodeId) ---
-    private final JsonObject[] nodeDataArray;                             // 节点原始配置数据 (只读透传)
-    private final String[] typeArray;                                     // 节点类型标识 (如 "math_add")
-    private final Map<String, IntFlowTarget>[] flowOutputArray;           // 执行流拓扑：当前节点输出端口 -> 下一个节点 ID
-    private final Map<String, IntConnectionSource>[] inputArray;          // 数据流拓扑：当前节点输入端口 -> 上游数据提供者
-    private final Map<String, Object>[] propertyArray;                    // 节点静态属性 (Properties)
-    private final Map<String, Object>[] staticInputArray;                 // 节点静态默认输入 (Static Inputs)
+    private final JsonObject[] nodeDataArray;                               // 节点原始配置数据 (只读透传)
+    private final String[] typeArray;                                       // 节点类型标识 (如 "math_add")
+    private final IntFlowTarget[][] flowOutputArray;                        // [nodeId][portId] -> 目标节点
+    private final IntConnectionSource[][] inputArray;
+    private final Map<String, Object>[] propertyArray;                      // 节点静态属性 (Properties)
+    private final Map<String, Object>[] staticInputArray;                   // 节点静态默认输入 (Static Inputs)
 
     // --- 分类与查询辅助 ---
     private final Map<String, List<Integer>> typeLookup;                  // 按节点类型归类 (常用于查找事件起始节点)
-
-    // --- 全局并发字典 ---
-    // 用于将运行时的动态 String (如局部变量名、事件参数名) 映射为固定的寄存器槽位(int)
-    private final Map<String, Integer> keyDictionary = new ConcurrentHashMap<>();
-    private final List<String> dictionaryReverse = new CopyOnWriteArrayList<>();
-
 
     // ====================================================
     // 3. 构造与工厂方法 (Constructors & Factory)
@@ -62,11 +56,13 @@ public class RuntimeGraphIndex {
                               Map<String, Integer> stringToId,
                               JsonObject[] nodeDataArray,
                               String[] typeArray,
-                              Map<String, IntFlowTarget>[] flowOutputArray, // [修改这里]
-                              Map<String, IntConnectionSource>[] inputArray,
+                              IntFlowTarget[][] flowOutputArray,
+                              IntConnectionSource[][] inputArray,
                               Map<String, List<Integer>> typeLookup,
                               Map<String, Object>[] propertyArray,
-                              Map<String, Object>[] staticInputArray) {
+                              Map<String, Object>[] staticInputArray,
+                              Map<String, Integer> keyDictionary,
+                              List<String> dictionaryReverse) {
         this.idToString = idToString;
         this.stringToId = stringToId;
         this.nodeDataArray = nodeDataArray;
@@ -76,6 +72,8 @@ public class RuntimeGraphIndex {
         this.typeLookup = typeLookup;
         this.propertyArray = propertyArray;
         this.staticInputArray = staticInputArray;
+        this.keyDictionary = keyDictionary;
+        this.dictionaryReverse = dictionaryReverse;
     }
 
     /**
@@ -103,16 +101,22 @@ public class RuntimeGraphIndex {
             indexCounter++;
         }
 
+        Map<String, Integer> keyDict = new HashMap<>();
+        List<String> dictReverse = new ArrayList<>();
+        for (String key : flattener.allStaticKeys) {
+            if (!keyDict.containsKey(key)) {
+                keyDict.put(key, dictReverse.size());
+                dictReverse.add(key);
+            }
+        }
+        int maxPortId = dictReverse.size();
+
         JsonObject[] nodeDataArray = new JsonObject[size];
         String[] typeArray = new String[size];
-        Map<String, IntFlowTarget>[] flowOutputArray = new Map[size];
-        Map<String, IntConnectionSource>[] inputArray = new Map[size];
+        IntFlowTarget[][] flowOutputArray = new IntFlowTarget[size][maxPortId];
+        IntConnectionSource[][] inputArray = new IntConnectionSource[size][maxPortId];
         Map<String, Object>[] propertyArray = new Map[size];
         Map<String, Object>[] staticInputArray = new Map[size];
-
-        for (int i = 0; i < size; i++) {
-            inputArray[i] = new HashMap<>();
-        }
 
         for (int i = 0; i < size; i++) {
             String strId = idToString[i];
@@ -123,16 +127,13 @@ public class RuntimeGraphIndex {
 
             Map<String, GraphFlattener.TargetConnection> oldFlow = flattener.flowOutputLookup.get(strId);
             if (oldFlow != null) {
-                Map<String, IntFlowTarget> newFlow = new HashMap<>();
                 for (Map.Entry<String, GraphFlattener.TargetConnection> e : oldFlow.entrySet()) {
                     Integer targetInt = stringToId.get(e.getValue().targetNodeId());
-                    if (targetInt != null) {
-                        newFlow.put(e.getKey(), new IntFlowTarget(targetInt, e.getValue().targetPortName()));
+                    Integer portId = keyDict.get(e.getKey());
+                    if (targetInt != null && portId != null) {
+                        flowOutputArray[i][portId] = new IntFlowTarget(targetInt, e.getValue().targetPortName());
                     }
                 }
-                flowOutputArray[i] = newFlow;
-            } else {
-                flowOutputArray[i] = Collections.emptyMap();
             }
 
             propertyArray[i] = flattener.propertyLookup.getOrDefault(strId, Collections.emptyMap());
@@ -146,9 +147,10 @@ public class RuntimeGraphIndex {
 
             Integer targetInt = stringToId.get(targetId);
             Integer sourceInt = stringToId.get(entry.getValue().sourceNodeId());
+            Integer portId = keyDict.get(portName);
 
-            if (targetInt != null && sourceInt != null) {
-                inputArray[targetInt].put(portName, new IntConnectionSource(sourceInt, entry.getValue().sourcePortName()));
+            if (targetInt != null && sourceInt != null && portId != null) {
+                inputArray[targetInt][portId] = new IntConnectionSource(sourceInt, entry.getValue().sourcePortName());
             }
         }
 
@@ -162,16 +164,8 @@ public class RuntimeGraphIndex {
             typeToIntList.put(entry.getKey(), List.copyOf(intList));
         }
 
-        RuntimeGraphIndex finalIndex = new RuntimeGraphIndex(idToString, stringToId, nodeDataArray, typeArray, flowOutputArray, inputArray, typeToIntList, propertyArray, staticInputArray);
-
-        // ✨ 核心修复：在这里将收集到的所有静态字符串注册进不可变字典中
-        for (String key : flattener.allStaticKeys) {
-            finalIndex.registerKey(key);
-        }
-
-        return finalIndex;
+        return new RuntimeGraphIndex(idToString, stringToId, nodeDataArray, typeArray, flowOutputArray, inputArray, typeToIntList, propertyArray, staticInputArray, keyDict, dictReverse);
     }
-
 
     // ====================================================
     // 4. 字典与映射 API (Dictionaries & Mappings)
@@ -272,7 +266,9 @@ public class RuntimeGraphIndex {
     @Nullable
     public IntFlowTarget findFlowTarget(int currentNodeId, String outputPortName) {
         if (currentNodeId < 0 || currentNodeId >= flowOutputArray.length) return null;
-        return flowOutputArray[currentNodeId].get(outputPortName);
+        int portId = getKeyId(outputPortName);
+        if (portId < 0 || portId >= flowOutputArray[currentNodeId].length) return null;
+        return flowOutputArray[currentNodeId][portId];
     }
 
     /**
@@ -282,7 +278,9 @@ public class RuntimeGraphIndex {
     @Nullable
     public IntConnectionSource findInputSource(int targetNodeId, String inputPortName) {
         if (targetNodeId < 0 || targetNodeId >= inputArray.length) return null;
-        return inputArray[targetNodeId].get(inputPortName);
+        int portId = getKeyId(inputPortName);
+        if (portId < 0 || portId >= inputArray[targetNodeId].length) return null;
+        return inputArray[targetNodeId][portId];
     }
 
     /**

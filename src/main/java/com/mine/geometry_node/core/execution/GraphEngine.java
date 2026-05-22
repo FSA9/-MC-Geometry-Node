@@ -23,11 +23,10 @@ public class GraphEngine {
     // ==========================================
     // 高性能事件订阅字典 (保持现状)
     // ==========================================
-    private static final Map<String, Set<Entity>> eventSubscribers = new ConcurrentHashMap<>();
+    private static final Map<String, Set<Entity>> eventSubscribers = new HashMap<>();
 
     private static void addSubscriber(String frequency, Entity entity) {
-        eventSubscribers.computeIfAbsent(frequency, k -> Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>())))
-                .add(entity);
+        eventSubscribers.computeIfAbsent(frequency, k -> Collections.newSetFromMap(new WeakHashMap<>())).add(entity);
     }
 
     private static void removeSubscriber(String frequency, Entity entity) {
@@ -97,10 +96,7 @@ public class GraphEngine {
         // 实体作用域
         Set<Entity> entities = eventSubscribers.get(frequency);
         if (entities != null) {
-            Entity[] snapshot;
-            synchronized (entities) {
-                snapshot = entities.toArray(new Entity[0]);
-            }
+            Entity[] snapshot = entities.toArray(new Entity[0]);
             for (Entity target : snapshot) {
                 if (target.isRemoved()) continue;
                 if (target.level() instanceof ServerLevel targetLevel) {
