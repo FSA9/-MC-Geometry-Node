@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.execution.attachment;
 
 import com.mine.geometry_node.core.execution.GraphEngine;
 import com.mine.geometry_node.core.execution.GraphProcess;
+import com.mine.geometry_node.core.execution.GraphProcessSerializer;
 import com.mine.geometry_node.core.execution.RuntimeGraphIndex;
 import com.mine.geometry_node.core.execution.variables.VariableRegistry;
 import net.minecraft.core.HolderLookup;
@@ -111,50 +112,21 @@ public class GraphContainer {
      * [序列化] 将进程和属性保存到 NBT
      */
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
-        if (!processes.isEmpty()) {
-            ListTag processList = new ListTag();
-            for (GraphProcess process : processes.values()) {
-                CompoundTag processTag = new CompoundTag();
-                process.save(processTag, provider);
-                processList.add(processTag);
-            }
-            tag.put("ActiveProcesses", processList);
-        }
-        if (!attributes.isEmpty()) {
-            CompoundTag attrTag = new CompoundTag();
-            for (Map.Entry<String, Object> entry : attributes.entrySet()) {
-                Tag t = VariableRegistry.toTag(entry.getValue(), provider);
-                if (t != null) attrTag.put(entry.getKey(), t);
-            }
-            tag.put("Attributes", attrTag);
-        }
-        return tag;
+        return GraphProcessSerializer.saveContainer(this, tag, provider);
     }
 
     /**
      * [反序列化] 从 NBT 恢复进程和属性
      */
     public void load(CompoundTag tag, HolderLookup.Provider provider) {
-        this.processes.clear();
-        if (tag.contains("ActiveProcesses", Tag.TAG_LIST)) {
-            ListTag list = tag.getList("ActiveProcesses", Tag.TAG_COMPOUND);
-            for (int i = 0; i < list.size(); i++) {
-                CompoundTag pTag = list.getCompound(i);
-                String graphId = pTag.getString("GraphId");
-                RuntimeGraphIndex index = GraphEngine.getGraphIndex(graphId);
-                if (index != null) {
-                    this.processes.put(graphId, new GraphProcess(pTag, index, provider));
-                }
-            }
-        }
+        GraphProcessSerializer.loadContainer(this, tag, provider);
+    }
 
-        this.attributes.clear();
-        if (tag.contains("Attributes", Tag.TAG_COMPOUND)) {
-            CompoundTag attrTag = tag.getCompound("Attributes");
-            for (String key : attrTag.getAllKeys()) {
-                Object obj = VariableRegistry.fromTag(attrTag.get(key), provider);
-                if (obj != null) this.attributes.put(key, obj);
-            }
-        }
+    public Map<String, GraphProcess> getProcessesMap() {
+        return this.processes;
+    }
+
+    public Map<String, Object> getAttributesMap() {
+        return this.attributes;
     }
 }

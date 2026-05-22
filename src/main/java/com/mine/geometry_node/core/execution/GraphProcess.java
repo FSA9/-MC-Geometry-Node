@@ -46,43 +46,33 @@ public class GraphProcess {
     private ServerLevel level;
     private Entity entity;
 
-    private static class VariableScope {
+    static class VariableScope {
         final Object[] statics;
-        Map<String, Object> dynamics = null; // 懒加载，没用到就不分配内存
+        Map<String, Object> dynamics = null; // 懒加载
 
         VariableScope(int staticSize) {
             this.statics = new Object[staticSize];
         }
     }
 
-    private final Deque<VariableScope> variableStack = new ArrayDeque<>(8);
+    final Deque<VariableScope> variableStack = new ArrayDeque<>(8);
 
     // --- 执行流管理 ---
-    private final PriorityQueue<ExecutionThread> sleepingThreads = new PriorityQueue<>(Comparator.comparingLong(t -> t.wakeUpTick));  // 挂起的协程线程
-    private boolean needsTimeRebase = false;  // 读档标记
+    final PriorityQueue<ExecutionThread> sleepingThreads = new PriorityQueue<>(Comparator.comparingLong(t -> t.wakeUpTick));  // 挂起的协程线程
+    boolean needsTimeRebase = false;  // 读档标记
 
-//    private final java.util.concurrent.ConcurrentLinkedQueue<ExecutionThread> THREAD_POOL = new java.util.concurrent.ConcurrentLinkedQueue<>();
-    private final java.util.ArrayDeque<ExecutionThread> THREAD_POOL = new java.util.ArrayDeque<>();
+    private final ArrayDeque<ExecutionThread> THREAD_POOL = new ArrayDeque<>();
 
-
-    /**
-     * 从池中借用一个线程，如果没有多余的才去 new (按需扩容)
-     */
     private ExecutionThread borrowThread(int startNodeId, String startPortName) {
         ExecutionThread thread = THREAD_POOL.poll();
         if (thread == null) {
-            // 池子空了，只有这种极端情况才分配新内存
             thread = this.new ExecutionThread(startNodeId, startPortName);
         } else {
-            // 重置脏数据 (洗盘子)
             thread.reset(startNodeId, startPortName);
         }
         return thread;
     }
 
-    /**
-     * 将用完的线程洗干净还回池子
-     */
     private void recycleThread(ExecutionThread thread) {
         THREAD_POOL.offer(thread);
     }
@@ -107,7 +97,7 @@ public class GraphProcess {
     public RuntimeGraphIndex getIndex() { return index; }
 
     // ================================
-    // 3. 执行调度入口 (核心优化点)
+    // 3. 执行调度入口
     // ================================
 
     /**
@@ -175,16 +165,16 @@ public class GraphProcess {
         public enum State { RUNNING, WAITING, FINISHED, ERROR }
 
         public State state = State.RUNNING;
-        private int currentFlowId;
-        private String currentEntryPort;
+        int currentFlowId;
+        String currentEntryPort;
         private int activeNodeId = -1;
         public long wakeUpTick = -1; // 仅在 WAITING 状态有效
         private int runDepth = 0;
 
         // --- 线程私有寄存器 (Zero-Allocation 核心) ---
-        private final List<RuntimeGraphIndex.IntFlowTarget> executionStack = new ArrayList<>();
-        private Object[] eventRegisters = new Object[GraphProcess.this.index.getRegisterCount() + 8];
-        private Map<String, Object> dynamicEventData = null;
+        final List<RuntimeGraphIndex.IntFlowTarget> executionStack = new ArrayList<>();
+        Object[] eventRegisters = new Object[GraphProcess.this.index.getRegisterCount() + 8];
+        Map<String, Object> dynamicEventData = null;
         private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>();
         private final Int2ObjectOpenHashMap<Map<String, Object>> dynamicFrameCache = new Int2ObjectOpenHashMap<>();
         private static final Object CACHED_NULL = new Object();
@@ -668,178 +658,13 @@ public class GraphProcess {
     // 5. 辅助与持久化 (NBT)
     // ================================
 
+    ServerLevel getLevel() { return this.level; }
+
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
-        tag.putString("GraphId", graphId);
-
-        // 1. 保存变量栈
-        ListTag stackTag = new ListTag();
-        Iterator<VariableScope> it = variableStack.descendingIterator();
-        while (it.hasNext()) {
-            CompoundTag scopeTag = new CompoundTag();
-            VariableScope scope = it.next();
-            // 存静态
-            for (int i = 0; i < scope.statics.length; i++) {
-                if (scope.statics[i] != null) {
-                    String key = index.getKeyFromId(i);
-                    Tag s = VariableRegistry.toTag(scope.statics[i], provider);
-                    if (s != null && key != null) scopeTag.put(key, s);
-                }
-            }
-            // 存动态
-            if (scope.dynamics != null) {
-                for (Map.Entry<String, Object> entry : scope.dynamics.entrySet()) {
-                    Tag s = VariableRegistry.toTag(entry.getValue(), provider);
-                    if (s != null) scopeTag.put(entry.getKey(), s);
-                }
-            }
-            stackTag.add(scopeTag);
-        }
-        tag.put("VariableStack", stackTag);
-
-        // 2. 保存休眠线程
-        if (!sleepingThreads.isEmpty()) {
-            ListTag threadsTag = new ListTag();
-            for (ExecutionThread thread : sleepingThreads) {
-                CompoundTag tTag = new CompoundTag();
-                long remaining = (level != null) ? Math.max(0, thread.wakeUpTick - level.getGameTime()) : thread.wakeUpTick;
-                tTag.putLong("WaitRemaining", remaining);
-
-                tTag.putInt("CurrentFlowId", thread.currentFlowId);
-                if (thread.currentEntryPort != null) {
-                    tTag.putString("CurrentEntryPort", thread.currentEntryPort);
-                }
-
-                ListTag execStackTag = new ListTag();
-                for (RuntimeGraphIndex.IntFlowTarget frame : thread.executionStack) {
-                    CompoundTag frameTag = new CompoundTag();
-                    frameTag.putString("TargetNodeId", index.getIdToString(frame.targetNodeId()));
-                    frameTag.putString("TargetPortName", frame.targetPortName());
-                    execStackTag.add(frameTag);
-                }
-                tTag.put("ExecutionStack", execStackTag);
-
-                // 存线程寄存器 (静态 + 动态)
-                CompoundTag regTag = new CompoundTag();
-                for (int i = 0; i < thread.eventRegisters.length; i++) {
-                    if (thread.eventRegisters[i] != null) {
-                        String key = index.getKeyFromId(i);
-                        Tag s = VariableRegistry.toTag(thread.eventRegisters[i], provider);
-                        if (s != null && key != null) regTag.put(key, s);
-                    }
-                }
-                if (thread.dynamicEventData != null) {
-                    for (Map.Entry<String, Object> entry : thread.dynamicEventData.entrySet()) {
-                        Tag s = VariableRegistry.toTag(entry.getValue(), provider);
-                        if (s != null) regTag.put(entry.getKey(), s);
-                    }
-                }
-                tTag.put("Registers", regTag);
-
-                // 存临时黑板
-                CompoundTag tempTag = new CompoundTag();
-                for (Map.Entry<String, Object> entry : thread.tempData.entrySet()) {
-                    Tag s = VariableRegistry.toTag(entry.getValue(), provider);
-                    if (s != null) tempTag.put(entry.getKey(), s);
-                }
-                if (!tempTag.isEmpty()) tTag.put("TempData", tempTag);
-
-                threadsTag.add(tTag);
-            }
-            tag.put("SleepingThreads", threadsTag);
-        }
-        return tag;
+        return GraphProcessSerializer.save(this, tag, provider);
     }
 
-    private void saveVariablesToTag(CompoundTag tag, Object[] scope, HolderLookup.Provider provider) {
-        for (int i = 0; i < scope.length; i++) {
-            if (scope[i] != null) {
-                String key = index.getKeyFromId(i);
-                Tag s = VariableRegistry.toTag(scope[i], provider);
-                if (s != null && key != null) tag.put(key, s);
-            }
-        }
-    }
-
-    public GraphProcess(CompoundTag tag, RuntimeGraphIndex index, HolderLookup.Provider provider) {
-        this.index = index;
-        this.graphId = tag.getString("GraphId");
-        int exactSize = index.getRegisterCount() + 8;
-
-        // 1. 恢复变量栈
-        this.variableStack.clear();
-        if (tag.contains("VariableStack", Tag.TAG_LIST)) {
-            ListTag list = tag.getList("VariableStack", Tag.TAG_COMPOUND);
-            for (int i = 0; i < list.size(); i++) {
-                VariableScope scope = new VariableScope(exactSize);
-                loadVariablesFromTag(list.getCompound(i), scope, provider);
-                this.variableStack.addLast(scope);
-            }
-        } else {
-            this.variableStack.push(new VariableScope(exactSize));
-        }
-
-        // 2. 恢复线程
-        if (tag.contains("SleepingThreads", Tag.TAG_LIST)) {
-            ListTag list = tag.getList("SleepingThreads", Tag.TAG_COMPOUND);
-            for (int i = 0; i < list.size(); i++) {
-                CompoundTag tTag = list.getCompound(i);
-                int currentFlowId = tTag.contains("CurrentFlowId") ? tTag.getInt("CurrentFlowId") : -1;
-                String currentPort = tTag.getString("CurrentEntryPort");
-                if (currentPort == null || currentPort.isEmpty()) currentPort = "flow_in";
-
-                ExecutionThread thread = new ExecutionThread(currentFlowId, currentPort);
-
-                // 完整还原执行栈
-                if (tTag.contains("ExecutionStack", Tag.TAG_LIST)) {
-                    ListTag stackList = tTag.getList("ExecutionStack", Tag.TAG_COMPOUND);
-                    for (int j = 0; j < stackList.size(); j++) {
-                        CompoundTag frameTag = stackList.getCompound(j);
-                        int targetId = index.getStringToId(frameTag.getString("TargetNodeId"));
-                        String portName = frameTag.getString("TargetPortName");
-                        if (targetId != -1) {
-                            thread.executionStack.add(new RuntimeGraphIndex.IntFlowTarget(targetId, portName));
-                        }
-                    }
-                }
-
-                // 只要当前有执行节点或栈内有残留上下文，就恢复线程
-                if (currentFlowId != -1 || !thread.executionStack.isEmpty()) {
-                    thread.wakeUpTick = tTag.getLong("WaitRemaining");
-                    thread.state = ExecutionThread.State.WAITING;
-
-                    // 借用 VariableScope 来复用反序列化逻辑
-                    VariableScope tempScope = new VariableScope(exactSize);
-                    loadVariablesFromTag(tTag.getCompound("Registers"), tempScope, provider);
-                    thread.eventRegisters = tempScope.statics;
-                    thread.dynamicEventData = tempScope.dynamics;
-
-                    this.sleepingThreads.add(thread);
-
-                    if (tTag.contains("TempData", Tag.TAG_COMPOUND)) {
-                        CompoundTag tempTag = tTag.getCompound("TempData");
-                        for (String key : tempTag.getAllKeys()) {
-                            Object obj = VariableRegistry.fromTag(tempTag.get(key), provider);
-                            if (obj != null) thread.tempData.put(key, obj);
-                        }
-                    }
-                }
-            }
-            this.needsTimeRebase = true;
-        }
-    }
-
-    private void loadVariablesFromTag(CompoundTag tag, VariableScope scope, HolderLookup.Provider provider) {
-        for (String key : tag.getAllKeys()) {
-            Object obj = VariableRegistry.fromTag(tag.get(key), provider);
-            if (obj != null) {
-                int id = index.getKeyId(key);
-                if (id != -1 && id < scope.statics.length) {
-                    scope.statics[id] = obj;
-                } else {
-                    if (scope.dynamics == null) scope.dynamics = new HashMap<>();
-                    scope.dynamics.put(key, obj);
-                }
-            }
-        }
+    public static GraphProcess load(CompoundTag tag, RuntimeGraphIndex index, HolderLookup.Provider provider) {
+        return GraphProcessSerializer.load(tag, index, provider);
     }
 }
