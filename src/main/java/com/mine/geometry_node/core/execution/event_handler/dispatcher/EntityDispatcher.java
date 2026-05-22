@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.execution.event_handler;
+package com.mine.geometry_node.core.execution.event_handler.dispatcher;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.execution.GraphEngine;
