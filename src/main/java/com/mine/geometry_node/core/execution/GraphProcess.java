@@ -57,8 +57,8 @@ public class GraphProcess {
     private final Deque<VariableScope> variableStack = new ArrayDeque<>(8);
 
     // --- 执行流管理 ---
-    private final List<ExecutionThread> sleepingThreads = new ArrayList<>();  // 挂起的协程线程
-    private boolean needsTimeRebase = false;                                  // 读档标记
+    private final PriorityQueue<ExecutionThread> sleepingThreads = new PriorityQueue<>(Comparator.comparingLong(t -> t.wakeUpTick));  // 挂起的协程线程
+    private boolean needsTimeRebase = false;  // 读档标记
 
 //    private final java.util.concurrent.ConcurrentLinkedQueue<ExecutionThread> THREAD_POOL = new java.util.concurrent.ConcurrentLinkedQueue<>();
     private final java.util.ArrayDeque<ExecutionThread> THREAD_POOL = new java.util.ArrayDeque<>();
@@ -135,30 +135,28 @@ public class GraphProcess {
 
         // 1. 读档后的相对时间修正
         if (this.needsTimeRebase) {
-            for (ExecutionThread thread : sleepingThreads) {
+            List<ExecutionThread> temp = new ArrayList<>(sleepingThreads);
+            sleepingThreads.clear();
+            for (ExecutionThread thread : temp) {
                 thread.wakeUpTick = currentWorldTick + thread.wakeUpTick;
+                sleepingThreads.add(thread); // 重新入堆排序
             }
             this.needsTimeRebase = false;
         }
 
-        // 2. 唤醒到期的线程 [核心修复：防止 ConcurrentModificationException]
+        // 2. 唤醒到期线程
         List<ExecutionThread> awakeThreads = null;
-        Iterator<ExecutionThread> it = sleepingThreads.iterator();
-        while (it.hasNext()) {
-            ExecutionThread thread = it.next();
-            if (currentWorldTick >= thread.wakeUpTick) {
-                it.remove(); // 安全移除
-                if (awakeThreads == null) awakeThreads = new ArrayList<>();
-                awakeThreads.add(thread);
-            }
+        while (!sleepingThreads.isEmpty() && sleepingThreads.peek().wakeUpTick <= currentWorldTick) {
+            ExecutionThread thread = sleepingThreads.poll();
+            if (awakeThreads == null) awakeThreads = new ArrayList<>();
+            awakeThreads.add(thread);
         }
 
-        // 3. 在迭代器外部统一执行
-        // 这样即使 thread.run() 内部调用 scheduleNode 再次向 sleepingThreads 添加新元素，也绝对安全
+        // 3. 执行唤醒线程
         if (awakeThreads != null) {
             for (ExecutionThread thread : awakeThreads) {
                 thread.state = ExecutionThread.State.RUNNING;
-                thread.run(); // 继续跑剩下的逻辑
+                thread.run();
             }
         }
     }
@@ -189,7 +187,7 @@ public class GraphProcess {
         private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>();
         private final Int2ObjectOpenHashMap<Map<String, Object>> dynamicFrameCache = new Int2ObjectOpenHashMap<>();
         private static final Object CACHED_NULL = new Object();
-        private final IntOpenHashSet recursionGuard = new IntOpenHashSet();
+        private final boolean[] recursionGuard = new boolean[GraphProcess.this.index.getNodeCount()];
         // ✨ 新增：线程私有的临时黑板
         public final Map<String, Object> tempData = new HashMap<>();
 
@@ -216,7 +214,7 @@ public class GraphProcess {
             this.executionStack.clear();
             this.frameCache.clear();
             this.dynamicFrameCache.clear();
-            this.recursionGuard.clear();
+            Arrays.fill(this.recursionGuard, false);
             this.tempData.clear();
             Arrays.fill(this.eventRegisters, null);
             if (this.dynamicEventData != null) this.dynamicEventData.clear();
@@ -233,13 +231,13 @@ public class GraphProcess {
             // 只有最外层启动时，才清理初始缓存，防止误清内层递归数据
             if (runDepth == 1) {
                 frameCache.clear();
-                recursionGuard.clear();
+                Arrays.fill(this.recursionGuard, false);
             }
 
             try {
                 while ((currentFlowId != -1 || !executionStack.isEmpty()) && state == State.RUNNING) {
                     if (currentFlowId == -1) {
-                        RuntimeGraphIndex.IntFlowTarget frame = executionStack.remove(0);
+                        RuntimeGraphIndex.IntFlowTarget frame = executionStack.remove(executionStack.size() - 1);
                         currentFlowId = frame.targetNodeId();
                         currentEntryPort = frame.targetPortName();
                     }
@@ -301,12 +299,13 @@ public class GraphProcess {
                     List<String> ports = call.outputPorts();
                     for (int i = ports.size() - 1; i >= 0; i--) {
                         RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(currentFlowId, ports.get(i));
-                        if (target != null) this.executionStack.add(0, target);
+                        if (target != null) this.executionStack.add(target);
                     }
                     if (executionStack.isEmpty()) {
                         this.currentFlowId = -1;
                     } else {
-                        RuntimeGraphIndex.IntFlowTarget frame = executionStack.remove(0);
+                        // 从尾部弹出
+                        RuntimeGraphIndex.IntFlowTarget frame = executionStack.remove(executionStack.size() - 1);
                         this.currentFlowId = frame.targetNodeId();
                         this.currentEntryPort = frame.targetPortName();
                     }
@@ -314,7 +313,7 @@ public class GraphProcess {
                 case ExecutionResult.Wait wait -> {
                     this.wakeUpTick = level.getGameTime() + wait.ticks();
                     RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(currentFlowId, wait.nextPortName());
-                    if (target != null) this.executionStack.add(0, target);
+                    if (target != null) this.executionStack.add(target);
 
                     this.currentFlowId = -1;
                     this.state = State.WAITING;
@@ -330,7 +329,7 @@ public class GraphProcess {
         }
 
         private Object executeDataNode(int nodeId, String portName) {
-            if (recursionGuard.contains(nodeId)) return null;
+            if (recursionGuard[nodeId]) return null;
 
             int portId = index.getKeyId(portName);
             long cacheKey = 0;
@@ -355,7 +354,7 @@ public class GraphProcess {
             // ==========================================
             // 2. 执行计算
             // ==========================================
-            recursionGuard.add(nodeId);
+            recursionGuard[nodeId] = true;
             int prevActive = this.activeNodeId;
             Object result;
 
@@ -367,7 +366,7 @@ public class GraphProcess {
                 result = logic.compute(this, portName);
             } finally {
                 this.activeNodeId = prevActive;
-                recursionGuard.remove(nodeId);
+                recursionGuard[nodeId] = false;
             }
 
             // ==========================================
@@ -628,16 +627,19 @@ public class GraphProcess {
                 long remaining = (level != null) ? Math.max(0, thread.wakeUpTick - level.getGameTime()) : thread.wakeUpTick;
                 tTag.putLong("WaitRemaining", remaining);
 
-                RuntimeGraphIndex.IntFlowTarget resumeTarget = thread.currentFlowId != -1
-                        ? new RuntimeGraphIndex.IntFlowTarget(thread.currentFlowId, thread.currentEntryPort)
-                        : (!thread.executionStack.isEmpty() ? thread.executionStack.get(0) : null);
-
-                if (resumeTarget != null) {
-                    tTag.putString("ResumeNodeId", index.getIdToString(resumeTarget.targetNodeId()));
-                    tTag.putString("ResumePortName", resumeTarget.targetPortName());
-                } else {
-                    tTag.putString("ResumeNodeId", "unknown");
+                tTag.putInt("CurrentFlowId", thread.currentFlowId);
+                if (thread.currentEntryPort != null) {
+                    tTag.putString("CurrentEntryPort", thread.currentEntryPort);
                 }
+
+                ListTag execStackTag = new ListTag();
+                for (RuntimeGraphIndex.IntFlowTarget frame : thread.executionStack) {
+                    CompoundTag frameTag = new CompoundTag();
+                    frameTag.putString("TargetNodeId", index.getIdToString(frame.targetNodeId()));
+                    frameTag.putString("TargetPortName", frame.targetPortName());
+                    execStackTag.add(frameTag);
+                }
+                tTag.put("ExecutionStack", execStackTag);
 
                 // 存线程寄存器 (静态 + 动态)
                 CompoundTag regTag = new CompoundTag();
@@ -655,7 +657,6 @@ public class GraphProcess {
                     }
                 }
                 tTag.put("Registers", regTag);
-                threadsTag.add(tTag);
 
                 // 存临时黑板
                 CompoundTag tempTag = new CompoundTag();
@@ -664,6 +665,8 @@ public class GraphProcess {
                     if (s != null) tempTag.put(entry.getKey(), s);
                 }
                 if (!tempTag.isEmpty()) tTag.put("TempData", tempTag);
+
+                threadsTag.add(tTag);
             }
             tag.put("SleepingThreads", threadsTag);
         }
@@ -704,12 +707,27 @@ public class GraphProcess {
             ListTag list = tag.getList("SleepingThreads", Tag.TAG_COMPOUND);
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag tTag = list.getCompound(i);
-                int resumeId = index.getStringToId(tTag.getString("ResumeNodeId"));
-                String resumePort = tTag.getString("ResumePortName");
-                if (resumePort == null || resumePort.isEmpty()) resumePort = "flow_in";
+                int currentFlowId = tTag.contains("CurrentFlowId") ? tTag.getInt("CurrentFlowId") : -1;
+                String currentPort = tTag.getString("CurrentEntryPort");
+                if (currentPort == null || currentPort.isEmpty()) currentPort = "flow_in";
 
-                if (resumeId != -1) {
-                    ExecutionThread thread = new ExecutionThread(resumeId, resumePort);
+                ExecutionThread thread = new ExecutionThread(currentFlowId, currentPort);
+
+                // 完整还原执行栈
+                if (tTag.contains("ExecutionStack", Tag.TAG_LIST)) {
+                    ListTag stackList = tTag.getList("ExecutionStack", Tag.TAG_COMPOUND);
+                    for (int j = 0; j < stackList.size(); j++) {
+                        CompoundTag frameTag = stackList.getCompound(j);
+                        int targetId = index.getStringToId(frameTag.getString("TargetNodeId"));
+                        String portName = frameTag.getString("TargetPortName");
+                        if (targetId != -1) {
+                            thread.executionStack.add(new RuntimeGraphIndex.IntFlowTarget(targetId, portName));
+                        }
+                    }
+                }
+
+                // 只要当前有执行节点或栈内有残留上下文，就恢复线程
+                if (currentFlowId != -1 || !thread.executionStack.isEmpty()) {
                     thread.wakeUpTick = tTag.getLong("WaitRemaining");
                     thread.state = ExecutionThread.State.WAITING;
 
