@@ -18,6 +18,7 @@ import net.minecraft.nbt.*;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -532,7 +533,7 @@ public class GraphProcess {
             this.currentFlowId = target.targetNodeId();
             this.currentEntryPort = target.targetPortName();
             this.executionStack.clear();
-            this.run(); // 递归执行跑完子树
+            this.run(); // 递归执行子树
 
             this.currentFlowId = savedId;
             this.currentEntryPort = savedPort;
@@ -571,15 +572,95 @@ public class GraphProcess {
         }
 
         @Override
-        public void broadcastVisual(String type, int srcId, Vec3 start, int tgtId, Vec3 end, int color, float size, int ticks) {
-            if (level == null) return;
-            // 网络广播逻辑 (略，保持原有逻辑)
+        public void broadcastVisual(String effectType, int sourceEntityId, Vec3 startPos,
+                                    int targetEntityId, Vec3 endPos,
+                                    int color, float size, int durationTicks) {
+
+            if (GraphProcess.this.level == null) return;
+
+            int radius = 128;
+
+            net.minecraft.nbt.CompoundTag extraData = new net.minecraft.nbt.CompoundTag();
+            extraData.putInt("sourceId", sourceEntityId);
+            if (startPos != null) {
+                extraData.putDouble("startX", startPos.x);
+                extraData.putDouble("startY", startPos.y);
+                extraData.putDouble("startZ", startPos.z);
+            }
+            extraData.putInt("targetId", targetEntityId);
+            if (endPos != null) {
+                extraData.putDouble("endX", endPos.x);
+                extraData.putDouble("endY", endPos.y);
+                extraData.putDouble("endZ", endPos.z);
+            }
+            extraData.putFloat("size", size);
+
+            PacketSpawnDynamicVisual payload = new PacketSpawnDynamicVisual(
+            effectType, color, durationTicks,
+                    java.util.Collections.emptyMap(),
+                    java.util.Collections.emptyMap(),
+                    extraData
+            );
+
+            Vec3 center = startPos != null ? startPos : Vec3.ZERO;
+            List<ServerPlayer> nearbyPlayers =
+                    GraphProcess.this.level.getPlayers(
+                            player -> player.position().distanceToSqr(center) < radius * radius
+                    );
+
+            if (!nearbyPlayers.isEmpty()) {
+                com.mine.geometry_node.core.network.NetworkHandler.sendToPlayers(nearbyPlayers, payload);
+            }
         }
 
         @Override
-        public void broadcastDynamicVisual(String type, int color, int ticks, Map<String, String> exprs, Map<String, String> binds, CompoundTag extra) {
-            if (level == null) return;
-            // 网络广播逻辑 (略，保持原有逻辑)
+        public void broadcastDynamicVisual(String effectType, int color, int durationTicks,
+                                           Map<String, String> expressions,
+                                           Map<String, String> bindings,
+                                           net.minecraft.nbt.CompoundTag extraData) {
+
+            if (GraphProcess.this.level == null) return;
+
+            PacketSpawnDynamicVisual packet = new PacketSpawnDynamicVisual(
+                    effectType, color, durationTicks, expressions, bindings, extraData
+            );
+
+            Vec3 center = null;
+
+            if (extraData != null && extraData.contains("sourceId")) {
+                int sourceId = extraData.getInt("sourceId");
+                if (sourceId != -1) {
+                    Entity sourceEntity = GraphProcess.this.level.getEntity(sourceId);
+                    if (sourceEntity != null) {
+                        center = sourceEntity.position();
+                    }
+                }
+            }
+
+            if (center == null && extraData != null && extraData.contains("startX")) {
+                center = new Vec3(extraData.getDouble("startX"),
+                                  extraData.getDouble("startY"),
+                                  extraData.getDouble("startZ"));
+            }
+
+            if (center == null) {
+                center = Vec3.ZERO;
+            }
+
+            int radius = 128;
+            double radiusSqr = (double) radius * radius;
+
+            List<ServerPlayer> targetPlayers = new java.util.ArrayList<>();
+
+            for (ServerPlayer player : GraphProcess.this.level.players()) {
+                if (player.position().distanceToSqr(center) < radiusSqr) {
+                    targetPlayers.add(player);
+                }
+            }
+
+            if (!targetPlayers.isEmpty()) {
+                NetworkHandler.sendToPlayers(targetPlayers, packet);
+            }
         }
     }
 
@@ -587,10 +668,6 @@ public class GraphProcess {
     // 5. 辅助与持久化 (NBT)
     // ================================
 
-    /**
-     * [存档]
-     * 只需要保存变量栈和那些正在休眠的 ExecutionThread。
-     */
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
         tag.putString("GraphId", graphId);
 
@@ -683,7 +760,6 @@ public class GraphProcess {
         }
     }
 
-    // 读档构造函数 (配套重写)
     public GraphProcess(CompoundTag tag, RuntimeGraphIndex index, HolderLookup.Provider provider) {
         this.index = index;
         this.graphId = tag.getString("GraphId");
