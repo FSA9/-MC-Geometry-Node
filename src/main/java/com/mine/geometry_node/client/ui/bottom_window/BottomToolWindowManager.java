@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.bottom_window;
 
+import com.mine.geometry_node.client.ui.bottom_window.console.TerminalConsolePanel;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -78,7 +79,7 @@ public class BottomToolWindowManager extends LinearLayout {
             case ASSET_BROWSER:
                 return new AssetBrowserPanel(context);
             case TERMINAL:
-                return createPlaceholderWindow(context, "终端控制台 (Terminal)");
+                return new TerminalConsolePanel(context);
             case PERFORMANCE:
                 return createPlaceholderWindow(context, "性能监视器 (Performance Panel)");
             default:
