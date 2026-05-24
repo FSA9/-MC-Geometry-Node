@@ -159,7 +159,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
 
             updateSuggestions(newText);
         }
-        return true; // 拦截默认的焦点切换行为
+        return true;
     }
 
     private boolean handleEnterKey() {
