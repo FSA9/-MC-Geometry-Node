@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes.events.entity;
+package com.mine.geometry_node.core.node.nodes.events.display_entity;
 
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
