@@ -1,4 +1,3 @@
-// --- START OF FILE SelectHintRenderer.java ---
 package com.mine.geometry_node.client.ui.viewport.UIHints;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
@@ -6,7 +5,7 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext; // 引入接口
+import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -73,7 +72,6 @@ public class SelectHintRenderer implements UIHintRenderer {
         dropdownBtn.setOnClickListener(v -> {
             icyllis.modernui.view.ViewParent parent = v.getParent();
 
-            // 【架构优化】：向上寻找 InteractionContext 接口，而不是特定的 Viewport 类
             while (parent != null && !(parent instanceof InteractionContext)) {
                 parent = parent.getParent();
             }
@@ -141,7 +139,6 @@ public class SelectHintRenderer implements UIHintRenderer {
 
         private View mAnchor;
 
-        // 【架构优化】：依赖抽象接口
         private InteractionContext mContext;
         private boolean mIsTracking = false;
 
@@ -245,7 +242,6 @@ public class SelectHintRenderer implements UIHintRenderer {
             renderList();
         }
 
-        // 【架构优化】：接收 InteractionContext
         public void showAt(View anchor, InteractionContext context) {
             this.mAnchor = anchor;
             this.mContext = context;
@@ -254,7 +250,6 @@ public class SelectHintRenderer implements UIHintRenderer {
 
             if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
 
-            // Context 本质是画布 ViewGroup，直接强转添加 View
             ((ViewGroup) context).addView(this);
 
             mSearchBox.post(() -> { mSearchBox.setText(""); mSearchBox.requestFocus(); });
@@ -280,7 +275,6 @@ public class SelectHintRenderer implements UIHintRenderer {
         private void updatePosition() {
             if (mAnchor == null || mContext == null) return;
 
-            // 【架构优化】：向 Camera 要缩放比例
             float newScale = mContext.getCamera().getScale();
             this.mCurrentScale = newScale;
 
@@ -365,4 +359,3 @@ public class SelectHintRenderer implements UIHintRenderer {
         }
     }
 }
-// --- END OF FILE SelectHintRenderer.java ---

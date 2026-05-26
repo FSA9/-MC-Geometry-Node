@@ -1,4 +1,3 @@
-// --- START OF FILE ViewportCamera.java ---
 package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UIConstants;
@@ -100,4 +99,3 @@ public class ViewportCamera {
         }
     }
 }
-// --- END OF FILE ViewportCamera.java ---

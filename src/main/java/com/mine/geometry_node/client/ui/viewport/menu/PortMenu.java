@@ -85,7 +85,6 @@ public class PortMenu {
         confirmBtn.setOnClickListener(v -> {
             String newName = input.getText().toString().trim();
             if (!newName.equals(oldName)) {
-                // 架构优化：直接抛出意图，断开对 CmdRenamePort 的直接依赖
                 context.requestRenamePort(node.getNodeData().id, finalCategory, portId, oldName, newName);
             }
             ((ViewGroup) popupOverlay.getParent()).removeView(popupOverlay);

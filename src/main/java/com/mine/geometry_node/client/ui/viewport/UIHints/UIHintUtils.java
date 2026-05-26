@@ -32,7 +32,6 @@ public class UIHintUtils {
 
         et.setBackground(bgDrawable);
 
-        // 【核心修复】将上下 Padding 设为 0，把所有垂直空间留给字体渲染
         et.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
 
         if (expectedType == PortType.INTEGER) {
@@ -43,7 +42,6 @@ public class UIHintUtils {
     }
 
 
-    // 【新增】生成正则拦截器的工厂方法
     private static TextWatcher createRegexWatcher(EditText et, String regex) {
         return new TextWatcher() {
             private String previousText = "";

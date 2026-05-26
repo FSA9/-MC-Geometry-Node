@@ -1,18 +1,14 @@
-// --- START OF FILE Viewport.java ---
 package com.mine.geometry_node.client.ui.viewport;
 
-import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.viewport.interaction.*;
 import com.mine.geometry_node.client.ui.viewport.layers.*;
 import com.mine.geometry_node.client.ui.viewport.menu.ViewportMenu;
 import com.mine.geometry_node.client.ui.viewport.visual.ConnectionNodeVisual;
 import com.mine.geometry_node.client.ui.viewport.visual.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeGraph;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
-import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 
@@ -24,7 +20,7 @@ import java.util.Map;
 public class Viewport extends FrameLayout implements InteractionContext {
 
     // ==========================================
-    // 1. 核心变量声明
+    // 1. 模块状态
     // ==========================================
 
     private final ViewportCamera mCamera;
@@ -34,7 +30,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
     private final ViewportController mController;
     private ViewportMenu mActiveMenu;
 
-    // 渲染层
     private final BackgroundLayer mBackgroundLayer;
     private final ConnectionLayer mConnectionLayer;
     private NodeLayer mNodeLayer;
@@ -43,7 +38,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
     private boolean mFirstLayout = true;
     private final float[] mTempPos = new float[2];
 
-    // UI 组件
     private TextView mEmptyHint;
 
 
@@ -63,7 +57,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
         mInteractionManager = new InteractionManager(this);
         mKeyManager = new KeyManager(this);
 
-        // 让 Controller 持有自己
         mController = new ViewportController(this, null);
 
         mInteractionManager.setListener(mController);
@@ -90,14 +83,13 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     protected void onDetachedFromWindow() {
-        // 移交：由 Controller 负责保存当前的 Session 状态
         mController.saveCurrentSessionState();
         super.onDetachedFromWindow();
     }
 
 
     // ==========================================
-    // 3. 指挥官专用视图控制接口 (供 Controller 调用)
+    // 3. Controller 视图接口
     // ==========================================
 
     /**
@@ -179,7 +171,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
 
     // ==========================================
-    // 5. 纯粹的图元显示管道接口
+    // 5. 图元显示管道接口
     // ==========================================
 
     public Map<String, ? extends NodeVisualAdapter> getNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getNodeVisuals() : new HashMap<>(); }
@@ -198,12 +190,12 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override public void updateFrameBounds(String frameId) { if (mFrameLayer != null) { mFrameLayer.updateFrameBounds(frameId); invalidate(); } }
     @Override public void updateConnectionsForNode(String nodeId) { mConnectionLayer.updateConnectionsForNode(nodeId); }
-    public void rebuildVisualConnections() { mConnectionLayer.rebuildVisualConnections(); }
+    public void rebuildVisualConnections(NodeGraph graph) { mConnectionLayer.rebuildVisualConnections(graph, getConnectionNodeVisuals()); }
     public void previewFrameBounds(String frameId) { if (mFrameLayer != null) { mFrameLayer.previewFrameBounds(frameId); invalidate(); } }
 
 
     // ==========================================
-    // 6. InteractionContext 接口闭环实现
+    // 6. InteractionContext 实现
     // ==========================================
 
     @Override public boolean isReady() { return mController != null && mController.hasActiveSession(); }
@@ -259,6 +251,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     public void showMenu(float screenX, float screenY) {
         closeMenu();
         mActiveMenu = new ViewportMenu(getContext());
+        addView(mActiveMenu);
         mActiveMenu.showAt(screenX, screenY, this);
     }
 
@@ -327,4 +320,3 @@ public class Viewport extends FrameLayout implements InteractionContext {
         public PortInfo(NodeVisualAdapter n, String id, boolean in) { this.node = n; this.portId = id; this.isInput = in; }
     }
 }
-// --- END OF FILE Viewport.java ---

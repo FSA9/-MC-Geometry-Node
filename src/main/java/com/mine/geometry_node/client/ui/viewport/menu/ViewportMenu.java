@@ -106,9 +106,6 @@ public class ViewportMenu extends FrameLayout {
         }
         mContentLayout.setLayoutParams(lp);
 
-        if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
-        parent.addView(this);
-
         mSearchBox.post(() -> {
             mSearchBox.setText("");
             mSearchBox.requestFocus();
@@ -116,8 +113,9 @@ public class ViewportMenu extends FrameLayout {
     }
 
     public void dismiss() {
-        if (mContext != null) mContext.closeMenu();
-        else if (getParent() != null) ((ViewGroup) getParent()).removeView(this);
+        if (mContext != null) {
+            mContext.closeMenu();
+        }
     }
 
     private void navigateTo(NodeCategory folder) {

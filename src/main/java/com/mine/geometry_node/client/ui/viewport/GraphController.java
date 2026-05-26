@@ -99,7 +99,6 @@ public class GraphController {
         }
     }
 
-    // 【核心重构】吸收了原 setNodeProperty 的全部清理逻辑
     public void setNodeInputValue(String nodeId, String portId, Object value) {
         NodeData node = mContext.getGraph().getNode(nodeId);
         if (node == null) return;
@@ -177,7 +176,6 @@ public class GraphController {
         return node.connectedInputs.contains(targetPortId);
     }
 
-    // 【核心清理】移除所有对 properties 的操作
     public void removeDynamicBranch(String nodeId, String propertyKey, int removeIndex, int totalCount) {
         NodeData node = mContext.getGraph().getNode(nodeId);
         if (node == null) return;
@@ -320,7 +318,7 @@ public class GraphController {
     }
 
     /**
-     * 核心：更新元素的父图框，并触发对应图框的边界重算
+     * Updates an element's parent frame and refreshes affected frame bounds.
      */
     public void setElementParentFrame(String elementId, boolean isNode, String newParentFrameId) {
         String oldParentId = null;
@@ -348,7 +346,7 @@ public class GraphController {
     }
 
     /**
-     * 核心：根据内部节点重新计算图框边界 (Auto-Bounding Box)
+     * Recomputes a frame's auto bounds from committed graph data.
      */
     public void updateFrameBounds(String frameId) {
         com.mine.geometry_node.core.node.FrameData frame = mContext.getGraph().getFrame(frameId);

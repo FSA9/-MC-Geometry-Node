@@ -9,6 +9,7 @@ import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
 import com.mine.geometry_node.client.ui.viewport.visual.ConnectionNodeVisual;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeGraph;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -34,7 +35,6 @@ public class ConnectionLayer {
     }
 
     public void draw(Canvas canvas, ViewportCamera camera) {
-        // 架构更新：利用 Viewport 的 isReady 替代深层判空
         if (!mViewport.isReady()) return;
 
         float scaledLineWidth = UIConstants.ViewPort.LINE_WIDTH_CONNECTION * camera.getScale();
@@ -57,18 +57,11 @@ public class ConnectionLayer {
         }
     }
 
-    public void rebuildVisualConnections() {
+    public void rebuildVisualConnections(NodeGraph graph, Map<String, ? extends ConnectionNodeVisual> nodeVisuals) {
         mVisualConnections.clear();
         mConnectionsByNodeId.clear();
 
-        // 架构更新：利用 Viewport 的 isReady 替代深层判空
-        if (!mViewport.isReady()) return;
-
-        // 架构更新：从 Controller 中获取由其管理的 Session 和 Graph 数据
-        com.mine.geometry_node.core.node.NodeGraph graph = mViewport.getController().getCurrentSession().editorContext.getGraph();
         if (graph == null) return;
-
-        Map<String, ? extends ConnectionNodeVisual> nodeVisuals = mViewport.getConnectionNodeVisuals();
 
         for (NodeData outData : graph.nodes.values()) {
             ConnectionNodeVisual outUi = nodeVisuals.get(outData.id);

@@ -23,7 +23,6 @@ public class ViewportController implements EditorContext.EditorListener,
     private final Viewport mViewport;
     private EditorContext mEditorContext;
 
-    // 移交：由 Controller 独立接管的 Session 状态记忆
     private GraphSession mCurrentSession;
 
     private static String sClipboardJson = null;
@@ -33,27 +32,19 @@ public class ViewportController implements EditorContext.EditorListener,
         setEditorContext(editorContext);
     }
 
-    /**
-     * 【核心改动】由 Controller 全权指挥的蓝图会话绑定与数据层还原管道
-     */
     public void bindSession(GraphSession session) {
-        // 1. 先保存旧 Session 的相机与选中状态
         saveCurrentSessionState();
 
         this.mCurrentSession = session;
 
         if (session != null) {
-            // 2. 命令 Viewport 刷新图层画布容器
             mViewport.prepareLayers();
 
-            // 3. 还原相机的位置与缩放
             mViewport.getCamera().setPosition(session.viewportX, session.viewportY);
             mViewport.getCamera().setScale(session.currentScale);
 
-            // 4. 绑定上下文监听
             setEditorContext(session.editorContext);
 
-            // 5. 驱动数据加载，还原所有的 Frame 与 Node 视图
             com.mine.geometry_node.core.node.NodeGraph graph = session.editorContext.getGraph();
             if (graph != null) {
                 if (graph.frames != null) {
@@ -68,14 +59,11 @@ public class ViewportController implements EditorContext.EditorListener,
                 }
             }
 
-            // 6. 还原选中图元以及视觉连线层
             mViewport.updateSelectionState(session.selectedNodeIds);
-            mViewport.rebuildVisualConnections();
+            mViewport.rebuildVisualConnections(graph);
 
-            // 7. 同步仿射变换矩阵
             mViewport.updateTransform();
         } else {
-            // 卸载数据，命令 Viewport 退回空闲白板状态
             setEditorContext(null);
             mViewport.showEmptyHint();
         }
@@ -84,9 +72,6 @@ public class ViewportController implements EditorContext.EditorListener,
         mViewport.invalidate();
     }
 
-    /**
-     * 【核心改动】抽取：收集当前的画布相机与选中节点，暂存至会话内存中
-     */
     public void saveCurrentSessionState() {
         if (mCurrentSession != null) {
             mCurrentSession.viewportX = mViewport.getCamera().getX();
@@ -151,6 +136,10 @@ public class ViewportController implements EditorContext.EditorListener,
         if (mEditorContext == null) return;
         CmdRenamePort cmd = new CmdRenamePort(mEditorContext.getGraphController(), nodeId, category, portId, oldName, newName);
         mEditorContext.getCommandManager().execute(cmd);
+    }
+
+    private void rebuildVisualConnections() {
+        mViewport.rebuildVisualConnections(mEditorContext != null ? mEditorContext.getGraph() : null);
     }
 
     // ==========================================
@@ -229,13 +218,12 @@ public class ViewportController implements EditorContext.EditorListener,
         Set<String> copiedFrameIds = new HashSet<>();
         Set<String> copiedNodeIds = new HashSet<>();
 
-        // 1. 录入明面选中的图元
         for (FrameVisualAdapter frame : selectedFrames) copiedFrameIds.add(frame.getFrameId());
         for (NodeVisualAdapter node : selectedNodes) copiedNodeIds.add(node.getNodeId());
 
         NodeGraph mainGraph = mEditorContext.getGraph();
 
-        // 2. 深层渗透：递归揪出被选中的大图框内部包裹的子图框
+        // Include child frames inside selected frames.
         boolean addedNew = true;
         while (addedNew) {
             addedNew = false;
@@ -249,7 +237,7 @@ public class ViewportController implements EditorContext.EditorListener,
             }
         }
 
-        // 3. 深层渗透：揪出属于这些图框的全部节点
+        // Include nodes inside selected frames.
         if (mainGraph.nodes != null) {
             for (NodeData n : mainGraph.nodes.values()) {
                 if (n.parentFrame != null && copiedFrameIds.contains(n.parentFrame) && !copiedNodeIds.contains(n.id)) {
@@ -258,7 +246,6 @@ public class ViewportController implements EditorContext.EditorListener,
             }
         }
 
-        // 4. 将提取的内容打包装箱，序列化存入剪贴板
         NodeGraph tempGraph = new NodeGraph("Clipboard");
         for (String fid : copiedFrameIds) tempGraph.frames.put(fid, mainGraph.getFrame(fid));
         for (String nid : copiedNodeIds) tempGraph.nodes.put(nid, mainGraph.getNode(nid));
@@ -274,7 +261,7 @@ public class ViewportController implements EditorContext.EditorListener,
         CmdPasteElements cmd = new CmdPasteElements(mEditorContext.getGraphController(), sClipboardJson, uiX, uiY);
         mEditorContext.getCommandManager().execute(cmd);
 
-        mViewport.clearSelection(); // 粘贴后清空原有选择，体验更好
+        mViewport.clearSelection();
         System.out.println("Pasted elements from clipboard.");
     }
 
@@ -320,7 +307,7 @@ public class ViewportController implements EditorContext.EditorListener,
         uiNode.setPreviewPosition(nodeData.getX(), nodeData.getY());
         mViewport.addNodeVisual(nodeData.id, uiNode);
     }
-    @Override public void onNodeRemoved(String nodeId) { mViewport.removeNodeVisual(nodeId); mViewport.rebuildVisualConnections(); }
+    @Override public void onNodeRemoved(String nodeId) { mViewport.removeNodeVisual(nodeId); rebuildVisualConnections(); }
     @Override
     public void onNodeStructureChanged(NodeData nodeData) {
         if (nodeData == null || nodeData.id == null) return;
@@ -331,14 +318,14 @@ public class ViewportController implements EditorContext.EditorListener,
             NodeVisualAdapter rebuilt = mViewport.getNodeVisual(nodeData.id);
             if (rebuilt != null) mViewport.addToSelection(rebuilt);
         }
-        mViewport.rebuildVisualConnections();
+        rebuildVisualConnections();
     }
 
-    @Override public void onGraphConnectionsRebuildRequested() { mViewport.rebuildVisualConnections(); }
-    @Override public void onExecutionConnectionAdded(String outN, String outP, String inN, String inP) { mViewport.rebuildVisualConnections(); }
-    @Override public void onExecutionConnectionRemoved(String outN, String outP, String inN, String inP) { mViewport.rebuildVisualConnections(); }
+    @Override public void onGraphConnectionsRebuildRequested() { rebuildVisualConnections(); }
+    @Override public void onExecutionConnectionAdded(String outN, String outP, String inN, String inP) { rebuildVisualConnections(); }
+    @Override public void onExecutionConnectionRemoved(String outN, String outP, String inN, String inP) { rebuildVisualConnections(); }
     @Override public void onSelectionChanged(List<String> selectedNodeIds) { mViewport.updateSelectionState(selectedNodeIds); }
     @Override public void onNodeMoved(String nodeId, float x, float y) { mViewport.updateNodePosition(nodeId, x, y); mViewport.updateConnectionsForNode(nodeId); }
-    @Override public void onConnectionAdded(String outN, String outP, String inN, String inP) { mViewport.notifyNodeLayoutUpdate(outN); mViewport.notifyNodeLayoutUpdate(inN); mViewport.rebuildVisualConnections(); }
-    @Override public void onConnectionRemoved(String outN, String outP, String inN, String inP) { mViewport.notifyNodeLayoutUpdate(outN); mViewport.notifyNodeLayoutUpdate(inN); mViewport.rebuildVisualConnections(); }
+    @Override public void onConnectionAdded(String outN, String outP, String inN, String inP) { mViewport.notifyNodeLayoutUpdate(outN); mViewport.notifyNodeLayoutUpdate(inN); rebuildVisualConnections(); }
+    @Override public void onConnectionRemoved(String outN, String outP, String inN, String inP) { mViewport.notifyNodeLayoutUpdate(outN); mViewport.notifyNodeLayoutUpdate(inN); rebuildVisualConnections(); }
 }
