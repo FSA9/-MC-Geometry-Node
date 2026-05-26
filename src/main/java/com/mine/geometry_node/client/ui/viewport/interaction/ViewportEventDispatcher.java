@@ -1,14 +1,13 @@
 package com.mine.geometry_node.client.ui.viewport.interaction;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.UINode;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
+import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
 
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.View;
-import icyllis.modernui.view.ViewParent;
 import icyllis.modernui.widget.EditText;
 
 /**
@@ -29,7 +28,7 @@ public class ViewportEventDispatcher {
     private final float[] mTmpEventScreen = new float[2];
     private final int[] mTmpTargetLoc = new int[2];
 
-    private record HintHitResult(View view, boolean isLogical, UINode node) {}
+    private record HintHitResult(View view, boolean isLogical, NodeVisualAdapter node) {}
 
     public ViewportEventDispatcher(Viewport viewport) {
         this.mViewport = viewport;
@@ -74,7 +73,7 @@ public class ViewportEventDispatcher {
                             mCapturedHintView = hitResult.view();
                             mHintCaptureUsesLogical = hitResult.isLogical();
                             // 联动选中状态
-                            if (!mViewport.getSelectedNodes().contains(hitResult.node())) {
+                            if (!mViewport.getSelectedNodeVisuals().contains(hitResult.node())) {
                                 mViewport.clearSelection();
                                 mViewport.addToSelection(hitResult.node());
                                 mViewport.invalidate();
@@ -125,10 +124,10 @@ public class ViewportEventDispatcher {
         float uiX = camera.screenToUIX(ev.getX());
         float uiY = camera.screenToUIY(ev.getY());
 
-        UINode topNode = mViewport.findNodeAt(uiX, uiY);
+        NodeVisualAdapter topNode = mViewport.findNodeAt(uiX, uiY);
         if (topNode != null) {
-            float localXpx = UIUtils.dp2px(uiX - topNode.getTranslationX());
-            float localYpx = UIUtils.dp2px(uiY - topNode.getTranslationY());
+            float localXpx = UIUtils.dp2px(uiX - topNode.getUiX());
+            float localYpx = UIUtils.dp2px(uiY - topNode.getUiY());
 
             View interactiveView = topNode.findInteractiveViewAt(localXpx, localYpx);
             if (interactiveView != null) {
@@ -146,28 +145,20 @@ public class ViewportEventDispatcher {
         ViewportCamera camera = mViewport.getCamera();
 
         if (isLogical) {
-            // 向上遍历寻找真正的 UINode
-            ViewParent p = target.getParent();
-            UINode node = null;
-            while (p != null) {
-                if (p instanceof UINode) {
-                    node = (UINode) p;
-                    break;
-                }
-                p = p.getParent();
-            }
+            NodeVisualAdapter node = findNodeVisualForOverlay(target);
             if (node == null) return false;
 
             float uiX = camera.screenToUIX(ox);
             float uiY = camera.screenToUIY(oy);
 
-            // 初始化相对于 UINode 的局部像素坐标
-            lx = UIUtils.dp2px(uiX - node.getTranslationX());
-            ly = UIUtils.dp2px(uiY - node.getTranslationY());
+            // 初始化相对于节点 overlay host 的局部像素坐标
+            lx = UIUtils.dp2px(uiX - node.getUiX());
+            ly = UIUtils.dp2px(uiY - node.getUiY());
 
             // 逐层减去所有父容器的相对偏移量
+            View overlayHost = node.getOverlayHostView();
             View current = target;
-            while (current != node && current != null) {
+            while (current != overlayHost && current != null) {
                 lx -= current.getLeft();
                 ly -= current.getTop();
                 current = (View) current.getParent();
@@ -183,5 +174,22 @@ public class ViewportEventDispatcher {
         boolean handled = target.dispatchTouchEvent(ev);
         ev.setLocation(ox, oy);
         return handled;
+    }
+
+    private NodeVisualAdapter findNodeVisualForOverlay(View target) {
+        for (NodeVisualAdapter node : mViewport.getNodeVisuals().values()) {
+            View overlayHost = node.getOverlayHostView();
+            View current = target;
+            while (current != null) {
+                if (current == overlayHost) {
+                    return node;
+                }
+                if (!(current.getParent() instanceof View parentView)) {
+                    break;
+                }
+                current = parentView;
+            }
+        }
+        return null;
     }
 }

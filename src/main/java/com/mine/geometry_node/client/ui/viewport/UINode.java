@@ -5,6 +5,9 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.UIHints.HintRendererFactory;
 import com.mine.geometry_node.client.ui.viewport.UIHints.UIHintRenderer;
+import com.mine.geometry_node.client.ui.viewport.layout.NodeLayout;
+import com.mine.geometry_node.client.ui.viewport.layout.NodeLayoutEngine;
+import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
@@ -17,16 +20,13 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
-import icyllis.modernui.view.MeasureSpec;
-import icyllis.modernui.view.MotionEvent;
-import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.*;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class UINode extends FrameLayout {
+public class UINode extends FrameLayout implements NodeVisualAdapter {
     private float mLogicX = 0;
     private float mLogicY = 0;
     private final NodeData mNodeData;
@@ -37,10 +37,9 @@ public class UINode extends FrameLayout {
 
     private final Paint mPaint = new Paint();
     private final RectF mTempRect = new RectF();
-    private final Map<String, Float> mInputPortY = new HashMap<>(); // 逻辑单位 DP
-    private final Map<String, Float> mOutputPortY = new HashMap<>(); // 逻辑单位 DP
+    private final NodeLayoutEngine mLayoutEngine = new NodeLayoutEngine();
+    private NodeLayout mLayout;
 
-    private final Map<String, TextView> mPortLabels = new HashMap<>();
     private final Map<Integer, View> mHintViews = new HashMap<>();
 
     private View mAddButton;
@@ -52,7 +51,7 @@ public class UINode extends FrameLayout {
         this.mNodeDef = nodeDef;
         this.mEditorContext = editorContext;
 
-        setWillNotDraw(false);
+        setWillNotDraw(true);
         setClipChildren(false);
         mPaint.setAntiAlias(true);
 
@@ -60,12 +59,10 @@ public class UINode extends FrameLayout {
     }
 
     public String hitTestLabel(float localXpx, float localYpx) {
-        for (Map.Entry<String, TextView> entry : mPortLabels.entrySet()) {
-            View tv = entry.getValue();
-            if (tv.getVisibility() == View.VISIBLE &&
-                    localXpx >= tv.getLeft() && localXpx <= tv.getRight() &&
-                    localYpx >= tv.getTop() && localYpx <= tv.getBottom()) {
-                return entry.getKey();
+        if (mLayout == null) return null;
+        for (NodeLayout.LabelRun label : mLayout.labels) {
+            if (label.hitRect.contains(localXpx, localYpx)) {
+                return label.portId;
             }
         }
         return null;
@@ -114,99 +111,20 @@ public class UINode extends FrameLayout {
         return btn;
     }
 
-    private TextView createLabel(Context context, String text, int gravity) {
-        TextView tv = new TextView(context);
-        tv.setText(text);
-        tv.setTextColor(UIConstants.CLR_GRAY_LABEL);
-        tv.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
-        tv.setGravity(gravity | icyllis.modernui.view.Gravity.CENTER_VERTICAL);
-        tv.setClickable(false);
-        tv.setFocusable(false);
-        return tv;
-    }
-
-    private String getPortCategory(com.mine.geometry_node.core.node.port.PortDef port, boolean isLeft) {
-        boolean isExec = port.type() == com.mine.geometry_node.core.node.port.PortType.EXECUTION;
-
-        if (isLeft) {
-            return isExec ? "exec_inputs" : "inputs";
-        } else {
-            return isExec ? "exec_outputs" : "outputs";
-        }
-    }
-
     private void syncAndLayoutUI(Context context) {
-        mInputPortY.clear();
-        mOutputPortY.clear();
+        mLayout = mLayoutEngine.build(mNodeData, mNodeDef);
 
         removeAllViews();
-        mPortLabels.clear();
         mHintViews.clear();
         mRemoveButtons.clear();
         mAddButton = null;
 
-        // --- 1. 重建 Header ---
-        TextView titleView = new TextView(context);
-        titleView.setText(mNodeDef.displayName().getString());
-        titleView.setTextColor(UIConstants.CLR_WHITE);
-        titleView.setTextSize(UIConstants.Node.TEXT_SIZE_HEADER);
-        titleView.setGravity(icyllis.modernui.view.Gravity.CENTER);
-        addView(titleView, new LayoutParams(LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(UIConstants.Node.HEADER_HEIGHT)));
-
         float currentY = UIConstants.Node.HEADER_HEIGHT; // 逻辑单位 DP
 
-        // --- 2. 遍历行，边动态构建边排版 ---
+        // --- 1. 遍历行，仅重建真实交互控件 ---
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
-            float rowHeight = calculateRowHeight(row);
-            float portCenterY = currentY + UIConstants.Node.ROW_HEIGHT / 2.0f;
-
-            // 左侧端口处理
-            if (row.leftPort() != null) {
-                if (!row.leftPort().hidePin()) {
-                    mInputPortY.put(row.leftPort().id(), portCenterY);
-                }
-
-                String category = getPortCategory(row.leftPort(), true);
-                String defaultName = row.leftPort().displayName().getString();
-                String effectiveName = mNodeData.getEffectivePortName(category, row.leftPort().id(), defaultName);
-
-                TextView tv = createLabel(context, effectiveName, icyllis.modernui.view.Gravity.LEFT);
-                mPortLabels.put(row.leftPort().id(), tv);
-
-                // 立即计算 LayoutParams
-                int leftMargin = UIConstants.Node.LABEL_MARGIN_PORT;
-                if (row.uiHint() == UIHint.CHECKBOX && !mNodeData.isInputConnected(row.leftPort().id())) {
-                    // Checkbox 间距计算
-                    leftMargin = UIConstants.Node.LABEL_MARGIN_PORT + UIConstants.Node.CHECKBOX_DEFAULT_WIDTH + UIConstants.Node.MARGIN_CHECKBOX_GAP;
-                }
-
-                LayoutParams lp = new LayoutParams(LayoutParams.WRAP_CONTENT, UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT));
-                lp.gravity = icyllis.modernui.view.Gravity.LEFT | icyllis.modernui.view.Gravity.TOP;
-                lp.leftMargin = UIUtils.dp2pxInt(leftMargin);
-                lp.topMargin = UIUtils.dp2pxInt(currentY);
-                tv.setSingleLine(true);
-                addView(tv, lp);
-            }
-
-            // 右侧端口处理
-            if (row.rightPort() != null) {
-                mOutputPortY.put(row.rightPort().id(), portCenterY);
-
-                String category = getPortCategory(row.rightPort(), false);
-                String defaultName = row.rightPort().displayName().getString();
-                String effectiveName = mNodeData.getEffectivePortName(category, row.rightPort().id(), defaultName);
-
-                TextView tv = createLabel(context, effectiveName, icyllis.modernui.view.Gravity.RIGHT);
-                mPortLabels.put(row.rightPort().id(), tv);
-
-                LayoutParams lp = new LayoutParams(LayoutParams.WRAP_CONTENT, UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT));
-                lp.gravity = icyllis.modernui.view.Gravity.RIGHT | icyllis.modernui.view.Gravity.TOP;
-                lp.rightMargin = UIUtils.dp2pxInt(UIConstants.Node.LABEL_MARGIN_PORT);
-                lp.topMargin = UIUtils.dp2pxInt(currentY);
-                tv.setSingleLine(true);
-                addView(tv, lp);
-            }
+            float rowHeight = mLayoutEngine.calculateRowHeight(mNodeData, row);
 
             // Hint 内嵌输入组件处理
             if (row.uiHint() != null) {
@@ -251,7 +169,7 @@ public class UINode extends FrameLayout {
             currentY += rowHeight;
         }
 
-        // --- 3. Add 按钮 ---
+        // --- 2. Add 按钮 ---
         boolean isInputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
         boolean isOutputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT).isPresent();
         if (isInputDynamic || isOutputDynamic) {
@@ -271,28 +189,40 @@ public class UINode extends FrameLayout {
             currentY += UIConstants.Node.ROW_HEIGHT;
         }
 
-        // --- 4. 刷新整体尺寸 ---
-        mTotalHeight = (int) currentY;
-        if (mNodeData.uiSize == null) mNodeData.uiSize = new float[2];
-        mNodeData.uiSize[0] = UIConstants.Node.NODE_WIDTH;
-        mNodeData.uiSize[1] = mTotalHeight;
+        // --- 3. 刷新整体尺寸 ---
+        mTotalHeight = mLayout.totalHeight;
 
         LayoutParams lp = new LayoutParams(UIUtils.dp2pxInt(UIConstants.Node.NODE_WIDTH), UIUtils.dp2pxInt(mTotalHeight));
-        lp.leftMargin = UIUtils.dp2pxInt(mLogicX);
-        lp.topMargin = UIUtils.dp2pxInt(mLogicY);
         setLayoutParams(lp);
-
-        invalidate();
     }
 
+    @Override
     public void updateNodeLayout() {
         syncAndLayoutUI(getContext());
     }
 
     @Override
-    protected void onDraw(Canvas canvas) {
-        float w = getWidth();
-        float h = getHeight() > 0 ? getHeight() : UIUtils.dp2px(mTotalHeight);
+    public boolean hasOverlayViews() {
+        return mAddButton != null || !mRemoveButtons.isEmpty() || !mHintViews.isEmpty();
+    }
+
+    @Override
+    public int getTotalHeightDp() {
+        return mTotalHeight;
+    }
+
+    @Override
+    public void drawNode(Canvas canvas, ViewportCamera camera) {
+        canvas.save();
+        canvas.translate(camera.uiToScreenX(mLogicX), camera.uiToScreenY(mLogicY));
+        canvas.scale(camera.getScale(), camera.getScale());
+        drawNodeLocal(canvas);
+        canvas.restore();
+    }
+
+    private void drawNodeLocal(Canvas canvas) {
+        float w = UIUtils.dp2px(UIConstants.Node.NODE_WIDTH);
+        float h = UIUtils.dp2px(mTotalHeight);
 
         float scaledRadius = UIUtils.dp2px(com.mine.geometry_node.client.ui.persistence.ConfigManager.INSTANCE.getConfig().node.cornerRadius);
         float scaledHeaderH = UIUtils.dp2px(UIConstants.Node.HEADER_HEIGHT);
@@ -320,7 +250,7 @@ public class UINode extends FrameLayout {
             PortRow row = mNodeDef.rows().get(i);
 
             if (row.leftPort() != null && !row.leftPort().hidePin()) {
-                Float yDp = mInputPortY.get(row.leftPort().id());
+                Float yDp = mLayout != null ? mLayout.inputPortY.get(row.leftPort().id()) : null;
                 if (yDp != null) {
                     mPaint.setStyle(Paint.Style.FILL);
                     mPaint.setColor(row.leftPort().type().getColor());
@@ -328,7 +258,7 @@ public class UINode extends FrameLayout {
                 }
             }
             if (row.rightPort() != null) {
-                Float yDp = mOutputPortY.get(row.rightPort().id());
+                Float yDp = mLayout != null ? mLayout.outputPortY.get(row.rightPort().id()) : null;
                 if (yDp != null) {
                     mPaint.setStyle(Paint.Style.FILL);
                     mPaint.setColor(row.rightPort().type().getColor());
@@ -336,24 +266,24 @@ public class UINode extends FrameLayout {
                 }
             }
         }
-        super.onDraw(canvas);
+        drawTextRuns(canvas);
+    }
+
+    private void drawTextRuns(Canvas canvas) {
+        if (mLayout == null) return;
+
+        mLayoutEngine.getHeaderPaint().setColor(UIConstants.CLR_WHITE);
+        canvas.drawShapedText(mLayout.titleText, mLayout.titleX, mLayout.titleBaseline, mLayoutEngine.getHeaderPaint());
+
+        mLayoutEngine.getLabelPaint().setColor(UIConstants.CLR_GRAY_LABEL);
+        for (NodeLayout.LabelRun label : mLayout.labels) {
+            canvas.drawShapedText(label.shapedText, label.x, label.baseline, mLayoutEngine.getLabelPaint());
+        }
     }
 
     private boolean isDynamicRow(PortRow row) { return row.hintParams() != null && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC)); }
 
-    @Override public boolean onInterceptTouchEvent(MotionEvent ev) { return true; }
-    @Override public boolean onInterceptHoverEvent(MotionEvent event) { return true; }
-    @Override public PointerIcon onResolvePointerIcon(MotionEvent event) { return PointerIcon.getSystemIcon(PointerIcon.TYPE_DEFAULT); }
-
     @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        float lx = UIUtils.px2dp(ev.getX());
-        float ly = UIUtils.px2dp(ev.getY());
-        float interceptRadius = UIConstants.Node.PORT_HITBOX_RADIUS;
-        if (hitTestPort(lx, ly, true, interceptRadius) != null || hitTestPort(lx, ly, false, interceptRadius) != null) return false;
-        return super.dispatchTouchEvent(ev);
-    }
-
     public View findInteractiveViewAt(float localXpx, float localYpx) {
         // 检测 Add 按钮
         if (mAddButton != null && mAddButton.getVisibility() == View.VISIBLE && localXpx >= mAddButton.getLeft() && localXpx < mAddButton.getRight() && localYpx >= mAddButton.getTop() && localYpx < mAddButton.getBottom()) {
@@ -370,10 +300,16 @@ public class UINode extends FrameLayout {
         return null;
     }
 
+    @Override
+    public View getOverlayHostView() {
+        return this;
+    }
+
+    @Override
     public String hitTestPort(float localXdp, float localYdp, boolean checkInput, float touchRadiusDp) {
         float targetX = checkInput ? 0 : UIConstants.Node.NODE_WIDTH;
         float dx = localXdp - targetX;
-        Map<String, Float> map = checkInput ? mInputPortY : mOutputPortY;
+        Map<String, Float> map = mLayout != null ? (checkInput ? mLayout.inputPortY : mLayout.outputPortY) : new HashMap<>();
         float thresholdSq = touchRadiusDp * touchRadiusDp;
         String best = null; float bestDistSq = Float.MAX_VALUE;
         for (Map.Entry<String, Float> entry : map.entrySet()) {
@@ -384,62 +320,46 @@ public class UINode extends FrameLayout {
         return best;
     }
 
-    private float calculateRowHeight(PortRow row) {
-        float height = UIConstants.Node.ROW_HEIGHT;
-        if (row.uiHint() == null) return height;
-        if (!mNodeData.isInputConnected(row.leftPort() != null ? row.leftPort().id() : "")) {
-            UIHintRenderer renderer = HintRendererFactory.getRenderer(row.uiHint());
-            float extraRows = (renderer != null) ? renderer.getRequiredExtraRows(row) : 0.0f;
-            height = UIConstants.Node.ROW_HEIGHT * (row.leftPort() != null || row.rightPort() != null ? 1.0f + extraRows : Math.max(1.0f, extraRows));
-        }
-        return height;
-    }
-
+    @Override
     public void getPortPosition(String portId, boolean isInput, float[] outPos) {
         outPos[0] = isInput ? 0 : UIConstants.Node.NODE_WIDTH;
-        Float y = isInput ? mInputPortY.get(portId) : mOutputPortY.get(portId);
+        Float y = mLayout != null ? (isInput ? mLayout.inputPortY.get(portId) : mLayout.outputPortY.get(portId)) : null;
         outPos[1] = (y != null) ? y : UIConstants.Node.HEADER_HEIGHT + UIConstants.Node.ROW_HEIGHT / 2.0f;
     }
 
+    @Override
     public NodeData getNodeData() { return mNodeData; }
+    @Override
     public NodeDef getNodeDef() { return mNodeDef; }
+    @Override
     public void setSelected(boolean selected) { if (mIsSelected != selected) { mIsSelected = selected; invalidate(); } }
+    @Override
     public boolean isSelected() { return mIsSelected; }
 
+    @Override
     public void getLogicalBounds(RectF outRect) {
-        outRect.set(getTranslationX(), getTranslationY(), getTranslationX() + UIConstants.Node.NODE_WIDTH, getTranslationY() + mTotalHeight);
+        outRect.set(mLogicX, mLogicY, mLogicX + UIConstants.Node.NODE_WIDTH, mLogicY + mTotalHeight);
     }
 
     @Override
-    public void setTranslationX(float translationX) {
-        mLogicX = translationX;
-        super.setTranslationX(0);
-        updateMarginPos();
+    public void setPreviewPosition(float x, float y) {
+        mLogicX = x;
+        mLogicY = y;
     }
 
     @Override
-    public void setTranslationY(float translationY) {
-        mLogicY = translationY;
-        super.setTranslationY(0);
-        updateMarginPos();
+    public void offsetPreviewPosition(float dx, float dy) {
+        setPreviewPosition(mLogicX + dx, mLogicY + dy);
     }
 
     @Override
-    public float getTranslationX() {
+    public float getUiX() {
         return mLogicX;
     }
 
     @Override
-    public float getTranslationY() {
+    public float getUiY() {
         return mLogicY;
     }
 
-    private void updateMarginPos() {
-        icyllis.modernui.view.ViewGroup.LayoutParams params = getLayoutParams();
-        if (params instanceof LayoutParams lp) {
-            lp.leftMargin = UIUtils.dp2pxInt(mLogicX);
-            lp.topMargin = UIUtils.dp2pxInt(mLogicY);
-            setLayoutParams(lp);
-        }
-    }
 }

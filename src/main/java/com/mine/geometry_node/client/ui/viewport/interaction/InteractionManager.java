@@ -4,6 +4,8 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.*;
 import com.mine.geometry_node.client.ui.viewport.menu.PortMenu;
+import com.mine.geometry_node.client.ui.viewport.visual.FrameVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import icyllis.modernui.graphics.Canvas;
@@ -32,7 +34,7 @@ public class InteractionManager {
     private static final int MODE_DRAGGING_FRAME = 5;
     private static final int MODE_CUTTING        = 6;
 
-    private UIFrame mDraggedFrame = null;
+    private FrameVisualAdapter mDraggedFrame = null;
     private final InteractionContext mContext;
     private InteractionListener mListener;
     private int mCurrentMode = MODE_NONE;
@@ -128,16 +130,16 @@ public class InteractionManager {
         Viewport.PortInfo port = mContext.findPortAt(uiX, uiY);
         if (port != null) { enterConnectingMode(port, uiX, uiY); return; }
 
-        UINode target = mContext.findNodeAt(uiX, uiY);
+        NodeVisualAdapter target = mContext.findNodeAt(uiX, uiY);
         if (target != null) {
-            float localXpx = UIUtils.dp2px(uiX - target.getTranslationX());
-            float localYpx = UIUtils.dp2px(uiY - target.getTranslationY());
+            float localXpx = UIUtils.dp2px(uiX - target.getUiX());
+            float localYpx = UIUtils.dp2px(uiY - target.getUiY());
             if (target.findInteractiveViewAt(localXpx, localYpx) != null) return;
             enterDraggingMode(target, uiX, uiY);
             return;
         }
 
-        UIFrame targetFrame = mContext.findFrameAt(uiX, uiY);
+        FrameVisualAdapter targetFrame = mContext.findFrameAt(uiX, uiY);
         if (targetFrame != null) {
             mCurrentMode = MODE_DRAGGING_FRAME;
             mDragStartUiX = uiX; mDragStartUiY = uiY;
@@ -199,9 +201,9 @@ public class InteractionManager {
         float uiY = camera.screenToUIY(screenY);
 
         if (isRightMouse(event) && !mHasMovedSignificantly) {
-            UINode targetNode = mContext.findNodeAt(uiX, uiY);
+            NodeVisualAdapter targetNode = mContext.findNodeAt(uiX, uiY);
             if (targetNode != null) {
-                String clickedLabelPortId = targetNode.hitTestLabel(UIUtils.dp2px(uiX - targetNode.getTranslationX()), UIUtils.dp2px(uiY - targetNode.getTranslationY()));
+                String clickedLabelPortId = targetNode.hitTestLabel(UIUtils.dp2px(uiX - targetNode.getUiX()), UIUtils.dp2px(uiY - targetNode.getUiY()));
                 if (clickedLabelPortId != null) {
                     PortMenu.show(mContext, targetNode, clickedLabelPortId, screenX, screenY);
                     mCurrentMode = MODE_NONE;
@@ -228,7 +230,7 @@ public class InteractionManager {
         mDraftStartPort = port; mDraftCurrentUiX = uiX; mDraftCurrentUiY = uiY;
     }
 
-    private void enterDraggingMode(UINode target, float uiX, float uiY) {
+    private void enterDraggingMode(NodeVisualAdapter target, float uiX, float uiY) {
         mCurrentMode = MODE_DRAGGING_NODES;
         mDragStartUiX = uiX; mDragStartUiY = uiY;
         if (!target.isSelected()) {
@@ -260,26 +262,25 @@ public class InteractionManager {
 
         if (Math.abs(totalUiDx) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE || Math.abs(totalUiDy) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE) {
             List<String> selectedIds = new ArrayList<>();
-            for (UINode node : mContext.getSelectedNodes()) selectedIds.add(node.getNodeData().id);
+            for (NodeVisualAdapter node : mContext.getSelectedNodeVisuals()) selectedIds.add(node.getNodeId());
 
             if (mListener != null) mListener.onMoveElements(selectedIds, new ArrayList<>(), totalUiDx, totalUiDy);
 
-            UIFrame targetFrame = mContext.getSmallestContainingFrame(endUiX, endUiY);
-            String targetFrameId = (targetFrame != null) ? targetFrame.getFrameData().id : null;
+            FrameVisualAdapter targetFrame = mContext.getSmallestContainingFrame(endUiX, endUiY);
+            String targetFrameId = (targetFrame != null) ? targetFrame.getFrameId() : null;
 
             List<String> nodesToChange = new ArrayList<>();
-            for (UINode node : mContext.getSelectedNodes()) {
+            for (NodeVisualAdapter node : mContext.getSelectedNodeVisuals()) {
                 String currentParent = node.getNodeData().parentFrame;
                 if ((currentParent == null && targetFrameId != null) || (currentParent != null && !currentParent.equals(targetFrameId))) {
-                    nodesToChange.add(node.getNodeData().id);
+                    nodesToChange.add(node.getNodeId());
                 }
             }
             if (!nodesToChange.isEmpty() && mListener != null) mListener.onChangeParent(nodesToChange, true, targetFrameId);
         } else {
-            for (UINode node : mContext.getSelectedNodes()) {
-                node.setTranslationX(node.getNodeData().getX());
-                node.setTranslationY(node.getNodeData().getY());
-                mContext.updateConnectionsForNode(node.getNodeData().id);
+            for (NodeVisualAdapter node : mContext.getSelectedNodeVisuals()) {
+                node.setPreviewPosition(node.getNodeData().getX(), node.getNodeData().getY());
+                mContext.updateConnectionsForNode(node.getNodeId());
             }
             mContext.invalidate();
         }
@@ -294,8 +295,8 @@ public class InteractionManager {
         if (Math.abs(totalUiDx) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE || Math.abs(totalUiDy) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE) {
             if (mListener != null) mListener.onMoveElements(new ArrayList<>(), List.of(draggedFrameId), totalUiDx, totalUiDy);
 
-            UIFrame largerFrame = getSmallestContainingFrameForFrame(draggedFrameId, endUiX, endUiY);
-            String newParentId = (largerFrame != null) ? largerFrame.getFrameData().id : null;
+            FrameVisualAdapter largerFrame = getSmallestContainingFrameForFrame(draggedFrameId, endUiX, endUiY);
+            String newParentId = (largerFrame != null) ? largerFrame.getFrameId() : null;
             String currentParent = mDraggedFrame.getFrameData().parentFrame;
 
             if ((currentParent == null && newParentId != null) || (currentParent != null && !currentParent.equals(newParentId))) {
@@ -307,12 +308,12 @@ public class InteractionManager {
         mDraggedFrame = null;
     }
 
-    private UIFrame getSmallestContainingFrameForFrame(String draggedFrameId, float uiX, float uiY) {
-        UIFrame target = null;
+    private FrameVisualAdapter getSmallestContainingFrameForFrame(String draggedFrameId, float uiX, float uiY) {
+        FrameVisualAdapter target = null;
         float minArea = Float.MAX_VALUE;
 
-        for (UIFrame frame : mContext.getAllFrames()) {
-            String fid = frame.getFrameData().id;
+        for (FrameVisualAdapter frame : mContext.getAllFrameVisuals()) {
+            String fid = frame.getFrameId();
             if (fid.equals(draggedFrameId) || (mListener != null && mListener.isCyclicFrame(draggedFrameId, fid))) {
                 continue;
             }
@@ -332,7 +333,7 @@ public class InteractionManager {
             Viewport.PortInfo input = mDraftStartPort.isInput ? mDraftStartPort : endPort;
             Viewport.PortInfo output = mDraftStartPort.isInput ? endPort : mDraftStartPort;
             if (!mContext.hasConnection(output.node, output.portId, input.node, input.portId)) {
-                if (mListener != null) mListener.onConnectPorts(output.node.getNodeData().id, output.portId, input.node.getNodeData().id, input.portId);
+                if (mListener != null) mListener.onConnectPorts(output.node.getNodeId(), output.portId, input.node.getNodeId(), input.portId);
             }
         }
         mDraftStartPort = null;
@@ -367,13 +368,13 @@ public class InteractionManager {
         ViewportCamera camera = mContext.getCamera();
         mDraftLinePaint.setStrokeWidth(UIUtils.dp2px(UIConstants.ViewPort.Connection.LINE_WIDTH_DRAFT) * camera.getScale());
         mDraftStartPort.node.getPortPosition(mDraftStartPort.portId, mDraftStartPort.isInput, mTempPos);
-        canvas.drawLine(camera.uiToScreenX(mDraftStartPort.node.getTranslationX() + mTempPos[0]),
-                camera.uiToScreenY(mDraftStartPort.node.getTranslationY() + mTempPos[1]),
+        canvas.drawLine(camera.uiToScreenX(mDraftStartPort.node.getUiX() + mTempPos[0]),
+                camera.uiToScreenY(mDraftStartPort.node.getUiY() + mTempPos[1]),
                 camera.uiToScreenX(mDraftCurrentUiX), camera.uiToScreenY(mDraftCurrentUiY), mDraftLinePaint);
     }
 
     private boolean isValidConnection(Viewport.PortInfo s, Viewport.PortInfo e) {
-        if (s == null || e == null || s.node == e.node || s.isInput == e.isInput) return false;
+        if (s == null || e == null || s.node.getNodeId().equals(e.node.getNodeId()) || s.isInput == e.isInput) return false;
         return PortType.isCompatible(getPortType(s.isInput ? e : s), getPortType(s.isInput ? s : e));
     }
 

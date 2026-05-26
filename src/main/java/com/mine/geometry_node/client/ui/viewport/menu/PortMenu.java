@@ -2,8 +2,8 @@ package com.mine.geometry_node.client.ui.viewport.menu;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.UINode;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
+import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 
@@ -18,20 +18,20 @@ import icyllis.modernui.widget.TextView;
 
 public class PortMenu {
 
-    public static void show(InteractionContext context, UINode node, String portId, float screenX, float screenY) {
+    public static void show(InteractionContext context, NodeVisualAdapter node, String portId, float screenX, float screenY) {
         String category = "inputs";
         boolean found = false;
         String defaultName = "";
 
         for (PortRow row : node.getNodeDef().rows()) {
             if (row.leftPort() != null && row.leftPort().id().equals(portId)) {
-                category = row.leftPort().type() == PortType.EXECUTION ? "execution" : "inputs";
+                category = row.leftPort().type() == PortType.EXECUTION ? "exec_inputs" : "inputs";
                 defaultName = row.leftPort().displayName().getString();
                 found = true;
                 break;
             }
             if (row.rightPort() != null && row.rightPort().id().equals(portId)) {
-                category = row.rightPort().type() == PortType.EXECUTION ? "execution" : "outputs";
+                category = row.rightPort().type() == PortType.EXECUTION ? "exec_outputs" : "outputs";
                 defaultName = row.rightPort().displayName().getString();
                 found = true;
                 break;

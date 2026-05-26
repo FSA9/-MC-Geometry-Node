@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import icyllis.modernui.graphics.RectF;
 
 /**
  * 视口摄像机管理器
@@ -77,6 +78,20 @@ public class ViewportCamera {
 
     public float uiToScreenY(float uiY) {
         return UIUtils.dp2px(uiY) * mScale + mY;
+    }
+
+    public void getVisibleUiRect(RectF outRect, int viewportWidthPx, int viewportHeightPx, float paddingDp) {
+        float x1 = screenToUIX(0);
+        float y1 = screenToUIY(0);
+        float x2 = screenToUIX(viewportWidthPx);
+        float y2 = screenToUIY(viewportHeightPx);
+
+        outRect.set(
+                Math.min(x1, x2) - paddingDp,
+                Math.min(y1, y2) - paddingDp,
+                Math.max(x1, x2) + paddingDp,
+                Math.max(y1, y2) + paddingDp
+        );
     }
 
     private void notifyChange() {

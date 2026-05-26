@@ -24,6 +24,10 @@ public class CmdRemoveBranch implements ICommand {
     private final Map<String, Object> mBackupInputs = new HashMap<>();
     private final Map<String, List<Connection>> mBackupOutputs = new HashMap<>();
     private final Map<String, Connection> mBackupExecution = new HashMap<>();
+    private final Map<String, NodeData.PortConfig> mBackupPortSettingInputs = new HashMap<>();
+    private final Map<String, NodeData.PortConfig> mBackupPortSettingExecInputs = new HashMap<>();
+    private final Map<String, NodeData.PortConfig> mBackupPortSettingExecOutputs = new HashMap<>();
+    private final Map<String, NodeData.PortConfig> mBackupPortSettingOutputs = new HashMap<>();
     private final List<InboundConnectionBackup> mBackupInbounds = new ArrayList<>();
 
     private record InboundConnectionBackup(String sourceNodeId, String sourcePortId, String targetPortId) {}
@@ -52,6 +56,13 @@ public class CmdRemoveBranch implements ICommand {
         // 备份 execOutputs
         if (targetNode.execOutputs != null) {
             mBackupExecution.putAll(targetNode.execOutputs);
+        }
+
+        if (targetNode.portSettings != null) {
+            backupPortSettings(targetNode.portSettings.inputs, mBackupPortSettingInputs);
+            backupPortSettings(targetNode.portSettings.execInputs, mBackupPortSettingExecInputs);
+            backupPortSettings(targetNode.portSettings.execOutputs, mBackupPortSettingExecOutputs);
+            backupPortSettings(targetNode.portSettings.outputs, mBackupPortSettingOutputs);
         }
 
         for (NodeData otherNode : mGraph.nodes.values()) {
@@ -102,6 +113,7 @@ public class CmdRemoveBranch implements ICommand {
 
         targetNode.inputs.clear();
         targetNode.inputs.putAll(mBackupInputs);
+        restorePortSettings(targetNode);
 
         for (Map.Entry<String, List<Connection>> entry : mBackupOutputs.entrySet()) {
             for (Connection link : entry.getValue()) {
@@ -120,5 +132,35 @@ public class CmdRemoveBranch implements ICommand {
         }
 
         mController.setNodeInputValue(mNodeId, mPropertyKey, mOldCount);
+    }
+
+    private void backupPortSettings(Map<String, NodeData.PortConfig> source, Map<String, NodeData.PortConfig> target) {
+        if (source == null) return;
+        for (Map.Entry<String, NodeData.PortConfig> entry : source.entrySet()) {
+            target.put(entry.getKey(), copyPortConfig(entry.getValue()));
+        }
+    }
+
+    private void restorePortSettings(NodeData node) {
+        node.portSettings = new NodeData.PortSettings();
+        restorePortSettingsMap(mBackupPortSettingInputs, node.portSettings.inputs);
+        restorePortSettingsMap(mBackupPortSettingExecInputs, node.portSettings.execInputs);
+        restorePortSettingsMap(mBackupPortSettingExecOutputs, node.portSettings.execOutputs);
+        restorePortSettingsMap(mBackupPortSettingOutputs, node.portSettings.outputs);
+    }
+
+    private void restorePortSettingsMap(Map<String, NodeData.PortConfig> source, Map<String, NodeData.PortConfig> target) {
+        target.clear();
+        for (Map.Entry<String, NodeData.PortConfig> entry : source.entrySet()) {
+            target.put(entry.getKey(), copyPortConfig(entry.getValue()));
+        }
+    }
+
+    private NodeData.PortConfig copyPortConfig(NodeData.PortConfig source) {
+        if (source == null) return null;
+        NodeData.PortConfig copy = new NodeData.PortConfig();
+        copy.customName = source.customName;
+        copy.hidden = source.hidden;
+        return copy;
     }
 }

@@ -11,6 +11,8 @@ import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.client.ui.viewport.visual.FrameVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
 
 import java.util.*;
 
@@ -92,8 +94,8 @@ public class ViewportController implements EditorContext.EditorListener,
             mCurrentSession.currentScale = mViewport.getCamera().getScale();
 
             mCurrentSession.selectedNodeIds.clear();
-            for (UINode node : mViewport.getSelectedNodes()) {
-                mCurrentSession.selectedNodeIds.add(node.getNodeData().id);
+            for (NodeVisualAdapter node : mViewport.getSelectedNodeVisuals()) {
+                mCurrentSession.selectedNodeIds.add(node.getNodeId());
             }
         }
     }
@@ -136,8 +138,8 @@ public class ViewportController implements EditorContext.EditorListener,
     public void executeGroupIntoFrame() {
         if (mEditorContext == null) return;
         List<String> selectedIds = new ArrayList<>();
-        for (UINode node : mViewport.getSelectedNodes()) {
-            selectedIds.add(node.getNodeData().id);
+        for (NodeVisualAdapter node : mViewport.getSelectedNodeVisuals()) {
+            selectedIds.add(node.getNodeId());
         }
         if (!selectedIds.isEmpty()) {
             CmdGroupIntoFrame cmd = new CmdGroupIntoFrame(mEditorContext.getGraphController(), selectedIds);
@@ -220,16 +222,16 @@ public class ViewportController implements EditorContext.EditorListener,
     public void onCopyRequested() {
         if (mEditorContext == null) return;
 
-        List<UINode> selectedNodes = mViewport.getSelectedNodes();
-        List<UIFrame> selectedFrames = mViewport.getSelectedFrames();
+        List<NodeVisualAdapter> selectedNodes = mViewport.getSelectedNodeVisuals();
+        List<FrameVisualAdapter> selectedFrames = mViewport.getSelectedFrameVisuals();
         if (selectedNodes.isEmpty() && selectedFrames.isEmpty()) return;
 
         Set<String> copiedFrameIds = new HashSet<>();
         Set<String> copiedNodeIds = new HashSet<>();
 
         // 1. 录入明面选中的图元
-        for (UIFrame frame : selectedFrames) copiedFrameIds.add(frame.getFrameData().id);
-        for (UINode node : selectedNodes) copiedNodeIds.add(node.getNodeData().id);
+        for (FrameVisualAdapter frame : selectedFrames) copiedFrameIds.add(frame.getFrameId());
+        for (NodeVisualAdapter node : selectedNodes) copiedNodeIds.add(node.getNodeId());
 
         NodeGraph mainGraph = mEditorContext.getGraph();
 
@@ -279,14 +281,14 @@ public class ViewportController implements EditorContext.EditorListener,
     @Override
     public void onDeleteRequested() {
         if (mEditorContext == null) return;
-        List<UINode> selectedNodes = mViewport.getSelectedNodes();
-        List<UIFrame> selectedFrames = mViewport.getSelectedFrames();
+        List<NodeVisualAdapter> selectedNodes = mViewport.getSelectedNodeVisuals();
+        List<FrameVisualAdapter> selectedFrames = mViewport.getSelectedFrameVisuals();
 
         List<String> nodeIdsToRemove = new java.util.ArrayList<>();
-        for (UINode node : selectedNodes) nodeIdsToRemove.add(node.getNodeData().id);
+        for (NodeVisualAdapter node : selectedNodes) nodeIdsToRemove.add(node.getNodeId());
 
         List<String> frameIdsToRemove = new java.util.ArrayList<>();
-        for (UIFrame frame : selectedFrames) frameIdsToRemove.add(frame.getFrameData().id);
+        for (FrameVisualAdapter frame : selectedFrames) frameIdsToRemove.add(frame.getFrameId());
 
         if (!nodeIdsToRemove.isEmpty()) {
             CmdRemoveNodes cmdN = new CmdRemoveNodes(mEditorContext.getGraphController(), mEditorContext.getGraph(), nodeIdsToRemove);
@@ -305,29 +307,28 @@ public class ViewportController implements EditorContext.EditorListener,
     // EditorListener 数据驱动视图更新接口实现
     // ==========================================
 
-    @Override public void onFrameAdded(com.mine.geometry_node.core.node.FrameData frame) { mViewport.addFrameView(frame.id, new UIFrame(mViewport.getContext(), frame)); }
-    @Override public void onFrameRemoved(String frameId) { mViewport.removeFrameView(frameId); }
+    @Override public void onFrameAdded(com.mine.geometry_node.core.node.FrameData frame) { mViewport.addFrameVisual(frame.id, new UIFrame(frame)); }
+    @Override public void onFrameRemoved(String frameId) { mViewport.removeFrameVisual(frameId); }
     @Override public void onFrameBoundsUpdated(String frameId, float x, float y, float w, float h) { mViewport.updateFrameBounds(frameId); }
-    @Override public void onFrameTitleChanged(String frameId, String newTitle) { mViewport.updateFrameBounds(frameId); }
+    @Override public void onFrameTitleChanged(String frameId, String newTitle) { mViewport.updateFrameVisual(frameId); }
 
     @Override
     public void onNodeAdded(NodeData nodeData) {
         NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(nodeData);
         if (def == null) return;
         UINode uiNode = new UINode(mViewport.getContext(), nodeData, def, mEditorContext);
-        uiNode.setTranslationX(nodeData.getX());
-        uiNode.setTranslationY(nodeData.getY());
-        mViewport.addNodeView(nodeData.id, uiNode);
+        uiNode.setPreviewPosition(nodeData.getX(), nodeData.getY());
+        mViewport.addNodeVisual(nodeData.id, uiNode);
     }
-    @Override public void onNodeRemoved(String nodeId) { mViewport.removeNodeView(nodeId); mViewport.rebuildVisualConnections(); }
+    @Override public void onNodeRemoved(String nodeId) { mViewport.removeNodeVisual(nodeId); mViewport.rebuildVisualConnections(); }
     @Override
     public void onNodeStructureChanged(NodeData nodeData) {
         if (nodeData == null || nodeData.id == null) return;
         boolean wasSelected = mViewport.isNodeSelected(nodeData.id);
-        mViewport.removeNodeView(nodeData.id);
+        mViewport.removeNodeVisual(nodeData.id);
         onNodeAdded(nodeData);
         if (wasSelected) {
-            UINode rebuilt = mViewport.getNodeView(nodeData.id);
+            NodeVisualAdapter rebuilt = mViewport.getNodeVisual(nodeData.id);
             if (rebuilt != null) mViewport.addToSelection(rebuilt);
         }
         mViewport.rebuildVisualConnections();

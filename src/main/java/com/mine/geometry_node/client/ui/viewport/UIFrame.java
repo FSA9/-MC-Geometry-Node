@@ -2,69 +2,65 @@ package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.visual.FrameVisualAdapter;
 import com.mine.geometry_node.core.node.FrameData;
 
-import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
-import icyllis.modernui.view.MotionEvent;
-import icyllis.modernui.widget.FrameLayout;
-import icyllis.modernui.widget.TextView;
+import icyllis.modernui.graphics.text.FontMetricsInt;
+import icyllis.modernui.graphics.text.ShapedText;
+import icyllis.modernui.text.TextDirectionHeuristics;
+import icyllis.modernui.text.TextPaint;
+import icyllis.modernui.text.TextShaper;
 
-public class UIFrame extends FrameLayout {
+public class UIFrame implements FrameVisualAdapter {
     private final FrameData mFrameData;
 
     private float mLogicX = 0;
     private float mLogicY = 0;
+    private float mLogicW = 0;
+    private float mLogicH = 0;
 
     // 仅保留统一的标题栏高度 (逻辑单位 DP)
     public static final float FRAME_HEADER_H = 30f;
 
     private final Paint mPaint = new Paint();
+    private final TextPaint mTitlePaint = new TextPaint();
+    private final FontMetricsInt mTitleMetrics = new FontMetricsInt();
     private final RectF mTempRect = new RectF();
-    private final TextView mTitleView;
+    private ShapedText mTitleText;
     private boolean mIsSelected = false;
 
-    public UIFrame(Context context, FrameData frameData) {
-        super(context);
+    public UIFrame(FrameData frameData) {
         this.mFrameData = frameData;
 
-        setWillNotDraw(false);
         mPaint.setAntiAlias(true);
-
-        mTitleView = new TextView(context);
-        mTitleView.setText(mFrameData.title);
-        mTitleView.setTextColor(UIConstants.CLR_WHITE);
-        mTitleView.setTextSize(16);
-        mTitleView.setGravity(icyllis.modernui.view.Gravity.CENTER);
-
-        LayoutParams titleLp = new LayoutParams(
-                LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(FRAME_HEADER_H)
-        );
-        addView(mTitleView, titleLp);
+        mTitlePaint.setTextAntiAlias(true);
+        mTitlePaint.setTextSize(UIUtils.dp2px(16f));
+        updateTitleText();
 
         updateBounds();
     }
 
+    @Override
     public void updateTitle() {
-        if (mTitleView != null && mFrameData != null) {
-            mTitleView.setText(mFrameData.title);
-        }
+        updateTitleText();
     }
 
+    @Override
     public FrameData getFrameData() {
         return mFrameData;
     }
 
+    @Override
     public void setSelected(boolean selected) {
         if (mIsSelected != selected) {
             mIsSelected = selected;
-            invalidate();
         }
     }
 
+    @Override
     public boolean isSelected() {
         return mIsSelected;
     }
@@ -72,28 +68,27 @@ public class UIFrame extends FrameLayout {
     /**
      * 根据数据更新自己的位置和大小
      */
+    @Override
     public void updateBounds() {
         mLogicX = mFrameData.uiPos[0];
         mLogicY = mFrameData.uiPos[1];
 
         float w = mFrameData.uiSize[0];
         float h = mFrameData.uiSize[1];
-
-        LayoutParams lp = new LayoutParams(UIUtils.dp2pxInt(w), UIUtils.dp2pxInt(h));
-        lp.leftMargin = UIUtils.dp2pxInt(mLogicX);
-        lp.topMargin = UIUtils.dp2pxInt(mLogicY);
-        setLayoutParams(lp);
-
-        super.setTranslationX(0);
-        super.setTranslationY(0);
-
-        invalidate();
+        mLogicW = w;
+        mLogicH = h;
     }
 
     @Override
-    protected void onDraw(Canvas canvas) {
-        float w = getWidth();
-        float h = getHeight();
+    public void drawFrame(Canvas canvas, ViewportCamera camera) {
+        canvas.save();
+        canvas.translate(camera.uiToScreenX(mLogicX), camera.uiToScreenY(mLogicY));
+        canvas.scale(camera.getScale(), camera.getScale());
+        drawFrameLocal(canvas, UIUtils.dp2px(mLogicW), UIUtils.dp2px(mLogicH));
+        canvas.restore();
+    }
+
+    private void drawFrameLocal(Canvas canvas, float w, float h) {
         float scaledRadius = UIUtils.dp2px(4f);
 
         // 1. 画图框整体背景 (半透明)
@@ -110,7 +105,17 @@ public class UIFrame extends FrameLayout {
         mTempRect.set(0, 0, w, headerBottom);
         canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, 0, 0, mPaint);
 
-        // 3. 画整体外部边框
+        // 3. 画标题文字
+        if (mTitleText != null) {
+            mTitlePaint.setColor(UIConstants.CLR_WHITE);
+            mTitlePaint.setAlpha(255);
+            mTitlePaint.getFontMetricsInt(mTitleMetrics);
+            float titleX = (w - mTitleText.getAdvance()) / 2.0f;
+            float titleBaseline = headerBottom / 2.0f - (mTitleMetrics.ascent + mTitleMetrics.descent) / 2.0f;
+            canvas.drawShapedText(mTitleText, titleX, titleBaseline, mTitlePaint);
+        }
+
+        // 4. 画整体外部边框
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(UIUtils.dp2px(mIsSelected ? 2.5f : 1.5f));
         mPaint.setColor(mIsSelected ? UIConstants.CLR_WHITE : mFrameData.color);
@@ -120,30 +125,9 @@ public class UIFrame extends FrameLayout {
     }
 
     /**
-     * 只有点击在标题栏内才拦截事件，点击下方主体区域直接放行给底下的节点和 Viewport。
-     */
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        float ly = UIUtils.px2dp(ev.getY());
-
-        if (ly > FRAME_HEADER_H) {
-            return false;
-        }
-
-        return super.dispatchTouchEvent(ev);
-    }
-
-    /**
-     * 实时拖拽时，增量平移图框的 UI 位置
-     */
-    public void offsetPosition(float dx, float dy) {
-        setTranslationX(getTranslationX() + dx);
-        setTranslationY(getTranslationY() + dy);
-    }
-
-    /**
      * 判定逻辑坐标是否精准落在标题栏的矩形区域内
      */
+    @Override
     public boolean hitTest(float uiX, float uiY) {
         float x = mFrameData.uiPos[0];
         float y = mFrameData.uiPos[1];
@@ -153,35 +137,50 @@ public class UIFrame extends FrameLayout {
     }
 
     @Override
-    public void setTranslationX(float translationX) {
-        mLogicX = translationX; // 核心修复：只修改视觉变量，绝对不碰 mFrameData
-        super.setTranslationX(0);
-        updateMarginPos();
+    public void setPreviewPosition(float x, float y) {
+        mLogicX = x;
+        mLogicY = y;
     }
 
     @Override
-    public void setTranslationY(float translationY) {
-        mLogicY = translationY; // 核心修复：只修改视觉变量，绝对不碰 mFrameData
-        super.setTranslationY(0);
-        updateMarginPos();
+    public void offsetPreviewPosition(float dx, float dy) {
+        setPreviewPosition(mLogicX + dx, mLogicY + dy);
     }
 
     @Override
-    public float getTranslationX() {
+    public void setPreviewBounds(float x, float y, float w, float h) {
+        mLogicW = w;
+        mLogicH = h;
+        setPreviewPosition(x, y);
+    }
+
+    @Override
+    public float getUiX() {
         return mLogicX;
     }
 
     @Override
-    public float getTranslationY() {
+    public float getUiY() {
         return mLogicY;
     }
 
-    private void updateMarginPos() {
-        icyllis.modernui.view.ViewGroup.LayoutParams params = getLayoutParams();
-        if (params instanceof LayoutParams lp) {
-            lp.leftMargin = UIUtils.dp2pxInt(mLogicX);
-            lp.topMargin = UIUtils.dp2pxInt(mLogicY);
-            setLayoutParams(lp);
-        }
+    @Override
+    public float getVisualWidthDp() {
+        return mLogicW;
+    }
+
+    @Override
+    public float getVisualHeightDp() {
+        return mLogicH;
+    }
+
+    @Override
+    public void getLogicalBounds(RectF outRect) {
+        outRect.set(mLogicX, mLogicY, mLogicX + mLogicW, mLogicY + mLogicH);
+    }
+
+    private void updateTitleText() {
+        String title = mFrameData != null && mFrameData.title != null ? mFrameData.title : "";
+        mTitleText = TextShaper.shapeText(title, 0, title.length(), TextDirectionHeuristics.FIRSTSTRONG_LTR, mTitlePaint);
     }
 }

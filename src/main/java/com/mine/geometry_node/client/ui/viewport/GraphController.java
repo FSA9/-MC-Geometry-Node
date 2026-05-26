@@ -10,6 +10,7 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class GraphController {
@@ -147,7 +148,14 @@ public class GraphController {
             removeExecutionConnection(nodeId, invalidExec);
         }
 
-        // 6. 清理其他节点连接到当前节点失效【输入】端口的连线
+        // 6. 清理失效的端口自定义配置
+        ensurePortSettings(node);
+        removeInvalidPortSettings(node.portSettings.inputs, validInputs);
+        removeInvalidPortSettings(node.portSettings.execInputs, validInputs);
+        removeInvalidPortSettings(node.portSettings.outputs, validOutputs);
+        removeInvalidPortSettings(node.portSettings.execOutputs, validOutputs);
+
+        // 7. 清理其他节点连接到当前节点失效【输入】端口的连线
         for (NodeData otherNode : mContext.getGraph().nodes.values()) {
             for (String otherOutPort : new ArrayList<>(otherNode.outputs.keySet())) {
                 List<Connection> links = new ArrayList<>(otherNode.getConnections(otherOutPort));
@@ -159,7 +167,7 @@ public class GraphController {
             }
         }
 
-        // 7. 通知 viewport 重新构建该节点的 UI
+        // 8. 通知 viewport 重新构建该节点的 UI
         mContext.notifyNodeStructureChanged(node);
     }
 
@@ -175,6 +183,7 @@ public class GraphController {
         if (node == null) return;
 
         if (removeIndex < 1 || removeIndex > totalCount) return;
+        ensurePortSettings(node);
 
         for (int i = removeIndex; i < totalCount; i++) {
             String oldSuffix = "_" + (i + 1);
@@ -182,6 +191,7 @@ public class GraphController {
             shiftMapData(node.inputs, oldSuffix, newSuffix);
             shiftMapData(node.outputs, oldSuffix, newSuffix);
             shiftMapData(node.execOutputs, oldSuffix, newSuffix);
+            shiftPortSettings(node.portSettings, oldSuffix, newSuffix);
             shiftConnections(nodeId, oldSuffix, newSuffix);
         }
 
@@ -189,6 +199,7 @@ public class GraphController {
         node.inputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
         node.outputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
         node.execOutputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
+        removePortSettingsSuffix(node.portSettings, lastSuffix);
         shiftConnections(nodeId, lastSuffix, null);
 
         setNodeInputValue(nodeId, propertyKey, totalCount - 1);
@@ -197,8 +208,8 @@ public class GraphController {
     private <V> void shiftMapData(java.util.Map<String, V> map, String oldSuffix, String newSuffix) {
         map.keySet().removeIf(k -> k.endsWith(newSuffix));
 
-        java.util.Map<String, V> toMove = new java.util.HashMap<>();
-        for (java.util.Map.Entry<String, V> entry : map.entrySet()) {
+        Map<String, V> toMove = new java.util.HashMap<>();
+        for (Map.Entry<String, V> entry : map.entrySet()) {
             if (entry.getKey().endsWith(oldSuffix)) {
                 String newKey = entry.getKey().substring(0, entry.getKey().length() - oldSuffix.length()) + newSuffix;
                 toMove.put(newKey, entry.getValue());
@@ -207,6 +218,37 @@ public class GraphController {
 
         map.keySet().removeIf(k -> k.endsWith(oldSuffix));
         map.putAll(toMove);
+    }
+
+    private void shiftPortSettings(NodeData.PortSettings settings, String oldSuffix, String newSuffix) {
+        if (settings == null) return;
+        shiftMapData(settings.inputs, oldSuffix, newSuffix);
+        shiftMapData(settings.execInputs, oldSuffix, newSuffix);
+        shiftMapData(settings.outputs, oldSuffix, newSuffix);
+        shiftMapData(settings.execOutputs, oldSuffix, newSuffix);
+    }
+
+    private void removePortSettingsSuffix(NodeData.PortSettings settings, String suffix) {
+        if (settings == null) return;
+        settings.inputs.keySet().removeIf(k -> k.endsWith(suffix));
+        settings.execInputs.keySet().removeIf(k -> k.endsWith(suffix));
+        settings.outputs.keySet().removeIf(k -> k.endsWith(suffix));
+        settings.execOutputs.keySet().removeIf(k -> k.endsWith(suffix));
+    }
+
+    private void removeInvalidPortSettings(Map<String, NodeData.PortConfig> settings, Set<String> validPorts) {
+        if (settings == null) return;
+        settings.keySet().removeIf(portId -> !validPorts.contains(portId));
+    }
+
+    private void ensurePortSettings(NodeData node) {
+        if (node.portSettings == null) {
+            node.portSettings = new NodeData.PortSettings();
+        }
+        if (node.portSettings.inputs == null) node.portSettings.inputs = new java.util.HashMap<>();
+        if (node.portSettings.execInputs == null) node.portSettings.execInputs = new java.util.HashMap<>();
+        if (node.portSettings.execOutputs == null) node.portSettings.execOutputs = new java.util.HashMap<>();
+        if (node.portSettings.outputs == null) node.portSettings.outputs = new java.util.HashMap<>();
     }
 
     private void shiftConnections(String targetNodeId, String oldSuffix, String newSuffix) {
@@ -237,12 +279,13 @@ public class GraphController {
     public void setPortCustomName(String nodeId, String category, String portId, String newName) {
         NodeData node = mContext.getGraph().getNode(nodeId);
         if (node == null) return;
+        ensurePortSettings(node);
 
         // 根据 category 获取对应的 Map
-        java.util.Map<String, NodeData.PortConfig> targetMap = switch (category) {
+        Map<String, NodeData.PortConfig> targetMap = switch (category) {
             case "inputs" -> node.portSettings.inputs;
-            case "execInputs" -> node.portSettings.execInputs;
-            case "execOutputs" -> node.portSettings.execOutputs;
+            case "exec_inputs" -> node.portSettings.execInputs;
+            case "exec_outputs" -> node.portSettings.execOutputs;
             case "outputs" -> node.portSettings.outputs;
             default -> null;
         };
@@ -261,10 +304,6 @@ public class GraphController {
             mContext.notifyNodeStructureChanged(node);
         }
     }
-
-    private static final float FRAME_PADDING_P = 20f;
-    private static final float FRAME_MARGIN_K = 10f;
-    private static final float FRAME_HEADER_H1 = 30f; // 标题栏高度预留
 
     public void addFrame(com.mine.geometry_node.core.node.FrameData frame) {
         mContext.getGraph().addFrame(frame);
@@ -315,47 +354,17 @@ public class GraphController {
         com.mine.geometry_node.core.node.FrameData frame = mContext.getGraph().getFrame(frameId);
         if (frame == null) return;
 
-        float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE;
-        float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
-        boolean hasChildren = false;
-
-        // 1. 遍历所有节点
-        for (NodeData node : mContext.getGraph().nodes.values()) {
-            if (frameId.equals(node.parentFrame)) {
-                hasChildren = true;
-                minX = Math.min(minX, node.uiPos[0]);
-                minY = Math.min(minY, node.uiPos[1]);
-
-                // 需要你在 NodeData 中补充 uiSize 字段，并在 UINode 排版后更新它
-                float w = (node.uiSize != null && node.uiSize[0] > 0) ? node.uiSize[0] : 150f; // 150f为fallback
-                float h = (node.uiSize != null && node.uiSize[1] > 0) ? node.uiSize[1] : 100f; // 100f为fallback
-
-                maxX = Math.max(maxX, node.uiPos[0] + w);
-                maxY = Math.max(maxY, node.uiPos[1] + h);
-            }
-        }
-
-        // 2. 遍历所有子图框 (支持嵌套)
-        for (com.mine.geometry_node.core.node.FrameData childFrame : mContext.getGraph().frames.values()) {
-            if (frameId.equals(childFrame.parentFrame)) {
-                hasChildren = true;
-                minX = Math.min(minX, childFrame.uiPos[0]);
-                minY = Math.min(minY, childFrame.uiPos[1]);
-                maxX = Math.max(maxX, childFrame.uiPos[0] + childFrame.uiSize[0]);
-                maxY = Math.max(maxY, childFrame.uiPos[1] + childFrame.uiSize[1]);
-            }
-        }
+        FrameBoundsCalculator.Result bounds = FrameBoundsCalculator.computeCommittedBounds(
+                frameId,
+                mContext.getGraph().nodes.values(),
+                mContext.getGraph().frames.values(),
+                null
+        );
 
         // 3. 应用计算结果
-        if (hasChildren) {
-            float newX = minX - FRAME_PADDING_P - FRAME_MARGIN_K;
-            // 顶部额外减去标题栏高度，保证标题栏在 P 区域内起步
-            float newY = minY - FRAME_PADDING_P - FRAME_MARGIN_K - FRAME_HEADER_H1;
-            float newW = (maxX - minX) + 2 * (FRAME_PADDING_P + FRAME_MARGIN_K);
-            float newH = (maxY - minY) + 2 * (FRAME_PADDING_P + FRAME_MARGIN_K) + FRAME_HEADER_H1;
-
-            frame.setPosition(newX, newY);
-            frame.setSize(newW, newH);
+        if (bounds.hasChildren()) {
+            frame.setPosition(bounds.x(), bounds.y());
+            frame.setSize(bounds.width(), bounds.height());
         } else {
             // 如果内部被清空了，维持最后的状态或重置为默认大小，这里选择不强制缩回
             // frame.setSize(200f, 200f);

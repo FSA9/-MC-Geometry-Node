@@ -2,8 +2,8 @@ package com.mine.geometry_node.core.execution.event_handler.dispatcher;
 
 import com.mine.geometry_node.core.execution.GraphEngine;
 import com.mine.geometry_node.core.execution.state.PlayerInputStateManager;
+import com.mine.geometry_node.core.node.nodes.events.display_entity.OnInteraction;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
-import com.mine.geometry_node.core.node.nodes.events.entity.OnInteraction;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import dev.architectury.event.CompoundEventResult;

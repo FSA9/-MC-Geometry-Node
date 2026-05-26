@@ -3,12 +3,14 @@ package com.mine.geometry_node.client.ui.viewport.layers;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionManager;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
+import icyllis.modernui.graphics.RectF;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.viewport.UINode;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
+import com.mine.geometry_node.client.ui.viewport.visual.ConnectionNodeVisual;
 import com.mine.geometry_node.core.node.NodeData;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -16,6 +18,9 @@ public class ConnectionLayer {
     private final Viewport mViewport;
     private final Paint mConnectionPaint = new Paint();
     private final List<VisualConnection> mVisualConnections = new ArrayList<>();
+    private final Map<String, List<VisualConnection>> mConnectionsByNodeId = new HashMap<>();
+    private final RectF mTmpVisibleBounds = new RectF();
+    private static final float CULL_PADDING_DP = 96f;
 
     private final float[] mTempOutPos = new float[2];
     private final float[] mTempInPos  = new float[2];
@@ -35,8 +40,15 @@ public class ConnectionLayer {
         float scaledLineWidth = UIConstants.ViewPort.LINE_WIDTH_CONNECTION * camera.getScale();
         mConnectionPaint.setStrokeWidth(scaledLineWidth);
 
+        boolean canCull = mViewport.getWidth() > 0 && mViewport.getHeight() > 0;
+        if (canCull) {
+            camera.getVisibleUiRect(mTmpVisibleBounds, mViewport.getWidth(), mViewport.getHeight(), CULL_PADDING_DP);
+        }
+
         for (int i = 0; i < mVisualConnections.size(); i++) {
             VisualConnection vc = mVisualConnections.get(i);
+            if (canCull && !vc.intersects(mTmpVisibleBounds.left, mTmpVisibleBounds.top, mTmpVisibleBounds.right, mTmpVisibleBounds.bottom)) continue;
+
             canvas.drawLine(
                     camera.uiToScreenX(vc.startUiX), camera.uiToScreenY(vc.startUiY),
                     camera.uiToScreenX(vc.endUiX), camera.uiToScreenY(vc.endUiY),
@@ -47,6 +59,7 @@ public class ConnectionLayer {
 
     public void rebuildVisualConnections() {
         mVisualConnections.clear();
+        mConnectionsByNodeId.clear();
 
         // 架构更新：利用 Viewport 的 isReady 替代深层判空
         if (!mViewport.isReady()) return;
@@ -55,10 +68,10 @@ public class ConnectionLayer {
         com.mine.geometry_node.core.node.NodeGraph graph = mViewport.getController().getCurrentSession().editorContext.getGraph();
         if (graph == null) return;
 
-        Map<String, UINode> nodeViews = mViewport.getNodeViews();
+        Map<String, ? extends ConnectionNodeVisual> nodeVisuals = mViewport.getConnectionNodeVisuals();
 
         for (NodeData outData : graph.nodes.values()) {
-            UINode outUi = nodeViews.get(outData.id);
+            ConnectionNodeVisual outUi = nodeVisuals.get(outData.id);
             if (outUi == null) continue;
 
             // 处理数据连接
@@ -67,11 +80,12 @@ public class ConnectionLayer {
                     String outPortId = entry.getKey();
                     if (entry.getValue() == null) continue;
                     for (com.mine.geometry_node.core.node.Connection link : entry.getValue()) {
-                        UINode inUi = nodeViews.get(link.targetNodeId());
+                        ConnectionNodeVisual inUi = nodeVisuals.get(link.targetNodeId());
                         if (inUi != null) {
                             VisualConnection vc = new VisualConnection(outUi, outPortId, inUi, link.targetPortName(), false);
                             vc.updateUiCoordinates(mTempOutPos, mTempInPos);
                             mVisualConnections.add(vc);
+                            indexVisualConnection(vc);
                         }
                     }
                 }
@@ -83,11 +97,12 @@ public class ConnectionLayer {
                     String execOutPortId = entry.getKey();
                     com.mine.geometry_node.core.node.Connection link = entry.getValue();
 
-                    UINode inUi = nodeViews.get(link.targetNodeId());
+                    ConnectionNodeVisual inUi = nodeVisuals.get(link.targetNodeId());
                     if (inUi != null) {
                         VisualConnection vc = new VisualConnection(outUi, execOutPortId, inUi, link.targetPortName(), true);
                         vc.updateUiCoordinates(mTempOutPos, mTempInPos);
                         mVisualConnections.add(vc);
+                        indexVisualConnection(vc);
                     }
                 }
             }
@@ -96,16 +111,24 @@ public class ConnectionLayer {
     }
 
     public void updateConnectionsForNode(String nodeId) {
-        boolean needsInvalidate = false;
-        for (int i = 0; i < mVisualConnections.size(); i++) {
-            VisualConnection vc = mVisualConnections.get(i);
-            if (vc.outNode.getNodeData().id.equals(nodeId) || vc.inNode.getNodeData().id.equals(nodeId)) {
-                vc.updateUiCoordinates(mTempOutPos, mTempInPos);
-                needsInvalidate = true;
-            }
+        List<VisualConnection> nodeConnections = mConnectionsByNodeId.get(nodeId);
+        if (nodeConnections == null || nodeConnections.isEmpty()) {
+            return;
         }
-        if (needsInvalidate) {
-            mViewport.invalidate();
+
+        for (int i = 0; i < nodeConnections.size(); i++) {
+            nodeConnections.get(i).updateUiCoordinates(mTempOutPos, mTempInPos);
+        }
+        mViewport.invalidate();
+    }
+
+    private void indexVisualConnection(VisualConnection vc) {
+        String outNodeId = vc.outNode.getNodeId();
+        String inNodeId = vc.inNode.getNodeId();
+
+        mConnectionsByNodeId.computeIfAbsent(outNodeId, ignored -> new ArrayList<>()).add(vc);
+        if (!outNodeId.equals(inNodeId)) {
+            mConnectionsByNodeId.computeIfAbsent(inNodeId, ignored -> new ArrayList<>()).add(vc);
         }
     }
 
@@ -125,8 +148,8 @@ public class ConnectionLayer {
 
         for (VisualConnection vc : cutConnections) {
             listener.onDisconnectPorts(
-                    vc.outNode.getNodeData().id, vc.outPortId,
-                    vc.inNode.getNodeData().id, vc.inPortId
+                    vc.outNode.getNodeId(), vc.outPortId,
+                    vc.inNode.getNodeId(), vc.inPortId
             );
         }
     }
@@ -146,16 +169,16 @@ public class ConnectionLayer {
     }
 
     private static class VisualConnection {
-        final UINode outNode;
+        final ConnectionNodeVisual outNode;
         final String outPortId;
-        final UINode inNode;
+        final ConnectionNodeVisual inNode;
         final String inPortId;
         final boolean isExecution;
 
         float startUiX, startUiY;
         float endUiX, endUiY;
 
-        VisualConnection(UINode outNode, String outPortId, UINode inNode, String inPortId, boolean isExecution) {
+        VisualConnection(ConnectionNodeVisual outNode, String outPortId, ConnectionNodeVisual inNode, String inPortId, boolean isExecution) {
             this.outNode = outNode;
             this.outPortId = outPortId;
             this.inNode = inNode;
@@ -165,12 +188,20 @@ public class ConnectionLayer {
 
         void updateUiCoordinates(float[] tempOutPos, float[] tempInPos) {
             outNode.getPortPosition(outPortId, false, tempOutPos);
-            startUiX = outNode.getTranslationX() + tempOutPos[0];
-            startUiY = outNode.getTranslationY() + tempOutPos[1];
+            startUiX = outNode.getUiX() + tempOutPos[0];
+            startUiY = outNode.getUiY() + tempOutPos[1];
 
             inNode.getPortPosition(inPortId, true, tempInPos);
-            endUiX = inNode.getTranslationX() + tempInPos[0];
-            endUiY = inNode.getTranslationY() + tempInPos[1];
+            endUiX = inNode.getUiX() + tempInPos[0];
+            endUiY = inNode.getUiY() + tempInPos[1];
+        }
+
+        boolean intersects(float l, float t, float r, float b) {
+            float minX = Math.min(startUiX, endUiX);
+            float maxX = Math.max(startUiX, endUiX);
+            float minY = Math.min(startUiY, endUiY);
+            float maxY = Math.max(startUiY, endUiY);
+            return maxX >= l && minX <= r && maxY >= t && minY <= b;
         }
     }
 }

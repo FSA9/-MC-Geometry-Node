@@ -6,6 +6,9 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.viewport.interaction.*;
 import com.mine.geometry_node.client.ui.viewport.layers.*;
 import com.mine.geometry_node.client.ui.viewport.menu.ViewportMenu;
+import com.mine.geometry_node.client.ui.viewport.visual.ConnectionNodeVisual;
+import com.mine.geometry_node.client.ui.viewport.visual.FrameVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.NodeData;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -111,6 +114,9 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
         mNodeLayer = new NodeLayer(getContext(), this);
         addView(mNodeLayer, 1, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+
+        // 子 layer 刚 attach 时可能还没有完成测量；延后一帧同步 overlay 和 culling 状态。
+        post(this::updateTransform);
     }
 
     /**
@@ -138,28 +144,10 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     public void updateTransform() {
         if (mNodeLayer != null) {
-            mNodeLayer.setTranslationX(0);
-            mNodeLayer.setTranslationY(0);
-
-            LayoutParams lp = (LayoutParams) mNodeLayer.getLayoutParams();
-            if (lp == null) lp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
-            lp.leftMargin = (int) mCamera.getX();
-            lp.topMargin = (int) mCamera.getY();
-            mNodeLayer.setLayoutParams(lp);
-
-            mNodeLayer.setScaleX(mCamera.getScale());
-            mNodeLayer.setScaleY(mCamera.getScale());
+            mNodeLayer.updateOverlayTransforms();
 
             if (mFrameLayer != null) {
-                mFrameLayer.setTranslationX(0);
-                mFrameLayer.setTranslationY(0);
-                LayoutParams lpF = (LayoutParams) mFrameLayer.getLayoutParams();
-                if (lpF == null) lpF = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
-                lpF.leftMargin = (int) mCamera.getX();
-                lpF.topMargin = (int) mCamera.getY();
-                mFrameLayer.setLayoutParams(lpF);
-                mFrameLayer.setScaleX(mCamera.getScale());
-                mFrameLayer.setScaleY(mCamera.getScale());
+                mFrameLayer.invalidate();
             }
         }
         invalidate();
@@ -171,6 +159,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
         if (mFirstLayout && w > 0 && h > 0) {
             mCamera.setPosition(w / 2f, h / 2f);
             mFirstLayout = false;
+        } else {
+            updateTransform();
         }
     }
 
@@ -192,16 +182,19 @@ public class Viewport extends FrameLayout implements InteractionContext {
     // 5. 纯粹的图元显示管道接口
     // ==========================================
 
-    public Map<String, UINode> getNodeViews() { return mNodeLayer != null ? mNodeLayer.getNodeViews() : new HashMap<>(); }
-    public void addNodeView(String nodeId, UINode uiNode) { if (mNodeLayer != null) { mNodeLayer.addNodeView(nodeId, uiNode); invalidate(); } }
-    public void removeNodeView(String nodeId) { if (mNodeLayer != null) { mNodeLayer.removeNodeView(nodeId); invalidate(); } }
-    public UINode getNodeView(String nodeId) { return mNodeLayer != null ? mNodeLayer.getNodeView(nodeId) : null; }
+    public Map<String, ? extends NodeVisualAdapter> getNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getNodeVisuals() : new HashMap<>(); }
+    public Map<String, ? extends ConnectionNodeVisual> getConnectionNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getNodeVisuals() : new HashMap<>(); }
+    public void addNodeVisual(String nodeId, NodeVisualAdapter node) { if (mNodeLayer != null) { mNodeLayer.addNodeVisual(nodeId, node); invalidate(); } }
+    public void removeNodeVisual(String nodeId) { if (mNodeLayer != null) { mNodeLayer.removeNodeVisual(nodeId); invalidate(); } }
+    public NodeVisualAdapter getNodeVisual(String nodeId) { return mNodeLayer != null ? mNodeLayer.getNodeVisual(nodeId) : null; }
     public void updateNodePosition(String nodeId, float x, float y) { if (mNodeLayer != null) { mNodeLayer.updateNodePosition(nodeId, x, y); invalidate(); } }
     public void notifyNodeLayoutUpdate(String nodeId) { if (mNodeLayer != null) mNodeLayer.notifyNodeLayoutUpdate(nodeId); }
+    public void notifyNodeVisualMoved(NodeVisualAdapter node) { if (mNodeLayer != null) mNodeLayer.updateOverlayForNode(node); }
 
-    public Map<String, UIFrame> getFrameViews() { return mFrameLayer != null ? mFrameLayer.getFrameViews() : new HashMap<>(); }
-    public void addFrameView(String frameId, UIFrame uiFrame) { if (mFrameLayer != null) { mFrameLayer.addFrameView(frameId, uiFrame); invalidate(); } }
-    public void removeFrameView(String frameId) { if (mFrameLayer != null) { mFrameLayer.removeFrameView(frameId); invalidate(); } }
+    public Map<String, ? extends FrameVisualAdapter> getFrameVisuals() { return mFrameLayer != null ? mFrameLayer.getFrameVisuals() : new HashMap<>(); }
+    public void addFrameVisual(String frameId, FrameVisualAdapter frame) { if (mFrameLayer != null) { mFrameLayer.addFrameVisual(frameId, frame); invalidate(); } }
+    public void removeFrameVisual(String frameId) { if (mFrameLayer != null) { mFrameLayer.removeFrameVisual(frameId); invalidate(); } }
+    public void updateFrameVisual(String frameId) { if (mFrameLayer != null) { mFrameLayer.updateFrameVisual(frameId); invalidate(); } }
 
     @Override public void updateFrameBounds(String frameId) { if (mFrameLayer != null) { mFrameLayer.updateFrameBounds(frameId); invalidate(); } }
     @Override public void updateConnectionsForNode(String nodeId) { mConnectionLayer.updateConnectionsForNode(nodeId); }
@@ -214,17 +207,15 @@ public class Viewport extends FrameLayout implements InteractionContext {
     // ==========================================
 
     @Override public boolean isReady() { return mController != null && mController.hasActiveSession(); }
-    @Override public UINode findNodeAt(float uiX, float uiY) { return mNodeLayer != null ? mNodeLayer.findNodeAt(uiX, uiY) : null; }
+    @Override public NodeVisualAdapter findNodeAt(float uiX, float uiY) { return mNodeLayer != null ? mNodeLayer.findNodeAt(uiX, uiY) : null; }
     @Override public PortInfo findPortAt(float uiX, float uiY) { return mNodeLayer != null ? mNodeLayer.findPortAt(uiX, uiY) : null; }
-    @Override public UIFrame findFrameAt(float uiX, float uiY) { return mFrameLayer != null ? mFrameLayer.findFrameAt(uiX, uiY) : null; }
-    @Override public UIFrame getSmallestContainingFrame(float uiX, float uiY) { return mFrameLayer != null ? mFrameLayer.getSmallestContainingFrame(uiX, uiY) : null; }
-    @Override public Iterable<UIFrame> getAllFrames() { return mFrameLayer != null ? mFrameLayer.getFrameViews().values() : new ArrayList<>(); }
+    @Override public FrameVisualAdapter findFrameAt(float uiX, float uiY) { return mFrameLayer != null ? mFrameLayer.findFrameAt(uiX, uiY) : null; }
+    @Override public FrameVisualAdapter getSmallestContainingFrame(float uiX, float uiY) { return mFrameLayer != null ? mFrameLayer.getSmallestContainingFrame(uiX, uiY) : null; }
+    @Override public Iterable<FrameVisualAdapter> getAllFrameVisuals() { return mFrameLayer != null ? mFrameLayer.getFrameVisuals().values() : new ArrayList<>(); }
 
     @Override public void updateBoxSelection(float uiX, float uiY, float uiW, float uiH) { if (mNodeLayer != null) mNodeLayer.updateBoxSelection(uiX, uiY, uiW, uiH); }
     @Override public void moveSelectedNodes(float uiDx, float uiDy) { if (mNodeLayer != null) mNodeLayer.moveSelectedNodes(uiDx, uiDy); }
-    @Override public List<UINode> getSelectedNodes() { return mNodeLayer != null ? mNodeLayer.getSelectedNodes() : new ArrayList<>(); }
-    @Override public void moveFrameAndChildren(String frameId, float dx, float dy) { if (mFrameLayer != null) mFrameLayer.moveFrameAndChildren(frameId, dx, dy); }
-
+    @Override public List<NodeVisualAdapter> getSelectedNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getSelectedNodeVisuals() : new ArrayList<>(); }
     @Override public void previewFrameMove(String frameId, float totalUiDx, float totalUiDy) { if (mFrameLayer != null) { mFrameLayer.previewFrameMove(frameId, totalUiDx, totalUiDy); invalidate(); } }
 
     @Override
@@ -240,26 +231,26 @@ public class Viewport extends FrameLayout implements InteractionContext {
         if (mFrameLayer != null) mFrameLayer.clearSelection();
     }
     @Override
-    public void addToSelection(UINode node) {
+    public void addToSelection(NodeVisualAdapter node) {
         if (mNodeLayer != null) mNodeLayer.addToSelection(node);
     }
     @Override
-    public void addToSelection(UIFrame frame) {
+    public void addToSelection(FrameVisualAdapter frame) {
         if (mFrameLayer != null) mFrameLayer.addToSelection(frame);
     }
     @Override
-    public List<UIFrame> getSelectedFrames() {
-        return mFrameLayer != null ? mFrameLayer.getSelectedFrames() : new ArrayList<>();
+    public List<FrameVisualAdapter> getSelectedFrameVisuals() {
+        return mFrameLayer != null ? mFrameLayer.getSelectedFrameVisuals() : new ArrayList<>();
     }
     public boolean isNodeSelected(String nodeId) { return mNodeLayer != null && mNodeLayer.isNodeSelected(nodeId); }
     public void updateSelectionState(List<String> selectedNodeIds) { if (mNodeLayer != null) { mNodeLayer.updateSelectionState(selectedNodeIds); invalidate(); } }
 
     @Override
-    public boolean hasConnection(UINode outN, String outId, UINode inN, String inId) {
+    public boolean hasConnection(NodeVisualAdapter outN, String outId, NodeVisualAdapter inN, String inId) {
         List<com.mine.geometry_node.core.node.Connection> links = outN.getNodeData().getConnections(outId);
         if (links == null) return false;
         for (com.mine.geometry_node.core.node.Connection link : links) {
-            if (link.targetNodeId().equals(inN.getNodeData().id) && link.targetPortName().equals(inId)) return true;
+            if (link.targetNodeId().equals(inN.getNodeId()) && link.targetPortName().equals(inId)) return true;
         }
         return false;
     }
@@ -286,7 +277,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override public void requestRenamePort(String nodeId, String category, String portId, String oldName, String newName) { if (mController != null) mController.executeRenamePort(nodeId, category, portId, oldName, newName); }
     @Override public void requestSave() { if (mController != null) mController.onSaveRequested(); }
     @Override public void requestViewportFocus() { requestFocus(); }
-    @Override public void addNodeToScene(UINode node) { if (mNodeLayer != null) mNodeLayer.addView(node); }
     @Override public Context getUIContext() { return getContext(); }
 
     @Override
@@ -331,10 +321,10 @@ public class Viewport extends FrameLayout implements InteractionContext {
     // ==========================================
 
     public static class PortInfo {
-        public UINode node;
-        public String portId;
-        public boolean isInput;
-        public PortInfo(UINode n, String id, boolean in) { this.node = n; this.portId = id; this.isInput = in; }
+        public final NodeVisualAdapter node;
+        public final String portId;
+        public final boolean isInput;
+        public PortInfo(NodeVisualAdapter n, String id, boolean in) { this.node = n; this.portId = id; this.isInput = in; }
     }
 }
 // --- END OF FILE Viewport.java ---
