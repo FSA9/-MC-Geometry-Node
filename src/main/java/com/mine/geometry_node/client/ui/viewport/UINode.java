@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.UIHints.HintRendererFactory;
+import com.mine.geometry_node.client.ui.viewport.UIHints.UIItemSlot;
 import com.mine.geometry_node.client.ui.viewport.UIHints.UIHintRenderer;
 import com.mine.geometry_node.client.ui.viewport.layout.NodeLayout;
 import com.mine.geometry_node.client.ui.viewport.layout.NodeLayoutEngine;
@@ -204,6 +205,15 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
     @Override
     public boolean hasOverlayViews() {
         return mAddButton != null || !mRemoveButtons.isEmpty() || !mHintViews.isEmpty();
+    }
+
+    @Override
+    public void onOverlayScaleChanged(float scale) {
+        for (View view : mHintViews.values()) {
+            if (view instanceof UIItemSlot itemSlot) {
+                itemSlot.setViewportScale(scale);
+            }
+        }
     }
 
     @Override

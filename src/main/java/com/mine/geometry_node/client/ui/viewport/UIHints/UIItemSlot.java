@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.viewport.UIHints;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.screen.PlayerInventoryPickerScreen;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.utils.ItemTooltipProxy;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
@@ -10,6 +11,7 @@ import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
+import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.mc.MinecraftSurfaceView;
@@ -19,14 +21,23 @@ import net.minecraft.client.gui.GuiGraphics;
 import javax.annotation.Nonnull;
 
 public class UIItemSlot extends FrameLayout {
+    private static final float ITEM_SIZE_GUI = 16f;
+    private static final float ITEM_PADDING_GUI = 4f;
+    private static final float ITEM_MAX_SCALE = 1.25f;
+
     private final NodeData mNodeData;
     private final String mPortId;
     private final EditorContext mEditorContext;
     private final Paint mPaint = new Paint();
+    private final RectF mTempRect = new RectF();
 
-    private ItemStack mCachedStack = ItemStack.EMPTY;
+    private volatile ItemStack mCachedStack = ItemStack.EMPTY;
     private String mLastJson = null;
     private long mLastClickTime = 0;
+    private MinecraftSurfaceView mSurfaceView;
+    private volatile float mViewportScale = 1.0f;
+    private int mLastSurfaceWidth = -1;
+    private int mLastSurfaceHeight = -1;
 
     public UIItemSlot(Context context, NodeData nodeData, String portId, EditorContext editorContext) {
         super(context);
@@ -35,10 +46,11 @@ public class UIItemSlot extends FrameLayout {
         this.mEditorContext = editorContext;
 
         setWillNotDraw(false);
+        setClipChildren(false);
         updateCache();
 
-        MinecraftSurfaceView surfaceView = new MinecraftSurfaceView(context);
-        surfaceView.setRenderer(new MinecraftSurfaceView.Renderer() {
+        mSurfaceView = new MinecraftSurfaceView(context);
+        mSurfaceView.setRenderer(new MinecraftSurfaceView.Renderer() {
             @Override
             public void onSurfaceChanged(int width, int height) {}
 
@@ -47,55 +59,90 @@ public class UIItemSlot extends FrameLayout {
                 if (!mCachedStack.isEmpty()) {
                     gr.pose().pushPose();
 
-                    float globalScale = 1.0f;
-                    icyllis.modernui.view.View current = UIItemSlot.this;
-                    while (current != null) {
-                        globalScale *= current.getScaleX();
-                        icyllis.modernui.view.ViewParent parent = current.getParent();
-                        if (parent instanceof icyllis.modernui.view.View) {
-                            current = (icyllis.modernui.view.View) parent;
-                        } else {
-                            current = null;
-                        }
-                    }
+                    float safeGuiScale = guiScale > 0.0 ? (float) guiScale : 1.0f;
+                    float viewportScale = mViewportScale;
+                    float slotGuiW = UIItemSlot.this.getWidth() * viewportScale / safeGuiScale;
+                    float slotGuiH = UIItemSlot.this.getHeight() * viewportScale / safeGuiScale;
+                    float padding = ITEM_PADDING_GUI * viewportScale;
+                    float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - padding * 2.0f);
+                    float itemScale = Math.min(ITEM_MAX_SCALE * viewportScale, contentSize / ITEM_SIZE_GUI);
+                    float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;
+                    float drawY = (slotGuiH - ITEM_SIZE_GUI * itemScale) / 2.0f;
 
-                    // 2. 将原版固定的 16x16 渲染比例缩放到与蓝图一致，彻底解决被裁剪的问题！
-                    gr.pose().scale(globalScale, globalScale, 1.0f);
-
-                    // 3. 计算居中偏移 (逻辑大小减去 16 除以 2)
-                    float logicW = UIItemSlot.this.getWidth();
-                    float logicH = UIItemSlot.this.getHeight();
-                    float offsetX = (logicW - 16f) / 2f;
-                    float offsetY = (logicH - 16f) / 2f;
-
-                    // 4. 渲染物品及其耐久条、角标
-                    gr.renderItem(mCachedStack, (int) offsetX, (int) offsetY);
-                    gr.renderItemDecorations(Minecraft.getInstance().font, mCachedStack, (int) offsetX, (int) offsetY);
+                    gr.pose().translate(drawX, drawY, 0.0f);
+                    gr.pose().scale(itemScale, itemScale, 1.0f);
+                    gr.renderItem(mCachedStack, 0, 0);
+                    gr.renderItemDecorations(Minecraft.getInstance().font, mCachedStack, 0, 0);
 
                     gr.pose().popPose();
                 }
             }
         });
 
-        // 撑满容器
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
-        addView(surfaceView, lp);
+        addView(mSurfaceView, lp);
+    }
+
+    public void setViewportScale(float scale) {
+        float safeScale = scale > 0.0f ? scale : 1.0f;
+        boolean scaleChanged = Math.abs(mViewportScale - safeScale) > 0.001f;
+        if (!scaleChanged && mLastSurfaceWidth >= 0 && mLastSurfaceHeight >= 0) return;
+
+        mViewportScale = safeScale;
+        updateSurfaceBounds();
+        if (scaleChanged && mSurfaceView != null) {
+            mSurfaceView.invalidate();
+        }
+    }
+
+    private void updateSurfaceBounds() {
+        if (mSurfaceView == null || getWidth() <= 0 || getHeight() <= 0) return;
+
+        float viewportScale = Math.max(1.0f, mViewportScale);
+        int surfaceWidth = Math.max(1, Math.round(getWidth() * viewportScale));
+        int surfaceHeight = Math.max(1, Math.round(getHeight() * viewportScale));
+        if (surfaceWidth == mLastSurfaceWidth && surfaceHeight == mLastSurfaceHeight) return;
+
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mSurfaceView.getLayoutParams();
+        if (lp == null) {
+            lp = new FrameLayout.LayoutParams(surfaceWidth, surfaceHeight);
+        } else {
+            lp.width = surfaceWidth;
+            lp.height = surfaceHeight;
+        }
+        lp.leftMargin = 0;
+        lp.topMargin = 0;
+        mSurfaceView.setLayoutParams(lp);
+        mSurfaceView.invalidate();
+
+        mLastSurfaceWidth = surfaceWidth;
+        mLastSurfaceHeight = surfaceHeight;
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        updateSurfaceBounds();
     }
 
     private void updateCache() {
         Object rawVal = mNodeData.inputs.get(mPortId);
         String json = rawVal instanceof String ? (String) rawVal : "";
         if (!json.equals(mLastJson)) {
+            ItemStack previousStack = mCachedStack;
             mLastJson = json;
             if (Minecraft.getInstance().level != null) {
                 mCachedStack = ItemCodecUtils.fromJson(json, Minecraft.getInstance().level.registryAccess());
             } else {
                 mCachedStack = ItemStack.EMPTY;
             }
+            ItemTooltipProxy.clearTooltipTask(previousStack);
+            if (mSurfaceView != null) {
+                mSurfaceView.invalidate();
+            }
         }
     }
 
-    // 绘制灰色凹陷背景
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -103,32 +150,44 @@ public class UIItemSlot extends FrameLayout {
 
         float w = getWidth();
         float h = getHeight();
+        float radius = UIUtils.dp2px(3.0f);
+        float stroke = UIUtils.dp2px(1.0f);
+        float inset = UIUtils.dp2px(3.0f);
         mPaint.setAntiAlias(true);
 
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(0xFF8B8B8B);
-        canvas.drawRect(0, 0, w, h, mPaint);
-        mPaint.setColor(0xFF373737);
-        canvas.drawRect(0, 0, w, 2, mPaint);
-        canvas.drawRect(0, 0, 2, h, mPaint);
-        mPaint.setColor(0xFFFFFFFF);
-        canvas.drawRect(w - 2, 0, w, h, mPaint);
-        canvas.drawRect(0, h - 2, w, h, mPaint);
-        mPaint.setColor(0xFF8B8B8B);
-        canvas.drawRect(2, 2, w - 2, h - 2, mPaint);
+        mPaint.setColor(0xFF171A1F);
+        mTempRect.set(0, 0, w, h);
+        canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
+
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(stroke);
+        mPaint.setColor(0xFF4D535C);
+        mTempRect.set(stroke / 2.0f, stroke / 2.0f, w - stroke / 2.0f, h - stroke / 2.0f);
+        canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
+
+        mPaint.setStyle(Paint.Style.FILL);
+        mPaint.setColor(0xFF252A31);
+        mTempRect.set(inset, inset, w - inset, h - inset);
+        canvas.drawRoundRect(mTempRect, radius * 0.6f, radius * 0.6f, radius * 0.6f, radius * 0.6f, mPaint);
+
+        mPaint.setColor(0x44343A43);
+        canvas.drawRect(inset, inset, w - inset, inset + stroke, mPaint);
+        canvas.drawRect(inset, inset, inset + stroke, h - inset, mPaint);
     }
 
-    // 【关键修复】鼠标悬浮事件，将坐标送给全局 Tooltip 代理
     @Override
     public boolean onHoverEvent(MotionEvent event) {
+        updateCache();
         int action = event.getAction();
         if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE) {
+            if (mCachedStack.isEmpty()) {
+                return super.onHoverEvent(event);
+            }
 
-            // 获取控件在屏幕上的物理坐标
             int[] loc = new int[2];
             getLocationOnScreen(loc);
 
-            // 转换为 Minecraft 的 GUI 坐标，并向右下角稍作偏移，防止遮挡鼠标
             double guiScale = Minecraft.getInstance().getWindow().getGuiScale();
             int guiX = (int) (loc[0] / guiScale) + 12;
             int guiY = (int) (loc[1] / guiScale) + 12;
@@ -141,7 +200,6 @@ public class UIItemSlot extends FrameLayout {
         return super.onHoverEvent(event);
     }
 
-    // 防止节点被删除时产生幽灵 Tooltip
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
@@ -176,7 +234,6 @@ public class UIItemSlot extends FrameLayout {
                     );
                     updateCache();
                     this.invalidate();
-                    // 重新选择物品后清理之前的 Hover 缓存
                     ItemTooltipProxy.clearTooltipTask(mCachedStack);
                 }
             }));

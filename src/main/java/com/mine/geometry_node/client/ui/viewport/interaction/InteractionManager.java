@@ -235,8 +235,8 @@ public class InteractionManager {
         mDragStartUiX = uiX; mDragStartUiY = uiY;
         if (!target.isSelected()) {
             mContext.clearSelection();
-            mContext.addToSelection(target);
         }
+        mContext.addToSelection(target);
     }
 
     private void enterSelectingMode(float uiX, float uiY) {

@@ -11,31 +11,33 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 
 public class ItemSlotHintRenderer implements UIHintRenderer {
+    private static final float SLOT_SIZE_DP = 28.0f;
+    private static final float EXTRA_ROWS = 2.0f;
 
     @Override
     public float getRequiredExtraRows(PortRow row) {
-        // 物品槽稍微大一点，需要占用 2 行的高度
-        return 1.5f;
+        return EXTRA_ROWS;
     }
 
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
         String portId = row.leftPort().id();
 
-        // 创建我们自定义的物品槽控件（第三步实现）
         UIItemSlot slotView = new UIItemSlot(context, nodeData, portId, editorContext);
         return slotView;
     }
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        // 设定槽位在节点中的大小 (比如 28x28 dp)
-        int slotSizePx = UIUtils.dp2pxInt(28);
+        int slotSizePx = UIUtils.dp2pxInt(SLOT_SIZE_DP);
+        boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
+        float topOffset = hasLabel ? UIConstants.Node.ROW_HEIGHT : 0.0f;
+        float hintAreaHeight = UIConstants.Node.ROW_HEIGHT * EXTRA_ROWS;
+        float topGap = Math.max(0.0f, (hintAreaHeight - SLOT_SIZE_DP) / 2.0f);
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(slotSizePx, slotSizePx);
-        // 居中放置
         lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
-        lp.topMargin = UIUtils.dp2pxInt(currentY + 4);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + topGap);
 
         view.setLayoutParams(lp);
     }

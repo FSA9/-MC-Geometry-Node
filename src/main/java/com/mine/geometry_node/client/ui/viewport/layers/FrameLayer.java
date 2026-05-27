@@ -98,10 +98,18 @@ public class FrameLayer extends FrameLayout {
     }
 
     public void addToSelection(FrameVisualAdapter frame) {
-        if (frame != null && !mSelectedFrames.contains(frame)) {
+        if (frame == null) return;
+        if (!mSelectedFrames.contains(frame)) {
             frame.setSelected(true);
             mSelectedFrames.add(frame);
-            invalidate();
+        }
+        bringFrameToFront(frame);
+        invalidate();
+    }
+
+    private void bringFrameToFront(FrameVisualAdapter frame) {
+        if (mFrameOrder.remove(frame)) {
+            mFrameOrder.add(frame);
         }
     }
 

@@ -80,10 +80,10 @@ public class NodeLayer extends FrameLayout {
         for (String id : selectedNodeIds) {
             NodeVisualAdapter node = mNodeVisuals.get(id);
             if (node != null) {
-                node.setSelected(true);
-                mSelectedNodes.add(node);
+                selectNode(node);
             }
         }
+        bringSelectedNodesToFront();
         invalidate();
     }
 
@@ -94,10 +94,42 @@ public class NodeLayer extends FrameLayout {
     }
 
     public void addToSelection(NodeVisualAdapter node) {
-        if (!mSelectedNodes.contains(node)) {
+        if (node == null) return;
+        if (mSelectedNodes.remove(node)) {
+            mSelectedNodes.add(node);
+        } else {
+            selectNode(node);
+        }
+        bringSelectedNodesToFront();
+        invalidate();
+    }
+
+    private void selectNode(NodeVisualAdapter node) {
+        if (node != null && !mSelectedNodes.contains(node)) {
             mSelectedNodes.add(node);
             node.setSelected(true);
-            invalidate();
+        }
+    }
+
+    private void bringSelectedNodesToFront() {
+        if (mSelectedNodes.isEmpty()) return;
+        mNodeOrder.removeAll(mSelectedNodes);
+        mNodeOrder.addAll(mSelectedNodes);
+        for (NodeVisualAdapter node : mSelectedNodes) {
+            bringOverlayHostToFront(node);
+        }
+    }
+
+    private void bringOverlayHostToFront(NodeVisualAdapter node) {
+        View overlayHost = node.getOverlayHostView();
+        if (overlayHost == null || overlayHost.getParent() != this) return;
+
+        LayoutParams lp = (LayoutParams) overlayHost.getLayoutParams();
+        removeView(overlayHost);
+        if (lp != null) {
+            addView(overlayHost, lp);
+        } else {
+            addView(overlayHost);
         }
     }
 
@@ -167,6 +199,7 @@ public class NodeLayer extends FrameLayout {
         overlayHost.setPivotY(0);
         overlayHost.setScaleX(scale);
         overlayHost.setScaleY(scale);
+        node.onOverlayScaleChanged(scale);
     }
 
     @Override
@@ -230,10 +263,12 @@ public class NodeLayer extends FrameLayout {
         float selRight = uiX + uiW;
         float selBottom = uiY + uiH;
 
-        for (NodeVisualAdapter n : mNodeOrder) {
+        List<NodeVisualAdapter> orderedNodes = new ArrayList<>(mNodeOrder);
+        for (NodeVisualAdapter n : orderedNodes) {
             n.getLogicalBounds(mTmpNodeBounds);
-            if (mTmpNodeBounds.intersects(uiX, uiY, selRight, selBottom)) addToSelection(n);
+            if (mTmpNodeBounds.intersects(uiX, uiY, selRight, selBottom)) selectNode(n);
         }
+        bringSelectedNodesToFront();
         invalidate();
     }
 

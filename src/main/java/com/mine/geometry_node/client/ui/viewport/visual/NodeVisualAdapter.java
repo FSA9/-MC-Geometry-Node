@@ -27,6 +27,8 @@ public interface NodeVisualAdapter extends CanvasVisualItem, ConnectionNodeVisua
 
     boolean hasOverlayViews();
 
+    default void onOverlayScaleChanged(float scale) {}
+
     int getTotalHeightDp();
 
     void updateNodeLayout();

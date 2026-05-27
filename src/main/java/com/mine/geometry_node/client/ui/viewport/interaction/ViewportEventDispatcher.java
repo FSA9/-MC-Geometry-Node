@@ -67,17 +67,20 @@ public class ViewportEventDispatcher {
             if (isMouseHoverMove || isActionDown) {
                 HintHitResult hitResult = findInteractiveHint(ev);
                 if (hitResult != null) {
-                    boolean handled = dispatchTransformedEvent(ev, hitResult.view(), hitResult.isLogical(), !hitResult.isLogical());
+                    View targetView = hitResult.view();
+                    if (isActionDown) {
+                        if (!mViewport.getSelectedNodeVisuals().contains(hitResult.node())) {
+                            mViewport.clearSelection();
+                        }
+                        mViewport.addToSelection(hitResult.node());
+                        mViewport.invalidate();
+                    }
+
+                    boolean handled = dispatchTransformedEvent(ev, targetView, hitResult.isLogical(), !hitResult.isLogical());
                     if (handled) {
                         if (isActionDown) {
-                            mCapturedHintView = hitResult.view();
+                            mCapturedHintView = targetView;
                             mHintCaptureUsesLogical = hitResult.isLogical();
-                            // 联动选中状态
-                            if (!mViewport.getSelectedNodeVisuals().contains(hitResult.node())) {
-                                mViewport.clearSelection();
-                                mViewport.addToSelection(hitResult.node());
-                                mViewport.invalidate();
-                            }
                         }
                         return true;
                     }
