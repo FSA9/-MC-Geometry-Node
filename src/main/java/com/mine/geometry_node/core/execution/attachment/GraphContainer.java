@@ -15,6 +15,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,7 +40,7 @@ public class GraphContainer {
     public void tick(ServerLevel level, @Nullable Entity target) {
         if (processes.isEmpty()) return;
         long currentTime = level.getGameTime();
-        for (GraphProcess process : processes.values()) {
+        for (GraphProcess process : List.copyOf(processes.values())) {
             process.setEnvironment(level, target);
             process.tick(currentTime);
         }

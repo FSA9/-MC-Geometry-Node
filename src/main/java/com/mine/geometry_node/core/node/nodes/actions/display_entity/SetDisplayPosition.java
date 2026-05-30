@@ -47,10 +47,10 @@ public class SetDisplayPosition extends BaseNode {
         for (Entity entity : entities) {
             if (entity instanceof Display displayEntity) {
 
-                if (tpDuration != null && tpDuration > 0) {
+                if (tpDuration != null) {
                     CompoundTag nbt = new CompoundTag();
                     displayEntity.saveWithoutId(nbt);
-                    nbt.putInt("teleport_duration", tpDuration);
+                    nbt.putInt("teleport_duration", Math.max(0, tpDuration));
                     displayEntity.load(nbt);
                 }
 

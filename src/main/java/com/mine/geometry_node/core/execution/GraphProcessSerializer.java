@@ -10,6 +10,7 @@ import net.minecraft.nbt.Tag;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.UUID;
 
 
 public class GraphProcessSerializer {
@@ -41,6 +42,14 @@ public class GraphProcessSerializer {
                 tTag.putInt("CurrentFlowId", thread.currentFlowId);
                 if (thread.currentEntryPort != null) {
                     tTag.putString("CurrentEntryPort", thread.currentEntryPort);
+                }
+                String contextDimension = thread.getThreadDimensionId();
+                if (contextDimension != null) {
+                    tTag.putString("ContextDimension", contextDimension);
+                }
+                UUID contextEntity = thread.getThreadEntityUuid();
+                if (contextEntity != null) {
+                    tTag.putString("ContextEntity", contextEntity.toString());
                 }
 
                 ListTag execStackTag = new ListTag();
@@ -101,6 +110,16 @@ public class GraphProcessSerializer {
                 if (currentPort == null || currentPort.isEmpty()) currentPort = "flow_in";
 
                 GraphProcess.ExecutionThread thread = process.new ExecutionThread(currentFlowId, currentPort);
+                UUID contextEntity = null;
+                if (tTag.contains("ContextEntity", Tag.TAG_STRING)) {
+                    try {
+                        contextEntity = UUID.fromString(tTag.getString("ContextEntity"));
+                    } catch (IllegalArgumentException ignored) {}
+                }
+                String contextDimension = tTag.contains("ContextDimension", Tag.TAG_STRING)
+                        ? tTag.getString("ContextDimension")
+                        : null;
+                thread.restoreEnvironment(contextDimension, contextEntity);
 
                 if (tTag.contains("ExecutionStack", Tag.TAG_LIST)) {
                     ListTag stackList = tTag.getList("ExecutionStack", Tag.TAG_COMPOUND);

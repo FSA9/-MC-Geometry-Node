@@ -4,13 +4,13 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.execution.attachment.*;
 import com.mine.geometry_node.core.execution.event_handler.GraphEventHandler;
 import com.mine.geometry_node.core.execution.storage.*;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -23,15 +23,30 @@ public class GraphEngine {
     // ==========================================
     // 高性能事件订阅字典 (保持现状)
     // ==========================================
-    private static final Map<String, Set<Entity>> eventSubscribers = new HashMap<>();
+    private static final Map<String, Map<Entity, Set<String>>> eventSubscribers = new HashMap<>();
 
-    private static void addSubscriber(String frequency, Entity entity) {
-        eventSubscribers.computeIfAbsent(frequency, k -> Collections.newSetFromMap(new WeakHashMap<>())).add(entity);
+    private static void addSubscriber(String frequency, Entity entity, String graphId) {
+        eventSubscribers
+                .computeIfAbsent(frequency, k -> new WeakHashMap<>())
+                .computeIfAbsent(entity, k -> new HashSet<>())
+                .add(normalizeSubscriptionGraphId(graphId));
     }
 
-    private static void removeSubscriber(String frequency, Entity entity) {
-        Set<Entity> set = eventSubscribers.get(frequency);
-        if (set != null) set.remove(entity);
+    private static void removeSubscriber(String frequency, Entity entity, String graphId) {
+        Map<Entity, Set<String>> entities = eventSubscribers.get(frequency);
+        if (entities == null) return;
+
+        Set<String> graphIds = entities.get(entity);
+        if (graphIds != null) {
+            graphIds.remove(normalizeSubscriptionGraphId(graphId));
+            if (graphIds.isEmpty()) {
+                entities.remove(entity);
+            }
+        }
+
+        if (entities.isEmpty()) {
+            eventSubscribers.remove(frequency);
+        }
     }
 
     // ==========================================
@@ -94,15 +109,18 @@ public class GraphEngine {
         }
 
         // 实体作用域
-        Set<Entity> entities = eventSubscribers.get(frequency);
+        Map<Entity, Set<String>> entities = eventSubscribers.get(frequency);
         if (entities != null) {
-            Entity[] snapshot = entities.toArray(new Entity[0]);
+            Entity[] snapshot = entities.keySet().toArray(new Entity[0]);
             for (Entity target : snapshot) {
                 if (target.isRemoved()) continue;
                 if (target.level() instanceof ServerLevel targetLevel) {
                     EntityGraphAttachment entityAttachment = getAttachment(target);
                     if (entityAttachment != null) {
+                        Set<String> graphIds = entities.get(target);
+                        if (graphIds == null || graphIds.isEmpty()) continue;
                         for (String graphId : entityAttachment.getBoundGraphs()) {
+                            if (!graphIds.contains(normalizeSubscriptionGraphId(graphId))) continue;
                             triggerCustomOnProcess(targetLevel, target, graphId, targetEventType, frequency, initializer,
                                     id -> entityAttachment.getProcess(id),
                                     entityAttachment::addProcess);
@@ -154,20 +172,16 @@ public class GraphEngine {
         RuntimeGraphIndex index = getGraphIndex(graphId);
         if (index == null) return;
 
-        List<Integer> startNodeIds = index.findNodesByType(eventNodeId);
+        List<Integer> startNodeIds = index.findReceiveBlueprintNodes(targetFrequency);
         for (int nodeId : startNodeIds) {
-            Object staticFreq = index.getNodeStaticInput(nodeId, "frequency");
-            if (targetFrequency.equals(String.valueOf(staticFreq))) {
-
-                GraphProcess process = processFinder.apply(graphId);
-                if (process == null) {
-                    process = new GraphProcess(graphId, index);
-                    mountAction.accept(process);
-                }
-
-                process.setEnvironment(level, target);
-                process.executeEvent(nodeId, initializer);
+            GraphProcess process = processFinder.apply(graphId);
+            if (process == null) {
+                process = new GraphProcess(graphId, index);
+                mountAction.accept(process);
             }
+
+            process.setEnvironment(level, target);
+            process.executeEvent(nodeId, initializer);
         }
     }
 
@@ -259,23 +273,39 @@ public class GraphEngine {
     private static void registerEntityForGraph(Entity entity, String graphId) {
         RuntimeGraphIndex index = getGraphIndex(graphId);
         if (index == null) return;
-        List<Integer> nodes = index.findNodesByType("receive_blueprint");
-        for (int nodeId : nodes) {
-            Object freq = index.getNodeStaticInput(nodeId, "frequency");
-            if (freq != null && !String.valueOf(freq).isEmpty()) {
-                addSubscriber(String.valueOf(freq), entity);
-            }
+        for (String frequency : index.getReceiveBlueprintFrequencies()) {
+            addSubscriber(frequency, entity, graphId);
         }
     }
 
     private static void unregisterEntityForGraph(Entity entity, String graphId) {
         RuntimeGraphIndex index = getGraphIndex(graphId);
+        unregisterEntityForGraph(entity, graphId, index);
+    }
+
+    private static void unregisterEntityForGraph(Entity entity, String graphId, @Nullable RuntimeGraphIndex index) {
         if (index == null) return;
-        List<Integer> nodes = index.findNodesByType("receive_blueprint");
-        for (int nodeId : nodes) {
-            Object freq = index.getNodeStaticInput(nodeId, "frequency");
-            if (freq != null && !String.valueOf(freq).isEmpty()) {
-                removeSubscriber(String.valueOf(freq), entity);
+        for (String frequency : index.getReceiveBlueprintFrequencies()) {
+            removeSubscriber(frequency, entity, graphId);
+        }
+    }
+
+    public static void refreshGraphSubscriptions(MinecraftServer server, String graphId,
+                                                 @Nullable RuntimeGraphIndex oldIndex,
+                                                 @Nullable RuntimeGraphIndex newIndex) {
+        if (server == null) return;
+
+        for (ServerLevel level : server.getAllLevels()) {
+            for (Entity entity : level.getAllEntities()) {
+                EntityGraphAttachment attachment = getAttachment(entity);
+                if (attachment == null || !attachment.getBoundGraphs().contains(graphId)) continue;
+
+                unregisterEntityForGraph(entity, graphId, oldIndex);
+                if (newIndex != null) {
+                    for (String frequency : newIndex.getReceiveBlueprintFrequencies()) {
+                        addSubscriber(frequency, entity, graphId);
+                    }
+                }
             }
         }
     }
@@ -290,5 +320,10 @@ public class GraphEngine {
 
     private static EntityGraphAttachment getAttachment(Entity entity) {
         return entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
+    }
+
+    private static String normalizeSubscriptionGraphId(String graphId) {
+        RuntimeGraphIndex dynamicIndex = DynamicGraphManager.getIndex(GraphIdMapper.normalizeId(graphId));
+        return dynamicIndex != null ? GraphIdMapper.normalizeId(graphId) : graphId;
     }
 }

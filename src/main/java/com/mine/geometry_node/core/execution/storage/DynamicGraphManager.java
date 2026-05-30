@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.execution.storage;
 
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.execution.GraphEngine;
 import com.mine.geometry_node.core.execution.RuntimeGraphIndex;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -59,7 +60,8 @@ public class DynamicGraphManager {
                     com.mine.geometry_node.core.execution.RuntimeGraphIndex.build(reader);
 
             String normalizedId = GraphIdMapper.pathToId(folder, file.toPath());
-            dynamicIndexCache.put(normalizedId, index);
+            RuntimeGraphIndex oldIndex = dynamicIndexCache.put(normalizedId, index);
+            GraphEngine.refreshGraphSubscriptions(server, normalizedId, oldIndex, index);
         }
     }
 

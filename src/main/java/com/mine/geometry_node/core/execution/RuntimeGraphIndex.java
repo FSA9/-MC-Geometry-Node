@@ -47,6 +47,7 @@ public class RuntimeGraphIndex {
 
     // --- 分类与查询辅助 ---
     private final Map<String, List<Integer>> typeLookup;                  // 按节点类型归类 (常用于查找事件起始节点)
+    private final Map<String, List<Integer>> receiveBlueprintLookup;
 
     // ====================================================
     // 3. 构造与工厂方法 (Constructors & Factory)
@@ -59,6 +60,7 @@ public class RuntimeGraphIndex {
                               IntFlowTarget[][] flowOutputArray,
                               IntConnectionSource[][] inputArray,
                               Map<String, List<Integer>> typeLookup,
+                              Map<String, List<Integer>> receiveBlueprintLookup,
                               Map<String, Object>[] propertyArray,
                               Map<String, Object>[] staticInputArray,
                               Map<String, Integer> keyDictionary,
@@ -70,6 +72,7 @@ public class RuntimeGraphIndex {
         this.flowOutputArray = flowOutputArray;
         this.inputArray = inputArray;
         this.typeLookup = typeLookup;
+        this.receiveBlueprintLookup = receiveBlueprintLookup;
         this.propertyArray = propertyArray;
         this.staticInputArray = staticInputArray;
         this.keyDictionary = keyDictionary;
@@ -164,7 +167,23 @@ public class RuntimeGraphIndex {
             typeToIntList.put(entry.getKey(), List.copyOf(intList));
         }
 
-        return new RuntimeGraphIndex(idToString, stringToId, nodeDataArray, typeArray, flowOutputArray, inputArray, typeToIntList, propertyArray, staticInputArray, keyDict, dictReverse);
+        Map<String, List<Integer>> receiveLookup = new HashMap<>();
+        List<Integer> receiveNodes = typeToIntList.getOrDefault("receive_blueprint", List.of());
+        for (int nodeId : receiveNodes) {
+            Object frequency = staticInputArray[nodeId].get("frequency");
+            if (frequency == null) continue;
+
+            String frequencyKey = String.valueOf(frequency);
+            if (frequencyKey.isEmpty()) continue;
+
+            receiveLookup.computeIfAbsent(frequencyKey, k -> new ArrayList<>()).add(nodeId);
+        }
+        Map<String, List<Integer>> receiveLookupImmutable = new HashMap<>();
+        for (Map.Entry<String, List<Integer>> entry : receiveLookup.entrySet()) {
+            receiveLookupImmutable.put(entry.getKey(), List.copyOf(entry.getValue()));
+        }
+
+        return new RuntimeGraphIndex(idToString, stringToId, nodeDataArray, typeArray, flowOutputArray, inputArray, typeToIntList, Map.copyOf(receiveLookupImmutable), propertyArray, staticInputArray, keyDict, dictReverse);
     }
 
     // ====================================================
@@ -288,6 +307,14 @@ public class RuntimeGraphIndex {
      */
     public List<Integer> findNodesByType(String nodeType) {
         return typeLookup.getOrDefault(nodeType, List.of());
+    }
+
+    public List<Integer> findReceiveBlueprintNodes(String frequency) {
+        return receiveBlueprintLookup.getOrDefault(frequency, List.of());
+    }
+
+    public Set<String> getReceiveBlueprintFrequencies() {
+        return receiveBlueprintLookup.keySet();
     }
 
 

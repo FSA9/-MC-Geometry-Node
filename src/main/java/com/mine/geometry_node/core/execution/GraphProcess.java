@@ -61,6 +61,7 @@ public class GraphProcess {
     final PriorityQueue<ExecutionThread> sleepingThreads = new PriorityQueue<>(Comparator.comparingLong(t -> t.wakeUpTick));  // 挂起的协程线程
     boolean needsTimeRebase = false;  // 读档标记
 
+    private static final int MAX_POOLED_THREADS = 128;
     private final ArrayDeque<ExecutionThread> THREAD_POOL = new ArrayDeque<>();
 
     private ExecutionThread borrowThread(int startNodeId, String startPortName) {
@@ -74,7 +75,9 @@ public class GraphProcess {
     }
 
     private void recycleThread(ExecutionThread thread) {
-        THREAD_POOL.offer(thread);
+        if (THREAD_POOL.size() < MAX_POOLED_THREADS) {
+            THREAD_POOL.offer(thread);
+        }
     }
 
     // ================================
@@ -170,6 +173,9 @@ public class GraphProcess {
         private int activeNodeId = -1;
         public long wakeUpTick = -1; // 仅在 WAITING 状态有效
         private int runDepth = 0;
+        private ServerLevel threadLevel;
+        private String threadDimensionId;
+        private UUID threadEntityUuid;
 
         // --- 线程私有寄存器 (Zero-Allocation 核心) ---
         final List<RuntimeGraphIndex.IntFlowTarget> executionStack = new ArrayList<>();
@@ -185,6 +191,7 @@ public class GraphProcess {
         public ExecutionThread(int startNodeId, String startPortName) {
             this.currentFlowId = startNodeId;
             this.currentEntryPort = startPortName;
+            captureEnvironment();
         }
 
         @Override
@@ -209,6 +216,36 @@ public class GraphProcess {
             this.tempData.clear();
             Arrays.fill(this.eventRegisters, null);
             if (this.dynamicEventData != null) this.dynamicEventData.clear();
+            captureEnvironment();
+        }
+
+        void captureEnvironment() {
+            this.threadLevel = GraphProcess.this.level;
+            this.threadDimensionId = this.threadLevel != null ? this.threadLevel.dimension().location().toString() : null;
+            this.threadEntityUuid = GraphProcess.this.entity != null ? GraphProcess.this.entity.getUUID() : null;
+        }
+
+        void restoreEnvironment(@Nullable ServerLevel level, @Nullable UUID entityUuid) {
+            this.threadLevel = level;
+            this.threadDimensionId = level != null ? level.dimension().location().toString() : null;
+            this.threadEntityUuid = entityUuid;
+        }
+
+        void restoreEnvironment(@Nullable String dimensionId, @Nullable UUID entityUuid) {
+            this.threadLevel = null;
+            this.threadDimensionId = dimensionId;
+            this.threadEntityUuid = entityUuid;
+        }
+
+        @Nullable
+        String getThreadDimensionId() {
+            if (this.threadDimensionId != null) return this.threadDimensionId;
+            return this.threadLevel != null ? this.threadLevel.dimension().location().toString() : null;
+        }
+
+        @Nullable
+        UUID getThreadEntityUuid() {
+            return this.threadEntityUuid;
         }
 
         /**
@@ -302,7 +339,15 @@ public class GraphProcess {
                     }
                 }
                 case ExecutionResult.Wait wait -> {
-                    this.wakeUpTick = level.getGameTime() + wait.ticks();
+                    ServerLevel currentLevel = getLevel();
+                    if (currentLevel == null) {
+                        this.state = State.ERROR;
+                        this.currentFlowId = -1;
+                        this.executionStack.clear();
+                        return;
+                    }
+
+                    this.wakeUpTick = currentLevel.getGameTime() + wait.ticks();
                     RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(currentFlowId, wait.nextPortName());
                     if (target != null) this.executionStack.add(target);
 
@@ -382,10 +427,31 @@ public class GraphProcess {
         // ==========================================
 
         @Override
-        public ServerLevel getLevel() { return GraphProcess.this.level; }
+        public ServerLevel getLevel() {
+            if (this.threadLevel != null) return this.threadLevel;
+            if (this.threadDimensionId != null && GraphProcess.this.level != null) {
+                ResourceLocation dimensionLocation = ResourceLocation.tryParse(this.threadDimensionId);
+                if (dimensionLocation != null) {
+                    ResourceKey<Level> dimensionKey = ResourceKey.create(Registries.DIMENSION, dimensionLocation);
+                    ServerLevel resolved = GraphProcess.this.level.getServer().getLevel(dimensionKey);
+                    if (resolved != null) {
+                        this.threadLevel = resolved;
+                        return resolved;
+                    }
+                }
+            }
+            return GraphProcess.this.level;
+        }
 
         @Override
-        public Entity getEntity() { return GraphProcess.this.entity; }
+        public Entity getEntity() {
+            ServerLevel currentLevel = getLevel();
+            if (this.threadEntityUuid != null && currentLevel != null) {
+                Entity res = currentLevel.getEntity(this.threadEntityUuid);
+                return (res == null || res.isRemoved()) ? null : res;
+            }
+            return null;
+        }
 
         @Override
         public String getGraphId() { return GraphProcess.this.graphId; }
@@ -402,8 +468,9 @@ public class GraphProcess {
                 }
 
                 if (val != null) {
-                    if (val instanceof UUID uuid && level != null) {
-                        Entity res = level.getEntity(uuid);
+                    ServerLevel currentLevel = getLevel();
+                    if (val instanceof UUID uuid && currentLevel != null) {
+                        Entity res = currentLevel.getEntity(uuid);
                         return (res == null || res.isRemoved()) ? null : res;
                     }
                     return val;
@@ -440,8 +507,9 @@ public class GraphProcess {
                 val = dynamicEventData.get(key);
             }
 
-            if (val instanceof UUID uuid && level != null) {
-                Entity res = level.getEntity(uuid);
+            ServerLevel currentLevel = getLevel();
+            if (val instanceof UUID uuid && currentLevel != null) {
+                Entity res = currentLevel.getEntity(uuid);
                 return (res == null || res.isRemoved()) ? null : res;
             }
             return val;
@@ -485,8 +553,11 @@ public class GraphProcess {
             if (target instanceof Entity ent) {
                 EntityGraphAttachment att = ent.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
                 if (att != null) att.setAttribute(name, value);
-            } else if ("GLOBAL".equals(target) && level != null) {
-                LevelGraphAttachment.get(level.getServer().overworld()).setAttribute(name, value);
+            } else if ("GLOBAL".equals(target)) {
+                ServerLevel currentLevel = getLevel();
+                if (currentLevel != null) {
+                    LevelGraphAttachment.get(currentLevel.getServer().overworld()).setAttribute(name, value);
+                }
             }
         }
 
@@ -496,8 +567,11 @@ public class GraphProcess {
             if (target instanceof Entity ent) {
                 EntityGraphAttachment att = ent.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
                 return att != null ? att.getAttribute(name) : null;
-            } else if ("GLOBAL".equals(target) && level != null) {
-                return LevelGraphAttachment.get(level.getServer().overworld()).getAttribute(name);
+            } else if ("GLOBAL".equals(target)) {
+                ServerLevel currentLevel = getLevel();
+                if (currentLevel != null) {
+                    return LevelGraphAttachment.get(currentLevel.getServer().overworld()).getAttribute(name);
+                }
             }
             return null;
         }
@@ -545,10 +619,12 @@ public class GraphProcess {
 
         @Override
         public void scheduleNode(int nodeId, long delayTicks, String entryPortName) {
-            if (level == null) return;
+            ServerLevel currentLevel = getLevel();
+            if (currentLevel == null) return;
 
             ExecutionThread delayThread = new ExecutionThread(nodeId, entryPortName);
-            delayThread.wakeUpTick = level.getGameTime() + delayTicks;
+            delayThread.restoreEnvironment(currentLevel, getThreadEntityUuid());
+            delayThread.wakeUpTick = currentLevel.getGameTime() + delayTicks;
             delayThread.state = State.WAITING;
 
             System.arraycopy(this.eventRegisters, 0, delayThread.eventRegisters, 0, this.eventRegisters.length);
@@ -566,7 +642,8 @@ public class GraphProcess {
                                     int targetEntityId, Vec3 endPos,
                                     int color, float size, int durationTicks) {
 
-            if (GraphProcess.this.level == null) return;
+            ServerLevel currentLevel = getLevel();
+            if (currentLevel == null) return;
 
             int radius = 128;
 
@@ -594,7 +671,7 @@ public class GraphProcess {
 
             Vec3 center = startPos != null ? startPos : Vec3.ZERO;
             List<ServerPlayer> nearbyPlayers =
-                    GraphProcess.this.level.getPlayers(
+                    currentLevel.getPlayers(
                             player -> player.position().distanceToSqr(center) < radius * radius
                     );
 
@@ -609,7 +686,8 @@ public class GraphProcess {
                                            Map<String, String> bindings,
                                            net.minecraft.nbt.CompoundTag extraData) {
 
-            if (GraphProcess.this.level == null) return;
+            ServerLevel currentLevel = getLevel();
+            if (currentLevel == null) return;
 
             PacketSpawnDynamicVisual packet = new PacketSpawnDynamicVisual(
                     effectType, color, durationTicks, expressions, bindings, extraData
@@ -620,7 +698,7 @@ public class GraphProcess {
             if (extraData != null && extraData.contains("sourceId")) {
                 int sourceId = extraData.getInt("sourceId");
                 if (sourceId != -1) {
-                    Entity sourceEntity = GraphProcess.this.level.getEntity(sourceId);
+                    Entity sourceEntity = currentLevel.getEntity(sourceId);
                     if (sourceEntity != null) {
                         center = sourceEntity.position();
                     }
@@ -642,7 +720,7 @@ public class GraphProcess {
 
             List<ServerPlayer> targetPlayers = new java.util.ArrayList<>();
 
-            for (ServerPlayer player : GraphProcess.this.level.players()) {
+            for (ServerPlayer player : currentLevel.players()) {
                 if (player.position().distanceToSqr(center) < radiusSqr) {
                     targetPlayers.add(player);
                 }
