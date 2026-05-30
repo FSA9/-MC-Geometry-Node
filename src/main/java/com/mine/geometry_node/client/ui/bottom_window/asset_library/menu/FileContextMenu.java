@@ -56,6 +56,14 @@ public class FileContextMenu extends FrameLayout {
         mContentLayout.addView(tv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
+    public void addTitle(String text) {
+        TextView tv = new TextView(getContext());
+        tv.setText(text);
+        tv.setTextColor(0xFF888888);
+        tv.setPadding(UIUtils.dp2pxInt(10), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(30), UIUtils.dp2pxInt(4));
+        mContentLayout.addView(tv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
     public void addDivider() {
         View divider = new View(getContext());
         ShapeDrawable line = new ShapeDrawable(); line.setColor(0xFF111111);

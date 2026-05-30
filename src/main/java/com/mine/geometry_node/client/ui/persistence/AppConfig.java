@@ -12,6 +12,8 @@ public class AppConfig {
     public static class AssetBrowserConfig {
         // 快捷访问路径
         public List<String> quickAccessPaths = new ArrayList<>();
+        // 文件展示模式：LIST / ICON_SMALL / ICON_MEDIUM / ICON_LARGE
+        public String viewMode = "LIST";
     }
 
     public static class ViewportConfig {
