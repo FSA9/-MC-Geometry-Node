@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library;
 
 import com.mine.geometry_node.client.ui.bottom_window.IToolWindow;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.left.LeftQuickAccessPanel;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.RightFileBrowserPanel;
 import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.PathUtils;

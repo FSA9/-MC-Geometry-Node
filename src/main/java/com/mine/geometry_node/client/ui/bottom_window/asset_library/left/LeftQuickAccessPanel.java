@@ -1,5 +1,6 @@
-package com.mine.geometry_node.client.ui.bottom_window.asset_library;
+package com.mine.geometry_node.client.ui.bottom_window.asset_library.left;
 
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
 import com.mine.geometry_node.client.ui.persistence.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;

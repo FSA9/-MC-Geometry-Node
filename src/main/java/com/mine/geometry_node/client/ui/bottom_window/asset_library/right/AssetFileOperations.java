@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.bottom_window.asset_library;
+package com.mine.geometry_node.client.ui.bottom_window.asset_library.right;
 
 import java.io.File;
 import java.io.IOException;
