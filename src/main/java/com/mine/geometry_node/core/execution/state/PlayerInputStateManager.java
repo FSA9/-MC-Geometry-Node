@@ -1,7 +1,9 @@
 package com.mine.geometry_node.core.execution.state;
 
-import com.mine.geometry_node.core.execution.GraphEngine;
+import com.mine.geometry_node.api.EventPayload;
+import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.network.packet.c2s.PacketPlayerInput;
+import com.mine.geometry_node.core.node.nodes.events.player.OnPlayerKeyEvent;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -35,16 +37,16 @@ public class PlayerInputStateManager {
         // 注意：DOUBLE_CLICK 是瞬间动作，不改变按压状态字典
 
         // 2. 唤醒并派发蓝图事件
-        GraphEngine.dispatchEvent(
+        GeometryNodeEvents.dispatch(
                 (net.minecraft.server.level.ServerLevel) player.level(),
                 player,
-                "on_player_key_event", // 这是我们第四阶段将要写的节点 TYPE_ID
-                process -> {
-                    process.setEventData(StandardPorts.ENTITY.getId(), player);
-                    process.setEventData("key_id", keyId);           // 输出按键 ID (如 "skill_1", "ctrl")
-                    process.setEventData("action", action);          // 输出动作 (PRESS/RELEASE/DOUBLE_CLICK)
-                    process.setEventData("duration", payload.durationMs() / 1000.0f); // 将毫秒转为秒，对蓝图玩家更友好
-                }
+                OnPlayerKeyEvent.TYPE_ID,
+                EventPayload.builder()
+                        .put(StandardPorts.ENTITY.getId(), player)
+                        .put("key_id", keyId)
+                        .put("action", action)
+                        .put("duration", payload.durationMs() / 1000.0f)
+                        .build()
         );
     }
 

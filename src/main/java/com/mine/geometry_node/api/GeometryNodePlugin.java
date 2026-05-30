@@ -7,5 +7,33 @@ import com.mine.geometry_node.core.node.NodeRegistry;
  * 无论是内置节点还是第三方 Addon，都通过此接口向系统注册节点。
  */
 public interface GeometryNodePlugin {
-    void registerNodes(NodeRegistry registry);
+    /**
+     * 插件 ID，用于日志、诊断和后续图兼容信息。
+     * 第三方 Addon 建议返回自己的 mod id。
+     */
+    default String addonId() {
+        return getClass().getName();
+    }
+
+    /**
+     * 标准节点注册入口。
+     * 新 Addon 优先实现这个方法，避免直接依赖 NodeRegistry 的内部细节。
+     */
+    default void registerNodes(NodeRegistrationContext registry) {
+    }
+
+    /**
+     * 标准事件注册入口。
+     * 用于声明 Addon 提供的事件类型，并获取标准事件派发器。
+     */
+    default void registerEvents(EventRegistrationContext registry) {
+    }
+
+    /**
+     * 旧节点注册入口。
+     * 现有内置节点和旧 Addon 可以继续使用；新代码优先使用 NodeRegistrationContext。
+     */
+    @Deprecated
+    default void registerNodes(NodeRegistry registry) {
+    }
 }

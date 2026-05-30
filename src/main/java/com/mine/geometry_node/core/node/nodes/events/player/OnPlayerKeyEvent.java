@@ -27,7 +27,7 @@ public class OnPlayerKeyEvent extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.on_player_key_event"))
+        return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node.on_player_key_event"))
                 // --- 输出 ---
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))

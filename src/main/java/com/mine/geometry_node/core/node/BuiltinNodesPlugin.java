@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.api.GeometryNodePlugin;
+import com.mine.geometry_node.api.NodeRegistrationContext;
 import com.mine.geometry_node.core.node.nodes.actions.block.*;
 import com.mine.geometry_node.core.node.nodes.actions.display_entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.entity.*;
@@ -31,7 +32,12 @@ import com.mine.geometry_node.core.node.nodes.maths.operation.*;
 public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
     @Override
-    public void registerNodes(NodeRegistry registry) {
+    public String addonId() {
+        return "geometry_node";
+    }
+
+    @Override
+    public void registerNodes(NodeRegistrationContext registry) {
         System.out.println("[BuiltinNodesPlugin] Start to register Nodes...");
 
         // --- ACTIONS ---

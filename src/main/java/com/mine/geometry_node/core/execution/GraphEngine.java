@@ -53,6 +53,11 @@ public class GraphEngine {
     // 核心事件派发 API (重构点)
     // ==========================================
 
+    /**
+     * @deprecated 外部 Addon 应使用 {@link com.mine.geometry_node.api.GeometryNodeEvents}。
+     * 这个入口暴露了 VM 内部线程，只保留给现有内部 dispatcher 过渡使用。
+     */
+    @Deprecated
     public static void dispatchEvent(@NotNull Entity target, String eventNodeId, @Nullable Consumer<GraphProcess.ExecutionThread> initializer) {
         if (target.level().isClientSide) return;
         dispatchEvent((ServerLevel) target.level(), target, eventNodeId, initializer);
@@ -61,7 +66,11 @@ public class GraphEngine {
     /**
      * [通用事件分发]
      * 逻辑：查找关联的常驻进程 -> 从进程中派发轻量级执行线程
+     *
+     * @deprecated 外部 Addon 应使用 {@link com.mine.geometry_node.api.GeometryNodeEvents}。
+     * 这个入口暴露了 VM 内部线程，只保留给现有内部 dispatcher 过渡使用。
      */
+    @Deprecated
     public static void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId, @Nullable Consumer<GraphProcess.ExecutionThread> initializer) {
         // 处理全局图
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
