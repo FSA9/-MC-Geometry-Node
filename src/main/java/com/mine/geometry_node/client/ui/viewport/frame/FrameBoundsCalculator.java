@@ -1,8 +1,7 @@
-package com.mine.geometry_node.client.ui.viewport;
+package com.mine.geometry_node.client.ui.viewport.frame;
 
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.viewport.visual.FrameVisualAdapter;
-import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.FrameData;
 import com.mine.geometry_node.core.node.NodeData;
 

@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.viewport.interaction;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
-import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.PointerIcon;

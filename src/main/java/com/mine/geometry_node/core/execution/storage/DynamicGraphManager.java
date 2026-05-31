@@ -7,7 +7,11 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.io.File;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,9 +44,14 @@ public class DynamicGraphManager {
     public static void saveAndHotReload(MinecraftServer server, String graphId, String jsonContent) throws Exception {
         if (server == null) return;
 
-        Path folder = server.getWorldPath(GRAPH_DIR);
-        Path relativePath = GraphIdMapper.idToRelativePath(graphId);
-        File file = folder.resolve(relativePath).toFile();
+        Path folder = server.getWorldPath(GRAPH_DIR).toAbsolutePath().normalize();
+        Path filePath = GraphIdMapper.resolveGraphPath(folder, graphId);
+        File file = filePath.toFile();
+
+        RuntimeGraphIndex index;
+        try (StringReader reader = new StringReader(jsonContent)) {
+            index = RuntimeGraphIndex.build(reader);
+        }
 
         // 创建目录
         File parentDir = file.getParentFile();
@@ -50,19 +59,14 @@ public class DynamicGraphManager {
             throw new Exception("[DynamicGraphManager] Fail to create server content!");
         }
 
-        try (java.io.FileWriter writer = new java.io.FileWriter(file)) {
-            writer.write(jsonContent);
-        }
+        Path tempPath = Files.createTempFile(parentDir.toPath(), ".graph_upload_", ".tmp");
+        Files.writeString(tempPath, jsonContent, StandardCharsets.UTF_8);
+        Files.move(tempPath, filePath, StandardCopyOption.REPLACE_EXISTING);
 
         // 热更新
-        try (java.io.StringReader reader = new java.io.StringReader(jsonContent)) {
-            com.mine.geometry_node.core.execution.RuntimeGraphIndex index =
-                    com.mine.geometry_node.core.execution.RuntimeGraphIndex.build(reader);
-
-            String normalizedId = GraphIdMapper.pathToId(folder, file.toPath());
-            RuntimeGraphIndex oldIndex = dynamicIndexCache.put(normalizedId, index);
-            GraphEngine.refreshGraphSubscriptions(server, normalizedId, oldIndex, index);
-        }
+        String normalizedId = GraphIdMapper.pathToId(folder, file.toPath().toAbsolutePath().normalize());
+        RuntimeGraphIndex oldIndex = dynamicIndexCache.put(normalizedId, index);
+        GraphEngine.refreshGraphSubscriptions(server, normalizedId, oldIndex, index);
     }
 
     public static void loadAllFromDisk(MinecraftServer server) {
@@ -70,14 +74,14 @@ public class DynamicGraphManager {
         if (server == null) return;
 
         try {
-            Path folder = server.getWorldPath(GRAPH_DIR);
+            Path folder = server.getWorldPath(GRAPH_DIR).toAbsolutePath().normalize();
             if (!java.nio.file.Files.exists(folder) || !java.nio.file.Files.isDirectory(folder)) {
                 return;
             }
 
             // 递归遍历服务端文件
             try (java.util.stream.Stream<Path> walk = java.nio.file.Files.walk(folder)) {
-                walk.filter(java.nio.file.Files::isRegularFile)
+                walk.filter(p -> java.nio.file.Files.isRegularFile(p) && !java.nio.file.Files.isSymbolicLink(p))
                         .filter(p -> p.toString().endsWith(".json"))
                         .forEach(file -> {
                             try {

@@ -28,7 +28,7 @@ public class GraphDownloadCommand {
 
                                     try {
                                         Path folder = player.getServer().getWorldPath(DynamicGraphManager.GRAPH_DIR);
-                                        File file = folder.resolve(GraphIdMapper.idToRelativePath(graphId)).toFile();
+                                        File file = GraphIdMapper.resolveGraphPath(folder, graphId).toFile();
 
                                         if (file.exists()) {
                                             String json = Files.readString(file.toPath());

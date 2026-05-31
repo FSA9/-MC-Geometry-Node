@@ -26,6 +26,7 @@ public class LeftQuickAccessPanel extends ScrollView {
     private final AssetBrowserPanel mCoordinator;
     private final QuickAccessListLayout mLeftSidebar;
     private final float mTouchSlop;
+    private String mSelectedKey = "";
 
     private static final float TITLE_BAR_HEIGHT = 40.0f;
     private static final float ROW_HEIGHT = 40.0f;
@@ -34,6 +35,14 @@ public class LeftQuickAccessPanel extends ScrollView {
     private static final float TEXT_SIZE_PATH = 14.0f;
     private static final float TEXT_SIZE_HANDLE = 12.0f;
     private static final float TEXT_SIZE_NAV = 14.0f;
+    private static final int COLOR_LOCAL_NORMAL = 0xFF2A2A2A;
+    private static final int COLOR_LOCAL_HOVER = 0xFF343434;
+    private static final int COLOR_LOCAL_PRESSED = 0xFF3F4D5B;
+    private static final int COLOR_LOCAL_SELECTED = 0xFF33485E;
+    private static final int COLOR_REMOTE_NORMAL = 0xFF263445;
+    private static final int COLOR_REMOTE_HOVER = 0xFF2F4055;
+    private static final int COLOR_REMOTE_PRESSED = 0xFF3C5874;
+    private static final int COLOR_REMOTE_SELECTED = 0xFF36597A;
 
     public LeftQuickAccessPanel(Context context, AssetBrowserPanel coordinator) {
         super(context);
@@ -62,9 +71,40 @@ public class LeftQuickAccessPanel extends ScrollView {
                 ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(TITLE_BAR_HEIGHT));
         mLeftSidebar.addView(title, titleParams);
 
+        if (mCoordinator.canBrowseRemote()) {
+            mLeftSidebar.addView(createRemoteServerRow(context));
+        }
+
         for (String pathStr : ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths) {
             mLeftSidebar.addView(createQuickAccessRow(context, pathStr));
         }
+    }
+
+    private LinearLayout createRemoteServerRow(Context context) {
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        bindRowFeedback(row, "remote", COLOR_REMOTE_NORMAL, COLOR_REMOTE_HOVER, COLOR_REMOTE_PRESSED, COLOR_REMOTE_SELECTED,
+                () -> {
+                    mSelectedKey = "remote";
+                    mCoordinator.dispatchNavigateToRemoteRoot();
+                    buildSidebar();
+                });
+
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
+        rowParams.setMargins(0, 0, 0, dp2pxInt(2));
+        row.setLayoutParams(rowParams);
+
+        TextView spacer = UIUtils.createLockedTextView(context, " ☁ ", TEXT_SIZE_HANDLE, 0xFF8FBFFF);
+        spacer.setGravity(Gravity.CENTER);
+        row.addView(spacer, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+
+        TextView btnPath = UIUtils.createLockedTextView(context, "远程服务器", TEXT_SIZE_PATH, 0xFFE6F1FF);
+        btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
+        btnPath.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+
+        return row;
     }
 
     private LinearLayout createQuickAccessRow(Context context, String pathStr) {
@@ -72,7 +112,12 @@ public class LeftQuickAccessPanel extends ScrollView {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(createColorDrawable(0xFF2A2A2A));
+        bindRowFeedback(row, "local:" + pathStr, COLOR_LOCAL_NORMAL, COLOR_LOCAL_HOVER, COLOR_LOCAL_PRESSED, COLOR_LOCAL_SELECTED,
+                () -> {
+                    mSelectedKey = "local:" + pathStr;
+                    mCoordinator.dispatchNavigateTo(file);
+                    buildSidebar();
+                });
 
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
         rowParams.setMargins(0, 0, 0, dp2pxInt(2));
@@ -130,11 +175,12 @@ public class LeftQuickAccessPanel extends ScrollView {
                         mLeftSidebar.getLocationOnScreen(loc);
                         float dropY = event.getRawY() - loc[1];
 
-                        int targetIdx = mLeftSidebar.getChildCount() - 1;
-                        for (int i = 1; i < mLeftSidebar.getChildCount(); i++) {
+                        int firstQuickAccessChild = mCoordinator.canBrowseRemote() ? 2 : 1;
+                        int targetIdx = ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.size() - 1;
+                        for (int i = firstQuickAccessChild; i < mLeftSidebar.getChildCount(); i++) {
                             View child = mLeftSidebar.getChildAt(i);
                             if (dropY < child.getTop() + child.getHeight() / 2f) {
-                                targetIdx = i - 1;
+                                targetIdx = i - firstQuickAccessChild;
                                 break;
                             }
                         }
@@ -165,7 +211,6 @@ public class LeftQuickAccessPanel extends ScrollView {
         TextView btnPath = UIUtils.createLockedTextView(context, "📂 " + displayName, TEXT_SIZE_PATH, 0xFFDDDDDD);
         btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
         btnPath.setGravity(Gravity.CENTER_VERTICAL);
-        btnPath.setOnClickListener(v -> mCoordinator.dispatchNavigateTo(file));
 
         row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
@@ -177,16 +222,102 @@ public class LeftQuickAccessPanel extends ScrollView {
             btnDel.setBackground(createColorDrawable(event.getAction() == MotionEvent.ACTION_HOVER_ENTER ? 0xFF882222 : 0xFF3A3A3A));
             return true;
         });
-
-        btnDel.setOnClickListener(v -> {
-            ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.remove(pathStr);
-            ConfigManager.INSTANCE.save();
-            buildSidebar();
+        btnDel.setOnTouchListener((v, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                btnDel.setBackground(createColorDrawable(0xFFAA3333));
+                return true;
+            }
+            if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                if (isInside(btnDel, event)) {
+                    ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.remove(pathStr);
+                    ConfigManager.INSTANCE.save();
+                    buildSidebar();
+                } else {
+                    btnDel.setBackground(createColorDrawable(0xFF3A3A3A));
+                }
+                return true;
+            }
+            if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                btnDel.setBackground(createColorDrawable(0xFF3A3A3A));
+                return true;
+            }
+            return true;
         });
 
         row.addView(btnDel, new LinearLayout.LayoutParams(dp2pxInt(ROW_HEIGHT), ViewGroup.LayoutParams.MATCH_PARENT));
 
         return row;
+    }
+
+    private void bindRowFeedback(LinearLayout row, String key, int normalColor, int hoverColor, int pressedColor, int selectedColor, Runnable action) {
+        final boolean[] hovered = {false};
+        final boolean[] pressed = {false};
+        final boolean[] moved = {false};
+        final float[] downX = {0};
+        final float[] downY = {0};
+        Runnable update = () -> {
+            int color;
+            if (pressed[0]) {
+                color = pressedColor;
+            } else if (key.equals(mSelectedKey)) {
+                color = selectedColor;
+            } else if (hovered[0]) {
+                color = hoverColor;
+            } else {
+                color = normalColor;
+            }
+            row.setBackground(createColorDrawable(color));
+        };
+        update.run();
+
+        row.setOnClickListener(v -> action.run());
+        row.setOnHoverListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                hovered[0] = true;
+                update.run();
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                hovered[0] = false;
+                pressed[0] = false;
+                update.run();
+            }
+            return false;
+        });
+
+        row.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downX[0] = event.getRawX();
+                    downY[0] = event.getRawY();
+                    moved[0] = false;
+                    pressed[0] = true;
+                    update.run();
+                    return false;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getRawX() - downX[0]) > mTouchSlop || Math.abs(event.getRawY() - downY[0]) > mTouchSlop) {
+                        moved[0] = true;
+                        pressed[0] = false;
+                        update.run();
+                    }
+                    return false;
+                case MotionEvent.ACTION_UP:
+                    pressed[0] = false;
+                    update.run();
+                    return false;
+                case MotionEvent.ACTION_CANCEL:
+                    pressed[0] = false;
+                    moved[0] = false;
+                    update.run();
+                    return false;
+                default:
+                    return false;
+            }
+        });
+    }
+
+    private boolean isInside(View view, MotionEvent event) {
+        return event.getX() >= 0 && event.getY() >= 0
+                && event.getX() < view.getWidth()
+                && event.getY() < view.getHeight();
     }
 
     private ShapeDrawable createColorDrawable(int color) {

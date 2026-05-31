@@ -2,8 +2,8 @@ package com.mine.geometry_node.client.ui.viewport.interaction;
 
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
-import com.mine.geometry_node.client.ui.viewport.visual.FrameVisualAdapter;
-import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 
 import java.util.List;
 

@@ -1,11 +1,14 @@
 package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.viewport.interaction.*;
-import com.mine.geometry_node.client.ui.viewport.layers.*;
+import com.mine.geometry_node.client.ui.viewport.connection.ConnectionLayer;
+import com.mine.geometry_node.client.ui.viewport.frame.FrameLayer;
+import com.mine.geometry_node.client.ui.viewport.layers.BackgroundLayer;
+import com.mine.geometry_node.client.ui.viewport.node.NodeLayer;
 import com.mine.geometry_node.client.ui.viewport.menu.ViewportMenu;
-import com.mine.geometry_node.client.ui.viewport.visual.ConnectionNodeVisual;
-import com.mine.geometry_node.client.ui.viewport.visual.FrameVisualAdapter;
-import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.connection.ConnectionNodeVisual;
+import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.NodeGraph;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;

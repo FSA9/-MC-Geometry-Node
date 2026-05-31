@@ -1,8 +1,11 @@
 package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.client.render.ClientVisualManager;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.execution.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.execution.storage.RemoteGraphPermissions;
 import com.mine.geometry_node.core.network.packet.c2s.*;
 import com.mine.geometry_node.core.network.packet.s2c.*;
 import dev.architectury.networking.NetworkManager;
@@ -10,6 +13,13 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.nio.file.Files;
+import java.util.Set;
 
 public class NetworkHandler {
 
@@ -38,11 +48,105 @@ public class NetworkHandler {
                             String jsonContent = payload.jsonContent();
 
                             try {
+                                if (!RemoteGraphPermissions.canUploadGraphs(player)) {
+                                    sendToPlayer(player, new PacketSyncResponse(false, graphId, "没有上传服务器图纸的权限。"));
+                                    return;
+                                }
                                 DynamicGraphManager.saveAndHotReload(server, graphId, jsonContent);
                                 sendToPlayer(player, new PacketSyncResponse(true, graphId, "上传并热更新成功！"));
                             } catch (Exception e) {
                                 sendToPlayer(player, new PacketSyncResponse(false, graphId, "上传失败: " + e.getMessage()));
                             }
+                        }
+                    });
+                }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketRemoteGraphCapabilitiesRequest.TYPE,
+                PacketRemoteGraphCapabilitiesRequest.STREAM_CODEC,
+                (payload, context) -> {
+                    context.queue(() -> {
+                        if (context.getPlayer() instanceof ServerPlayer player) {
+                            sendToPlayer(player, new PacketRemoteGraphCapabilitiesResponse(
+                                    payload.requestId(),
+                                    RemoteGraphPermissions.canBrowseRemoteGraphs(player),
+                                    RemoteGraphPermissions.canUploadGraphs(player),
+                                    RemoteGraphPermissions.canDownloadGraphs(player),
+                                    RemoteGraphPermissions.canManageGraphs(player)
+                            ));
+                        }
+                    });
+                }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketRemoteGraphListRequest.TYPE,
+                PacketRemoteGraphListRequest.STREAM_CODEC,
+                (payload, context) -> {
+                    context.queue(() -> {
+                        if (!(context.getPlayer() instanceof ServerPlayer player)) return;
+                        if (!RemoteGraphPermissions.canBrowseRemoteGraphs(player)) {
+                            sendToPlayer(player, new PacketRemoteGraphListResponse(
+                                    payload.requestId(), false, payload.directory(), "没有浏览服务器图纸的权限。", Collections.emptyList()));
+                            return;
+                        }
+                        try {
+                            String directory = RemoteGraphFileService.normalizeDirectoryPath(payload.directory());
+                            if (payload.createIfMissing()) {
+                                if (!RemoteGraphPermissions.canCreateRemoteFolders(player)) {
+                                    sendToPlayer(player, new PacketRemoteGraphListResponse(
+                                            payload.requestId(), false, payload.directory(), "没有创建服务器图纸文件夹的权限。", Collections.emptyList()));
+                                    return;
+                                }
+                                Files.createDirectories(RemoteGraphFileService.resolveDirectory(player.getServer(), directory));
+                            }
+                            List<RemoteGraphFileService.Entry> entries = RemoteGraphFileService.list(player.getServer(), directory);
+                            sendToPlayer(player, new PacketRemoteGraphListResponse(payload.requestId(), true, directory, "", entries));
+                        } catch (Exception e) {
+                            sendToPlayer(player, new PacketRemoteGraphListResponse(
+                                    payload.requestId(), false, payload.directory(), e.getMessage(), Collections.emptyList()));
+                        }
+                    });
+                }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketRemoteGraphUploadRequest.TYPE,
+                PacketRemoteGraphUploadRequest.STREAM_CODEC,
+                (payload, context) -> {
+                    context.queue(() -> {
+                        if (context.getPlayer() instanceof ServerPlayer player) {
+                            handleRemoteGraphUpload(payload, player);
+                        }
+                    });
+                }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketRemoteGraphDownloadRequest.TYPE,
+                PacketRemoteGraphDownloadRequest.STREAM_CODEC,
+                (payload, context) -> {
+                    context.queue(() -> {
+                        if (context.getPlayer() instanceof ServerPlayer player) {
+                            handleRemoteGraphDownload(payload, player);
+                        }
+                    });
+                }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketRemoteGraphFileOperationRequest.TYPE,
+                PacketRemoteGraphFileOperationRequest.STREAM_CODEC,
+                (payload, context) -> {
+                    context.queue(() -> {
+                        if (context.getPlayer() instanceof ServerPlayer player) {
+                            handleRemoteGraphFileOperation(payload, player);
                         }
                     });
                 }
@@ -93,6 +197,41 @@ public class NetworkHandler {
                 }
         );
 
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketRemoteGraphCapabilitiesResponse.TYPE,
+                PacketRemoteGraphCapabilitiesResponse.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload))
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketRemoteGraphListResponse.TYPE,
+                PacketRemoteGraphListResponse.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload))
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketRemoteGraphUploadResponse.TYPE,
+                PacketRemoteGraphUploadResponse.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload))
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketRemoteGraphDownloadResponse.TYPE,
+                PacketRemoteGraphDownloadResponse.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload))
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketRemoteGraphFileOperationResponse.TYPE,
+                PacketRemoteGraphFileOperationResponse.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload))
+        );
+
         // ==========================================
         // 7. 注册 C2S: 客户端按键输入 -> 服务端处理
         // ==========================================
@@ -124,5 +263,109 @@ public class NetworkHandler {
 
     public static void sendToServer(CustomPacketPayload payload) {
         NetworkManager.sendToServer(payload);
+    }
+
+    private static void handleRemoteGraphUpload(PacketRemoteGraphUploadRequest payload, ServerPlayer player) {
+        if (!RemoteGraphPermissions.canUploadGraphs(player)) {
+            sendToPlayer(player, new PacketRemoteGraphUploadResponse(
+                    payload.requestId(), payload.preflightOnly(), false, 0, payload.files().size(),
+                    "没有上传服务器图纸的权限。", Collections.emptyList()));
+            return;
+        }
+
+        try {
+            List<String> targetPaths = new ArrayList<>();
+            for (RemoteGraphFileService.UploadFile file : payload.files()) {
+                targetPaths.add(file.targetPath());
+            }
+            List<RemoteGraphFileService.Conflict> conflicts = RemoteGraphFileService.findUploadConflicts(player.getServer(), targetPaths);
+            if (payload.preflightOnly()) {
+                sendToPlayer(player, new PacketRemoteGraphUploadResponse(
+                        payload.requestId(), true, conflicts.isEmpty(), 0, payload.files().size(), "", conflicts));
+                return;
+            }
+            Set<String> allowedOverwritePaths = new HashSet<>(payload.overwritePaths());
+            if (!payload.overwrite()) {
+                List<RemoteGraphFileService.Conflict> blockingConflicts = new ArrayList<>();
+                for (RemoteGraphFileService.Conflict conflict : conflicts) {
+                    if (!allowedOverwritePaths.contains(conflict.targetPath())) {
+                        blockingConflicts.add(conflict);
+                    }
+                }
+                if (!blockingConflicts.isEmpty()) {
+                    sendToPlayer(player, new PacketRemoteGraphUploadResponse(
+                            payload.requestId(), false, false, 0, payload.files().size(), "目标存在冲突。", blockingConflicts));
+                    return;
+                }
+            }
+
+            int processed = 0;
+            int total = payload.files().size();
+            for (RemoteGraphFileService.UploadFile file : payload.files()) {
+                RemoteGraphFileService.saveUpload(
+                        player.getServer(),
+                        file,
+                        payload.overwrite() || allowedOverwritePaths.contains(file.targetPath())
+                );
+                processed++;
+                sendToPlayer(player, new PacketRemoteGraphUploadResponse(
+                        payload.requestId(), false, true, processed, total, "上传中", Collections.emptyList()));
+            }
+            sendToPlayer(player, new PacketRemoteGraphUploadResponse(
+                    payload.requestId(), false, true, processed, total, "上传完成", Collections.emptyList()));
+        } catch (Exception e) {
+            sendToPlayer(player, new PacketRemoteGraphUploadResponse(
+                    payload.requestId(), false, false, 0, payload.files().size(), "上传失败: " + e.getMessage(), Collections.emptyList()));
+        }
+    }
+
+    private static void handleRemoteGraphDownload(PacketRemoteGraphDownloadRequest payload, ServerPlayer player) {
+        if (!RemoteGraphPermissions.canDownloadGraphs(player)) {
+            sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
+                    payload.requestId(), false, 0, payload.paths().size(), "没有下载服务器图纸的权限。", Collections.emptyList()));
+            return;
+        }
+
+        try {
+            List<RemoteGraphFileService.Entry> files = RemoteGraphFileService.flattenSelection(player.getServer(), payload.paths());
+            int total = files.size();
+            int processed = 0;
+            for (RemoteGraphFileService.Entry entry : files) {
+                RemoteGraphFileService.UploadFile downloaded = new RemoteGraphFileService.UploadFile(
+                        entry.path(),
+                        RemoteGraphFileService.readGraph(player.getServer(), entry.path())
+                );
+                processed++;
+                sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
+                        payload.requestId(), true, processed, total, "下载中", List.of(downloaded)));
+            }
+            sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
+                    payload.requestId(), true, processed, total, "下载完成", Collections.emptyList()));
+        } catch (Exception e) {
+            sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
+                    payload.requestId(), false, 0, payload.paths().size(), "下载失败: " + e.getMessage(), Collections.emptyList()));
+        }
+    }
+
+    private static void handleRemoteGraphFileOperation(PacketRemoteGraphFileOperationRequest payload, ServerPlayer player) {
+        if (!RemoteGraphPermissions.canManageGraphs(player)) {
+            sendToPlayer(player, new PacketRemoteGraphFileOperationResponse(
+                    payload.requestId(), false, "没有管理服务器图纸文件的权限。"));
+            return;
+        }
+
+        try {
+            int count = switch (payload.operation()) {
+                case DELETE -> RemoteGraphFileService.deleteSelection(player.getServer(), payload.paths());
+                case COPY -> RemoteGraphFileService.copySelection(player.getServer(), payload.paths(), payload.targetDirectory());
+            };
+            DynamicGraphManager.loadAllFromDisk(player.getServer());
+            String action = payload.operation() == PacketRemoteGraphFileOperationRequest.Operation.DELETE ? "删除" : "复制";
+            sendToPlayer(player, new PacketRemoteGraphFileOperationResponse(
+                    payload.requestId(), true, action + "完成: " + count));
+        } catch (Exception e) {
+            sendToPlayer(player, new PacketRemoteGraphFileOperationResponse(
+                    payload.requestId(), false, "操作失败: " + e.getMessage()));
+        }
     }
 }

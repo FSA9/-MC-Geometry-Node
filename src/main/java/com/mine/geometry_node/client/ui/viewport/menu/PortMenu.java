@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.viewport.menu;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
-import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 

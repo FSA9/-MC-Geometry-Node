@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.viewport.frame.FrameBoundsCalculator;
 import com.mine.geometry_node.core.node.Connection;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeRegistry;

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.viewport.layers;
+package com.mine.geometry_node.client.ui.viewport.node;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -9,7 +9,6 @@ import icyllis.modernui.graphics.RectF;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
-import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
 
 import java.util.ArrayList;
 import java.util.HashMap;

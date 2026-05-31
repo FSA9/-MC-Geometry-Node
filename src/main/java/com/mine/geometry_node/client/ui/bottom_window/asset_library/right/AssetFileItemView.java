@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library.right;
 
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.resources.TypedValue;
@@ -11,15 +12,13 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
-import java.io.File;
-
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 final class AssetFileItemView extends LinearLayout {
     interface Listener {
-        void onItemPressed(File file, MotionEvent event);
-        void onItemReleased(File file, MotionEvent event, boolean moved);
+        void onItemPressed(AssetEntry entry, MotionEvent event);
+        void onItemReleased(AssetEntry entry, MotionEvent event, boolean moved);
     }
 
     private static final float TEXT_SIZE_LIST_SUBTITLE = 11.0f;
@@ -30,7 +29,7 @@ final class AssetFileItemView extends LinearLayout {
     private static final int COLOR_TEXT = 0xFFDDDDDD;
     private static final int COLOR_SUBTEXT = 0xFF888888;
 
-    private final File mFile;
+    private final AssetEntry mEntry;
     private final TextView mIconView;
     private final TextView mNameView;
     private final TextView mSubtitleView;
@@ -41,16 +40,16 @@ final class AssetFileItemView extends LinearLayout {
     private boolean mMoved;
     private final float mTouchSlop;
 
-    AssetFileItemView(Context context, File file, AssetViewMode mode, String displayName, String parentLabel, Listener listener) {
+    AssetFileItemView(Context context, AssetEntry entry, AssetViewMode mode, String displayName, String parentLabel, Listener listener) {
         super(context);
-        mFile = file;
+        mEntry = entry;
         mListener = listener;
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         setGravity(Gravity.CENTER_VERTICAL);
         setPadding(dp2pxInt(6), dp2pxInt(4), dp2pxInt(6), dp2pxInt(4));
         setBackground(RightFileBrowserPanel.createRectDrawable(COLOR_ITEM_TRANSPARENT, 4));
 
-        mIconView = UIUtils.createLockedTextView(context, file.isDirectory() ? "📁" : "📄", mode.iconTextSizeDp, file.isDirectory() ? COLOR_FOLDER : COLOR_FILE);
+        mIconView = UIUtils.createLockedTextView(context, entry.isDirectory() ? "📁" : "📄", mode.iconTextSizeDp, entry.isDirectory() ? COLOR_FOLDER : COLOR_FILE);
         mIconView.setGravity(Gravity.CENTER);
         mNameView = UIUtils.createLockedTextView(context, displayName, mode.nameTextSizeDp, COLOR_TEXT);
         mNameView.setGravity(mode == AssetViewMode.LIST ? Gravity.CENTER_VERTICAL : Gravity.CENTER);
@@ -61,8 +60,8 @@ final class AssetFileItemView extends LinearLayout {
         setOnTouchListener(this::onItemTouch);
     }
 
-    File getFile() {
-        return mFile;
+    AssetEntry getEntry() {
+        return mEntry;
     }
 
     TextView getNameView() {
@@ -88,7 +87,7 @@ final class AssetFileItemView extends LinearLayout {
         if (mode == AssetViewMode.LIST) {
             setOrientation(LinearLayout.HORIZONTAL);
             setGravity(Gravity.CENTER_VERTICAL);
-            mIconView.setText((mFile.isDirectory() ? "📁 " : "📄 "));
+            mIconView.setText((mEntry.isDirectory() ? "📁 " : "📄 "));
             addView(mIconView, new LinearLayout.LayoutParams(dp2pxInt(34), ViewGroup.LayoutParams.MATCH_PARENT));
 
             LinearLayout textColumn = new LinearLayout(getContext());
@@ -102,7 +101,7 @@ final class AssetFileItemView extends LinearLayout {
 
         setOrientation(LinearLayout.VERTICAL);
         setGravity(Gravity.CENTER);
-        mIconView.setText(mFile.isDirectory() ? "📁" : "📄");
+        mIconView.setText(mEntry.isDirectory() ? "📁" : "📄");
         addView(mIconView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(mode.iconTextSizeDp + 10)));
         addView(mNameView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(mSubtitleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -114,7 +113,7 @@ final class AssetFileItemView extends LinearLayout {
                 mDownX = event.getX();
                 mDownY = event.getY();
                 mMoved = false;
-                mListener.onItemPressed(mFile, event);
+                mListener.onItemPressed(mEntry, event);
                 return true;
             case MotionEvent.ACTION_MOVE:
                 if (Math.abs(event.getX() - mDownX) > mTouchSlop || Math.abs(event.getY() - mDownY) > mTouchSlop) {
@@ -122,7 +121,7 @@ final class AssetFileItemView extends LinearLayout {
                 }
                 return true;
             case MotionEvent.ACTION_UP:
-                mListener.onItemReleased(mFile, event, mMoved);
+                mListener.onItemReleased(mEntry, event, mMoved);
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 mMoved = false;

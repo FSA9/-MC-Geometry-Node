@@ -128,6 +128,10 @@ public class FileContextMenu extends FrameLayout {
         mContentLayout.addView(divider, lp);
     }
 
+    public boolean hasItems() {
+        return mContentLayout.getChildCount() > 0;
+    }
+
     public void showAt(float x, float y, ViewGroup parent) {
         mHostParent = parent;
         parent.addView(this);

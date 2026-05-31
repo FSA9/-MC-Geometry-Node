@@ -1,5 +1,6 @@
-package com.mine.geometry_node.client.ui.viewport.visual;
+package com.mine.geometry_node.client.ui.viewport.frame;
 
+import com.mine.geometry_node.client.ui.viewport.CanvasVisualItem;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
 import com.mine.geometry_node.core.node.FrameData;
 import icyllis.modernui.graphics.Canvas;

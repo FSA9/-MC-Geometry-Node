@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.viewport.layout;
+package com.mine.geometry_node.client.ui.viewport.node;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;

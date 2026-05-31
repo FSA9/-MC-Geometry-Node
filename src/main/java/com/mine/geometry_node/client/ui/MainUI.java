@@ -16,6 +16,7 @@ import icyllis.modernui.util.DataSet;
 import icyllis.modernui.view.LayoutInflater;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
+import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.RelativeLayout;
 import icyllis.modernui.widget.TextView;
@@ -44,12 +45,17 @@ public class MainUI extends Fragment {
 
         UIConstants.mDensity = context.getResources().getDisplayMetrics().density;
 
+        FrameLayout rootFrame = new FrameLayout(context);
         LinearLayout rootLayout = createRootLayout(context);
+        rootFrame.addView(rootLayout, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
         setupHeader(context, rootLayout);
         setupMiddleSection(context, rootLayout);
         setupBottomSection(context, rootLayout);
 
-        return rootLayout;
+        return rootFrame;
     }
 
     private LinearLayout createRootLayout(Context context) {

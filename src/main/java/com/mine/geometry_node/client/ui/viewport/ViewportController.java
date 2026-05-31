@@ -5,14 +5,16 @@ import com.mine.geometry_node.client.ui.UICommand.commands.*;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.viewport.frame.UIFrame;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionManager;
 import com.mine.geometry_node.client.ui.viewport.interaction.KeyManager;
+import com.mine.geometry_node.client.ui.viewport.node.UINode;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.client.ui.viewport.visual.FrameVisualAdapter;
-import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 
 import java.util.*;
 

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.viewport.visual;
+package com.mine.geometry_node.client.ui.viewport.connection;
 
 /**
  * Minimal node endpoint API needed by connection rendering.

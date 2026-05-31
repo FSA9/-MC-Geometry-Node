@@ -1,14 +1,12 @@
-package com.mine.geometry_node.client.ui.viewport.layers;
+package com.mine.geometry_node.client.ui.viewport.frame;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.widget.FrameLayout;
-import com.mine.geometry_node.client.ui.viewport.FrameBoundsCalculator;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
-import com.mine.geometry_node.client.ui.viewport.visual.FrameVisualAdapter;
-import com.mine.geometry_node.client.ui.viewport.visual.NodeVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 
 import java.util.ArrayList;
 import java.util.HashMap;

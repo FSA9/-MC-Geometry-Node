@@ -22,7 +22,11 @@ public class LocalDraftManager {
             Path folder = getDraftFolder();
             // 1. 将 ID (A:B/C) 转化为相对路径 (A/B/C.json)
             Path relativePath = GraphIdMapper.idToRelativePath(graphId);
-            File file = folder.resolve(relativePath).toFile();
+            Path resolved = folder.toAbsolutePath().normalize().resolve(relativePath).normalize();
+            if (!resolved.startsWith(folder.toAbsolutePath().normalize())) {
+                throw new IllegalArgumentException("invalid draft path: " + graphId);
+            }
+            File file = resolved.toFile();
 
             // 2. 自动创建所有缺失的父级文件夹 (关键！)
             File parentDir = file.getParentFile();
@@ -67,7 +71,11 @@ public class LocalDraftManager {
         try {
             Path root = getDraftFolder();
             Path relativePath = GraphIdMapper.idToRelativePath(graphId);
-            File file = root.resolve(relativePath).toFile();
+            Path resolved = root.toAbsolutePath().normalize().resolve(relativePath).normalize();
+            if (!resolved.startsWith(root.toAbsolutePath().normalize())) {
+                throw new IllegalArgumentException("invalid draft path: " + graphId);
+            }
+            File file = resolved.toFile();
 
             if (file.exists()) {
                 return Files.readString(file.toPath());

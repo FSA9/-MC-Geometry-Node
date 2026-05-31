@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.viewport.visual;
+package com.mine.geometry_node.client.ui.viewport;
 
 import icyllis.modernui.graphics.RectF;
 
