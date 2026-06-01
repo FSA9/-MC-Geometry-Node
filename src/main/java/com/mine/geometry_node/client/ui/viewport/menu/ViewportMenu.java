@@ -17,9 +17,30 @@ import net.minecraft.network.chat.Component;
 import java.util.Stack;
 
 public class ViewportMenu extends FrameLayout {
+    private static final int MENU_WIDTH_DP = 220;
+    private static final int MENU_PADDING_DP = 8;
+    private static final int MENU_EDGE_MARGIN_DP = 6;
+    private static final int SEARCH_HEIGHT_DP = 28;
+    private static final int SEARCH_RADIUS_DP = 5;
+    private static final int ITEM_HEIGHT_DP = 24;
+    private static final int ITEM_RADIUS_DP = 4;
+    private static final int MAX_LIST_HEIGHT_DP = 320;
+
+    private static final int COLOR_PANEL_BG = 0xFF2B2B2B;
+    private static final int COLOR_PANEL_BORDER = 0xFF151515;
+    private static final int COLOR_SEARCH_BG = 0xFF1E1E1E;
+    private static final int COLOR_SEARCH_BORDER = 0xFF3A3A3A;
+    private static final int COLOR_DIVIDER = 0xFF171717;
+    private static final int COLOR_SECTION_TEXT = 0xFF777777;
+    private static final int COLOR_ACTION_TEXT = 0xFF8FC7FF;
+    private static final int COLOR_CATEGORY_TEXT = 0xFFE0E0E0;
+    private static final int COLOR_NODE_TEXT = 0xFFCCCCCC;
+    private static final int COLOR_MUTED_TEXT = 0xFF999999;
+    private static final int COLOR_HOVER_BG = 0xFF3A4652;
 
     private LinearLayout mContentLayout;
     private LinearLayout mListContainer;
+    private ScrollView mScrollView;
     private EditText mSearchBox;
 
     private InteractionContext mContext;
@@ -40,24 +61,25 @@ public class ViewportMenu extends FrameLayout {
 
         mContentLayout = new LinearLayout(context);
         mContentLayout.setOrientation(LinearLayout.VERTICAL);
-        mContentLayout.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.BG_COLOR, UIConstants.ViewPort.NodeMenu.BORDER_RADIUS));
+        mContentLayout.setBackground(createRectDrawable(COLOR_PANEL_BG, UIConstants.ViewPort.NodeMenu.BORDER_RADIUS + 5, 1, COLOR_PANEL_BORDER));
 
-        int menuPadding = UIUtils.dp2pxInt(4);
+        int menuPadding = UIUtils.dp2pxInt(MENU_PADDING_DP);
         mContentLayout.setPadding(menuPadding, menuPadding, menuPadding, menuPadding);
         mContentLayout.setOnClickListener(v -> {});
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(100), LayoutParams.WRAP_CONTENT);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(MENU_WIDTH_DP), LayoutParams.WRAP_CONTENT);
         lp.gravity = Gravity.TOP | Gravity.LEFT;
         mContentLayout.setLayoutParams(lp);
 
         mSearchBox = new EditText(context);
         mSearchBox.setHint(Component.translatable("menu.node.search").getString());
 
-        float searchFontSizeDp = UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX * (float) UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
-        mSearchBox.setTextSize(0, UIUtils.dp2px(searchFontSizeDp));
+        mSearchBox.setTextSize(0, UIUtils.dp2px(12));
         mSearchBox.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
-        mSearchBox.setHintTextColor(0xFF666666);
-        mSearchBox.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.SEARCH_BG_COLOR, 4));
+        mSearchBox.setHintTextColor(0xFF777777);
+        mSearchBox.setSingleLine(true);
+        mSearchBox.setGravity(Gravity.CENTER_VERTICAL);
+        mSearchBox.setBackground(createRectDrawable(COLOR_SEARCH_BG, SEARCH_RADIUS_DP, 1, COLOR_SEARCH_BORDER));
         mSearchBox.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
 
         mSearchBox.addTextChangedListener(new TextWatcher() {
@@ -66,16 +88,16 @@ public class ViewportMenu extends FrameLayout {
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
         });
 
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(UIConstants.ViewPort.NodeMenu.HEIGHT_SEARCH_BOX));
-        searchLp.setMargins(menuPadding, menuPadding, menuPadding, UIUtils.dp2pxInt(6));
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(SEARCH_HEIGHT_DP));
+        searchLp.setMargins(0, 0, 0, UIUtils.dp2pxInt(8));
         mContentLayout.addView(mSearchBox, searchLp);
 
-        ScrollView sv = new ScrollView(context);
+        mScrollView = new ScrollView(context);
         mListContainer = new LinearLayout(context);
         mListContainer.setOrientation(LinearLayout.VERTICAL);
-        sv.addView(mListContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mScrollView.addView(mListContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        mContentLayout.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mContentLayout.addView(mScrollView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(mContentLayout);
     }
 
@@ -85,26 +107,7 @@ public class ViewportMenu extends FrameLayout {
         mMenuY = y;
 
         ViewGroup parent = (ViewGroup) context;
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
-        lp.gravity = Gravity.TOP | Gravity.LEFT;
-        lp.leftMargin = (int) x;
-        lp.topMargin = (int) y;
-
-        if (parent != null) {
-            int widthSpec = MeasureSpec.makeMeasureSpec(UIUtils.dp2pxInt(200), MeasureSpec.EXACTLY);
-            int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
-            mContentLayout.measure(widthSpec, heightSpec);
-
-            int actualW = mContentLayout.getMeasuredWidth();
-            int actualH = mContentLayout.getMeasuredHeight();
-
-            if (actualW == 0) actualW = UIUtils.dp2pxInt(200);
-            if (actualH == 0) actualH = UIUtils.dp2pxInt(300);
-
-            if (x + actualW > parent.getWidth()) lp.leftMargin = Math.max(0, parent.getWidth() - actualW);
-            if (y + actualH > parent.getHeight()) lp.topMargin = Math.max(0, parent.getHeight() - actualH);
-        }
-        mContentLayout.setLayoutParams(lp);
+        if (parent != null) layoutPanel(parent, x, y);
 
         mSearchBox.post(() -> {
             mSearchBox.setText("");
@@ -135,12 +138,13 @@ public class ViewportMenu extends FrameLayout {
         mListContainer.removeAllViews();
 
         if (mCurrentFolder == NodeRegistry.INSTANCE.ROOT) {
-            addClickItem("💾 Save", 0xFF44AAFF, v -> {
+            addSectionLabel("操作");
+            addClickItem("保存", COLOR_ACTION_TEXT, v -> {
                 if (mContext != null) mContext.requestSave();
                 post(this::dismiss);
             });
 
-            addClickItem("📦 添加图框", 0xFF44AAFF, v -> {
+            addClickItem("添加图框", COLOR_ACTION_TEXT, v -> {
                 if (mContext != null) {
                     float uiX = mContext.getCamera().screenToUIX(mMenuX);
                     float uiY = mContext.getCamera().screenToUIY(mMenuY);
@@ -149,7 +153,7 @@ public class ViewportMenu extends FrameLayout {
                 post(this::dismiss);
             });
 
-            addClickItem("🖇 并入图框", 0xFF44AAFF, v -> {
+            addClickItem("并入图框", COLOR_ACTION_TEXT, v -> {
                 if (mContext != null) {
                     mContext.requestGroupIntoFrame();
                     mContext.clearSelection();
@@ -157,57 +161,67 @@ public class ViewportMenu extends FrameLayout {
                 post(this::dismiss);
             });
 
-            View divider = new View(getContext());
-            mListContainer.addView(divider, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1)));
+            addDivider();
+            addSectionLabel("节点");
         }
 
         if (mCurrentFolder != NodeRegistry.INSTANCE.ROOT) {
-            addClickItem("← " + Component.translatable("menu.node.back").getString(), 0xFF888888, v -> navigateBack());
+            addClickItem("← " + Component.translatable("menu.node.back").getString(), COLOR_MUTED_TEXT, v -> navigateBack());
+            addDivider();
         }
 
         for (NodeCategory sub : mCurrentFolder.getSubCategories()) {
-            String label = Component.translatable(sub.translationKey).getString() + "  ›";
-            addClickItem(label, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> { mSearchBox.setText(""); navigateTo(sub); });
+            String label = Component.translatable(sub.translationKey).getString() + "    ›";
+            addClickItem(label, COLOR_CATEGORY_TEXT, v -> { mSearchBox.setText(""); navigateTo(sub); });
         }
 
         for (BaseNode node : mCurrentFolder.getNodes()) {
             String label = node.getDefaultDefinition().displayName().getString();
-            addClickItem(label, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> {
+            addClickItem(label, COLOR_NODE_TEXT, v -> {
                 if (mContext != null) mContext.requestAddNode(mMenuX, mMenuY, node.getTypeId());
                 post(this::dismiss);
             });
         }
+
+        updateScrollHeight();
+        relayoutIfAttached();
     }
 
     private void performSearch(String query) {
         if (query.trim().isEmpty()) { renderCurrentFolder(); return; }
         mListContainer.removeAllViews();
         String q = query.toLowerCase().trim();
+        int matches = 0;
 
         for (com.mine.geometry_node.core.node.nodes.NodeDef def : NodeRegistry.INSTANCE.getAllDefinitions()) {
             String name = def.displayName().getString();
             if (name.toLowerCase().contains(q)) {
-                addClickItem(name, UIConstants.ViewPort.NodeMenu.TEXT_COLOR, v -> {
+                matches++;
+                addClickItem(name, COLOR_NODE_TEXT, v -> {
                     if (mContext != null) mContext.requestAddNode(mMenuX, mMenuY, def.typeId());
                     post(this::dismiss);
                 });
             }
         }
+        if (matches == 0) addEmptyItem("未找到匹配节点");
+
+        updateScrollHeight();
+        relayoutIfAttached();
     }
 
     private void addClickItem(String text, int color, View.OnClickListener listener) {
         TextView tv = new TextView(getContext());
         tv.setText(text);
-        float itemFontSizeDp = UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT * (float) UIConstants.ViewPort.NodeMenu.TEXT_SIZE;
-        tv.setTextSize(0, UIUtils.dp2px(itemFontSizeDp));
+        tv.setTextSize(0, UIUtils.dp2px(12));
         tv.setTextColor(color);
-        tv.setPadding(UIUtils.dp2pxInt(3), 0, UIUtils.dp2pxInt(3), 0);
+        tv.setSingleLine(true);
+        tv.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
         tv.setGravity(Gravity.CENTER_VERTICAL);
         tv.setOnClickListener(listener);
 
         tv.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                tv.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.HOVER_COLOR, 4));
+                tv.setBackground(createRectDrawable(COLOR_HOVER_BG, ITEM_RADIUS_DP));
                 tv.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_HOVER);
             } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
                 tv.setBackground(null);
@@ -216,17 +230,105 @@ public class ViewportMenu extends FrameLayout {
             return false;
         });
 
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(UIConstants.ViewPort.NodeMenu.ITEM_HEIGHT));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(ITEM_HEIGHT_DP));
         int marginV = UIUtils.dp2pxInt(1);
-        int marginH = UIUtils.dp2pxInt(2);
-        lp.setMargins(marginH, marginV, marginH, marginV);
+        lp.setMargins(0, marginV, 0, marginV);
         mListContainer.addView(tv, lp);
     }
 
+    private void addSectionLabel(String text) {
+        TextView tv = new TextView(getContext());
+        tv.setText(text);
+        tv.setTextSize(0, UIUtils.dp2px(10));
+        tv.setTextColor(COLOR_SECTION_TEXT);
+        tv.setSingleLine(true);
+        tv.setGravity(Gravity.CENTER_VERTICAL);
+        tv.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(18));
+        lp.setMargins(0, UIUtils.dp2pxInt(2), 0, 0);
+        mListContainer.addView(tv, lp);
+    }
+
+    private void addEmptyItem(String text) {
+        TextView tv = new TextView(getContext());
+        tv.setText(text);
+        tv.setTextSize(0, UIUtils.dp2px(12));
+        tv.setTextColor(COLOR_MUTED_TEXT);
+        tv.setSingleLine(true);
+        tv.setGravity(Gravity.CENTER_VERTICAL);
+        tv.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+        mListContainer.addView(tv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(ITEM_HEIGHT_DP)));
+    }
+
+    private void addDivider() {
+        View divider = new View(getContext());
+        divider.setBackground(createRectDrawable(COLOR_DIVIDER, 0));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1));
+        lp.setMargins(0, UIUtils.dp2pxInt(6), 0, UIUtils.dp2pxInt(6));
+        mListContainer.addView(divider, lp);
+    }
+
+    private void updateScrollHeight() {
+        LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) mScrollView.getLayoutParams();
+        if (mListContainer.getChildCount() > 12) {
+            lp.height = UIUtils.dp2pxInt(MAX_LIST_HEIGHT_DP);
+        } else {
+            lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+        }
+        mScrollView.setLayoutParams(lp);
+    }
+
+    private void relayoutIfAttached() {
+        if (mContext instanceof ViewGroup parent) {
+            layoutPanel(parent, mMenuX, mMenuY);
+        }
+    }
+
+    private void layoutPanel(ViewGroup parent, float x, float y) {
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
+        int menuWidth = UIUtils.dp2pxInt(MENU_WIDTH_DP);
+        lp.gravity = Gravity.TOP | Gravity.LEFT;
+        lp.width = menuWidth;
+
+        int widthSpec = MeasureSpec.makeMeasureSpec(menuWidth, MeasureSpec.EXACTLY);
+        int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+        mContentLayout.measure(widthSpec, heightSpec);
+
+        int actualH = mContentLayout.getMeasuredHeight();
+        if (actualH == 0) actualH = UIUtils.dp2pxInt(SEARCH_HEIGHT_DP + MAX_LIST_HEIGHT_DP + MENU_PADDING_DP * 2);
+
+        int edge = UIUtils.dp2pxInt(MENU_EDGE_MARGIN_DP);
+        int parentW = parent.getWidth();
+        int parentH = parent.getHeight();
+
+        int targetX = (int) x;
+        int targetY = (int) y;
+
+        if (parentW > 0 && targetX + menuWidth + edge > parentW) {
+            targetX = Math.max(edge, parentW - menuWidth - edge);
+        }
+        if (parentH > 0 && targetY + actualH + edge > parentH) {
+            int aboveY = (int) y - actualH;
+            targetY = aboveY >= edge ? aboveY : Math.max(edge, parentH - actualH - edge);
+        }
+
+        lp.leftMargin = Math.max(edge, targetX);
+        lp.topMargin = Math.max(edge, targetY);
+        mContentLayout.setLayoutParams(lp);
+    }
+
     private ShapeDrawable createRectDrawable(int color, int radius) {
+        return createRectDrawable(color, radius, 0, 0);
+    }
+
+    private ShapeDrawable createRectDrawable(int color, int radius, int strokeWidthDp, int strokeColor) {
         ShapeDrawable d = new ShapeDrawable();
         d.setColor(color);
-        d.setCornerRadius(radius);
+        d.setCornerRadius(UIUtils.dp2px(radius));
+        if (strokeWidthDp > 0) {
+            d.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
+        }
         return d;
     }
 }
