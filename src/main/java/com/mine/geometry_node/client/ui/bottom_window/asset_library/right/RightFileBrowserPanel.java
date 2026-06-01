@@ -467,27 +467,29 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
         if (event.isCtrlPressed()) {
             toggleSelection(entry);
-        } else {
+        } else if (!mSelectedPaths.contains(entry.key())) {
             selectOnly(entry);
+        } else {
+            syncSelectionViews();
         }
     }
 
     @Override
     public void onItemDragStarted(AssetEntry entry, MotionEvent event) {
         List<AssetEntry> selectedEntries = getSelectedEntries();
-        if (selectedEntries.size() != 1 || !selectedEntries.get(0).key().equals(entry.key())) {
+        if (selectedEntries.isEmpty() || !mSelectedPaths.contains(entry.key())) {
             AssetDragState.clear();
             return;
         }
-        if (!entry.isJsonFile()) {
-            AssetDragState.clear();
-            return;
-        }
-        AssetDragState.start(new AssetDragState.Payload(entry));
+        AssetDragState.start(new AssetDragState.Payload(selectedEntries));
     }
 
     @Override
     public void onItemReleased(AssetEntry entry, MotionEvent event, boolean moved) {
+        if (moved && handleInternalDrop(event.getRawX(), event.getRawY())) {
+            AssetDragState.clear();
+            return;
+        }
         if (moved && AssetDragDropRegistry.dispatchDrop(event.getRawX(), event.getRawY())) {
             AssetDragState.clear();
             return;
@@ -586,6 +588,75 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             }
         }
         return result;
+    }
+
+    private boolean handleInternalDrop(float rawX, float rawY) {
+        AssetDragState.Payload payload = AssetDragState.current();
+        if (payload == null || payload.entries().isEmpty()) return false;
+
+        AssetEntry target = findDirectoryEntryAt(rawX, rawY);
+        if (target == null) return false;
+
+        if (target.sourceKind() == AssetSourceKind.LOCAL) {
+            return moveLocalEntries(payload.entries(), target);
+        }
+        if (target.sourceKind() == AssetSourceKind.REMOTE) {
+            return moveRemoteEntries(payload.entries(), target);
+        }
+        return false;
+    }
+
+    private AssetEntry findDirectoryEntryAt(float rawX, float rawY) {
+        for (AssetFileItemView item : mItemViews.values()) {
+            AssetEntry candidate = item.getEntry();
+            if (!candidate.isDirectory() || !isRawPointInside(item, rawX, rawY)) continue;
+            return candidate;
+        }
+        return null;
+    }
+
+    private boolean moveLocalEntries(List<AssetEntry> entries, AssetEntry targetDirectoryEntry) {
+        if (targetDirectoryEntry.sourceKind() != AssetSourceKind.LOCAL || targetDirectoryEntry.localFile() == null) return false;
+        File targetDirectory = targetDirectoryEntry.localFile();
+        if (!targetDirectory.isDirectory()) return false;
+
+        boolean movedAny = false;
+        try {
+            for (AssetEntry entry : entries) {
+                if (entry.sourceKind() != AssetSourceKind.LOCAL || entry.localFile() == null) continue;
+                File source = entry.localFile();
+                if (!source.exists() || source.equals(targetDirectory) || isDescendantOrSelf(targetDirectory, source)) continue;
+                if (source.getParentFile() != null && source.getParentFile().equals(targetDirectory)) continue;
+
+                File dest = AssetFileOperations.resolveAvailableDestination(targetDirectory, source.getName(), source.isDirectory());
+                AssetFileOperations.moveRecursively(source, dest);
+                movedAny = true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        if (movedAny) {
+            clearSelection();
+            refreshFileList();
+        }
+        return movedAny;
+    }
+
+    private boolean moveRemoteEntries(List<AssetEntry> entries, AssetEntry targetDirectoryEntry) {
+        if (targetDirectoryEntry.sourceKind() != AssetSourceKind.REMOTE || !targetDirectoryEntry.isDirectory()) return false;
+        if (!mEnableRemoteTransferActions || !RemoteGraphClientState.canManage()) return false;
+
+        List<String> paths = new ArrayList<>();
+        for (AssetEntry entry : entries) {
+            if (entry.sourceKind() == AssetSourceKind.REMOTE && !entry.path().equals(targetDirectoryEntry.path())) {
+                paths.add(entry.path());
+            }
+        }
+        if (paths.isEmpty()) return false;
+
+        sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation.MOVE, paths, targetDirectoryEntry.path());
+        return true;
     }
 
     private void addLocalContextActions(FileContextMenu menu, List<File> filesSnapshot) {
@@ -947,6 +1018,13 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         int keepStart = Math.max(1, (maxChars - 1) / 2);
         int keepEnd = Math.max(1, maxChars - 1 - keepStart);
         return text.substring(0, keepStart) + "…" + text.substring(text.length() - keepEnd);
+    }
+
+    private boolean isRawPointInside(View view, float rawX, float rawY) {
+        int[] loc = new int[2];
+        view.getLocationOnScreen(loc);
+        return rawX >= loc[0] && rawX <= loc[0] + view.getWidth()
+                && rawY >= loc[1] && rawY <= loc[1] + view.getHeight();
     }
 
     private boolean isRightMouse(MotionEvent e) {

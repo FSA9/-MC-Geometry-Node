@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog;
 
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.drag.AssetDragDropRegistry;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -20,6 +21,7 @@ abstract class AssetDialogBase extends FrameLayout {
     private int mDragStartLeft;
     private int mDragStartTop;
     private boolean mDragging;
+    private boolean mRegisteredDragBlocker;
 
     AssetDialogBase(Context context, String title) {
         super(context);
@@ -61,12 +63,23 @@ abstract class AssetDialogBase extends FrameLayout {
     public void showIn(ViewGroup parent) {
         ViewGroup host = findWindowHost(parent);
         host.addView(this, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (!mRegisteredDragBlocker) {
+            AssetDragDropRegistry.pushModalBlocker();
+            mRegisteredDragBlocker = true;
+        }
     }
 
     public void dismiss() {
+        releaseDragBlocker();
         if (getParent() instanceof ViewGroup parent) {
             parent.removeView(this);
         }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        releaseDragBlocker();
+        super.onDetachedFromWindow();
     }
 
     protected TextView label(Context context, String text, float size, int color) {
@@ -106,6 +119,12 @@ abstract class AssetDialogBase extends FrameLayout {
             current = (View) current.getParent();
         }
         return best;
+    }
+
+    private void releaseDragBlocker() {
+        if (!mRegisteredDragBlocker) return;
+        AssetDragDropRegistry.popModalBlocker();
+        mRegisteredDragBlocker = false;
     }
 
     private boolean onTitleBarTouch(View view, MotionEvent event) {

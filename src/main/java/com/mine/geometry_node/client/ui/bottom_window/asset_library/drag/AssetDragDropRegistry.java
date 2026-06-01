@@ -6,6 +6,7 @@ public final class AssetDragDropRegistry {
     }
 
     private static DropTarget sDropTarget;
+    private static int sModalBlockCount = 0;
 
     private AssetDragDropRegistry() {
     }
@@ -18,7 +19,20 @@ public final class AssetDragDropRegistry {
         sDropTarget = null;
     }
 
+    public static void pushModalBlocker() {
+        sModalBlockCount++;
+    }
+
+    public static void popModalBlocker() {
+        sModalBlockCount = Math.max(0, sModalBlockCount - 1);
+    }
+
+    public static boolean isBlockedByModal() {
+        return sModalBlockCount > 0;
+    }
+
     public static boolean dispatchDrop(float rawX, float rawY) {
+        if (isBlockedByModal()) return false;
         AssetDragState.Payload payload = AssetDragState.current();
         return payload != null && sDropTarget != null && sDropTarget.acceptDrop(payload, rawX, rawY);
     }

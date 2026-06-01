@@ -2,6 +2,10 @@ package com.mine.geometry_node.client.ui.bottom_window.asset_library.drag;
 
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 public final class AssetDragState {
     private static Payload sPayload;
 
@@ -26,8 +30,17 @@ public final class AssetDragState {
         sPayload = null;
     }
 
-    public record Payload(AssetEntry entry) {
+    public record Payload(List<AssetEntry> entries) {
+        public Payload {
+            entries = entries == null ? List.of() : Collections.unmodifiableList(new ArrayList<>(entries));
+        }
+
+        public AssetEntry entry() {
+            return entries.size() == 1 ? entries.get(0) : null;
+        }
+
         public boolean isSingleJsonGraph() {
+            AssetEntry entry = entry();
             return entry != null && entry.isJsonFile();
         }
     }
