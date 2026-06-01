@@ -1,8 +1,15 @@
 package com.mine.geometry_node.client.ui.viewport;
 
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.drag.AssetDragDropRegistry;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.drag.AssetDragState;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.core.network.NetworkHandler;
+import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphDownloadRequest;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -15,6 +22,9 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
+
+import java.nio.file.Files;
+import java.util.List;
 
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
@@ -73,7 +83,59 @@ public class ViewportPanel extends LinearLayout {
         addView(mViewport, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         DocumentManager.INSTANCE.setOnTabChangedListener(() -> post(this::refreshTabs));
+        AssetDragDropRegistry.setDropTarget(this::acceptAssetDrop);
         refreshTabs();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        AssetDragDropRegistry.clearDropTarget();
+        super.onDetachedFromWindow();
+    }
+
+    private boolean acceptAssetDrop(AssetDragState.Payload payload, float rawX, float rawY) {
+        if (payload == null || !payload.isSingleJsonGraph()) return false;
+        if (DocumentManager.INSTANCE.getActiveSession() == null || !mViewport.getController().hasActiveSession()) return false;
+        if (!isRawPointInside(mViewport, rawX, rawY)) return false;
+
+        int[] viewportLoc = new int[2];
+        mViewport.getLocationOnScreen(viewportLoc);
+        float viewportX = rawX - viewportLoc[0];
+        float viewportY = rawY - viewportLoc[1];
+        importDraggedGraph(payload.entry(), viewportX, viewportY);
+        return true;
+    }
+
+    private void importDraggedGraph(AssetEntry entry, float viewportX, float viewportY) {
+        if (entry.sourceKind() == AssetSourceKind.LOCAL) {
+            if (entry.localFile() == null || entry.localFile().isDirectory()) return;
+            try {
+                mViewport.getController().executeImportGraphJson(Files.readString(entry.localFile().toPath()), viewportX, viewportY);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return;
+        }
+
+        if (entry.sourceKind() == AssetSourceKind.REMOTE && RemoteGraphClientState.canDownload()) {
+            int requestId = RemoteGraphClientState.nextRequestId();
+            RemoteGraphClientState.onDownload(requestId, response -> post(() -> {
+                if (!response.success()) {
+                    System.err.println("[ViewportPanel] Remote graph import failed: " + response.message());
+                    return;
+                }
+                if (response.files().isEmpty()) return;
+                mViewport.getController().executeImportGraphJson(response.files().get(0).jsonContent(), viewportX, viewportY);
+            }));
+            NetworkHandler.sendToServer(new PacketRemoteGraphDownloadRequest(requestId, List.of(entry.path())));
+        }
+    }
+
+    private boolean isRawPointInside(View view, float rawX, float rawY) {
+        int[] loc = new int[2];
+        view.getLocationOnScreen(loc);
+        return rawX >= loc[0] && rawX <= loc[0] + view.getWidth()
+                && rawY >= loc[1] && rawY <= loc[1] + view.getHeight();
     }
 
     private void refreshTabs() {

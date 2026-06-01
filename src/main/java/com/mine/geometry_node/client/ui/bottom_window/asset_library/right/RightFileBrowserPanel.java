@@ -4,6 +4,8 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetPathUtils;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.ConfirmDialog;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.drag.AssetDragState;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.drag.AssetDragDropRegistry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.menu.FileContextMenu;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
@@ -78,6 +80,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private Runnable mPickCurrentDirectoryAction;
 
     private static List<String> sRemoteClipboardPaths = new ArrayList<>();
+    private static boolean sRemoteCutOperation = false;
 
     private static final float NAV_BAR_HEIGHT = 40.0f;
     private static final float BTN_ADD_WIDTH = 40.0f;
@@ -453,6 +456,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     @Override
     public void onItemPressed(AssetEntry entry, MotionEvent event) {
+        AssetDragState.clear();
         if (isRightMouse(event)) {
             if (!mSelectedPaths.contains(entry.key())) {
                 selectOnly(entry);
@@ -469,7 +473,26 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     @Override
+    public void onItemDragStarted(AssetEntry entry, MotionEvent event) {
+        List<AssetEntry> selectedEntries = getSelectedEntries();
+        if (selectedEntries.size() != 1 || !selectedEntries.get(0).key().equals(entry.key())) {
+            AssetDragState.clear();
+            return;
+        }
+        if (!entry.isJsonFile()) {
+            AssetDragState.clear();
+            return;
+        }
+        AssetDragState.start(new AssetDragState.Payload(entry));
+    }
+
+    @Override
     public void onItemReleased(AssetEntry entry, MotionEvent event, boolean moved) {
+        if (moved && AssetDragDropRegistry.dispatchDrop(event.getRawX(), event.getRawY())) {
+            AssetDragState.clear();
+            return;
+        }
+        AssetDragState.clear();
         if (moved || isRightMouse(event)) return;
 
         String key = entry.key();
@@ -607,7 +630,8 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             menu.addDivider();
         }
         if (RemoteGraphClientState.canManage()) {
-            menu.addMenuItem("复制" + suffix, () -> copyRemoteEntries(entriesSnapshot));
+            menu.addMenuItem("复制" + suffix, () -> setRemoteClipboard(entriesSnapshot, false));
+            menu.addMenuItem("剪切" + suffix, () -> setRemoteClipboard(entriesSnapshot, true));
             menu.addMenuItem("删除" + suffix, () -> deleteRemoteEntries(entriesSnapshot));
             menu.addDivider();
         }
@@ -635,7 +659,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         }
         if (mEnableRemoteTransferActions && mSourceKind == AssetSourceKind.REMOTE
                 && RemoteGraphClientState.canManage() && !sRemoteClipboardPaths.isEmpty()) {
-            menu.addMenuItem("粘贴", this::pasteRemoteEntries);
+            menu.addMenuItem(sRemoteCutOperation ? "移动到此处" : "粘贴", this::pasteRemoteEntries);
             menu.addDivider();
         }
         if (mEnableLocalFileActions && mSourceKind == AssetSourceKind.LOCAL) {
@@ -749,13 +773,14 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         }
     }
 
-    private void copyRemoteEntries(List<AssetEntry> entries) {
+    private void setRemoteClipboard(List<AssetEntry> entries, boolean cutOperation) {
         sRemoteClipboardPaths = new ArrayList<>();
         for (AssetEntry entry : entries) {
             if (entry.sourceKind() == AssetSourceKind.REMOTE) {
                 sRemoteClipboardPaths.add(entry.path());
             }
         }
+        sRemoteCutOperation = cutOperation;
     }
 
     private void deleteRemoteEntries(List<AssetEntry> entries) {
@@ -781,13 +806,20 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void pasteRemoteEntries() {
         if (sRemoteClipboardPaths.isEmpty()) return;
-        sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation.COPY, new ArrayList<>(sRemoteClipboardPaths), mRemoteDirectory);
+        PacketRemoteGraphFileOperationRequest.Operation operation = sRemoteCutOperation
+                ? PacketRemoteGraphFileOperationRequest.Operation.MOVE
+                : PacketRemoteGraphFileOperationRequest.Operation.COPY;
+        sendRemoteFileOperation(operation, new ArrayList<>(sRemoteClipboardPaths), mRemoteDirectory);
     }
 
     private void sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation operation, List<String> paths, String targetDirectory) {
         if (paths.isEmpty()) return;
         int requestId = RemoteGraphClientState.nextRequestId();
-        String title = operation == PacketRemoteGraphFileOperationRequest.Operation.DELETE ? "删除云端文件" : "复制云端文件";
+        String title = switch (operation) {
+            case DELETE -> "删除云端文件";
+            case COPY -> "复制云端文件";
+            case MOVE -> "移动云端文件";
+        };
         com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.TransferProgressDialog progress =
                 new com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.TransferProgressDialog(getContext(), title);
         progress.showIn(this);
@@ -799,6 +831,10 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                     return;
                 }
                 progress.update(response.message(), 1, 1);
+                if (operation == PacketRemoteGraphFileOperationRequest.Operation.MOVE) {
+                    sRemoteClipboardPaths = new ArrayList<>();
+                    sRemoteCutOperation = false;
+                }
                 clearSelection();
                 refreshFileList();
             });

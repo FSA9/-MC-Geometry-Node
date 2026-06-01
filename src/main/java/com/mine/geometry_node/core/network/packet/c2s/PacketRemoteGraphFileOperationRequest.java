@@ -16,7 +16,8 @@ public record PacketRemoteGraphFileOperationRequest(
 ) implements CustomPacketPayload {
     public enum Operation {
         DELETE,
-        COPY
+        COPY,
+        MOVE
     }
 
     public static final Type<PacketRemoteGraphFileOperationRequest> TYPE =

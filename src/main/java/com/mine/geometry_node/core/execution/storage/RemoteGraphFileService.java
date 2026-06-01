@@ -138,6 +138,32 @@ public final class RemoteGraphFileService {
         return copied;
     }
 
+    public static int moveSelection(MinecraftServer server, List<String> sourcePaths, String targetDirectoryPath) throws IOException {
+        Path targetDirectory = resolveDirectory(server, targetDirectoryPath);
+        Files.createDirectories(targetDirectory);
+        if (!Files.isDirectory(targetDirectory)) {
+            throw new IOException("Remote target is not a directory: " + targetDirectoryPath);
+        }
+
+        Path normalizedTargetDirectory = targetDirectory.toAbsolutePath().normalize();
+        int moved = 0;
+        for (String sourcePath : sourcePaths) {
+            Path source = resolvePath(server, sourcePath, false);
+            Path normalizedSource = source.toAbsolutePath().normalize();
+            if (!Files.exists(source) || source.equals(root(server))) continue;
+            if (source.getParent() != null && source.getParent().toAbsolutePath().normalize().equals(normalizedTargetDirectory)) {
+                continue;
+            }
+
+            Path target = resolveAvailableDestination(targetDirectory, source.getFileName().toString(), Files.isDirectory(source));
+            if (Files.isDirectory(source) && target.toAbsolutePath().normalize().startsWith(normalizedSource)) {
+                continue;
+            }
+            moved += moveRecursively(source, target);
+        }
+        return moved;
+    }
+
     public static Path root(MinecraftServer server) {
         return server.getWorldPath(DynamicGraphManager.GRAPH_DIR).toAbsolutePath().normalize();
     }
@@ -219,6 +245,38 @@ public final class RemoteGraphFileService {
         Files.createDirectories(target.getParent());
         Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES);
         return 1;
+    }
+
+    private static int moveRecursively(Path source, Path target) throws IOException {
+        if (Files.isSymbolicLink(source)) {
+            return 0;
+        }
+        int moved = countRecursively(source);
+        Files.createDirectories(target.getParent());
+        try {
+            Files.move(source, target);
+        } catch (IOException moveException) {
+            copyRecursively(source, target);
+            deleteRecursively(source);
+        }
+        return moved;
+    }
+
+    private static int countRecursively(Path path) throws IOException {
+        if (Files.isSymbolicLink(path) || !Files.exists(path)) {
+            return 0;
+        }
+        if (!Files.isDirectory(path)) {
+            return 1;
+        }
+
+        int count = 1;
+        try (var stream = Files.list(path)) {
+            for (Path child : stream.toList()) {
+                count += countRecursively(child);
+            }
+        }
+        return count;
     }
 
     private static Path resolveAvailableDestination(Path directory, String sourceName, boolean directoryName) throws IOException {

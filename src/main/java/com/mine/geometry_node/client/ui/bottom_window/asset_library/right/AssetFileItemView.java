@@ -18,6 +18,7 @@ import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 final class AssetFileItemView extends LinearLayout {
     interface Listener {
         void onItemPressed(AssetEntry entry, MotionEvent event);
+        void onItemDragStarted(AssetEntry entry, MotionEvent event);
         void onItemReleased(AssetEntry entry, MotionEvent event, boolean moved);
     }
 
@@ -38,6 +39,7 @@ final class AssetFileItemView extends LinearLayout {
     private float mDownX;
     private float mDownY;
     private boolean mMoved;
+    private boolean mDragging;
     private final float mTouchSlop;
 
     AssetFileItemView(Context context, AssetEntry entry, AssetViewMode mode, String displayName, String parentLabel, Listener listener) {
@@ -113,18 +115,25 @@ final class AssetFileItemView extends LinearLayout {
                 mDownX = event.getX();
                 mDownY = event.getY();
                 mMoved = false;
+                mDragging = false;
                 mListener.onItemPressed(mEntry, event);
                 return true;
             case MotionEvent.ACTION_MOVE:
                 if (Math.abs(event.getX() - mDownX) > mTouchSlop || Math.abs(event.getY() - mDownY) > mTouchSlop) {
                     mMoved = true;
+                    if (!mDragging) {
+                        mDragging = true;
+                        mListener.onItemDragStarted(mEntry, event);
+                    }
                 }
                 return true;
             case MotionEvent.ACTION_UP:
                 mListener.onItemReleased(mEntry, event, mMoved);
+                mDragging = false;
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 mMoved = false;
+                mDragging = false;
                 return true;
             default:
                 return true;

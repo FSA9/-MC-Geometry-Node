@@ -358,9 +358,14 @@ public class NetworkHandler {
             int count = switch (payload.operation()) {
                 case DELETE -> RemoteGraphFileService.deleteSelection(player.getServer(), payload.paths());
                 case COPY -> RemoteGraphFileService.copySelection(player.getServer(), payload.paths(), payload.targetDirectory());
+                case MOVE -> RemoteGraphFileService.moveSelection(player.getServer(), payload.paths(), payload.targetDirectory());
             };
             DynamicGraphManager.loadAllFromDisk(player.getServer());
-            String action = payload.operation() == PacketRemoteGraphFileOperationRequest.Operation.DELETE ? "删除" : "复制";
+            String action = switch (payload.operation()) {
+                case DELETE -> "删除";
+                case COPY -> "复制";
+                case MOVE -> "移动";
+            };
             sendToPlayer(player, new PacketRemoteGraphFileOperationResponse(
                     payload.requestId(), true, action + "完成: " + count));
         } catch (Exception e) {

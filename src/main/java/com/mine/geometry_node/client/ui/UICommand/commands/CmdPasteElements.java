@@ -14,6 +14,8 @@ public class CmdPasteElements implements ICommand {
     private final GraphController mController;
     private final List<NodeData> mPastedNodes = new ArrayList<>();
     private final List<FrameData> mPastedFrames = new ArrayList<>();
+    private final Map<String, Map<String, List<Connection>>> mPastedDataConnections = new HashMap<>();
+    private final Map<String, Map<String, Connection>> mPastedExecutionConnections = new HashMap<>();
 
     public CmdPasteElements(GraphController controller, String json, float targetUiX, float targetUiY) {
         this.mController = controller;
@@ -72,7 +74,8 @@ public class CmdPasteElements implements ICommand {
                 }
                 if (!newLinks.isEmpty()) newOutputs.put(entry.getKey(), newLinks);
             }
-            node.outputs = newOutputs;
+            mPastedDataConnections.put(node.id, newOutputs);
+            node.outputs = new HashMap<>();
 
             Map<String, Connection> newExecOutputs = new HashMap<>();
             if (node.execOutputs != null) {
@@ -83,7 +86,8 @@ public class CmdPasteElements implements ICommand {
                     }
                 }
             }
-            node.execOutputs = newExecOutputs;
+            mPastedExecutionConnections.put(node.id, newExecOutputs);
+            node.execOutputs = new HashMap<>();
             if (node.connectedInputs != null) node.connectedInputs.clear();
         }
     }
@@ -94,16 +98,16 @@ public class CmdPasteElements implements ICommand {
         for (NodeData node : mPastedNodes) mController.addNode(node);
 
         for (NodeData node : mPastedNodes) {
-            for (Map.Entry<String, List<Connection>> entry : node.outputs.entrySet()) {
+            Map<String, List<Connection>> dataConnections = mPastedDataConnections.getOrDefault(node.id, Map.of());
+            for (Map.Entry<String, List<Connection>> entry : dataConnections.entrySet()) {
                 for (Connection link : entry.getValue()) {
                     mController.addConnection(node.id, entry.getKey(), link.targetNodeId(), link.targetPortName());
                 }
             }
-            if (node.execOutputs != null) {
-                for (Map.Entry<String, Connection> entry : node.execOutputs.entrySet()) {
-                    Connection link = entry.getValue();
-                    mController.addExecutionConnection(node.id, entry.getKey(), link.targetNodeId(), link.targetPortName());
-                }
+            Map<String, Connection> executionConnections = mPastedExecutionConnections.getOrDefault(node.id, Map.of());
+            for (Map.Entry<String, Connection> entry : executionConnections.entrySet()) {
+                Connection link = entry.getValue();
+                mController.addExecutionConnection(node.id, entry.getKey(), link.targetNodeId(), link.targetPortName());
             }
         }
     }
@@ -112,5 +116,13 @@ public class CmdPasteElements implements ICommand {
     public void undo() {
         for (NodeData node : mPastedNodes) mController.removeNode(node.id);
         for (FrameData frame : mPastedFrames) mController.removeFrame(frame.id);
+    }
+
+    public List<NodeData> getPastedNodes() {
+        return Collections.unmodifiableList(mPastedNodes);
+    }
+
+    public List<FrameData> getPastedFrames() {
+        return Collections.unmodifiableList(mPastedFrames);
     }
 }

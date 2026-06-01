@@ -140,6 +140,33 @@ public class ViewportController implements EditorContext.EditorListener,
         mEditorContext.getCommandManager().execute(cmd);
     }
 
+    public void executeImportGraphJson(String json, float screenX, float screenY) {
+        if (mEditorContext == null || json == null || json.isBlank()) return;
+        float uiX = mViewport.getCamera().screenToUIX(screenX);
+        float uiY = mViewport.getCamera().screenToUIY(screenY);
+        CmdPasteElements cmd = new CmdPasteElements(mEditorContext.getGraphController(), json, uiX, uiY);
+        mEditorContext.getCommandManager().execute(cmd);
+        selectPastedElements(cmd);
+    }
+
+    private void selectPastedElements(CmdPasteElements cmd) {
+        mViewport.clearSelection();
+        mCurrentSession.selectedNodeIds.clear();
+        for (NodeData node : cmd.getPastedNodes()) {
+            NodeVisualAdapter visual = mViewport.getNodeVisual(node.id);
+            if (visual != null) {
+                mViewport.addToSelection(visual);
+                mCurrentSession.selectedNodeIds.add(node.id);
+            }
+        }
+        for (com.mine.geometry_node.core.node.FrameData frame : cmd.getPastedFrames()) {
+            FrameVisualAdapter visual = mViewport.getFrameVisuals().get(frame.id);
+            if (visual != null) {
+                mViewport.addToSelection(visual);
+            }
+        }
+    }
+
     private void rebuildVisualConnections() {
         mViewport.rebuildVisualConnections(mEditorContext != null ? mEditorContext.getGraph() : null);
     }
