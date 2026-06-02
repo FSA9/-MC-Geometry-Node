@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.command.server;
 
-import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.execution.storage.GraphIdMapper;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.GraphIdMapper;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload;
 import com.mojang.brigadier.CommandDispatcher;

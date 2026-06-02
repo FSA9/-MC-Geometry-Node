@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.node.nodes.functions.graph;
 
-import com.mine.geometry_node.core.execution.ExecutionContext;
-import com.mine.geometry_node.core.execution.ExecutionResult;
-import com.mine.geometry_node.core.execution.GraphProcess;
+import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionResult;
+import com.mine.geometry_node.core.engine.blueprint.execution.GraphProcess;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;

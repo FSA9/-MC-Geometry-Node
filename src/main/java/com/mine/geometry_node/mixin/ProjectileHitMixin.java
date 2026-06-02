@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin;
 
-import com.mine.geometry_node.core.execution.GraphEngine;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnProjectileHit;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import net.minecraft.core.BlockPos;
@@ -50,7 +50,7 @@ public abstract class ProjectileHitMixin {
         final Entity finalHitEntity = hitEntity;
         final BlockState finalHitBlock = hitBlock;
 
-        GraphEngine.dispatchEvent(serverLevel, dispatchTarget, OnProjectileHit.TYPE_ID, process -> {
+        BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, dispatchTarget, OnProjectileHit.TYPE_ID, process -> {
             process.setEventData(StandardPorts.ENTITY.getId(), projectile);
             process.setEventData(StandardPorts.XYZ.getId(), hitPos);
             process.setEventData(StandardPorts.VECTOR.getId(), impactVelocity);

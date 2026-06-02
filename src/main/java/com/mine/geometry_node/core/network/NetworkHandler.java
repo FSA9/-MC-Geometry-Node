@@ -3,9 +3,9 @@ package com.mine.geometry_node.core.network;
 import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
-import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.execution.storage.RemoteGraphFileService;
-import com.mine.geometry_node.core.execution.storage.RemoteGraphPermissions;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphPermissions;
 import com.mine.geometry_node.core.network.packet.c2s.*;
 import com.mine.geometry_node.core.network.packet.s2c.*;
 import dev.architectury.networking.NetworkManager;
@@ -243,7 +243,7 @@ public class NetworkHandler {
                     context.queue(() -> {
                         if (context.getPlayer() instanceof ServerPlayer player) {
                             // 将数据包直接甩给状态管家处理
-                            com.mine.geometry_node.core.execution.state.PlayerInputStateManager.handleInput(player, payload);
+                            com.mine.geometry_node.core.engine.blueprint.execution.state.PlayerInputStateManager.handleInput(player, payload);
                         }
                     });
                 }

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.persistence;
 
-import com.mine.geometry_node.core.execution.storage.GraphIdMapper;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.GraphIdMapper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 

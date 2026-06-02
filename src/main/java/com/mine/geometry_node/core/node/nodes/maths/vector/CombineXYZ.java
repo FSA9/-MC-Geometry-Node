@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.node.nodes.maths.vector;
 
-import com.mine.geometry_node.core.execution.ExecutionContext;
-import com.mine.geometry_node.core.execution.datatypes.DynamicData;
-import com.mine.geometry_node.core.execution.datatypes.ExpressionData;
+import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.execution.datatypes.DynamicData;
+import com.mine.geometry_node.core.engine.blueprint.execution.datatypes.ExpressionData;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
 import net.minecraft.network.chat.Component;

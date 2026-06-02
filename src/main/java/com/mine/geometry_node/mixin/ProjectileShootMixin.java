@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin;
 
-import com.mine.geometry_node.core.execution.GraphEngine;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnProjectileShoot;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import net.minecraft.server.level.ServerLevel;
@@ -36,7 +36,7 @@ public abstract class ProjectileShootMixin {
             // 为了防止闭包要求 final 引用
             final Entity finalOwner = owner;
 
-            GraphEngine.dispatchEvent(serverLevel, dispatchTarget, OnProjectileShoot.TYPE_ID, process -> {
+            BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, dispatchTarget, OnProjectileShoot.TYPE_ID, process -> {
                 process.setEventData(StandardPorts.ENTITY.getId(), projectile);
                 process.setEventData(StandardPorts.XYZ.getId(), pos);
                 process.setEventData(StandardPorts.VECTOR.getId(), motion);

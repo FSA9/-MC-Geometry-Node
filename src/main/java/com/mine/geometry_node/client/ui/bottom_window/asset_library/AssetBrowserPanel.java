@@ -11,7 +11,7 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.RightF
 import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.PathUtils;
-import com.mine.geometry_node.core.execution.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphFileService;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphCapabilitiesRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphDownloadRequest;

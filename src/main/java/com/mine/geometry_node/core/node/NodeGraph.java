@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node;
 
 import com.google.gson.annotations.SerializedName;
+import com.mine.geometry_node.core.engine.graph.GraphKind;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,6 +35,18 @@ public class NodeGraph {
     public NodeGraph(String graphName) {
         this();
         this.graphName = graphName;
+    }
+
+    public GraphKind getKind() {
+        if (tags != null) {
+            for (String tag : tags) {
+                GraphKind kind = GraphKind.fromId(tag);
+                if (kind != GraphKind.UNKNOWN) {
+                    return kind;
+                }
+            }
+        }
+        return GraphKind.BLUEPRINT;
     }
 
     /**

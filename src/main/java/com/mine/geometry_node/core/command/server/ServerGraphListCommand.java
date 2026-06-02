@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.command.server;
 
-import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.GraphResourceManager;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;

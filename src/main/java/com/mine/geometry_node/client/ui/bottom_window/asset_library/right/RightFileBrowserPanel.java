@@ -15,7 +15,7 @@ import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.execution.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphFileService;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphFileOperationRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphListRequest;

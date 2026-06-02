@@ -1,11 +1,15 @@
 package com.mine.geometry_node;
 
 import com.mine.geometry_node.core.command.registry.ModServerCommands;
-import com.mine.geometry_node.core.execution.attachment.EntityGraphAttachment;
-import com.mine.geometry_node.core.execution.event_handler.GraphEventHandler;
-import com.mine.geometry_node.core.execution.attachment.EntityImmunityAttachment;
-import com.mine.geometry_node.core.execution.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.execution.storage.GraphResourceManager;
+import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
+import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
+import com.mine.geometry_node.core.engine.blueprint.execution.attachment.EntityGraphAttachment;
+import com.mine.geometry_node.core.engine.blueprint.execution.event_handler.GraphEventHandler;
+import com.mine.geometry_node.core.engine.blueprint.execution.attachment.EntityImmunityAttachment;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.blueprint.execution.storage.GraphResourceManager;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
@@ -83,6 +87,11 @@ public class GeometryNode {
 
         // 初始化节点注册表
         NodeRegistry.INSTANCE.init();
+
+        // 初始化图运行时注册表
+        GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);
+        GraphRuntimeRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
+        GraphRuntimeRegistry.INSTANCE.register(BehaviorTreeRuntime.INSTANCE);
 
         // 初始化蓝图系统事件引擎！
         GraphEventHandler.init();

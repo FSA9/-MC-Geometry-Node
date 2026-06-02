@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.entity.attribution;
 
-import com.mine.geometry_node.core.execution.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
 import net.minecraft.network.chat.Component;

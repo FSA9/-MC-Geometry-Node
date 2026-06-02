@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.command.server;
 
-import com.mine.geometry_node.core.execution.GraphEngine;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -64,7 +64,7 @@ public class GraphBindCommand {
     private static int handleTargetList(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
         for (Entity entity : targets) {
-            Set<String> graphs = GraphEngine.getBoundGraphs(entity);
+            Set<String> graphs = BlueprintRuntime.INSTANCE.getBoundGraphs(entity);
             context.getSource().sendSuccess(() -> Component.literal(
                     entity.getName().getString() + " 绑定的图: " + (graphs.isEmpty() ? "无" : graphs)
             ), false);
@@ -77,7 +77,7 @@ public class GraphBindCommand {
         String graphId = StringArgumentType.getString(context, "graph_id");
         int count = 0;
         for (Entity entity : targets) {
-            GraphEngine.bindGraph(entity, graphId);
+            BlueprintRuntime.INSTANCE.bindGraph(entity, graphId);
             count++;
         }
         int finalCount = count;
@@ -86,7 +86,7 @@ public class GraphBindCommand {
     }
 
     private static int handleGlobalList(CommandContext<CommandSourceStack> context) {
-        Set<String> graphs = GraphEngine.getGlobalBoundGraphs(context.getSource().getLevel());
+        Set<String> graphs = BlueprintRuntime.INSTANCE.getGlobalBoundGraphs(context.getSource().getLevel());
         context.getSource().sendSuccess(() -> Component.literal(
                 "全局绑定的图: " + (graphs.isEmpty() ? "无" : graphs)
         ), false);
@@ -95,7 +95,7 @@ public class GraphBindCommand {
 
     private static int handleGlobalBind(CommandContext<CommandSourceStack> context) {
         String graphId = StringArgumentType.getString(context, "graph_id");
-        GraphEngine.bindGlobalGraph(context.getSource().getLevel(), graphId);
+        BlueprintRuntime.INSTANCE.bindGlobalGraph(context.getSource().getLevel(), graphId);
         context.getSource().sendSuccess(() -> Component.literal("成功将图 " + graphId + " 绑定到全局服务器。"), true);
         return 1;
     }
@@ -119,7 +119,7 @@ public class GraphBindCommand {
 
         if (hitResult != null && hitResult.getEntity() != null) {
             Entity targetEntity = hitResult.getEntity();
-            GraphEngine.bindGraph(targetEntity, graphId);
+            BlueprintRuntime.INSTANCE.bindGraph(targetEntity, graphId);
             context.getSource().sendSuccess(() -> Component.literal(
                     "§a成功将图纸 " + graphId + " 绑定到: " + targetEntity.getName().getString()
             ), true);

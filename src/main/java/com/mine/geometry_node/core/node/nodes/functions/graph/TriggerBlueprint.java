@@ -1,7 +1,8 @@
 package com.mine.geometry_node.core.node.nodes.functions.graph;
 
-import com.mine.geometry_node.core.execution.ExecutionContext;
-import com.mine.geometry_node.core.execution.ExecutionResult;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
+import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
 import net.minecraft.network.chat.Component;
@@ -31,7 +32,7 @@ public class TriggerBlueprint extends BaseNode {
         String frequency = getInput(context, "frequency", String.class);
 
         if (frequency != null && !frequency.trim().isEmpty()) {
-            com.mine.geometry_node.core.execution.GraphEngine.dispatchCustomEvent(
+            BlueprintRuntime.INSTANCE.dispatchCustomEvent(
                     context.getLevel(),
                     frequency,
                     thread -> {

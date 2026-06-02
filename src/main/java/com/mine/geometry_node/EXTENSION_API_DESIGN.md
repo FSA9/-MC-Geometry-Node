@@ -37,7 +37,7 @@ geometry_node
     BaseNode / NodeDef / NodeType
     PortDef / PortRow / PortType / StandardPorts / UIHint
 
-  core/execution/
+  core/engine/blueprint/execution/
     ExecutionContext
     ExecutionResult
     GraphEngine
@@ -442,10 +442,10 @@ EventPayload.builder()
   - 使用新 `NodeRegistrationContext`
   - `addonId()` 返回 `geometry_node`
 
-- `core/execution/GraphEngine.java`
+- `core/engine/blueprint/execution/GraphEngine.java`
   - 旧 thread-consumer 事件入口标记 deprecated
 
-- `core/execution/state/PlayerInputStateManager.java`
+- `core/engine/blueprint/execution/state/PlayerInputStateManager.java`
   - 改用 `GeometryNodeEvents`
 
 - `core/node/nodes/events/player/OnPlayerKeyEvent.java`

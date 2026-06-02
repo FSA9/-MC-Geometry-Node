@@ -1,7 +1,7 @@
 package com.mine.geometry_node.api;
 
-import com.mine.geometry_node.core.execution.GraphEngine;
-import com.mine.geometry_node.core.execution.variables.VariableRegistry;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
+import com.mine.geometry_node.core.engine.blueprint.execution.variables.VariableRegistry;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -19,7 +19,7 @@ public final class GeometryNodeEvents {
             }
 
             EventPayload safePayload = payload != null ? payload : EventPayload.empty();
-            GraphEngine.dispatchEvent(level, target, eventTypeId, thread -> {
+            BlueprintRuntime.INSTANCE.dispatchEvent(level, target, eventTypeId, thread -> {
                 for (var entry : safePayload.values().entrySet()) {
                     Object value = entry.getValue();
                     if (value != null && !VariableRegistry.isSupported(value)) {
