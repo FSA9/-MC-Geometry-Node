@@ -1,8 +1,10 @@
 package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.client.render.ClientVisualManager;
+import com.mine.geometry_node.client.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
+import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.blueprint.execution.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphFileService;
 import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphPermissions;
@@ -232,6 +234,28 @@ public class NetworkHandler {
                 (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload))
         );
 
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketOpenDialogue.TYPE,
+                PacketOpenDialogue.STREAM_CODEC,
+                (payload, context) -> {
+                    context.queue(() -> {
+                        ClientDialogueState.handleOpen(payload);
+                    });
+                }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketCloseDialogue.TYPE,
+                PacketCloseDialogue.STREAM_CODEC,
+                (payload, context) -> {
+                    context.queue(() -> {
+                        ClientDialogueState.handleClose(payload);
+                    });
+                }
+        );
+
         // ==========================================
         // 7. 注册 C2S: 客户端按键输入 -> 服务端处理
         // ==========================================
@@ -244,6 +268,23 @@ public class NetworkHandler {
                         if (context.getPlayer() instanceof ServerPlayer player) {
                             // 将数据包直接甩给状态管家处理
                             com.mine.geometry_node.core.engine.blueprint.execution.state.PlayerInputStateManager.handleInput(player, payload);
+                        }
+                    });
+                }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketDialogueChoice.TYPE,
+                PacketDialogueChoice.STREAM_CODEC,
+                (payload, context) -> {
+                    context.queue(() -> {
+                        if (context.getPlayer() instanceof ServerPlayer player) {
+                            if (PacketDialogueChoice.ACTION_CLOSE.equals(payload.action())) {
+                                DialogueRuntime.INSTANCE.closeFromClient(player, payload.sessionId());
+                            } else {
+                                DialogueRuntime.INSTANCE.choose(player, payload.sessionId(), payload.choiceId());
+                            }
                         }
                     });
                 }

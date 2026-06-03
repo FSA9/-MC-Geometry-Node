@@ -475,5 +475,26 @@
   "geometry_node.port.interpolation_duration": "形变插值(刻)",
   "geometry_node.port.width": "剔除包围盒宽",
   "geometry_node.port.height": "剔除包围盒高",
-  "geometry_node.port.glow_color": "发光轮廓色(ARGB)"
+  "geometry_node.port.glow_color": "发光轮廓色(ARGB)",
+
+  "geometry_node.menu.dialogue": "对话",
+
+  "geometry_node.node.begin_dialogue": "开始对话",
+  "geometry_node.node.show_dialogue_page": "显示对话页",
+  "geometry_node.node.close_dialogue": "关闭对话",
+  "geometry_node.node.resolve_dialogue_text": "解析对话文本",
+
+  "geometry_node.port.player": "玩家",
+  "geometry_node.port.speaker": "说话者",
+  "geometry_node.port.text_key": "文本键",
+  "geometry_node.port.fallback_text": "备用文本",
+  "geometry_node.port.style_id": "样式 ID",
+  "geometry_node.port.choice": "选项",
+  "geometry_node.port.closed": "关闭",
+  "geometry_node.port.choice_text_key": "选项文本键",
+  "geometry_node.port.choice_fallback_text": "选项备用文本",
+  "geometry_node.port.choice_visible": "选项可见",
+  "geometry_node.port.choice_enabled": "选项可用",
+  "geometry_node.dialogue.close": "关闭",
+  "geometry_node.dialogue.continue": "继续"
 }

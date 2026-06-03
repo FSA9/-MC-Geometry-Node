@@ -16,17 +16,23 @@ public class DialoguePagePayload {
     @Nullable
     private final String speaker;
     private final String text;
+    private final String styleId;
     private final List<DialogueChoicePayload> choices;
     private final Map<String, Object> metadata;
 
     public DialoguePagePayload(String id, @Nullable String speaker, String text) {
-        this(id, speaker, text, List.of(), Map.of());
+        this(id, speaker, text, "default", List.of(), Map.of());
     }
 
     public DialoguePagePayload(String id, @Nullable String speaker, String text, List<DialogueChoicePayload> choices, Map<String, Object> metadata) {
+        this(id, speaker, text, "default", choices, metadata);
+    }
+
+    public DialoguePagePayload(String id, @Nullable String speaker, String text, String styleId, List<DialogueChoicePayload> choices, Map<String, Object> metadata) {
         this.id = id;
         this.speaker = speaker;
         this.text = text;
+        this.styleId = styleId == null || styleId.isBlank() ? "default" : styleId;
         this.choices = new ArrayList<>(choices);
         this.metadata = new LinkedHashMap<>(metadata);
     }
@@ -42,6 +48,10 @@ public class DialoguePagePayload {
 
     public String getText() {
         return text;
+    }
+
+    public String getStyleId() {
+        return styleId;
     }
 
     public List<DialogueChoicePayload> getChoices() {

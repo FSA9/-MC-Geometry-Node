@@ -12,7 +12,8 @@ public enum NodeType {
 
     // --- 行为与副作用 ---
     ACTION("动作", 0xFF1976D2),       // 蓝色
-    
+    DIALOGUE("对话", 0xFFC2185B),     // 洋红色
+
     // --- 数据计算 ---
     MATH("数学", 0xFF388E3C),         // 绿色
     LOGIC("逻辑运算", 0xFF455A64),     // 深灰/蓝灰

@@ -368,6 +368,128 @@ EventPayload.builder()
 - `PlayerInputStateManager` 的玩家按键事件已经改用 `GeometryNodeEvents`。
 - `OnPlayerKeyEvent` 已调整为 `NodeType.EVENT`。
 
+## Dialogue MVP 后端范围
+
+可以开始做对话树 MVP。第一版目标不是完成完整编辑器，也不是一次性完成独立对话资产系统，而是先打通服务端对话闭环：
+
+```text
+蓝图事件或普通蓝图流程
+  -> ShowDialoguePage
+  -> DialogueRuntime 创建 DialogueSession
+  -> 服务端下发 DialoguePagePayload
+  -> 玩家选择 choice
+  -> 服务端校验 choice
+  -> 恢复原执行流并从对应输出端口继续
+```
+
+### MVP 必须实现
+
+1. 服务端会话：
+
+- `DialogueRuntime` 作为对话运行时门面。
+- `DialogueSessionManager` 管理当前活动 session。
+- `DialogueSession` 保存 `session_id`、`player_id`、`graph_id`、当前页、临时变量和中性 `GraphExecutionHandle`。
+- session 关闭时释放执行句柄。
+
+2. 蓝图等待能力：
+
+- 新增通用 `ExecutionResult.ExternalWait(GraphKind, ExternalWaitRequest)`。
+- `GraphProcess.ExecutionThread` 执行到等待结果时暂停，不回收线程。
+- 等待线程通过中性的 `GraphExecutionHandle` 暴露 `resume(outputPortName)`。
+- 玩家选择后，Dialogue Runtime 根据 choice 恢复线程，并让执行流从对应输出端口继续。
+- MVP 不持久化等待中的 session；玩家下线、服务器关闭、图热更新时直接关闭。
+
+3. 对话节点：
+
+- `ShowDialoguePage`
+  - Dialogue 节点。
+  - 端口使用 `StandardPorts` 定义。
+  - 输入：player、speaker、text_key、fallback_text、style_id。
+  - 动态 choice 输入组：choice_text_key、choice_fallback_text、choice_visible、choice_enabled。
+  - choice 默认 1 组，上限 10 组。
+  - 动态输出：choice_1、choice_2、...，以及固定 closed。
+  - 每个 choice 是多行动态分组，仅组首输出行携带删除按钮索引。
+  - 只描述对话语义，不是 UI widget。
+
+- `CloseDialogue`
+  - Dialogue 节点。
+  - 端口使用 `StandardPorts` 定义。
+  - 关闭指定玩家当前对话 session。
+  - 下发关闭包并释放等待句柄。
+
+- `ResolveDialogueText`
+  - Dialogue 节点。
+  - 端口使用 `StandardPorts` 定义。
+  - 输入 text key 和 fallback。
+  - 输出服务端解析后的文本。
+  - MVP 可以先主要返回 fallback，但接口必须保留 key 解析能力。
+
+4. 网络协议：
+
+- `PacketOpenDialogue`
+  - 服务端下发 `DialoguePagePayload`。
+  - 包含 session id、speaker、body text、style id、choice 列表。
+
+- `PacketDialogueChoice`
+  - 客户端回传 session id 和 choice id。
+  - 服务端必须校验 session 属于当前玩家，且 choice 可见、可用。
+
+- `PacketCloseDialogue`
+  - 服务端要求客户端关闭对话。
+  - 客户端主动关闭时也应回传 close/closed 语义，服务端走 `closed` 输出。
+
+5. 默认样式：
+
+- `style_id = default` 使用 Minecraft 原生聊天 `Component` 渲染。
+- 服务端发送说话者、正文和可点击选项文本，不依赖 ModernUI 面板。
+- 选项点击执行 `/geometry_node dialogue choose <session_id> <choice_id>`。
+- 关闭点击执行 `/geometry_node dialogue close <session_id>`。
+- 命令不要求 OP 权限；服务端按命令来源玩家校验 session 归属。
+
+6. RPG 样式：
+
+- `style_id = rpg` 使用 ModernUI 对话面板渲染。
+- 服务端通过 `PacketOpenDialogue` 下发 page，客户端由样式分发器打开 RPG 对话 Fragment。
+- 面板点击选项通过 `PacketDialogueChoice` 回传，不依赖命令。
+- 服务端发送 `PacketCloseDialogue` 关闭旧 session 对应的客户端面板。
+
+7. 文本格式：
+
+- 对话图仍然保存为普通 `NodeGraph` JSON。
+- 节点中保存 `text_key` 和 `fallback_text`。
+- 对话正文外置为文本资源，MVP 建议先使用服务端可读取的 JSON map：
+
+```json
+{
+  "dialogue.quest.blacksmith.intro.001": "需要修理装备吗？",
+  "dialogue.quest.blacksmith.choice.trade": "打开交易"
+}
+```
+
+- 后续可扩展 locale、comment、speaker、voice、portrait 等字段。
+- 服务端在 MVP 中解析最终 literal 文本后下发客户端，避免客户端依赖 world 文本资源。
+
+7. 条件分支：
+
+- 对话节点只接收 boolean 条件输入。
+- 不在对话系统内置专用条件语言。
+- 条件应复用现有节点，例如 `GetEntityTags -> ListHasValue -> choice_visible_1`。
+- 这保证对话系统兼容 `GetEntityAttribute`、`GetEntityTags` 等任意数据节点。
+
+### MVP 暂不实现
+
+- 独立对话图入口 `DialogueEntry`。
+- 从普通蓝图打开独立对话图的 `OpenDialogueTree`。
+- 实体属性直接绑定对话图。
+- `DialogueSequence` 多段线性文本节点。
+- 无限动态 choice 端口。
+- 对话 session NBT 持久化。
+- 完整多语言资源覆盖和翻译工作流。
+- 对话专用编辑器 inspector。
+- 客户端 UI 样式系统的后端校验。
+
+这些属于 MVP 之后的第二阶段。MVP 第一版可以直接在普通蓝图里使用 `ShowDialoguePage` 串联对话页，先验证服务端等待、选择恢复、文本解析和网络闭环。
+
 ## 端口类型策略
 
 本轮不实现自定义端口类型 API。

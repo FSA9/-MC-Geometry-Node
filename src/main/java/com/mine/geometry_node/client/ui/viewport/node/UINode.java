@@ -20,6 +20,7 @@ import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.View;
+import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.*;
 
 import java.util.HashMap;
@@ -85,8 +86,9 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
 
             boolean isInputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
             String propertyKey = isInputDynamic ? StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id() : StaticKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
+            int minCount = isInputDynamic ? 1 : mNodeDef.getMetaOrDefault(SchemaKeys.MIN_DYNAMIC_OUTPUT, 1);
 
-            int currentCount = 1;
+            int currentCount = minCount;
             Object countObj = mNodeData.inputs.get(propertyKey);
             if (countObj instanceof Number num) {
                 currentCount = num.intValue();
@@ -101,7 +103,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
                     mEditorContext.getCommandManager().execute(cmd);
                 }
             } else {
-                if (currentCount > 1 && removeIndex != null) {
+                if (currentCount > minCount && removeIndex != null) {
                     com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch cmd = new com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch(mEditorContext.getGraphController(), mEditorContext.getGraph(), mNodeData.id, propertyKey, currentCount, removeIndex);
                     mEditorContext.getCommandManager().execute(cmd);
                 }
@@ -294,18 +296,43 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
     @Override
     public View findInteractiveViewAt(float localXpx, float localYpx) {
         // 检测 Add 按钮
-        if (mAddButton != null && mAddButton.getVisibility() == View.VISIBLE && localXpx >= mAddButton.getLeft() && localXpx < mAddButton.getRight() && localYpx >= mAddButton.getTop() && localYpx < mAddButton.getBottom()) {
-            return mAddButton;
-        }
+        View hit = findInteractiveChildAt(mAddButton, localXpx, localYpx);
+        if (hit != null) return hit;
+
         // 检测 Remove 按钮
         for (View v : mRemoveButtons.values()) {
-            if (v.getVisibility() == View.VISIBLE && localXpx >= v.getLeft() && localXpx < v.getRight() && localYpx >= v.getTop() && localYpx < v.getBottom()) return v;
+            hit = findInteractiveChildAt(v, localXpx, localYpx);
+            if (hit != null) return hit;
         }
+
         // 检测输入框等 Hint
         for (View v : mHintViews.values()) {
-            if (v.getVisibility() == View.VISIBLE && localXpx >= v.getLeft() && localXpx < v.getRight() && localYpx >= v.getTop() && localYpx < v.getBottom()) return v;
+            hit = findInteractiveChildAt(v, localXpx, localYpx);
+            if (hit != null) return hit;
         }
         return null;
+    }
+
+    private View findInteractiveChildAt(View view, float parentLocalXpx, float parentLocalYpx) {
+        if (view == null || view.getVisibility() != View.VISIBLE) {
+            return null;
+        }
+        if (parentLocalXpx < view.getLeft() || parentLocalXpx >= view.getRight()
+                || parentLocalYpx < view.getTop() || parentLocalYpx >= view.getBottom()) {
+            return null;
+        }
+
+        float childLocalXpx = parentLocalXpx - view.getLeft();
+        float childLocalYpx = parentLocalYpx - view.getTop();
+        if (view instanceof ViewGroup group) {
+            for (int i = group.getChildCount() - 1; i >= 0; i--) {
+                View hit = findInteractiveChildAt(group.getChildAt(i), childLocalXpx, childLocalYpx);
+                if (hit != null) {
+                    return hit;
+                }
+            }
+        }
+        return view;
     }
 
     @Override

@@ -19,6 +19,7 @@ import com.mine.geometry_node.core.node.nodes.data.type.*;
 import com.mine.geometry_node.core.node.nodes.data.value.*;
 import com.mine.geometry_node.core.node.nodes.data.world.*;
 import com.mine.geometry_node.core.node.nodes.events.block.*;
+import com.mine.geometry_node.core.node.nodes.dialogue.*;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
 import com.mine.geometry_node.core.node.nodes.events.world.*;
@@ -239,6 +240,12 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/value", new IntValue());
         registry.register("data/value", new FloatValue());
         registry.register("data/value", new BoolValue());
+
+        // --- DIALOGUE ---
+        registry.register("dialogue", new BeginDialogue());
+        registry.register("dialogue", new ShowDialoguePage());
+        registry.register("dialogue", new CloseDialogue());
+        registry.register("dialogue", new ResolveDialogueText());
 
         // --- EVENTS ---
 

@@ -4,6 +4,9 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.execution.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.execution.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.execution.variables.VariableRegistry;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -163,19 +166,23 @@ public class GraphProcess {
      * 代表一次独立的蓝图指令流。
      * 拥有私有的栈、私有的寄存器、私有的运算缓存，彻底杜绝重入污染。
      */
-    public class ExecutionThread implements ExecutionContext {
+    public class ExecutionThread implements ExecutionContext, GraphExecutionHandle {
 
-        public enum State { RUNNING, WAITING, FINISHED, ERROR }
+        public enum State { RUNNING, WAITING, EXTERNAL_WAITING, FINISHED, ERROR }
 
         public State state = State.RUNNING;
         int currentFlowId;
         String currentEntryPort;
         private int activeNodeId = -1;
+        private int externalWaitNodeId = -1;
+        @Nullable
+        private GraphRuntime externalWaitRuntime;
         public long wakeUpTick = -1; // 仅在 WAITING 状态有效
         private int runDepth = 0;
         private ServerLevel threadLevel;
         private String threadDimensionId;
         private UUID threadEntityUuid;
+        private boolean pooled = false;
 
         // --- 线程私有寄存器 (Zero-Allocation 核心) ---
         final List<RuntimeGraphIndex.IntFlowTarget> executionStack = new ArrayList<>();
@@ -203,10 +210,13 @@ public class GraphProcess {
          * [洗盘子] 重置线程状态，准备下一次复用
          */
         public void reset(int startNodeId, String startPortName) {
+            this.pooled = false;
             this.state = State.RUNNING;
             this.currentFlowId = startNodeId;
             this.currentEntryPort = startPortName;
             this.activeNodeId = -1;
+            this.externalWaitNodeId = -1;
+            this.externalWaitRuntime = null;
             this.wakeUpTick = -1;
             this.runDepth = 0;
             this.executionStack.clear();
@@ -303,11 +313,12 @@ public class GraphProcess {
                 }
             } finally {
                 runDepth--;
-                if (runDepth == 0 && currentFlowId == -1 && executionStack.isEmpty() && state != State.WAITING) {
+                if (runDepth == 0 && currentFlowId == -1 && executionStack.isEmpty()
+                        && state != State.WAITING && state != State.EXTERNAL_WAITING) {
                     if (this.state != State.ERROR) {
                         this.state = State.FINISHED;
                     }
-                    GraphProcess.this.recycleThread(this);
+                    recycleIfNeeded();
                 }
             }
         }
@@ -355,12 +366,105 @@ public class GraphProcess {
                     this.state = State.WAITING;
                     GraphProcess.this.sleepingThreads.add(this);
                 }
+                case ExecutionResult.ExternalWait externalWait -> {
+                    GraphRuntime runtime = GraphRuntimeRegistry.INSTANCE.get(externalWait.runtimeKind());
+                    if (runtime == null) {
+                        this.state = State.ERROR;
+                        this.currentFlowId = -1;
+                        this.executionStack.clear();
+                        return;
+                    }
+
+                    this.externalWaitNodeId = this.currentFlowId;
+                    this.externalWaitRuntime = runtime;
+                    this.currentFlowId = -1;
+                    this.state = State.EXTERNAL_WAITING;
+
+                    if (!runtime.beginExternalWait(this, externalWait.request())) {
+                        this.externalWaitNodeId = -1;
+                        this.externalWaitRuntime = null;
+                        this.state = State.ERROR;
+                        this.executionStack.clear();
+                    }
+                }
                 case ExecutionResult.Finish ignored -> this.currentFlowId = -1;
                 case ExecutionResult.Error err -> {
                     this.state = State.ERROR;
                     this.currentFlowId = -1;
                     this.executionStack.clear();
                 }
+            }
+        }
+
+        public boolean resumeExternalWait(String outputPortName) {
+            if (this.state != State.EXTERNAL_WAITING || this.externalWaitNodeId == -1) {
+                return false;
+            }
+
+            RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(this.externalWaitNodeId, outputPortName);
+            this.externalWaitNodeId = -1;
+            this.externalWaitRuntime = null;
+            this.wakeUpTick = -1;
+
+            if (target == null) {
+                this.currentFlowId = -1;
+                this.executionStack.clear();
+                this.state = State.FINISHED;
+                recycleIfNeeded();
+                return false;
+            }
+
+            this.currentFlowId = target.targetNodeId();
+            this.currentEntryPort = target.targetPortName();
+            this.state = State.RUNNING;
+            this.run();
+            return true;
+        }
+
+        @Override
+        public boolean resume(String outputPortName) {
+            return resumeExternalWait(outputPortName);
+        }
+
+        @Override
+        public String graphId() {
+            return getGraphId();
+        }
+
+        @Override
+        public ServerLevel level() {
+            return getLevel();
+        }
+
+        @Override
+        public boolean isActive() {
+            return this.state == State.RUNNING || this.state == State.WAITING || this.state == State.EXTERNAL_WAITING;
+        }
+
+        @Override
+        public void close() {
+            if (this.state == State.EXTERNAL_WAITING && this.externalWaitRuntime != null) {
+                GraphRuntime runtime = this.externalWaitRuntime;
+                this.externalWaitRuntime = null;
+                runtime.endExternalWait(this, "closed");
+            }
+            this.externalWaitNodeId = -1;
+            this.currentFlowId = -1;
+            this.executionStack.clear();
+            this.state = State.FINISHED;
+            GraphProcess.this.sleepingThreads.remove(this);
+            recycleIfNeeded();
+        }
+
+        @Override
+        public Object unwrap() {
+            return this;
+        }
+
+        private void recycleIfNeeded() {
+            if (!this.pooled) {
+                this.pooled = true;
+                GraphProcess.this.recycleThread(this);
             }
         }
 

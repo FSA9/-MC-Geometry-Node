@@ -4,7 +4,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -31,6 +33,21 @@ public class DialogueSessionManager {
     }
 
     @Nullable
+    public DialogueSession getSessionForPlayer(UUID playerId) {
+        for (DialogueSession session : sessions.values()) {
+            if (session.isActive() && session.getPlayerId().equals(playerId)) {
+                return session;
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    public DialogueSession removeSession(UUID sessionId) {
+        return sessions.remove(sessionId);
+    }
+
+    @Nullable
     public DialogueSession closeSession(UUID sessionId) {
         DialogueSession session = sessions.remove(sessionId);
         if (session != null) {
@@ -40,12 +57,15 @@ public class DialogueSessionManager {
     }
 
     public void closeSessionsForPlayer(UUID playerId) {
-        sessions.values().removeIf(session -> {
-            if (!session.getPlayerId().equals(playerId)) {
-                return false;
+        List<DialogueSession> closing = new ArrayList<>();
+        for (DialogueSession session : sessions.values()) {
+            if (session.getPlayerId().equals(playerId)) {
+                closing.add(session);
             }
+        }
+        for (DialogueSession session : closing) {
+            sessions.remove(session.getSessionId());
             session.close();
-            return true;
-        });
+        }
     }
 }

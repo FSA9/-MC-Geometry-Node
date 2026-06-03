@@ -9,12 +9,18 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 
 import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
+import icyllis.modernui.widget.LinearLayout;
+import icyllis.modernui.widget.TextView;
+
+import java.util.Objects;
 
 public class InputHintRenderer implements UIHintRenderer {
+    private static final float EXPAND_BUTTON_WIDTH = 16.0f;
 
     @Override
     public float getRequiredExtraRows(PortRow row) {
@@ -36,25 +42,28 @@ public class InputHintRenderer implements UIHintRenderer {
 
         et.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus && editorContext != null) {
-                String currentText = et.getText().toString();
-                Object parsedValue = currentText;
-
-                try {
-                    if (expectedType == PortType.INTEGER) parsedValue = Integer.parseInt(currentText);
-                    else if (expectedType == PortType.FLOAT) parsedValue = Float.parseFloat(currentText);
-                } catch (NumberFormatException e) {
+                Object parsedValue = parseValue(et.getText().toString(), expectedType);
+                if (parsedValue == null && (expectedType == PortType.INTEGER || expectedType == PortType.FLOAT)) {
                     et.setText(finalOldVal != null ? finalOldVal.toString() : "");
                     return;
                 }
 
                 Object oldVal = nodeData.inputs.get(portId);
-                if (!parsedValue.equals(oldVal)) {
+                if (!Objects.equals(parsedValue, oldVal)) {
                     CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, parsedValue);
                     editorContext.getCommandManager().execute(cmd);
                 }
             }
         });
-        return et;
+
+        LinearLayout wrapper = new LinearLayout(context);
+        wrapper.setOrientation(LinearLayout.HORIZONTAL);
+        wrapper.setGravity(Gravity.CENTER_VERTICAL);
+
+        wrapper.addView(et, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f));
+        wrapper.addView(createExpandButton(context, et, nodeData, portId, expectedType, editorContext),
+                new LinearLayout.LayoutParams(UIUtils.dp2pxInt(EXPAND_BUTTON_WIDTH), LinearLayout.LayoutParams.MATCH_PARENT));
+        return wrapper;
     }
 
     @Override
@@ -86,5 +95,45 @@ public class InputHintRenderer implements UIHintRenderer {
         lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
 
         view.setLayoutParams(lp);
+    }
+
+    private View createExpandButton(Context context, EditText input, NodeData nodeData, String portId, PortType expectedType,
+                                    EditorContext editorContext) {
+        TextView button = new TextView(context);
+        button.setText("...");
+        button.setGravity(Gravity.CENTER);
+        button.setTextColor(0xFFBFC7D5);
+        button.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
+
+        ShapeDrawable bg = new ShapeDrawable();
+        bg.setColor(0xFF30343B);
+        bg.setCornerRadius(UIUtils.dp2px(2.0f));
+        bg.setStroke(UIUtils.dp2pxInt(1), 0xFF424956);
+        button.setBackground(bg);
+
+        button.setOnClickListener(v -> ExpandedTextInputOverlay.show(
+                context,
+                button,
+                editorContext,
+                nodeData,
+                portId,
+                expectedType,
+                input.getText().toString()
+        ));
+        return button;
+    }
+
+    private Object parseValue(String text, PortType expectedType) {
+        try {
+            if (expectedType == PortType.INTEGER) {
+                return Integer.parseInt(text);
+            }
+            if (expectedType == PortType.FLOAT) {
+                return Float.parseFloat(text);
+            }
+            return text;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 }

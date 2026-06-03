@@ -12,6 +12,8 @@ public enum StandardPorts {
     COMPLETED("completed", PortType.EXECUTION),
     FLOW_TRUE("flow_true", PortType.EXECUTION),
     FLOW_FALSE("flow_false", PortType.EXECUTION),
+    CHOICE("choice", PortType.EXECUTION),
+    CLOSED("closed", PortType.EXECUTION),
 
     // Int
     INT("int", PortType.INTEGER),
@@ -47,6 +49,8 @@ public enum StandardPorts {
     RESPONSIVE("responsive", PortType.BOOLEAN),
     GRAVITY("gravity", PortType.BOOLEAN),
     INVISIBLE("invisible", PortType.BOOLEAN),
+    CHOICE_VISIBLE("choice_visible", PortType.BOOLEAN),
+    CHOICE_ENABLED("choice_enabled", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
@@ -91,9 +95,16 @@ public enum StandardPorts {
     PREDICATE("predicate", PortType.STRING),
     KEY("key", PortType.STRING),
     BILLBOARD("billboard", PortType.STRING),
+    SPEAKER("speaker", PortType.STRING),
+    TEXT_KEY("text_key", PortType.STRING),
+    FALLBACK_TEXT("fallback_text", PortType.STRING),
+    STYLE_ID("style_id", PortType.STRING),
+    CHOICE_TEXT_KEY("choice_text_key", PortType.STRING),
+    CHOICE_FALLBACK_TEXT("choice_fallback_text", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),
+    PLAYER("player", PortType.ENTITY),
     TRIGGER_ENTITY("trigger_entity", PortType.ENTITY),
     SOURCE_ENTITY("source_entity", PortType.ENTITY),
     TARGET_ENTITY("target_entity", PortType.ENTITY),
