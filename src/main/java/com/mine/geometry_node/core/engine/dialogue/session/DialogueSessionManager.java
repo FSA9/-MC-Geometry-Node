@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.dialogue;
+package com.mine.geometry_node.core.engine.dialogue.session;
 
 import org.jetbrains.annotations.Nullable;
 

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
-import com.mine.geometry_node.core.engine.dialogue.DialogueChoicePayload;
-import com.mine.geometry_node.core.engine.dialogue.DialogueSession;
+import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -17,6 +17,7 @@ public record PacketOpenDialogue(
         String speaker,
         String bodyText,
         String styleId,
+        String defaultChoiceId,
         List<Choice> choices
 ) implements CustomPacketPayload {
     public static final Type<PacketOpenDialogue> TYPE =
@@ -28,18 +29,25 @@ public record PacketOpenDialogue(
     );
 
     public PacketOpenDialogue(RegistryFriendlyByteBuf buf) {
-        this(buf.readUUID(), buf.readUtf(32767), buf.readUtf(32767), buf.readUtf(32767), buf.readUtf(32767), readChoices(buf));
+        this(buf.readUUID(), buf.readUtf(32767), buf.readUtf(32767), buf.readUtf(32767), buf.readUtf(32767), buf.readUtf(32767), readChoices(buf));
     }
 
     public static PacketOpenDialogue from(DialogueSession session) {
         var page = session.getCurrentPage();
         if (page == null) {
-            return new PacketOpenDialogue(session.getSessionId(), "", "", "", "default", List.of());
+            return new PacketOpenDialogue(session.getSessionId(), "", "", "", "default", "", List.of());
         }
 
         List<Choice> choices = new ArrayList<>();
+        String defaultChoiceId = page.getDefaultChoiceId() == null ? "" : page.getDefaultChoiceId();
         for (DialogueChoicePayload choice : page.getChoices()) {
-            choices.add(new Choice(choice.getId(), choice.getText(), choice.isEnabled()));
+            choices.add(new Choice(
+                    choice.getId(),
+                    choice.getText(),
+                    choice.isEnabled(),
+                    choice.getDisabledReason() == null ? "" : choice.getDisabledReason(),
+                    choice.getId().equals(defaultChoiceId)
+            ));
         }
 
         return new PacketOpenDialogue(
@@ -48,6 +56,7 @@ public record PacketOpenDialogue(
                 page.getSpeaker() == null ? "" : page.getSpeaker(),
                 page.getText(),
                 page.getStyleId(),
+                defaultChoiceId,
                 choices
         );
     }
@@ -58,11 +67,14 @@ public record PacketOpenDialogue(
         buf.writeUtf(speaker, 32767);
         buf.writeUtf(bodyText, 32767);
         buf.writeUtf(styleId, 32767);
+        buf.writeUtf(defaultChoiceId, 32767);
         buf.writeInt(choices.size());
         for (Choice choice : choices) {
             buf.writeUtf(choice.choiceId(), 32767);
             buf.writeUtf(choice.text(), 32767);
             buf.writeBoolean(choice.enabled());
+            buf.writeUtf(choice.disabledReason(), 32767);
+            buf.writeBoolean(choice.defaultChoice());
         }
     }
 
@@ -70,7 +82,7 @@ public record PacketOpenDialogue(
         int size = buf.readInt();
         List<Choice> choices = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            choices.add(new Choice(buf.readUtf(32767), buf.readUtf(32767), buf.readBoolean()));
+            choices.add(new Choice(buf.readUtf(32767), buf.readUtf(32767), buf.readBoolean(), buf.readUtf(32767), buf.readBoolean()));
         }
         return choices;
     }
@@ -80,6 +92,6 @@ public record PacketOpenDialogue(
         return TYPE;
     }
 
-    public record Choice(String choiceId, String text, boolean enabled) {
+    public record Choice(String choiceId, String text, boolean enabled, String disabledReason, boolean defaultChoice) {
     }
 }

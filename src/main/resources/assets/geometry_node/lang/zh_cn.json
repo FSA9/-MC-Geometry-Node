@@ -485,16 +485,18 @@
   "geometry_node.node.resolve_dialogue_text": "解析对话文本",
 
   "geometry_node.port.player": "玩家",
+  "geometry_node.port.speaker_entity": "说话者实体",
   "geometry_node.port.speaker": "说话者",
+  "geometry_node.port.graph_id": "图 ID",
+  "geometry_node.port.entry_id": "入口 ID",
   "geometry_node.port.text_key": "文本键",
-  "geometry_node.port.fallback_text": "备用文本",
   "geometry_node.port.style_id": "样式 ID",
   "geometry_node.port.choice": "选项",
   "geometry_node.port.closed": "关闭",
   "geometry_node.port.choice_text_key": "选项文本键",
-  "geometry_node.port.choice_fallback_text": "选项备用文本",
   "geometry_node.port.choice_visible": "选项可见",
   "geometry_node.port.choice_enabled": "选项可用",
+  "geometry_node.port.choice_disabled_reason_key": "禁用原因文本",
   "geometry_node.dialogue.close": "关闭",
   "geometry_node.dialogue.continue": "继续"
 }

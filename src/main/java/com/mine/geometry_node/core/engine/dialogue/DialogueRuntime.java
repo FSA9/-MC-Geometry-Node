@@ -1,5 +1,16 @@
 package com.mine.geometry_node.core.engine.dialogue;
 
+import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
+import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
+import com.mine.geometry_node.core.engine.dialogue.launcher.DialogueGraphLauncher;
+import com.mine.geometry_node.core.engine.dialogue.launcher.NoopDialogueGraphLauncher;
+import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.dialogue.payload.DialogueWaitRequest;
+import com.mine.geometry_node.core.engine.dialogue.render.DefaultDialogueRenderer;
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionManager;
+import com.mine.geometry_node.core.engine.dialogue.text.DialogueTextManager;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
@@ -57,6 +68,7 @@ public class DialogueRuntime implements GraphRuntime {
         DialogueSession session = sessionManager.createSession(player.getUUID(), handleGraphId(handle));
         session.setCurrentPage(dialogueRequest.page());
         session.setExecutionHandle(handle);
+        session.setDialogueContext(resolveDialogueContext(handle));
         openForPlayer(player, session);
         return true;
     }
@@ -218,6 +230,18 @@ public class DialogueRuntime implements GraphRuntime {
 
     private String handleGraphId(GraphExecutionHandle handle) {
         return handle.graphId();
+    }
+
+    @Nullable
+    private DialogueContext resolveDialogueContext(GraphExecutionHandle handle) {
+        Object unwrapped = handle.unwrap();
+        if (unwrapped instanceof ExecutionContext executionContext) {
+            Object value = executionContext.getTempData(DialogueContext.TEMP_KEY);
+            if (value instanceof DialogueContext dialogueContext) {
+                return dialogueContext;
+            }
+        }
+        return null;
     }
 
     @Nullable

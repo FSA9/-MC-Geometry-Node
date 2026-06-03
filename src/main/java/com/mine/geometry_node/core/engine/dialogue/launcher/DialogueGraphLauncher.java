@@ -1,5 +1,8 @@
-package com.mine.geometry_node.core.engine.dialogue;
+package com.mine.geometry_node.core.engine.dialogue.launcher;
 
+import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import org.jetbrains.annotations.Nullable;
 

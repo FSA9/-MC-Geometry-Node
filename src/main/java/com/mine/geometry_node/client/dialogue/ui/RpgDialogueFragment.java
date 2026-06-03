@@ -29,6 +29,7 @@ public class RpgDialogueFragment extends Fragment {
     private static final int TEXT_MUTED = 0xFF9DA5B4;
     private static final int TEXT_ACCENT = 0xFFE2C16A;
     private static final int CHOICE_BG = 0x55171B23;
+    private static final int CHOICE_BG_DEFAULT = 0x66313A45;
     private static final int CHOICE_BG_HOVER = 0x77262C36;
     private static final int CHOICE_BG_PRESSED = 0x99414B5F;
     private static final int CHOICE_BG_DISABLED = 0x33171B23;
@@ -196,13 +197,16 @@ public class RpgDialogueFragment extends Fragment {
     }
 
     private View createChoiceRow(PacketOpenDialogue.Choice choice) {
-        String text = choice.enabled() ? "> " + choice.text() : choice.text();
+        String reason = choice.disabledReason() == null || choice.disabledReason().isBlank()
+                ? ""
+                : " - " + choice.disabledReason();
+        String text = choice.enabled() ? "> " + choice.text() : choice.text() + reason;
         TextView row = label(text, 15.0f, choice.enabled() ? TEXT_MAIN : TEXT_MUTED, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         row.setPadding(dp(14), 0, dp(14), 0);
         row.setEnabled(choice.enabled());
-        applyChoiceBackground(row, false, false, choice.enabled());
+        applyChoiceBackground(row, false, false, choice.enabled(), choice.defaultChoice());
         if (choice.enabled()) {
-            bindChoiceFeedback(row);
+            bindChoiceFeedback(row, choice.defaultChoice());
             row.setOnClickListener(v -> {
                 if (waitingForServer) {
                     return;
@@ -216,10 +220,10 @@ public class RpgDialogueFragment extends Fragment {
         return row;
     }
 
-    private void bindChoiceFeedback(TextView row) {
+    private void bindChoiceFeedback(TextView row, boolean defaultChoice) {
         final boolean[] hovered = {false};
         final boolean[] pressed = {false};
-        Runnable update = () -> applyChoiceBackground(row, hovered[0], pressed[0], true);
+        Runnable update = () -> applyChoiceBackground(row, hovered[0], pressed[0], true, defaultChoice);
 
         row.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
@@ -250,7 +254,7 @@ public class RpgDialogueFragment extends Fragment {
         });
     }
 
-    private void applyChoiceBackground(View view, boolean hovered, boolean pressed, boolean enabled) {
+    private void applyChoiceBackground(View view, boolean hovered, boolean pressed, boolean enabled, boolean defaultChoice) {
         int background;
         int stroke;
         if (!enabled) {
@@ -261,6 +265,9 @@ public class RpgDialogueFragment extends Fragment {
             stroke = CHOICE_STROKE_HOVER;
         } else if (hovered) {
             background = CHOICE_BG_HOVER;
+            stroke = CHOICE_STROKE_HOVER;
+        } else if (defaultChoice) {
+            background = CHOICE_BG_DEFAULT;
             stroke = CHOICE_STROKE_HOVER;
         } else {
             background = CHOICE_BG;

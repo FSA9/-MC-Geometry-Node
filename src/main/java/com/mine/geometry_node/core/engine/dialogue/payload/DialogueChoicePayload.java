@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.dialogue;
+package com.mine.geometry_node.core.engine.dialogue.payload;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -15,6 +15,8 @@ public class DialogueChoicePayload {
     @Nullable
     private final String targetNodeId;
     private final boolean enabled;
+    @Nullable
+    private final String disabledReason;
     private final Map<String, Object> metadata;
 
     public DialogueChoicePayload(String id, String text) {
@@ -22,10 +24,20 @@ public class DialogueChoicePayload {
     }
 
     public DialogueChoicePayload(String id, String text, @Nullable String targetNodeId, boolean enabled, Map<String, Object> metadata) {
+        this(id, text, targetNodeId, enabled, null, metadata);
+    }
+
+    public DialogueChoicePayload(String id,
+                                 String text,
+                                 @Nullable String targetNodeId,
+                                 boolean enabled,
+                                 @Nullable String disabledReason,
+                                 Map<String, Object> metadata) {
         this.id = id;
         this.text = text;
         this.targetNodeId = targetNodeId;
         this.enabled = enabled;
+        this.disabledReason = disabledReason;
         this.metadata = new LinkedHashMap<>(metadata);
     }
 
@@ -44,6 +56,11 @@ public class DialogueChoicePayload {
 
     public boolean isEnabled() {
         return enabled;
+    }
+
+    @Nullable
+    public String getDisabledReason() {
+        return disabledReason;
     }
 
     public Map<String, Object> getMetadata() {

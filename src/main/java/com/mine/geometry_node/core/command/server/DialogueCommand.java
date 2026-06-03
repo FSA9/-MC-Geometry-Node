@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.command.server;
 
-import com.mine.geometry_node.core.engine.dialogue.DefaultDialogueRenderer;
+import com.mine.geometry_node.core.engine.dialogue.render.DefaultDialogueRenderer;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;

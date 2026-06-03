@@ -1,4 +1,7 @@
-package com.mine.geometry_node.core.engine.dialogue;
+package com.mine.geometry_node.core.engine.dialogue.launcher;
+
+import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 
 /**
  * Placeholder launcher used until dialogue graph execution is implemented.

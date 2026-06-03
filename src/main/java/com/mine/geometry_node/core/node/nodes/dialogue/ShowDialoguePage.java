@@ -2,12 +2,11 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 
 import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionResult;
-import com.mine.geometry_node.core.engine.dialogue.DialogueChoicePayload;
-import com.mine.geometry_node.core.engine.dialogue.DialogueContext;
-import com.mine.geometry_node.core.engine.dialogue.DialoguePagePayload;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
-import com.mine.geometry_node.core.engine.dialogue.DialogueTextManager;
-import com.mine.geometry_node.core.engine.dialogue.DialogueWaitRequest;
+import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
+import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.dialogue.payload.DialogueWaitRequest;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.MetaKey;
@@ -33,7 +32,6 @@ public class ShowDialoguePage extends BaseNode {
 
     public static final String SPEAKER = StandardPorts.SPEAKER.getId();
     public static final String TEXT_KEY = StandardPorts.TEXT_KEY.getId();
-    public static final String FALLBACK_TEXT = StandardPorts.FALLBACK_TEXT.getId();
     public static final String CLOSED = StandardPorts.CLOSED.getId();
     public static final int DEFAULT_CHOICE_COUNT = 0;
     public static final int MAX_CHOICE_COUNT = 10;
@@ -66,11 +64,6 @@ public class ShowDialoguePage extends BaseNode {
                         StandardPorts.TEXT_KEY.toInput(""),
                         null,
                         UIHint.INPUT, null, null
-                ))
-                .addRow(new PortRow(
-                        StandardPorts.FALLBACK_TEXT.toInput(""),
-                        null,
-                        UIHint.INPUT, null, null
                 ));
 
         for (int i = 1; i <= choiceCount; i++) {
@@ -84,16 +77,16 @@ public class ShowDialoguePage extends BaseNode {
                     null, UIHint.INPUT, null, dynamicGroupRow()
             ));
             builder.addRow(new PortRow(
-                    StandardPorts.CHOICE_FALLBACK_TEXT.toInputWithIndex(i, ""),
-                    null, UIHint.INPUT, null, dynamicGroupRow()
-            ));
-            builder.addRow(new PortRow(
                     StandardPorts.CHOICE_VISIBLE.toInputWithIndex(i, true),
                     null, UIHint.CHECKBOX, null, dynamicGroupRow()
             ));
             builder.addRow(new PortRow(
                     StandardPorts.CHOICE_ENABLED.toInputWithIndex(i, true),
                     null, UIHint.CHECKBOX, null, dynamicGroupRow()
+            ));
+            builder.addRow(new PortRow(
+                    StandardPorts.CHOICE_DISABLED_REASON_KEY.toInputWithIndex(i, ""),
+                    null, UIHint.INPUT, null, dynamicGroupRow()
             ));
         }
 
@@ -116,10 +109,13 @@ public class ShowDialoguePage extends BaseNode {
         DialogueContext dialogueContext = getDialogueContext(context);
         String speaker = stringOrDefault(getInput(context, SPEAKER, String.class),
                 dialogueContext != null ? dialogueContext.speaker() : "");
+        if (dialogueContext == null) {
+            dialogueContext = createFallbackDialogueContext(context, player, speaker);
+            context.setTempData(DialogueContext.TEMP_KEY, dialogueContext);
+        }
         String textKey = stringOrEmpty(getInput(context, TEXT_KEY, String.class));
-        String fallbackText = stringOrEmpty(getInput(context, FALLBACK_TEXT, String.class));
         String styleId = dialogueContext != null ? dialogueContext.styleId() : "default";
-        String bodyText = DialogueRuntime.INSTANCE.getTextManager().resolveText(textKey, fallbackText);
+        String bodyText = DialogueRuntime.INSTANCE.getTextManager().resolveText(textKey, textKey);
 
         List<DialogueChoicePayload> choices = new ArrayList<>();
         int choiceCount = resolveRuntimeChoiceCount(context);
@@ -129,20 +125,30 @@ public class ShowDialoguePage extends BaseNode {
                 continue;
             }
             String choiceTextKey = stringOrEmpty(getInput(context, choiceTextKeyPort(i), String.class));
-            String choiceFallback = stringOrEmpty(getInput(context, choiceFallbackPort(i), String.class));
-            String choiceText = DialogueRuntime.INSTANCE.getTextManager().resolveText(choiceTextKey, choiceFallback);
+            String choiceText = DialogueRuntime.INSTANCE.getTextManager().resolveText(choiceTextKey, choiceTextKey);
             if (choiceText.isBlank()) {
                 continue;
             }
             Boolean enabled = getInput(context, choiceEnabledPort(i), Boolean.class);
-            choices.add(new DialogueChoicePayload(choiceOutputPort(i), choiceText, null, !Boolean.FALSE.equals(enabled), Map.of()));
+            boolean choiceEnabled = !Boolean.FALSE.equals(enabled);
+            String disabledReason = choiceEnabled
+                    ? ""
+                    : resolveChoiceDisabledReason(context, i);
+            choices.add(new DialogueChoicePayload(
+                    choiceOutputPort(i),
+                    choiceText,
+                    null,
+                    choiceEnabled,
+                    disabledReason,
+                    Map.of()
+            ));
         }
 
         if (choices.isEmpty() && choiceCount == 0) {
-            String continueText = DialogueRuntime.INSTANCE.getTextManager().resolveText(DialogueTextManager.CONTINUE_KEY, "Continue");
-            choices.add(new DialogueChoicePayload(StandardPorts.FLOW_OUT.getId(), continueText, null, true, Map.of()));
+            String continueText = DialogueRuntime.INSTANCE.getTextManager().resolveText("geometry_node.dialogue.continue", "Continue");
+            choices.add(new DialogueChoicePayload(StandardPorts.FLOW_OUT.getId(), continueText, null, true, null, Map.of()));
         } else if (choices.isEmpty()) {
-            choices.add(new DialogueChoicePayload(CLOSED, "Close", null, true, Map.of()));
+            choices.add(new DialogueChoicePayload(CLOSED, "Close", null, true, null, Map.of()));
         }
 
         DialoguePagePayload page = new DialoguePagePayload(
@@ -179,6 +185,11 @@ public class ShowDialoguePage extends BaseNode {
     private DialogueContext getDialogueContext(ExecutionContext context) {
         Object value = context.getTempData(DialogueContext.TEMP_KEY);
         return value instanceof DialogueContext dialogueContext ? dialogueContext : null;
+    }
+
+    private DialogueContext createFallbackDialogueContext(ExecutionContext context, ServerPlayer player, String speaker) {
+        Entity targetEntity = context.getEntity();
+        return new DialogueContext(player, null, targetEntity, speaker, "default", context.getGraphId(), "root");
     }
 
     private static int resolveChoiceCount(NodeData instanceData) {
@@ -224,9 +235,9 @@ public class ShowDialoguePage extends BaseNode {
         for (int i = 1; i <= MAX_CHOICE_COUNT; i++) {
             if (context.hasPort(choiceOutputPort(i))
                     || context.hasPort(choiceTextKeyPort(i))
-                    || context.hasPort(choiceFallbackPort(i))
                     || context.hasPort(choiceVisiblePort(i))
-                    || context.hasPort(choiceEnabledPort(i))) {
+                    || context.hasPort(choiceEnabledPort(i))
+                    || context.hasPort(choiceDisabledReasonKeyPort(i))) {
                 inferred = i;
             }
         }
@@ -249,15 +260,15 @@ public class ShowDialoguePage extends BaseNode {
         if (index > 0) {
             return index;
         }
-        index = parseIndexedPort(portId, StandardPorts.CHOICE_FALLBACK_TEXT.getId());
-        if (index > 0) {
-            return index;
-        }
         index = parseIndexedPort(portId, StandardPorts.CHOICE_VISIBLE.getId());
         if (index > 0) {
             return index;
         }
         index = parseIndexedPort(portId, StandardPorts.CHOICE_ENABLED.getId());
+        if (index > 0) {
+            return index;
+        }
+        index = parseIndexedPort(portId, StandardPorts.CHOICE_DISABLED_REASON_KEY.getId());
         if (index > 0) {
             return index;
         }
@@ -302,16 +313,21 @@ public class ShowDialoguePage extends BaseNode {
         return StandardPorts.CHOICE_TEXT_KEY.getIdWithIndex(index);
     }
 
-    private static String choiceFallbackPort(int index) {
-        return StandardPorts.CHOICE_FALLBACK_TEXT.getIdWithIndex(index);
-    }
-
     private static String choiceVisiblePort(int index) {
         return StandardPorts.CHOICE_VISIBLE.getIdWithIndex(index);
     }
 
     private static String choiceEnabledPort(int index) {
         return StandardPorts.CHOICE_ENABLED.getIdWithIndex(index);
+    }
+
+    private static String choiceDisabledReasonKeyPort(int index) {
+        return StandardPorts.CHOICE_DISABLED_REASON_KEY.getIdWithIndex(index);
+    }
+
+    private String resolveChoiceDisabledReason(ExecutionContext context, int index) {
+        String reasonKey = stringOrEmpty(getInput(context, choiceDisabledReasonKeyPort(index), String.class));
+        return DialogueRuntime.INSTANCE.getTextManager().resolveText(reasonKey, reasonKey);
     }
 
     private static String stringOrEmpty(String value) {

@@ -66,6 +66,9 @@ public final class DialogueStyleRenderer {
         if (minecraft.screen == activeScreen) {
             Screen previousScreen = activeScreen instanceof MuiScreen muiScreen ? muiScreen.getPreviousScreen() : null;
             minecraft.setScreen(previousScreen);
+            if (previousScreen == null) {
+                minecraft.mouseHandler.grabMouse();
+            }
         }
         activeScreen = null;
         activeSessionId = null;

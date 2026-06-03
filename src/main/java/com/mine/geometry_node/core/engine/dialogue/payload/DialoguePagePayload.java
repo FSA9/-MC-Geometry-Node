@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.dialogue;
+package com.mine.geometry_node.core.engine.dialogue.payload;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -18,6 +18,8 @@ public class DialoguePagePayload {
     private final String text;
     private final String styleId;
     private final List<DialogueChoicePayload> choices;
+    @Nullable
+    private final String defaultChoiceId;
     private final Map<String, Object> metadata;
 
     public DialoguePagePayload(String id, @Nullable String speaker, String text) {
@@ -34,6 +36,7 @@ public class DialoguePagePayload {
         this.text = text;
         this.styleId = styleId == null || styleId.isBlank() ? "default" : styleId;
         this.choices = new ArrayList<>(choices);
+        this.defaultChoiceId = resolveDefaultChoiceId(this.choices);
         this.metadata = new LinkedHashMap<>(metadata);
     }
 
@@ -58,7 +61,22 @@ public class DialoguePagePayload {
         return choices;
     }
 
+    @Nullable
+    public String getDefaultChoiceId() {
+        return defaultChoiceId;
+    }
+
     public Map<String, Object> getMetadata() {
         return metadata;
+    }
+
+    @Nullable
+    private static String resolveDefaultChoiceId(List<DialogueChoicePayload> choices) {
+        for (DialogueChoicePayload choice : choices) {
+            if (choice.isEnabled()) {
+                return choice.getId();
+            }
+        }
+        return null;
     }
 }

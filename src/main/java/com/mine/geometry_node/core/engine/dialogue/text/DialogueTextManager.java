@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.dialogue;
+package com.mine.geometry_node.core.engine.dialogue.text;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;

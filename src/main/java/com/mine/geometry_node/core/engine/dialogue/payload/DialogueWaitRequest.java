@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.dialogue;
+package com.mine.geometry_node.core.engine.dialogue.payload;
 
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 import net.minecraft.server.level.ServerPlayer;

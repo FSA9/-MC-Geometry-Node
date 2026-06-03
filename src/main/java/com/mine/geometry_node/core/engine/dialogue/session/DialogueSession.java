@@ -1,5 +1,7 @@
-package com.mine.geometry_node.core.engine.dialogue;
+package com.mine.geometry_node.core.engine.dialogue.session;
 
+import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
+import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import org.jetbrains.annotations.Nullable;
 
@@ -26,6 +28,8 @@ public class DialogueSession {
     private State state = State.ACTIVE;
     @Nullable
     private DialoguePagePayload currentPage;
+    @Nullable
+    private DialogueContext dialogueContext;
     @Nullable
     private GraphExecutionHandle executionHandle;
 
@@ -75,6 +79,15 @@ public class DialogueSession {
 
     public void setCurrentPage(@Nullable DialoguePagePayload currentPage) {
         this.currentPage = currentPage;
+    }
+
+    @Nullable
+    public DialogueContext getDialogueContext() {
+        return dialogueContext;
+    }
+
+    public void setDialogueContext(@Nullable DialogueContext dialogueContext) {
+        this.dialogueContext = dialogueContext;
     }
 
     @Nullable

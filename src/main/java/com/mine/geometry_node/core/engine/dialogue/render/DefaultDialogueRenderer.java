@@ -1,5 +1,8 @@
-package com.mine.geometry_node.core.engine.dialogue;
+package com.mine.geometry_node.core.engine.dialogue.render;
 
+import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
@@ -37,7 +40,7 @@ public final class DefaultDialogueRenderer {
         for (DialogueChoicePayload choice : page.getChoices()) {
             if ("closed".equals(choice.getId())) {
                 hasClosedChoice = true;
-                player.sendSystemMessage(closeLine(session, choice.getText(), choice.isEnabled()));
+                player.sendSystemMessage(closeLine(session, choice.getText(), choice.isEnabled(), choice.getDisabledReason()));
                 continue;
             }
             player.sendSystemMessage(choiceLine(session, index, choice));
@@ -52,6 +55,9 @@ public final class DefaultDialogueRenderer {
     private static MutableComponent choiceLine(DialogueSession session, int index, DialogueChoicePayload choice) {
         String prefix = "[" + index + "] ";
         MutableComponent line = Component.literal(prefix + choice.getText());
+        if (!choice.isEnabled() && choice.getDisabledReason() != null && !choice.getDisabledReason().isBlank()) {
+            line.append(Component.literal(" - " + choice.getDisabledReason()).withStyle(ChatFormatting.DARK_GRAY));
+        }
         boolean clickable = choice.isEnabled() && isCommandSafeIdentifier(choice.getId());
         line.withStyle(style -> choiceStyle(style, clickable, command("choose " + session.getSessionId() + " " + choice.getId())));
         return line;
@@ -63,14 +69,17 @@ public final class DefaultDialogueRenderer {
         return line;
     }
 
-    private static MutableComponent closeLine(DialogueSession session, String text, boolean enabled) {
+    private static MutableComponent closeLine(DialogueSession session, String text, boolean enabled, String disabledReason) {
         MutableComponent line = Component.literal("[x] ");
         if (text == null || text.isBlank() || "Close".equals(text)) {
             line.append(Component.translatable("geometry_node.dialogue.close"));
         } else {
             line.append(Component.literal(text));
         }
-        line.withStyle(style -> choiceStyle(style, enabled, command("choose " + session.getSessionId() + " closed")));
+        if (!enabled && disabledReason != null && !disabledReason.isBlank()) {
+            line.append(Component.literal(" - " + disabledReason).withStyle(ChatFormatting.DARK_GRAY));
+        }
+        line.withStyle(style -> choiceStyle(style, enabled, enabled ? command("choose " + session.getSessionId() + " closed") : ""));
         return line;
     }
 

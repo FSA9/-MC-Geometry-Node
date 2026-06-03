@@ -404,10 +404,12 @@ EventPayload.builder()
 - `ShowDialoguePage`
   - Dialogue 节点。
   - 端口使用 `StandardPorts` 定义。
-  - 输入：player、speaker、text_key、fallback_text、style_id。
-  - 动态 choice 输入组：choice_text_key、choice_fallback_text、choice_visible、choice_enabled。
-  - choice 默认 1 组，上限 10 组。
+  - 输入：speaker、text_key。
+  - player、style_id、graph_id、entry_id 等会话信息从 `BeginDialogue` 建立的 `DialogueContext` 读取。
+  - 动态 choice 输入组：choice_text_key、choice_visible、choice_enabled、choice_disabled_reason_key。
+  - choice 默认 0 组，上限 10 组；0 组时自动提供继续输出。
   - 动态输出：choice_1、choice_2、...，以及固定 closed。
+  - 每页默认选项始终是第一个可用 choice，不提供额外默认选项端口。
   - 每个 choice 是多行动态分组，仅组首输出行携带删除按钮索引。
   - 只描述对话语义，不是 UI widget。
 
@@ -420,9 +422,9 @@ EventPayload.builder()
 - `ResolveDialogueText`
   - Dialogue 节点。
   - 端口使用 `StandardPorts` 定义。
-  - 输入 text key 和 fallback。
+  - 输入 text key。
   - 输出服务端解析后的文本。
-  - MVP 可以先主要返回 fallback，但接口必须保留 key 解析能力。
+  - 当前未加载外置文本时，直接返回输入文本本身；后续接入外置语言 JSON 后优先按 key 解析。
 
 4. 网络协议：
 
@@ -456,7 +458,7 @@ EventPayload.builder()
 7. 文本格式：
 
 - 对话图仍然保存为普通 `NodeGraph` JSON。
-- 节点中保存 `text_key` 和 `fallback_text`。
+- 节点中保存 `text_key`。当前它既可以是 literal 文本，也可以是未来语言表 key。
 - 对话正文外置为文本资源，MVP 建议先使用服务端可读取的 JSON map：
 
 ```json
