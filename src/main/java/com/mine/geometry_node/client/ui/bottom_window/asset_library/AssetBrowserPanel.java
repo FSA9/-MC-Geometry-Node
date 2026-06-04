@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.bottom_window.IToolWindow;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.FolderPickerDialog;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.OverwriteConfirmDialog;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.TransferProgressDialog;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.UploadFailureRetryDialog;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.left.LeftQuickAccessPanel;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
@@ -158,9 +159,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
             post(() -> {
                 if (!response.preflight()) return;
                 if (!response.success() && response.conflicts().isEmpty()) {
-                    TransferProgressDialog progress = new TransferProgressDialog(getContext(), "上传图纸");
-                    progress.showIn(this);
-                    progress.fail(response.message());
+                    showUploadFailureDialog(files, false, List.of());
                     return;
                 }
                 if (response.conflicts().isEmpty()) {
@@ -202,9 +201,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
 
     private void startUpload(List<RemoteGraphFileService.UploadFile> files, boolean overwrite, List<String> overwritePaths) {
         if (files.isEmpty()) return;
-        TransferProgressDialog progress = new TransferProgressDialog(getContext(), "上传图纸");
-        progress.showIn(this);
-        UploadBatchRunner runner = new UploadBatchRunner(files, overwrite, overwritePaths, progress);
+        UploadBatchRunner runner = new UploadBatchRunner(files, overwrite, overwritePaths);
         runner.sendNext();
     }
 
@@ -220,13 +217,13 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
             paths.add(entry.path());
         }
 
-        TransferProgressDialog progress = new TransferProgressDialog(getContext(), "下载图纸");
-        progress.showIn(this);
         int requestId = RemoteGraphClientState.nextRequestId();
         List<RemoteGraphFileService.UploadFile> downloaded = new ArrayList<>();
         RemoteGraphClientState.onDownload(requestId, response -> {
             post(() -> {
                 if (!response.success()) {
+                    TransferProgressDialog progress = new TransferProgressDialog(getContext(), "下载图纸");
+                    progress.showIn(this);
                     progress.fail(response.message());
                     return;
                 }
@@ -234,10 +231,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
                     downloaded.addAll(response.files());
                 }
                 if ("下载完成".equals(response.message())) {
-                    progress.update(response.message(), response.processed(), response.total());
                     finishDownload(downloaded, targetDirectory);
-                } else {
-                    progress.update(response.message(), response.processed(), response.total() + 1);
                 }
             });
         });
@@ -306,6 +300,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
 
     private void saveDownloadedFiles(List<RemoteGraphFileService.UploadFile> files, File targetDirectory) {
         Path root = targetDirectory.toPath().toAbsolutePath().normalize();
+        List<String> failedPaths = new ArrayList<>();
         for (RemoteGraphFileService.UploadFile file : files) {
             try {
                 String relative = AssetPathUtils.normalizeRemoteFilePath(file.targetPath());
@@ -317,12 +312,35 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
                 if (parent != null) Files.createDirectories(parent);
                 Files.writeString(target, file.jsonContent());
             } catch (Exception e) {
+                failedPaths.add(file.targetPath());
                 e.printStackTrace();
             }
         }
         if (mRightPanel != null) {
             mRightPanel.refreshFileList();
         }
+        if (!failedPaths.isEmpty()) {
+            TransferProgressDialog progress = new TransferProgressDialog(getContext(), "下载图纸");
+            progress.showIn(this);
+            progress.fail("部分文件保存失败: " + String.join(", ", failedPaths));
+        }
+    }
+
+    private void showUploadFailureDialog(
+            List<RemoteGraphFileService.UploadFile> failedFiles,
+            boolean overwrite,
+            List<String> overwritePaths
+    ) {
+        if (failedFiles == null || failedFiles.isEmpty()) return;
+        List<String> failedPaths = new ArrayList<>();
+        for (RemoteGraphFileService.UploadFile file : failedFiles) {
+            failedPaths.add(file.targetPath());
+        }
+        new UploadFailureRetryDialog(
+                getContext(),
+                failedPaths,
+                () -> startUpload(failedFiles, overwrite, overwritePaths)
+        ).showIn(this);
     }
 
     private List<String> findLocalDownloadConflicts(List<RemoteGraphFileService.UploadFile> files, File targetDirectory) {
@@ -403,26 +421,26 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         private final List<RemoteGraphFileService.UploadFile> mFiles;
         private final boolean mOverwriteAll;
         private final Set<String> mOverwritePaths;
-        private final TransferProgressDialog mProgress;
+        private final List<RemoteGraphFileService.UploadFile> mFailedFiles = new ArrayList<>();
         private int mIndex = 0;
 
         private UploadBatchRunner(
                 List<RemoteGraphFileService.UploadFile> files,
                 boolean overwriteAll,
-                List<String> overwritePaths,
-                TransferProgressDialog progress
+                List<String> overwritePaths
         ) {
             mFiles = files;
             mOverwriteAll = overwriteAll;
             mOverwritePaths = new HashSet<>(overwritePaths);
-            mProgress = progress;
         }
 
         void sendNext() {
             if (mIndex >= mFiles.size()) {
-                mProgress.update("上传完成", mFiles.size(), mFiles.size());
                 if (mRightPanel != null) {
                     mRightPanel.refreshFileList();
+                }
+                if (!mFailedFiles.isEmpty()) {
+                    showUploadFailureDialog(mFailedFiles, mOverwriteAll, new ArrayList<>(mOverwritePaths));
                 }
                 return;
             }
@@ -432,15 +450,14 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
             RemoteGraphClientState.onUpload(requestId, response -> {
                 post(() -> {
                     if (!response.success()) {
-                        mProgress.fail(response.message());
+                        mFailedFiles.add(file);
+                        mIndex++;
+                        sendNext();
                         return;
                     }
                     if ("上传完成".equals(response.message())) {
                         mIndex++;
-                        mProgress.update(file.targetPath(), mIndex, mFiles.size());
                         sendNext();
-                    } else {
-                        mProgress.update(file.targetPath(), mIndex + response.processed(), mFiles.size());
                     }
                 });
             });
