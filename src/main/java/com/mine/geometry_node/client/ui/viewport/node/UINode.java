@@ -174,7 +174,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         boolean isInputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
         boolean isOutputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT).isPresent();
         if (isInputDynamic || isOutputDynamic) {
-            mAddButton = createDynamicButton(context, "+ Add Item", true, null, null);
+            mAddButton = createDynamicButton(context, "+", true, null, null);
 
             float inputBoxHeight = com.mine.geometry_node.client.ui.viewport.UIHints.UIHintUtils.getStandardInputHeight();
             float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;

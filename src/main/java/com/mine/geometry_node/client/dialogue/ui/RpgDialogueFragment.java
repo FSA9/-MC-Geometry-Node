@@ -18,24 +18,25 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 
 /**
  * In-game RPG dialogue overlay rendered with ModernUI.
  */
 public class RpgDialogueFragment extends Fragment {
-    private static final int TEXT_MAIN = 0xFFF4F1E8;
-    private static final int TEXT_MUTED = 0xFF9DA5B4;
-    private static final int TEXT_ACCENT = 0xFFE2C16A;
-    private static final int CHOICE_BG = 0x55171B23;
-    private static final int CHOICE_BG_DEFAULT = 0x66313A45;
-    private static final int CHOICE_BG_HOVER = 0x77262C36;
-    private static final int CHOICE_BG_PRESSED = 0x99414B5F;
-    private static final int CHOICE_BG_DISABLED = 0x33171B23;
-    private static final int CHOICE_STROKE = 0x66E2C16A;
-    private static final int CHOICE_STROKE_HOVER = 0xAAE2C16A;
-    private static final int CHOICE_STROKE_DISABLED = 0x339DA5B4;
+    private static final int TEXT_MAIN = 0xFFF0EEE7;
+    private static final int TEXT_MUTED = 0xFF8F97A5;
+    private static final int TEXT_ACCENT = 0xFFD5B46A;
+    private static final int DIVIDER = 0x66D5B46A;
+    private static final int CHOICE_BG = 0x4011131A;
+    private static final int CHOICE_BG_DEFAULT = 0x4A20242D;
+    private static final int CHOICE_BG_HOVER = 0x66303845;
+    private static final int CHOICE_BG_PRESSED = 0x88424A58;
+    private static final int CHOICE_BG_DISABLED = 0x2511131A;
+    private static final int CHOICE_STROKE = 0x44D5B46A;
+    private static final int CHOICE_STROKE_HOVER = 0x88D5B46A;
+    private static final int CHOICE_STROKE_DISABLED = 0x288F97A5;
+    private static final int PANEL_MIN_HEIGHT_DP = 142;
 
     private FrameLayout root;
     private LinearLayout panel;
@@ -61,7 +62,7 @@ public class RpgDialogueFragment extends Fragment {
 
         panel = new LinearLayout(context);
         panel.setOrientation(LinearLayout.HORIZONTAL);
-        panel.setGravity(Gravity.BOTTOM);
+        panel.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         panel.setOnClickListener(v -> {
         });
 
@@ -70,9 +71,9 @@ public class RpgDialogueFragment extends Fragment {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
         panelParams.gravity = Gravity.BOTTOM;
-        panelParams.leftMargin = dp(48);
-        panelParams.rightMargin = dp(48);
-        panelParams.bottomMargin = dp(96);
+        panelParams.leftMargin = dp(64);
+        panelParams.rightMargin = dp(64);
+        panelParams.bottomMargin = dp(82);
         root.addView(panel, panelParams);
 
         refresh(ClientDialogueState.current());
@@ -106,13 +107,14 @@ public class RpgDialogueFragment extends Fragment {
 
         panel.addView(createTextColumn(packet), new LinearLayout.LayoutParams(
                 0,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                1.0f
+                dp(PANEL_MIN_HEIGHT_DP),
+                7.0f
         ));
 
         panel.addView(createActionColumn(packet), new LinearLayout.LayoutParams(
-                dp(280),
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                0,
+                dp(PANEL_MIN_HEIGHT_DP),
+                3.0f
         ));
     }
 
@@ -120,22 +122,34 @@ public class RpgDialogueFragment extends Fragment {
         Context context = getContext();
         LinearLayout column = new LinearLayout(context);
         column.setOrientation(LinearLayout.VERTICAL);
-        column.setPadding(0, 0, dp(36), 0);
+        column.setGravity(Gravity.BOTTOM);
+        column.setPadding(0, 0, dp(40), 0);
 
         String speaker = packet.speaker() == null || packet.speaker().isBlank() ? "Dialogue" : packet.speaker();
-        TextView speakerView = label(speaker, 16.0f, TEXT_ACCENT, Gravity.LEFT);
-        speakerView.setPadding(0, 0, 0, dp(8));
+        TextView speakerView = label(speaker, 22.0f, TEXT_ACCENT, Gravity.LEFT);
+        speakerView.setPadding(0, 0, 0, dp(4));
         column.addView(speakerView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(30)
+                dp(32)
         ));
 
-        TextView body = label(packet.bodyText(), 20.0f, TEXT_MAIN, Gravity.LEFT);
+        View divider = new View(context);
+        divider.setBackground(rect(DIVIDER, 0.0f, 0, 0));
+        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(1)
+        );
+        dividerParams.rightMargin = dp(24);
+        dividerParams.bottomMargin = dp(12);
+        column.addView(divider, dividerParams);
+
+        TextView body = label(packet.bodyText(), 18.0f, TEXT_MAIN, Gravity.LEFT | Gravity.BOTTOM);
         body.setMinLines(3);
-        body.setLineSpacing(UIUtils.dp2px(3.0f), 1.08f);
+        body.setLineSpacing(UIUtils.dp2px(3.0f), 1.06f);
         column.addView(body, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                0,
+                1.0f
         ));
 
         return column;
@@ -158,12 +172,13 @@ public class RpgDialogueFragment extends Fragment {
         Context context = getContext();
         LinearLayout column = new LinearLayout(context);
         column.setOrientation(LinearLayout.VERTICAL);
-        column.setGravity(Gravity.RIGHT);
+        column.setGravity(Gravity.RIGHT | Gravity.BOTTOM);
+        column.setPadding(dp(18), 0, 0, 0);
 
         if (!packet.choices().isEmpty()) {
             column.addView(createChoices(packet), new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    Math.min(dp(260), dp(42 * packet.choices().size()))
+                    ViewGroup.LayoutParams.WRAP_CONTENT
             ));
         }
 
@@ -172,37 +187,29 @@ public class RpgDialogueFragment extends Fragment {
 
     private View createChoices(PacketOpenDialogue packet) {
         Context context = getContext();
-        ScrollView scrollView = new ScrollView(context);
-        scrollView.setFillViewport(false);
-
         LinearLayout choices = new LinearLayout(context);
         choices.setOrientation(LinearLayout.VERTICAL);
-        choices.setGravity(Gravity.RIGHT);
-        choices.setPadding(0, dp(8), 0, 0);
+        choices.setGravity(Gravity.RIGHT | Gravity.BOTTOM);
 
         for (PacketOpenDialogue.Choice choice : packet.choices()) {
             LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    dp(34)
+                    dp(32)
             );
-            rowParams.bottomMargin = dp(6);
+            rowParams.topMargin = dp(6);
             choices.addView(createChoiceRow(choice), rowParams);
         }
 
-        scrollView.addView(choices, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-        return scrollView;
+        return choices;
     }
 
     private View createChoiceRow(PacketOpenDialogue.Choice choice) {
         String reason = choice.disabledReason() == null || choice.disabledReason().isBlank()
                 ? ""
                 : " - " + choice.disabledReason();
-        String text = choice.enabled() ? "> " + choice.text() : choice.text() + reason;
-        TextView row = label(text, 15.0f, choice.enabled() ? TEXT_MAIN : TEXT_MUTED, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(14), 0, dp(14), 0);
+        String text = choice.enabled() ? choice.text() : choice.text() + reason;
+        TextView row = label(text, 14.0f, choice.enabled() ? TEXT_MAIN : TEXT_MUTED, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), 0, dp(12), 0);
         row.setEnabled(choice.enabled());
         applyChoiceBackground(row, false, false, choice.enabled(), choice.defaultChoice());
         if (choice.enabled()) {

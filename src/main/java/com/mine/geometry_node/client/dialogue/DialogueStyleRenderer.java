@@ -66,12 +66,22 @@ public final class DialogueStyleRenderer {
         if (minecraft.screen == activeScreen) {
             Screen previousScreen = activeScreen instanceof MuiScreen muiScreen ? muiScreen.getPreviousScreen() : null;
             minecraft.setScreen(previousScreen);
-            if (previousScreen == null) {
-                minecraft.mouseHandler.grabMouse();
-            }
         }
         activeScreen = null;
         activeSessionId = null;
+        restoreGameInputIfNeeded();
+    }
+
+    private static void restoreGameInputIfNeeded() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen == null) {
+            minecraft.mouseHandler.grabMouse();
+            minecraft.tell(() -> {
+                if (minecraft.screen == null) {
+                    minecraft.mouseHandler.grabMouse();
+                }
+            });
+        }
     }
 
     public static boolean isActive(PacketOpenDialogue packet) {

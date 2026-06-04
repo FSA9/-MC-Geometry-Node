@@ -53,8 +53,7 @@ public final class DefaultDialogueRenderer {
     }
 
     private static MutableComponent choiceLine(DialogueSession session, int index, DialogueChoicePayload choice) {
-        String prefix = "[" + index + "] ";
-        MutableComponent line = Component.literal(prefix + choice.getText());
+        MutableComponent line = Component.literal("[" + index + "] " + choice.getText());
         if (!choice.isEnabled() && choice.getDisabledReason() != null && !choice.getDisabledReason().isBlank()) {
             line.append(Component.literal(" - " + choice.getDisabledReason()).withStyle(ChatFormatting.DARK_GRAY));
         }
@@ -64,13 +63,13 @@ public final class DefaultDialogueRenderer {
     }
 
     private static MutableComponent closeLine(DialogueSession session) {
-        MutableComponent line = Component.literal("[x] ").append(Component.translatable("geometry_node.dialogue.close"));
+        MutableComponent line = Component.empty().append(Component.translatable("geometry_node.dialogue.close"));
         line.withStyle(style -> choiceStyle(style, true, command("close " + session.getSessionId())));
         return line;
     }
 
     private static MutableComponent closeLine(DialogueSession session, String text, boolean enabled, String disabledReason) {
-        MutableComponent line = Component.literal("[x] ");
+        MutableComponent line = Component.empty();
         if (text == null || text.isBlank() || "Close".equals(text)) {
             line.append(Component.translatable("geometry_node.dialogue.close"));
         } else {
