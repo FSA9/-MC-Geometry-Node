@@ -8,8 +8,10 @@ import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload
 import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialogueWaitRequest;
 import com.mine.geometry_node.core.engine.dialogue.render.DefaultDialogueRenderer;
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueCloseReason;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionManager;
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionPolicy;
 import com.mine.geometry_node.core.engine.dialogue.text.DialogueTextManager;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
@@ -18,9 +20,14 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -54,6 +61,11 @@ public class DialogueRuntime implements GraphRuntime {
     }
 
     @Override
+    public void init() {
+        DialogueEventHandler.init();
+    }
+
+    @Override
     public boolean beginExternalWait(GraphExecutionHandle handle, ExternalWaitRequest request) {
         if (!(request instanceof DialogueWaitRequest dialogueRequest)) {
             return false;
@@ -63,12 +75,28 @@ public class DialogueRuntime implements GraphRuntime {
             return false;
         }
 
-        closeForPlayer(player, "replaced");
+        closeForPlayer(player, DialogueCloseReason.REPLACED);
+
+        DialogueContext dialogueContext = resolveDialogueContext(handle);
+        DialogueSessionPolicy policy = dialogueContext == null ? DialogueSessionPolicy.DEFAULT : dialogueContext.policy();
+        UUID lockEntityId = lockEntityId(dialogueContext);
+        if (lockEntityId != null) {
+            boolean includeSharedSessions = !policy.allowMultiPlayer();
+            if (sessionManager.findEntityOccupant(lockEntityId, player.getUUID(), includeSharedSessions) != null) {
+                sendBusyMessage(player, policy);
+                handle.resume("closed");
+                return true;
+            }
+        }
 
         DialogueSession session = sessionManager.createSession(player.getUUID(), handleGraphId(handle));
         session.setCurrentPage(dialogueRequest.page());
         session.setExecutionHandle(handle);
-        session.setDialogueContext(resolveDialogueContext(handle));
+        session.setDialogueContext(dialogueContext);
+        session.setPolicy(policy);
+        long gameTime = player.serverLevel().getGameTime();
+        session.setCreatedGameTime(gameTime);
+        session.touch(gameTime);
         openForPlayer(player, session);
         return true;
     }
@@ -85,7 +113,7 @@ public class DialogueRuntime implements GraphRuntime {
         if (match != null) {
             sessionManager.removeSession(match.getSessionId());
             match.setExecutionHandle(null);
-            match.close();
+            match.close(reason == null ? DialogueCloseReason.CLOSED : reason);
         }
     }
 
@@ -104,6 +132,7 @@ public class DialogueRuntime implements GraphRuntime {
 
         for (DialogueChoicePayload choice : session.getCurrentPage().getChoices()) {
             if (choice.getId().equals(choiceId) && choice.isEnabled()) {
+                touch(session);
                 applyLaunchResult(session, graphLauncher.choose(session, choice));
                 return session;
             }
@@ -121,16 +150,7 @@ public class DialogueRuntime implements GraphRuntime {
 
         for (DialogueChoicePayload choice : session.getCurrentPage().getChoices()) {
             if (choice.getId().equals(choiceId) && choice.isEnabled()) {
-                GraphExecutionHandle handle = session.getExecutionHandle();
-                DialogueSession removed = sessionManager.removeSession(sessionId);
-                if (removed != null) {
-                    removed.setExecutionHandle(null);
-                    removed.close();
-                }
-                if (handle != null) {
-                    handle.resume(choice.getId());
-                }
-                NetworkHandler.sendToPlayer(player, new PacketCloseDialogue(sessionId, "chosen"));
+                closeSessionInternal(session, DialogueCloseReason.CHOSEN, choice.getId(), true, true);
                 return session;
             }
         }
@@ -152,14 +172,7 @@ public class DialogueRuntime implements GraphRuntime {
         if (session == null || !session.getPlayerId().equals(player.getUUID())) {
             return null;
         }
-        GraphExecutionHandle handle = session.getExecutionHandle();
-        sessionManager.removeSession(sessionId);
-        session.setExecutionHandle(null);
-        session.close();
-        if (handle != null) {
-            handle.resume("closed");
-        }
-        NetworkHandler.sendToPlayer(player, new PacketCloseDialogue(sessionId, "client"));
+        closeSessionInternal(session, DialogueCloseReason.CLIENT, "closed", true, true);
         return session;
     }
 
@@ -174,15 +187,14 @@ public class DialogueRuntime implements GraphRuntime {
 
     @Nullable
     public DialogueSession closeSession(UUID sessionId) {
+        return closeSession(sessionId, DialogueCloseReason.CLOSED);
+    }
+
+    @Nullable
+    public DialogueSession closeSession(UUID sessionId, String reason) {
         DialogueSession session = sessionManager.getSession(sessionId);
-        ServerPlayer player = session != null ? findPlayer(session.getPlayerId()) : null;
         if (session != null) {
-            sessionManager.closeSession(sessionId);
-        }
-        if (session != null) {
-            if (player != null) {
-                NetworkHandler.sendToPlayer(player, new PacketCloseDialogue(session.getSessionId(), "closed"));
-            }
+            closeSessionInternal(session, reason, "closed", true, true);
         }
         return session;
     }
@@ -193,9 +205,48 @@ public class DialogueRuntime implements GraphRuntime {
         if (session == null) {
             return null;
         }
-        sessionManager.closeSession(session.getSessionId());
-        NetworkHandler.sendToPlayer(player, new PacketCloseDialogue(session.getSessionId(), reason));
+        closeSessionInternal(session, reason, "closed", true, true);
         return session;
+    }
+
+    public void onServerLevelTick(ServerLevel level) {
+        for (DialogueSession session : sessionManager.snapshotSessions()) {
+            if (!session.isActive()) {
+                continue;
+            }
+            GraphExecutionHandle handle = session.getExecutionHandle();
+            if (handle == null || handle.level() != level) {
+                continue;
+            }
+            String closeReason = evaluateCloseReason(level, session);
+            if (closeReason != null) {
+                closeSessionInternal(session, closeReason, "closed", true, true);
+            }
+        }
+    }
+
+    public void onPlayerLogout(ServerPlayer player) {
+        closeForPlayer(player, DialogueCloseReason.PLAYER_LOGOUT);
+    }
+
+    public void onEntityDeath(Entity entity) {
+        if (entity instanceof ServerPlayer player) {
+            closeForPlayer(player, DialogueCloseReason.PLAYER_DEAD);
+        }
+        closeSessionsForEntity(entity.getUUID(), DialogueCloseReason.ACTOR_DEAD);
+    }
+
+    public void onEntityChangeDimension(Entity entity) {
+        if (entity instanceof ServerPlayer player) {
+            closeForPlayer(player, DialogueCloseReason.DIMENSION_CHANGED);
+        }
+        closeSessionsForEntity(entity.getUUID(), DialogueCloseReason.DIMENSION_CHANGED);
+    }
+
+    public void onServerStopping() {
+        for (DialogueSession session : sessionManager.snapshotSessions()) {
+            closeSessionInternal(session, DialogueCloseReason.SERVER_SHUTDOWN, "closed", false, true);
+        }
     }
 
     public DialogueSessionManager getSessionManager() {
@@ -232,6 +283,109 @@ public class DialogueRuntime implements GraphRuntime {
         return handle.graphId();
     }
 
+    private void closeSessionsForEntity(UUID entityId, String reason) {
+        for (DialogueSession session : sessionManager.snapshotSessions()) {
+            DialogueContext context = session.getDialogueContext();
+            if (context == null) {
+                continue;
+            }
+            if (entityId.equals(context.speakerEntityId()) || entityId.equals(context.targetEntityId())) {
+                closeSessionInternal(session, reason, "closed", true, true);
+            }
+        }
+    }
+
+    private void closeSessionInternal(DialogueSession session, String reason, String resumePort, boolean notifyClient, boolean resumeHandle) {
+        if (session == null) {
+            return;
+        }
+        GraphExecutionHandle handle = session.getExecutionHandle();
+        ServerPlayer player = findPlayer(session);
+        sessionManager.removeSession(session.getSessionId());
+        session.setExecutionHandle(null);
+        session.close(reason);
+
+        if (notifyClient && player != null) {
+            NetworkHandler.sendToPlayer(player, new PacketCloseDialogue(session.getSessionId(), reason));
+        }
+        if (resumeHandle && handle != null) {
+            handle.resume(resumePort == null || resumePort.isBlank() ? "closed" : resumePort);
+        }
+    }
+
+    @Nullable
+    private String evaluateCloseReason(ServerLevel level, DialogueSession session) {
+        ServerPlayer player = level.getServer().getPlayerList().getPlayer(session.getPlayerId());
+        if (player == null || player.isRemoved()) {
+            return DialogueCloseReason.PLAYER_LOGOUT;
+        }
+        if (!player.isAlive()) {
+            return DialogueCloseReason.PLAYER_DEAD;
+        }
+        if (player.level() != level) {
+            return DialogueCloseReason.DIMENSION_CHANGED;
+        }
+
+        DialogueContext context = session.getDialogueContext();
+        if (context != null) {
+            Entity speakerEntity = context.resolveSpeakerEntity(level);
+            Entity targetEntity = context.resolveTargetEntity(level);
+            if (context.speakerEntityId() != null && speakerEntity == null) {
+                return DialogueCloseReason.ACTOR_REMOVED;
+            }
+            if (context.targetEntityId() != null && targetEntity == null) {
+                return DialogueCloseReason.ACTOR_REMOVED;
+            }
+            if (isDead(speakerEntity) || isDead(targetEntity)) {
+                return DialogueCloseReason.ACTOR_DEAD;
+            }
+            Entity distanceTarget = speakerEntity != null ? speakerEntity : targetEntity;
+            if (distanceTarget != null && session.getPolicy().hasDistanceLimit()) {
+                double maxDistance = session.getPolicy().maxDistance();
+                if (player.distanceToSqr(distanceTarget) > maxDistance * maxDistance) {
+                    return DialogueCloseReason.TOO_FAR;
+                }
+            }
+        }
+
+        if (session.getPolicy().hasTimeout()) {
+            long lastInteraction = session.getLastInteractionGameTime() >= 0
+                    ? session.getLastInteractionGameTime()
+                    : session.getCreatedGameTime();
+            if (lastInteraction >= 0 && level.getGameTime() - lastInteraction > session.getPolicy().timeoutSeconds() * 20L) {
+                return DialogueCloseReason.TIMEOUT;
+            }
+        }
+        return null;
+    }
+
+    private void touch(DialogueSession session) {
+        ServerPlayer player = findPlayer(session);
+        if (player != null) {
+            session.touch(player.serverLevel().getGameTime());
+        }
+    }
+
+    @Nullable
+    private UUID lockEntityId(@Nullable DialogueContext context) {
+        if (context == null) {
+            return null;
+        }
+        return context.speakerEntityId() != null ? context.speakerEntityId() : context.targetEntityId();
+    }
+
+    private void sendBusyMessage(ServerPlayer player, DialogueSessionPolicy policy) {
+        String key = policy.busyTextKey();
+        if (key == null || key.isBlank()) {
+            key = "geometry_node.dialogue.busy";
+        }
+        player.sendSystemMessage(Component.literal(textManager.resolveText(key, key)));
+    }
+
+    private static boolean isDead(@Nullable Entity entity) {
+        return entity instanceof LivingEntity livingEntity && !livingEntity.isAlive();
+    }
+
     @Nullable
     private DialogueContext resolveDialogueContext(GraphExecutionHandle handle) {
         Object unwrapped = handle.unwrap();
@@ -247,10 +401,34 @@ public class DialogueRuntime implements GraphRuntime {
     @Nullable
     private ServerPlayer findPlayer(UUID playerId) {
         for (DialogueSession session : sessionManager.getSessions()) {
-            if (session.getPlayerId().equals(playerId)
-                    && session.getExecutionHandle() != null
-                    && session.getExecutionHandle().level() != null) {
-                return session.getExecutionHandle().level().getServer().getPlayerList().getPlayer(playerId);
+            if (session.getPlayerId().equals(playerId)) {
+                ServerPlayer player = findPlayer(session);
+                if (player != null) {
+                    return player;
+                }
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private ServerPlayer findPlayer(DialogueSession session) {
+        GraphExecutionHandle handle = session.getExecutionHandle();
+        if (handle != null && handle.level() != null) {
+            ServerPlayer player = handle.level().getServer().getPlayerList().getPlayer(session.getPlayerId());
+            if (player != null) {
+                return player;
+            }
+        }
+        DialogueContext ownContext = session.getDialogueContext();
+        if (ownContext != null && ownContext.player() != null && Objects.equals(ownContext.player().getUUID(), session.getPlayerId())) {
+            return ownContext.player();
+        }
+        UUID playerId = session.getPlayerId();
+        for (DialogueSession candidate : sessionManager.getSessions()) {
+            DialogueContext context = candidate.getDialogueContext();
+            if (context != null && context.player() != null && Objects.equals(context.player().getUUID(), playerId)) {
+                return context.player();
             }
         }
         return null;

@@ -26,6 +26,11 @@ public class DialogueSession {
     private final Instant createdAt;
     private final Map<String, Object> variables = new LinkedHashMap<>();
     private State state = State.ACTIVE;
+    private DialogueSessionPolicy policy = DialogueSessionPolicy.DEFAULT;
+    private long createdGameTime = -1L;
+    private long lastInteractionGameTime = -1L;
+    @Nullable
+    private String closeReason;
     @Nullable
     private DialoguePagePayload currentPage;
     @Nullable
@@ -65,7 +70,12 @@ public class DialogueSession {
     }
 
     public void close() {
+        close(DialogueCloseReason.CLOSED);
+    }
+
+    public void close(String reason) {
         this.state = State.CLOSED;
+        this.closeReason = reason == null || reason.isBlank() ? DialogueCloseReason.CLOSED : reason;
         if (this.executionHandle != null) {
             this.executionHandle.close();
             this.executionHandle = null;
@@ -101,5 +111,38 @@ public class DialogueSession {
 
     public Map<String, Object> getVariables() {
         return variables;
+    }
+
+    public DialogueSessionPolicy getPolicy() {
+        return policy;
+    }
+
+    public void setPolicy(@Nullable DialogueSessionPolicy policy) {
+        this.policy = policy == null ? DialogueSessionPolicy.DEFAULT : policy;
+    }
+
+    public long getCreatedGameTime() {
+        return createdGameTime;
+    }
+
+    public void setCreatedGameTime(long createdGameTime) {
+        this.createdGameTime = createdGameTime;
+    }
+
+    public long getLastInteractionGameTime() {
+        return lastInteractionGameTime;
+    }
+
+    public void setLastInteractionGameTime(long lastInteractionGameTime) {
+        this.lastInteractionGameTime = lastInteractionGameTime;
+    }
+
+    public void touch(long gameTime) {
+        this.lastInteractionGameTime = gameTime;
+    }
+
+    @Nullable
+    public String getCloseReason() {
+        return closeReason;
     }
 }

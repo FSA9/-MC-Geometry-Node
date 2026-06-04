@@ -102,10 +102,34 @@
   "geometry_node.node.event_on_entity_death": "OnEntityDeath",
 
   "geometry_node.menu.dialogue": "Dialogue",
+  "geometry_node.node.begin_dialogue": "Begin Dialogue",
+  "geometry_node.node.show_dialogue_page": "Show Dialogue Page",
+  "geometry_node.node.close_dialogue": "Close Dialogue",
+  "geometry_node.node.resolve_dialogue_text": "Resolve Dialogue Text",
   "geometry_node.node.format_dialogue_text": "Format Dialogue Text",
+  "geometry_node.port.player": "Player",
+  "geometry_node.port.speaker_entity": "Speaker Entity",
+  "geometry_node.port.speaker": "Speaker",
+  "geometry_node.port.graph_id": "Graph ID",
+  "geometry_node.port.entry_id": "Entry ID",
+  "geometry_node.port.text_key": "Text Key",
   "geometry_node.port.template": "Template",
+  "geometry_node.port.style_id": "Style ID",
+  "geometry_node.port.max_distance": "Max Distance",
+  "geometry_node.port.allow_multi_player": "Allow Multiplayer",
+  "geometry_node.port.timeout_seconds": "Timeout Seconds",
+  "geometry_node.port.busy_text_key": "Busy Text Key",
   "geometry_node.port.variable_name": "Variable Name",
-  "geometry_node.port.variable_value": "Variable Value"
+  "geometry_node.port.variable_value": "Variable Value",
+  "geometry_node.port.choice": "Choice",
+  "geometry_node.port.closed": "Closed",
+  "geometry_node.port.choice_text_key": "Choice Text Key",
+  "geometry_node.port.choice_visible": "Choice Visible",
+  "geometry_node.port.choice_enabled": "Choice Enabled",
+  "geometry_node.port.choice_disabled_reason_key": "Disabled Reason Text",
+  "geometry_node.dialogue.close": "Close",
+  "geometry_node.dialogue.continue": "Continue",
+  "geometry_node.dialogue.busy": "This dialogue is currently busy."
 
 
 }

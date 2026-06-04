@@ -32,6 +32,10 @@ public class DialogueSessionManager {
         return Collections.unmodifiableCollection(sessions.values());
     }
 
+    public List<DialogueSession> snapshotSessions() {
+        return new ArrayList<>(sessions.values());
+    }
+
     @Nullable
     public DialogueSession getSessionForPlayer(UUID playerId) {
         for (DialogueSession session : sessions.values()) {
@@ -49,14 +53,23 @@ public class DialogueSessionManager {
 
     @Nullable
     public DialogueSession closeSession(UUID sessionId) {
+        return closeSession(sessionId, DialogueCloseReason.CLOSED);
+    }
+
+    @Nullable
+    public DialogueSession closeSession(UUID sessionId, String reason) {
         DialogueSession session = sessions.remove(sessionId);
         if (session != null) {
-            session.close();
+            session.close(reason);
         }
         return session;
     }
 
     public void closeSessionsForPlayer(UUID playerId) {
+        closeSessionsForPlayer(playerId, DialogueCloseReason.CLOSED);
+    }
+
+    public void closeSessionsForPlayer(UUID playerId, String reason) {
         List<DialogueSession> closing = new ArrayList<>();
         for (DialogueSession session : sessions.values()) {
             if (session.getPlayerId().equals(playerId)) {
@@ -65,7 +78,47 @@ public class DialogueSessionManager {
         }
         for (DialogueSession session : closing) {
             sessions.remove(session.getSessionId());
-            session.close();
+            session.close(reason);
+        }
+    }
+
+    @Nullable
+    public DialogueSession findEntityOccupant(UUID entityId, @Nullable UUID exceptPlayerId) {
+        return findEntityOccupant(entityId, exceptPlayerId, false);
+    }
+
+    @Nullable
+    public DialogueSession findEntityOccupant(UUID entityId, @Nullable UUID exceptPlayerId, boolean includeSharedSessions) {
+        if (entityId == null) {
+            return null;
+        }
+        for (DialogueSession session : sessions.values()) {
+            if (!session.isActive()) {
+                continue;
+            }
+            if (exceptPlayerId != null && session.getPlayerId().equals(exceptPlayerId)) {
+                continue;
+            }
+            if (session.getDialogueContext() == null) {
+                continue;
+            }
+            if (!includeSharedSessions && session.getPolicy().allowMultiPlayer()) {
+                continue;
+            }
+            UUID speakerId = session.getDialogueContext().speakerEntityId();
+            UUID targetId = session.getDialogueContext().targetEntityId();
+            if (entityId.equals(speakerId) || entityId.equals(targetId)) {
+                return session;
+            }
+        }
+        return null;
+    }
+
+    public void closeAll(String reason) {
+        List<DialogueSession> closing = new ArrayList<>(sessions.values());
+        sessions.clear();
+        for (DialogueSession session : closing) {
+            session.close(reason);
         }
     }
 }

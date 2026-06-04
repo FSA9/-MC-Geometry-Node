@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionResult;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueCloseReason;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -30,7 +31,7 @@ public class CloseDialogue extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         ServerPlayer player = resolvePlayer(context);
         if (player != null) {
-            DialogueRuntime.INSTANCE.closeForPlayer(player, "node");
+            DialogueRuntime.INSTANCE.closeForPlayer(player, DialogueCloseReason.NODE);
         }
         return next(StandardPorts.FLOW_OUT.getId());
     }

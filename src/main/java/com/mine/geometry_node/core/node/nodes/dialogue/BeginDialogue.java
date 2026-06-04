@@ -3,11 +3,14 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionResult;
 import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionPolicy;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
+import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
@@ -27,6 +30,10 @@ public class BeginDialogue extends BaseNode {
     public static final String STYLE_ID = StandardPorts.STYLE_ID.getId();
     public static final String GRAPH_ID = StandardPorts.GRAPH_ID.getId();
     public static final String ENTRY_ID = StandardPorts.ENTRY_ID.getId();
+    public static final String MAX_DISTANCE = "max_distance";
+    public static final String ALLOW_MULTI_PLAYER = "allow_multi_player";
+    public static final String TIMEOUT_SECONDS = "timeout_seconds";
+    public static final String BUSY_TEXT_KEY = "busy_text_key";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -45,6 +52,10 @@ public class BeginDialogue extends BaseNode {
                 ))
                 .addRow(new PortRow(StandardPorts.GRAPH_ID.toInput(""), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTRY_ID.toInput("root"), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(PortDef.create(MAX_DISTANCE, "geometry_node.port.max_distance", PortType.FLOAT, 0.0f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(PortDef.create(ALLOW_MULTI_PLAYER, "geometry_node.port.allow_multi_player", PortType.BOOLEAN, true), null, UIHint.CHECKBOX, null, null))
+                .addRow(new PortRow(PortDef.create(TIMEOUT_SECONDS, "geometry_node.port.timeout_seconds", PortType.INTEGER, 0), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(PortDef.create(BUSY_TEXT_KEY, "geometry_node.port.busy_text_key", PortType.STRING, "geometry_node.dialogue.busy"), null, UIHint.INPUT, null, null))
                 .build();
     }
 
@@ -57,6 +68,12 @@ public class BeginDialogue extends BaseNode {
         String styleId = stringOrDefault(getInput(context, STYLE_ID, String.class), "default");
         String graphId = stringOrDefault(getInput(context, GRAPH_ID, String.class), context.getGraphId());
         String entryId = stringOrDefault(getInput(context, ENTRY_ID, String.class), "root");
+        DialogueSessionPolicy policy = new DialogueSessionPolicy(
+                floatOrDefault(getInput(context, MAX_DISTANCE, Float.class), 0.0f),
+                boolOrDefault(getInput(context, ALLOW_MULTI_PLAYER, Boolean.class), true),
+                intOrDefault(getInput(context, TIMEOUT_SECONDS, Integer.class), 0),
+                stringOrDefault(getInput(context, BUSY_TEXT_KEY, String.class), "geometry_node.dialogue.busy")
+        );
 
         context.setTempData(DialogueContext.TEMP_KEY, new DialogueContext(
                 player,
@@ -65,7 +82,8 @@ public class BeginDialogue extends BaseNode {
                 speaker,
                 styleId,
                 graphId,
-                entryId
+                entryId,
+                policy
         ));
         return next(StandardPorts.FLOW_OUT.getId());
     }
@@ -134,5 +152,17 @@ public class BeginDialogue extends BaseNode {
 
     private static String stringOrDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static boolean boolOrDefault(Boolean value, boolean fallback) {
+        return value == null ? fallback : value;
+    }
+
+    private static float floatOrDefault(Float value, float fallback) {
+        return value == null ? fallback : value;
+    }
+
+    private static int intOrDefault(Integer value, int fallback) {
+        return value == null ? fallback : value;
     }
 }

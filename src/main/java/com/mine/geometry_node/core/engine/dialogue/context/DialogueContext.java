@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.dialogue.context;
 
+import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionPolicy;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -25,10 +26,11 @@ public final class DialogueContext {
     private final String styleId;
     private final String graphId;
     private final String entryId;
+    private final DialogueSessionPolicy policy;
     private final Map<String, Object> variables;
 
     public DialogueContext(@Nullable ServerPlayer player, @Nullable String speaker, String styleId) {
-        this(player, null, null, speaker, styleId, "", "", Map.of());
+        this(player, null, null, speaker, styleId, "", "", DialogueSessionPolicy.DEFAULT, Map.of());
     }
 
     public DialogueContext(@Nullable ServerPlayer player,
@@ -38,6 +40,17 @@ public final class DialogueContext {
                            String styleId,
                            @Nullable String graphId,
                            @Nullable String entryId) {
+        this(player, speakerEntity, targetEntity, speaker, styleId, graphId, entryId, DialogueSessionPolicy.DEFAULT);
+    }
+
+    public DialogueContext(@Nullable ServerPlayer player,
+                           @Nullable Entity speakerEntity,
+                           @Nullable Entity targetEntity,
+                           @Nullable String speaker,
+                           String styleId,
+                           @Nullable String graphId,
+                           @Nullable String entryId,
+                           DialogueSessionPolicy policy) {
         this(player,
                 speakerEntity == null ? null : speakerEntity.getUUID(),
                 targetEntity == null ? null : targetEntity.getUUID(),
@@ -45,6 +58,7 @@ public final class DialogueContext {
                 styleId,
                 graphId,
                 entryId,
+                policy,
                 Map.of());
     }
 
@@ -56,6 +70,18 @@ public final class DialogueContext {
                            @Nullable String graphId,
                            @Nullable String entryId,
                            Map<String, Object> variables) {
+        this(player, speakerEntityId, targetEntityId, speaker, styleId, graphId, entryId, DialogueSessionPolicy.DEFAULT, variables);
+    }
+
+    public DialogueContext(@Nullable ServerPlayer player,
+                           @Nullable UUID speakerEntityId,
+                           @Nullable UUID targetEntityId,
+                           @Nullable String speaker,
+                           String styleId,
+                           @Nullable String graphId,
+                           @Nullable String entryId,
+                           DialogueSessionPolicy policy,
+                           Map<String, Object> variables) {
         this.player = player;
         this.speakerEntityId = speakerEntityId;
         this.targetEntityId = targetEntityId;
@@ -63,6 +89,7 @@ public final class DialogueContext {
         this.styleId = styleId == null || styleId.isBlank() ? "default" : styleId;
         this.graphId = graphId == null ? "" : graphId;
         this.entryId = entryId == null || entryId.isBlank() ? "root" : entryId;
+        this.policy = policy == null ? DialogueSessionPolicy.DEFAULT : policy;
         this.variables = new LinkedHashMap<>(variables);
     }
 
@@ -95,6 +122,10 @@ public final class DialogueContext {
 
     public String entryId() {
         return entryId;
+    }
+
+    public DialogueSessionPolicy policy() {
+        return policy;
     }
 
     public Map<String, Object> variables() {

@@ -14,6 +14,7 @@ import java.util.Map;
  */
 public class DialogueTextManager {
     public static final String CONTINUE_KEY = "geometry_node.dialogue.continue";
+    public static final String BUSY_KEY = "geometry_node.dialogue.busy";
 
     private final Map<String, String> texts = new LinkedHashMap<>();
 
@@ -55,5 +56,6 @@ public class DialogueTextManager {
 
     private void registerDefaults() {
         texts.put(CONTINUE_KEY, "Continue");
+        texts.put(BUSY_KEY, "This dialogue is currently busy.");
     }
 }

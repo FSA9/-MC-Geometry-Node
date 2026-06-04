@@ -493,6 +493,10 @@
   "geometry_node.port.text_key": "文本键",
   "geometry_node.port.template": "模板",
   "geometry_node.port.style_id": "样式 ID",
+  "geometry_node.port.max_distance": "最大距离",
+  "geometry_node.port.allow_multi_player": "允许多人对话",
+  "geometry_node.port.timeout_seconds": "超时秒数",
+  "geometry_node.port.busy_text_key": "占用提示文本键",
   "geometry_node.port.variable_name": "变量名",
   "geometry_node.port.variable_value": "变量值",
   "geometry_node.port.choice": "选项",
@@ -502,5 +506,6 @@
   "geometry_node.port.choice_enabled": "选项可用",
   "geometry_node.port.choice_disabled_reason_key": "禁用原因文本",
   "geometry_node.dialogue.close": "关闭",
-  "geometry_node.dialogue.continue": "继续"
+  "geometry_node.dialogue.continue": "继续",
+  "geometry_node.dialogue.busy": "该对话正在进行中。"
 }
