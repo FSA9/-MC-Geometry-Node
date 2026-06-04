@@ -103,8 +103,9 @@ public class UIConstants {
         public static final float DYNAMIC_BTN_HITBOX_TOLERANCE_DP = 6.0f;         // 逻辑排版阶段的半包围盒容差 (DP)
         public static final float DYNAMIC_BTN_TOUCH_TOLERANCE_DP = 15.0f;         // 物理屏幕触摸事件的高容差判定半径 (DP)
 
-        public static final int CLR_DYNAMIC_BTN_BG = 0xFF444444;                  // 动态按钮背景色
-        public static final int CLR_DYNAMIC_BTN_FG = 0xFFFFFFFF;                  // 动态按钮前景色 (边框与符号)
+        public static final int CLR_DYNAMIC_BTN_BG = 0xFF35373B;                  // 动态按钮背景色
+        public static final int CLR_DYNAMIC_BTN_STROKE = 0xFF5A5E66;              // 动态按钮描边色
+        public static final int CLR_DYNAMIC_BTN_FG = 0xFFE6EAF0;                  // 动态按钮前景色
     }
 
     /**

@@ -99,7 +99,9 @@ public enum StandardPorts {
     ENTRY_ID("entry_id", PortType.STRING),
     GRAPH_ID("graph_id", PortType.STRING),
     TEXT_KEY("text_key", PortType.STRING),
+    TEMPLATE("template", PortType.STRING),
     STYLE_ID("style_id", PortType.STRING),
+    VARIABLE_NAME("variable_name", PortType.STRING),
     CHOICE_TEXT_KEY("choice_text_key", PortType.STRING),
     CHOICE_DISABLED_REASON_KEY("choice_disabled_reason_key", PortType.STRING),
 
@@ -143,7 +145,8 @@ public enum StandardPorts {
 
     // ANY
 
-    ANY_VALUE("any_value", PortType.ANY);
+    ANY_VALUE("any_value", PortType.ANY),
+    VARIABLE_VALUE("variable_value", PortType.ANY);
 
     private final String id;
     private final PortType type;

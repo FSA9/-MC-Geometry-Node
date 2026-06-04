@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.node.UINode;
 
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.PointerIcon;
@@ -22,6 +23,7 @@ public class ViewportEventDispatcher {
     // 状态与缓存 (从原 Viewport 中剥离)
     private View mCapturedHintView;
     private boolean mHintCaptureUsesLogical;
+    private HintHitResult mHoveredHint;
     private float mLastMouseScreenX = 0;
     private float mLastMouseScreenY = 0;
 
@@ -57,7 +59,15 @@ public class ViewportEventDispatcher {
         }
 
         // 2. 如果点到了悬浮菜单或非图元UI，直接放行给 super
-        if (isHitOverlay) return false;
+        if (isHitOverlay) {
+            updateHoveredHint(ev, null);
+            if (action == MotionEvent.ACTION_DOWN) {
+                if (UINode.closeOpenCommentPopup()) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         // 3. 探测是否点到了节点内部的 UI 交互件（比如 Add/Remove 按钮、输入框）
         if (ev.getPointerCount() == 1) {
@@ -66,6 +76,14 @@ public class ViewportEventDispatcher {
 
             if (isMouseHoverMove || isActionDown) {
                 HintHitResult hitResult = findInteractiveHint(ev);
+                if (isMouseHoverMove) {
+                    updateHoveredHint(ev, hitResult);
+                }
+                if (isActionDown && !isCommentButtonHit(hitResult)) {
+                    if (UINode.closeOpenCommentPopup()) {
+                        return true;
+                    }
+                }
                 if (hitResult != null) {
                     View targetView = hitResult.view();
                     if (isActionDown) {
@@ -76,7 +94,9 @@ public class ViewportEventDispatcher {
                         mViewport.invalidate();
                     }
 
-                    boolean handled = dispatchTransformedEvent(ev, targetView, hitResult.isLogical(), !hitResult.isLogical());
+                    boolean handled = isMouseHoverMove
+                            ? dispatchHoverMoveEvent(ev, targetView, hitResult.isLogical(), !hitResult.isLogical())
+                            : dispatchTransformedEvent(ev, targetView, hitResult.isLogical(), !hitResult.isLogical());
                     if (handled) {
                         if (isActionDown) {
                             mCapturedHintView = targetView;
@@ -97,13 +117,17 @@ public class ViewportEventDispatcher {
         mLastMouseScreenX = ev.getX();
         mLastMouseScreenY = ev.getY();
 
-        if (isHitOverlay) return false;
+        if (isHitOverlay) {
+            updateHoveredHint(ev, null);
+            return false;
+        }
 
         int action = ev.getActionMasked();
         if (action == MotionEvent.ACTION_HOVER_MOVE || action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_EXIT) {
             HintHitResult hitResult = findInteractiveHint(ev);
+            updateHoveredHint(ev, hitResult);
             if (hitResult != null) {
-                if (dispatchTransformedEvent(ev, hitResult.view(), hitResult.isLogical(), !hitResult.isLogical())) return true;
+                if (dispatchTransformedEvent(ev, hitResult.view(), hitResult.isLogical(), !hitResult.isLogical(), true)) return true;
             }
         }
         return false;
@@ -142,6 +166,18 @@ public class ViewportEventDispatcher {
     }
 
     private boolean dispatchTransformedEvent(MotionEvent ev, View target, boolean isLogical, boolean skipEventToScreen) {
+        return dispatchTransformedEvent(ev, target, isLogical, skipEventToScreen, false);
+    }
+
+    private boolean dispatchHoverMoveEvent(MotionEvent ev, View target, boolean isLogical, boolean skipEventToScreen) {
+        MotionEvent hoverEvent = ev.copy();
+        hoverEvent.setAction(MotionEvent.ACTION_HOVER_MOVE);
+        boolean handled = dispatchTransformedEvent(hoverEvent, target, isLogical, skipEventToScreen, true);
+        hoverEvent.recycle();
+        return handled;
+    }
+
+    private boolean dispatchTransformedEvent(MotionEvent ev, View target, boolean isLogical, boolean skipEventToScreen, boolean genericMotion) {
         float ox = ev.getX();
         float oy = ev.getY();
         float lx, ly;
@@ -174,9 +210,38 @@ public class ViewportEventDispatcher {
         }
 
         ev.setLocation(lx, ly);
-        boolean handled = target.dispatchTouchEvent(ev);
+        boolean handled = genericMotion ? target.dispatchGenericMotionEvent(ev) : target.dispatchTouchEvent(ev);
         ev.setLocation(ox, oy);
         return handled;
+    }
+
+    private void updateHoveredHint(MotionEvent ev, HintHitResult next) {
+        if (sameHint(mHoveredHint, next)) {
+            return;
+        }
+
+        if (mHoveredHint != null) {
+            MotionEvent exitEvent = ev.copy();
+            exitEvent.setAction(MotionEvent.ACTION_HOVER_EXIT);
+            dispatchTransformedEvent(exitEvent, mHoveredHint.view(), mHoveredHint.isLogical(), !mHoveredHint.isLogical(), true);
+            exitEvent.recycle();
+        }
+
+        mHoveredHint = next;
+    }
+
+    private static boolean sameHint(HintHitResult a, HintHitResult b) {
+        if (a == b) {
+            return true;
+        }
+        if (a == null || b == null) {
+            return false;
+        }
+        return a.view() == b.view() && a.node() == b.node() && a.isLogical() == b.isLogical();
+    }
+
+    private static boolean isCommentButtonHit(HintHitResult hitResult) {
+        return hitResult != null && UINode.isCommentButton(hitResult.view());
     }
 
     private NodeVisualAdapter findNodeVisualForOverlay(View target) {

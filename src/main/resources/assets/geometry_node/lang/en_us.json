@@ -99,7 +99,13 @@
   
   "geometry_node.node.event_on_block_break": "OnBlockBreak",
   "geometry_node.node.event_on_block_place": "OnBlockPlace",
-  "geometry_node.node.event_on_entity_death": "OnEntityDeath"
+  "geometry_node.node.event_on_entity_death": "OnEntityDeath",
+
+  "geometry_node.menu.dialogue": "Dialogue",
+  "geometry_node.node.format_dialogue_text": "Format Dialogue Text",
+  "geometry_node.port.template": "Template",
+  "geometry_node.port.variable_name": "Variable Name",
+  "geometry_node.port.variable_value": "Variable Value"
 
 
 }
