@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.maths;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.execution.datatypes.DynamicData;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.value.DynamicData;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;

@@ -1,10 +1,13 @@
 package com.mine.geometry_node.api;
 
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
-import com.mine.geometry_node.core.engine.blueprint.execution.variables.VariableRegistry;
+import com.mine.geometry_node.core.engine.blueprint.variables.VariableRegistry;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 事件派发 facade。
@@ -18,18 +21,26 @@ public final class GeometryNodeEvents {
                 return;
             }
 
+            BlueprintRuntime.INSTANCE.dispatchEvent(level, target, eventTypeId, sanitizePayload(eventTypeId, payload));
+        }
+
+        private Map<String, Object> sanitizePayload(String eventTypeId, @Nullable EventPayload payload) {
             EventPayload safePayload = payload != null ? payload : EventPayload.empty();
-            BlueprintRuntime.INSTANCE.dispatchEvent(level, target, eventTypeId, thread -> {
-                for (var entry : safePayload.values().entrySet()) {
-                    Object value = entry.getValue();
-                    if (value != null && !VariableRegistry.isSupported(value)) {
-                        System.err.println("[GeometryNodeEvents] Skip unsupported event payload value: event=" +
-                                eventTypeId + ", key=" + entry.getKey() + ", type=" + value.getClass().getName());
-                        continue;
-                    }
-                    thread.setEventData(entry.getKey(), entry.getValue());
+            if (safePayload.values().isEmpty()) {
+                return Map.of();
+            }
+
+            Map<String, Object> sanitized = new LinkedHashMap<>();
+            for (var entry : safePayload.values().entrySet()) {
+                Object value = entry.getValue();
+                if (value != null && !VariableRegistry.isSupported(value)) {
+                    System.err.println("[GeometryNodeEvents] Skip unsupported event payload value: event=" +
+                            eventTypeId + ", key=" + entry.getKey() + ", type=" + value.getClass().getName());
+                    continue;
                 }
-            });
+                sanitized.put(entry.getKey(), value);
+            }
+            return sanitized.isEmpty() ? Map.of() : sanitized;
         }
     };
 

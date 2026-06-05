@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -15,7 +15,7 @@ public record PacketRemoteGraphDownloadResponse(
         int processed,
         int total,
         String message,
-        List<RemoteGraphFileService.UploadFile> files
+        List<RemoteGraphUploadFile> files
 ) implements CustomPacketPayload {
     public static final Type<PacketRemoteGraphDownloadResponse> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath("geometry_node", "remote_graph_download_response"));
@@ -36,17 +36,17 @@ public record PacketRemoteGraphDownloadResponse(
         buf.writeInt(total);
         buf.writeUtf(message, 32767);
         buf.writeInt(files.size());
-        for (RemoteGraphFileService.UploadFile file : files) {
+        for (RemoteGraphUploadFile file : files) {
             buf.writeUtf(file.targetPath(), 32767);
             buf.writeUtf(file.jsonContent(), 262144);
         }
     }
 
-    private static List<RemoteGraphFileService.UploadFile> readFiles(RegistryFriendlyByteBuf buf) {
+    private static List<RemoteGraphUploadFile> readFiles(RegistryFriendlyByteBuf buf) {
         int size = buf.readInt();
-        List<RemoteGraphFileService.UploadFile> files = new ArrayList<>(size);
+        List<RemoteGraphUploadFile> files = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            files.add(new RemoteGraphFileService.UploadFile(buf.readUtf(32767), buf.readUtf(262144)));
+            files.add(new RemoteGraphUploadFile(buf.readUtf(32767), buf.readUtf(262144)));
         }
         return files;
     }

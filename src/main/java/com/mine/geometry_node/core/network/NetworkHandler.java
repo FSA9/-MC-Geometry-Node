@@ -5,9 +5,13 @@ import com.mine.geometry_node.client.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphFileService;
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphPermissions;
+import com.mine.geometry_node.core.engine.service.GraphEngineServices;
+import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphPermissions;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
 import com.mine.geometry_node.core.network.packet.c2s.*;
 import com.mine.geometry_node.core.network.packet.s2c.*;
 import dev.architectury.networking.NetworkManager;
@@ -15,17 +19,21 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.nio.file.Files;
 import java.util.Set;
 
 public class NetworkHandler {
 
     public static void init() {
+        GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
+
         NetworkManager.registerReceiver(
                 NetworkManager.Side.S2C,
                 PacketSpawnDynamicVisual.TYPE,
@@ -105,7 +113,7 @@ public class NetworkHandler {
                                 }
                                 Files.createDirectories(RemoteGraphFileService.resolveDirectory(player.getServer(), directory));
                             }
-                            List<RemoteGraphFileService.Entry> entries = RemoteGraphFileService.list(player.getServer(), directory);
+                            List<RemoteGraphEntry> entries = RemoteGraphFileService.list(player.getServer(), directory);
                             sendToPlayer(player, new PacketRemoteGraphListResponse(payload.requestId(), true, directory, "", entries));
                         } catch (Exception e) {
                             sendToPlayer(player, new PacketRemoteGraphListResponse(
@@ -267,7 +275,7 @@ public class NetworkHandler {
                     context.queue(() -> {
                         if (context.getPlayer() instanceof ServerPlayer player) {
                             // 将数据包直接甩给状态管家处理
-                            com.mine.geometry_node.core.engine.blueprint.execution.state.PlayerInputStateManager.handleInput(player, payload);
+                            com.mine.geometry_node.core.engine.blueprint.event.PlayerInputStateManager.handleInput(player, payload);
                         }
                     });
                 }
@@ -306,6 +314,43 @@ public class NetworkHandler {
         NetworkManager.sendToServer(payload);
     }
 
+    private static void broadcastVisualEffect(GraphEngineServices.VisualEffect effect) {
+        if (effect == null || effect.level() == null || effect.center() == null || effect.radius() <= 0) {
+            return;
+        }
+
+        Map<String, String> expressions = effect.expressions() != null
+                ? effect.expressions()
+                : Collections.emptyMap();
+        Map<String, String> bindings = effect.bindings() != null
+                ? effect.bindings()
+                : Collections.emptyMap();
+        net.minecraft.nbt.CompoundTag extraData = effect.extraData() != null
+                ? effect.extraData()
+                : new net.minecraft.nbt.CompoundTag();
+
+        PacketSpawnDynamicVisual packet = new PacketSpawnDynamicVisual(
+                effect.effectType(),
+                effect.color(),
+                effect.durationTicks(),
+                expressions,
+                bindings,
+                extraData
+        );
+
+        double radiusSqr = effect.radius() * effect.radius();
+        Vec3 center = effect.center();
+        List<ServerPlayer> targetPlayers = new ArrayList<>();
+        for (ServerPlayer player : effect.level().players()) {
+            if (player.position().distanceToSqr(center) < radiusSqr) {
+                targetPlayers.add(player);
+            }
+        }
+        if (!targetPlayers.isEmpty()) {
+            sendToPlayers(targetPlayers, packet);
+        }
+    }
+
     private static void handleRemoteGraphUpload(PacketRemoteGraphUploadRequest payload, ServerPlayer player) {
         if (!RemoteGraphPermissions.canUploadGraphs(player)) {
             sendToPlayer(player, new PacketRemoteGraphUploadResponse(
@@ -316,10 +361,10 @@ public class NetworkHandler {
 
         try {
             List<String> targetPaths = new ArrayList<>();
-            for (RemoteGraphFileService.UploadFile file : payload.files()) {
+            for (RemoteGraphUploadFile file : payload.files()) {
                 targetPaths.add(file.targetPath());
             }
-            List<RemoteGraphFileService.Conflict> conflicts = RemoteGraphFileService.findUploadConflicts(player.getServer(), targetPaths);
+            List<RemoteGraphConflict> conflicts = RemoteGraphFileService.findUploadConflicts(player.getServer(), targetPaths);
             if (payload.preflightOnly()) {
                 sendToPlayer(player, new PacketRemoteGraphUploadResponse(
                         payload.requestId(), true, conflicts.isEmpty(), 0, payload.files().size(), "", conflicts));
@@ -327,8 +372,8 @@ public class NetworkHandler {
             }
             Set<String> allowedOverwritePaths = new HashSet<>(payload.overwritePaths());
             if (!payload.overwrite()) {
-                List<RemoteGraphFileService.Conflict> blockingConflicts = new ArrayList<>();
-                for (RemoteGraphFileService.Conflict conflict : conflicts) {
+                List<RemoteGraphConflict> blockingConflicts = new ArrayList<>();
+                for (RemoteGraphConflict conflict : conflicts) {
                     if (!allowedOverwritePaths.contains(conflict.targetPath())) {
                         blockingConflicts.add(conflict);
                     }
@@ -342,7 +387,7 @@ public class NetworkHandler {
 
             int processed = 0;
             int total = payload.files().size();
-            for (RemoteGraphFileService.UploadFile file : payload.files()) {
+            for (RemoteGraphUploadFile file : payload.files()) {
                 RemoteGraphFileService.saveUpload(
                         player.getServer(),
                         file,
@@ -368,11 +413,11 @@ public class NetworkHandler {
         }
 
         try {
-            List<RemoteGraphFileService.Entry> files = RemoteGraphFileService.flattenSelection(player.getServer(), payload.paths());
+            List<RemoteGraphEntry> files = RemoteGraphFileService.flattenSelection(player.getServer(), payload.paths());
             int total = files.size();
             int processed = 0;
-            for (RemoteGraphFileService.Entry entry : files) {
-                RemoteGraphFileService.UploadFile downloaded = new RemoteGraphFileService.UploadFile(
+            for (RemoteGraphEntry entry : files) {
+                RemoteGraphUploadFile downloaded = new RemoteGraphUploadFile(
                         entry.path(),
                         RemoteGraphFileService.readGraph(player.getServer(), entry.path())
                 );

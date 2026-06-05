@@ -24,6 +24,9 @@ public final class GraphRuntimeRegistry {
             return;
         }
         GraphRuntime existing = runtimes.get(runtime.kind());
+        if (existing == runtime) {
+            return;
+        }
         if (existing != null && existing != runtime) {
             throw new IllegalStateException("Duplicate graph runtime: " + runtime.kind().id());
         }

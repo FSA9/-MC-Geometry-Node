@@ -37,6 +37,8 @@ public class DialogueSession {
     private DialogueContext dialogueContext;
     @Nullable
     private GraphExecutionHandle executionHandle;
+    @Nullable
+    private String presenterId;
 
     public DialogueSession(UUID sessionId, UUID playerId, String graphId) {
         this.sessionId = sessionId;
@@ -107,6 +109,15 @@ public class DialogueSession {
 
     public void setExecutionHandle(@Nullable GraphExecutionHandle executionHandle) {
         this.executionHandle = executionHandle;
+    }
+
+    @Nullable
+    public String getPresenterId() {
+        return presenterId;
+    }
+
+    public void setPresenterId(@Nullable String presenterId) {
+        this.presenterId = presenterId;
     }
 
     public Map<String, Object> getVariables() {

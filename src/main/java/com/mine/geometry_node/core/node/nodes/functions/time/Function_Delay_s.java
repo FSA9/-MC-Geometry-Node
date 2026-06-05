@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.functions.time;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionResult;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;

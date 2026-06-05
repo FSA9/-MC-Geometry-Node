@@ -12,7 +12,8 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.RightF
 import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.PathUtils;
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphCapabilitiesRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphDownloadRequest;
@@ -151,7 +152,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
     }
 
     private void preflightUpload(List<File> selectedFiles, String targetDirectory) {
-        List<RemoteGraphFileService.UploadFile> files = collectUploadFiles(selectedFiles, targetDirectory);
+        List<RemoteGraphUploadFile> files = collectUploadFiles(selectedFiles, targetDirectory);
         if (files.isEmpty()) return;
 
         int requestId = RemoteGraphClientState.nextRequestId();
@@ -167,11 +168,11 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
                     return;
                 }
                 List<String> conflictPaths = new ArrayList<>();
-                for (RemoteGraphFileService.Conflict conflict : response.conflicts()) {
+                for (RemoteGraphConflict conflict : response.conflicts()) {
                     conflictPaths.add(conflict.targetPath());
                 }
-                ConflictResolutionState<RemoteGraphFileService.UploadFile> resolution =
-                        new ConflictResolutionState<>(files, conflictPaths, RemoteGraphFileService.UploadFile::targetPath);
+                ConflictResolutionState<RemoteGraphUploadFile> resolution =
+                        new ConflictResolutionState<>(files, conflictPaths, RemoteGraphUploadFile::targetPath);
                 new OverwriteConfirmDialog(getContext(), conflictPaths, decision -> {
                     switch (decision) {
                         case OVERWRITE_CURRENT -> {
@@ -195,11 +196,11 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         NetworkHandler.sendToServer(new PacketRemoteGraphUploadRequest(requestId, true, false, files));
     }
 
-    private void startUpload(List<RemoteGraphFileService.UploadFile> files, boolean overwrite) {
+    private void startUpload(List<RemoteGraphUploadFile> files, boolean overwrite) {
         startUpload(files, overwrite, List.of());
     }
 
-    private void startUpload(List<RemoteGraphFileService.UploadFile> files, boolean overwrite, List<String> overwritePaths) {
+    private void startUpload(List<RemoteGraphUploadFile> files, boolean overwrite, List<String> overwritePaths) {
         if (files.isEmpty()) return;
         UploadBatchRunner runner = new UploadBatchRunner(files, overwrite, overwritePaths);
         runner.sendNext();
@@ -218,7 +219,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         }
 
         int requestId = RemoteGraphClientState.nextRequestId();
-        List<RemoteGraphFileService.UploadFile> downloaded = new ArrayList<>();
+        List<RemoteGraphUploadFile> downloaded = new ArrayList<>();
         RemoteGraphClientState.onDownload(requestId, response -> {
             post(() -> {
                 if (!response.success()) {
@@ -238,8 +239,8 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         NetworkHandler.sendToServer(new PacketRemoteGraphDownloadRequest(requestId, paths));
     }
 
-    private List<RemoteGraphFileService.UploadFile> collectUploadFiles(List<File> selectedFiles, String targetDirectory) {
-        List<RemoteGraphFileService.UploadFile> files = new ArrayList<>();
+    private List<RemoteGraphUploadFile> collectUploadFiles(List<File> selectedFiles, String targetDirectory) {
+        List<RemoteGraphUploadFile> files = new ArrayList<>();
         String targetPrefix = AssetPathUtils.normalizeRemoteDirectory(targetDirectory);
         for (File selected : selectedFiles) {
             if (selected == null || !selected.exists()) continue;
@@ -249,7 +250,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         return files;
     }
 
-    private void collectUploadFile(List<RemoteGraphFileService.UploadFile> out, Path base, Path path, String targetPrefix) {
+    private void collectUploadFile(List<RemoteGraphUploadFile> out, Path base, Path path, String targetPrefix) {
         try {
             if (Files.isSymbolicLink(path)) return;
             if (Files.isDirectory(path)) {
@@ -263,20 +264,20 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
             String relative = base.relativize(path).toString().replace('\\', '/');
             String targetPath = targetPrefix.isEmpty() ? relative : targetPrefix + "/" + relative;
             targetPath = AssetPathUtils.normalizeRemoteFilePath(targetPath);
-            out.add(new RemoteGraphFileService.UploadFile(targetPath, Files.readString(path)));
+            out.add(new RemoteGraphUploadFile(targetPath, Files.readString(path)));
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private void finishDownload(List<RemoteGraphFileService.UploadFile> files, File targetDirectory) {
+    private void finishDownload(List<RemoteGraphUploadFile> files, File targetDirectory) {
         List<String> conflicts = findLocalDownloadConflicts(files, targetDirectory);
         if (conflicts.isEmpty()) {
             saveDownloadedFiles(files, targetDirectory);
             return;
         }
 
-        ConflictResolutionState<RemoteGraphFileService.UploadFile> resolution =
+        ConflictResolutionState<RemoteGraphUploadFile> resolution =
                 new ConflictResolutionState<>(files, conflicts, file -> AssetPathUtils.normalizeRemoteFilePath(file.targetPath()));
         new OverwriteConfirmDialog(getContext(), conflicts, decision -> {
             switch (decision) {
@@ -298,10 +299,10 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         }).showIn(this);
     }
 
-    private void saveDownloadedFiles(List<RemoteGraphFileService.UploadFile> files, File targetDirectory) {
+    private void saveDownloadedFiles(List<RemoteGraphUploadFile> files, File targetDirectory) {
         Path root = targetDirectory.toPath().toAbsolutePath().normalize();
         List<String> failedPaths = new ArrayList<>();
-        for (RemoteGraphFileService.UploadFile file : files) {
+        for (RemoteGraphUploadFile file : files) {
             try {
                 String relative = AssetPathUtils.normalizeRemoteFilePath(file.targetPath());
                 Path target = root.resolve(relative).normalize();
@@ -327,13 +328,13 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
     }
 
     private void showUploadFailureDialog(
-            List<RemoteGraphFileService.UploadFile> failedFiles,
+            List<RemoteGraphUploadFile> failedFiles,
             boolean overwrite,
             List<String> overwritePaths
     ) {
         if (failedFiles == null || failedFiles.isEmpty()) return;
         List<String> failedPaths = new ArrayList<>();
-        for (RemoteGraphFileService.UploadFile file : failedFiles) {
+        for (RemoteGraphUploadFile file : failedFiles) {
             failedPaths.add(file.targetPath());
         }
         new UploadFailureRetryDialog(
@@ -343,10 +344,10 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         ).showIn(this);
     }
 
-    private List<String> findLocalDownloadConflicts(List<RemoteGraphFileService.UploadFile> files, File targetDirectory) {
+    private List<String> findLocalDownloadConflicts(List<RemoteGraphUploadFile> files, File targetDirectory) {
         List<String> conflicts = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (RemoteGraphFileService.UploadFile file : files) {
+        for (RemoteGraphUploadFile file : files) {
             String path = AssetPathUtils.normalizeRemoteFilePath(file.targetPath());
             if (!seen.add(path)) continue;
             File target = new File(targetDirectory, path);
@@ -418,14 +419,14 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
     }
 
     private final class UploadBatchRunner {
-        private final List<RemoteGraphFileService.UploadFile> mFiles;
+        private final List<RemoteGraphUploadFile> mFiles;
         private final boolean mOverwriteAll;
         private final Set<String> mOverwritePaths;
-        private final List<RemoteGraphFileService.UploadFile> mFailedFiles = new ArrayList<>();
+        private final List<RemoteGraphUploadFile> mFailedFiles = new ArrayList<>();
         private int mIndex = 0;
 
         private UploadBatchRunner(
-                List<RemoteGraphFileService.UploadFile> files,
+                List<RemoteGraphUploadFile> files,
                 boolean overwriteAll,
                 List<String> overwritePaths
         ) {
@@ -445,7 +446,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
                 return;
             }
 
-            RemoteGraphFileService.UploadFile file = mFiles.get(mIndex);
+            RemoteGraphUploadFile file = mFiles.get(mIndex);
             int requestId = RemoteGraphClientState.nextRequestId();
             RemoteGraphClientState.onUpload(requestId, response -> {
                 post(() -> {

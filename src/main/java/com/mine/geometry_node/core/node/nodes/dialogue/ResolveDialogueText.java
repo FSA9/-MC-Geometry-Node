@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.dialogue;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.command.server;
 
-import com.mine.geometry_node.core.engine.dialogue.render.DefaultDialogueRenderer;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
+import com.mine.geometry_node.core.engine.dialogue.presenter.ChatDialoguePresenter;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
@@ -16,8 +16,8 @@ public class DialogueCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
-                Commands.literal(DefaultDialogueRenderer.COMMAND_ROOT)
-                        .then(Commands.literal(DefaultDialogueRenderer.COMMAND_DIALOGUE)
+                Commands.literal(ChatDialoguePresenter.COMMAND_ROOT)
+                        .then(Commands.literal(ChatDialoguePresenter.COMMAND_DIALOGUE)
                                 .then(Commands.literal("choose")
                                         .then(Commands.argument("session_id", UuidArgument.uuid())
                                                 .then(Commands.argument("choice_id", StringArgumentType.word())

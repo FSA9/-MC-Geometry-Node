@@ -1,7 +1,8 @@
 package com.mine.geometry_node.core.node.nodes.data;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionResult;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -31,7 +32,7 @@ public class SetEntityAttribute extends BaseNode {
         Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
 
         if (attrName != null && !attrName.trim().isEmpty() && entity != null) {
-            context.setPersistentAttribute(entity, attrName, attrValue);
+            context.setPersistentAttribute(PersistentAttributeTarget.entity(entity), attrName, attrValue);
         }
 
         return next(StandardPorts.FLOW_OUT.getId());

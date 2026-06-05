@@ -1,9 +1,9 @@
 package com.mine.geometry_node.core.node.nodes;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionResult;
-import com.mine.geometry_node.core.engine.blueprint.execution.datatypes.DynamicData;
-import com.mine.geometry_node.core.engine.blueprint.execution.datatypes.ExpressionData;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.value.DynamicData;
+import com.mine.geometry_node.core.node.value.ExpressionData;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.TypeConverter;
 import net.minecraft.world.entity.Entity;

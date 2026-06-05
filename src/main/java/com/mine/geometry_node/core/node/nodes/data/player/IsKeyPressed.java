@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.player;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.execution.state.PlayerInputStateManager;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputStateManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -16,7 +16,7 @@ public record PacketRemoteGraphUploadResponse(
         int processed,
         int total,
         String message,
-        List<RemoteGraphFileService.Conflict> conflicts
+        List<RemoteGraphConflict> conflicts
 ) implements CustomPacketPayload {
     public static final Type<PacketRemoteGraphUploadResponse> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath("geometry_node", "remote_graph_upload_response"));
@@ -38,18 +38,18 @@ public record PacketRemoteGraphUploadResponse(
         buf.writeInt(total);
         buf.writeUtf(message, 32767);
         buf.writeInt(conflicts.size());
-        for (RemoteGraphFileService.Conflict conflict : conflicts) {
+        for (RemoteGraphConflict conflict : conflicts) {
             buf.writeUtf(conflict.sourcePath(), 32767);
             buf.writeUtf(conflict.targetPath(), 32767);
             buf.writeBoolean(conflict.directory());
         }
     }
 
-    private static List<RemoteGraphFileService.Conflict> readConflicts(RegistryFriendlyByteBuf buf) {
+    private static List<RemoteGraphConflict> readConflicts(RegistryFriendlyByteBuf buf) {
         int size = buf.readInt();
-        List<RemoteGraphFileService.Conflict> conflicts = new ArrayList<>(size);
+        List<RemoteGraphConflict> conflicts = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            conflicts.add(new RemoteGraphFileService.Conflict(buf.readUtf(32767), buf.readUtf(32767), buf.readBoolean()));
+            conflicts.add(new RemoteGraphConflict(buf.readUtf(32767), buf.readUtf(32767), buf.readBoolean()));
         }
         return conflicts;
     }

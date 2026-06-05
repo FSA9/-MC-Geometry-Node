@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -14,7 +14,7 @@ public record PacketRemoteGraphListResponse(
         boolean success,
         String directory,
         String message,
-        List<RemoteGraphFileService.Entry> entries
+        List<RemoteGraphEntry> entries
 ) implements CustomPacketPayload {
     public static final Type<PacketRemoteGraphListResponse> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath("geometry_node", "remote_graph_list_response"));
@@ -34,7 +34,7 @@ public record PacketRemoteGraphListResponse(
         buf.writeUtf(directory, 32767);
         buf.writeUtf(message, 32767);
         buf.writeInt(entries.size());
-        for (RemoteGraphFileService.Entry entry : entries) {
+        for (RemoteGraphEntry entry : entries) {
             buf.writeUtf(entry.path(), 32767);
             buf.writeUtf(entry.name(), 32767);
             buf.writeBoolean(entry.directory());
@@ -42,11 +42,11 @@ public record PacketRemoteGraphListResponse(
         }
     }
 
-    private static List<RemoteGraphFileService.Entry> readEntries(RegistryFriendlyByteBuf buf) {
+    private static List<RemoteGraphEntry> readEntries(RegistryFriendlyByteBuf buf) {
         int size = buf.readInt();
-        List<RemoteGraphFileService.Entry> entries = new ArrayList<>(size);
+        List<RemoteGraphEntry> entries = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            entries.add(new RemoteGraphFileService.Entry(
+            entries.add(new RemoteGraphEntry(
                     buf.readUtf(32767),
                     buf.readUtf(32767),
                     buf.readBoolean(),

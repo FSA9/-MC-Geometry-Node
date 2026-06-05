@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -28,7 +29,10 @@ public class GetScopeAttribute extends BaseNode {
         String attrName = getInput(context, StandardPorts.NAME.getId(), String.class);
 
         if (scopeId != null && !scopeId.trim().isEmpty() && attrName != null && !attrName.trim().isEmpty()) {
-            return context.getPersistentAttribute(scopeId, attrName);
+            PersistentAttributeTarget target = "GLOBAL".equals(scopeId)
+                    ? PersistentAttributeTarget.global()
+                    : PersistentAttributeTarget.scope(scopeId);
+            return context.getPersistentAttribute(target, attrName);
         }
         return null;
     }

@@ -1,13 +1,12 @@
 package com.mine.geometry_node.core.engine.dialogue;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
 import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
-import com.mine.geometry_node.core.engine.dialogue.launcher.DialogueGraphLauncher;
-import com.mine.geometry_node.core.engine.dialogue.launcher.NoopDialogueGraphLauncher;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialogueWaitRequest;
-import com.mine.geometry_node.core.engine.dialogue.render.DefaultDialogueRenderer;
+import com.mine.geometry_node.core.engine.dialogue.presenter.ChatDialoguePresenter;
+import com.mine.geometry_node.core.engine.dialogue.presenter.DialoguePresenter;
+import com.mine.geometry_node.core.engine.dialogue.presenter.PacketDialoguePresenter;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueCloseReason;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionManager;
@@ -17,9 +16,6 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
-import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
-import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -34,20 +30,29 @@ import java.util.UUID;
  * Minimal server-side facade for dialogue runtime state.
  */
 public class DialogueRuntime implements GraphRuntime {
-    public static final DialogueRuntime INSTANCE = new DialogueRuntime(new NoopDialogueGraphLauncher());
+    public static final DialogueRuntime INSTANCE = new DialogueRuntime();
 
     private final DialogueSessionManager sessionManager;
     private final DialogueTextManager textManager;
-    private final DialogueGraphLauncher graphLauncher;
+    private final DialoguePresenter chatPresenter;
+    private final DialoguePresenter packetPresenter;
 
-    public DialogueRuntime(DialogueGraphLauncher graphLauncher) {
-        this(new DialogueSessionManager(), new DialogueTextManager(), graphLauncher);
+    public DialogueRuntime() {
+        this(new DialogueSessionManager(), new DialogueTextManager());
     }
 
-    public DialogueRuntime(DialogueSessionManager sessionManager, DialogueTextManager textManager, DialogueGraphLauncher graphLauncher) {
+    public DialogueRuntime(DialogueSessionManager sessionManager, DialogueTextManager textManager) {
+        this(sessionManager, textManager, ChatDialoguePresenter.INSTANCE, PacketDialoguePresenter.INSTANCE);
+    }
+
+    public DialogueRuntime(DialogueSessionManager sessionManager,
+                           DialogueTextManager textManager,
+                           DialoguePresenter chatPresenter,
+                           DialoguePresenter packetPresenter) {
         this.sessionManager = sessionManager;
         this.textManager = textManager;
-        this.graphLauncher = graphLauncher;
+        this.chatPresenter = chatPresenter;
+        this.packetPresenter = packetPresenter;
     }
 
     @Override
@@ -70,15 +75,15 @@ public class DialogueRuntime implements GraphRuntime {
         if (!(request instanceof DialogueWaitRequest dialogueRequest)) {
             return false;
         }
-        ServerPlayer player = dialogueRequest.player();
+        DialogueContext dialogueContext = dialogueRequest.context();
+        ServerPlayer player = dialogueContext.player();
         if (player == null) {
             return false;
         }
 
         closeForPlayer(player, DialogueCloseReason.REPLACED);
 
-        DialogueContext dialogueContext = resolveDialogueContext(handle);
-        DialogueSessionPolicy policy = dialogueContext == null ? DialogueSessionPolicy.DEFAULT : dialogueContext.policy();
+        DialogueSessionPolicy policy = dialogueContext.policy();
         UUID lockEntityId = lockEntityId(dialogueContext);
         if (lockEntityId != null) {
             boolean includeSharedSessions = !policy.allowMultiPlayer();
@@ -102,42 +107,23 @@ public class DialogueRuntime implements GraphRuntime {
     }
 
     @Override
-    public void endExternalWait(GraphExecutionHandle handle, @Nullable String reason) {
-        DialogueSession match = null;
-        for (DialogueSession session : sessionManager.getSessions()) {
-            if (session.getExecutionHandle() == handle) {
-                match = session;
-                break;
-            }
-        }
+    public void completeExternalWait(GraphExecutionHandle handle, String outputPortName, GraphRuntime.ExternalWaitCompletion completion) {
+        DialogueSession match = findSessionByHandle(handle);
         if (match != null) {
             sessionManager.removeSession(match.getSessionId());
             match.setExecutionHandle(null);
-            match.close(reason == null ? DialogueCloseReason.CLOSED : reason);
+            match.close(completion == GraphRuntime.ExternalWaitCompletion.NO_TARGET
+                    ? DialogueCloseReason.CLOSED
+                    : DialogueCloseReason.CHOSEN);
         }
     }
 
-    public DialogueSession startSession(UUID playerId, String graphId) {
-        DialogueSession session = sessionManager.createSession(playerId, graphId);
-        applyLaunchResult(session, graphLauncher.launch(session));
-        return session;
-    }
-
-    @Nullable
-    public DialogueSession choose(UUID sessionId, String choiceId) {
-        DialogueSession session = sessionManager.getSession(sessionId);
-        if (session == null || !session.isActive() || session.getCurrentPage() == null) {
-            return null;
+    @Override
+    public void endExternalWait(GraphExecutionHandle handle, @Nullable String reason) {
+        DialogueSession match = findSessionByHandle(handle);
+        if (match != null) {
+            closeSessionInternal(match, reason == null ? DialogueCloseReason.CLOSED : reason, "closed", true, false);
         }
-
-        for (DialogueChoicePayload choice : session.getCurrentPage().getChoices()) {
-            if (choice.getId().equals(choiceId) && choice.isEnabled()) {
-                touch(session);
-                applyLaunchResult(session, graphLauncher.choose(session, choice));
-                return session;
-            }
-        }
-        return null;
     }
 
     @Nullable
@@ -257,26 +243,27 @@ public class DialogueRuntime implements GraphRuntime {
         return textManager;
     }
 
-    public DialogueGraphLauncher getGraphLauncher() {
-        return graphLauncher;
-    }
-
-    private void applyLaunchResult(DialogueSession session, DialogueGraphLauncher.LaunchResult result) {
-        if (result.getPage() != null) {
-            session.setCurrentPage(result.getPage());
-        }
-        if (result.getExecutionHandle() != null) {
-            session.setExecutionHandle(result.getExecutionHandle());
-        }
-    }
-
     private void openForPlayer(ServerPlayer player, DialogueSession session) {
         DialoguePagePayload page = session.getCurrentPage();
-        if (page != null && "default".equals(page.getStyleId())) {
-            DefaultDialogueRenderer.render(player, session);
-            return;
+        DialoguePresenter presenter = page != null && "default".equals(page.getStyleId())
+                ? chatPresenter
+                : packetPresenter;
+        session.setPresenterId(presenter.id());
+        presenter.open(player, session);
+    }
+
+    private DialoguePresenter getPresenter(DialogueSession session) {
+        return chatPresenter.id().equals(session.getPresenterId()) ? chatPresenter : packetPresenter;
+    }
+
+    @Nullable
+    private DialogueSession findSessionByHandle(GraphExecutionHandle handle) {
+        for (DialogueSession session : sessionManager.getSessions()) {
+            if (session.getExecutionHandle() == handle) {
+                return session;
+            }
         }
-        NetworkHandler.sendToPlayer(player, PacketOpenDialogue.from(session));
+        return null;
     }
 
     private String handleGraphId(GraphExecutionHandle handle) {
@@ -299,14 +286,15 @@ public class DialogueRuntime implements GraphRuntime {
         if (session == null) {
             return;
         }
+        String closeReason = reason == null || reason.isBlank() ? DialogueCloseReason.CLOSED : reason;
         GraphExecutionHandle handle = session.getExecutionHandle();
         ServerPlayer player = findPlayer(session);
         sessionManager.removeSession(session.getSessionId());
         session.setExecutionHandle(null);
-        session.close(reason);
+        session.close(closeReason);
 
         if (notifyClient && player != null) {
-            NetworkHandler.sendToPlayer(player, new PacketCloseDialogue(session.getSessionId(), reason));
+            getPresenter(session).close(player, session, closeReason);
         }
         if (resumeHandle && handle != null) {
             handle.resume(resumePort == null || resumePort.isBlank() ? "closed" : resumePort);
@@ -359,13 +347,6 @@ public class DialogueRuntime implements GraphRuntime {
         return null;
     }
 
-    private void touch(DialogueSession session) {
-        ServerPlayer player = findPlayer(session);
-        if (player != null) {
-            session.touch(player.serverLevel().getGameTime());
-        }
-    }
-
     @Nullable
     private UUID lockEntityId(@Nullable DialogueContext context) {
         if (context == null) {
@@ -384,18 +365,6 @@ public class DialogueRuntime implements GraphRuntime {
 
     private static boolean isDead(@Nullable Entity entity) {
         return entity instanceof LivingEntity livingEntity && !livingEntity.isAlive();
-    }
-
-    @Nullable
-    private DialogueContext resolveDialogueContext(GraphExecutionHandle handle) {
-        Object unwrapped = handle.unwrap();
-        if (unwrapped instanceof ExecutionContext executionContext) {
-            Object value = executionContext.getTempData(DialogueContext.TEMP_KEY);
-            if (value instanceof DialogueContext dialogueContext) {
-                return dialogueContext;
-            }
-        }
-        return null;
     }
 
     @Nullable

@@ -1,0 +1,224 @@
+package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
+
+import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
+import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputStateManager;
+import com.mine.geometry_node.core.node.nodes.events.display_entity.OnInteraction;
+import com.mine.geometry_node.core.node.nodes.events.entity.*;
+import com.mine.geometry_node.core.node.nodes.events.player.*;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+import dev.architectury.event.CompoundEventResult;
+import dev.architectury.event.EventResult;
+import dev.architectury.event.events.common.InteractionEvent;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Interaction;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.CommandEvent;
+import net.neoforged.neoforge.event.ServerChatEvent;
+import net.neoforged.neoforge.event.entity.item.ItemTossEvent;
+import net.neoforged.neoforge.event.entity.player.*;
+
+public class PlayerDispatcher {
+
+    public static void register() {
+        // 实体交互方块
+        InteractionEvent.RIGHT_CLICK_BLOCK.register((player, hand, pos, face) -> {
+            if (!player.level().isClientSide()) {
+                ServerLevel serverLevel = (ServerLevel) player.level();
+                GraphEngine.dispatchEvent(serverLevel, player, EntityInteractBlock.TYPE_ID, GraphEventData.of(
+                        StandardPorts.TRIGGER_ENTITY.getId(), player,
+                        StandardPorts.XYZ.getId(), pos,
+                        StandardPorts.BLOCK_STATE.getId(), serverLevel.getBlockState(pos)
+                ));
+            }
+            return EventResult.pass();
+        });
+
+        InteractionEvent.LEFT_CLICK_BLOCK.register((player, hand, pos, face) -> {
+            if (!player.level().isClientSide()) {
+                ServerLevel serverLevel = (ServerLevel) player.level();
+                GraphEngine.dispatchEvent(serverLevel, player, OnPlayerLeftClickBlock.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), player,
+                        StandardPorts.XYZ.getId(), pos,
+                        StandardPorts.BLOCK_STATE.getId(), serverLevel.getBlockState(pos),
+                        StandardPorts.DIMENSION.getId(), serverLevel.dimension().location().toString()
+                ));
+            }
+            return EventResult.pass();
+        });
+
+        InteractionEvent.INTERACT_ENTITY.register((player, entity, hand) -> {
+            if (!player.level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) player.level(), player, EntityInteractEntity.TYPE_ID, GraphEventData.of(
+                        StandardPorts.TRIGGER_ENTITY.getId(), player,
+                        StandardPorts.ENTITY.getId(), entity
+                ));
+            }
+            return EventResult.pass();
+        });
+
+        InteractionEvent.RIGHT_CLICK_ITEM.register((player, hand) -> {
+            if (!player.level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) player.level(), player, EntityUseItem.TYPE_ID, GraphEventData.of(
+                        StandardPorts.TRIGGER_ENTITY.getId(), player,
+                        StandardPorts.ITEM.getId(), player.getItemInHand(hand)
+                ));
+            }
+            return CompoundEventResult.pass();
+        });
+
+        var bus = NeoForge.EVENT_BUS;
+
+        bus.addListener((PlayerInteractEvent.EntityInteractSpecific event) -> {
+            if (!event.getEntity().level().isClientSide() && event.getTarget() instanceof Interaction interaction) {
+                Vec3 hitPos = interaction.position().add(event.getLocalPos());
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnInteraction.TYPE_ID, GraphEventData.of(
+                        StandardPorts.TRIGGER_ENTITY.getId(), event.getEntity(),
+                        StandardPorts.ENTITY.getId(), interaction,
+                        StandardPorts.TYPE.getId(), "interact",
+                        StandardPorts.XYZ.getId(), hitPos
+                ));
+            }
+        });
+
+        bus.addListener((AttackEntityEvent event) -> {
+            if (!event.getEntity().level().isClientSide() && event.getTarget() instanceof Interaction interaction) {
+                Vec3 hitPos = interaction.position().add(0, interaction.getBbHeight() / 2.0, 0);
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnInteraction.TYPE_ID, GraphEventData.of(
+                        StandardPorts.TRIGGER_ENTITY.getId(), event.getEntity(),
+                        StandardPorts.ENTITY.getId(), interaction,
+                        StandardPorts.TYPE.getId(), "attack",
+                        StandardPorts.XYZ.getId(), hitPos
+                ));
+            }
+        });
+
+        bus.addListener((ItemTossEvent event) -> {
+            if (!event.getPlayer().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnEntityDropItem.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getPlayer(),
+                        StandardPorts.ITEM.getId(), event.getEntity().getItem()
+                ));
+            }
+        });
+
+        bus.addListener((ItemEntityPickupEvent.Pre event) -> {
+            if (!event.getPlayer().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnPlayerPickupItemPre.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getPlayer(),
+                        StandardPorts.ITEM_STACK.getId(), event.getItemEntity().getItem()
+                ));
+            }
+        });
+
+        bus.addListener((ItemEntityPickupEvent.Post event) -> {
+            if (!event.getPlayer().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnPlayerPickupItemPost.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getPlayer(),
+                        StandardPorts.ITEM_STACK.getId(), event.getItemEntity().getItem()
+                ));
+            }
+        });
+
+        bus.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerJoin.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getEntity()
+                ));
+            }
+        });
+
+        bus.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                PlayerInputStateManager.clearPlayer(event.getEntity().getUUID());
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerQuit.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getEntity()
+                ));
+            }
+        });
+
+        bus.addListener((ServerChatEvent event) -> {
+            if (event.getPlayer() != null && !event.getPlayer().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnPlayerChat.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getPlayer(),
+                        StandardPorts.MESSAGE.getId(), event.getMessage().getString()
+                ));
+            }
+        });
+
+        bus.addListener((PlayerEvent.PlayerChangeGameModeEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerChangeGameMode.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getEntity(),
+                        StandardPorts.TYPE.getId(), event.getNewGameMode().getName()
+                ));
+            }
+        });
+
+        bus.addListener((AdvancementEvent.AdvancementEarnEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerEarnAdvancement.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getEntity(),
+                        StandardPorts.NAME.getId(), event.getAdvancement().id().toString()
+                ));
+            }
+        });
+
+        bus.addListener((CommandEvent event) -> {
+            Entity sourceEntity = event.getParseResults().getContext().getSource().getEntity();
+            if (sourceEntity instanceof Player player && !player.level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) player.level(), player, OnPlayerExecuteCommand.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), player,
+                        StandardPorts.MESSAGE.getId(), event.getParseResults().getReader().getString()
+                ));
+            }
+        });
+
+        bus.addListener((PlayerXpEvent.LevelChange event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerLevelChange.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getEntity(),
+                        StandardPorts.VALUE.getId(), event.getLevels()
+                ));
+            }
+        });
+
+        bus.addListener((PlayerXpEvent.PickupXp event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerPickupXp.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getEntity(),
+                        StandardPorts.VALUE.getId(), (float) event.getOrb().getValue(),
+                        StandardPorts.SOURCE_ENTITY.getId(), event.getOrb()
+                ));
+            }
+        });
+
+        bus.addListener((PlayerEvent.PlayerRespawnEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerRespawn.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getEntity()
+                ));
+            }
+        });
+
+        bus.addListener((CanPlayerSleepEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerSleep.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getEntity(),
+                        StandardPorts.XYZ.getId(), event.getPos()
+                ));
+            }
+        });
+
+        bus.addListener((PlayerWakeUpEvent event) -> {
+            if (!event.getEntity().level().isClientSide()) {
+                GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerWakeUp.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), event.getEntity()
+                ));
+            }
+        });
+    }
+}

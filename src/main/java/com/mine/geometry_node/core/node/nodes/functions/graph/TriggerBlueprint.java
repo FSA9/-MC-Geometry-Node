@@ -1,11 +1,13 @@
 package com.mine.geometry_node.core.node.nodes.functions.graph;
 
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionResult;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
 import net.minecraft.network.chat.Component;
+
+import java.util.Map;
 
 public class TriggerBlueprint extends BaseNode {
 
@@ -35,9 +37,7 @@ public class TriggerBlueprint extends BaseNode {
             BlueprintRuntime.INSTANCE.dispatchCustomEvent(
                     context.getLevel(),
                     frequency,
-                    thread -> {
-                        thread.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), context.getEntity());
-                    }
+                    Map.of(StandardPorts.TRIGGER_ENTITY.getId(), context.getEntity())
             );
         }
 

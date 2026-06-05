@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.persistence;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.GraphIdMapper;
+import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
@@ -21,7 +21,7 @@ public class LocalDraftManager {
         try {
             Path folder = getDraftFolder();
             // 1. 将 ID (A:B/C) 转化为相对路径 (A/B/C.json)
-            Path relativePath = GraphIdMapper.idToRelativePath(graphId);
+            Path relativePath = GraphPathMapper.idToRelativePath(graphId);
             Path resolved = folder.toAbsolutePath().normalize().resolve(relativePath).normalize();
             if (!resolved.startsWith(folder.toAbsolutePath().normalize())) {
                 throw new IllegalArgumentException("invalid draft path: " + graphId);
@@ -58,7 +58,7 @@ public class LocalDraftManager {
                 try (Stream<Path> walk = Files.walk(root)) {
                     walk.filter(Files::isRegularFile)
                             .filter(p -> p.toString().endsWith(".json"))
-                            .forEach(p -> names.add(GraphIdMapper.pathToId(root, p)));
+                            .forEach(p -> names.add(GraphPathMapper.pathToId(root, p)));
                 }
             }
         } catch (Exception e) {
@@ -70,7 +70,7 @@ public class LocalDraftManager {
     public static String readDraft(String graphId) {
         try {
             Path root = getDraftFolder();
-            Path relativePath = GraphIdMapper.idToRelativePath(graphId);
+            Path relativePath = GraphPathMapper.idToRelativePath(graphId);
             Path resolved = root.toAbsolutePath().normalize().resolve(relativePath).normalize();
             if (!resolved.startsWith(root.toAbsolutePath().normalize())) {
                 throw new IllegalArgumentException("invalid draft path: " + graphId);

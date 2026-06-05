@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.dialogue;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.execution.ExecutionResult;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
@@ -112,6 +112,9 @@ public class ShowDialoguePage extends BaseNode {
         if (dialogueContext == null) {
             dialogueContext = createFallbackDialogueContext(context, player, speaker);
             context.setTempData(DialogueContext.TEMP_KEY, dialogueContext);
+        } else if (dialogueContext.player() == null) {
+            dialogueContext = withPlayer(dialogueContext, player);
+            context.setTempData(DialogueContext.TEMP_KEY, dialogueContext);
         }
         String textKey = stringOrEmpty(getInput(context, TEXT_KEY, String.class));
         String styleId = dialogueContext != null ? dialogueContext.styleId() : "default";
@@ -159,7 +162,7 @@ public class ShowDialoguePage extends BaseNode {
                 choices,
                 Map.of()
         );
-        return ExecutionResult.externalWait(GraphKind.DIALOGUE, new DialogueWaitRequest(player, page));
+        return ExecutionResult.externalWait(GraphKind.DIALOGUE, new DialogueWaitRequest(dialogueContext, page));
     }
 
     private ServerPlayer resolvePlayer(ExecutionContext context) {
@@ -190,6 +193,20 @@ public class ShowDialoguePage extends BaseNode {
     private DialogueContext createFallbackDialogueContext(ExecutionContext context, ServerPlayer player, String speaker) {
         Entity targetEntity = context.getEntity();
         return new DialogueContext(player, null, targetEntity, speaker, "default", context.getGraphId(), "root");
+    }
+
+    private DialogueContext withPlayer(DialogueContext dialogueContext, ServerPlayer player) {
+        return new DialogueContext(
+                player,
+                dialogueContext.speakerEntityId(),
+                dialogueContext.targetEntityId(),
+                dialogueContext.speaker(),
+                dialogueContext.styleId(),
+                dialogueContext.graphId(),
+                dialogueContext.entryId(),
+                dialogueContext.policy(),
+                dialogueContext.variables()
+        );
     }
 
     private static int resolveChoiceCount(NodeData instanceData) {

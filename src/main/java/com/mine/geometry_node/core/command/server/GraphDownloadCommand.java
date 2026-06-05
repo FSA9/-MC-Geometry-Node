@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.command.server;
 
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.GraphIdMapper;
+import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload;
 import com.mojang.brigadier.CommandDispatcher;
@@ -28,7 +28,7 @@ public class GraphDownloadCommand {
 
                                     try {
                                         Path folder = player.getServer().getWorldPath(DynamicGraphManager.GRAPH_DIR);
-                                        File file = GraphIdMapper.resolveGraphPath(folder, graphId).toFile();
+                                        File file = GraphPathMapper.resolveGraphPath(folder, graphId).toFile();
 
                                         if (file.exists()) {
                                             String json = Files.readString(file.toPath());

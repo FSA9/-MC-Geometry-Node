@@ -20,6 +20,14 @@ public interface GraphRuntime {
         return false;
     }
 
+    default void completeExternalWait(GraphExecutionHandle handle, String outputPortName, ExternalWaitCompletion completion) {
+    }
+
     default void endExternalWait(GraphExecutionHandle handle, @Nullable String reason) {
+    }
+
+    enum ExternalWaitCompletion {
+        RESUMED,
+        NO_TARGET
     }
 }

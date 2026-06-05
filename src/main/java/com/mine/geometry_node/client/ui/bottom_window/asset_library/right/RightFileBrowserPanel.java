@@ -15,7 +15,7 @@ import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.engine.blueprint.execution.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphFileOperationRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphListRequest;
@@ -323,7 +323,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                     mRemoteDirectoryChangedListener.accept(mRemoteDirectory);
                 }
                 List<AssetEntry> entries = new ArrayList<>();
-                for (RemoteGraphFileService.Entry entry : response.entries()) {
+                for (RemoteGraphEntry entry : response.entries()) {
                     if (!mSearchQuery.isEmpty() && !entry.name().toLowerCase(Locale.ROOT).contains(mSearchQuery.toLowerCase(Locale.ROOT))) {
                         continue;
                     }
