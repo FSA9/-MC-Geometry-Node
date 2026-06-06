@@ -22,6 +22,8 @@ public interface InteractionContext {
     NodeVisualAdapter findNodeAt(float uiX, float uiY);
     Viewport.PortInfo findPortAt(float uiX, float uiY);
     void moveSelectedNodes(float uiDx, float uiDy);
+    boolean isSnapToGridEnabled();
+    float getSnapGridSize();
     void updateBoxSelection(float uiX, float uiY, float uiW, float uiH);
 
     List<NodeVisualAdapter> getSelectedNodeVisuals();
@@ -40,6 +42,7 @@ public interface InteractionContext {
     void updateFrameBounds(String frameId);
     void updateConnectionsForNode(String nodeId);
     void cutIntersectingConnections(float lastUiX, float lastUiY, float currentUiX, float currentUiY, InteractionManager.InteractionListener listener);
+    Iterable<NodeVisualAdapter> getAllNodeVisuals();
     Iterable<FrameVisualAdapter> getAllFrameVisuals();
 
     // --- 环境上下文 ---

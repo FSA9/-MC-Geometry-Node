@@ -183,6 +183,13 @@ public class ViewportController implements EditorContext.EditorListener,
     }
 
     @Override
+    public void onMoveElementsTo(Map<String, float[]> nodePositions, Map<String, float[]> framePositions) {
+        if (mEditorContext == null) return;
+        CmdSetElementPositions cmdMove = new CmdSetElementPositions(mEditorContext.getGraphController(), nodePositions, framePositions);
+        mEditorContext.getCommandManager().execute(cmdMove);
+    }
+
+    @Override
     public void onChangeParent(List<String> elementIds, boolean isNode, String newParentId) {
         if (mEditorContext == null) return;
         CmdChangeParent cmdParent = new CmdChangeParent(mEditorContext.getGraphController(), elementIds, isNode, newParentId);

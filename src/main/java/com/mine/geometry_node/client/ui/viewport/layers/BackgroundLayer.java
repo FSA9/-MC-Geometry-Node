@@ -18,6 +18,7 @@ public class BackgroundLayer {
 
     private final Paint mBackgroundPaint = new Paint();
     private final Paint mGridPaint = new Paint();
+    private boolean mGridAndAxisVisible = true;
 
     public BackgroundLayer() {
         mBackgroundPaint.setColor(UIConstants.ViewPort.BG_COLOR);
@@ -29,6 +30,7 @@ public class BackgroundLayer {
         // 1. 绘制底色
         canvas.drawRect(0, 0, width, height, mBackgroundPaint);
 
+        if (!mGridAndAxisVisible) return;
         if (camera == null || width <= 0 || height <= 0) return;
 
         float scale = camera.getScale();
@@ -57,6 +59,14 @@ public class BackgroundLayer {
         mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_AXIS);
         if (cx >= 0 && cx <= width) canvas.drawLine(cx, 0, cx, height, mGridPaint);
         if (cy >= 0 && cy <= height) canvas.drawLine(0, cy, width, cy, mGridPaint);
+    }
+
+    public void setGridAndAxisVisible(boolean visible) {
+        mGridAndAxisVisible = visible;
+    }
+
+    public boolean isGridAndAxisVisible() {
+        return mGridAndAxisVisible;
     }
 
     private float getAdaptiveGridSpacing(float baseGridPx, float scale) {

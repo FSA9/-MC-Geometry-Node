@@ -9,6 +9,9 @@ import com.mine.geometry_node.client.ui.viewport.menu.ViewportMenu;
 import com.mine.geometry_node.client.ui.viewport.connection.ConnectionNodeVisual;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.toolbar.ViewportToolbar;
+import com.mine.geometry_node.client.ui.persistence.ConfigManager;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeGraph;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -40,8 +43,10 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     private boolean mFirstLayout = true;
     private final float[] mTempPos = new float[2];
+    private boolean mSnapToGridEnabled = false;
 
     private TextView mEmptyHint;
+    private ViewportToolbar mToolbar;
 
 
     // ==========================================
@@ -82,6 +87,24 @@ public class Viewport extends FrameLayout implements InteractionContext {
         LayoutParams lp = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
         lp.gravity = Gravity.CENTER;
         addView(mEmptyHint, lp);
+
+        mToolbar = new ViewportToolbar(getContext(), new ViewportToolbar.Listener() {
+            @Override
+            public void onSnapToGridChanged(boolean enabled) {
+                setSnapToGridEnabled(enabled);
+            }
+
+            @Override
+            public void onGridAndAxisVisibilityChanged(boolean visible) {
+                setGridAndAxisVisible(visible);
+            }
+        });
+        mToolbar.setVisibility(View.GONE);
+        LayoutParams toolbarLp = new LayoutParams(UIUtils.dp2pxInt(140), LayoutParams.WRAP_CONTENT);
+        toolbarLp.gravity = Gravity.RIGHT | Gravity.TOP;
+        toolbarLp.topMargin = UIUtils.dp2pxInt(10);
+        toolbarLp.rightMargin = UIUtils.dp2pxInt(10);
+        addView(mToolbar, toolbarLp);
     }
 
     @Override
@@ -110,6 +133,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
         mNodeLayer = new NodeLayer(getContext(), this);
         addView(mNodeLayer, 1, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
+        if (mToolbar != null) mToolbar.setVisibility(View.VISIBLE);
+
         // 子 layer 刚 attach 时可能还没有完成测量；延后一帧同步 overlay 和 culling 状态。
         post(this::updateTransform);
     }
@@ -123,6 +148,10 @@ public class Viewport extends FrameLayout implements InteractionContext {
         mNodeLayer = null;
         mFrameLayer = null;
         mEmptyHint.setVisibility(View.VISIBLE);
+        if (mToolbar != null) {
+            mToolbar.setVisibility(View.GONE);
+            mToolbar.hideTooltip();
+        }
     }
 
     public ViewportController getController() {
@@ -206,10 +235,13 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override public PortInfo findPortAt(float uiX, float uiY) { return mNodeLayer != null ? mNodeLayer.findPortAt(uiX, uiY) : null; }
     @Override public FrameVisualAdapter findFrameAt(float uiX, float uiY) { return mFrameLayer != null ? mFrameLayer.findFrameAt(uiX, uiY) : null; }
     @Override public FrameVisualAdapter getSmallestContainingFrame(float uiX, float uiY) { return mFrameLayer != null ? mFrameLayer.getSmallestContainingFrame(uiX, uiY) : null; }
+    @Override public Iterable<NodeVisualAdapter> getAllNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getNodeVisuals().values() : new ArrayList<>(); }
     @Override public Iterable<FrameVisualAdapter> getAllFrameVisuals() { return mFrameLayer != null ? mFrameLayer.getFrameVisuals().values() : new ArrayList<>(); }
 
     @Override public void updateBoxSelection(float uiX, float uiY, float uiW, float uiH) { if (mNodeLayer != null) mNodeLayer.updateBoxSelection(uiX, uiY, uiW, uiH); }
     @Override public void moveSelectedNodes(float uiDx, float uiDy) { if (mNodeLayer != null) mNodeLayer.moveSelectedNodes(uiDx, uiDy); }
+    @Override public boolean isSnapToGridEnabled() { return mSnapToGridEnabled; }
+    @Override public float getSnapGridSize() { return Math.max(1.0f, ConfigManager.INSTANCE.getConfig().viewport.gridSize); }
     @Override public List<NodeVisualAdapter> getSelectedNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getSelectedNodeVisuals() : new ArrayList<>(); }
     @Override public void previewFrameMove(String frameId, float totalUiDx, float totalUiDy) { if (mFrameLayer != null) { mFrameLayer.previewFrameMove(frameId, totalUiDx, totalUiDy); invalidate(); } }
 
@@ -239,6 +271,18 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
     public boolean isNodeSelected(String nodeId) { return mNodeLayer != null && mNodeLayer.isNodeSelected(nodeId); }
     public void updateSelectionState(List<String> selectedNodeIds) { if (mNodeLayer != null) { mNodeLayer.updateSelectionState(selectedNodeIds); invalidate(); } }
+
+    private void setSnapToGridEnabled(boolean enabled) {
+        if (mSnapToGridEnabled == enabled) return;
+        mSnapToGridEnabled = enabled;
+        invalidate();
+    }
+
+    private void setGridAndAxisVisible(boolean visible) {
+        if (mBackgroundLayer.isGridAndAxisVisible() == visible) return;
+        mBackgroundLayer.setGridAndAxisVisible(visible);
+        invalidate();
+    }
 
     @Override
     public boolean hasConnection(NodeVisualAdapter outN, String outId, NodeVisualAdapter inN, String inId) {

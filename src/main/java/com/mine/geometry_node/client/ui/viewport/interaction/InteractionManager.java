@@ -14,7 +14,9 @@ import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MotionEvent;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class InteractionManager {
     // --- 新增：意图监听器接口 ---
@@ -23,6 +25,7 @@ public class InteractionManager {
         void onChangeParent(List<String> elementIds, boolean isNode, String newParentId);
         void onConnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId);
         void onDisconnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId);
+        void onMoveElementsTo(Map<String, float[]> nodePositions, Map<String, float[]> framePositions);
         boolean isCyclicFrame(String draggedFrameId, String potentialParentId);
     }
 
@@ -43,6 +46,8 @@ public class InteractionManager {
     private float mLastScreenX, mLastScreenY;
     private boolean mHasMovedSignificantly = false;
     private float mDragStartUiX, mDragStartUiY;
+    private float mDragAnchorStartUiX, mDragAnchorStartUiY;
+    private float mAppliedDragUiDx, mAppliedDragUiDy;
     private float mSelectionStartUiX, mSelectionStartUiY;
     private final RectF mSelectionRectUi = new RectF();
     private Viewport.PortInfo mDraftStartPort = null;
@@ -143,6 +148,10 @@ public class InteractionManager {
         if (targetFrame != null) {
             mCurrentMode = MODE_DRAGGING_FRAME;
             mDragStartUiX = uiX; mDragStartUiY = uiY;
+            mDragAnchorStartUiX = targetFrame.getUiX();
+            mDragAnchorStartUiY = targetFrame.getUiY();
+            mAppliedDragUiDx = 0.0f;
+            mAppliedDragUiDy = 0.0f;
             mDraggedFrame = targetFrame;
             mContext.clearSelection();
             mContext.addToSelection(targetFrame);
@@ -163,17 +172,15 @@ public class InteractionManager {
         ViewportCamera camera = mContext.getCamera();
         float uiX = camera.screenToUIX(screenX);
         float uiY = camera.screenToUIY(screenY);
-        float lastUiX = camera.screenToUIX(mLastScreenX);
-        float lastUiY = camera.screenToUIY(mLastScreenY);
 
         switch (mCurrentMode) {
             case MODE_PANNING: mContext.getCamera().pan(dx, dy); break;
-            case MODE_DRAGGING_NODES: mContext.moveSelectedNodes(uiX - lastUiX, uiY - lastUiY); break;
+            case MODE_DRAGGING_NODES: updateNodeDragPreview(uiX, uiY); break;
             case MODE_SELECTING: updateBoxSelection(uiX, uiY); break;
             case MODE_CONNECTING: mDraftCurrentUiX = uiX; mDraftCurrentUiY = uiY; mContext.invalidate(); break;
             case MODE_DRAGGING_FRAME:
                 if (mDraggedFrame != null) {
-                    mContext.previewFrameMove(mDraggedFrame.getFrameData().id, uiX - mDragStartUiX, uiY - mDragStartUiY);
+                    updateFrameDragPreview(uiX, uiY);
                 }
                 break;
             case MODE_CUTTING:
@@ -233,10 +240,29 @@ public class InteractionManager {
     private void enterDraggingMode(NodeVisualAdapter target, float uiX, float uiY) {
         mCurrentMode = MODE_DRAGGING_NODES;
         mDragStartUiX = uiX; mDragStartUiY = uiY;
+        mDragAnchorStartUiX = target.getUiX();
+        mDragAnchorStartUiY = target.getUiY();
+        mAppliedDragUiDx = 0.0f;
+        mAppliedDragUiDy = 0.0f;
         if (!target.isSelected()) {
             mContext.clearSelection();
         }
         mContext.addToSelection(target);
+    }
+
+    private void updateNodeDragPreview(float currentUiX, float currentUiY) {
+        float rawTotalUiDx = currentUiX - mDragStartUiX;
+        float rawTotalUiDy = currentUiY - mDragStartUiY;
+        float snappedTotalUiDx = getSnappedDragDx(rawTotalUiDx);
+        float snappedTotalUiDy = getSnappedDragDy(rawTotalUiDy);
+        float deltaUiDx = snappedTotalUiDx - mAppliedDragUiDx;
+        float deltaUiDy = snappedTotalUiDy - mAppliedDragUiDy;
+
+        if (deltaUiDx != 0.0f || deltaUiDy != 0.0f) {
+            mContext.moveSelectedNodes(deltaUiDx, deltaUiDy);
+            mAppliedDragUiDx = snappedTotalUiDx;
+            mAppliedDragUiDy = snappedTotalUiDy;
+        }
     }
 
     private void enterSelectingMode(float uiX, float uiY) {
@@ -257,8 +283,18 @@ public class InteractionManager {
     }
 
     private void finalizeNodeDragging(float endUiX, float endUiY) {
-        float totalUiDx = endUiX - mDragStartUiX;
-        float totalUiDy = endUiY - mDragStartUiY;
+        float rawTotalUiDx = endUiX - mDragStartUiX;
+        float rawTotalUiDy = endUiY - mDragStartUiY;
+        float totalUiDx = getSnappedDragDx(rawTotalUiDx);
+        float totalUiDy = getSnappedDragDy(rawTotalUiDy);
+
+        float previewDeltaUiDx = totalUiDx - mAppliedDragUiDx;
+        float previewDeltaUiDy = totalUiDy - mAppliedDragUiDy;
+        if (previewDeltaUiDx != 0.0f || previewDeltaUiDy != 0.0f) {
+            mContext.moveSelectedNodes(previewDeltaUiDx, previewDeltaUiDy);
+            mAppliedDragUiDx = totalUiDx;
+            mAppliedDragUiDy = totalUiDy;
+        }
 
         if (Math.abs(totalUiDx) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE || Math.abs(totalUiDy) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE) {
             List<String> selectedIds = new ArrayList<>();
@@ -286,14 +322,56 @@ public class InteractionManager {
         }
     }
 
+    private void updateFrameDragPreview(float currentUiX, float currentUiY) {
+        float rawTotalUiDx = currentUiX - mDragStartUiX;
+        float rawTotalUiDy = currentUiY - mDragStartUiY;
+
+        if (rawTotalUiDx != mAppliedDragUiDx || rawTotalUiDy != mAppliedDragUiDy) {
+            mContext.previewFrameMove(mDraggedFrame.getFrameData().id, rawTotalUiDx, rawTotalUiDy);
+            mAppliedDragUiDx = rawTotalUiDx;
+            mAppliedDragUiDy = rawTotalUiDy;
+        }
+    }
+
+    private float getSnappedDragDx(float rawTotalUiDx) {
+        return getSnappedDragDelta(mDragAnchorStartUiX, rawTotalUiDx);
+    }
+
+    private float getSnappedDragDy(float rawTotalUiDy) {
+        return getSnappedDragDelta(mDragAnchorStartUiY, rawTotalUiDy);
+    }
+
+    private float getSnappedDragDelta(float anchorStartUi, float rawTotalUiDelta) {
+        if (!mContext.isSnapToGridEnabled()) return rawTotalUiDelta;
+
+        float gridSize = mContext.getSnapGridSize();
+        if (gridSize <= 0.0f) return rawTotalUiDelta;
+
+        float snappedAnchorUi = Math.round((anchorStartUi + rawTotalUiDelta) / gridSize) * gridSize;
+        return snappedAnchorUi - anchorStartUi;
+    }
+
     private void finalizeFrameDragging(float endUiX, float endUiY) {
         if (mDraggedFrame == null) return;
-        float totalUiDx = endUiX - mDragStartUiX;
-        float totalUiDy = endUiY - mDragStartUiY;
+        float rawTotalUiDx = endUiX - mDragStartUiX;
+        float rawTotalUiDy = endUiY - mDragStartUiY;
         String draggedFrameId = mDraggedFrame.getFrameData().id;
 
-        if (Math.abs(totalUiDx) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE || Math.abs(totalUiDy) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE) {
-            if (mListener != null) mListener.onMoveElements(new ArrayList<>(), List.of(draggedFrameId), totalUiDx, totalUiDy);
+        if (rawTotalUiDx != mAppliedDragUiDx || rawTotalUiDy != mAppliedDragUiDy) {
+            mContext.previewFrameMove(draggedFrameId, rawTotalUiDx, rawTotalUiDy);
+            mAppliedDragUiDx = rawTotalUiDx;
+            mAppliedDragUiDy = rawTotalUiDy;
+        }
+
+        if (Math.abs(rawTotalUiDx) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE || Math.abs(rawTotalUiDy) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE) {
+            if (mListener != null) {
+                if (mContext.isSnapToGridEnabled()) {
+                    MoveTargets targets = collectFrameMoveTargets(draggedFrameId, rawTotalUiDx, rawTotalUiDy);
+                    mListener.onMoveElementsTo(targets.nodePositions, targets.framePositions);
+                } else {
+                    mListener.onMoveElements(new ArrayList<>(), List.of(draggedFrameId), rawTotalUiDx, rawTotalUiDy);
+                }
+            }
 
             FrameVisualAdapter largerFrame = getSmallestContainingFrameForFrame(draggedFrameId, endUiX, endUiY);
             String newParentId = (largerFrame != null) ? largerFrame.getFrameId() : null;
@@ -306,6 +384,63 @@ public class InteractionManager {
             mContext.updateFrameBounds(draggedFrameId);
         }
         mDraggedFrame = null;
+    }
+
+    private MoveTargets collectFrameMoveTargets(String frameId, float rawTotalUiDx, float rawTotalUiDy) {
+        MoveTargets targets = new MoveTargets();
+        collectFrameMoveTargets(frameId, rawTotalUiDx, rawTotalUiDy, targets);
+        return targets;
+    }
+
+    private boolean collectFrameMoveTargets(String frameId, float rawTotalUiDx, float rawTotalUiDy, MoveTargets targets) {
+        boolean hasChildren = false;
+        float gridSize = mContext.getSnapGridSize();
+
+        for (NodeVisualAdapter node : mContext.getAllNodeVisuals()) {
+            if (frameId.equals(node.getParentFrameId())) {
+                hasChildren = true;
+                targets.nodePositions.put(node.getNodeId(), new float[]{
+                        snapCoordinate(node.getNodeData().getX() + rawTotalUiDx, gridSize),
+                        snapCoordinate(node.getNodeData().getY() + rawTotalUiDy, gridSize)
+                });
+            }
+        }
+
+        for (FrameVisualAdapter frame : mContext.getAllFrameVisuals()) {
+            if (frameId.equals(frame.getParentFrameId())) {
+                hasChildren = true;
+                collectFrameMoveTargets(frame.getFrameId(), rawTotalUiDx, rawTotalUiDy, targets);
+            }
+        }
+
+        if (!hasChildren) {
+            FrameVisualAdapter frame = findFrameVisual(frameId);
+            if (frame != null) {
+                targets.framePositions.put(frameId, new float[]{
+                        snapCoordinate(frame.getFrameData().uiPos[0] + rawTotalUiDx, gridSize),
+                        snapCoordinate(frame.getFrameData().uiPos[1] + rawTotalUiDy, gridSize)
+                });
+            }
+        }
+
+        return hasChildren;
+    }
+
+    private FrameVisualAdapter findFrameVisual(String frameId) {
+        for (FrameVisualAdapter frame : mContext.getAllFrameVisuals()) {
+            if (frameId.equals(frame.getFrameId())) return frame;
+        }
+        return null;
+    }
+
+    private float snapCoordinate(float value, float gridSize) {
+        if (gridSize <= 0.0f) return value;
+        return Math.round(value / gridSize) * gridSize;
+    }
+
+    private static final class MoveTargets {
+        final Map<String, float[]> nodePositions = new HashMap<>();
+        final Map<String, float[]> framePositions = new HashMap<>();
     }
 
     private FrameVisualAdapter getSmallestContainingFrameForFrame(String draggedFrameId, float uiX, float uiY) {

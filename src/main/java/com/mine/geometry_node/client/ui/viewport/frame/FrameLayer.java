@@ -174,20 +174,23 @@ public class FrameLayer extends FrameLayout {
     }
 
     public void previewFrameMove(String frameId, float totalUiDx, float totalUiDy) {
+        previewFrameMoveInternal(frameId, totalUiDx, totalUiDy, mViewport.isSnapToGridEnabled(), mViewport.getSnapGridSize());
+    }
+
+    private boolean previewFrameMoveInternal(String frameId, float totalUiDx, float totalUiDy, boolean snapToGrid, float gridSize) {
         FrameVisualAdapter frame = mFrameVisuals.get(frameId);
-        if (frame != null) {
-            float startX = frame.getFrameData().uiPos[0];
-            float startY = frame.getFrameData().uiPos[1];
-            frame.setPreviewPosition(startX + totalUiDx, startY + totalUiDy);
-            invalidate();
-        }
+        boolean hasChildren = false;
 
         for (Map.Entry<String, ? extends NodeVisualAdapter> entry : mViewport.getNodeVisuals().entrySet()) {
             NodeVisualAdapter node = entry.getValue();
             if (frameId.equals(node.getParentFrameId())) {
+                hasChildren = true;
                 float startNx = node.getNodeData().getX();
                 float startNy = node.getNodeData().getY();
-                node.setPreviewPosition(startNx + totalUiDx, startNy + totalUiDy);
+                node.setPreviewPosition(
+                        snapIfNeeded(startNx + totalUiDx, snapToGrid, gridSize),
+                        snapIfNeeded(startNy + totalUiDy, snapToGrid, gridSize)
+                );
                 mViewport.notifyNodeVisualMoved(node);
                 mViewport.updateConnectionsForNode(node.getNodeId());
             }
@@ -196,13 +199,35 @@ public class FrameLayer extends FrameLayout {
         for (Map.Entry<String, FrameVisualAdapter> entry : mFrameVisuals.entrySet()) {
             FrameVisualAdapter childFrame = entry.getValue();
             if (frameId.equals(childFrame.getParentFrameId())) {
-                previewFrameMove(childFrame.getFrameId(), totalUiDx, totalUiDy);
+                hasChildren = true;
+                previewFrameMoveInternal(childFrame.getFrameId(), totalUiDx, totalUiDy, snapToGrid, gridSize);
             }
         }
 
-        if (frame != null && frame.getParentFrameId() != null) {
-            previewFrameBounds(frame.getParentFrameId());
+        if (frame != null) {
+            if (hasChildren) {
+                previewFrameBounds(frameId);
+            } else {
+                float startX = frame.getFrameData().uiPos[0];
+                float startY = frame.getFrameData().uiPos[1];
+                frame.setPreviewPosition(
+                        snapIfNeeded(startX + totalUiDx, snapToGrid, gridSize),
+                        snapIfNeeded(startY + totalUiDy, snapToGrid, gridSize)
+                );
+                invalidate();
+
+                if (frame.getParentFrameId() != null) {
+                    previewFrameBounds(frame.getParentFrameId());
+                }
+            }
         }
+
+        return hasChildren;
+    }
+
+    private float snapIfNeeded(float value, boolean snapToGrid, float gridSize) {
+        if (!snapToGrid || gridSize <= 0.0f) return value;
+        return Math.round(value / gridSize) * gridSize;
     }
 
     @Override
