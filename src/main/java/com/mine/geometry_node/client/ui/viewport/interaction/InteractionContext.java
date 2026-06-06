@@ -56,6 +56,7 @@ public interface InteractionContext {
     void requestAddNode(float screenX, float screenY, String typeId);
     void requestAddFrame(float uiX, float uiY);
     void requestGroupIntoFrame();
+    void requestSetFrameProperty(String frameId, String title, int color);
     void requestRenamePort(String nodeId, String category, String portId, String oldName, String newName);
     void requestSave();
 }

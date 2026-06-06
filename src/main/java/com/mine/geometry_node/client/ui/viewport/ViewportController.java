@@ -141,6 +141,12 @@ public class ViewportController implements EditorContext.EditorListener,
         mEditorContext.getCommandManager().execute(cmd);
     }
 
+    public void executeSetFrameProperty(String frameId, String title, int color) {
+        if (mEditorContext == null || frameId == null) return;
+        CmdSetFrameProperty cmd = new CmdSetFrameProperty(mEditorContext.getGraphController(), frameId, title, color);
+        mEditorContext.getCommandManager().execute(cmd);
+    }
+
     public void executeImportGraphJson(String json, float screenX, float screenY) {
         if (mEditorContext == null || json == null || json.isBlank()) return;
         float uiX = mViewport.getCamera().screenToUIX(screenX);

@@ -320,6 +320,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override public void requestAddNode(float screenX, float screenY, String typeId) { if (mController != null) mController.executeAddNode(screenX, screenY, typeId); }
     @Override public void requestAddFrame(float uiX, float uiY) { if (mController != null) mController.executeAddFrame(uiX, uiY); }
     @Override public void requestGroupIntoFrame() { if (mController != null) mController.executeGroupIntoFrame(); }
+    @Override public void requestSetFrameProperty(String frameId, String title, int color) { if (mController != null) mController.executeSetFrameProperty(frameId, title, color); }
     @Override public void requestRenamePort(String nodeId, String category, String portId, String oldName, String newName) { if (mController != null) mController.executeRenamePort(nodeId, category, portId, oldName, newName); }
     @Override public void requestSave() { if (mController != null) mController.onSaveRequested(); }
     @Override public void requestViewportFocus() { requestFocus(); }

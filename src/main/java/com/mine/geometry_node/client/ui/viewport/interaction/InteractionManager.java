@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.viewport.interaction;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.*;
+import com.mine.geometry_node.client.ui.viewport.menu.FrameMenu;
 import com.mine.geometry_node.client.ui.viewport.menu.PortMenu;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
@@ -214,6 +215,17 @@ public class InteractionManager {
                 if (clickedLabelPortId != null) {
                     PortMenu.show(mContext, targetNode, clickedLabelPortId, screenX, screenY);
                     mCurrentMode = MODE_NONE;
+                    return;
+                }
+            }
+            if (targetNode == null) {
+                FrameVisualAdapter targetFrame = mContext.findFrameAt(uiX, uiY);
+                if (targetFrame != null) {
+                    mContext.clearSelection();
+                    mContext.addToSelection(targetFrame);
+                    FrameMenu.show(mContext, targetFrame, screenX, screenY);
+                    mCurrentMode = MODE_NONE;
+                    mContext.invalidate();
                     return;
                 }
             }
