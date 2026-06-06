@@ -43,6 +43,16 @@ final class ConfigSanitizer {
                 changed = true;
             }
 
+            ReadList favorites = readStringList(assetBrowser, "favoriteGraphPaths");
+            if (favorites.valid) {
+                NormalizeList normalized = normalizeFavoriteGraphPaths(favorites.value);
+                config.assetBrowser.favoriteGraphPaths = normalized.value;
+                changed |= favorites.changed || normalized.changed;
+            } else {
+                config.assetBrowser.favoriteGraphPaths = defaults.assetBrowser.favoriteGraphPaths;
+                changed = true;
+            }
+
             ReadString viewMode = readString(assetBrowser, "viewMode");
             if (viewMode.valid && VIEW_MODES.contains(viewMode.value)) {
                 config.assetBrowser.viewMode = viewMode.value;
@@ -164,6 +174,17 @@ final class ConfigSanitizer {
                 NormalizeList normalized = normalizeQuickAccessPaths(config.assetBrowser.quickAccessPaths);
                 if (normalized.changed) {
                     config.assetBrowser.quickAccessPaths = normalized.value;
+                    changed = true;
+                }
+            }
+
+            if (config.assetBrowser.favoriteGraphPaths == null) {
+                config.assetBrowser.favoriteGraphPaths = defaults.assetBrowser.favoriteGraphPaths;
+                changed = true;
+            } else {
+                NormalizeList normalized = normalizeFavoriteGraphPaths(config.assetBrowser.favoriteGraphPaths);
+                if (normalized.changed) {
+                    config.assetBrowser.favoriteGraphPaths = normalized.value;
                     changed = true;
                 }
             }
@@ -349,6 +370,39 @@ final class ConfigSanitizer {
                 continue;
             }
             normalized.add(path);
+        }
+        changed |= normalized.size() != source.size();
+        return new NormalizeList(normalized, changed);
+    }
+
+    private static NormalizeList normalizeFavoriteGraphPaths(List<String> source) {
+        List<String> normalized = new ArrayList<>();
+        boolean changed = false;
+        for (String path : source) {
+            if (path == null || path.isBlank()) {
+                changed = true;
+                continue;
+            }
+
+            File file = new File(path);
+            if (!file.exists() || !file.isFile() || !file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".json")) {
+                changed = true;
+                continue;
+            }
+
+            String normalizedPath;
+            try {
+                normalizedPath = file.getCanonicalPath();
+            } catch (Exception ignored) {
+                normalizedPath = file.getAbsolutePath();
+            }
+
+            if (normalized.contains(normalizedPath)) {
+                changed = true;
+                continue;
+            }
+            normalized.add(normalizedPath);
+            changed |= !normalizedPath.equals(path);
         }
         changed |= normalized.size() != source.size();
         return new NormalizeList(normalized, changed);

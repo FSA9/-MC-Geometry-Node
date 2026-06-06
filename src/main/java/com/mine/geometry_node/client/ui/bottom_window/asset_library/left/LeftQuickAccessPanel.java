@@ -71,6 +71,8 @@ public class LeftQuickAccessPanel extends ScrollView {
                 ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(TITLE_BAR_HEIGHT));
         mLeftSidebar.addView(title, titleParams);
 
+        mLeftSidebar.addView(createFavoritesRow(context));
+
         if (mCoordinator.canBrowseRemote()) {
             mLeftSidebar.addView(createRemoteServerRow(context));
         }
@@ -78,6 +80,33 @@ public class LeftQuickAccessPanel extends ScrollView {
         for (String pathStr : ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths) {
             mLeftSidebar.addView(createQuickAccessRow(context, pathStr));
         }
+    }
+
+    private LinearLayout createFavoritesRow(Context context) {
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        bindRowFeedback(row, "favorites", COLOR_LOCAL_NORMAL, COLOR_LOCAL_HOVER, COLOR_LOCAL_PRESSED, COLOR_LOCAL_SELECTED,
+                () -> {
+                    mSelectedKey = "favorites";
+                    mCoordinator.dispatchNavigateToFavorites();
+                    buildSidebar();
+                });
+
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
+        rowParams.setMargins(0, 0, 0, dp2pxInt(2));
+        row.setLayoutParams(rowParams);
+
+        TextView icon = UIUtils.createLockedTextView(context, " ★ ", TEXT_SIZE_HANDLE, 0xFFFFD166);
+        icon.setGravity(Gravity.CENTER);
+        row.addView(icon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+
+        TextView label = UIUtils.createLockedTextView(context, "我的收藏", TEXT_SIZE_PATH, 0xFFE6E6E6);
+        label.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
+        label.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+
+        return row;
     }
 
     private LinearLayout createRemoteServerRow(Context context) {
@@ -156,7 +185,8 @@ public class LeftQuickAccessPanel extends ScrollView {
                             indicatorY = lastChild.getBottom();
                         }
 
-                        for (int i = 1; i < mLeftSidebar.getChildCount(); i++) {
+                        int firstQuickAccessChild = mCoordinator.canBrowseRemote() ? 3 : 2;
+                        for (int i = firstQuickAccessChild; i < mLeftSidebar.getChildCount(); i++) {
                             View child = mLeftSidebar.getChildAt(i);
                             float centerY = child.getTop() + child.getHeight() / 2f;
                             if (dropY < centerY) {
@@ -175,7 +205,7 @@ public class LeftQuickAccessPanel extends ScrollView {
                         mLeftSidebar.getLocationOnScreen(loc);
                         float dropY = event.getRawY() - loc[1];
 
-                        int firstQuickAccessChild = mCoordinator.canBrowseRemote() ? 2 : 1;
+                        int firstQuickAccessChild = mCoordinator.canBrowseRemote() ? 3 : 2;
                         List<String> currentPaths = ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths;
                         int targetIdx = currentPaths.size() - 1;
                         for (int i = firstQuickAccessChild; i < mLeftSidebar.getChildCount(); i++) {

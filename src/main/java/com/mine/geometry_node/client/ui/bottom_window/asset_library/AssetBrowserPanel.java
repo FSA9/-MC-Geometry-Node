@@ -72,6 +72,12 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         }
     }
 
+    public void dispatchNavigateToFavorites() {
+        if (mRightPanel != null) {
+            mRightPanel.navigateToFavorites();
+        }
+    }
+
     public void dispatchNavigateToRemoteRoot() {
         if (RemoteGraphClientState.canBrowse() && mRightPanel != null) {
             mRightPanel.navigateToRemoteRoot();

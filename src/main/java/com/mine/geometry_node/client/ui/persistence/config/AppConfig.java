@@ -11,6 +11,7 @@ public class AppConfig {
 
     public static class AssetBrowserConfig {
         public List<String> quickAccessPaths = new ArrayList<>();
+        public List<String> favoriteGraphPaths = new ArrayList<>();
         public String viewMode = "LIST";
     }
 

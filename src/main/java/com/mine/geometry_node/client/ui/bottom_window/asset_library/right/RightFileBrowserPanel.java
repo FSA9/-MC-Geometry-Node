@@ -66,6 +66,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private File mCurrentDirectory;
     private String mRemoteDirectory = "";
     private AssetSourceKind mSourceKind = AssetSourceKind.LOCAL;
+    private boolean mFavoritesMode = false;
     private List<File> mClipboardFiles = new ArrayList<>();
     private boolean mIsCutOperation = false;
     private AssetViewMode mViewMode;
@@ -141,6 +142,11 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         mPathInput = createNavInput(context);
         mPathInput.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
+                if (mFavoritesMode) {
+                    mPathInput.setText("我的收藏");
+                    mPathInput.clearFocus();
+                    return true;
+                }
                 String path = mPathInput.getText().toString().trim();
                 if (mSourceKind == AssetSourceKind.REMOTE || path.startsWith("remote:/")) {
                     navigateToRemote(AssetPathUtils.remotePathFromInput(path));
@@ -266,6 +272,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     public void navigateTo(File directory) {
         if (directory == null || !directory.exists() || !directory.isDirectory()) return;
+        mFavoritesMode = false;
         mSourceKind = AssetSourceKind.LOCAL;
         mCurrentDirectory = directory;
         mPathInput.setText(directory.getAbsolutePath());
@@ -285,11 +292,20 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public void navigateToRemote(String directory, boolean createIfMissing) {
+        mFavoritesMode = false;
         mSourceKind = AssetSourceKind.REMOTE;
         mRemoteDirectory = AssetPathUtils.normalizeRemoteDirectory(directory);
         mPathInput.setText(AssetPathUtils.formatRemotePath(mRemoteDirectory));
         clearSelection();
         refreshRemoteFileList(createIfMissing);
+    }
+
+    public void navigateToFavorites() {
+        mFavoritesMode = true;
+        mSourceKind = AssetSourceKind.LOCAL;
+        mPathInput.setText("我的收藏");
+        clearSelection();
+        refreshFileList();
     }
 
     public void createRemoteDirectoryFromInput() {
@@ -303,7 +319,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public void createLocalFolderInCurrentDirectory() {
-        if (mSourceKind == AssetSourceKind.LOCAL) {
+        if (!mFavoritesMode && mSourceKind == AssetSourceKind.LOCAL) {
             triggerNewItem(true);
         }
     }
@@ -333,6 +349,9 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void navigateUp() {
+        if (mFavoritesMode) {
+            return;
+        }
         if (mSourceKind == AssetSourceKind.REMOTE) {
             if (!mRemoteDirectory.isEmpty()) {
                 int idx = mRemoteDirectory.lastIndexOf('/');
@@ -355,7 +374,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             return;
         }
 
-        if (mCurrentDirectory == null) return;
+        if (!mFavoritesMode && mCurrentDirectory == null) return;
 
         List<AssetEntry> entries = loadVisibleEntries();
         renderEntries(entries);
@@ -404,8 +423,8 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         for (AssetEntry entry : entries) {
             String key = entry.key();
             visibleKeys.add(key);
-            String parentLabel = mSearchQuery.isEmpty() ? "" : parentLabel(entry);
-            AssetFileItemView item = new AssetFileItemView(context, entry, mViewMode, displayName(entry), parentLabel, tagsForListDisplay(entry), this);
+            String parentLabel = (mFavoritesMode || !mSearchQuery.isEmpty() || !mTagSearchQuery.isEmpty()) ? parentLabel(entry) : "";
+            AssetFileItemView item = new AssetFileItemView(context, entry, mViewMode, displayName(entry), parentLabel, tagsForListDisplay(entry), isFavorite(entry), this);
             item.setSelected(mSelectedPaths.contains(key));
             mItemViews.put(key, item);
             mFileContent.addView(item);
@@ -434,6 +453,10 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private List<AssetEntry> loadVisibleEntries() {
+        if (mFavoritesMode) {
+            return loadFavoriteEntries();
+        }
+
         if (mSearchQuery.isEmpty() && mTagSearchQuery.isEmpty()) {
             File[] files = mCurrentDirectory.listFiles();
             if (files == null) return Collections.emptyList();
@@ -454,6 +477,22 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         );
         sortFiles(fileResult);
         return toLocalEntries(fileResult);
+    }
+
+    private List<AssetEntry> loadFavoriteEntries() {
+        List<File> files = new ArrayList<>();
+        List<String> tagTerms = parseTagSearchTerms();
+        String nameQuery = mSearchQuery.toLowerCase(Locale.ROOT);
+
+        for (String path : ConfigManager.INSTANCE.getConfig().assetBrowser.favoriteGraphPaths) {
+            File file = new File(path);
+            if (!isLocalGraphFile(file)) continue;
+            if (!matchesSearch(file, nameQuery, tagTerms)) continue;
+            files.add(file);
+        }
+
+        sortFiles(files);
+        return toLocalEntries(files);
     }
 
     private void collectSearchMatches(File directory, String nameQuery, List<String> tagTerms, List<File> out) {
@@ -717,6 +756,31 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         return result;
     }
 
+    @Override
+    public void onFavoriteToggled(AssetEntry entry) {
+        if (entry == null || entry.sourceKind() != AssetSourceKind.LOCAL || entry.localFile() == null || !isLocalGraphFile(entry.localFile())) {
+            return;
+        }
+
+        String key = pathKey(entry.localFile());
+        ConfigManager.INSTANCE.update(config -> {
+            List<String> favorites = config.assetBrowser.favoriteGraphPaths;
+            if (favorites.contains(key)) {
+                favorites.remove(key);
+            } else {
+                favorites.add(key);
+            }
+        });
+        refreshFileList();
+    }
+
+    private boolean isFavorite(AssetEntry entry) {
+        if (entry == null || entry.sourceKind() != AssetSourceKind.LOCAL || entry.localFile() == null || !entry.isJsonFile()) {
+            return false;
+        }
+        return ConfigManager.INSTANCE.getConfig().assetBrowser.favoriteGraphPaths.contains(pathKey(entry.localFile()));
+    }
+
     private boolean handleInternalDrop(float rawX, float rawY) {
         AssetDragState.Payload payload = AssetDragState.current();
         if (payload == null || payload.entries().isEmpty()) return false;
@@ -757,6 +821,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
                 File dest = AssetFileOperations.resolveAvailableDestination(targetDirectory, source.getName(), source.isDirectory());
                 AssetFileOperations.moveRecursively(source, dest);
+                updateFavoritePath(source, dest);
                 movedAny = true;
             }
         } catch (Exception e) {
@@ -809,6 +874,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         menu.addMenuItem("删除" + suffix, () -> {
             for (File file : filesSnapshot) {
                 try {
+                    removeFavoritePath(file);
                     AssetFileOperations.deleteRecursively(file);
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -879,7 +945,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             }
         }
 
-        if (mEnableLocalFileActions && mSourceKind == AssetSourceKind.LOCAL && !mClipboardFiles.isEmpty()) {
+        if (mEnableLocalFileActions && !mFavoritesMode && mSourceKind == AssetSourceKind.LOCAL && !mClipboardFiles.isEmpty()) {
             menu.addMenuItem("粘贴", this::performPaste);
             menu.addDivider();
         }
@@ -888,7 +954,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             menu.addMenuItem(sRemoteCutOperation ? "移动到此处" : "粘贴", this::pasteRemoteEntries);
             menu.addDivider();
         }
-        if (mEnableLocalFileActions && mSourceKind == AssetSourceKind.LOCAL) {
+        if (mEnableLocalFileActions && !mFavoritesMode && mSourceKind == AssetSourceKind.LOCAL) {
             menu.addMenuItem("新建文件夹", () -> triggerNewItem(true));
             menu.addMenuItem("新建文件", () -> triggerNewItem(false));
         }
@@ -953,7 +1019,9 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                 if (!newName.isEmpty() && !newName.equals(targetFile.getName())) {
                     File dest = new File(targetFile.getParentFile(), newName);
                     if (!dest.exists()) {
-                        targetFile.renameTo(dest);
+                        if (targetFile.renameTo(dest)) {
+                            updateFavoritePath(targetFile, dest);
+                        }
                     }
                 }
                 refreshFileList();
@@ -974,7 +1042,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void performPaste() {
-        if (mClipboardFiles.isEmpty() || mCurrentDirectory == null) return;
+        if (mFavoritesMode || mClipboardFiles.isEmpty() || mCurrentDirectory == null) return;
         try {
             for (File source : new ArrayList<>(mClipboardFiles)) {
                 if (!source.exists()) continue;
@@ -985,6 +1053,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                 }
                 if (mIsCutOperation) {
                     AssetFileOperations.moveRecursively(source, dest);
+                    updateFavoritePath(source, dest);
                 } else {
                     AssetFileOperations.copyRecursively(source, dest);
                 }
@@ -1069,6 +1138,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void triggerNewItem(boolean isFolder) {
+        if (mFavoritesMode) return;
         clearSearch();
         if (mCurrentDirectory == null) return;
         try {
@@ -1178,6 +1248,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private String relativeLabel(File file) {
+        if (mFavoritesMode) return file.getAbsolutePath();
         if (mCurrentDirectory == null) return file.getName();
         try {
             return mCurrentDirectory.toPath().relativize(file.toPath()).toString();
@@ -1224,6 +1295,46 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private void updateFavoritePath(File oldFile, File newFile) {
+        String oldKey = pathKey(oldFile);
+        String newKey = pathKey(newFile);
+        if (oldKey.equals(newKey)) return;
+        if (oldFile.isDirectory() || newFile.isDirectory()) {
+            updateFavoriteDirectoryPath(oldFile, newFile);
+            return;
+        }
+        ConfigManager.INSTANCE.update(config -> {
+            List<String> favorites = config.assetBrowser.favoriteGraphPaths;
+            int index = favorites.indexOf(oldKey);
+            if (index < 0) return;
+            favorites.set(index, newKey);
+        });
+    }
+
+    private void updateFavoriteDirectoryPath(File oldDirectory, File newDirectory) {
+        String oldPrefix = pathKey(oldDirectory);
+        String newPrefix = pathKey(newDirectory);
+        ConfigManager.INSTANCE.update(config -> {
+            List<String> favorites = config.assetBrowser.favoriteGraphPaths;
+            for (int i = 0; i < favorites.size(); i++) {
+                String favorite = favorites.get(i);
+                if (favorite.equals(oldPrefix)) {
+                    favorites.set(i, newPrefix);
+                } else if (favorite.startsWith(oldPrefix + File.separator)) {
+                    favorites.set(i, newPrefix + favorite.substring(oldPrefix.length()));
+                }
+            }
+        });
+    }
+
+    private void removeFavoritePath(File file) {
+        String key = pathKey(file);
+        ConfigManager.INSTANCE.update(config -> {
+            List<String> favorites = config.assetBrowser.favoriteGraphPaths;
+            favorites.removeIf(favorite -> favorite.equals(key) || favorite.startsWith(key + File.separator));
+        });
     }
 
     private String pathKey(File file) {

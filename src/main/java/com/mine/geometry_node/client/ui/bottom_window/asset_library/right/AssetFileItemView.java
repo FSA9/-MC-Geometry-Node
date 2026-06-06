@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library.right;
 
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.resources.TypedValue;
@@ -9,6 +10,7 @@ import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewGroup;
+import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
@@ -22,6 +24,7 @@ final class AssetFileItemView extends LinearLayout {
         void onItemPressed(AssetEntry entry, MotionEvent event);
         void onItemDragStarted(AssetEntry entry, MotionEvent event);
         void onItemReleased(AssetEntry entry, MotionEvent event, boolean moved);
+        void onFavoriteToggled(AssetEntry entry);
     }
 
     private static final float TEXT_SIZE_LIST_SUBTITLE = 11.0f;
@@ -33,9 +36,12 @@ final class AssetFileItemView extends LinearLayout {
     private static final int COLOR_SUBTEXT = 0xFF888888;
     private static final int COLOR_TAG_BG = 0xFF344458;
     private static final int COLOR_TAG_TEXT = 0xFFE6F0FF;
+    private static final int COLOR_STAR_ON = 0xFFFFD166;
+    private static final int COLOR_STAR_OFF = 0xFF69727D;
 
     private final AssetEntry mEntry;
     private final List<String> mTags;
+    private final boolean mFavorite;
     private final TextView mIconView;
     private final TextView mNameView;
     private final TextView mSubtitleView;
@@ -47,10 +53,11 @@ final class AssetFileItemView extends LinearLayout {
     private boolean mDragging;
     private final float mTouchSlop;
 
-    AssetFileItemView(Context context, AssetEntry entry, AssetViewMode mode, String displayName, String parentLabel, List<String> tags, Listener listener) {
+    AssetFileItemView(Context context, AssetEntry entry, AssetViewMode mode, String displayName, String parentLabel, List<String> tags, boolean favorite, Listener listener) {
         super(context);
         mEntry = entry;
         mTags = tags != null ? tags : List.of();
+        mFavorite = favorite;
         mListener = listener;
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         setGravity(Gravity.CENTER_VERTICAL);
@@ -122,15 +129,57 @@ final class AssetFileItemView extends LinearLayout {
             textColumn.addView(nameRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
             textColumn.addView(mSubtitleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
             addView(textColumn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+            if (canFavorite()) {
+                addView(createFavoriteButton(), new LinearLayout.LayoutParams(dp2pxInt(34), ViewGroup.LayoutParams.MATCH_PARENT));
+            }
             return;
         }
 
         setOrientation(LinearLayout.VERTICAL);
         setGravity(Gravity.CENTER);
+        FrameLayout iconFrame = new FrameLayout(getContext());
         mIconView.setText(mEntry.isDirectory() ? "📁" : "📄");
-        addView(mIconView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(mode.iconTextSizeDp + 10)));
+        iconFrame.addView(mIconView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (canFavorite()) {
+            FrameLayout.LayoutParams starLp = new FrameLayout.LayoutParams(dp2pxInt(24), dp2pxInt(24));
+            starLp.gravity = Gravity.TOP | Gravity.RIGHT;
+            iconFrame.addView(createFavoriteButton(), starLp);
+        }
+        addView(iconFrame, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(mode.iconTextSizeDp + 10)));
         addView(mNameView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(mSubtitleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private boolean canFavorite() {
+        return mEntry.sourceKind() == AssetSourceKind.LOCAL && mEntry.isJsonFile();
+    }
+
+    private TextView createFavoriteButton() {
+        TextView star = UIUtils.createLockedTextView(getContext(), mFavorite ? "★" : "☆", 15.0f, mFavorite ? COLOR_STAR_ON : COLOR_STAR_OFF);
+        star.setGravity(Gravity.CENTER);
+        star.setSingleLine(true);
+        star.setPadding(0, 0, 0, 0);
+        star.setOnTouchListener((v, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                return true;
+            }
+            if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                if (event.getX() >= 0 && event.getY() >= 0 && event.getX() < v.getWidth() && event.getY() < v.getHeight()) {
+                    mListener.onFavoriteToggled(mEntry);
+                }
+                return true;
+            }
+            return true;
+        });
+        star.setOnHoverListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                star.setTextColor(COLOR_STAR_ON);
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                star.setTextColor(mFavorite ? COLOR_STAR_ON : COLOR_STAR_OFF);
+            }
+            return false;
+        });
+        return star;
     }
 
     private TextView createTagChip(String tag) {
