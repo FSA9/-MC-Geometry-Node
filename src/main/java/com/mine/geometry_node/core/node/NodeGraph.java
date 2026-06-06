@@ -13,8 +13,8 @@ import java.util.Map;
  * 代表一整张逻辑图，包含所有节点数据。
  */
 public class NodeGraph {
-    @SerializedName("graph_name")
-    public String graphName;        // 图名称
+    @SerializedName("graph_kind")
+    public String graphKind = GraphKind.BLUEPRINT.id();
 
     @SerializedName("tags")
     public List<String> tags = new ArrayList<>();
@@ -32,12 +32,13 @@ public class NodeGraph {
 
     public NodeGraph() {}
 
-    public NodeGraph(String graphName) {
-        this();
-        this.graphName = graphName;
-    }
-
     public GraphKind getKind() {
+        GraphKind explicitKind = GraphKind.fromId(graphKind);
+        if (explicitKind != GraphKind.UNKNOWN) {
+            return explicitKind;
+        }
+
+        // Backward compatibility for older graph files that stored graph kind in tags.
         if (tags != null) {
             for (String tag : tags) {
                 GraphKind kind = GraphKind.fromId(tag);

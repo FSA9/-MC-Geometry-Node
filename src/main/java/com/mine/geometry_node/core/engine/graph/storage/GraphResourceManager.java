@@ -44,11 +44,11 @@ public class GraphResourceManager extends SimpleJsonResourceReloadListener {
 
     /**
      * 根据 ID 获取图索引。
-     * @param graphName 格式： "modid:path/to/graph"
+     * @param graphId 格式： "modid:path/to/graph"
      */
     @Nullable
-    public RuntimeGraphIndex getIndex(String graphName) {
-        return indexCache.get(graphName);
+    public RuntimeGraphIndex getIndex(String graphId) {
+        return indexCache.get(graphId);
     }
 
     /**
@@ -61,9 +61,6 @@ public class GraphResourceManager extends SimpleJsonResourceReloadListener {
         object.forEach((location, json) -> {
             try {
                 String graphId = location.toString();
-                if (json.isJsonObject() && json.getAsJsonObject().has("graph_name")) {
-
-                }
 
                 try (java.io.Reader reader = new java.io.StringReader(json.toString())) {
                     RuntimeGraphIndex index = BlueprintCompiler.compile(reader);

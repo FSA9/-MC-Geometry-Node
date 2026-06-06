@@ -289,7 +289,7 @@ public class ViewportController implements EditorContext.EditorListener,
             }
         }
 
-        NodeGraph tempGraph = new NodeGraph("Clipboard");
+        NodeGraph tempGraph = new NodeGraph();
         for (String fid : copiedFrameIds) tempGraph.frames.put(fid, mainGraph.getFrame(fid));
         for (String nid : copiedNodeIds) tempGraph.nodes.put(nid, mainGraph.getNode(nid));
 

@@ -23,7 +23,7 @@ public class EditorContext {
 
     public EditorContext(NodeGraph graph) {
         // 如果传入 null，则默认创建一个空的新图
-        this.mGraph = (graph != null) ? graph : new NodeGraph("New Graph");
+        this.mGraph = (graph != null) ? graph : new NodeGraph();
         this.mCommandManager = new CommandManager();
         this.mGraphController = new GraphController(this);
     }

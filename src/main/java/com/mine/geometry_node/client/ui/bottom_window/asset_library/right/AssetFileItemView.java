@@ -12,6 +12,8 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
+import java.util.List;
+
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
@@ -29,8 +31,11 @@ final class AssetFileItemView extends LinearLayout {
     private static final int COLOR_FILE = 0xFF88CCFF;
     private static final int COLOR_TEXT = 0xFFDDDDDD;
     private static final int COLOR_SUBTEXT = 0xFF888888;
+    private static final int COLOR_TAG_BG = 0xFF344458;
+    private static final int COLOR_TAG_TEXT = 0xFFE6F0FF;
 
     private final AssetEntry mEntry;
+    private final List<String> mTags;
     private final TextView mIconView;
     private final TextView mNameView;
     private final TextView mSubtitleView;
@@ -42,9 +47,10 @@ final class AssetFileItemView extends LinearLayout {
     private boolean mDragging;
     private final float mTouchSlop;
 
-    AssetFileItemView(Context context, AssetEntry entry, AssetViewMode mode, String displayName, String parentLabel, Listener listener) {
+    AssetFileItemView(Context context, AssetEntry entry, AssetViewMode mode, String displayName, String parentLabel, List<String> tags, Listener listener) {
         super(context);
         mEntry = entry;
+        mTags = tags != null ? tags : List.of();
         mListener = listener;
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         setGravity(Gravity.CENTER_VERTICAL);
@@ -55,8 +61,10 @@ final class AssetFileItemView extends LinearLayout {
         mIconView.setGravity(Gravity.CENTER);
         mNameView = UIUtils.createLockedTextView(context, displayName, mode.nameTextSizeDp, COLOR_TEXT);
         mNameView.setGravity(mode == AssetViewMode.LIST ? Gravity.CENTER_VERTICAL : Gravity.CENTER);
+        mNameView.setSingleLine(true);
         mSubtitleView = UIUtils.createLockedTextView(context, parentLabel, TEXT_SIZE_LIST_SUBTITLE, COLOR_SUBTEXT);
         mSubtitleView.setGravity(mode == AssetViewMode.LIST ? Gravity.CENTER_VERTICAL : Gravity.CENTER);
+        mSubtitleView.setSingleLine(true);
 
         buildLayoutForMode(mode, displayName, parentLabel);
         setOnTouchListener(this::onItemTouch);
@@ -95,7 +103,23 @@ final class AssetFileItemView extends LinearLayout {
             LinearLayout textColumn = new LinearLayout(getContext());
             textColumn.setOrientation(LinearLayout.VERTICAL);
             textColumn.setGravity(Gravity.CENTER_VERTICAL);
-            textColumn.addView(mNameView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
+
+            LinearLayout nameRow = new LinearLayout(getContext());
+            nameRow.setOrientation(LinearLayout.HORIZONTAL);
+            nameRow.setGravity(Gravity.CENTER_VERTICAL);
+            nameRow.addView(mNameView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            if (!mTags.isEmpty()) {
+                LinearLayout tagRow = new LinearLayout(getContext());
+                tagRow.setOrientation(LinearLayout.HORIZONTAL);
+                tagRow.setGravity(Gravity.CENTER_VERTICAL);
+                tagRow.setPadding(dp2pxInt(8), 0, 0, 0);
+                for (String tag : mTags) {
+                    tagRow.addView(createTagChip(tag), tagLayoutParams());
+                }
+                nameRow.addView(tagRow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+            }
+
+            textColumn.addView(nameRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
             textColumn.addView(mSubtitleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
             addView(textColumn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
             return;
@@ -107,6 +131,21 @@ final class AssetFileItemView extends LinearLayout {
         addView(mIconView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(mode.iconTextSizeDp + 10)));
         addView(mNameView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(mSubtitleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private TextView createTagChip(String tag) {
+        TextView chip = UIUtils.createLockedTextView(getContext(), "#" + tag, 10.0f, COLOR_TAG_TEXT);
+        chip.setSingleLine(true);
+        chip.setGravity(Gravity.CENTER);
+        chip.setPadding(dp2pxInt(7), 0, dp2pxInt(7), 0);
+        chip.setBackground(RightFileBrowserPanel.createRectDrawable(COLOR_TAG_BG, 4));
+        return chip;
+    }
+
+    private LinearLayout.LayoutParams tagLayoutParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp2pxInt(20));
+        lp.rightMargin = dp2pxInt(5);
+        return lp;
     }
 
     private boolean onItemTouch(View v, MotionEvent event) {

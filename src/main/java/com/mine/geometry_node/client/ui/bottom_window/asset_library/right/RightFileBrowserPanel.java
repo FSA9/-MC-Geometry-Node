@@ -4,12 +4,14 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetPathUtils;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.ConfirmDialog;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.GraphTagDialog;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.drag.AssetDragState;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.drag.AssetDragDropRegistry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.menu.FileContextMenu;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.tags.GraphTagIO;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
@@ -53,6 +55,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final AssetBrowserPanel mCoordinator;
     private final EditText mPathInput;
     private final EditText mSearchInput;
+    private final EditText mTagSearchInput;
     private final FrameLayout mBodyFrame;
     private final ScrollView mScrollView;
     private final FileContentLayout mFileContent;
@@ -67,6 +70,9 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private boolean mIsCutOperation = false;
     private AssetViewMode mViewMode;
     private String mSearchQuery = "";
+    private String mTagSearchQuery = "";
+    private String mPendingSearchQuery = "";
+    private String mPendingTagSearchQuery = "";
     private String mLastClickedPath = null;
     private long mLastClickTime = 0L;
     private int mActiveRemoteListRequestId = 0;
@@ -85,7 +91,10 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private static final float NAV_BAR_HEIGHT = 40.0f;
     private static final float BTN_ADD_WIDTH = 40.0f;
     private static final float BTN_MENU_WIDTH = 34.0f;
-    private static final float SEARCH_WIDTH = 220.0f;
+    private static final float SEARCH_WIDTH = 170.0f;
+    private static final float TAG_SEARCH_WIDTH = 150.0f;
+    private static final float SEARCH_BUTTON_WIDTH = 34.0f;
+    private static final float CLEAR_BUTTON_WIDTH = 34.0f;
     private static final float TEXT_SIZE_NAV = 14.0f;
     private static final float TEXT_SIZE_LIST_ITEM = 14.0f;
     private static final float TEXT_SIZE_BTN_ADD = 14.0f;
@@ -167,19 +176,58 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         btnAdd.setVisibility(mEnableQuickAccessAdd ? View.VISIBLE : View.GONE);
 
         mSearchInput = createSearchInput(context);
-        mSearchInput.setHint("搜索资产");
+        mSearchInput.setHint("搜索名称");
         mSearchInput.setHintTextColor(0xFF666666);
         mSearchInput.addTextChangedListener(new TextWatcher() {
             @Override public void afterTextChanged(Editable s) {
-                mSearchQuery = s.toString().trim();
-                refreshFileList();
+                mPendingSearchQuery = s.toString().trim();
             }
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
         });
+        mSearchInput.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
+                applySearch();
+                return true;
+            }
+            return false;
+        });
         LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(dp2pxInt(SEARCH_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
         searchLp.setMargins(dp2pxInt(6), dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
         navBar.addView(mSearchInput, searchLp);
+
+        mTagSearchInput = createSearchInput(context);
+        mTagSearchInput.setHint("搜索标签");
+        mTagSearchInput.setHintTextColor(0xFF666666);
+        mTagSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override public void afterTextChanged(Editable s) {
+                mPendingTagSearchQuery = s.toString().trim();
+            }
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+        });
+        mTagSearchInput.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
+                applySearch();
+                return true;
+            }
+            return false;
+        });
+        LinearLayout.LayoutParams tagSearchLp = new LinearLayout.LayoutParams(dp2pxInt(TAG_SEARCH_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
+        tagSearchLp.setMargins(0, dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
+        navBar.addView(mTagSearchInput, tagSearchLp);
+
+        TextView btnSearch = createIconButton(context, "⌕");
+        btnSearch.setOnClickListener(v -> applySearch());
+        LinearLayout.LayoutParams searchButtonLp = new LinearLayout.LayoutParams(dp2pxInt(SEARCH_BUTTON_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
+        searchButtonLp.setMargins(0, dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
+        navBar.addView(btnSearch, searchButtonLp);
+
+        TextView btnClearSearch = createIconButton(context, "×");
+        btnClearSearch.setOnClickListener(v -> clearSearch());
+        LinearLayout.LayoutParams clearButtonLp = new LinearLayout.LayoutParams(dp2pxInt(CLEAR_BUTTON_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
+        clearButtonLp.setMargins(0, dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
+        navBar.addView(btnClearSearch, clearButtonLp);
 
         TextView btnOptions = createNavButton(context, "⋮");
         btnOptions.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(18));
@@ -198,6 +246,14 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         addView(mBodyFrame, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    private void applySearch() {
+        mSearchQuery = mPendingSearchQuery;
+        mTagSearchQuery = mPendingTagSearchQuery;
+        refreshFileList();
+        mSearchInput.clearFocus();
+        mTagSearchInput.clearFocus();
     }
 
     @Override
@@ -323,6 +379,9 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                 }
                 List<AssetEntry> entries = new ArrayList<>();
                 for (RemoteGraphEntry entry : response.entries()) {
+                    if (!mTagSearchQuery.isEmpty()) {
+                        continue;
+                    }
                     if (!mSearchQuery.isEmpty() && !entry.name().toLowerCase(Locale.ROOT).contains(mSearchQuery.toLowerCase(Locale.ROOT))) {
                         continue;
                     }
@@ -346,7 +405,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             String key = entry.key();
             visibleKeys.add(key);
             String parentLabel = mSearchQuery.isEmpty() ? "" : parentLabel(entry);
-            AssetFileItemView item = new AssetFileItemView(context, entry, mViewMode, displayName(entry), parentLabel, this);
+            AssetFileItemView item = new AssetFileItemView(context, entry, mViewMode, displayName(entry), parentLabel, tagsForListDisplay(entry), this);
             item.setSelected(mSelectedPaths.contains(key));
             mItemViews.put(key, item);
             mFileContent.addView(item);
@@ -358,8 +417,24 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         mFileContent.invalidate();
     }
 
+    private List<String> tagsForListDisplay(AssetEntry entry) {
+        if (mViewMode != AssetViewMode.LIST
+                || entry == null
+                || entry.sourceKind() != AssetSourceKind.LOCAL
+                || entry.localFile() == null
+                || !isLocalGraphFile(entry.localFile())) {
+            return List.of();
+        }
+
+        try {
+            return GraphTagIO.readTags(entry.localFile());
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
     private List<AssetEntry> loadVisibleEntries() {
-        if (mSearchQuery.isEmpty()) {
+        if (mSearchQuery.isEmpty() && mTagSearchQuery.isEmpty()) {
             File[] files = mCurrentDirectory.listFiles();
             if (files == null) return Collections.emptyList();
             List<File> fileResult = new ArrayList<>();
@@ -371,12 +446,17 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         }
 
         List<File> fileResult = new ArrayList<>();
-        collectSearchMatches(mCurrentDirectory, mSearchQuery.toLowerCase(Locale.ROOT), fileResult);
+        collectSearchMatches(
+                mCurrentDirectory,
+                mSearchQuery.toLowerCase(Locale.ROOT),
+                parseTagSearchTerms(),
+                fileResult
+        );
         sortFiles(fileResult);
         return toLocalEntries(fileResult);
     }
 
-    private void collectSearchMatches(File directory, String query, List<File> out) {
+    private void collectSearchMatches(File directory, String nameQuery, List<String> tagTerms, List<File> out) {
         File[] files = directory.listFiles();
         if (files == null) return;
 
@@ -388,13 +468,62 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             }
 
             boolean displayable = isDisplayable(file);
-            if (displayable && file.getName().toLowerCase(Locale.ROOT).contains(query)) {
+            if (displayable && matchesSearch(file, nameQuery, tagTerms)) {
                 out.add(file);
             }
             if (file.isDirectory()) {
-                collectSearchMatches(file, query, out);
+                collectSearchMatches(file, nameQuery, tagTerms, out);
             }
         }
+    }
+
+    private boolean matchesSearch(File file, String nameQuery, List<String> tagTerms) {
+        if (!nameQuery.isEmpty() && !file.getName().toLowerCase(Locale.ROOT).contains(nameQuery)) {
+            return false;
+        }
+        if (tagTerms.isEmpty()) {
+            return true;
+        }
+        if (!isLocalGraphFile(file)) {
+            return false;
+        }
+
+        List<String> tags;
+        try {
+            tags = GraphTagIO.readTags(file);
+        } catch (Exception ignored) {
+            return false;
+        }
+
+        for (String term : tagTerms) {
+            boolean matched = false;
+            for (String tag : tags) {
+                if (tag.contains(term)) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<String> parseTagSearchTerms() {
+        if (mTagSearchQuery.isBlank()) {
+            return List.of();
+        }
+
+        List<String> terms = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (String part : mTagSearchQuery.split("[,，;；\\s]+")) {
+            String normalized = GraphTagIO.normalizeTag(part);
+            if (!normalized.isEmpty() && seen.add(normalized)) {
+                terms.add(normalized);
+            }
+        }
+        return terms;
     }
 
     private boolean isDisplayable(File file) {
@@ -665,6 +794,10 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             menu.addDivider();
         }
         if (!mEnableLocalFileActions) return;
+        if (filesSnapshot.size() == 1 && isLocalGraphFile(filesSnapshot.get(0))) {
+            menu.addMenuItem("编辑标签", () -> showGraphTagDialog(filesSnapshot.get(0)));
+            menu.addDivider();
+        }
         menu.addMenuItem("复制" + suffix, () -> {
             mClipboardFiles = new ArrayList<>(filesSnapshot);
             mIsCutOperation = false;
@@ -689,6 +822,30 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             menu.addMenuItem("重命名", () -> startInlineEdit(filesSnapshot.get(0)));
         }
         menu.addDivider();
+    }
+
+    private boolean isLocalGraphFile(File file) {
+        return file != null
+                && file.isFile()
+                && file.getName().toLowerCase(Locale.ROOT).endsWith(".json");
+    }
+
+    private void showGraphTagDialog(File file) {
+        GraphTagDialog dialog = new GraphTagDialog(getContext(), file, tags -> {
+            syncOpenGraphTags(file, tags);
+            refreshFileList();
+        });
+        dialog.showIn(this);
+    }
+
+    private void syncOpenGraphTags(File file, List<String> tags) {
+        String targetKey = pathKey(file);
+        for (GraphSession session : DocumentManager.INSTANCE.getSessions()) {
+            if (session == null || session.editorContext == null || session.editorContext.getGraph() == null) continue;
+            File sessionFile = new File(session.fileId);
+            if (!targetKey.equals(pathKey(sessionFile))) continue;
+            session.editorContext.getGraph().tags = new ArrayList<>(tags);
+        }
     }
 
     private void addRemoteContextActions(FileContextMenu menu, List<AssetEntry> entriesSnapshot) {
@@ -930,8 +1087,18 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void clearSearch() {
-        if (!mSearchQuery.isEmpty()) {
-            mSearchInput.setText("");
+        boolean hadSearch = !mSearchQuery.isEmpty()
+                || !mTagSearchQuery.isEmpty()
+                || !mPendingSearchQuery.isEmpty()
+                || !mPendingTagSearchQuery.isEmpty();
+        mSearchInput.setText("");
+        mTagSearchInput.setText("");
+        mPendingSearchQuery = "";
+        mPendingTagSearchQuery = "";
+        mSearchQuery = "";
+        mTagSearchQuery = "";
+        if (hadSearch) {
+            refreshFileList();
         }
     }
 
@@ -956,7 +1123,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         try {
             String content = Files.readString(file.toPath()).trim();
             NodeGraph graph = (content.isEmpty() || content.equals("{}"))
-                    ? new NodeGraph(file.getName())
+                    ? new NodeGraph()
                     : GraphJsonIO.fromJson(content);
 
             GraphSession session = new GraphSession(file.getAbsolutePath(), file.getName(), graph);
@@ -969,6 +1136,25 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         btn.setPadding(dp2pxInt(16), 0, dp2pxInt(16), 0);
         btn.setGravity(Gravity.CENTER);
         btn.setBackground(createColorDrawable(0xFF444444));
+        return btn;
+    }
+
+    private TextView createIconButton(Context context, String text) {
+        TextView btn = UIUtils.createLockedTextView(context, text, 16.0f, 0xFFE6E6E6);
+        btn.setSingleLine(true);
+        btn.setPadding(0, 0, 0, 0);
+        btn.setGravity(Gravity.CENTER);
+        btn.setBackground(createRectDrawable(0xFF343A42, 4));
+        btn.setOnHoverListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                btn.setBackground(createRectDrawable(0xFF46515E, 4));
+                btn.setTextColor(0xFFFFFFFF);
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                btn.setBackground(createRectDrawable(0xFF343A42, 4));
+                btn.setTextColor(0xFFE6E6E6);
+            }
+            return false;
+        });
         return btn;
     }
 

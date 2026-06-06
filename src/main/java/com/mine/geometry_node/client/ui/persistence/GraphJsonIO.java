@@ -1,11 +1,13 @@
 package com.mine.geometry_node.client.ui.persistence;
 
 import com.google.gson.*;
+import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.node.Connection;
 import com.mine.geometry_node.core.node.FrameData;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -16,7 +18,9 @@ public final class GraphJsonIO {
 
     public static String toJson(NodeGraph g) {
         JsonObject root = new JsonObject();
-        root.addProperty("graph_name", g.graphName != null ? g.graphName : "");
+        GraphKind kind = g.getKind();
+        root.addProperty("graph_kind", kind != GraphKind.UNKNOWN ? kind.id() : GraphKind.BLUEPRINT.id());
+        root.add("tags", GSON.toJsonTree(g.tags != null ? g.tags : List.of()));
         root.addProperty("version", g.version != null ? g.version : "1.0");
 
         // 序列化 Nodes
@@ -45,8 +49,9 @@ public final class GraphJsonIO {
     public static NodeGraph fromJson(String json) {
         JsonObject root = JsonParser.parseString(json).getAsJsonObject();
         NodeGraph g = new NodeGraph();
-        g.graphName = root.has("graph_name") ? root.get("graph_name").getAsString() : "";
+        g.graphKind = root.has("graph_kind") ? root.get("graph_kind").getAsString() : GraphKind.BLUEPRINT.id();
         g.version = root.has("version") ? root.get("version").getAsString() : "1.0";
+        g.tags = readUserTags(root, g);
 
         JsonObject nodesObj = root.getAsJsonObject("nodes");
         for (String id : nodesObj.keySet()) {
@@ -77,5 +82,29 @@ public final class GraphJsonIO {
             }
         }
         return g;
+    }
+
+    private static List<String> readUserTags(JsonObject root, NodeGraph graph) {
+        List<String> tags = new ArrayList<>();
+        if (!root.has("tags") || !root.get("tags").isJsonArray()) {
+            return tags;
+        }
+
+        boolean needsLegacyKindMigration = !root.has("graph_kind")
+                || GraphKind.fromId(graph.graphKind) == GraphKind.UNKNOWN;
+        for (JsonElement element : root.getAsJsonArray("tags")) {
+            if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) continue;
+
+            String tag = element.getAsString();
+            GraphKind kind = GraphKind.fromId(tag);
+            if (needsLegacyKindMigration && kind != GraphKind.UNKNOWN) {
+                graph.graphKind = kind.id();
+                needsLegacyKindMigration = false;
+                continue;
+            }
+
+            tags.add(tag);
+        }
+        return tags;
     }
 }
