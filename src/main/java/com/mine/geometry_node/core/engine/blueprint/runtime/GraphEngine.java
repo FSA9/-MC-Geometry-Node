@@ -267,7 +267,9 @@ public class GraphEngine {
     public static void unbindGlobalGraph(ServerLevel level, String graphId) {
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         storage.removeGraph(graphId);
-        // 如果你的 LevelGraphAttachment 也实现了解绑进程，可以在这里调用
+        for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
+            LevelGraphAttachment.get(loadedLevel).removeProcess(graphId);
+        }
     }
 
     public static void unbindAllGraphs(Entity entity) {
@@ -282,7 +284,19 @@ public class GraphEngine {
 
     public static void unbindAllGlobalGraphs(ServerLevel level) {
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
+        Set<String> graphIds = new HashSet<>(storage.getGraphs());
+        for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
+            for (GraphProcess process : LevelGraphAttachment.get(loadedLevel).getProcesses()) {
+                graphIds.add(process.getGraphId());
+            }
+        }
         storage.clearGraphs();
+        for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
+            LevelGraphAttachment attachment = LevelGraphAttachment.get(loadedLevel);
+            for (String graphId : graphIds) {
+                attachment.removeProcess(graphId);
+            }
+        }
     }
 
     public static Set<String> getBoundGraphs(Entity entity) {

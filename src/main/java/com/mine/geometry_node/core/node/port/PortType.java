@@ -96,7 +96,6 @@ public enum PortType {
             if (inputport == ENTITY) return true; // 字符串尝试解析为 UUID 寻找实体
             if (inputport == BLOCK)  return true; // 字符串尝试解析为方块 Registry ID
             if (inputport == ITEM)   return true; // 字符串尝试解析为物品 Registry ID
-            if (inputport == XYZ)    return true; // 字符串尝试解析为坐标数组 "[x,y,z]"
             if (inputport == BOOLEAN) return true; // 字符串尝试解析为 "true"/"false"
             if (inputport == INTEGER || inputport == FLOAT) return true;
         }

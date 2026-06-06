@@ -179,6 +179,32 @@ public interface ExecutionContext {
     void executeBranchSync(String portName);
 
     /**
+     * [子分支汇合] 创建一个 join group。调用方可以启动多个子分支，
+     * 并在所有子分支完成后再触发指定的完成端口。
+     *
+     * @param completedPortName 当前节点上的完成输出端口
+     * @return join group id
+     */
+    String createBranchJoin(String completedPortName);
+
+    /**
+     * [子分支执行] 启动当前节点指定输出端口上的独立子执行流。
+     * 子分支拥有独立的事件寄存器与临时黑板副本，可以安全跨 tick 等待。
+     *
+     * @param portName 当前节点的输出执行端口名
+     * @param tempDataOverride 子分支临时黑板覆盖值
+     * @param joinId 可选 join group id；非空时子分支结束会参与汇合计数
+     * @return 是否成功启动了子分支
+     */
+    boolean spawnBranch(String portName, @Nullable Map<String, Object> tempDataOverride, @Nullable String joinId);
+
+    /**
+     * [子分支汇合] 标记某个 join group 已经完成所有子分支的发起。
+     * 如果此时没有待完成子分支，则立即触发完成端口。
+     */
+    void finishBranchJoin(String joinId);
+
+    /**
      * [临时黑板写入] 设置当前图进程级别的瞬时态数据。
      * 专为控制流节点保存内部游标 (如 Index, Current Element) 设计，防止污染常规局部变量。
      *

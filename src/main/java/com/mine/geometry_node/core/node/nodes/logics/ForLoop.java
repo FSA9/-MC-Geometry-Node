@@ -2,16 +2,25 @@ package com.mine.geometry_node.core.node.nodes.logics;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Map;
+
 public class ForLoop extends BaseNode {
 
     public static final String TYPE_ID = "for_loop";
+    private static final String COMPLETED_POLICY = "completed_policy";
+    private static final String POLICY_SCHEDULED = "scheduled";
+    private static final String POLICY_JOINED = "joined";
+    private static final String[] COMPLETED_POLICY_OPTIONS = { POLICY_SCHEDULED, POLICY_JOINED };
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -22,6 +31,13 @@ public class ForLoop extends BaseNode {
                 .addRow(new PortRow(StandardPorts.MIN_INT.toInput(0), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.MAX_INT.toInput(0), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(
+                        PortDef.create(COMPLETED_POLICY, "geometry_node.port.completed_policy", PortType.STRING, POLICY_SCHEDULED).hiddenPin(),
+                        null,
+                        UIHint.SELECT,
+                        null,
+                        Map.of(PortMetaKeys.OPTIONS, COMPLETED_POLICY_OPTIONS)
+                ))
                 .build();
     }
 
@@ -51,7 +67,13 @@ public class ForLoop extends BaseNode {
             currentIndex = start;
         }
 
+        String completedPolicy = getInput(context, COMPLETED_POLICY, String.class);
+        boolean waitForBranches = POLICY_JOINED.equals(completedPolicy);
+
         if ((start <= end && currentIndex > end) || (start > end && currentIndex < end)) {
+            if (waitForBranches) {
+                return finishJoinedLoop(context, myNodeId, indexKey, cursorKey);
+            }
             context.removeTempData(indexKey);
             context.removeTempData(cursorKey);
             return next(StandardPorts.COMPLETED.getId());
@@ -59,6 +81,10 @@ public class ForLoop extends BaseNode {
 
         int delay = (tickInterval != null) ? tickInterval : 0;
         int step = start <= end ? 1 : -1;
+
+        if (waitForBranches) {
+            return executeJoinedLoop(context, myNodeId, indexKey, cursorKey, currentIndex, end, step, delay);
+        }
 
         if (delay > 0) { // 异步跨帧模式
             context.setTempData(indexKey, currentIndex);
@@ -79,6 +105,54 @@ public class ForLoop extends BaseNode {
             context.removeTempData(cursorKey);
             return next(StandardPorts.COMPLETED.getId());
         }
+    }
+
+    private ExecutionResult executeJoinedLoop(ExecutionContext context,
+                                              int myNodeId,
+                                              String indexKey,
+                                              String cursorKey,
+                                              int currentIndex,
+                                              int end,
+                                              int step,
+                                              int delay) {
+        String joinKey = "ForLoop_" + myNodeId + "_join";
+        Object joinObj = context.getTempData(joinKey);
+        String joinId = joinObj instanceof String existingJoin ? existingJoin : null;
+        if (joinId == null) {
+            joinId = context.createBranchJoin(StandardPorts.COMPLETED.getId());
+            context.setTempData(joinKey, joinId);
+        }
+
+        if (delay > 0) {
+            context.spawnBranch(StandardPorts.LOOP.getId(), Map.of(indexKey, currentIndex), joinId);
+            context.setTempData(cursorKey, currentIndex + step);
+            context.scheduleNode(myNodeId, delay, "internal_loop_tick");
+            return finish();
+        }
+
+        for (int i = currentIndex; (step > 0 ? i <= end : i >= end); i += step) {
+            context.spawnBranch(StandardPorts.LOOP.getId(), Map.of(indexKey, i), joinId);
+        }
+        context.removeTempData(indexKey);
+        context.removeTempData(cursorKey);
+        context.removeTempData(joinKey);
+        context.finishBranchJoin(joinId);
+        return finish();
+    }
+
+    private ExecutionResult finishJoinedLoop(ExecutionContext context, int myNodeId, String indexKey, String cursorKey) {
+        String joinKey = "ForLoop_" + myNodeId + "_join";
+        Object joinObj = context.getTempData(joinKey);
+        if (joinObj instanceof String joinId) {
+            context.removeTempData(indexKey);
+            context.removeTempData(cursorKey);
+            context.removeTempData(joinKey);
+            context.finishBranchJoin(joinId);
+            return finish();
+        }
+        context.removeTempData(indexKey);
+        context.removeTempData(cursorKey);
+        return next(StandardPorts.COMPLETED.getId());
     }
 
     @Override

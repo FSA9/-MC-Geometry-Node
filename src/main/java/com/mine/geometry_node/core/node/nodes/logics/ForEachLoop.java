@@ -2,18 +2,27 @@ package com.mine.geometry_node.core.node.nodes.logics;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ForEachLoop extends BaseNode {
 
     public static final String TYPE_ID = "for_each_loop";
+    private static final String COMPLETED_POLICY = "completed_policy";
+    private static final String POLICY_SCHEDULED = "scheduled";
+    private static final String POLICY_JOINED = "joined";
+    private static final String[] COMPLETED_POLICY_OPTIONS = { POLICY_SCHEDULED, POLICY_JOINED };
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -25,6 +34,13 @@ public class ForEachLoop extends BaseNode {
                 .addRow(new PortRow(StandardPorts.LIST.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.LIMIT.toInput(), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(
+                        PortDef.create(COMPLETED_POLICY, "geometry_node.port.completed_policy", PortType.STRING, POLICY_SCHEDULED).hiddenPin(),
+                        null,
+                        UIHint.SELECT,
+                        null,
+                        Map.of(PortMetaKeys.OPTIONS, COMPLETED_POLICY_OPTIONS)
+                ))
                 .build();
     }
 
@@ -54,8 +70,14 @@ public class ForEachLoop extends BaseNode {
             currentIndex = 0;
         }
 
+        String completedPolicy = getInput(context, COMPLETED_POLICY, String.class);
+        boolean waitForBranches = POLICY_JOINED.equals(completedPolicy);
+
         // 结束条件判断
         if (currentIndex >= targetIterations) {
+            if (waitForBranches) {
+                return finishJoinedLoop(context, myNodeId, indexKey, elementKey, cursorKey);
+            }
             context.removeTempData(indexKey);
             context.removeTempData(elementKey);
             context.removeTempData(cursorKey);
@@ -63,6 +85,10 @@ public class ForEachLoop extends BaseNode {
         }
 
         int delay = (tickInterval != null) ? tickInterval : 0;
+
+        if (waitForBranches) {
+            return executeJoinedLoop(context, list, myNodeId, indexKey, elementKey, cursorKey, currentIndex, targetIterations, delay);
+        }
 
         if (delay > 0) { // --- 异步跨帧模式 ---
             Object currentElement = list.get(currentIndex);
@@ -91,6 +117,66 @@ public class ForEachLoop extends BaseNode {
             context.removeTempData(cursorKey);
             return next(StandardPorts.COMPLETED.getId());
         }
+    }
+
+    private ExecutionResult executeJoinedLoop(ExecutionContext context,
+                                              List<?> list,
+                                              int myNodeId,
+                                              String indexKey,
+                                              String elementKey,
+                                              String cursorKey,
+                                              int currentIndex,
+                                              int targetIterations,
+                                              int delay) {
+        String joinKey = "ForEach_" + myNodeId + "_join";
+        Object joinObj = context.getTempData(joinKey);
+        String joinId = joinObj instanceof String existingJoin ? existingJoin : null;
+        if (joinId == null) {
+            joinId = context.createBranchJoin(StandardPorts.COMPLETED.getId());
+            context.setTempData(joinKey, joinId);
+        }
+
+        if (delay > 0) {
+            Object currentElement = list.get(currentIndex);
+            context.spawnBranch(StandardPorts.LOOP.getId(), branchTempData(indexKey, currentIndex, elementKey, currentElement), joinId);
+            context.setTempData(cursorKey, currentIndex + 1);
+            context.scheduleNode(myNodeId, delay, "internal_loop_tick");
+            return finish();
+        }
+
+        for (int i = currentIndex; i < targetIterations; i++) {
+            context.spawnBranch(StandardPorts.LOOP.getId(), branchTempData(indexKey, i, elementKey, list.get(i)), joinId);
+        }
+        context.removeTempData(indexKey);
+        context.removeTempData(elementKey);
+        context.removeTempData(cursorKey);
+        context.removeTempData(joinKey);
+        context.finishBranchJoin(joinId);
+        return finish();
+    }
+
+    private ExecutionResult finishJoinedLoop(ExecutionContext context, int myNodeId, String indexKey, String elementKey, String cursorKey) {
+        String joinKey = "ForEach_" + myNodeId + "_join";
+        Object joinObj = context.getTempData(joinKey);
+        if (joinObj instanceof String joinId) {
+            context.removeTempData(indexKey);
+            context.removeTempData(elementKey);
+            context.removeTempData(cursorKey);
+            context.removeTempData(joinKey);
+            context.finishBranchJoin(joinId);
+            return finish();
+        }
+        context.removeTempData(indexKey);
+        context.removeTempData(elementKey);
+        context.removeTempData(cursorKey);
+        return next(StandardPorts.COMPLETED.getId());
+    }
+
+    private Map<String, Object> branchTempData(String indexKey, int index, String elementKey, Object element) {
+        Map<String, Object> tempData = new HashMap<>();
+        tempData.put(indexKey, index);
+        tempData.put(elementKey, element);
+        return tempData;
     }
 
     @Override

@@ -9,10 +9,6 @@ import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.*;
@@ -60,9 +56,35 @@ public class GraphProcess {
     // --- 执行流管理 ---
     final PriorityQueue<ExecutionThread> sleepingThreads = new PriorityQueue<>(Comparator.comparingLong(t -> t.wakeUpTick));  // 挂起的协程线程
     boolean needsTimeRebase = false;  // 读档标记
+    private final Map<String, BranchJoin> branchJoins = new HashMap<>();
 
     private static final int MAX_POOLED_THREADS = 128;
     private final ArrayDeque<ExecutionThread> THREAD_POOL = new ArrayDeque<>();
+
+    static final class BranchJoin {
+        final String id;
+        final int ownerNodeId;
+        final String completedPortName;
+        final Object[] eventRegisters;
+        final Map<String, Object> dynamicEventData;
+        final Map<String, Object> tempData;
+        int pendingChildren;
+        boolean launchFinished;
+
+        BranchJoin(String id,
+                   int ownerNodeId,
+                   String completedPortName,
+                   Object[] eventRegisters,
+                   @Nullable Map<String, Object> dynamicEventData,
+                   Map<String, Object> tempData) {
+            this.id = id;
+            this.ownerNodeId = ownerNodeId;
+            this.completedPortName = completedPortName;
+            this.eventRegisters = eventRegisters;
+            this.dynamicEventData = dynamicEventData != null ? new HashMap<>(dynamicEventData) : null;
+            this.tempData = new HashMap<>(tempData);
+        }
+    }
 
     private ExecutionThread borrowThread(int startNodeId, String startPortName) {
         ExecutionThread thread = THREAD_POOL.poll();
@@ -127,6 +149,22 @@ public class GraphProcess {
         sleepingThreads.add(thread);
     }
 
+    public Collection<BranchJoin> getBranchJoinsForSerialization() {
+        return branchJoins.values();
+    }
+
+    public boolean hasBranchJoinsForSerialization() {
+        return !branchJoins.isEmpty();
+    }
+
+    public void clearBranchJoinsForSerialization() {
+        branchJoins.clear();
+    }
+
+    public void addBranchJoinForSerialization(BranchJoin join) {
+        branchJoins.put(join.id, join);
+    }
+
     public void markNeedsTimeRebaseForSerialization() {
         needsTimeRebase = true;
     }
@@ -187,6 +225,56 @@ public class GraphProcess {
         }
     }
 
+    private void onThreadFinished(ExecutionThread thread) {
+        String parentJoinId = thread.parentJoinId;
+        if (parentJoinId == null) {
+            return;
+        }
+        thread.parentJoinId = null;
+
+        BranchJoin join = branchJoins.get(parentJoinId);
+        if (join == null) {
+            return;
+        }
+        if (join.pendingChildren > 0) {
+            join.pendingChildren--;
+        }
+        tryCompleteBranchJoin(join);
+    }
+
+    private void finishBranchJoin(String joinId) {
+        if (joinId == null || joinId.isBlank()) {
+            return;
+        }
+        BranchJoin join = branchJoins.get(joinId);
+        if (join == null) {
+            return;
+        }
+        join.launchFinished = true;
+        tryCompleteBranchJoin(join);
+    }
+
+    private void tryCompleteBranchJoin(BranchJoin join) {
+        if (!join.launchFinished || join.pendingChildren > 0) {
+            return;
+        }
+        if (branchJoins.remove(join.id) == null) {
+            return;
+        }
+
+        RuntimeGraphIndex.IntFlowTarget completedTarget = index.findFlowTarget(join.ownerNodeId, join.completedPortName);
+        if (completedTarget == null) {
+            return;
+        }
+
+        ExecutionThread completionThread = borrowThread(completedTarget.targetNodeId(), completedTarget.targetPortName());
+        completionThread.parentJoinId = null;
+        completionThread.eventRegisters = Arrays.copyOf(join.eventRegisters, join.eventRegisters.length);
+        completionThread.dynamicEventData = join.dynamicEventData != null ? new HashMap<>(join.dynamicEventData) : null;
+        completionThread.tempData.putAll(join.tempData);
+        completionThread.run();
+    }
+
     // ================================
     // 4. 内部执行线程 (ExecutionContext 实现)
     // ================================
@@ -212,15 +300,14 @@ public class GraphProcess {
         private String threadDimensionId;
         private UUID threadEntityUuid;
         private boolean pooled = false;
+        @Nullable
+        private String parentJoinId;
 
         // --- 线程私有寄存器 (Zero-Allocation 核心) ---
         final List<RuntimeGraphIndex.IntFlowTarget> executionStack = new ArrayList<>();
         Object[] eventRegisters = new Object[GraphProcess.this.index.getRegisterCount() + 8];
         Map<String, Object> dynamicEventData = null;
-        private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>();
-        private final Int2ObjectOpenHashMap<Map<String, Object>> dynamicFrameCache = new Int2ObjectOpenHashMap<>();
-        private static final Object CACHED_NULL = new Object();
-        private final boolean[] recursionGuard = new boolean[GraphProcess.this.index.getNodeCount()];
+        private final FrameValueCache frameValueCache = new FrameValueCache(GraphProcess.this.index.getNodeCount());
         // ✨ 新增：线程私有的临时黑板
         public final Map<String, Object> tempData = new HashMap<>();
 
@@ -248,10 +335,9 @@ public class GraphProcess {
             this.externalWaitRuntime = null;
             this.wakeUpTick = -1;
             this.runDepth = 0;
+            this.parentJoinId = null;
             this.executionStack.clear();
-            this.frameCache.clear();
-            this.dynamicFrameCache.clear();
-            Arrays.fill(this.recursionGuard, false);
+            this.frameValueCache.reset();
             this.tempData.clear();
             Arrays.fill(this.eventRegisters, null);
             if (this.dynamicEventData != null) this.dynamicEventData.clear();
@@ -317,6 +403,15 @@ public class GraphProcess {
             this.dynamicEventData = dynamicEventData;
         }
 
+        @Nullable
+        public String getParentJoinIdForSerialization() {
+            return parentJoinId;
+        }
+
+        public void setParentJoinIdForSerialization(@Nullable String parentJoinId) {
+            this.parentJoinId = parentJoinId;
+        }
+
         /**
          * 启动或恢复执行流
          */
@@ -327,8 +422,7 @@ public class GraphProcess {
 
             // 只有最外层启动时，才清理初始缓存，防止误清内层递归数据
             if (runDepth == 1) {
-                frameCache.clear();
-                Arrays.fill(this.recursionGuard, false);
+                frameValueCache.beginRootRun();
             }
 
             try {
@@ -377,6 +471,7 @@ public class GraphProcess {
                     if (this.state != State.ERROR) {
                         this.state = State.FINISHED;
                     }
+                    GraphProcess.this.onThreadFinished(this);
                     recycleIfNeeded();
                 }
             }
@@ -476,6 +571,7 @@ public class GraphProcess {
                 this.currentFlowId = -1;
                 this.executionStack.clear();
                 this.state = State.FINISHED;
+                GraphProcess.this.onThreadFinished(this);
                 recycleIfNeeded();
                 return false;
             }
@@ -519,6 +615,7 @@ public class GraphProcess {
             this.executionStack.clear();
             this.state = State.FINISHED;
             GraphProcess.this.sleepingThreads.remove(this);
+            GraphProcess.this.onThreadFinished(this);
             recycleIfNeeded();
         }
 
@@ -535,32 +632,22 @@ public class GraphProcess {
         }
 
         private Object executeDataNode(int nodeId, String portName) {
-            if (recursionGuard[nodeId]) return null;
+            if (frameValueCache.isRecursing(nodeId)) return null;
 
             int portId = index.getKeyId(portName);
-            long cacheKey = 0;
-            Map<String, Object> nodeDynamicCache = null;
 
             // ==========================================
             // 1. 查缓存 (单次查询 O(1) + 零字符串分配)
             // ==========================================
-            if (portId != -1) {
-                cacheKey = ((long) nodeId << 32) | (portId & 0xFFFFFFFFL);
-                Object cached = frameCache.get(cacheKey);
-                // 如果有值，判断是否是占位符
-                if (cached != null) return cached == CACHED_NULL ? null : cached;
-            } else {
-                nodeDynamicCache = dynamicFrameCache.get(nodeId);
-                if (nodeDynamicCache != null) {
-                    Object cached = nodeDynamicCache.get(portName);
-                    if (cached != null) return cached == CACHED_NULL ? null : cached;
-                }
+            Object cached = frameValueCache.get(nodeId, portName, portId);
+            if (!FrameValueCache.isCacheMiss(cached)) {
+                return cached;
             }
 
             // ==========================================
             // 2. 执行计算
             // ==========================================
-            recursionGuard[nodeId] = true;
+            frameValueCache.enterNode(nodeId);
             int prevActive = this.activeNodeId;
             Object result;
 
@@ -572,23 +659,13 @@ public class GraphProcess {
                 result = logic.compute(this, portName);
             } finally {
                 this.activeNodeId = prevActive;
-                recursionGuard[nodeId] = false;
+                frameValueCache.exitNode(nodeId);
             }
 
             // ==========================================
             // 3. 写缓存 (使用 CACHED_NULL 占位)
             // ==========================================
-            Object cacheValue = (result == null) ? CACHED_NULL : result;
-            if (portId != -1) {
-                frameCache.put(cacheKey, cacheValue);
-            } else {
-                if (nodeDynamicCache == null) {
-                    nodeDynamicCache = new HashMap<>();
-                    dynamicFrameCache.put(nodeId, nodeDynamicCache);
-                }
-                nodeDynamicCache.put(portName, cacheValue);
-            }
-
+            frameValueCache.put(nodeId, portName, portId, result);
             return result;
         }
 
@@ -734,10 +811,7 @@ public class GraphProcess {
 
         @Override
         public void clearFrameCache() {
-            frameCache.clear();
-            for (Map<String, Object> map : dynamicFrameCache.values()) {
-                map.clear();
-            }
+            frameValueCache.clearFrameValues();
         }
 
         @Override
@@ -759,6 +833,57 @@ public class GraphProcess {
             this.currentEntryPort = savedPort;
             this.executionStack.clear();
             this.executionStack.addAll(savedStack);
+        }
+
+        @Override
+        public String createBranchJoin(String completedPortName) {
+            String joinId = UUID.randomUUID().toString();
+            BranchJoin join = new BranchJoin(
+                    joinId,
+                    activeNodeId,
+                    completedPortName,
+                    Arrays.copyOf(this.eventRegisters, this.eventRegisters.length),
+                    this.dynamicEventData,
+                    this.tempData
+            );
+            GraphProcess.this.branchJoins.put(joinId, join);
+            return joinId;
+        }
+
+        @Override
+        public boolean spawnBranch(String portName, @Nullable Map<String, Object> tempDataOverride, @Nullable String joinId) {
+            if (activeNodeId == -1) {
+                return false;
+            }
+            RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(activeNodeId, portName);
+            if (target == null) {
+                return false;
+            }
+
+            if (joinId != null && !joinId.isBlank()) {
+                BranchJoin join = GraphProcess.this.branchJoins.get(joinId);
+                if (join == null) {
+                    return false;
+                }
+                join.pendingChildren++;
+            }
+
+            ExecutionThread child = GraphProcess.this.borrowThread(target.targetNodeId(), target.targetPortName());
+            child.restoreEnvironment(getLevel(), getThreadEntityUuid());
+            child.parentJoinId = joinId;
+            child.eventRegisters = Arrays.copyOf(this.eventRegisters, this.eventRegisters.length);
+            child.dynamicEventData = this.dynamicEventData != null ? new HashMap<>(this.dynamicEventData) : null;
+            child.tempData.putAll(this.tempData);
+            if (tempDataOverride != null) {
+                child.tempData.putAll(tempDataOverride);
+            }
+            child.run();
+            return true;
+        }
+
+        @Override
+        public void finishBranchJoin(String joinId) {
+            GraphProcess.this.finishBranchJoin(joinId);
         }
 
         @Override
@@ -801,35 +926,10 @@ public class GraphProcess {
             ServerLevel currentLevel = getLevel();
             if (currentLevel == null) return;
 
-            int radius = 128;
-
-            net.minecraft.nbt.CompoundTag extraData = new net.minecraft.nbt.CompoundTag();
-            extraData.putInt("sourceId", sourceEntityId);
-            if (startPos != null) {
-                extraData.putDouble("startX", startPos.x);
-                extraData.putDouble("startY", startPos.y);
-                extraData.putDouble("startZ", startPos.z);
-            }
-            extraData.putInt("targetId", targetEntityId);
-            if (endPos != null) {
-                extraData.putDouble("endX", endPos.x);
-                extraData.putDouble("endY", endPos.y);
-                extraData.putDouble("endZ", endPos.z);
-            }
-            extraData.putFloat("size", size);
-
-            Vec3 center = startPos != null ? startPos : Vec3.ZERO;
-            GraphEngineServices.INSTANCE.visualSink().broadcast(new GraphEngineServices.VisualEffect(
-                    currentLevel,
-                    effectType,
-                    color,
-                    durationTicks,
-                    java.util.Collections.emptyMap(),
-                    java.util.Collections.emptyMap(),
-                    extraData,
-                    center,
-                    radius
-            ));
+            GraphVisualEmitter.broadcastVisual(currentLevel, effectType,
+                    sourceEntityId, startPos,
+                    targetEntityId, endPos,
+                    color, size, durationTicks);
         }
 
         @Override
@@ -841,40 +941,8 @@ public class GraphProcess {
             ServerLevel currentLevel = getLevel();
             if (currentLevel == null) return;
 
-            Vec3 center = null;
-
-            if (extraData != null && extraData.contains("sourceId")) {
-                int sourceId = extraData.getInt("sourceId");
-                if (sourceId != -1) {
-                    Entity sourceEntity = currentLevel.getEntity(sourceId);
-                    if (sourceEntity != null) {
-                        center = sourceEntity.position();
-                    }
-                }
-            }
-
-            if (center == null && extraData != null && extraData.contains("startX")) {
-                center = new Vec3(extraData.getDouble("startX"),
-                                  extraData.getDouble("startY"),
-                                  extraData.getDouble("startZ"));
-            }
-
-            if (center == null) {
-                center = Vec3.ZERO;
-            }
-
-            int radius = 128;
-            GraphEngineServices.INSTANCE.visualSink().broadcast(new GraphEngineServices.VisualEffect(
-                    currentLevel,
-                    effectType,
-                    color,
-                    durationTicks,
-                    expressions,
-                    bindings,
-                    extraData,
-                    center,
-                    radius
-            ));
+            GraphVisualEmitter.broadcastDynamicVisual(currentLevel, effectType, color, durationTicks,
+                    expressions, bindings, extraData);
         }
     }
 

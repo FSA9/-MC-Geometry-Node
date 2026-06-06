@@ -33,6 +33,7 @@
   "geometry_node.port.flow_out": "Out",
   "geometry_node.port.loop": "Loop Body",
   "geometry_node.port.completed": "Completed",
+  "geometry_node.port.completed_policy": "Completed Policy",
   "geometry_node.port.flow_true": "True",
   "geometry_node.port.flow_false": "False",
 

@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.Reader;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -65,18 +66,51 @@ public class RuntimeGraphIndex {
                               Map<String, Object>[] staticInputArray,
                               Map<String, Integer> keyDictionary,
                               List<String> dictionaryReverse) {
-        this.idToString = idToString;
-        this.stringToId = stringToId;
-        this.nodeDataArray = nodeDataArray;
-        this.typeArray = typeArray;
-        this.flowOutputArray = flowOutputArray;
-        this.inputArray = inputArray;
-        this.typeLookup = typeLookup;
-        this.receiveBlueprintLookup = receiveBlueprintLookup;
-        this.propertyArray = propertyArray;
-        this.staticInputArray = staticInputArray;
-        this.keyDictionary = keyDictionary;
-        this.dictionaryReverse = dictionaryReverse;
+        this.idToString = idToString.clone();
+        this.stringToId = Map.copyOf(stringToId);
+        this.nodeDataArray = nodeDataArray.clone();
+        this.typeArray = typeArray.clone();
+        this.flowOutputArray = copyFlowOutputArray(flowOutputArray);
+        this.inputArray = copyInputArray(inputArray);
+        this.typeLookup = copyLookup(typeLookup);
+        this.receiveBlueprintLookup = copyLookup(receiveBlueprintLookup);
+        this.propertyArray = copyObjectMapArray(propertyArray);
+        this.staticInputArray = copyObjectMapArray(staticInputArray);
+        this.keyDictionary = Map.copyOf(keyDictionary);
+        this.dictionaryReverse = List.copyOf(dictionaryReverse);
+    }
+
+    private static Map<String, List<Integer>> copyLookup(Map<String, List<Integer>> lookup) {
+        Map<String, List<Integer>> copy = new HashMap<>();
+        for (Map.Entry<String, List<Integer>> entry : lookup.entrySet()) {
+            copy.put(entry.getKey(), List.copyOf(entry.getValue()));
+        }
+        return Map.copyOf(copy);
+    }
+
+    private static IntFlowTarget[][] copyFlowOutputArray(IntFlowTarget[][] source) {
+        IntFlowTarget[][] copy = new IntFlowTarget[source.length][];
+        for (int i = 0; i < source.length; i++) {
+            copy[i] = source[i] != null ? source[i].clone() : new IntFlowTarget[0];
+        }
+        return copy;
+    }
+
+    private static IntConnectionSource[][] copyInputArray(IntConnectionSource[][] source) {
+        IntConnectionSource[][] copy = new IntConnectionSource[source.length][];
+        for (int i = 0; i < source.length; i++) {
+            copy[i] = source[i] != null ? source[i].clone() : new IntConnectionSource[0];
+        }
+        return copy;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object>[] copyObjectMapArray(Map<String, Object>[] source) {
+        Map<String, Object>[] copy = new Map[source.length];
+        for (int i = 0; i < source.length; i++) {
+            copy[i] = source[i] != null ? Map.copyOf(source[i]) : Map.of();
+        }
+        return copy;
     }
 
     /**
@@ -131,14 +165,6 @@ public class RuntimeGraphIndex {
     /** 通过 Int 索引还原原始的 String ID (常用于报错日志与存档持久化) */
     public String getIdToString(int id) {
         return (id >= 0 && id < idToString.length) ? idToString[id] : null;
-    }
-
-    public int registerKey(String key) {
-        return keyDictionary.computeIfAbsent(key, k -> {
-            int id = dictionaryReverse.size();
-            dictionaryReverse.add(k);
-            return id;
-        });
     }
 
     public int getKeyId(String key) {

@@ -39,9 +39,15 @@ public class GraphProcessSerializer {
                 long remaining = (process.getLevel() != null) ? Math.max(0, thread.wakeUpTick - currentTime) : thread.wakeUpTick;
                 tTag.putLong("WaitRemaining", remaining);
 
-                tTag.putInt("CurrentFlowId", thread.getCurrentFlowIdForSerialization());
+                String currentFlowNodeId = index.getIdToString(thread.getCurrentFlowIdForSerialization());
+                if (currentFlowNodeId != null) {
+                    tTag.putString("CurrentFlowId", currentFlowNodeId);
+                }
                 if (thread.getCurrentEntryPortForSerialization() != null) {
                     tTag.putString("CurrentEntryPort", thread.getCurrentEntryPortForSerialization());
+                }
+                if (thread.getParentJoinIdForSerialization() != null) {
+                    tTag.putString("ParentJoinId", thread.getParentJoinIdForSerialization());
                 }
                 String contextDimension = thread.getThreadDimensionId();
                 if (contextDimension != null) {
@@ -78,6 +84,31 @@ public class GraphProcessSerializer {
             }
             tag.put("SleepingThreads", threadsTag);
         }
+        if (process.hasBranchJoinsForSerialization()) {
+            ListTag joinsTag = new ListTag();
+            for (GraphProcess.BranchJoin join : process.getBranchJoinsForSerialization()) {
+                CompoundTag joinTag = new CompoundTag();
+                joinTag.putString("JoinId", join.id);
+                joinTag.putString("OwnerNodeId", index.getIdToString(join.ownerNodeId));
+                joinTag.putString("CompletedPortName", join.completedPortName);
+                joinTag.putInt("PendingChildren", join.pendingChildren);
+                joinTag.putBoolean("LaunchFinished", join.launchFinished);
+
+                CompoundTag regTag = new CompoundTag();
+                saveVariablesToTag(regTag, join.eventRegisters, join.dynamicEventData, index, provider);
+                joinTag.put("Registers", regTag);
+
+                CompoundTag tempTag = new CompoundTag();
+                for (Map.Entry<String, Object> entry : join.tempData.entrySet()) {
+                    Tag s = VariableRegistry.toTag(entry.getValue(), provider);
+                    if (s != null) tempTag.put(entry.getKey(), s);
+                }
+                if (!tempTag.isEmpty()) joinTag.put("TempData", tempTag);
+
+                joinsTag.add(joinTag);
+            }
+            tag.put("BranchJoins", joinsTag);
+        }
         return tag;
     }
 
@@ -105,11 +136,19 @@ public class GraphProcessSerializer {
             ListTag list = tag.getList("SleepingThreads", Tag.TAG_COMPOUND);
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag tTag = list.getCompound(i);
-                int currentFlowId = tTag.contains("CurrentFlowId") ? tTag.getInt("CurrentFlowId") : -1;
+                int currentFlowId = -1;
+                if (tTag.contains("CurrentFlowId", Tag.TAG_STRING)) {
+                    currentFlowId = index.getStringToId(tTag.getString("CurrentFlowId"));
+                } else if (tTag.contains("CurrentFlowId", Tag.TAG_INT)) {
+                    currentFlowId = tTag.getInt("CurrentFlowId");
+                }
                 String currentPort = tTag.getString("CurrentEntryPort");
                 if (currentPort == null || currentPort.isEmpty()) currentPort = "flow_in";
 
                 GraphProcess.ExecutionThread thread = process.new ExecutionThread(currentFlowId, currentPort);
+                if (tTag.contains("ParentJoinId", Tag.TAG_STRING)) {
+                    thread.setParentJoinIdForSerialization(tTag.getString("ParentJoinId"));
+                }
                 UUID contextEntity = null;
                 if (tTag.contains("ContextEntity", Tag.TAG_STRING)) {
                     try {
@@ -154,6 +193,45 @@ public class GraphProcessSerializer {
                 }
             }
             process.markNeedsTimeRebaseForSerialization();
+        }
+        process.clearBranchJoinsForSerialization();
+        if (tag.contains("BranchJoins", Tag.TAG_LIST)) {
+            ListTag list = tag.getList("BranchJoins", Tag.TAG_COMPOUND);
+            for (int i = 0; i < list.size(); i++) {
+                CompoundTag joinTag = list.getCompound(i);
+                int ownerNodeId = index.getStringToId(joinTag.getString("OwnerNodeId"));
+                String completedPortName = joinTag.getString("CompletedPortName");
+                String joinId = joinTag.getString("JoinId");
+                if (ownerNodeId == -1 || joinId == null || joinId.isBlank() || completedPortName == null || completedPortName.isBlank()) {
+                    continue;
+                }
+
+                GraphProcess.VariableScope regScope = new GraphProcess.VariableScope(exactSize);
+                loadVariablesFromTag(joinTag.getCompound("Registers"), regScope.statics, regScope, index, provider);
+
+                Map<String, Object> tempData = new HashMap<>();
+                if (joinTag.contains("TempData", Tag.TAG_COMPOUND)) {
+                    CompoundTag tempTag = joinTag.getCompound("TempData");
+                    for (String key : tempTag.getAllKeys()) {
+                        Object obj = VariableRegistry.fromTag(tempTag.get(key), provider);
+                        if (obj != null) {
+                            tempData.put(key, obj);
+                        }
+                    }
+                }
+
+                GraphProcess.BranchJoin join = new GraphProcess.BranchJoin(
+                        joinId,
+                        ownerNodeId,
+                        completedPortName,
+                        regScope.statics,
+                        regScope.dynamics,
+                        tempData
+                );
+                join.pendingChildren = Math.max(0, joinTag.getInt("PendingChildren"));
+                join.launchFinished = joinTag.getBoolean("LaunchFinished");
+                process.addBranchJoinForSerialization(join);
+            }
         }
 
         return process;
