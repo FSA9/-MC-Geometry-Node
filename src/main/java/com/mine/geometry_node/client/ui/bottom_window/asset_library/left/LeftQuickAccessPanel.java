@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library.left;
 
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
-import com.mine.geometry_node.client.ui.persistence.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -176,7 +176,8 @@ public class LeftQuickAccessPanel extends ScrollView {
                         float dropY = event.getRawY() - loc[1];
 
                         int firstQuickAccessChild = mCoordinator.canBrowseRemote() ? 2 : 1;
-                        int targetIdx = ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.size() - 1;
+                        List<String> currentPaths = ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths;
+                        int targetIdx = currentPaths.size() - 1;
                         for (int i = firstQuickAccessChild; i < mLeftSidebar.getChildCount(); i++) {
                             View child = mLeftSidebar.getChildAt(i);
                             if (dropY < child.getTop() + child.getHeight() / 2f) {
@@ -185,17 +186,21 @@ public class LeftQuickAccessPanel extends ScrollView {
                             }
                         }
 
-                        List<String> list = ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths;
-                        int currentIndex = list.indexOf(pathStr);
+                        int currentIndex = currentPaths.indexOf(pathStr);
 
                         if (targetIdx > currentIndex) {
                             targetIdx--;
                         }
 
                         if (targetIdx != currentIndex && targetIdx >= 0) {
-                            String item = list.remove(currentIndex);
-                            list.add(targetIdx, item);
-                            ConfigManager.INSTANCE.save();
+                            int finalTargetIdx = targetIdx;
+                            ConfigManager.INSTANCE.update(config -> {
+                                List<String> list = config.assetBrowser.quickAccessPaths;
+                                int index = list.indexOf(pathStr);
+                                if (index < 0 || finalTargetIdx < 0 || finalTargetIdx >= list.size()) return;
+                                String item = list.remove(index);
+                                list.add(finalTargetIdx, item);
+                            });
                             row.post(this::buildSidebar);
                         }
                     }
@@ -229,8 +234,7 @@ public class LeftQuickAccessPanel extends ScrollView {
             }
             if (event.getActionMasked() == MotionEvent.ACTION_UP) {
                 if (isInside(btnDel, event)) {
-                    ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.remove(pathStr);
-                    ConfigManager.INSTANCE.save();
+                    ConfigManager.INSTANCE.update(config -> config.assetBrowser.quickAccessPaths.remove(pathStr));
                     buildSidebar();
                 } else {
                     btnDel.setBackground(createColorDrawable(0xFF3A3A3A));

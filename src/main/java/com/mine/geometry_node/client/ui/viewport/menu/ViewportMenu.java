@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.viewport.menu;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
 import com.mine.geometry_node.core.node.NodeCategory;
@@ -36,6 +39,7 @@ public class ViewportMenu extends FrameLayout {
     private static final int COLOR_CATEGORY_TEXT = 0xFFE0E0E0;
     private static final int COLOR_NODE_TEXT = 0xFFCCCCCC;
     private static final int COLOR_MUTED_TEXT = 0xFF999999;
+    private static final int COLOR_SHORTCUT_TEXT = 0xFF8B949E;
     private static final int COLOR_HOVER_BG = 0xFF3A4652;
 
     private LinearLayout mContentLayout;
@@ -45,14 +49,24 @@ public class ViewportMenu extends FrameLayout {
 
     private InteractionContext mContext;
     private float mMenuX, mMenuY;
+    private AppConfig mConfig;
+    private final ConfigChangeListener mConfigChangeListener = this::applyConfig;
 
     private final Stack<NodeCategory> mHistory = new Stack<>();
     private NodeCategory mCurrentFolder;
 
     public ViewportMenu(Context context) {
         super(context);
+        mConfig = ConfigManager.INSTANCE.getConfig();
+        ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
         initUI(context);
         navigateTo(NodeRegistry.INSTANCE.ROOT);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
+        super.onDetachedFromWindow();
     }
 
     private void initUI(Context context) {
@@ -139,7 +153,7 @@ public class ViewportMenu extends FrameLayout {
 
         if (mCurrentFolder == NodeRegistry.INSTANCE.ROOT) {
             addSectionLabel("操作");
-            addClickItem("保存", COLOR_ACTION_TEXT, v -> {
+            addShortcutItem("保存", shortcut(config -> config.keyBindings.save), COLOR_ACTION_TEXT, v -> {
                 if (mContext != null) mContext.requestSave();
                 post(this::dismiss);
             });
@@ -153,7 +167,7 @@ public class ViewportMenu extends FrameLayout {
                 post(this::dismiss);
             });
 
-            addClickItem("并入图框", COLOR_ACTION_TEXT, v -> {
+            addShortcutItem("并入图框", shortcut(config -> config.keyBindings.groupIntoFrame), COLOR_ACTION_TEXT, v -> {
                 if (mContext != null) {
                     mContext.requestGroupIntoFrame();
                     mContext.clearSelection();
@@ -234,6 +248,48 @@ public class ViewportMenu extends FrameLayout {
         int marginV = UIUtils.dp2pxInt(1);
         lp.setMargins(0, marginV, 0, marginV);
         mListContainer.addView(tv, lp);
+    }
+
+    private void addShortcutItem(String text, String shortcut, int color, View.OnClickListener listener) {
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+        row.setOnClickListener(listener);
+
+        TextView label = new TextView(getContext());
+        label.setText(text);
+        label.setTextSize(0, UIUtils.dp2px(12));
+        label.setTextColor(color);
+        label.setSingleLine(true);
+        label.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+
+        TextView shortcutView = new TextView(getContext());
+        shortcutView.setText(shortcut != null ? shortcut : "");
+        shortcutView.setTextSize(0, UIUtils.dp2px(10));
+        shortcutView.setTextColor(COLOR_SHORTCUT_TEXT);
+        shortcutView.setSingleLine(true);
+        shortcutView.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        row.addView(shortcutView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        row.setOnHoverListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                row.setBackground(createRectDrawable(COLOR_HOVER_BG, ITEM_RADIUS_DP));
+                label.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_HOVER);
+                shortcutView.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_HOVER);
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                row.setBackground(null);
+                label.setTextColor(color);
+                shortcutView.setTextColor(COLOR_SHORTCUT_TEXT);
+            }
+            return false;
+        });
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(ITEM_HEIGHT_DP));
+        int marginV = UIUtils.dp2pxInt(1);
+        lp.setMargins(0, marginV, 0, marginV);
+        mListContainer.addView(row, lp);
     }
 
     private void addSectionLabel(String text) {
@@ -330,5 +386,25 @@ public class ViewportMenu extends FrameLayout {
             d.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
         }
         return d;
+    }
+
+    private void applyConfig(AppConfig config) {
+        mConfig = config;
+        if (mListContainer == null || mCurrentFolder == null) return;
+        String query = mSearchBox != null ? mSearchBox.getText().toString() : "";
+        if (query == null || query.trim().isEmpty()) {
+            renderCurrentFolder();
+        } else {
+            performSearch(query);
+        }
+    }
+
+    private String shortcut(ShortcutReader reader) {
+        if (mConfig == null || mConfig.keyBindings == null) return "";
+        return reader.read(mConfig);
+    }
+
+    private interface ShortcutReader {
+        String read(AppConfig config);
     }
 }

@@ -60,7 +60,7 @@ public class GeometryNodeClient {
         GeometryNode.LOGGER.info("HELLO FROM CLIENT SETUP");
         GeometryNode.LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
 
-        com.mine.geometry_node.client.ui.persistence.ConfigManager.INSTANCE.initOrLoad();
+        com.mine.geometry_node.client.ui.persistence.config.ConfigManager.INSTANCE.initOrLoad();
         com.mine.geometry_node.core.node.NodeRegistry.INSTANCE.init();
     }
 }

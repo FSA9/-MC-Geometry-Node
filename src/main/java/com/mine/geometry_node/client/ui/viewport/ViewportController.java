@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.*;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
@@ -323,6 +324,22 @@ public class ViewportController implements EditorContext.EditorListener,
             mEditorContext.getCommandManager().execute(cmdF);
         }
 
+        mViewport.clearSelection();
+    }
+
+    @Override
+    public void onToggleSnapToGridRequested() {
+        ConfigManager.INSTANCE.update(config -> config.viewport.snapToGrid = !config.viewport.snapToGrid);
+    }
+
+    @Override
+    public void onToggleGridAndAxisRequested() {
+        ConfigManager.INSTANCE.update(config -> config.viewport.showGridAndAxis = !config.viewport.showGridAndAxis);
+    }
+
+    @Override
+    public void onGroupIntoFrameRequested() {
+        executeGroupIntoFrame();
         mViewport.clearSelection();
     }
 

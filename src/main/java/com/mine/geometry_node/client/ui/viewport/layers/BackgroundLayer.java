@@ -5,7 +5,7 @@ import icyllis.modernui.graphics.Paint;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
-import com.mine.geometry_node.client.ui.persistence.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 
 public class BackgroundLayer {
     private static final float MIN_GRID_SPACING_PX = 12f;

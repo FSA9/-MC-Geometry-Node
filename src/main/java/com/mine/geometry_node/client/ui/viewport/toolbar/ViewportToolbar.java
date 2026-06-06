@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.viewport.toolbar;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -22,6 +25,7 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
     private final SnapToggleView mSnapToggleView;
     private final GridVisibilityToggleView mGridVisibilityToggleView;
     private final TextView mTooltip;
+    private final ConfigChangeListener mConfigChangeListener = this::applyConfig;
     private View mTooltipAnchor;
 
     public ViewportToolbar(Context context, Listener listener) {
@@ -56,18 +60,35 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
         tooltipLp.gravity = Gravity.RIGHT | Gravity.TOP;
         tooltipLp.topMargin = UIUtils.dp2pxInt(19);
         addView(mTooltip, tooltipLp);
+
+        applyConfig(ConfigManager.INSTANCE.getConfig());
+        ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
+        super.onDetachedFromWindow();
     }
 
     public void setSnapToGridEnabled(boolean enabled) {
+        setSnapToGridEnabled(enabled, true);
+    }
+
+    public void setSnapToGridEnabled(boolean enabled, boolean notifyListener) {
         if (mSnapToggleView.isSnapEnabled() == enabled) return;
         mSnapToggleView.setSnapEnabled(enabled);
-        if (mListener != null) mListener.onSnapToGridChanged(enabled);
+        if (notifyListener && mListener != null) mListener.onSnapToGridChanged(enabled);
     }
 
     public void setGridAndAxisVisible(boolean visible) {
+        setGridAndAxisVisible(visible, true);
+    }
+
+    public void setGridAndAxisVisible(boolean visible, boolean notifyListener) {
         if (mGridVisibilityToggleView.isGridVisible() == visible) return;
         mGridVisibilityToggleView.setGridVisible(visible);
-        if (mListener != null) mListener.onGridAndAxisVisibilityChanged(visible);
+        if (notifyListener && mListener != null) mListener.onGridAndAxisVisibilityChanged(visible);
     }
 
     public void hideTooltip() {
@@ -100,5 +121,11 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
             drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
         }
         return drawable;
+    }
+
+    private void applyConfig(AppConfig config) {
+        if (config == null || config.keyBindings == null) return;
+        mSnapToggleView.setTooltipText("吸附 - " + config.keyBindings.toggleSnapToGrid + "\n开启后节点和图框会对齐网格");
+        mGridVisibilityToggleView.setTooltipText("坐标轴 - " + config.keyBindings.toggleGridAndAxis + "\n点击显示或隐藏栅格和坐标轴");
     }
 }

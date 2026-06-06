@@ -10,7 +10,9 @@ import com.mine.geometry_node.client.ui.viewport.connection.ConnectionNodeVisual
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.toolbar.ViewportToolbar;
-import com.mine.geometry_node.client.ui.persistence.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeGraph;
 import icyllis.modernui.core.Context;
@@ -44,6 +46,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     private boolean mFirstLayout = true;
     private final float[] mTempPos = new float[2];
     private boolean mSnapToGridEnabled = false;
+    private final ConfigChangeListener mConfigChangeListener = this::applyViewportConfig;
 
     private TextView mEmptyHint;
     private ViewportToolbar mToolbar;
@@ -72,6 +75,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
         setFocusable(true);
         setFocusableInTouchMode(true);
+        applyViewportConfig(ConfigManager.INSTANCE.getConfig());
+        ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
     }
 
     private void initViewportProps() {
@@ -91,12 +96,12 @@ public class Viewport extends FrameLayout implements InteractionContext {
         mToolbar = new ViewportToolbar(getContext(), new ViewportToolbar.Listener() {
             @Override
             public void onSnapToGridChanged(boolean enabled) {
-                setSnapToGridEnabled(enabled);
+                ConfigManager.INSTANCE.update(config -> config.viewport.snapToGrid = enabled);
             }
 
             @Override
             public void onGridAndAxisVisibilityChanged(boolean visible) {
-                setGridAndAxisVisible(visible);
+                ConfigManager.INSTANCE.update(config -> config.viewport.showGridAndAxis = visible);
             }
         });
         mToolbar.setVisibility(View.GONE);
@@ -109,6 +114,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     protected void onDetachedFromWindow() {
+        ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
+        mKeyManager.dispose();
         mController.saveCurrentSessionState();
         super.onDetachedFromWindow();
     }
@@ -156,6 +163,17 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     public ViewportController getController() {
         return mController;
+    }
+
+    private void applyViewportConfig(AppConfig config) {
+        if (config == null || config.viewport == null) return;
+        mSnapToGridEnabled = config.viewport.snapToGrid;
+        mBackgroundLayer.setGridAndAxisVisible(config.viewport.showGridAndAxis);
+        if (mToolbar != null) {
+            mToolbar.setSnapToGridEnabled(config.viewport.snapToGrid, false);
+            mToolbar.setGridAndAxisVisible(config.viewport.showGridAndAxis, false);
+        }
+        invalidate();
     }
 
 
@@ -272,18 +290,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
     public boolean isNodeSelected(String nodeId) { return mNodeLayer != null && mNodeLayer.isNodeSelected(nodeId); }
     public void updateSelectionState(List<String> selectedNodeIds) { if (mNodeLayer != null) { mNodeLayer.updateSelectionState(selectedNodeIds); invalidate(); } }
 
-    private void setSnapToGridEnabled(boolean enabled) {
-        if (mSnapToGridEnabled == enabled) return;
-        mSnapToGridEnabled = enabled;
-        invalidate();
-    }
-
-    private void setGridAndAxisVisible(boolean visible) {
-        if (mBackgroundLayer.isGridAndAxisVisible() == visible) return;
-        mBackgroundLayer.setGridAndAxisVisible(visible);
-        invalidate();
-    }
-
     @Override
     public boolean hasConnection(NodeVisualAdapter outN, String outId, NodeVisualAdapter inN, String inId) {
         List<com.mine.geometry_node.core.node.Connection> links = outN.getNodeData().getConnections(outId);
@@ -344,7 +350,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public boolean dispatchKeyEvent(icyllis.modernui.view.KeyEvent event) {
-        if (event.isCtrlPressed() && event.getAction() == icyllis.modernui.view.KeyEvent.ACTION_DOWN) {
+        if (event.getAction() == icyllis.modernui.view.KeyEvent.ACTION_DOWN) {
             View focusedView = findFocus();
             if (focusedView instanceof EditText) return super.dispatchKeyEvent(event);
             if (mKeyManager.onKeyDown(event)) return true;

@@ -11,7 +11,7 @@ abstract class ViewportToolButton extends View {
     }
 
     private final TooltipHost mTooltipHost;
-    private final String mTooltipText;
+    private String mTooltipText;
     private boolean mActive;
     private boolean mHovered;
 
@@ -35,6 +35,13 @@ abstract class ViewportToolButton extends View {
 
     boolean isToolHovered() {
         return mHovered;
+    }
+
+    void setTooltipText(String tooltipText) {
+        mTooltipText = tooltipText;
+        if (mHovered && mTooltipHost != null && mTooltipText != null && !mTooltipText.isBlank()) {
+            mTooltipHost.showToolTooltip(this, mTooltipText);
+        }
     }
 
     private boolean handleHover(View view, MotionEvent event) {

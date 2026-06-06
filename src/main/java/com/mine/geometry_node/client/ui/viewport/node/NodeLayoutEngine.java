@@ -2,8 +2,8 @@ package com.mine.geometry_node.client.ui.viewport.node;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.UIHints.HintRendererFactory;
-import com.mine.geometry_node.client.ui.viewport.UIHints.UIHintRenderer;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.HintRendererFactory;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintRenderer;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortDef;

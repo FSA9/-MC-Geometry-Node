@@ -3,9 +3,9 @@ package com.mine.geometry_node.client.ui.viewport.node;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.UIHints.HintRendererFactory;
-import com.mine.geometry_node.client.ui.viewport.UIHints.UIItemSlot;
-import com.mine.geometry_node.client.ui.viewport.UIHints.UIHintRenderer;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.HintRendererFactory;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIItemSlot;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintRenderer;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -13,7 +13,6 @@ import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.UIHint;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -165,7 +164,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
                     mRemoveButtons.put(portId, btn);
 
                     float btnWidth = 16.0f;
-                    float btnHeight = com.mine.geometry_node.client.ui.viewport.UIHints.UIHintUtils.getStandardInputHeight();
+                    float btnHeight = com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils.getStandardInputHeight();
                     LayoutParams lp = new LayoutParams(UIUtils.dp2pxInt(btnWidth), UIUtils.dp2pxInt(btnHeight));
                     lp.topMargin = UIUtils.dp2pxInt(currentY + (UIConstants.Node.ROW_HEIGHT - btnHeight) / 2f);
 
@@ -189,7 +188,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         if (isInputDynamic || isOutputDynamic) {
             mAddButton = createDynamicButton(context, "+", true, null, null);
 
-            float inputBoxHeight = com.mine.geometry_node.client.ui.viewport.UIHints.UIHintUtils.getStandardInputHeight();
+            float inputBoxHeight = com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils.getStandardInputHeight();
             float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
             float startX = UIConstants.Node.LABEL_MARGIN_PORT;
             float endX = UIConstants.Node.NODE_WIDTH - UIConstants.Node.LABEL_MARGIN_PORT;
@@ -367,7 +366,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         float w = UIUtils.dp2px(UIConstants.Node.NODE_WIDTH);
         float h = UIUtils.dp2px(mTotalHeight);
 
-        float scaledRadius = UIUtils.dp2px(com.mine.geometry_node.client.ui.persistence.ConfigManager.INSTANCE.getConfig().node.cornerRadius);
+        float scaledRadius = UIUtils.dp2px(com.mine.geometry_node.client.ui.persistence.config.ConfigManager.INSTANCE.getConfig().node.cornerRadius);
         float scaledHeaderH = UIUtils.dp2px(UIConstants.Node.HEADER_HEIGHT);
 
         // 画节点背景

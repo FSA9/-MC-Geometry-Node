@@ -10,7 +10,7 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.menu.FileCon
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
-import com.mine.geometry_node.client.ui.persistence.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
@@ -158,8 +158,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             String path = mPathInput.getText().toString().trim();
             if (!path.isEmpty() && new File(path).isDirectory()) {
                 if (!ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.contains(path)) {
-                    ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.add(path);
-                    ConfigManager.INSTANCE.save();
+                    ConfigManager.INSTANCE.update(config -> config.assetBrowser.quickAccessPaths.add(path));
                     mCoordinator.notifySidebarChanged();
                 }
             }
@@ -421,8 +420,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private void setViewMode(AssetViewMode mode) {
         if (mViewMode == mode) return;
         mViewMode = mode;
-        ConfigManager.INSTANCE.getConfig().assetBrowser.viewMode = mode.configValue;
-        ConfigManager.INSTANCE.save();
+        ConfigManager.INSTANCE.update(config -> config.assetBrowser.viewMode = mode.configValue);
         refreshFileList();
     }
 

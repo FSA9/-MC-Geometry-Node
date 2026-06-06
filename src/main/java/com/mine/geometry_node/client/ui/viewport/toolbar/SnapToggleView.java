@@ -20,7 +20,7 @@ final class SnapToggleView extends ViewportToolButton {
     private final Paint mPaint = new Paint();
     private final RectF mRect = new RectF();
     SnapToggleView(Context context, TooltipHost tooltipHost) {
-        super(context, "吸附到网格\n开启后节点和图框会对齐网格", tooltipHost);
+        super(context, "", tooltipHost);
         mPaint.setAntiAlias(true);
     }
 

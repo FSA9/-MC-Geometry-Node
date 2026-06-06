@@ -147,7 +147,7 @@ public class MainUI extends Fragment {
         System.setProperty("gn.standalone", "true");
         Configurator.setRootLevel(Level.DEBUG);
 
-        com.mine.geometry_node.client.ui.persistence.ConfigManager.INSTANCE.initOrLoad();
+        com.mine.geometry_node.client.ui.persistence.config.ConfigManager.INSTANCE.initOrLoad();
         NodeRegistry.INSTANCE.init();
 
         try (ModernUI app = new ModernUI()) {

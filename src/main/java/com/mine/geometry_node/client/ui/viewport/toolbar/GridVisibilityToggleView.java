@@ -19,7 +19,7 @@ final class GridVisibilityToggleView extends ViewportToolButton {
     private final RectF mRect = new RectF();
 
     GridVisibilityToggleView(Context context, TooltipHost tooltipHost) {
-        super(context, "背景栅格与坐标轴\n点击显示或隐藏栅格和坐标轴", tooltipHost);
+        super(context, "", tooltipHost);
         mPaint.setAntiAlias(true);
         setToolActive(true);
     }
