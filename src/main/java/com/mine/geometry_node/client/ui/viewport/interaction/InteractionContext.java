@@ -60,6 +60,7 @@ public interface InteractionContext {
     void requestGroupIntoFrame();
     void requestAddGroup(float uiX, float uiY);
     void requestGroupIntoNodeGroup();
+    void requestDissolveNodeGroup(String nodeId);
     void requestExitGroup();
     void requestSetFrameProperty(String frameId, String title, int color);
     void requestSetGroupNodeProperty(String nodeId, String title, int color, String comment);

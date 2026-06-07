@@ -217,6 +217,19 @@ public class ViewportController implements EditorContext.EditorListener,
         }
     }
 
+    public void executeDissolveNodeGroup(String nodeId) {
+        if (mEditorContext == null || nodeId == null) return;
+        CmdDissolveNodeGroup cmd = new CmdDissolveNodeGroup(
+                mEditorContext.getGraphController(),
+                mEditorContext.getCurrentGraph(),
+                nodeId
+        );
+        if (cmd.canExecute()) {
+            mEditorContext.getCommandManager().execute(cmd);
+            mViewport.clearSelection();
+        }
+    }
+
     public void executeRenamePort(String nodeId, String category, String portId, String oldName, String newName) {
         if (mEditorContext == null) return;
         CmdRenamePort cmd = new CmdRenamePort(mEditorContext.getGraphController(), nodeId, category, portId, oldName, newName);

@@ -214,6 +214,9 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
+        if (mFrameLayer != null) {
+            mFrameLayer.drawFrames(canvas);
+        }
         mConnectionLayer.draw(canvas, mCamera);
         super.dispatchDraw(canvas);
         mInteractionManager.drawOverlay(canvas);
@@ -332,6 +335,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override public void requestGroupIntoFrame() { if (mController != null) mController.executeGroupIntoFrame(); }
     @Override public void requestAddGroup(float uiX, float uiY) { if (mController != null) mController.executeAddGroup(uiX, uiY); }
     @Override public void requestGroupIntoNodeGroup() { if (mController != null) mController.executeGroupIntoNodeGroup(); }
+    @Override public void requestDissolveNodeGroup(String nodeId) { if (mController != null) mController.executeDissolveNodeGroup(nodeId); }
     @Override public void requestExitGroup() { if (mController != null) mController.executeExitGroup(); }
     @Override public void requestSetFrameProperty(String frameId, String title, int color) { if (mController != null) mController.executeSetFrameProperty(frameId, title, color); }
     @Override public void requestSetGroupNodeProperty(String nodeId, String title, int color, String comment) { if (mController != null) mController.executeSetGroupNodeProperty(nodeId, title, color, comment); }

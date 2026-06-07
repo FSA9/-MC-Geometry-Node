@@ -158,6 +158,9 @@ public class FrameLayer extends FrameLayout {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+    }
+
+    public void drawFrames(Canvas canvas) {
         ensureFrameHierarchyOrder();
         boolean canCull = getWidth() > 0 && getHeight() > 0;
         if (canCull) {

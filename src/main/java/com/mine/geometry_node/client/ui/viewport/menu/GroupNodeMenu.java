@@ -39,6 +39,7 @@ public final class GroupNodeMenu {
     private static final int COLOR_TEXT = 0xFFE7EAF0;
     private static final int COLOR_BUTTON = 0xFF3E4652;
     private static final int COLOR_BUTTON_PRIMARY = 0xFF4B7FBD;
+    private static final int COLOR_BUTTON_DANGER = 0xFF8A4A4A;
 
     private static final int[] PRESET_COLORS = {
             NodeData.DEFAULT_GROUP_COLOR,
@@ -134,6 +135,10 @@ public final class GroupNodeMenu {
         actionsLp.topMargin = dp(12);
         panel.addView(actions, actionsLp);
 
+        TextView dissolve = button(uiContext, "解散", COLOR_BUTTON_DANGER, v -> {
+            close(context, popupOverlay);
+            context.requestDissolveNodeGroup(nodeData.id);
+        });
         TextView cancel = button(uiContext, "取消", COLOR_BUTTON, v -> close(context, popupOverlay));
         TextView apply = button(uiContext, "应用", COLOR_BUTTON_PRIMARY, v -> {
             String newTitle = titleInput.getText().toString().trim();
@@ -147,10 +152,13 @@ public final class GroupNodeMenu {
             close(context, popupOverlay);
         });
 
-        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(dp(68), ViewGroup.LayoutParams.MATCH_PARENT);
-        cancelLp.rightMargin = dp(8);
+        LinearLayout.LayoutParams dissolveLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
+        dissolveLp.rightMargin = dp(6);
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
+        cancelLp.rightMargin = dp(6);
+        actions.addView(dissolve, dissolveLp);
         actions.addView(cancel, cancelLp);
-        actions.addView(apply, new LinearLayout.LayoutParams(dp(68), ViewGroup.LayoutParams.MATCH_PARENT));
+        actions.addView(apply, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
         popupOverlay.addView(panel, createPanelLayout(parent, screenX, screenY));
         parent.addView(popupOverlay);
