@@ -7,6 +7,7 @@ import com.mine.geometry_node.api.NodeRegistrationContext;
 import com.mine.geometry_node.api.EventDef;
 import com.mine.geometry_node.api.EventScope;
 import com.mine.geometry_node.api.GeometryEventDispatcher;
+import com.mine.geometry_node.core.node.group.GroupNodeDefinitions;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -195,6 +196,9 @@ public class NodeRegistry {
     @Nullable
     public NodeDef resolveDefinition(NodeData data) {
         if (data == null || data.type == null) return null;
+        NodeDef groupDef = GroupNodeDefinitions.resolve(data);
+        if (groupDef != null) return groupDef;
+
         BaseNode b = registry.get(data.type);
         if (b != null) {
             return b.getDefinition(data);

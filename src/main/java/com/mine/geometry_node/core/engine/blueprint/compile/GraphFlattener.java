@@ -5,21 +5,23 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.node.group.GroupNodeTypes;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
 
 import java.util.*;
 
 /**
  * [图展平器]
- * 负责将嵌套的节点组 (Node Group) 递归展开为扁平的一维图结构，
- * 并处理执行流与数据流的边界桥接。
+ * 负责将新版嵌套节点组递归展开为扁平运行时图，并在编译期消除
+ * node_group / group_in / group_out 这些 UI 边界节点。
  */
 class GraphFlattener {
 
-    // 扁平化后的最终数据容器
     public record TargetConnection(String targetNodeId, String targetPortName) {}
+
     final Map<String, JsonObject> nodeDataLookup = new HashMap<>();
     final Map<String, Map<String, TargetConnection>> flowOutputLookup = new HashMap<>();
     final Map<String, RuntimeGraphIndex.ConnectionSource> inputLookup = new HashMap<>();
@@ -27,278 +29,452 @@ class GraphFlattener {
     final Map<String, Map<String, Object>> propertyLookup = new HashMap<>();
     final Map<String, Map<String, Object>> staticInputLookup = new HashMap<>();
 
-    private final Map<String, GroupBoundary> groupBoundaries = new HashMap<>();
-    private final Map<String, String> internalToGroupMap = new HashMap<>();
-
     final Set<String> allStaticKeys = new HashSet<>();
 
-    /**
-     * 执行展平逻辑
-     * @param rootNodes 根节点的 JSON 对象
-     */
-    void flatten(JsonObject rootNodes) {
-        // 1. 递归展开所有节点
-        flattenRecursive("", rootNodes);
+    private final Map<String, GroupBoundary> groupBoundaries = new HashMap<>();
+    private final Map<String, String> boundaryToGroupMap = new HashMap<>();
+    private final Set<String> virtualNodeIds = new HashSet<>();
+    private final Map<String, DataResolution> dataResolutionCache = new HashMap<>();
+    private final Map<String, Optional<TargetConnection>> executionTargetCache = new HashMap<>();
 
-        // 2. 桥接节点组边界 (Bridging)
+    void flatten(JsonObject rootNodes) {
+        if (rootNodes == null) return;
+
+        flattenRecursive("", rootNodes);
         bridgeGroups();
+        removeVirtualNodes();
     }
 
     private void flattenRecursive(String prefix, JsonObject nodesMap) {
+        if (nodesMap == null) return;
+
         for (String localId : nodesMap.keySet()) {
-            JsonObject nodeObj = nodesMap.getAsJsonObject(localId);
+            JsonObject nodeObj = asObject(nodesMap.get(localId));
+            if (nodeObj == null) continue;
+
             String globalId = prefix + localId;
+            String type = readString(nodeObj, "node_type", "unknown");
 
-            // 1. 基础信息提取
             nodeDataLookup.put(globalId, nodeObj);
+            typeLookup.computeIfAbsent(type, ignored -> new ArrayList<>()).add(globalId);
 
-            String type = "unknown";
-            if (nodeObj.has("node_type")) {
-                type = nodeObj.get("node_type").getAsString();
-                typeLookup.computeIfAbsent(type, k -> new ArrayList<>()).add(globalId);
-
-                if ("node_group".equals(type) && nodeObj.has("sub_nodes")) {
-                    GroupBoundary boundary = parseGroupBoundary(globalId, nodeObj, prefix);
-                    groupBoundaries.put(globalId, boundary);
-
-                    if (boundary.groupInId != null) internalToGroupMap.put(boundary.groupInId, globalId);
-                    if (boundary.groupOutId != null) internalToGroupMap.put(boundary.groupOutId, globalId);
-
-                    flattenRecursive(globalId + "/", nodeObj.getAsJsonObject("sub_nodes"));
-                    continue;
-                }
+            if (isVirtualType(type)) {
+                virtualNodeIds.add(globalId);
             }
 
-            // 2. 属性与静态输入提取
-            if (nodeObj.has("properties")) {
-                Map<String, Object> props = BlueprintCompiler.parseValueMap(nodeObj.getAsJsonObject("properties"));
-                propertyLookup.put(globalId, props);
-                // ✨ 收集属性里的字符串值 (这通常包含了填写的“变量名”、“事件参数名”等)
-                for (Object val : props.values()) {
-                    if (val instanceof String s) allStaticKeys.add(s);
-                }
+            if (GroupNodeTypes.NODE_GROUP.equals(type) && nodeObj.has("sub_nodes")) {
+                virtualNodeIds.add(globalId);
+                GroupBoundary boundary = parseGroupBoundary(globalId, nodeObj);
+                groupBoundaries.put(globalId, boundary);
+                if (boundary.groupInId != null) boundaryToGroupMap.put(boundary.groupInId, globalId);
+                if (boundary.groupOutId != null) boundaryToGroupMap.put(boundary.groupOutId, globalId);
             }
 
-            // --- 烘焙(Baking) 核心逻辑 ---
-            Map<String, Object> bakedInputs = new HashMap<>();
-            BaseNode logic = NodeRegistry.INSTANCE.get(type);
-            if (logic != null) {
-                NodeDef def = logic.getDefaultDefinition();
-                if (def != null) {
-                    for (PortRow row : def.rows()) {
-                        if (row.leftPort() != null && row.leftPort().defaultValue() != null) {
-                            bakedInputs.put(row.leftPort().id(), row.leftPort().defaultValue());
-                        }
-                    }
-                }
-            }
-            if (nodeObj.has("inputs")) {
-                bakedInputs.putAll(BlueprintCompiler.parseValueMap(nodeObj.getAsJsonObject("inputs")));
-            }
-            staticInputLookup.put(globalId, bakedInputs);
-            // ✨ 收集所有的输入端口名
-            allStaticKeys.addAll(bakedInputs.keySet());
+            parseProperties(globalId, nodeObj);
+            parseStaticInputs(globalId, type, nodeObj);
+            parseExecutionOutputs(globalId, prefix, nodeObj);
+            parseDataOutputs(globalId, prefix, nodeObj);
 
-            // --- 执行流提取 ---
-            String execKey = nodeObj.has("exec_outputs") ? "exec_outputs" : (nodeObj.has("execution") ? "execution" : null);
-            if (execKey != null) {
-                Map<String, TargetConnection> flowMap = new HashMap<>();
-                JsonObject execObj = nodeObj.getAsJsonObject(execKey);
-
-                for (String port : execObj.keySet()) {
-                    // ✨ 收集执行输出端口名
-                    allStaticKeys.add(port);
-
-                    JsonElement el = execObj.get(port);
-                    if (el.isJsonObject()) {
-                        JsonObject tObj = el.getAsJsonObject();
-                        String targetLocalId = tObj.get("target_node").getAsString();
-                        String targetPort = tObj.get("target_port").getAsString();
-                        flowMap.put(port, new TargetConnection(prefix + targetLocalId, targetPort));
-                    } else if (el.isJsonPrimitive()) {
-                        String targetLocalId = el.getAsString();
-                        flowMap.put(port, new TargetConnection(prefix + targetLocalId, "flow_in"));
-                    }
-                }
-                flowOutputLookup.put(globalId, flowMap);
-            }
-
-            // 数据流提取
-            if (nodeObj.has("outputs")) {
-                JsonObject outObj = nodeObj.getAsJsonObject("outputs");
-                for (String sourcePort : outObj.keySet()) {
-                    // ✨ 收集数据输出端口名
-                    allStaticKeys.add(sourcePort);
-
-                    JsonArray targets = outObj.getAsJsonArray(sourcePort);
-                    for (JsonElement t : targets) {
-                        JsonObject tObj = t.getAsJsonObject();
-                        String targetLocalId = tObj.get("target_node").getAsString();
-                        String targetPort = tObj.get("target_port").getAsString();
-
-                        String targetGlobalId = prefix + targetLocalId;
-                        String key = makeKey(targetGlobalId, targetPort);
-
-                        inputLookup.put(key, new RuntimeGraphIndex.ConnectionSource(globalId, sourcePort));
-                    }
-                }
+            if (GroupNodeTypes.NODE_GROUP.equals(type) && nodeObj.has("sub_nodes")) {
+                flattenRecursive(globalId + "/", asObject(nodeObj.get("sub_nodes")));
             }
         }
     }
 
-    /**
-     * 核心桥接逻辑：消除所有 NodeGroup、GroupIn、GroupOut 的中间商
-     */
-    private void bridgeGroups() {
-        // --- 1. 数据流重定向 (Pull Model) ---
-        Map<String, RuntimeGraphIndex.ConnectionSource> finalInputLookup = new HashMap<>();
-        for (Map.Entry<String, RuntimeGraphIndex.ConnectionSource> entry : inputLookup.entrySet()) {
-            RuntimeGraphIndex.ConnectionSource resolvedSource = resolveDataSource(entry.getValue());
-            if (resolvedSource != null) {
-                finalInputLookup.put(entry.getKey(), resolvedSource);
+    private void parseProperties(String globalId, JsonObject nodeObj) {
+        JsonObject properties = asObject(nodeObj.get("properties"));
+        if (properties == null) return;
+
+        Map<String, Object> props = BlueprintCompiler.parseValueMap(properties);
+        propertyLookup.put(globalId, props);
+        for (Object val : props.values()) {
+            if (val instanceof String s) allStaticKeys.add(s);
+        }
+    }
+
+    private void parseStaticInputs(String globalId, String type, JsonObject nodeObj) {
+        Map<String, Object> bakedInputs = new HashMap<>();
+        BaseNode logic = NodeRegistry.INSTANCE.get(type);
+        if (logic != null) {
+            NodeDef def = logic.getDefaultDefinition();
+            if (def != null) {
+                for (PortRow row : def.rows()) {
+                    if (row.leftPort() != null && row.leftPort().defaultValue() != null) {
+                        bakedInputs.put(row.leftPort().id(), row.leftPort().defaultValue());
+                    }
+                }
             }
         }
+
+        addPortConfigInputDefaults(nodeObj, bakedInputs);
+
+        JsonObject inputs = asObject(nodeObj.get("inputs"));
+        if (inputs != null) {
+            bakedInputs.putAll(BlueprintCompiler.parseValueMap(inputs));
+        }
+
+        staticInputLookup.put(globalId, bakedInputs);
+        allStaticKeys.addAll(bakedInputs.keySet());
+    }
+
+    private void addPortConfigInputDefaults(JsonObject nodeObj, Map<String, Object> bakedInputs) {
+        JsonObject portConfig = asObject(nodeObj.get("port_config"));
+        JsonObject inputPorts = portConfig != null ? asObject(portConfig.get(GroupNodeTypes.CATEGORY_INPUTS)) : null;
+        if (inputPorts == null) return;
+
+        for (String portId : inputPorts.keySet()) {
+            if (bakedInputs.containsKey(portId)) continue;
+
+            JsonObject config = asObject(inputPorts.get(portId));
+            PortType type = readPortType(config);
+            Object defaultValue = type != null ? type.getDefaultValue() : null;
+            if (defaultValue != null) {
+                bakedInputs.put(portId, defaultValue);
+            }
+            allStaticKeys.add(portId);
+        }
+    }
+
+    private void parseExecutionOutputs(String globalId, String prefix, JsonObject nodeObj) {
+        String execKey = nodeObj.has("exec_outputs") ? "exec_outputs" : (nodeObj.has("execution") ? "execution" : null);
+        JsonObject execObj = execKey != null ? asObject(nodeObj.get(execKey)) : null;
+        if (execObj == null) return;
+
+        Map<String, TargetConnection> flowMap = new HashMap<>();
+        for (String port : execObj.keySet()) {
+            allStaticKeys.add(port);
+
+            TargetConnection target = parseTarget(prefix, execObj.get(port), "flow_in");
+            if (target != null) {
+                flowMap.put(port, target);
+            }
+        }
+        flowOutputLookup.put(globalId, flowMap);
+    }
+
+    private void parseDataOutputs(String globalId, String prefix, JsonObject nodeObj) {
+        JsonObject outObj = asObject(nodeObj.get("outputs"));
+        if (outObj == null) return;
+
+        for (String sourcePort : outObj.keySet()) {
+            allStaticKeys.add(sourcePort);
+
+            JsonArray targets = asArray(outObj.get(sourcePort));
+            if (targets == null) continue;
+
+            for (JsonElement targetElement : targets) {
+                TargetConnection target = parseTarget(prefix, targetElement, null);
+                if (target == null || target.targetPortName == null || target.targetPortName.isBlank()) continue;
+
+                allStaticKeys.add(target.targetPortName);
+                inputLookup.put(
+                        makeKey(target.targetNodeId, target.targetPortName),
+                        new RuntimeGraphIndex.ConnectionSource(globalId, sourcePort)
+                );
+            }
+        }
+    }
+
+    private void bridgeGroups() {
+        bridgeDataInputs();
+        bridgeExecutionOutputs();
+    }
+
+    private void bridgeDataInputs() {
+        Map<String, RuntimeGraphIndex.ConnectionSource> finalInputLookup = new HashMap<>();
+
+        for (Map.Entry<String, RuntimeGraphIndex.ConnectionSource> entry : inputLookup.entrySet()) {
+            NodePortKey target = parseKey(entry.getKey());
+            if (target == null || isVirtualNode(target.nodeId)) continue;
+
+            DataResolution resolved = resolveDataSource(entry.getValue(), new HashSet<>());
+            if (resolved.source != null) {
+                finalInputLookup.put(entry.getKey(), resolved.source);
+            } else if (resolved.hasStaticValue) {
+                setStaticInput(target.nodeId, target.portName, resolved.staticValue);
+            }
+        }
+
         inputLookup.clear();
         inputLookup.putAll(finalInputLookup);
-
-        // --- 2. [重写] 执行流重定向 (Push Model) ---
-        for (String sourceId : new HashSet<>(flowOutputLookup.keySet())) {
-            Map<String, TargetConnection> outputs = flowOutputLookup.get(sourceId);
-            if (outputs == null) continue;
-
-            Map<String, TargetConnection> newOutputs = new HashMap<>();
-            for (Map.Entry<String, TargetConnection> entry : outputs.entrySet()) {
-                String outPortName = entry.getKey();
-                TargetConnection initialTarget = entry.getValue();
-
-                TargetConnection resolvedTarget = resolveExecutionTarget(initialTarget.targetNodeId(), initialTarget.targetPortName());
-                if (resolvedTarget != null) {
-                    newOutputs.put(outPortName, resolvedTarget);
-                }
-            }
-            flowOutputLookup.put(sourceId, newOutputs);
-        }
     }
 
-    // --- 递归解析逻辑 ---
+    private void bridgeExecutionOutputs() {
+        Map<String, Map<String, TargetConnection>> finalFlowLookup = new HashMap<>();
 
-    /**
-     * [数据流解析] 给定一个数据源，如果是虚拟节点(Group/GroupIn)，则寻找其背后的真实数据源
-     */
-    private RuntimeGraphIndex.ConnectionSource resolveDataSource(RuntimeGraphIndex.ConnectionSource currentSource) {
+        for (Map.Entry<String, Map<String, TargetConnection>> sourceEntry : flowOutputLookup.entrySet()) {
+            String sourceId = sourceEntry.getKey();
+            if (isVirtualNode(sourceId)) continue;
+
+            Map<String, TargetConnection> rewrittenOutputs = new HashMap<>();
+            for (Map.Entry<String, TargetConnection> outputEntry : sourceEntry.getValue().entrySet()) {
+                TargetConnection initialTarget = outputEntry.getValue();
+                TargetConnection resolvedTarget = resolveExecutionTarget(
+                        initialTarget.targetNodeId,
+                        initialTarget.targetPortName,
+                        new HashSet<>()
+                );
+                if (resolvedTarget != null && !isVirtualNode(resolvedTarget.targetNodeId)) {
+                    rewrittenOutputs.put(outputEntry.getKey(), resolvedTarget);
+                }
+            }
+
+            if (!rewrittenOutputs.isEmpty()) {
+                finalFlowLookup.put(sourceId, rewrittenOutputs);
+            }
+        }
+
+        flowOutputLookup.clear();
+        flowOutputLookup.putAll(finalFlowLookup);
+    }
+
+    private DataResolution resolveDataSource(RuntimeGraphIndex.ConnectionSource currentSource, Set<String> visited) {
+        if (currentSource == null) return DataResolution.empty();
+
         String nodeId = currentSource.sourceNodeId();
         String port = currentSource.sourcePortName();
+        String cacheKey = makeKey(nodeId, port);
+        DataResolution cached = dataResolutionCache.get(cacheKey);
+        if (cached != null) return cached;
 
-        // 情况 A: 源头是一个 Group 节点 (说明我们在 Group 外部，连接了 Group 的输出)
-        // 动作：钻入内部，寻找是谁连接了 `group_out` 的对应端口
-        if (groupBoundaries.containsKey(nodeId)) {
-            GroupBoundary boundary = groupBoundaries.get(nodeId);
-            if (boundary.groupOutId == null) return null; // 该 Group 没有输出出口
-
-            // 在 inputLookup 中查找：谁连到了 group_out 节点的 port 端口？
-            String internalKey = makeKey(boundary.groupOutId, port);
-            RuntimeGraphIndex.ConnectionSource internalProvider = inputLookup.get(internalKey);
-
-            if (internalProvider != null) {
-                return resolveDataSource(internalProvider); // 递归：内部提供者可能还是一个 Group
-            }
-            return null; // 内部 group_out 悬空，无数据
+        if (!visited.add(cacheKey)) {
+            throw new IllegalStateException("[BlueprintCompiler] Data flow cycle crosses node_group boundary at " + cacheKey);
         }
 
-        // 情况 B: 源头是一个 GroupIn 节点 (说明我们在 Group 内部，连接了 group_in 的输出)
-        // 动作：钻出外部，寻找是谁连接了 `Group节点` 的对应端口
-        if (internalToGroupMap.containsKey(nodeId)) {
-            // 检查这是否是一个 GroupIn 节点 (通过边界信息反查，或者通过 typeLookup 查，这里用 map 简化判断)
-            String ownerGroupId = internalToGroupMap.get(nodeId);
-            GroupBoundary boundary = groupBoundaries.get(ownerGroupId);
-
-            // 确认一下当前的 nodeId 确实是该组的 groupInId
-            if (nodeId.equals(boundary.groupInId)) {
-                // 在 inputLookup 中查找：谁连到了 Group 节点的 port 端口？
-                String externalKey = makeKey(ownerGroupId, port);
-                RuntimeGraphIndex.ConnectionSource externalProvider = inputLookup.get(externalKey);
-
-                if (externalProvider != null) {
-                    return resolveDataSource(externalProvider); // 递归：外部提供者可能还是一个 GroupIn
-                }
-                return null; // 外部 Group 悬空，无数据
+        DataResolution resolved;
+        GroupBoundary groupBoundary = groupBoundaries.get(nodeId);
+        if (groupBoundary != null) {
+            if (groupBoundary.groupOutId == null) {
+                resolved = DataResolution.empty();
+            } else {
+                RuntimeGraphIndex.ConnectionSource internalProvider = inputLookup.get(makeKey(groupBoundary.groupOutId, port));
+                resolved = internalProvider != null
+                        ? resolveDataSource(internalProvider, visited)
+                        : DataResolution.empty();
             }
+
+        } else if (boundaryToGroupMap.containsKey(nodeId)) {
+            String ownerGroupId = boundaryToGroupMap.get(nodeId);
+            GroupBoundary ownerBoundary = groupBoundaries.get(ownerGroupId);
+            if (ownerBoundary != null && nodeId.equals(ownerBoundary.groupInId)) {
+                RuntimeGraphIndex.ConnectionSource externalProvider = inputLookup.get(makeKey(ownerGroupId, port));
+                resolved = externalProvider != null
+                        ? resolveDataSource(externalProvider, visited)
+                        : resolveGroupInputDefault(ownerGroupId, port);
+            } else {
+                resolved = DataResolution.empty();
+            }
+
+        } else if (isVirtualNode(nodeId)) {
+            resolved = DataResolution.empty();
+        } else {
+            resolved = DataResolution.source(currentSource);
         }
 
-        // 情况 C: 普通节点，直接返回
-        return currentSource;
+        visited.remove(cacheKey);
+        dataResolutionCache.put(cacheKey, resolved);
+        return resolved;
     }
 
-    /**
-     * [执行流解析] 给定一个跳转目标，如果是虚拟节点，则寻找其背后的真实目标
-     */
-    private TargetConnection resolveExecutionTarget(String targetId, String targetPort) {
-        // 情况 A: 目标是一个 Group 节点 (外部 -> 进内部)
-        if (groupBoundaries.containsKey(targetId)) {
-            GroupBoundary boundary = groupBoundaries.get(targetId);
-            if (boundary.groupInId == null) return null;
+    private TargetConnection resolveExecutionTarget(String targetId, String targetPort, Set<String> visited) {
+        if (targetId == null || targetPort == null) return null;
+        String cacheKey = makeKey(targetId, targetPort);
+        Optional<TargetConnection> cached = executionTargetCache.get(cacheKey);
+        if (cached != null) return cached.orElse(null);
 
-            Map<String, TargetConnection> internalFlows = flowOutputLookup.get(boundary.groupInId);
-            if (internalFlows != null) {
-                // 1. 外部连的是 Group 的 targetPort，对应 group_in 的输出端口也是 targetPort
-                if (internalFlows.containsKey(targetPort)) {
-                    TargetConnection nextHop = internalFlows.get(targetPort);
-                    return resolveExecutionTarget(nextHop.targetNodeId(), nextHop.targetPortName());
-                }
-                // 2. 兼容回落
-                if (internalFlows.containsKey("flow_out")) {
-                    TargetConnection nextHop = internalFlows.get("flow_out");
-                    return resolveExecutionTarget(nextHop.targetNodeId(), nextHop.targetPortName());
-                }
+        if (!visited.add(cacheKey)) return null;
+
+        TargetConnection resolved;
+        GroupBoundary groupBoundary = groupBoundaries.get(targetId);
+        if (groupBoundary != null) {
+            if (groupBoundary.groupInId == null) {
+                resolved = null;
+            } else {
+                TargetConnection nextHop = getFlowTarget(groupBoundary.groupInId, targetPort);
+                resolved = nextHop != null
+                        ? resolveExecutionTarget(nextHop.targetNodeId, nextHop.targetPortName, visited)
+                        : null;
             }
-            return null; // 死胡同
+
+        } else if (boundaryToGroupMap.containsKey(targetId)) {
+            String ownerGroupId = boundaryToGroupMap.get(targetId);
+            GroupBoundary ownerBoundary = groupBoundaries.get(ownerGroupId);
+            if (ownerBoundary != null && targetId.equals(ownerBoundary.groupOutId)) {
+                TargetConnection nextHop = getFlowTarget(ownerGroupId, targetPort);
+                resolved = nextHop != null
+                        ? resolveExecutionTarget(nextHop.targetNodeId, nextHop.targetPortName, visited)
+                        : null;
+            } else {
+                resolved = null;
+            }
+
+        } else if (isVirtualNode(targetId)) {
+            resolved = null;
+        } else {
+            resolved = new TargetConnection(targetId, targetPort);
         }
 
-        // 情况 B: 目标是一个 GroupOut 节点 (内部 -> 出外部)
-        if (internalToGroupMap.containsKey(targetId)) {
-            String ownerGroupId = internalToGroupMap.get(targetId);
-            GroupBoundary boundary = groupBoundaries.get(ownerGroupId);
-
-            if (targetId.equals(boundary.groupOutId)) {
-                Map<String, TargetConnection> externalFlows = flowOutputLookup.get(ownerGroupId);
-                if (externalFlows != null) {
-                    // 内部连的是 group_out 的 targetPort，对应 Group 的输出端口也是 targetPort
-                    if (externalFlows.containsKey(targetPort)) {
-                        TargetConnection nextHop = externalFlows.get(targetPort);
-                        return resolveExecutionTarget(nextHop.targetNodeId(), nextHop.targetPortName());
-                    }
-                    if (externalFlows.containsKey("flow_out")) {
-                        TargetConnection nextHop = externalFlows.get("flow_out");
-                        return resolveExecutionTarget(nextHop.targetNodeId(), nextHop.targetPortName());
-                    }
-                }
-                return null; // 流程在 Group 处终结
-            }
-        }
-
-        // 情况 C: 普通节点，触底返回真实的节点与端口
-        return new TargetConnection(targetId, targetPort);
+        visited.remove(cacheKey);
+        executionTargetCache.put(cacheKey, Optional.ofNullable(resolved));
+        return resolved;
     }
 
-    private GroupBoundary parseGroupBoundary(String groupId, JsonObject groupObj, String prefix) {
-        JsonObject subNodes = groupObj.getAsJsonObject("sub_nodes");
+    private DataResolution resolveGroupInputDefault(String groupId, String port) {
+        Map<String, Object> groupInputs = staticInputLookup.get(groupId);
+        if (groupInputs == null || !groupInputs.containsKey(port)) {
+            return DataResolution.empty();
+        }
+
+        Object value = groupInputs.get(port);
+        return value != null ? DataResolution.staticValue(value) : DataResolution.empty();
+    }
+
+    private TargetConnection getFlowTarget(String sourceId, String port) {
+        Map<String, TargetConnection> flows = flowOutputLookup.get(sourceId);
+        if (flows == null) return null;
+
+        TargetConnection exact = flows.get(port);
+        if (exact != null) return exact;
+
+        return flows.get("flow_out");
+    }
+
+    private void setStaticInput(String nodeId, String portName, Object value) {
+        if (value == null) return;
+        staticInputLookup.computeIfAbsent(nodeId, ignored -> new HashMap<>()).put(portName, value);
+        allStaticKeys.add(portName);
+    }
+
+    private void removeVirtualNodes() {
+        if (virtualNodeIds.isEmpty()) return;
+
+        for (String virtualId : virtualNodeIds) {
+            nodeDataLookup.remove(virtualId);
+            flowOutputLookup.remove(virtualId);
+            propertyLookup.remove(virtualId);
+            staticInputLookup.remove(virtualId);
+        }
+
+        for (Iterator<Map.Entry<String, List<String>>> iterator = typeLookup.entrySet().iterator(); iterator.hasNext();) {
+            Map.Entry<String, List<String>> entry = iterator.next();
+            entry.getValue().removeIf(virtualNodeIds::contains);
+            if (entry.getValue().isEmpty()) {
+                iterator.remove();
+            }
+        }
+    }
+
+    private GroupBoundary parseGroupBoundary(String groupId, JsonObject groupObj) {
+        JsonObject subNodes = asObject(groupObj.get("sub_nodes"));
+        if (subNodes == null) return new GroupBoundary(groupId, null, null);
+
         String inId = null;
         String outId = null;
+        for (String localId : subNodes.keySet()) {
+            JsonObject sub = asObject(subNodes.get(localId));
+            if (sub == null) continue;
 
-        for (String key : subNodes.keySet()) {
-            JsonObject sub = subNodes.getAsJsonObject(key);
-            if (!sub.has("node_type")) continue;
-            String type = sub.get("node_type").getAsString();
-            String globalKey = prefix + groupId + "/" + key;
-            if ("group_in".equals(type)) inId = globalKey;
-            if ("group_out".equals(type)) outId = globalKey;
+            String type = readString(sub, "node_type", "");
+            String globalId = groupId + "/" + localId;
+            if (GroupNodeTypes.GROUP_IN_ID.equals(localId) || GroupNodeTypes.GROUP_IN.equals(type)) {
+                inId = globalId;
+            } else if (GroupNodeTypes.GROUP_OUT_ID.equals(localId) || GroupNodeTypes.GROUP_OUT.equals(type)) {
+                outId = globalId;
+            }
         }
+
         return new GroupBoundary(groupId, inId, outId);
+    }
+
+    private TargetConnection parseTarget(String prefix, JsonElement element, String defaultPort) {
+        if (element == null || element.isJsonNull()) return null;
+
+        if (element.isJsonObject()) {
+            JsonObject target = element.getAsJsonObject();
+            String targetNode = readString(target, "target_node", null);
+            if (targetNode == null || targetNode.isBlank()) return null;
+
+            String targetPort = readString(target, "target_port", defaultPort);
+            return new TargetConnection(prefix + targetNode, targetPort);
+        }
+
+        if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
+            String targetNode = element.getAsString();
+            if (targetNode == null || targetNode.isBlank()) return null;
+            return new TargetConnection(prefix + targetNode, defaultPort);
+        }
+
+        return null;
+    }
+
+    private static JsonObject asObject(JsonElement element) {
+        return element != null && element.isJsonObject() ? element.getAsJsonObject() : null;
+    }
+
+    private static JsonArray asArray(JsonElement element) {
+        return element != null && element.isJsonArray() ? element.getAsJsonArray() : null;
+    }
+
+    private static String readString(JsonObject obj, String key, String defaultValue) {
+        if (obj == null || !obj.has(key)) return defaultValue;
+        JsonElement element = obj.get(key);
+        if (element == null || !element.isJsonPrimitive()) return defaultValue;
+        try {
+            return element.getAsString();
+        } catch (Exception ignored) {
+            return defaultValue;
+        }
+    }
+
+    private static PortType readPortType(JsonObject obj) {
+        String raw = readString(obj, "type", null);
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return PortType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private boolean isVirtualNode(String nodeId) {
+        return virtualNodeIds.contains(nodeId);
+    }
+
+    private static boolean isVirtualType(String type) {
+        return GroupNodeTypes.NODE_GROUP.equals(type)
+                || GroupNodeTypes.GROUP_IN.equals(type)
+                || GroupNodeTypes.GROUP_OUT.equals(type);
     }
 
     private static String makeKey(String nodeId, String portName) {
         return nodeId + "#" + portName;
     }
 
+    private static NodePortKey parseKey(String key) {
+        int separator = key != null ? key.indexOf('#') : -1;
+        if (separator <= 0 || separator >= key.length() - 1) return null;
+        return new NodePortKey(key.substring(0, separator), key.substring(separator + 1));
+    }
+
     private record GroupBoundary(String groupId, String groupInId, String groupOutId) {}
+
+    private record NodePortKey(String nodeId, String portName) {}
+
+    private record DataResolution(
+            RuntimeGraphIndex.ConnectionSource source,
+            Object staticValue,
+            boolean hasStaticValue
+    ) {
+        static DataResolution source(RuntimeGraphIndex.ConnectionSource source) {
+            return new DataResolution(source, null, false);
+        }
+
+        static DataResolution staticValue(Object value) {
+            return new DataResolution(null, value, true);
+        }
+
+        static DataResolution empty() {
+            return new DataResolution(null, null, false);
+        }
+    }
 }

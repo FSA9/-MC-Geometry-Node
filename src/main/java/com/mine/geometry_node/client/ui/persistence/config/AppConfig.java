@@ -35,5 +35,6 @@ public class AppConfig {
         public String toggleSnapToGrid = "SHIFT+TAB";
         public String toggleGridAndAxis = "SHIFT+ALT+Z";
         public String groupIntoFrame = "CTRL+J";
+        public String groupIntoNodeGroup = "CTRL+G";
     }
 }

@@ -90,6 +90,19 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         btn.setOnClickListener(v -> {
             if (mEditorContext == null) return;
 
+            if (isGroupVirtualDynamicNode()) {
+                if (isAdd) {
+                    com.mine.geometry_node.client.ui.UICommand.commands.CmdAddGroupVirtualPort cmd =
+                            new com.mine.geometry_node.client.ui.UICommand.commands.CmdAddGroupVirtualPort(mEditorContext.getGraphController(), mNodeData.id);
+                    mEditorContext.getCommandManager().execute(cmd);
+                } else if (refPortId != null && !refPortId.isBlank()) {
+                    com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveGroupVirtualPort cmd =
+                            new com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveGroupVirtualPort(mEditorContext.getGraphController(), mNodeData.id, refPortId);
+                    mEditorContext.getCommandManager().execute(cmd);
+                }
+                return;
+            }
+
             boolean isInputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
             String propertyKey = isInputDynamic ? StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id() : StaticKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
             int minCount = isInputDynamic ? 1 : mNodeDef.getMetaOrDefault(SchemaKeys.MIN_DYNAMIC_OUTPUT, 1);
@@ -110,7 +123,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
                 }
             } else {
                 if (currentCount > minCount && removeIndex != null) {
-                    com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch cmd = new com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch(mEditorContext.getGraphController(), mEditorContext.getGraph(), mNodeData.id, propertyKey, currentCount, removeIndex);
+                    com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch cmd = new com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch(mEditorContext.getGraphController(), mEditorContext.getCurrentGraph(), mNodeData.id, propertyKey, currentCount, removeIndex);
                     mEditorContext.getCommandManager().execute(cmd);
                 }
             }
@@ -185,7 +198,8 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         // --- 2. Add 按钮 ---
         boolean isInputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
         boolean isOutputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT).isPresent();
-        if (isInputDynamic || isOutputDynamic) {
+        boolean isGroupVirtualDynamic = isGroupVirtualDynamicNode();
+        if (isInputDynamic || isOutputDynamic || isGroupVirtualDynamic) {
             mAddButton = createDynamicButton(context, "+", true, null, null);
 
             float inputBoxHeight = com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils.getStandardInputHeight();
@@ -376,7 +390,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, scaledRadius, scaledRadius, mPaint);
 
         // 画节点头部
-        mPaint.setColor(mNodeDef.category().getColor());
+        mPaint.setColor(mNodeData.getHeaderColor(mNodeDef.category().getColor()));
         mTempRect.set(0, 0, w, scaledHeaderH);
         canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, 0f, 0f, mPaint);
 
@@ -424,6 +438,10 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
     }
 
     private boolean isDynamicRow(PortRow row) { return row.hintParams() != null && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC)); }
+
+    private boolean isGroupVirtualDynamicNode() {
+        return mNodeData != null && (mNodeData.isGroupInputNode() || mNodeData.isGroupOutputNode());
+    }
 
     @Override
     public View findInteractiveViewAt(float localXpx, float localYpx) {

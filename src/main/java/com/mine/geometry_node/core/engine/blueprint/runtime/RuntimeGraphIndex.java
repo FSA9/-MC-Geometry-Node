@@ -197,9 +197,24 @@ public class RuntimeGraphIndex {
 
         if (node.has("inputs") && node.getAsJsonObject("inputs").has(portName)) return true;
         if (node.has("outputs") && node.getAsJsonObject("outputs").has(portName)) return true;
+        if (node.has("exec_outputs") && node.getAsJsonObject("exec_outputs").has(portName)) return true;
         if (node.has("execution") && node.getAsJsonObject("execution").has(portName)) return true;
 
+        if (node.has("port_config") && node.get("port_config").isJsonObject()) {
+            JsonObject portConfig = node.getAsJsonObject("port_config");
+            if (hasPortConfigEntry(portConfig, "inputs", portName)) return true;
+            if (hasPortConfigEntry(portConfig, "exec_inputs", portName)) return true;
+            if (hasPortConfigEntry(portConfig, "outputs", portName)) return true;
+            if (hasPortConfigEntry(portConfig, "exec_outputs", portName)) return true;
+        }
+
         return false;
+    }
+
+    private static boolean hasPortConfigEntry(JsonObject portConfig, String category, String portName) {
+        return portConfig.has(category)
+                && portConfig.get(category).isJsonObject()
+                && portConfig.getAsJsonObject(category).has(portName);
     }
 
     @SuppressWarnings("unchecked")

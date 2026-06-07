@@ -19,6 +19,7 @@ public class KeyManager {
         void onToggleSnapToGridRequested();
         void onToggleGridAndAxisRequested();
         void onGroupIntoFrameRequested();
+        void onGroupIntoNodeGroupRequested();
     }
 
     private final InteractionContext mContext;
@@ -33,6 +34,7 @@ public class KeyManager {
     private KeyBinding mToggleSnapToGridBinding;
     private KeyBinding mToggleGridAndAxisBinding;
     private KeyBinding mGroupIntoFrameBinding;
+    private KeyBinding mGroupIntoNodeGroupBinding;
 
     public KeyManager(InteractionContext context) {
         this.mContext = context;
@@ -90,6 +92,10 @@ public class KeyManager {
             if (mListener != null) mListener.onGroupIntoFrameRequested();
             return true;
         }
+        if (matches(mGroupIntoNodeGroupBinding, event)) {
+            if (mListener != null) mListener.onGroupIntoNodeGroupRequested();
+            return true;
+        }
         return false;
     }
 
@@ -104,6 +110,7 @@ public class KeyManager {
         mToggleSnapToGridBinding = KeyBinding.parse(config.keyBindings.toggleSnapToGrid);
         mToggleGridAndAxisBinding = KeyBinding.parse(config.keyBindings.toggleGridAndAxis);
         mGroupIntoFrameBinding = KeyBinding.parse(config.keyBindings.groupIntoFrame);
+        mGroupIntoNodeGroupBinding = KeyBinding.parse(config.keyBindings.groupIntoNodeGroup);
     }
 
     private static boolean matches(KeyBinding binding, KeyEvent event) {

@@ -5,6 +5,9 @@ import com.mine.geometry_node.client.ui.viewport.GraphController;
 import com.mine.geometry_node.core.node.Connection;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
 
 import java.util.List;
 import java.util.Map;
@@ -32,8 +35,30 @@ public class CmdConnect implements ICommand {
     }
 
     private boolean isExecutionFlow() {
-        // [此处保持你的硬编码逻辑即可，或者通过 PortType 动态判断更佳，但目前用着没问题]
-        return outPortId.startsWith("flow_") || inPortId.startsWith("flow_");
+        if (outPortId.startsWith("flow_") || inPortId.startsWith("flow_")) return true;
+        PortType outType = getPortType(outNodeId, outPortId, false);
+        PortType inType = getPortType(inNodeId, inPortId, true);
+        if (outType == PortType.EXECUTION || inType == PortType.EXECUTION) return true;
+        return isBoundaryVirtualPort(outNodeId) && inType == PortType.EXECUTION
+                || isBoundaryVirtualPort(inNodeId) && outType == PortType.EXECUTION;
+    }
+
+    private PortType getPortType(String nodeId, String portId, boolean inputSide) {
+        if (mGraph == null || nodeId == null || portId == null) return null;
+        NodeData node = mGraph.getNode(nodeId);
+        var def = NodeRegistry.INSTANCE.resolveDefinition(node);
+        if (def == null) return null;
+        for (PortRow row : def.rows()) {
+            if (inputSide && row.leftPort() != null && row.leftPort().id().equals(portId)) return row.leftPort().type();
+            if (!inputSide && row.rightPort() != null && row.rightPort().id().equals(portId)) return row.rightPort().type();
+        }
+        return null;
+    }
+
+    private boolean isBoundaryVirtualPort(String nodeId) {
+        if (mGraph == null || nodeId == null) return false;
+        NodeData node = mGraph.getNode(nodeId);
+        return node != null && (node.isGroupInputNode() || node.isGroupOutputNode());
     }
 
     /**

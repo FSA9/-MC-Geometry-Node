@@ -26,7 +26,7 @@ public class CmdChangeParent implements ICommand {
         // 记录修改前的 parentFrame
         for (String id : elementIds) {
             if (isNode) {
-                NodeData node = controller.getContext().getGraph().getNode(id);
+                NodeData node = controller.getContext().getCurrentGraph().getNode(id);
                 if (node != null) mOldParents.put(id, node.parentFrame);
             } else {
                 FrameData frame = controller.getContext().getGraph().getFrame(id);

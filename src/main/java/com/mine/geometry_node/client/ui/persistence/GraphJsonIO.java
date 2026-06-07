@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -56,7 +57,7 @@ public final class GraphJsonIO {
         JsonObject nodesObj = root.getAsJsonObject("nodes");
         for (String id : nodesObj.keySet()) {
             NodeData n = GSON.fromJson(nodesObj.get(id), NodeData.class);
-            n.id = id;
+            restoreNodeTree(n, id, null);
             g.nodes.put(id, n);
         }
 
@@ -69,19 +70,50 @@ public final class GraphJsonIO {
             }
         }
 
-        for (NodeData outNode : g.nodes.values()) {
+        restoreConnectedInputs(g.nodes);
+        return g;
+    }
+
+    private static void restoreNodeTree(NodeData node, String id, NodeData parentGroupNode) {
+        if (node == null) return;
+        node.id = id;
+        node.parentGroupNode = parentGroupNode;
+        node.ensurePortConfig();
+
+        if (node.subNodes == null) return;
+        for (Map.Entry<String, NodeData> entry : node.subNodes.entrySet()) {
+            restoreNodeTree(entry.getValue(), entry.getKey(), node);
+        }
+    }
+
+    private static void restoreConnectedInputs(Map<String, NodeData> scopeNodes) {
+        if (scopeNodes == null) return;
+        Map<String, NodeData> scopeIndex = new HashMap<>();
+        for (Map.Entry<String, NodeData> entry : scopeNodes.entrySet()) {
+            NodeData node = entry.getValue();
+            if (node != null) {
+                scopeIndex.put(entry.getKey(), node);
+            }
+        }
+
+        for (NodeData outNode : scopeNodes.values()) {
+            if (outNode == null) continue;
             if (outNode.outputs != null) {
                 for (List<Connection> connections : outNode.outputs.values()) {
-                    if (connections != null) {
-                        for (Connection link : connections) {
-                            NodeData targetNode = g.nodes.get(link.targetNodeId());
-                            if (targetNode != null) targetNode.setInputConnected(link.targetPortName(), true);
-                        }
+                    if (connections == null) continue;
+                    for (Connection link : connections) {
+                        NodeData targetNode = scopeIndex.get(link.targetNodeId());
+                        if (targetNode != null) targetNode.setInputConnected(link.targetPortName(), true);
                     }
                 }
             }
         }
-        return g;
+
+        for (NodeData node : scopeNodes.values()) {
+            if (node != null && node.subNodes != null) {
+                restoreConnectedInputs(node.subNodes);
+            }
+        }
     }
 
     private static List<String> readUserTags(JsonObject root, NodeGraph graph) {

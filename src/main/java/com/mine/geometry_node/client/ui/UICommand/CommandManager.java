@@ -50,6 +50,11 @@ public class CommandManager {
         }
     }
 
+    public void clearHistory() {
+        mUndoStack.clear();
+        mRedoStack.clear();
+    }
+
     private void markAsDirty() {
         GraphSession activeSession = DocumentManager.INSTANCE.getActiveSession();
         if (activeSession != null && !activeSession.isDirty) {

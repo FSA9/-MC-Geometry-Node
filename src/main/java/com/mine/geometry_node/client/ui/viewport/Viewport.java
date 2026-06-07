@@ -301,6 +301,16 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     @Override
+    public boolean canConnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId) {
+        return mController != null && mController.canConnectPorts(outNodeId, outPortId, inNodeId, inPortId);
+    }
+
+    @Override
+    public boolean isInsideGroupScope() {
+        return mController != null && mController.isInsideGroupScope();
+    }
+
+    @Override
     public void showMenu(float screenX, float screenY) {
         closeMenu();
         mActiveMenu = new ViewportMenu(getContext());
@@ -320,7 +330,11 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override public void requestAddNode(float screenX, float screenY, String typeId) { if (mController != null) mController.executeAddNode(screenX, screenY, typeId); }
     @Override public void requestAddFrame(float uiX, float uiY) { if (mController != null) mController.executeAddFrame(uiX, uiY); }
     @Override public void requestGroupIntoFrame() { if (mController != null) mController.executeGroupIntoFrame(); }
+    @Override public void requestAddGroup(float uiX, float uiY) { if (mController != null) mController.executeAddGroup(uiX, uiY); }
+    @Override public void requestGroupIntoNodeGroup() { if (mController != null) mController.executeGroupIntoNodeGroup(); }
+    @Override public void requestExitGroup() { if (mController != null) mController.executeExitGroup(); }
     @Override public void requestSetFrameProperty(String frameId, String title, int color) { if (mController != null) mController.executeSetFrameProperty(frameId, title, color); }
+    @Override public void requestSetGroupNodeProperty(String nodeId, String title, int color, String comment) { if (mController != null) mController.executeSetGroupNodeProperty(nodeId, title, color, comment); }
     @Override public void requestRenamePort(String nodeId, String category, String portId, String oldName, String newName) { if (mController != null) mController.executeRenamePort(nodeId, category, portId, oldName, newName); }
     @Override public void requestSave() { if (mController != null) mController.onSaveRequested(); }
     @Override public void requestViewportFocus() { requestFocus(); }

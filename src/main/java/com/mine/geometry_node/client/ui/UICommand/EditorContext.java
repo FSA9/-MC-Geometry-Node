@@ -1,10 +1,13 @@
 package com.mine.geometry_node.client.ui.UICommand;
 
 import com.mine.geometry_node.client.ui.viewport.GraphController;
+import com.mine.geometry_node.core.node.FrameData;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -17,6 +20,8 @@ public class EditorContext {
     private final NodeGraph mGraph;
     private final CommandManager mCommandManager;
     private final GraphController mGraphController;
+    private NodeGraph mCurrentGraph;
+    private NodeData mCurrentGroupNode;
 
     // --- 事件监听器列表 ---
     private final List<EditorListener> mListeners = new ArrayList<>();
@@ -24,15 +29,56 @@ public class EditorContext {
     public EditorContext(NodeGraph graph) {
         // 如果传入 null，则默认创建一个空的新图
         this.mGraph = (graph != null) ? graph : new NodeGraph();
+        this.mCurrentGraph = this.mGraph;
         this.mCommandManager = new CommandManager();
         this.mGraphController = new GraphController(this);
     }
 
     // --- Getters ---
     public NodeGraph getGraph() { return mGraph; }
+    public NodeGraph getCurrentGraph() { return mCurrentGraph != null ? mCurrentGraph : mGraph; }
+    public NodeData getCurrentGroupNode() { return mCurrentGroupNode; }
+    public boolean isInsideGroupScope() { return mCurrentGroupNode != null; }
     public CommandManager getCommandManager() { return mCommandManager; }
     public GraphController getGraphController() { return mGraphController; }
     public List<EditorListener> getListeners() { return mListeners; }
+
+    public boolean enterGroupScope(NodeData groupNode) {
+        if (groupNode == null || !groupNode.isGroupNode()) {
+            return false;
+        }
+
+        GroupNodeFactory.ensureBoundaryNodes(groupNode);
+        mCurrentGroupNode = groupNode;
+        mCurrentGraph = createGroupScopeGraph(groupNode);
+        return true;
+    }
+
+    public boolean exitGroupScope() {
+        if (mCurrentGroupNode == null) {
+            return false;
+        }
+
+        NodeData parentGroup = mCurrentGroupNode.parentGroupNode;
+        if (parentGroup != null && parentGroup.isGroupNode()) {
+            mCurrentGroupNode = parentGroup;
+            mCurrentGraph = createGroupScopeGraph(parentGroup);
+        } else {
+            mCurrentGroupNode = null;
+            mCurrentGraph = mGraph;
+        }
+        return true;
+    }
+
+    private NodeGraph createGroupScopeGraph(NodeData groupNode) {
+        NodeGraph graph = new NodeGraph();
+        graph.graphKind = mGraph.graphKind;
+        graph.tags = mGraph.tags;
+        graph.version = mGraph.version;
+        graph.nodes = groupNode.ensureSubNodes();
+        graph.frames = new LinkedHashMap<String, FrameData>();
+        return graph;
+    }
 
     // ==========================================
     // 事件总线 (Event Bus)

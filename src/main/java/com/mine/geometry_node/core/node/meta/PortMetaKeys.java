@@ -6,6 +6,8 @@ public class PortMetaKeys {
      */
     public static final MetaKey<Boolean> IS_DYNAMIC = new MetaKey<>("is_dynamic");
 
+    public static final MetaKey<Boolean> IS_GROUP_VIRTUAL_DYNAMIC = new MetaKey<>("is_group_virtual_dynamic");
+
     public static final MetaKey<Integer> DYNAMIC_INDEX = new MetaKey<>("dynamic_index");
 
     /**

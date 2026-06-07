@@ -13,6 +13,7 @@ import com.mine.geometry_node.client.ui.viewport.node.UINode;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
@@ -48,19 +49,8 @@ public class ViewportController implements EditorContext.EditorListener,
 
             setEditorContext(session.editorContext);
 
-            com.mine.geometry_node.core.node.NodeGraph graph = session.editorContext.getGraph();
-            if (graph != null) {
-                if (graph.frames != null) {
-                    for (com.mine.geometry_node.core.node.FrameData frameData : graph.frames.values()) {
-                        onFrameAdded(frameData);
-                    }
-                }
-                if (graph.nodes != null) {
-                    for (NodeData data : graph.nodes.values()) {
-                        onNodeAdded(data);
-                    }
-                }
-            }
+            com.mine.geometry_node.core.node.NodeGraph graph = session.editorContext.getCurrentGraph();
+            rebuildScopeVisuals(graph);
 
             mViewport.updateSelectionState(session.selectedNodeIds);
             mViewport.rebuildVisualConnections(graph);
@@ -82,8 +72,10 @@ public class ViewportController implements EditorContext.EditorListener,
             mCurrentSession.currentScale = mViewport.getCamera().getScale();
 
             mCurrentSession.selectedNodeIds.clear();
-            for (NodeVisualAdapter node : mViewport.getSelectedNodeVisuals()) {
-                mCurrentSession.selectedNodeIds.add(node.getNodeId());
+            if (mEditorContext == null || !mEditorContext.isInsideGroupScope()) {
+                for (NodeVisualAdapter node : mViewport.getSelectedNodeVisuals()) {
+                    mCurrentSession.selectedNodeIds.add(node.getNodeId());
+                }
             }
         }
     }
@@ -96,6 +88,15 @@ public class ViewportController implements EditorContext.EditorListener,
         return mCurrentSession;
     }
 
+    public boolean isInsideGroupScope() {
+        return mEditorContext != null && mEditorContext.isInsideGroupScope();
+    }
+
+    public boolean canConnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId) {
+        return mEditorContext != null
+                && mEditorContext.getGraphController().canConnectPorts(outNodeId, outPortId, inNodeId, inPortId);
+    }
+
     public void setEditorContext(EditorContext context) {
         if (this.mEditorContext != null) {
             this.mEditorContext.removeListener(this);
@@ -103,6 +104,53 @@ public class ViewportController implements EditorContext.EditorListener,
         this.mEditorContext = context;
         if (this.mEditorContext != null) {
             this.mEditorContext.addListener(this);
+        }
+    }
+
+    public void executeEnterGroup(String nodeId) {
+        if (mEditorContext == null || nodeId == null) return;
+        NodeData node = mEditorContext.getCurrentGraph().getNode(nodeId);
+        if (node == null || !node.isGroupNode()) return;
+
+        if (mEditorContext.enterGroupScope(node)) {
+            mEditorContext.getCommandManager().clearHistory();
+            mViewport.clearSelection();
+            mViewport.prepareLayers();
+            rebuildScopeVisuals(mEditorContext.getCurrentGraph());
+            rebuildVisualConnections();
+            mViewport.getCamera().setPosition(mViewport.getWidth() / 2.0f, mViewport.getHeight() / 2.0f);
+            mViewport.updateTransform();
+            mViewport.invalidate();
+        }
+    }
+
+    public void executeExitGroup() {
+        if (mEditorContext == null || !mEditorContext.isInsideGroupScope()) return;
+
+        if (mEditorContext.exitGroupScope()) {
+            mEditorContext.getCommandManager().clearHistory();
+            mViewport.clearSelection();
+            mViewport.prepareLayers();
+            rebuildScopeVisuals(mEditorContext.getCurrentGraph());
+            rebuildVisualConnections();
+            mViewport.updateTransform();
+            mViewport.invalidate();
+        }
+    }
+
+    private void rebuildScopeVisuals(NodeGraph graph) {
+        if (graph == null) return;
+        if (mEditorContext == null || !mEditorContext.isInsideGroupScope()) {
+            if (graph.frames != null) {
+                for (com.mine.geometry_node.core.node.FrameData frameData : graph.frames.values()) {
+                    onFrameAdded(frameData);
+                }
+            }
+        }
+        if (graph.nodes != null) {
+            for (NodeData data : graph.nodes.values()) {
+                onNodeAdded(data);
+            }
         }
     }
 
@@ -117,9 +165,16 @@ public class ViewportController implements EditorContext.EditorListener,
     }
 
     public void executeAddFrame(float uiX, float uiY) {
-        if (mEditorContext == null) return;
+        if (mEditorContext == null || mEditorContext.isInsideGroupScope()) return;
         com.mine.geometry_node.core.node.FrameData frameData = new com.mine.geometry_node.core.node.FrameData(UUID.randomUUID().toString(), uiX, uiY);
         CmdAddFrame cmd = new CmdAddFrame(mEditorContext.getGraphController(), frameData);
+        mEditorContext.getCommandManager().execute(cmd);
+    }
+
+    public void executeAddGroup(float uiX, float uiY) {
+        if (mEditorContext == null) return;
+        NodeData group = GroupNodeFactory.createGroupNode(UUID.randomUUID().toString(), uiX, uiY);
+        CmdAddNode cmd = new CmdAddNode(mEditorContext.getGraphController(), group);
         mEditorContext.getCommandManager().execute(cmd);
     }
 
@@ -135,6 +190,33 @@ public class ViewportController implements EditorContext.EditorListener,
         }
     }
 
+    public void executeGroupIntoNodeGroup() {
+        if (mEditorContext == null) return;
+        List<NodeVisualAdapter> selectedNodes = mViewport.getSelectedNodeVisuals();
+        if (selectedNodes.isEmpty()) return;
+
+        List<String> selectedIds = new ArrayList<>();
+        float minX = Float.MAX_VALUE;
+        float minY = Float.MAX_VALUE;
+        float maxX = -Float.MAX_VALUE;
+        float maxY = -Float.MAX_VALUE;
+        for (NodeVisualAdapter node : selectedNodes) {
+            selectedIds.add(node.getNodeId());
+            NodeData data = node.getNodeData();
+            minX = Math.min(minX, data.getX());
+            minY = Math.min(minY, data.getY());
+            maxX = Math.max(maxX, data.getX() + node.getVisualWidthDp());
+            maxY = Math.max(maxY, data.getY() + node.getVisualHeightDp());
+        }
+
+        float groupX = minX == Float.MAX_VALUE ? mViewport.getLastMouseUiX() : (minX + maxX) * 0.5f;
+        float groupY = minY == Float.MAX_VALUE ? mViewport.getLastMouseUiY() : (minY + maxY) * 0.5f;
+        CmdGroupIntoNodeGroup cmd = new CmdGroupIntoNodeGroup(mEditorContext.getGraphController(), mEditorContext.getCurrentGraph(), selectedIds, groupX, groupY);
+        if (cmd.canExecute()) {
+            mEditorContext.getCommandManager().execute(cmd);
+        }
+    }
+
     public void executeRenamePort(String nodeId, String category, String portId, String oldName, String newName) {
         if (mEditorContext == null) return;
         CmdRenamePort cmd = new CmdRenamePort(mEditorContext.getGraphController(), nodeId, category, portId, oldName, newName);
@@ -144,6 +226,12 @@ public class ViewportController implements EditorContext.EditorListener,
     public void executeSetFrameProperty(String frameId, String title, int color) {
         if (mEditorContext == null || frameId == null) return;
         CmdSetFrameProperty cmd = new CmdSetFrameProperty(mEditorContext.getGraphController(), frameId, title, color);
+        mEditorContext.getCommandManager().execute(cmd);
+    }
+
+    public void executeSetGroupNodeProperty(String nodeId, String title, int color, String comment) {
+        if (mEditorContext == null || nodeId == null) return;
+        CmdSetGroupNodeProperty cmd = new CmdSetGroupNodeProperty(mEditorContext.getGraphController(), nodeId, title, color, comment);
         mEditorContext.getCommandManager().execute(cmd);
     }
 
@@ -175,7 +263,7 @@ public class ViewportController implements EditorContext.EditorListener,
     }
 
     private void rebuildVisualConnections() {
-        mViewport.rebuildVisualConnections(mEditorContext != null ? mEditorContext.getGraph() : null);
+        mViewport.rebuildVisualConnections(mEditorContext != null ? mEditorContext.getCurrentGraph() : null);
     }
 
     // ==========================================
@@ -198,7 +286,7 @@ public class ViewportController implements EditorContext.EditorListener,
 
     @Override
     public void onChangeParent(List<String> elementIds, boolean isNode, String newParentId) {
-        if (mEditorContext == null) return;
+        if (mEditorContext == null || mEditorContext.isInsideGroupScope()) return;
         CmdChangeParent cmdParent = new CmdChangeParent(mEditorContext.getGraphController(), elementIds, isNode, newParentId);
         mEditorContext.getCommandManager().execute(cmdParent);
     }
@@ -206,7 +294,7 @@ public class ViewportController implements EditorContext.EditorListener,
     @Override
     public void onConnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         if (mEditorContext == null) return;
-        CmdConnect cmd = new CmdConnect(mEditorContext.getGraphController(), mEditorContext.getGraph(), outNodeId, outPortId, inNodeId, inPortId);
+        CmdConnect cmd = new CmdConnect(mEditorContext.getGraphController(), mEditorContext.getCurrentGraph(), outNodeId, outPortId, inNodeId, inPortId);
         mEditorContext.getCommandManager().execute(cmd);
     }
 
@@ -225,8 +313,13 @@ public class ViewportController implements EditorContext.EditorListener,
     }
 
     @Override
+    public void onNodeDoubleClicked(String nodeId) {
+        executeEnterGroup(nodeId);
+    }
+
+    @Override
     public boolean isCyclicFrame(String childId, String parentId) {
-        if (mEditorContext == null || parentId == null) return false;
+        if (mEditorContext == null || mEditorContext.isInsideGroupScope() || parentId == null) return false;
         if (childId.equals(parentId)) return true;
 
         com.mine.geometry_node.core.node.FrameData current = mEditorContext.getGraph().getFrame(parentId);
@@ -264,29 +357,33 @@ public class ViewportController implements EditorContext.EditorListener,
         for (FrameVisualAdapter frame : selectedFrames) copiedFrameIds.add(frame.getFrameId());
         for (NodeVisualAdapter node : selectedNodes) copiedNodeIds.add(node.getNodeId());
 
-        NodeGraph mainGraph = mEditorContext.getGraph();
+        NodeGraph mainGraph = mEditorContext.getCurrentGraph();
 
         // Include child frames inside selected frames.
-        boolean addedNew = true;
-        while (addedNew) {
-            addedNew = false;
-            if (mainGraph.frames != null) {
-                for (com.mine.geometry_node.core.node.FrameData f : mainGraph.frames.values()) {
-                    if (f.parentFrame != null && copiedFrameIds.contains(f.parentFrame) && !copiedFrameIds.contains(f.id)) {
-                        copiedFrameIds.add(f.id);
-                        addedNew = true;
+        if (!mEditorContext.isInsideGroupScope()) {
+            boolean addedNew = true;
+            while (addedNew) {
+                addedNew = false;
+                if (mainGraph.frames != null) {
+                    for (com.mine.geometry_node.core.node.FrameData f : mainGraph.frames.values()) {
+                        if (f.parentFrame != null && copiedFrameIds.contains(f.parentFrame) && !copiedFrameIds.contains(f.id)) {
+                            copiedFrameIds.add(f.id);
+                            addedNew = true;
+                        }
                     }
                 }
             }
-        }
 
-        // Include nodes inside selected frames.
-        if (mainGraph.nodes != null) {
-            for (NodeData n : mainGraph.nodes.values()) {
-                if (n.parentFrame != null && copiedFrameIds.contains(n.parentFrame) && !copiedNodeIds.contains(n.id)) {
-                    copiedNodeIds.add(n.id);
+            // Include nodes inside selected frames.
+            if (mainGraph.nodes != null) {
+                for (NodeData n : mainGraph.nodes.values()) {
+                    if (n.parentFrame != null && copiedFrameIds.contains(n.parentFrame) && !copiedNodeIds.contains(n.id)) {
+                        copiedNodeIds.add(n.id);
+                    }
                 }
             }
+        } else {
+            copiedFrameIds.clear();
         }
 
         NodeGraph tempGraph = new NodeGraph();
@@ -321,11 +418,11 @@ public class ViewportController implements EditorContext.EditorListener,
         for (FrameVisualAdapter frame : selectedFrames) frameIdsToRemove.add(frame.getFrameId());
 
         if (!nodeIdsToRemove.isEmpty()) {
-            CmdRemoveNodes cmdN = new CmdRemoveNodes(mEditorContext.getGraphController(), mEditorContext.getGraph(), nodeIdsToRemove);
+            CmdRemoveNodes cmdN = new CmdRemoveNodes(mEditorContext.getGraphController(), mEditorContext.getCurrentGraph(), nodeIdsToRemove);
             mEditorContext.getCommandManager().execute(cmdN);
         }
 
-        if (!frameIdsToRemove.isEmpty()) {
+        if (!mEditorContext.isInsideGroupScope() && !frameIdsToRemove.isEmpty()) {
             CmdRemoveFrames cmdF = new CmdRemoveFrames(mEditorContext.getGraphController(), frameIdsToRemove);
             mEditorContext.getCommandManager().execute(cmdF);
         }
@@ -345,7 +442,14 @@ public class ViewportController implements EditorContext.EditorListener,
 
     @Override
     public void onGroupIntoFrameRequested() {
+        if (mEditorContext != null && mEditorContext.isInsideGroupScope()) return;
         executeGroupIntoFrame();
+        mViewport.clearSelection();
+    }
+
+    @Override
+    public void onGroupIntoNodeGroupRequested() {
+        executeGroupIntoNodeGroup();
         mViewport.clearSelection();
     }
 

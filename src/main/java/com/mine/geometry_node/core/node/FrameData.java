@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class FrameData {
+    public static final int DEFAULT_COLOR = 0xFF556677;
+
     public transient String id;
 
     @SerializedName("title")
@@ -20,7 +22,7 @@ public class FrameData {
     public float[] uiSize = new float[]{400, 300};
 
     @SerializedName("color")
-    public int color = 0xFF556677;
+    public int color = DEFAULT_COLOR;
 
     @SerializedName("parent_frame")
     public String parentFrame;

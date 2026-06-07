@@ -26,7 +26,7 @@ public class CmdGroupIntoFrame implements ICommand {
 
         // 记录这些节点原来的 parentFrame，方便撤销
         for (String id : selectedNodeIds) {
-            NodeData node = controller.getContext().getGraph().getNode(id);
+            NodeData node = controller.getContext().getCurrentGraph().getNode(id);
             if (node != null) {
                 mOldParents.put(id, node.parentFrame);
             }

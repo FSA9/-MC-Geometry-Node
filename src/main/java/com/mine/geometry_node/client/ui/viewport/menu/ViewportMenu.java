@@ -158,18 +158,26 @@ public class ViewportMenu extends FrameLayout {
                 post(this::dismiss);
             });
 
-            addClickItem("添加图框", COLOR_ACTION_TEXT, v -> {
-                if (mContext != null) {
-                    float uiX = mContext.getCamera().screenToUIX(mMenuX);
-                    float uiY = mContext.getCamera().screenToUIY(mMenuY);
-                    mContext.requestAddFrame(uiX, uiY);
-                }
-                post(this::dismiss);
-            });
+            if (mContext != null && mContext.isInsideGroupScope()) {
+                addClickItem("退出图组", COLOR_ACTION_TEXT, v -> {
+                    if (mContext != null) {
+                        mContext.requestExitGroup();
+                    }
+                    post(this::dismiss);
+                });
+            } else {
+                addShortcutItem("并入图框", shortcut(config -> config.keyBindings.groupIntoFrame), COLOR_ACTION_TEXT, v -> {
+                    if (mContext != null) {
+                        mContext.requestGroupIntoFrame();
+                        mContext.clearSelection();
+                    }
+                    post(this::dismiss);
+                });
+            }
 
-            addShortcutItem("并入图框", shortcut(config -> config.keyBindings.groupIntoFrame), COLOR_ACTION_TEXT, v -> {
+            addShortcutItem("合并为图组", shortcut(config -> config.keyBindings.groupIntoNodeGroup), COLOR_ACTION_TEXT, v -> {
                 if (mContext != null) {
-                    mContext.requestGroupIntoFrame();
+                    mContext.requestGroupIntoNodeGroup();
                     mContext.clearSelection();
                 }
                 post(this::dismiss);

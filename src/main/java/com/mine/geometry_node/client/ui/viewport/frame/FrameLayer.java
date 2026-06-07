@@ -10,8 +10,10 @@ import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class FrameLayer extends FrameLayout {
     private final Viewport mViewport;
@@ -46,8 +48,12 @@ public class FrameLayer extends FrameLayout {
     }
 
     public void addFrameVisual(String frameId, FrameVisualAdapter frame) {
-        mFrameVisuals.put(frameId, frame);
+        FrameVisualAdapter oldFrame = mFrameVisuals.put(frameId, frame);
+        if (oldFrame != null) {
+            mFrameOrder.remove(oldFrame);
+        }
         mFrameOrder.add(frame);
+        ensureFrameHierarchyOrder();
         invalidate();
     }
 
@@ -77,6 +83,7 @@ public class FrameLayer extends FrameLayout {
     }
 
     public FrameVisualAdapter findFrameAt(float uiX, float uiY) {
+        ensureFrameHierarchyOrder();
         // 倒序遍历（优先命中显示在最上层的子图框）
         for (int i = mFrameOrder.size() - 1; i >= 0; i--) {
             FrameVisualAdapter frame = mFrameOrder.get(i);
@@ -106,8 +113,20 @@ public class FrameLayer extends FrameLayout {
     }
 
     private void bringFrameToFront(FrameVisualAdapter frame) {
-        if (mFrameOrder.remove(frame)) {
-            mFrameOrder.add(frame);
+        String rootId = frame.getFrameId();
+        if (rootId == null) return;
+
+        List<FrameVisualAdapter> subtree = new ArrayList<>();
+        for (FrameVisualAdapter candidate : mFrameOrder) {
+            if (candidate == frame || isDescendantOf(candidate, rootId)) {
+                subtree.add(candidate);
+            }
+        }
+
+        if (!subtree.isEmpty()) {
+            mFrameOrder.removeAll(subtree);
+            mFrameOrder.addAll(subtree);
+            ensureFrameHierarchyOrder();
         }
     }
 
@@ -139,6 +158,7 @@ public class FrameLayer extends FrameLayout {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        ensureFrameHierarchyOrder();
         boolean canCull = getWidth() > 0 && getHeight() > 0;
         if (canCull) {
             mViewport.getCamera().getVisibleUiRect(mTmpVisibleBounds, getWidth(), getHeight(), CULL_PADDING_DP);
@@ -228,6 +248,59 @@ public class FrameLayer extends FrameLayout {
     private float snapIfNeeded(float value, boolean snapToGrid, float gridSize) {
         if (!snapToGrid || gridSize <= 0.0f) return value;
         return Math.round(value / gridSize) * gridSize;
+    }
+
+    private void ensureFrameHierarchyOrder() {
+        if (mFrameOrder.size() < 2) return;
+
+        List<FrameVisualAdapter> ordered = new ArrayList<>(mFrameOrder.size());
+        Set<String> emitted = new HashSet<>();
+        for (FrameVisualAdapter frame : mFrameOrder) {
+            appendAfterParents(frame, ordered, emitted, new HashSet<>());
+        }
+
+        if (ordered.size() == mFrameOrder.size()) {
+            mFrameOrder.clear();
+            mFrameOrder.addAll(ordered);
+        }
+    }
+
+    private void appendAfterParents(
+            FrameVisualAdapter frame,
+            List<FrameVisualAdapter> ordered,
+            Set<String> emitted,
+            Set<String> visiting
+    ) {
+        if (frame == null) return;
+        String frameId = frame.getFrameId();
+        if (frameId == null || emitted.contains(frameId)) return;
+        if (!visiting.add(frameId)) return;
+
+        String parentFrameId = frame.getParentFrameId();
+        FrameVisualAdapter parentFrame = parentFrameId != null ? mFrameVisuals.get(parentFrameId) : null;
+        if (parentFrame != null && parentFrame != frame) {
+            appendAfterParents(parentFrame, ordered, emitted, visiting);
+        }
+
+        visiting.remove(frameId);
+        if (emitted.add(frameId)) {
+            ordered.add(frame);
+        }
+    }
+
+    private boolean isDescendantOf(FrameVisualAdapter frame, String ancestorFrameId) {
+        if (frame == null || ancestorFrameId == null) return false;
+
+        Set<String> visited = new HashSet<>();
+        String parentFrameId = frame.getParentFrameId();
+        while (parentFrameId != null && visited.add(parentFrameId)) {
+            if (ancestorFrameId.equals(parentFrameId)) {
+                return true;
+            }
+            FrameVisualAdapter parentFrame = mFrameVisuals.get(parentFrameId);
+            parentFrameId = parentFrame != null ? parentFrame.getParentFrameId() : null;
+        }
+        return false;
     }
 
     @Override

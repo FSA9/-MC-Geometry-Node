@@ -56,7 +56,7 @@ public class CmdMoveElements implements ICommand {
 
     private void collectChildren(GraphController controller, String parentFrameId, List<String> outNodes, List<String> outFrames) {
         // 找节点
-        for (NodeData node : controller.getContext().getGraph().nodes.values()) {
+        for (NodeData node : controller.getContext().getCurrentGraph().nodes.values()) {
             if (parentFrameId.equals(node.parentFrame) && !outNodes.contains(node.id)) {
                 outNodes.add(node.id);
             }

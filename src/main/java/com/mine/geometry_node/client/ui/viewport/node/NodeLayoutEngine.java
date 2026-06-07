@@ -74,7 +74,8 @@ public class NodeLayoutEngine {
 
         boolean isInputDynamic = nodeDef.getMeta(com.mine.geometry_node.core.node.meta.SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
         boolean isOutputDynamic = nodeDef.getMeta(com.mine.geometry_node.core.node.meta.SchemaKeys.MAX_DYNAMIC_OUTPUT).isPresent();
-        if (isInputDynamic || isOutputDynamic) {
+        boolean isGroupVirtualDynamic = nodeData.isGroupInputNode() || nodeData.isGroupOutputNode();
+        if (isInputDynamic || isOutputDynamic || isGroupVirtualDynamic) {
             currentY += UIConstants.Node.ROW_HEIGHT;
         }
 

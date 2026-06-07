@@ -508,5 +508,10 @@
   "geometry_node.port.choice_disabled_reason_key": "禁用原因文本",
   "geometry_node.dialogue.close": "关闭",
   "geometry_node.dialogue.continue": "继续",
-  "geometry_node.dialogue.busy": "该对话正在进行中。"
+  "geometry_node.dialogue.busy": "该对话正在进行中。",
+  "geometry_node.node.node_group": "图组",
+  "geometry_node.node.group_in": "组输入",
+  "geometry_node.node.group_out": "组输出",
+  "geometry_node.menu.display_entity": "Display Entity",
+  "geometry_node.port.count": "数量"
 }

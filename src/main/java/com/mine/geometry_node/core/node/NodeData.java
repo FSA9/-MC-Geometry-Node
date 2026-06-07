@@ -1,7 +1,8 @@
-// --- START OF FILE NodeData.java (Updated) ---
 package com.mine.geometry_node.core.node;
 
 import com.google.gson.annotations.SerializedName;
+import com.mine.geometry_node.core.node.group.GroupNodeTypes;
+import com.mine.geometry_node.core.node.port.PortType;
 
 import java.util.*;
 
@@ -9,6 +10,8 @@ import java.util.*;
  * [存储层] 节点实例纯状态容器
  */
 public class NodeData {
+    public static final int DEFAULT_GROUP_COLOR = FrameData.DEFAULT_COLOR;
+
     // 索引标识符
     public transient String id;
 
@@ -21,6 +24,15 @@ public class NodeData {
     @SerializedName("UI_size")
     public float[] uiSize = new float[]{0, 0};
 
+    @SerializedName("custom_name")
+    public String customName;
+
+    @SerializedName("custom_color")
+    public Integer customColor;
+
+    @SerializedName("comment")
+    public String comment;
+
     @SerializedName("inputs")
     public Map<String, Object> inputs = new HashMap<>();
 
@@ -30,35 +42,36 @@ public class NodeData {
     @SerializedName("outputs")
     public Map<String, List<Connection>> outputs = new HashMap<>();
 
-    @SerializedName("port_settings")
-    public PortSettings portSettings = new PortSettings();
+    @SerializedName("port_config")
+    public PortsConfig portConfig = new PortsConfig();
 
     @SerializedName("parent_frame")
     public String parentFrame;
 
-    public static class PortSettings {
-        public Map<String, PortConfig> inputs = new HashMap<>();
-        public Map<String, PortConfig> execInputs = new HashMap<>();
-        public Map<String, PortConfig> execOutputs = new HashMap<>();
-        public Map<String, PortConfig> outputs = new HashMap<>();
+    public static class PortsConfig {
+        public Map<String, PortConfig> inputs = new LinkedHashMap<>();
+
+        @SerializedName("exec_inputs")
+        public Map<String, PortConfig> execInputs = new LinkedHashMap<>();
+
+        @SerializedName("exec_outputs")
+        public Map<String, PortConfig> execOutputs = new LinkedHashMap<>();
+
+        public Map<String, PortConfig> outputs = new LinkedHashMap<>();
     }
 
     public static class PortConfig {
         @SerializedName("custom_name")
         public String customName;
         public Boolean hidden;
+        public PortType type;
+        public Integer order;
     }
 
     public String getEffectivePortName(String category, String portId, String fallback) {
-        if (portSettings == null) return fallback;
+        if (portConfig == null) return fallback;
 
-        Map<String, PortConfig> targetMap = switch (category) {
-            case "inputs" -> portSettings.inputs;
-            case "exec_inputs" -> portSettings.execInputs;
-            case "exec_outputs" -> portSettings.execOutputs;
-            case "outputs" -> portSettings.outputs;
-            default -> null;
-        };
+        Map<String, PortConfig> targetMap = getPortConfigMap(category);
 
         if (targetMap != null && targetMap.containsKey(portId)) {
             String custom = targetMap.get(portId).customName;
@@ -69,10 +82,9 @@ public class NodeData {
         return fallback;
     }
 
-
-
-
     public transient Set<String> connectedInputs = new HashSet<>();
+
+    public transient NodeData parentGroupNode;
 
     // 支持节点组递归
     @SerializedName("sub_nodes")
@@ -92,6 +104,61 @@ public class NodeData {
     public void setPosition(float x, float y) {
         this.uiPos[0] = x;
         this.uiPos[1] = y;
+    }
+
+    public boolean isGroupNode() {
+        return GroupNodeTypes.NODE_GROUP.equals(type);
+    }
+
+    public int getHeaderColor(int fallbackColor) {
+        if (customColor != null) {
+            return customColor | 0xFF000000;
+        }
+        return isGroupNode() ? DEFAULT_GROUP_COLOR : fallbackColor;
+    }
+
+    public boolean isGroupInputNode() {
+        return GroupNodeTypes.GROUP_IN.equals(type);
+    }
+
+    public boolean isGroupOutputNode() {
+        return GroupNodeTypes.GROUP_OUT.equals(type);
+    }
+
+    public PortsConfig ensurePortConfig() {
+        if (portConfig == null) {
+            portConfig = new PortsConfig();
+        }
+        if (portConfig.inputs == null) portConfig.inputs = new LinkedHashMap<>();
+        if (portConfig.execInputs == null) portConfig.execInputs = new LinkedHashMap<>();
+        if (portConfig.execOutputs == null) portConfig.execOutputs = new LinkedHashMap<>();
+        if (portConfig.outputs == null) portConfig.outputs = new LinkedHashMap<>();
+        return portConfig;
+    }
+
+    public Map<String, PortConfig> getPortConfigMap(String category) {
+        PortsConfig config = ensurePortConfig();
+        return switch (category) {
+            case GroupNodeTypes.CATEGORY_INPUTS -> config.inputs;
+            case GroupNodeTypes.CATEGORY_EXEC_INPUTS -> config.execInputs;
+            case GroupNodeTypes.CATEGORY_EXEC_OUTPUTS -> config.execOutputs;
+            case GroupNodeTypes.CATEGORY_OUTPUTS -> config.outputs;
+            default -> null;
+        };
+    }
+
+    public Map<String, NodeData> ensureSubNodes() {
+        if (subNodes == null) {
+            subNodes = new LinkedHashMap<>();
+        }
+        return subNodes;
+    }
+
+    public void attachSubNode(String id, NodeData node) {
+        if (id == null || node == null) return;
+        node.id = id;
+        node.parentGroupNode = this;
+        ensureSubNodes().put(id, node);
     }
 
     public void setFlow(String port, String targetNodeId, String targetPortName) {

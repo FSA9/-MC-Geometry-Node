@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.*;
 import com.mine.geometry_node.client.ui.viewport.menu.FrameMenu;
+import com.mine.geometry_node.client.ui.viewport.menu.GroupNodeMenu;
 import com.mine.geometry_node.client.ui.viewport.menu.PortMenu;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
@@ -27,8 +28,11 @@ public class InteractionManager {
         void onConnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId);
         void onDisconnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId);
         void onMoveElementsTo(Map<String, float[]> nodePositions, Map<String, float[]> framePositions);
+        void onNodeDoubleClicked(String nodeId);
         boolean isCyclicFrame(String draggedFrameId, String potentialParentId);
     }
+
+    private static final long DOUBLE_CLICK_TIMEOUT_MS = 300L;
 
     private static final int MODE_NONE           = 0;
     private static final int MODE_PANNING        = 1;
@@ -46,6 +50,8 @@ public class InteractionManager {
     private float mDownScreenX, mDownScreenY;
     private float mLastScreenX, mLastScreenY;
     private boolean mHasMovedSignificantly = false;
+    private long mLastClickTimeMs;
+    private String mLastClickedNodeId;
     private float mDragStartUiX, mDragStartUiY;
     private float mDragAnchorStartUiX, mDragAnchorStartUiY;
     private float mAppliedDragUiDx, mAppliedDragUiDy;
@@ -130,8 +136,15 @@ public class InteractionManager {
             return;
         }
 
-        if (isMiddleMouse(event)) { mCurrentMode = MODE_PANNING; return; }
-        if (isRightMouse(event)) return;
+        if (isMiddleMouse(event)) {
+            resetDoubleClickTracking();
+            mCurrentMode = MODE_PANNING;
+            return;
+        }
+        if (isRightMouse(event)) {
+            resetDoubleClickTracking();
+            return;
+        }
 
         Viewport.PortInfo port = mContext.findPortAt(uiX, uiY);
         if (port != null) { enterConnectingMode(port, uiX, uiY); return; }
@@ -211,10 +224,20 @@ public class InteractionManager {
         if (isRightMouse(event) && !mHasMovedSignificantly) {
             NodeVisualAdapter targetNode = mContext.findNodeAt(uiX, uiY);
             if (targetNode != null) {
-                String clickedLabelPortId = targetNode.hitTestLabel(UIUtils.dp2px(uiX - targetNode.getUiX()), UIUtils.dp2px(uiY - targetNode.getUiY()));
+                float localX = uiX - targetNode.getUiX();
+                float localY = uiY - targetNode.getUiY();
+                String clickedLabelPortId = targetNode.hitTestLabel(UIUtils.dp2px(localX), UIUtils.dp2px(localY));
                 if (clickedLabelPortId != null) {
                     PortMenu.show(mContext, targetNode, clickedLabelPortId, screenX, screenY);
                     mCurrentMode = MODE_NONE;
+                    return;
+                }
+                if (targetNode.getNodeData().isGroupNode() && localY >= 0 && localY <= UIConstants.Node.HEADER_HEIGHT) {
+                    mContext.clearSelection();
+                    mContext.addToSelection(targetNode);
+                    GroupNodeMenu.show(mContext, targetNode, screenX, screenY);
+                    mCurrentMode = MODE_NONE;
+                    mContext.invalidate();
                     return;
                 }
             }
@@ -263,6 +286,9 @@ public class InteractionManager {
     }
 
     private void updateNodeDragPreview(float currentUiX, float currentUiY) {
+        if (mHasMovedSignificantly) {
+            resetDoubleClickTracking();
+        }
         float rawTotalUiDx = currentUiX - mDragStartUiX;
         float rawTotalUiDy = currentUiY - mDragStartUiY;
         float snappedTotalUiDx = getSnappedDragDx(rawTotalUiDx);
@@ -326,12 +352,39 @@ public class InteractionManager {
             }
             if (!nodesToChange.isEmpty() && mListener != null) mListener.onChangeParent(nodesToChange, true, targetFrameId);
         } else {
+            NodeVisualAdapter clickedNode = mContext.findNodeAt(endUiX, endUiY);
+            if (clickedNode != null) {
+                handleNodeClick(clickedNode);
+            }
             for (NodeVisualAdapter node : mContext.getSelectedNodeVisuals()) {
                 node.setPreviewPosition(node.getNodeData().getX(), node.getNodeData().getY());
                 mContext.updateConnectionsForNode(node.getNodeId());
             }
             mContext.invalidate();
         }
+    }
+
+    private void handleNodeClick(NodeVisualAdapter node) {
+        long now = System.currentTimeMillis();
+        String nodeId = node.getNodeId();
+        if (nodeId != null
+                && nodeId.equals(mLastClickedNodeId)
+                && now - mLastClickTimeMs <= DOUBLE_CLICK_TIMEOUT_MS) {
+            mLastClickedNodeId = null;
+            mLastClickTimeMs = 0L;
+            if (mListener != null) {
+                mListener.onNodeDoubleClicked(nodeId);
+            }
+            return;
+        }
+
+        mLastClickedNodeId = nodeId;
+        mLastClickTimeMs = now;
+    }
+
+    private void resetDoubleClickTracking() {
+        mLastClickedNodeId = null;
+        mLastClickTimeMs = 0L;
     }
 
     private void updateFrameDragPreview(float currentUiX, float currentUiY) {
@@ -522,7 +575,23 @@ public class InteractionManager {
 
     private boolean isValidConnection(Viewport.PortInfo s, Viewport.PortInfo e) {
         if (s == null || e == null || s.node.getNodeId().equals(e.node.getNodeId()) || s.isInput == e.isInput) return false;
-        return PortType.isCompatible(getPortType(s.isInput ? e : s), getPortType(s.isInput ? s : e));
+        Viewport.PortInfo output = s.isInput ? e : s;
+        Viewport.PortInfo input = s.isInput ? s : e;
+        PortType outputType = getPortType(output);
+        PortType inputType = getPortType(input);
+        boolean typeCompatible = isExecutionToVirtualAny(output, outputType, input, inputType)
+                || PortType.isCompatible(outputType, inputType);
+        return typeCompatible && mContext.canConnectPorts(output.node.getNodeId(), output.portId, input.node.getNodeId(), input.portId);
+    }
+
+    private boolean isExecutionToVirtualAny(Viewport.PortInfo output, PortType outputType, Viewport.PortInfo input, PortType inputType) {
+        return (outputType == PortType.EXECUTION && inputType == PortType.ANY && isGroupVirtualBoundaryPort(input))
+                || (inputType == PortType.EXECUTION && outputType == PortType.ANY && isGroupVirtualBoundaryPort(output));
+    }
+
+    private boolean isGroupVirtualBoundaryPort(Viewport.PortInfo portInfo) {
+        if (portInfo == null || portInfo.node == null || portInfo.node.getNodeData() == null) return false;
+        return portInfo.node.getNodeData().isGroupInputNode() || portInfo.node.getNodeData().isGroupOutputNode();
     }
 
     private PortType getPortType(Viewport.PortInfo portInfo) {

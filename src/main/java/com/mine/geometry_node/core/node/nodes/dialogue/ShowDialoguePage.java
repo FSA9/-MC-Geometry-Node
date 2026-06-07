@@ -221,9 +221,9 @@ public class ShowDialoguePage extends BaseNode {
         if (instanceData != null) {
             inferred = Math.max(inferred, inferMaxChoiceIndex(instanceData.inputs == null ? null : instanceData.inputs.keySet()));
             inferred = Math.max(inferred, inferMaxChoiceIndex(instanceData.execOutputs == null ? null : instanceData.execOutputs.keySet()));
-            if (instanceData.portSettings != null) {
-                inferred = Math.max(inferred, inferMaxChoiceIndex(instanceData.portSettings.inputs == null ? null : instanceData.portSettings.inputs.keySet()));
-                inferred = Math.max(inferred, inferMaxChoiceIndex(instanceData.portSettings.execOutputs == null ? null : instanceData.portSettings.execOutputs.keySet()));
+            if (instanceData.portConfig != null) {
+                inferred = Math.max(inferred, inferMaxChoiceIndex(instanceData.portConfig.inputs == null ? null : instanceData.portConfig.inputs.keySet()));
+                inferred = Math.max(inferred, inferMaxChoiceIndex(instanceData.portConfig.execOutputs == null ? null : instanceData.portConfig.execOutputs.keySet()));
             }
         }
         return clampChoiceCount(inferred);

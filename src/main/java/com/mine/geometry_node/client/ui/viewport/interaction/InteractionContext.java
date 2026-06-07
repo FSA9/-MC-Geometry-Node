@@ -32,6 +32,8 @@ public interface InteractionContext {
     void addToSelection(FrameVisualAdapter frame);
     List<FrameVisualAdapter> getSelectedFrameVisuals();
     boolean hasConnection(NodeVisualAdapter outNode, String outPortId, NodeVisualAdapter inNode, String inPortId);
+    boolean canConnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId);
+    boolean isInsideGroupScope();
 
     // --- UI 响应 ---
     void invalidate();
@@ -56,7 +58,11 @@ public interface InteractionContext {
     void requestAddNode(float screenX, float screenY, String typeId);
     void requestAddFrame(float uiX, float uiY);
     void requestGroupIntoFrame();
+    void requestAddGroup(float uiX, float uiY);
+    void requestGroupIntoNodeGroup();
+    void requestExitGroup();
     void requestSetFrameProperty(String frameId, String title, int color);
+    void requestSetGroupNodeProperty(String nodeId, String title, int color, String comment);
     void requestRenamePort(String nodeId, String category, String portId, String oldName, String newName);
     void requestSave();
 }

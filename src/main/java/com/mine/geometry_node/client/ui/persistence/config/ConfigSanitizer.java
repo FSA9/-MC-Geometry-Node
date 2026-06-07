@@ -152,6 +152,10 @@ final class ConfigSanitizer {
             ReadKeyBinding groupIntoFrame = readKeyBinding(keyBindings, "groupIntoFrame", defaults.keyBindings.groupIntoFrame);
             config.keyBindings.groupIntoFrame = groupIntoFrame.value;
             changed |= groupIntoFrame.changed;
+
+            ReadKeyBinding groupIntoNodeGroup = readKeyBinding(keyBindings, "groupIntoNodeGroup", defaults.keyBindings.groupIntoNodeGroup);
+            config.keyBindings.groupIntoNodeGroup = groupIntoNodeGroup.value;
+            changed |= groupIntoNodeGroup.changed;
         }
 
         return new Result(config, changed);
@@ -229,6 +233,7 @@ final class ConfigSanitizer {
             changed |= sanitizeKeyBinding(config.keyBindings.toggleSnapToGrid, defaults.keyBindings.toggleSnapToGrid, value -> config.keyBindings.toggleSnapToGrid = value);
             changed |= sanitizeKeyBinding(config.keyBindings.toggleGridAndAxis, defaults.keyBindings.toggleGridAndAxis, value -> config.keyBindings.toggleGridAndAxis = value);
             changed |= sanitizeKeyBinding(config.keyBindings.groupIntoFrame, defaults.keyBindings.groupIntoFrame, value -> config.keyBindings.groupIntoFrame = value);
+            changed |= sanitizeKeyBinding(config.keyBindings.groupIntoNodeGroup, defaults.keyBindings.groupIntoNodeGroup, value -> config.keyBindings.groupIntoNodeGroup = value);
         }
 
         return new Result(config, changed);

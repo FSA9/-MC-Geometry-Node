@@ -67,7 +67,7 @@ public class ConsoleCommandRegistry {
         String id = args.length > 3 ? args[3] : UUID.randomUUID().toString();
 
         // 4. ID 冲突校验 (防止覆盖已有的同名节点)
-        if (session.editorContext.getGraph().getNode(id) != null) {
+        if (session.editorContext.getCurrentGraph().getNode(id) != null) {
             logger.onLog("[Error] 节点生成失败: 当前画布中已经存在 ID 为 '" + id + "' 的节点", 0xFFFF4444);
             return;
         }
@@ -89,13 +89,13 @@ public class ConsoleCommandRegistry {
         String id = args[0];
 
         // 1. 目标节点存在性校验
-        if (session.editorContext.getGraph().getNode(id) == null) {
+        if (session.editorContext.getCurrentGraph().getNode(id) == null) {
             logger.onLog("[Error] 删除失败: 画布中找不到 ID 为 '" + id + "' 的节点", 0xFFFF4444);
             return;
         }
 
         CmdRemoveNodes cmd = new CmdRemoveNodes(session.editorContext.getGraphController(),
-                session.editorContext.getGraph(), Collections.singletonList(id));
+                session.editorContext.getCurrentGraph(), Collections.singletonList(id));
         session.editorContext.getCommandManager().execute(cmd);
 
         logger.onLog("[Success] 节点已删除 | ID: " + id, 0xFF00AAFF);
@@ -113,17 +113,17 @@ public class ConsoleCommandRegistry {
         String inPort = args[3];
 
         // 1. 节点存在性双重校验
-        if (session.editorContext.getGraph().getNode(outId) == null) {
+        if (session.editorContext.getCurrentGraph().getNode(outId) == null) {
             logger.onLog("[Error] 连线失败: 找不到输出端节点 ID '" + outId + "'", 0xFFFF4444);
             return;
         }
-        if (session.editorContext.getGraph().getNode(inId) == null) {
+        if (session.editorContext.getCurrentGraph().getNode(inId) == null) {
             logger.onLog("[Error] 连线失败: 找不到输入端节点 ID '" + inId + "'", 0xFFFF4444);
             return;
         }
 
         CmdConnect cmd = new CmdConnect(session.editorContext.getGraphController(),
-                session.editorContext.getGraph(), outId, outPort, inId, inPort);
+                session.editorContext.getCurrentGraph(), outId, outPort, inId, inPort);
         session.editorContext.getCommandManager().execute(cmd);
 
         logger.onLog(String.format("[Success] 连线成功 | %s[%s] -> %s[%s]", outId, outPort, inId, inPort), 0xFF00AAFF);

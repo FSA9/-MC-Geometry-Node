@@ -21,6 +21,7 @@ public class CmdPasteElements implements ICommand {
         this.mController = controller;
         NodeGraph tempGraph = GraphJsonIO.fromJson(json);
         Map<String, String> oldToNewIdMap = new HashMap<>();
+        boolean pasteFrames = !controller.getContext().isInsideGroupScope();
 
         // 1. 寻找阵型左上角（遍历包含 Node 和 Frame）
         float minX = Float.MAX_VALUE; float minY = Float.MAX_VALUE;
@@ -28,20 +29,24 @@ public class CmdPasteElements implements ICommand {
             if (oldNode.uiPos[0] < minX) minX = oldNode.uiPos[0];
             if (oldNode.uiPos[1] < minY) minY = oldNode.uiPos[1];
         }
-        for (FrameData oldFrame : tempGraph.frames.values()) {
-            if (oldFrame.uiPos[0] < minX) minX = oldFrame.uiPos[0];
-            if (oldFrame.uiPos[1] < minY) minY = oldFrame.uiPos[1];
+        if (pasteFrames) {
+            for (FrameData oldFrame : tempGraph.frames.values()) {
+                if (oldFrame.uiPos[0] < minX) minX = oldFrame.uiPos[0];
+                if (oldFrame.uiPos[1] < minY) minY = oldFrame.uiPos[1];
+            }
         }
         if (minX == Float.MAX_VALUE) { minX = 0; minY = 0; }
 
         // 2. 生成新 ID 与相对坐标偏移
-        for (FrameData oldFrame : tempGraph.frames.values()) {
-            String newId = UUID.randomUUID().toString();
-            oldToNewIdMap.put(oldFrame.id, newId);
-            oldFrame.id = newId;
-            oldFrame.uiPos[0] = targetUiX + (oldFrame.uiPos[0] - minX);
-            oldFrame.uiPos[1] = targetUiY + (oldFrame.uiPos[1] - minY);
-            mPastedFrames.add(oldFrame);
+        if (pasteFrames) {
+            for (FrameData oldFrame : tempGraph.frames.values()) {
+                String newId = UUID.randomUUID().toString();
+                oldToNewIdMap.put(oldFrame.id, newId);
+                oldFrame.id = newId;
+                oldFrame.uiPos[0] = targetUiX + (oldFrame.uiPos[0] - minX);
+                oldFrame.uiPos[1] = targetUiY + (oldFrame.uiPos[1] - minY);
+                mPastedFrames.add(oldFrame);
+            }
         }
         for (NodeData oldNode : tempGraph.nodes.values()) {
             String newId = UUID.randomUUID().toString();
@@ -60,8 +65,10 @@ public class CmdPasteElements implements ICommand {
             }
         }
         for (NodeData node : mPastedNodes) {
-            if (node.parentFrame != null) {
+            if (pasteFrames && node.parentFrame != null) {
                 node.parentFrame = oldToNewIdMap.getOrDefault(node.parentFrame, null);
+            } else {
+                node.parentFrame = null;
             }
 
             Map<String, List<Connection>> newOutputs = new HashMap<>();
