@@ -87,7 +87,7 @@ public class ViewportEventDispatcher {
                 if (hitResult != null) {
                     View targetView = hitResult.view();
                     if (isActionDown) {
-                        if (!mViewport.getSelectedNodeVisuals().contains(hitResult.node())) {
+                        if (!mViewport.isNodeSelected(hitResult.node().getNodeId())) {
                             mViewport.clearSelection();
                         }
                         mViewport.addToSelection(hitResult.node());

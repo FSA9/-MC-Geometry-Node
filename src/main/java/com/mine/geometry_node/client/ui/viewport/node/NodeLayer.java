@@ -21,7 +21,6 @@ public class NodeLayer extends FrameLayout {
     private final Viewport mViewport;
     private final Map<String, NodeVisualAdapter> mNodeVisuals = new HashMap<>();
     private final List<NodeVisualAdapter> mNodeOrder = new ArrayList<>();
-    private final List<NodeVisualAdapter> mSelectedNodes = new ArrayList<>();
 
     // 复用的临时对象，避免在遍历和碰撞检测时频繁创建
     private final RectF mTmpNodeBounds = new RectF();
@@ -38,13 +37,23 @@ public class NodeLayer extends FrameLayout {
     }
 
     public Map<String, NodeVisualAdapter> getNodeVisuals() { return mNodeVisuals; }
-    public List<NodeVisualAdapter> getSelectedNodeVisuals() { return mSelectedNodes; }
+
+    public List<NodeVisualAdapter> getNodeVisuals(List<String> nodeIds) {
+        List<NodeVisualAdapter> nodes = new ArrayList<>();
+        if (nodeIds == null) return nodes;
+        for (String nodeId : nodeIds) {
+            NodeVisualAdapter node = mNodeVisuals.get(nodeId);
+            if (node != null) {
+                nodes.add(node);
+            }
+        }
+        return nodes;
+    }
 
     public void clearNodeVisuals() {
         removeAllViews();
         mNodeVisuals.clear();
         mNodeOrder.clear();
-        mSelectedNodes.clear();
     }
 
     public void addNodeVisual(String nodeId, NodeVisualAdapter node) {
@@ -60,61 +69,26 @@ public class NodeLayer extends FrameLayout {
             mNodeOrder.remove(node);
             View overlayHost = node.getOverlayHostView();
             if (overlayHost != null && overlayHost.getParent() == this) removeView(overlayHost);
-            mSelectedNodes.remove(node);
             invalidate();
         }
     }
 
     public NodeVisualAdapter getNodeVisual(String nodeId) { return mNodeVisuals.get(nodeId); }
 
-    public boolean isNodeSelected(String nodeId) {
-        NodeVisualAdapter node = mNodeVisuals.get(nodeId);
-        return node != null && mSelectedNodes.contains(node);
-    }
-
-    public void updateSelectionState(List<String> selectedNodeIds) {
-        for (NodeVisualAdapter node : mNodeVisuals.values()) { node.setSelected(false); }
-        mSelectedNodes.clear();
-
-        for (String id : selectedNodeIds) {
-            NodeVisualAdapter node = mNodeVisuals.get(id);
-            if (node != null) {
-                selectNode(node);
-            }
+    public void applySelection(List<String> selectedNodeIds) {
+        Set<String> selectedNodeIdSet = selectedNodeIds != null ? new HashSet<>(selectedNodeIds) : new HashSet<>();
+        for (NodeVisualAdapter node : mNodeVisuals.values()) {
+            node.setSelected(selectedNodeIdSet.contains(node.getNodeId()));
         }
-        bringSelectedNodesToFront();
+        bringSelectedNodesToFront(getNodeVisuals(selectedNodeIds));
         invalidate();
     }
 
-    public void clearSelection() {
-        for (NodeVisualAdapter node : mSelectedNodes) { node.setSelected(false); }
-        mSelectedNodes.clear();
-        invalidate();
-    }
-
-    public void addToSelection(NodeVisualAdapter node) {
-        if (node == null) return;
-        if (mSelectedNodes.remove(node)) {
-            mSelectedNodes.add(node);
-        } else {
-            selectNode(node);
-        }
-        bringSelectedNodesToFront();
-        invalidate();
-    }
-
-    private void selectNode(NodeVisualAdapter node) {
-        if (node != null && !mSelectedNodes.contains(node)) {
-            mSelectedNodes.add(node);
-            node.setSelected(true);
-        }
-    }
-
-    private void bringSelectedNodesToFront() {
-        if (mSelectedNodes.isEmpty()) return;
-        mNodeOrder.removeAll(mSelectedNodes);
-        mNodeOrder.addAll(mSelectedNodes);
-        for (NodeVisualAdapter node : mSelectedNodes) {
+    private void bringSelectedNodesToFront(List<NodeVisualAdapter> selectedNodes) {
+        if (selectedNodes == null || selectedNodes.isEmpty()) return;
+        mNodeOrder.removeAll(selectedNodes);
+        mNodeOrder.addAll(selectedNodes);
+        for (NodeVisualAdapter node : selectedNodes) {
             bringOverlayHostToFront(node);
         }
     }
@@ -260,24 +234,25 @@ public class NodeLayer extends FrameLayout {
         return null;
     }
 
-    public void updateBoxSelection(float uiX, float uiY, float uiW, float uiH) {
-        clearSelection();
+    public List<String> findNodeIdsInRect(float uiX, float uiY, float uiW, float uiH) {
+        List<String> selectedNodeIds = new ArrayList<>();
         float selRight = uiX + uiW;
         float selBottom = uiY + uiH;
 
         List<NodeVisualAdapter> orderedNodes = new ArrayList<>(mNodeOrder);
         for (NodeVisualAdapter n : orderedNodes) {
             n.getLogicalBounds(mTmpNodeBounds);
-            if (mTmpNodeBounds.intersects(uiX, uiY, selRight, selBottom)) selectNode(n);
+            if (mTmpNodeBounds.intersects(uiX, uiY, selRight, selBottom)) {
+                selectedNodeIds.add(n.getNodeId());
+            }
         }
-        bringSelectedNodesToFront();
-        invalidate();
+        return selectedNodeIds;
     }
 
     public void moveSelectedNodes(float uiDx, float uiDy) {
         Set<String> affectedFrames = new HashSet<>();
 
-        for (NodeVisualAdapter node : mSelectedNodes) {
+        for (NodeVisualAdapter node : mViewport.getSelectedNodeVisuals()) {
             node.offsetPreviewPosition(uiDx, uiDy);
             syncOverlayHost(node);
             mViewport.updateConnectionsForNode(node.getNodeId());

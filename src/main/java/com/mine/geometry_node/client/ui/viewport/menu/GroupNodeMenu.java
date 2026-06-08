@@ -2,6 +2,8 @@ package com.mine.geometry_node.client.ui.viewport.menu;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.NodeData;
@@ -137,7 +139,10 @@ public final class GroupNodeMenu {
 
         TextView dissolve = button(uiContext, "解散", COLOR_BUTTON_DANGER, v -> {
             close(context, popupOverlay);
-            context.requestDissolveNodeGroup(nodeData.id);
+            context.getActionSink().performAction(
+                    ViewportActionId.DISSOLVE_NODE_GROUP,
+                    ViewportActionRequest.builder().nodeId(nodeData.id).build()
+            );
         });
         TextView cancel = button(uiContext, "取消", COLOR_BUTTON, v -> close(context, popupOverlay));
         TextView apply = button(uiContext, "应用", COLOR_BUTTON_PRIMARY, v -> {
@@ -147,7 +152,15 @@ public final class GroupNodeMenu {
             if (!newTitle.equals(oldTitle) || selectedColor[0] != initialColor || !newComment.equals(oldComment)) {
                 String customTitle = newTitle.equals(defaultTitle) ? null : newTitle;
                 String customComment = newComment.isEmpty() ? null : newComment;
-                context.requestSetGroupNodeProperty(nodeData.id, customTitle, selectedColor[0], customComment);
+                context.getActionSink().performAction(
+                        ViewportActionId.SET_GROUP_NODE_PROPERTY,
+                        ViewportActionRequest.builder()
+                                .nodeId(nodeData.id)
+                                .title(customTitle)
+                                .color(selectedColor[0])
+                                .comment(customComment)
+                                .build()
+                );
             }
             close(context, popupOverlay);
         });

@@ -2,6 +2,8 @@ package com.mine.geometry_node.client.ui.viewport.menu;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -98,7 +100,14 @@ public class PortMenu {
         TextView apply = button(uiContext, "应用", COLOR_BUTTON_PRIMARY, v -> {
             String newName = input.getText().toString().trim();
             if (!newName.equals(oldName)) {
-                context.requestRenamePort(node.getNodeData().id, finalCategory, portId, oldName, newName);
+                context.getActionSink().performAction(
+                        ViewportActionId.RENAME_PORT,
+                        ViewportActionRequest.builder()
+                                .nodeId(node.getNodeData().id)
+                                .port(finalCategory, portId)
+                                .rename(oldName, newName)
+                                .build()
+                );
             }
             close(context, popupOverlay);
         });

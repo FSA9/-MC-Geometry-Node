@@ -1,9 +1,10 @@
-package com.mine.geometry_node.client.ui.viewport.node.UIHints;
+package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintRenderer;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 
@@ -24,7 +25,7 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
         String portId = row.leftPort().id();
-        Object val = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
+        Object val = UIHintValueBinder.getValue(nodeData, row.leftPort());
 
         boolean initialCheck = String.valueOf(val).equalsIgnoreCase("true");
 
@@ -71,12 +72,7 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
             cb.setTag(isChecked);
             cb.invalidate();
 
-            if (editorContext != null) {
-                Object oldVal = nodeData.inputs.get(portId);
-                editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, isChecked));
-            } else {
-                nodeData.inputs.put(portId, isChecked);
-            }
+            UIHintValueBinder.commit(editorContext, nodeData, portId, isChecked);
         });
         return cb;
     }

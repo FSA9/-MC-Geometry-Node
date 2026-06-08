@@ -4,37 +4,19 @@ import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportAction;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRegistry;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import icyllis.modernui.view.KeyEvent;
 
 public class KeyManager {
 
-    // --- 新增：快捷键意图监听器 ---
-    public interface KeyListener {
-        void onUndo();
-        void onRedo();
-        void onSaveRequested();
-        void onCopyRequested();
-        void onPasteRequested(float uiX, float uiY);
-        void onDeleteRequested();
-        void onToggleSnapToGridRequested();
-        void onToggleGridAndAxisRequested();
-        void onGroupIntoFrameRequested();
-        void onGroupIntoNodeGroupRequested();
-    }
-
     private final InteractionContext mContext;
     private final ConfigChangeListener mConfigChangeListener = this::applyConfig;
-    private KeyListener mListener;
-    private KeyBinding mUndoBinding;
-    private KeyBinding mRedoBinding;
-    private KeyBinding mSaveBinding;
-    private KeyBinding mCopyBinding;
-    private KeyBinding mPasteBinding;
-    private KeyBinding mDeleteBinding;
-    private KeyBinding mToggleSnapToGridBinding;
-    private KeyBinding mToggleGridAndAxisBinding;
-    private KeyBinding mGroupIntoFrameBinding;
-    private KeyBinding mGroupIntoNodeGroupBinding;
+    private ViewportActionSink mActionSink;
+    private AppConfig mConfig;
 
     public KeyManager(InteractionContext context) {
         this.mContext = context;
@@ -46,71 +28,37 @@ public class KeyManager {
         ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
     }
 
-    public void setListener(KeyListener listener) {
-        this.mListener = listener;
+    public void setActionSink(ViewportActionSink actionSink) {
+        this.mActionSink = actionSink;
     }
 
     public boolean onKeyDown(KeyEvent event) {
         if (!mContext.isReady()) return false;
         if (event == null || event.getAction() != KeyEvent.ACTION_DOWN) return false;
 
-        if (matches(mUndoBinding, event)) {
-            if (mListener != null) mListener.onUndo();
-            return true;
-        }
-        if (matches(mRedoBinding, event)) {
-            if (mListener != null) mListener.onRedo();
-            return true;
-        }
-        if (matches(mSaveBinding, event)) {
-            if (mListener != null) mListener.onSaveRequested();
-            return true;
-        }
-        if (matches(mCopyBinding, event)) {
-            if (mListener != null) mListener.onCopyRequested();
-            return true;
-        }
-        if (matches(mPasteBinding, event)) {
-            if (mListener != null) {
-                mListener.onPasteRequested(mContext.getLastMouseUiX(), mContext.getLastMouseUiY());
+        for (ViewportAction action : ViewportActionRegistry.all()) {
+            KeyBinding binding = action.keyBinding(mConfig);
+            if (!matches(binding, event)) continue;
+            if (!action.isEnabled(mContext)) return true;
+            if (mActionSink != null) {
+                mActionSink.performAction(action.id(), requestFor(action.id()));
             }
-            return true;
-        }
-        if (matches(mDeleteBinding, event)) {
-            if (mListener != null) mListener.onDeleteRequested();
-            return true;
-        }
-        if (matches(mToggleSnapToGridBinding, event)) {
-            if (mListener != null) mListener.onToggleSnapToGridRequested();
-            return true;
-        }
-        if (matches(mToggleGridAndAxisBinding, event)) {
-            if (mListener != null) mListener.onToggleGridAndAxisRequested();
-            return true;
-        }
-        if (matches(mGroupIntoFrameBinding, event)) {
-            if (mListener != null) mListener.onGroupIntoFrameRequested();
-            return true;
-        }
-        if (matches(mGroupIntoNodeGroupBinding, event)) {
-            if (mListener != null) mListener.onGroupIntoNodeGroupRequested();
             return true;
         }
         return false;
     }
 
     private void applyConfig(AppConfig config) {
-        if (config == null || config.keyBindings == null) return;
-        mUndoBinding = KeyBinding.parse(config.keyBindings.undo);
-        mRedoBinding = KeyBinding.parse(config.keyBindings.redo);
-        mSaveBinding = KeyBinding.parse(config.keyBindings.save);
-        mCopyBinding = KeyBinding.parse(config.keyBindings.copy);
-        mPasteBinding = KeyBinding.parse(config.keyBindings.paste);
-        mDeleteBinding = KeyBinding.parse(config.keyBindings.delete);
-        mToggleSnapToGridBinding = KeyBinding.parse(config.keyBindings.toggleSnapToGrid);
-        mToggleGridAndAxisBinding = KeyBinding.parse(config.keyBindings.toggleGridAndAxis);
-        mGroupIntoFrameBinding = KeyBinding.parse(config.keyBindings.groupIntoFrame);
-        mGroupIntoNodeGroupBinding = KeyBinding.parse(config.keyBindings.groupIntoNodeGroup);
+        mConfig = config;
+    }
+
+    private ViewportActionRequest requestFor(ViewportActionId id) {
+        if (id == ViewportActionId.PASTE) {
+            return ViewportActionRequest.builder()
+                    .ui(mContext.getLastMouseUiX(), mContext.getLastMouseUiY())
+                    .build();
+        }
+        return ViewportActionRequest.EMPTY;
     }
 
     private static boolean matches(KeyBinding binding, KeyEvent event) {

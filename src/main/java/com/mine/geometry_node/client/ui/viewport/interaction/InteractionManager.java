@@ -3,13 +3,8 @@ package com.mine.geometry_node.client.ui.viewport.interaction;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.*;
-import com.mine.geometry_node.client.ui.viewport.menu.FrameMenu;
-import com.mine.geometry_node.client.ui.viewport.menu.GroupNodeMenu;
-import com.mine.geometry_node.client.ui.viewport.menu.PortMenu;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
@@ -44,6 +39,8 @@ public class InteractionManager {
 
     private FrameVisualAdapter mDraggedFrame = null;
     private final InteractionContext mContext;
+    private final ContextMenuRouter mContextMenuRouter;
+    private final ConnectionInteraction mConnectionInteraction;
     private InteractionListener mListener;
     private int mCurrentMode = MODE_NONE;
 
@@ -57,26 +54,20 @@ public class InteractionManager {
     private float mAppliedDragUiDx, mAppliedDragUiDy;
     private float mSelectionStartUiX, mSelectionStartUiY;
     private final RectF mSelectionRectUi = new RectF();
-    private Viewport.PortInfo mDraftStartPort = null;
-    private float mDraftCurrentUiX, mDraftCurrentUiY;
 
     private final Paint mSelectionFillPaint = new Paint();
     private final Paint mSelectionBorderPaint = new Paint();
-    private final Paint mDraftLinePaint = new Paint();
-    private final float[] mTempPos = new float[2];
-
-    // 轨迹记录
-    private final List<Float> mCutPath = new ArrayList<>();
-    // 刀锋画笔
-    private final Paint mCutLinePaint = new Paint();
 
     public InteractionManager(InteractionContext context) {
         this.mContext = context;
+        this.mContextMenuRouter = new ContextMenuRouter(context);
+        this.mConnectionInteraction = new ConnectionInteraction(context);
         initPaints();
     }
 
     public void setListener(InteractionListener listener) {
         this.mListener = listener;
+        mConnectionInteraction.setListener(listener);
     }
 
     private void initPaints() {
@@ -85,16 +76,6 @@ public class InteractionManager {
         mSelectionBorderPaint.setColor(UIConstants.ViewPort.Selection.CLR_BORDER);
         mSelectionBorderPaint.setStyle(Paint.Style.STROKE);
         mSelectionBorderPaint.setStrokeWidth(UIUtils.dp2px(UIConstants.ViewPort.Selection.STROKE_WIDTH));
-        mDraftLinePaint.setAntiAlias(true);
-        mDraftLinePaint.setStyle(Paint.Style.STROKE);
-        mDraftLinePaint.setColor(UIConstants.ViewPort.Connection.CLR_DRAFT_LINE);
-
-        // 刀锋连线样式
-        mCutLinePaint.setAntiAlias(true);
-        mCutLinePaint.setStyle(Paint.Style.STROKE);
-        mCutLinePaint.setColor(0xFFFF4444);
-        mCutLinePaint.setStrokeCap(Paint.Cap.ROUND);
-        mCutLinePaint.setStrokeJoin(Paint.Join.ROUND);
     }
 
     public boolean onGenericMotionEvent(MotionEvent event) {
@@ -130,9 +111,7 @@ public class InteractionManager {
 
         if (event.isCtrlPressed() && !isRightMouse(event) && !isMiddleMouse(event)) {
             mCurrentMode = MODE_CUTTING;
-            mCutPath.clear();
-            mCutPath.add(uiX);
-            mCutPath.add(uiY);
+            mConnectionInteraction.beginCut(uiX, uiY);
             return;
         }
 
@@ -191,27 +170,13 @@ public class InteractionManager {
             case MODE_PANNING: mContext.getCamera().pan(dx, dy); break;
             case MODE_DRAGGING_NODES: updateNodeDragPreview(uiX, uiY); break;
             case MODE_SELECTING: updateBoxSelection(uiX, uiY); break;
-            case MODE_CONNECTING: mDraftCurrentUiX = uiX; mDraftCurrentUiY = uiY; mContext.invalidate(); break;
+            case MODE_CONNECTING: mConnectionInteraction.updateDraft(uiX, uiY); break;
             case MODE_DRAGGING_FRAME:
                 if (mDraggedFrame != null) {
                     updateFrameDragPreview(uiX, uiY);
                 }
                 break;
-            case MODE_CUTTING:
-                if (mCutPath.size() >= 2) {
-                    float lastPathX = mCutPath.get(mCutPath.size() - 2);
-                    float lastPathY = mCutPath.get(mCutPath.size() - 1);
-
-                    float distSq = (uiX - lastPathX) * (uiX - lastPathX) + (uiY - lastPathY) * (uiY - lastPathY);
-                    if (distSq > UIUtils.dp2px(2) * UIUtils.dp2px(2)) {
-                        mCutPath.add(uiX);
-                        mCutPath.add(uiY);
-
-                        mContext.cutIntersectingConnections(lastPathX, lastPathY, uiX, uiY, mListener);
-                    }
-                }
-                mContext.invalidate();
-                break;
+            case MODE_CUTTING: mConnectionInteraction.updateCut(uiX, uiY); break;
         }
         mLastScreenX = screenX; mLastScreenY = screenY;
     }
@@ -222,45 +187,22 @@ public class InteractionManager {
         float uiY = camera.screenToUIY(screenY);
 
         if (isRightMouse(event) && !mHasMovedSignificantly) {
-            NodeVisualAdapter targetNode = mContext.findNodeAt(uiX, uiY);
-            if (targetNode != null) {
-                float localX = uiX - targetNode.getUiX();
-                float localY = uiY - targetNode.getUiY();
-                String clickedLabelPortId = targetNode.hitTestLabel(UIUtils.dp2px(localX), UIUtils.dp2px(localY));
-                if (clickedLabelPortId != null) {
-                    PortMenu.show(mContext, targetNode, clickedLabelPortId, screenX, screenY);
-                    mCurrentMode = MODE_NONE;
-                    return;
-                }
-                if (targetNode.getNodeData().isGroupNode() && localY >= 0 && localY <= UIConstants.Node.HEADER_HEIGHT) {
-                    mContext.clearSelection();
-                    mContext.addToSelection(targetNode);
-                    GroupNodeMenu.show(mContext, targetNode, screenX, screenY);
-                    mCurrentMode = MODE_NONE;
+            ContextMenuRouter.RouteResult routeResult = mContextMenuRouter.route(uiX, uiY, screenX, screenY);
+            if (routeResult.handled) {
+                mCurrentMode = MODE_NONE;
+                if (routeResult.invalidate) {
                     mContext.invalidate();
-                    return;
                 }
+                return;
             }
-            if (targetNode == null) {
-                FrameVisualAdapter targetFrame = mContext.findFrameAt(uiX, uiY);
-                if (targetFrame != null) {
-                    mContext.clearSelection();
-                    mContext.addToSelection(targetFrame);
-                    FrameMenu.show(mContext, targetFrame, screenX, screenY);
-                    mCurrentMode = MODE_NONE;
-                    mContext.invalidate();
-                    return;
-                }
-            }
-            mContext.showMenu(screenX, screenY);
         }
 
         switch (mCurrentMode) {
             case MODE_DRAGGING_NODES: finalizeNodeDragging(uiX, uiY); break;
-            case MODE_CONNECTING: finalizeConnection(uiX, uiY); break;
+            case MODE_CONNECTING: mConnectionInteraction.finalizeConnection(uiX, uiY); break;
             case MODE_SELECTING: mSelectionRectUi.setEmpty(); break;
             case MODE_DRAGGING_FRAME: finalizeFrameDragging(uiX, uiY); break;
-            case MODE_CUTTING: mCutPath.clear(); break;
+            case MODE_CUTTING: mConnectionInteraction.clearCut(); break;
         }
 
         mCurrentMode = MODE_NONE;
@@ -269,7 +211,7 @@ public class InteractionManager {
 
     private void enterConnectingMode(Viewport.PortInfo port, float uiX, float uiY) {
         mCurrentMode = MODE_CONNECTING;
-        mDraftStartPort = port; mDraftCurrentUiX = uiX; mDraftCurrentUiY = uiY;
+        mConnectionInteraction.beginConnection(port, uiX, uiY);
     }
 
     private void enterDraggingMode(NodeVisualAdapter target, float uiX, float uiY) {
@@ -527,20 +469,10 @@ public class InteractionManager {
         return target;
     }
 
-    private void finalizeConnection(float endUiX, float endUiY) {
-        Viewport.PortInfo endPort = mContext.findPortAt(endUiX, endUiY);
-        if (isValidConnection(mDraftStartPort, endPort)) {
-            Viewport.PortInfo input = mDraftStartPort.isInput ? mDraftStartPort : endPort;
-            Viewport.PortInfo output = mDraftStartPort.isInput ? endPort : mDraftStartPort;
-            if (!mContext.hasConnection(output.node, output.portId, input.node, input.portId)) {
-                if (mListener != null) mListener.onConnectPorts(output.node.getNodeId(), output.portId, input.node.getNodeId(), input.portId);
-            }
-        }
-        mDraftStartPort = null;
-    }
-
     public void drawOverlay(Canvas canvas) {
-        if (mCurrentMode == MODE_CONNECTING && mDraftStartPort != null) drawDraftLine(canvas);
+        if (mCurrentMode == MODE_CONNECTING) {
+            mConnectionInteraction.drawDraftLine(canvas);
+        }
         if (mCurrentMode == MODE_SELECTING) {
             ViewportCamera camera = mContext.getCamera();
             float l = camera.uiToScreenX(mSelectionRectUi.left);
@@ -550,57 +482,9 @@ public class InteractionManager {
             canvas.drawRect(l, t, r, b, mSelectionFillPaint);
             canvas.drawRect(l, t, r, b, mSelectionBorderPaint);
         }
-        if (mCurrentMode == MODE_CUTTING && mCutPath.size() >= 4) {
-            ViewportCamera camera = mContext.getCamera();
-            mCutLinePaint.setStrokeWidth(UIUtils.dp2px(2.0f) * camera.getScale());
-
-            for (int i = 0; i < mCutPath.size() - 2; i += 2) {
-                float sx1 = camera.uiToScreenX(mCutPath.get(i));
-                float sy1 = camera.uiToScreenY(mCutPath.get(i + 1));
-                float sx2 = camera.uiToScreenX(mCutPath.get(i + 2));
-                float sy2 = camera.uiToScreenY(mCutPath.get(i + 3));
-                canvas.drawLine(sx1, sy1, sx2, sy2, mCutLinePaint);
-            }
+        if (mCurrentMode == MODE_CUTTING) {
+            mConnectionInteraction.drawCutPath(canvas);
         }
-    }
-
-    private void drawDraftLine(Canvas canvas) {
-        ViewportCamera camera = mContext.getCamera();
-        mDraftLinePaint.setStrokeWidth(UIUtils.dp2px(UIConstants.ViewPort.Connection.LINE_WIDTH_DRAFT) * camera.getScale());
-        mDraftStartPort.node.getPortPosition(mDraftStartPort.portId, mDraftStartPort.isInput, mTempPos);
-        canvas.drawLine(camera.uiToScreenX(mDraftStartPort.node.getUiX() + mTempPos[0]),
-                camera.uiToScreenY(mDraftStartPort.node.getUiY() + mTempPos[1]),
-                camera.uiToScreenX(mDraftCurrentUiX), camera.uiToScreenY(mDraftCurrentUiY), mDraftLinePaint);
-    }
-
-    private boolean isValidConnection(Viewport.PortInfo s, Viewport.PortInfo e) {
-        if (s == null || e == null || s.node.getNodeId().equals(e.node.getNodeId()) || s.isInput == e.isInput) return false;
-        Viewport.PortInfo output = s.isInput ? e : s;
-        Viewport.PortInfo input = s.isInput ? s : e;
-        PortType outputType = getPortType(output);
-        PortType inputType = getPortType(input);
-        boolean typeCompatible = isExecutionToVirtualAny(output, outputType, input, inputType)
-                || PortType.isCompatible(outputType, inputType);
-        return typeCompatible && mContext.canConnectPorts(output.node.getNodeId(), output.portId, input.node.getNodeId(), input.portId);
-    }
-
-    private boolean isExecutionToVirtualAny(Viewport.PortInfo output, PortType outputType, Viewport.PortInfo input, PortType inputType) {
-        return (outputType == PortType.EXECUTION && inputType == PortType.ANY && isGroupVirtualBoundaryPort(input))
-                || (inputType == PortType.EXECUTION && outputType == PortType.ANY && isGroupVirtualBoundaryPort(output));
-    }
-
-    private boolean isGroupVirtualBoundaryPort(Viewport.PortInfo portInfo) {
-        if (portInfo == null || portInfo.node == null || portInfo.node.getNodeData() == null) return false;
-        return portInfo.node.getNodeData().isGroupInputNode() || portInfo.node.getNodeData().isGroupOutputNode();
-    }
-
-    private PortType getPortType(Viewport.PortInfo portInfo) {
-        if (portInfo == null || portInfo.node == null) return null;
-        for (PortRow row : portInfo.node.getNodeDef().rows()) {
-            if (portInfo.isInput) { if (row.leftPort() != null && row.leftPort().id().equals(portInfo.portId)) return row.leftPort().type(); }
-            else { if (row.rightPort() != null && row.rightPort().id().equals(portInfo.portId)) return row.rightPort().type(); }
-        }
-        return null;
     }
 
     private boolean isRightMouse(MotionEvent e) { return (e.getButtonState() & MotionEvent.BUTTON_SECONDARY) != 0 || e.getActionButton() == MotionEvent.BUTTON_SECONDARY; }

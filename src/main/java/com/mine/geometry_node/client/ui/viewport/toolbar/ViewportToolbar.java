@@ -5,6 +5,10 @@ import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRegistry;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -15,22 +19,17 @@ import icyllis.modernui.widget.TextView;
 public final class ViewportToolbar extends FrameLayout implements ViewportToolButton.TooltipHost {
     private static final int TOOL_BUTTON_SIZE_DP = 15;
 
-    public interface Listener {
-        void onSnapToGridChanged(boolean enabled);
-        void onGridAndAxisVisibilityChanged(boolean visible);
-    }
-
-    private final Listener mListener;
+    private ViewportActionSink mActionSink;
     private final ViewportToolStrip mToolStrip;
-    private final SnapToggleView mSnapToggleView;
-    private final GridVisibilityToggleView mGridVisibilityToggleView;
+    private final ViewportToggleButton mSnapToggleButton;
+    private final ViewportToggleButton mGridVisibilityButton;
     private final TextView mTooltip;
     private final ConfigChangeListener mConfigChangeListener = this::applyConfig;
     private View mTooltipAnchor;
 
-    public ViewportToolbar(Context context, Listener listener) {
+    public ViewportToolbar(Context context, ViewportActionSink actionSink) {
         super(context);
-        this.mListener = listener;
+        this.mActionSink = actionSink;
         setClipChildren(false);
         setWillNotDraw(true);
 
@@ -39,13 +38,13 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
         stripLp.gravity = Gravity.RIGHT | Gravity.TOP;
         addView(mToolStrip, stripLp);
 
-        mSnapToggleView = new SnapToggleView(context, this);
-        mSnapToggleView.setOnClickListener(v -> setSnapToGridEnabled(!mSnapToggleView.isSnapEnabled()));
-        mToolStrip.addTool(mSnapToggleView, TOOL_BUTTON_SIZE_DP);
+        mSnapToggleButton = ViewportToggleButton.createSnap(context, this);
+        mSnapToggleButton.setOnClickListener(v -> performAction(ViewportActionId.TOGGLE_SNAP_TO_GRID));
+        mToolStrip.addTool(mSnapToggleButton, TOOL_BUTTON_SIZE_DP);
 
-        mGridVisibilityToggleView = new GridVisibilityToggleView(context, this);
-        mGridVisibilityToggleView.setOnClickListener(v -> setGridAndAxisVisible(!mGridVisibilityToggleView.isGridVisible()));
-        mToolStrip.addTool(mGridVisibilityToggleView, TOOL_BUTTON_SIZE_DP);
+        mGridVisibilityButton = ViewportToggleButton.createGridVisibility(context, this);
+        mGridVisibilityButton.setOnClickListener(v -> performAction(ViewportActionId.TOGGLE_GRID_AND_AXIS));
+        mToolStrip.addTool(mGridVisibilityButton, TOOL_BUTTON_SIZE_DP);
 
         mTooltip = UIUtils.createLockedTextView(context, "", 10.0f, UIConstants.CLR_WHITE);
         mTooltip.setGravity(Gravity.LEFT | Gravity.TOP);
@@ -65,6 +64,10 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
         ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
     }
 
+    public void setActionSink(ViewportActionSink actionSink) {
+        mActionSink = actionSink;
+    }
+
     @Override
     protected void onDetachedFromWindow() {
         ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
@@ -76,9 +79,8 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
     }
 
     public void setSnapToGridEnabled(boolean enabled, boolean notifyListener) {
-        if (mSnapToggleView.isSnapEnabled() == enabled) return;
-        mSnapToggleView.setSnapEnabled(enabled);
-        if (notifyListener && mListener != null) mListener.onSnapToGridChanged(enabled);
+        if (mSnapToggleButton.isChecked() == enabled) return;
+        mSnapToggleButton.setChecked(enabled);
     }
 
     public void setGridAndAxisVisible(boolean visible) {
@@ -86,9 +88,8 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
     }
 
     public void setGridAndAxisVisible(boolean visible, boolean notifyListener) {
-        if (mGridVisibilityToggleView.isGridVisible() == visible) return;
-        mGridVisibilityToggleView.setGridVisible(visible);
-        if (notifyListener && mListener != null) mListener.onGridAndAxisVisibilityChanged(visible);
+        if (mGridVisibilityButton.isChecked() == visible) return;
+        mGridVisibilityButton.setChecked(visible);
     }
 
     public void hideTooltip() {
@@ -125,7 +126,17 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
 
     private void applyConfig(AppConfig config) {
         if (config == null || config.keyBindings == null) return;
-        mSnapToggleView.setTooltipText("吸附 - " + config.keyBindings.toggleSnapToGrid + "\n开启后节点和图框会对齐网格");
-        mGridVisibilityToggleView.setTooltipText("坐标轴 - " + config.keyBindings.toggleGridAndAxis + "\n点击显示或隐藏栅格和坐标轴");
+        mSnapToggleButton.setTooltipText(ViewportActionRegistry.label(ViewportActionId.TOGGLE_SNAP_TO_GRID)
+                + " - " + ViewportActionRegistry.shortcutText(ViewportActionId.TOGGLE_SNAP_TO_GRID, config)
+                + "\n开启后节点和图框会对齐网格");
+        mGridVisibilityButton.setTooltipText(ViewportActionRegistry.label(ViewportActionId.TOGGLE_GRID_AND_AXIS)
+                + " - " + ViewportActionRegistry.shortcutText(ViewportActionId.TOGGLE_GRID_AND_AXIS, config)
+                + "\n点击显示或隐藏栅格和坐标轴");
+    }
+
+    private void performAction(ViewportActionId id) {
+        if (mActionSink != null) {
+            mActionSink.performAction(id, ViewportActionRequest.EMPTY);
+        }
     }
 }

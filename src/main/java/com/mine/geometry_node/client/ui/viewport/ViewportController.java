@@ -6,9 +6,11 @@ import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import com.mine.geometry_node.client.ui.viewport.frame.UIFrame;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionManager;
-import com.mine.geometry_node.client.ui.viewport.interaction.KeyManager;
 import com.mine.geometry_node.client.ui.viewport.node.UINode;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
@@ -22,7 +24,7 @@ import java.util.*;
 
 public class ViewportController implements EditorContext.EditorListener,
         InteractionManager.InteractionListener,
-        KeyManager.KeyListener {
+        ViewportActionSink {
 
     private final Viewport mViewport;
     private EditorContext mEditorContext;
@@ -52,7 +54,7 @@ public class ViewportController implements EditorContext.EditorListener,
             com.mine.geometry_node.core.node.NodeGraph graph = session.editorContext.getCurrentGraph();
             rebuildScopeVisuals(graph);
 
-            mViewport.updateSelectionState(session.selectedNodeIds);
+            mViewport.updateSelectionState(session.selectedNodeIds, session.selectedFrameIds);
             mViewport.rebuildVisualConnections(graph);
 
             mViewport.updateTransform();
@@ -71,11 +73,11 @@ public class ViewportController implements EditorContext.EditorListener,
             mCurrentSession.viewportY = mViewport.getCamera().getY();
             mCurrentSession.currentScale = mViewport.getCamera().getScale();
 
-            mCurrentSession.selectedNodeIds.clear();
             if (mEditorContext == null || !mEditorContext.isInsideGroupScope()) {
-                for (NodeVisualAdapter node : mViewport.getSelectedNodeVisuals()) {
-                    mCurrentSession.selectedNodeIds.add(node.getNodeId());
-                }
+                mViewport.syncSelectionToSession(mCurrentSession.selectedNodeIds, mCurrentSession.selectedFrameIds);
+            } else {
+                mCurrentSession.selectedNodeIds.clear();
+                mCurrentSession.selectedFrameIds.clear();
             }
         }
     }
@@ -259,12 +261,10 @@ public class ViewportController implements EditorContext.EditorListener,
 
     private void selectPastedElements(CmdPasteElements cmd) {
         mViewport.clearSelection();
-        mCurrentSession.selectedNodeIds.clear();
         for (NodeData node : cmd.getPastedNodes()) {
             NodeVisualAdapter visual = mViewport.getNodeVisual(node.id);
             if (visual != null) {
                 mViewport.addToSelection(visual);
-                mCurrentSession.selectedNodeIds.add(node.id);
             }
         }
         for (com.mine.geometry_node.core.node.FrameData frame : cmd.getPastedFrames()) {
@@ -272,6 +272,9 @@ public class ViewportController implements EditorContext.EditorListener,
             if (visual != null) {
                 mViewport.addToSelection(visual);
             }
+        }
+        if (mCurrentSession != null) {
+            mViewport.syncSelectionToSession(mCurrentSession.selectedNodeIds, mCurrentSession.selectedFrameIds);
         }
     }
 
@@ -343,21 +346,71 @@ public class ViewportController implements EditorContext.EditorListener,
         return false;
     }
 
-    // ==========================================
-    // KeyListener 接口实现
-    // ==========================================
-
-    @Override public void onUndo() { if (mEditorContext != null) mEditorContext.getCommandManager().undo(); }
-    @Override public void onRedo() { if (mEditorContext != null) mEditorContext.getCommandManager().redo(); }
-
     @Override
-    public void onSaveRequested() {
+    public void performAction(ViewportActionId id, ViewportActionRequest request) {
+        if (id == null) return;
+        ViewportActionRequest actionRequest = request != null ? request : ViewportActionRequest.EMPTY;
+        switch (id) {
+            case UNDO -> undo();
+            case REDO -> redo();
+            case SAVE -> save();
+            case COPY -> copySelection();
+            case PASTE -> paste(actionRequest.uiXOr(mViewport.getLastMouseUiX()), actionRequest.uiYOr(mViewport.getLastMouseUiY()));
+            case DELETE -> deleteSelection();
+            case TOGGLE_SNAP_TO_GRID -> toggleSnapToGrid();
+            case TOGGLE_GRID_AND_AXIS -> toggleGridAndAxis();
+            case GROUP_INTO_FRAME -> groupIntoFrameFromAction();
+            case GROUP_INTO_NODE_GROUP -> groupIntoNodeGroupFromAction();
+            case EXIT_GROUP -> executeExitGroup();
+            case ADD_NODE -> executeAddNode(
+                    actionRequest.screenXOr(mViewport.getLastMouseUiX()),
+                    actionRequest.screenYOr(mViewport.getLastMouseUiY()),
+                    actionRequest.typeId()
+            );
+            case ADD_FRAME -> executeAddFrame(
+                    actionRequest.uiXOr(mViewport.getLastMouseUiX()),
+                    actionRequest.uiYOr(mViewport.getLastMouseUiY())
+            );
+            case ADD_GROUP -> executeAddGroup(
+                    actionRequest.uiXOr(mViewport.getLastMouseUiX()),
+                    actionRequest.uiYOr(mViewport.getLastMouseUiY())
+            );
+            case DISSOLVE_NODE_GROUP -> executeDissolveNodeGroup(actionRequest.nodeId());
+            case SET_FRAME_PROPERTY -> executeSetFrameProperty(
+                    actionRequest.frameId(),
+                    actionRequest.title(),
+                    actionRequest.colorOr(0xFF556677)
+            );
+            case SET_GROUP_NODE_PROPERTY -> executeSetGroupNodeProperty(
+                    actionRequest.nodeId(),
+                    actionRequest.title(),
+                    actionRequest.colorOr(NodeData.DEFAULT_GROUP_COLOR),
+                    actionRequest.comment()
+            );
+            case RENAME_PORT -> executeRenamePort(
+                    actionRequest.nodeId(),
+                    actionRequest.portCategory(),
+                    actionRequest.portId(),
+                    actionRequest.oldName(),
+                    actionRequest.newName()
+            );
+        }
+    }
+
+    private void undo() {
+        if (mEditorContext != null) mEditorContext.getCommandManager().undo();
+    }
+
+    private void redo() {
+        if (mEditorContext != null) mEditorContext.getCommandManager().redo();
+    }
+
+    private void save() {
         mViewport.requestViewportFocus();
         DocumentManager.INSTANCE.saveSession(DocumentManager.INSTANCE.getActiveSession());
     }
 
-    @Override
-    public void onCopyRequested() {
+    private void copySelection() {
         if (mEditorContext == null) return;
 
         List<NodeVisualAdapter> selectedNodes = mViewport.getSelectedNodeVisuals();
@@ -407,8 +460,7 @@ public class ViewportController implements EditorContext.EditorListener,
         System.out.println("Copied " + copiedNodeIds.size() + " nodes and " + copiedFrameIds.size() + " frames.");
     }
 
-    @Override
-    public void onPasteRequested(float uiX, float uiY) {
+    private void paste(float uiX, float uiY) {
         if (mEditorContext == null || sClipboardJson == null || sClipboardJson.isEmpty()) return;
 
         CmdPasteElements cmd = new CmdPasteElements(mEditorContext.getGraphController(), sClipboardJson, uiX, uiY);
@@ -418,8 +470,7 @@ public class ViewportController implements EditorContext.EditorListener,
         System.out.println("Pasted elements from clipboard.");
     }
 
-    @Override
-    public void onDeleteRequested() {
+    private void deleteSelection() {
         if (mEditorContext == null) return;
         List<NodeVisualAdapter> selectedNodes = mViewport.getSelectedNodeVisuals();
         List<FrameVisualAdapter> selectedFrames = mViewport.getSelectedFrameVisuals();
@@ -443,25 +494,21 @@ public class ViewportController implements EditorContext.EditorListener,
         mViewport.clearSelection();
     }
 
-    @Override
-    public void onToggleSnapToGridRequested() {
+    private void toggleSnapToGrid() {
         ConfigManager.INSTANCE.update(config -> config.viewport.snapToGrid = !config.viewport.snapToGrid);
     }
 
-    @Override
-    public void onToggleGridAndAxisRequested() {
+    private void toggleGridAndAxis() {
         ConfigManager.INSTANCE.update(config -> config.viewport.showGridAndAxis = !config.viewport.showGridAndAxis);
     }
 
-    @Override
-    public void onGroupIntoFrameRequested() {
+    private void groupIntoFrameFromAction() {
         if (mEditorContext != null && mEditorContext.isInsideGroupScope()) return;
         executeGroupIntoFrame();
         mViewport.clearSelection();
     }
 
-    @Override
-    public void onGroupIntoNodeGroupRequested() {
+    private void groupIntoNodeGroupFromAction() {
         executeGroupIntoNodeGroup();
         mViewport.clearSelection();
     }

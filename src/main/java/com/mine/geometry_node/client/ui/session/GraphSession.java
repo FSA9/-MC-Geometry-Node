@@ -16,8 +16,9 @@ public class GraphSession {
     public float viewportY = 0;
     public float currentScale = 1.0f;
 
-    // --- 【关键】只存储选中节点的 ID，不再存储 UINode 对象 ---
+    // --- 【关键】只存储选中图元的 ID，不再存储 UI 对象 ---
     public final List<String> selectedNodeIds = new ArrayList<>();
+    public final List<String> selectedFrameIds = new ArrayList<>();
 
     // 构造函数现在只需要 3 个参数，且完全不涉及 UI
     public GraphSession(String fileId, String tabName, NodeGraph graph) {

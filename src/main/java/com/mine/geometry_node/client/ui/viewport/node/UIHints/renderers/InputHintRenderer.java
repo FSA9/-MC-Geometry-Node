@@ -1,9 +1,11 @@
-package com.mine.geometry_node.client.ui.viewport.node.UIHints;
+package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintRenderer;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
@@ -17,8 +19,6 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
-import java.util.Objects;
-
 public class InputHintRenderer implements UIHintRenderer {
     private static final float EXPAND_BUTTON_WIDTH = 16.0f;
 
@@ -31,7 +31,7 @@ public class InputHintRenderer implements UIHintRenderer {
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
         String portId = row.leftPort().id();
         PortType expectedType = row.leftPort().type();
-        Object val = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
+        Object val = UIHintValueBinder.getValue(nodeData, row.leftPort());
 
         final Object finalOldVal = val;
 
@@ -42,17 +42,13 @@ public class InputHintRenderer implements UIHintRenderer {
 
         et.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus && editorContext != null) {
-                Object parsedValue = parseValue(et.getText().toString(), expectedType);
-                if (parsedValue == null && (expectedType == PortType.INTEGER || expectedType == PortType.FLOAT)) {
+                Object parsedValue = UIHintValueBinder.parseText(et.getText().toString(), expectedType);
+                if (parsedValue == null && UIHintValueBinder.requiresNumericValue(expectedType)) {
                     et.setText(finalOldVal != null ? finalOldVal.toString() : "");
                     return;
                 }
 
-                Object oldVal = nodeData.inputs.get(portId);
-                if (!Objects.equals(parsedValue, oldVal)) {
-                    CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, parsedValue);
-                    editorContext.getCommandManager().execute(cmd);
-                }
+                UIHintValueBinder.commit(editorContext, nodeData, portId, parsedValue);
             }
         });
 
@@ -123,17 +119,4 @@ public class InputHintRenderer implements UIHintRenderer {
         return button;
     }
 
-    private Object parseValue(String text, PortType expectedType) {
-        try {
-            if (expectedType == PortType.INTEGER) {
-                return Integer.parseInt(text);
-            }
-            if (expectedType == PortType.FLOAT) {
-                return Float.parseFloat(text);
-            }
-            return text;
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
 }

@@ -5,6 +5,10 @@ import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRegistry;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
 import com.mine.geometry_node.core.node.NodeCategory;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -48,6 +52,7 @@ public class ViewportMenu extends FrameLayout {
     private EditText mSearchBox;
 
     private InteractionContext mContext;
+    private ViewportActionSink mActionSink;
     private float mMenuX, mMenuY;
     private AppConfig mConfig;
     private final ConfigChangeListener mConfigChangeListener = this::applyConfig;
@@ -115,10 +120,12 @@ public class ViewportMenu extends FrameLayout {
         addView(mContentLayout);
     }
 
-    public void showAt(float x, float y, InteractionContext context) {
+    public void showAt(float x, float y, InteractionContext context, ViewportActionSink actionSink) {
         this.mContext = context;
+        this.mActionSink = actionSink;
         mMenuX = x;
         mMenuY = y;
+        renderCurrentFolder();
 
         ViewGroup parent = (ViewGroup) context;
         if (parent != null) layoutPanel(parent, x, y);
@@ -153,33 +160,25 @@ public class ViewportMenu extends FrameLayout {
 
         if (mCurrentFolder == NodeRegistry.INSTANCE.ROOT) {
             addSectionLabel("操作");
-            addShortcutItem("保存", shortcut(config -> config.keyBindings.save), COLOR_ACTION_TEXT, v -> {
-                if (mContext != null) mContext.requestSave();
+            addActionItem(ViewportActionId.SAVE, v -> {
+                performAction(ViewportActionId.SAVE, ViewportActionRequest.EMPTY);
                 post(this::dismiss);
             });
 
             if (mContext != null && mContext.isInsideGroupScope()) {
-                addClickItem("退出图组", COLOR_ACTION_TEXT, v -> {
-                    if (mContext != null) {
-                        mContext.requestExitGroup();
-                    }
+                addActionItem(ViewportActionId.EXIT_GROUP, v -> {
+                    performAction(ViewportActionId.EXIT_GROUP, ViewportActionRequest.EMPTY);
                     post(this::dismiss);
                 });
             } else {
-                addShortcutItem("并入图框", shortcut(config -> config.keyBindings.groupIntoFrame), COLOR_ACTION_TEXT, v -> {
-                    if (mContext != null) {
-                        mContext.requestGroupIntoFrame();
-                        mContext.clearSelection();
-                    }
+                addActionItem(ViewportActionId.GROUP_INTO_FRAME, v -> {
+                    performAction(ViewportActionId.GROUP_INTO_FRAME, ViewportActionRequest.EMPTY);
                     post(this::dismiss);
                 });
             }
 
-            addShortcutItem("合并为图组", shortcut(config -> config.keyBindings.groupIntoNodeGroup), COLOR_ACTION_TEXT, v -> {
-                if (mContext != null) {
-                    mContext.requestGroupIntoNodeGroup();
-                    mContext.clearSelection();
-                }
+            addActionItem(ViewportActionId.GROUP_INTO_NODE_GROUP, v -> {
+                performAction(ViewportActionId.GROUP_INTO_NODE_GROUP, ViewportActionRequest.EMPTY);
                 post(this::dismiss);
             });
 
@@ -200,7 +199,10 @@ public class ViewportMenu extends FrameLayout {
         for (BaseNode node : mCurrentFolder.getNodes()) {
             String label = node.getDefaultDefinition().displayName().getString();
             addClickItem(label, COLOR_NODE_TEXT, v -> {
-                if (mContext != null) mContext.requestAddNode(mMenuX, mMenuY, node.getTypeId());
+                performAction(ViewportActionId.ADD_NODE, ViewportActionRequest.builder()
+                        .screen(mMenuX, mMenuY)
+                        .typeId(node.getTypeId())
+                        .build());
                 post(this::dismiss);
             });
         }
@@ -220,7 +222,10 @@ public class ViewportMenu extends FrameLayout {
             if (name.toLowerCase().contains(q)) {
                 matches++;
                 addClickItem(name, COLOR_NODE_TEXT, v -> {
-                    if (mContext != null) mContext.requestAddNode(mMenuX, mMenuY, def.typeId());
+                    performAction(ViewportActionId.ADD_NODE, ViewportActionRequest.builder()
+                            .screen(mMenuX, mMenuY)
+                            .typeId(def.typeId())
+                            .build());
                     post(this::dismiss);
                 });
             }
@@ -298,6 +303,16 @@ public class ViewportMenu extends FrameLayout {
         int marginV = UIUtils.dp2pxInt(1);
         lp.setMargins(0, marginV, 0, marginV);
         mListContainer.addView(row, lp);
+    }
+
+    private void addActionItem(ViewportActionId actionId, View.OnClickListener listener) {
+        String shortcut = ViewportActionRegistry.shortcutText(actionId, mConfig);
+        String label = ViewportActionRegistry.label(actionId);
+        if (shortcut == null || shortcut.isBlank()) {
+            addClickItem(label, COLOR_ACTION_TEXT, listener);
+        } else {
+            addShortcutItem(label, shortcut, COLOR_ACTION_TEXT, listener);
+        }
     }
 
     private void addSectionLabel(String text) {
@@ -407,12 +422,9 @@ public class ViewportMenu extends FrameLayout {
         }
     }
 
-    private String shortcut(ShortcutReader reader) {
-        if (mConfig == null || mConfig.keyBindings == null) return "";
-        return reader.read(mConfig);
-    }
-
-    private interface ShortcutReader {
-        String read(AppConfig config);
+    private void performAction(ViewportActionId id, ViewportActionRequest request) {
+        if (mActionSink != null) {
+            mActionSink.performAction(id, request);
+        }
     }
 }

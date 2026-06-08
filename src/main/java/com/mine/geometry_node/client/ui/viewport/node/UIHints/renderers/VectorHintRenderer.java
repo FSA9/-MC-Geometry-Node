@@ -1,9 +1,11 @@
-package com.mine.geometry_node.client.ui.viewport.node.UIHints;
+package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils; // 引入工具类
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintRenderer;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 
@@ -30,7 +32,7 @@ public class VectorHintRenderer implements UIHintRenderer {
         container.setOrientation(LinearLayout.VERTICAL);
 
         String portId = row.leftPort().id();
-        Object rawVal = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
+        Object rawVal = UIHintValueBinder.getValue(nodeData, row.leftPort());
 
         for (int i = 0; i < 3; i++) {
             final int index = i;
@@ -46,7 +48,7 @@ public class VectorHintRenderer implements UIHintRenderer {
                 if (!hasFocus && editorContext != null) {
                     try {
                         float parsedFloat = Float.parseFloat(et.getText().toString());
-                        Object currentRaw = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
+                        Object currentRaw = UIHintValueBinder.getValue(nodeData, row.leftPort());
                         float oldComponent = UIHintUtils.getSafeVectorComponent(currentRaw, index);
 
                         if (oldComponent != parsedFloat) {
@@ -54,12 +56,10 @@ public class VectorHintRenderer implements UIHintRenderer {
                             for (int j = 0; j < 3; j++) {
                                 newList.add(j == index ? parsedFloat : UIHintUtils.getSafeVectorComponent(currentRaw, j));
                             }
-                            CmdChangeInputValue cmd = new CmdChangeInputValue(
-                                    editorContext.getGraphController(), nodeData.id, portId, currentRaw, newList);
-                            editorContext.getCommandManager().execute(cmd);
+                            UIHintValueBinder.commit(editorContext, nodeData, portId, currentRaw, newList);
                         }
                     } catch (NumberFormatException e) {
-                        Object fallbackRaw = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
+                        Object fallbackRaw = UIHintValueBinder.getValue(nodeData, row.leftPort());
                         et.setText(String.valueOf(UIHintUtils.getSafeVectorComponent(fallbackRaw, index)));
                     }
                 }

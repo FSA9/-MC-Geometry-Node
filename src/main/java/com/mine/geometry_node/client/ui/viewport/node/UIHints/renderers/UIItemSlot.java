@@ -1,10 +1,10 @@
-package com.mine.geometry_node.client.ui.viewport.node.UIHints;
+package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.screen.PlayerInventoryPickerScreen;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.utils.ItemTooltipProxy;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 
@@ -228,10 +228,7 @@ public class UIItemSlot extends FrameLayout {
             mc.setScreen(new PlayerInventoryPickerScreen(currentModernUIScreen, pickedStack -> {
                 if (mEditorContext != null) {
                     String newJson = ItemCodecUtils.toJson(pickedStack, mc.level.registryAccess());
-                    Object oldVal = mNodeData.inputs.get(mPortId);
-                    mEditorContext.getCommandManager().execute(
-                            new CmdChangeInputValue(mEditorContext.getGraphController(), mNodeData.id, mPortId, oldVal, newJson)
-                    );
+                    UIHintValueBinder.commit(mEditorContext, mNodeData, mPortId, newJson);
                     updateCache();
                     this.invalidate();
                     ItemTooltipProxy.clearTooltipTask(mCachedStack);

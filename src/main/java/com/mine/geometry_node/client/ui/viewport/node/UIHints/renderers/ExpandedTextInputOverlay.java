@@ -1,9 +1,9 @@
-package com.mine.geometry_node.client.ui.viewport.node.UIHints;
+package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortType;
 import icyllis.modernui.core.Context;
@@ -17,8 +17,6 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
-import java.util.Objects;
 
 final class ExpandedTextInputOverlay extends FrameLayout {
     private final EditorContext editorContext;
@@ -130,30 +128,12 @@ final class ExpandedTextInputOverlay extends FrameLayout {
     }
 
     private void commit() {
-        Object parsedValue = parseValue(editor.getText().toString());
-        if (parsedValue == null && (expectedType == PortType.INTEGER || expectedType == PortType.FLOAT)) {
+        Object parsedValue = UIHintValueBinder.parseText(editor.getText().toString(), expectedType);
+        if (parsedValue == null && UIHintValueBinder.requiresNumericValue(expectedType)) {
             return;
         }
-        Object currentValue = nodeData.inputs.get(portId);
-        if (!Objects.equals(parsedValue, currentValue)) {
-            CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, currentValue, parsedValue);
-            editorContext.getCommandManager().execute(cmd);
-        }
+        UIHintValueBinder.commit(editorContext, nodeData, portId, parsedValue);
         dismiss();
-    }
-
-    private Object parseValue(String text) {
-        try {
-            if (expectedType == PortType.INTEGER) {
-                return Integer.parseInt(text);
-            }
-            if (expectedType == PortType.FLOAT) {
-                return Float.parseFloat(text);
-            }
-            return text;
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
     }
 
     private void dismiss() {

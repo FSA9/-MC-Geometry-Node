@@ -20,7 +20,6 @@ public class FrameLayer extends FrameLayout {
     private final Map<String, FrameVisualAdapter> mFrameVisuals = new HashMap<>();
     private final List<FrameVisualAdapter> mFrameOrder = new ArrayList<>();
 
-    private final List<FrameVisualAdapter> mSelectedFrames = new ArrayList<>();
     private final RectF mTmpFrameBounds = new RectF();
     private final RectF mTmpVisibleBounds = new RectF();
 
@@ -44,7 +43,6 @@ public class FrameLayer extends FrameLayout {
         removeAllViews();
         mFrameVisuals.clear();
         mFrameOrder.clear();
-        mSelectedFrames.clear();
     }
 
     public void addFrameVisual(String frameId, FrameVisualAdapter frame) {
@@ -61,7 +59,6 @@ public class FrameLayer extends FrameLayout {
         FrameVisualAdapter frame = mFrameVisuals.remove(frameId);
         if (frame != null) {
             mFrameOrder.remove(frame);
-            mSelectedFrames.remove(frame);
             invalidate();
         }
     }
@@ -94,21 +91,14 @@ public class FrameLayer extends FrameLayout {
         return null;
     }
 
-    public void clearSelection() {
-        for (FrameVisualAdapter frame : mSelectedFrames) {
-            frame.setSelected(false);
+    public void applySelection(List<String> selectedFrameIds) {
+        Set<String> selectedFrameIdSet = selectedFrameIds != null ? new HashSet<>(selectedFrameIds) : new HashSet<>();
+        for (FrameVisualAdapter frame : mFrameVisuals.values()) {
+            frame.setSelected(selectedFrameIdSet.contains(frame.getFrameId()));
         }
-        mSelectedFrames.clear();
-        invalidate();
-    }
-
-    public void addToSelection(FrameVisualAdapter frame) {
-        if (frame == null) return;
-        if (!mSelectedFrames.contains(frame)) {
-            frame.setSelected(true);
-            mSelectedFrames.add(frame);
+        for (FrameVisualAdapter frame : getFrameVisuals(selectedFrameIds)) {
+            bringFrameToFront(frame);
         }
-        bringFrameToFront(frame);
         invalidate();
     }
 
@@ -130,8 +120,16 @@ public class FrameLayer extends FrameLayout {
         }
     }
 
-    public List<FrameVisualAdapter> getSelectedFrameVisuals() {
-        return mSelectedFrames;
+    public List<FrameVisualAdapter> getFrameVisuals(List<String> frameIds) {
+        List<FrameVisualAdapter> frames = new ArrayList<>();
+        if (frameIds == null) return frames;
+        for (String frameId : frameIds) {
+            FrameVisualAdapter frame = mFrameVisuals.get(frameId);
+            if (frame != null) {
+                frames.add(frame);
+            }
+        }
+        return frames;
     }
 
     public FrameVisualAdapter getSmallestContainingFrame(float uiX, float uiY) {

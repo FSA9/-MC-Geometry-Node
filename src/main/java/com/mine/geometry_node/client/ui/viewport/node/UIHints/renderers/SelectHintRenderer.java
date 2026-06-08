@@ -1,11 +1,13 @@
-package com.mine.geometry_node.client.ui.viewport.node.UIHints;
+package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintRenderer;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -49,7 +51,7 @@ public class SelectHintRenderer implements UIHintRenderer {
         String portId = row.leftPort() != null ? row.leftPort().id() : "";
         Object val = null;
         if (row.leftPort() != null) {
-            val = nodeData.inputs.containsKey(portId) ? nodeData.inputs.get(portId) : row.leftPort().defaultValue();
+            val = UIHintValueBinder.getValue(nodeData, row.leftPort());
         }
 
         TextView dropdownBtn = new TextView(context);
@@ -79,15 +81,7 @@ public class SelectHintRenderer implements UIHintRenderer {
             if (parent instanceof InteractionContext interactionContext && !portId.isEmpty()) {
                 DropdownSearchMenu menu = new DropdownSearchMenu(context, resolvedOptions, selectedVal -> {
                     dropdownBtn.setText(selectedVal + " ▼");
-
-                    Object oldVal = nodeData.inputs.get(portId);
-                    if (oldVal == null || !selectedVal.equals(oldVal.toString())) {
-                        if (editorContext != null) {
-                            editorContext.getCommandManager().execute(new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldVal, selectedVal));
-                        } else {
-                            nodeData.inputs.put(portId, selectedVal);
-                        }
-                    }
+                    UIHintValueBinder.commit(editorContext, nodeData, portId, selectedVal);
                 });
 
                 menu.showAt(v, interactionContext);

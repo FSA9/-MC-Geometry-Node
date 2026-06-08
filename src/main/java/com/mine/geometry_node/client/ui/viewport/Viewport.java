@@ -5,10 +5,12 @@ import com.mine.geometry_node.client.ui.viewport.connection.ConnectionLayer;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameLayer;
 import com.mine.geometry_node.client.ui.viewport.layers.BackgroundLayer;
 import com.mine.geometry_node.client.ui.viewport.node.NodeLayer;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import com.mine.geometry_node.client.ui.viewport.menu.ViewportMenu;
 import com.mine.geometry_node.client.ui.viewport.connection.ConnectionNodeVisual;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
+import com.mine.geometry_node.client.ui.viewport.selection.ViewportSelection;
 import com.mine.geometry_node.client.ui.viewport.toolbar.ViewportToolbar;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
@@ -36,6 +38,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     private final InteractionManager mInteractionManager;
     private final KeyManager mKeyManager;
     private final ViewportController mController;
+    private final ViewportSelection mSelection = new ViewportSelection();
     private ViewportMenu mActiveMenu;
 
     private final BackgroundLayer mBackgroundLayer;
@@ -69,9 +72,10 @@ public class Viewport extends FrameLayout implements InteractionContext {
         mKeyManager = new KeyManager(this);
 
         mController = new ViewportController(this, null);
+        mToolbar.setActionSink(mController);
 
         mInteractionManager.setListener(mController);
-        mKeyManager.setListener(mController);
+        mKeyManager.setActionSink(mController);
 
         setFocusable(true);
         setFocusableInTouchMode(true);
@@ -93,17 +97,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
         lp.gravity = Gravity.CENTER;
         addView(mEmptyHint, lp);
 
-        mToolbar = new ViewportToolbar(getContext(), new ViewportToolbar.Listener() {
-            @Override
-            public void onSnapToGridChanged(boolean enabled) {
-                ConfigManager.INSTANCE.update(config -> config.viewport.snapToGrid = enabled);
-            }
-
-            @Override
-            public void onGridAndAxisVisibilityChanged(boolean visible) {
-                ConfigManager.INSTANCE.update(config -> config.viewport.showGridAndAxis = visible);
-            }
-        });
+        mToolbar = new ViewportToolbar(getContext(), null);
         mToolbar.setVisibility(View.GONE);
         LayoutParams toolbarLp = new LayoutParams(UIUtils.dp2pxInt(140), LayoutParams.WRAP_CONTENT);
         toolbarLp.gravity = Gravity.RIGHT | Gravity.TOP;
@@ -141,6 +135,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
         addView(mNodeLayer, 1, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
         if (mToolbar != null) mToolbar.setVisibility(View.VISIBLE);
+        applySelectionToLayers();
 
         // 子 layer 刚 attach 时可能还没有完成测量；延后一帧同步 overlay 和 culling 状态。
         post(this::updateTransform);
@@ -154,6 +149,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
         if (mFrameLayer != null) removeView(mFrameLayer);
         mNodeLayer = null;
         mFrameLayer = null;
+        mSelection.clear();
         mEmptyHint.setVisibility(View.VISIBLE);
         if (mToolbar != null) {
             mToolbar.setVisibility(View.GONE);
@@ -230,7 +226,13 @@ public class Viewport extends FrameLayout implements InteractionContext {
     public Map<String, ? extends NodeVisualAdapter> getNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getNodeVisuals() : new HashMap<>(); }
     public Map<String, ? extends ConnectionNodeVisual> getConnectionNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getNodeVisuals() : new HashMap<>(); }
     public void addNodeVisual(String nodeId, NodeVisualAdapter node) { if (mNodeLayer != null) { mNodeLayer.addNodeVisual(nodeId, node); invalidate(); } }
-    public void removeNodeVisual(String nodeId) { if (mNodeLayer != null) { mNodeLayer.removeNodeVisual(nodeId); invalidate(); } }
+    public void removeNodeVisual(String nodeId) {
+        mSelection.removeNode(nodeId);
+        if (mNodeLayer != null) {
+            mNodeLayer.removeNodeVisual(nodeId);
+            applySelectionToLayers();
+        }
+    }
     public NodeVisualAdapter getNodeVisual(String nodeId) { return mNodeLayer != null ? mNodeLayer.getNodeVisual(nodeId) : null; }
     public void updateNodePosition(String nodeId, float x, float y) { if (mNodeLayer != null) { mNodeLayer.updateNodePosition(nodeId, x, y); invalidate(); } }
     public void notifyNodeLayoutUpdate(String nodeId) { if (mNodeLayer != null) mNodeLayer.notifyNodeLayoutUpdate(nodeId); }
@@ -238,7 +240,13 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     public Map<String, ? extends FrameVisualAdapter> getFrameVisuals() { return mFrameLayer != null ? mFrameLayer.getFrameVisuals() : new HashMap<>(); }
     public void addFrameVisual(String frameId, FrameVisualAdapter frame) { if (mFrameLayer != null) { mFrameLayer.addFrameVisual(frameId, frame); invalidate(); } }
-    public void removeFrameVisual(String frameId) { if (mFrameLayer != null) { mFrameLayer.removeFrameVisual(frameId); invalidate(); } }
+    public void removeFrameVisual(String frameId) {
+        mSelection.removeFrame(frameId);
+        if (mFrameLayer != null) {
+            mFrameLayer.removeFrameVisual(frameId);
+            applySelectionToLayers();
+        }
+    }
     public void updateFrameVisual(String frameId) { if (mFrameLayer != null) { mFrameLayer.updateFrameVisual(frameId); invalidate(); } }
 
     @Override public void updateFrameBounds(String frameId) { if (mFrameLayer != null) { mFrameLayer.updateFrameBounds(frameId); invalidate(); } }
@@ -259,11 +267,17 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override public Iterable<NodeVisualAdapter> getAllNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getNodeVisuals().values() : new ArrayList<>(); }
     @Override public Iterable<FrameVisualAdapter> getAllFrameVisuals() { return mFrameLayer != null ? mFrameLayer.getFrameVisuals().values() : new ArrayList<>(); }
 
-    @Override public void updateBoxSelection(float uiX, float uiY, float uiW, float uiH) { if (mNodeLayer != null) mNodeLayer.updateBoxSelection(uiX, uiY, uiW, uiH); }
+    @Override
+    public void updateBoxSelection(float uiX, float uiY, float uiW, float uiH) {
+        mSelection.setNodes(mNodeLayer != null ? mNodeLayer.findNodeIdsInRect(uiX, uiY, uiW, uiH) : new ArrayList<>());
+        mSelection.clearFrames();
+        applySelectionToLayers();
+    }
+
     @Override public void moveSelectedNodes(float uiDx, float uiDy) { if (mNodeLayer != null) mNodeLayer.moveSelectedNodes(uiDx, uiDy); }
     @Override public boolean isSnapToGridEnabled() { return mSnapToGridEnabled; }
     @Override public float getSnapGridSize() { return Math.max(1.0f, ConfigManager.INSTANCE.getConfig().viewport.gridSize); }
-    @Override public List<NodeVisualAdapter> getSelectedNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getSelectedNodeVisuals() : new ArrayList<>(); }
+    @Override public List<NodeVisualAdapter> getSelectedNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getNodeVisuals(mSelection.nodeIds()) : new ArrayList<>(); }
     @Override public void previewFrameMove(String frameId, float totalUiDx, float totalUiDy) { if (mFrameLayer != null) { mFrameLayer.previewFrameMove(frameId, totalUiDx, totalUiDy); invalidate(); } }
 
     @Override
@@ -275,23 +289,44 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public void clearSelection() {
-        if (mNodeLayer != null) mNodeLayer.clearSelection();
-        if (mFrameLayer != null) mFrameLayer.clearSelection();
+        mSelection.clear();
+        applySelectionToLayers();
     }
     @Override
     public void addToSelection(NodeVisualAdapter node) {
-        if (mNodeLayer != null) mNodeLayer.addToSelection(node);
+        mSelection.selectNode(node);
+        applySelectionToLayers();
     }
     @Override
     public void addToSelection(FrameVisualAdapter frame) {
-        if (mFrameLayer != null) mFrameLayer.addToSelection(frame);
+        mSelection.selectFrame(frame);
+        applySelectionToLayers();
     }
     @Override
     public List<FrameVisualAdapter> getSelectedFrameVisuals() {
-        return mFrameLayer != null ? mFrameLayer.getSelectedFrameVisuals() : new ArrayList<>();
+        return mFrameLayer != null ? mFrameLayer.getFrameVisuals(mSelection.frameIds()) : new ArrayList<>();
     }
-    public boolean isNodeSelected(String nodeId) { return mNodeLayer != null && mNodeLayer.isNodeSelected(nodeId); }
-    public void updateSelectionState(List<String> selectedNodeIds) { if (mNodeLayer != null) { mNodeLayer.updateSelectionState(selectedNodeIds); invalidate(); } }
+    @Override
+    public boolean isNodeSelected(String nodeId) { return mSelection.containsNode(nodeId); }
+    public void updateSelectionState(List<String> selectedNodeIds) {
+        updateSelectionState(selectedNodeIds, null);
+    }
+
+    public void updateSelectionState(List<String> selectedNodeIds, List<String> selectedFrameIds) {
+        mSelection.setNodes(selectedNodeIds);
+        mSelection.setFrames(selectedFrameIds);
+        applySelectionToLayers();
+    }
+
+    public void syncSelectionToSession(List<String> selectedNodeIds, List<String> selectedFrameIds) {
+        mSelection.syncSessionLists(selectedNodeIds, selectedFrameIds);
+    }
+
+    private void applySelectionToLayers() {
+        if (mNodeLayer != null) mNodeLayer.applySelection(mSelection.nodeIds());
+        if (mFrameLayer != null) mFrameLayer.applySelection(mSelection.frameIds());
+        invalidate();
+    }
 
     @Override
     public boolean hasConnection(NodeVisualAdapter outN, String outId, NodeVisualAdapter inN, String inId) {
@@ -313,12 +348,16 @@ public class Viewport extends FrameLayout implements InteractionContext {
         return mController != null && mController.isInsideGroupScope();
     }
 
+    public ViewportActionSink getActionSink() {
+        return mController;
+    }
+
     @Override
     public void showMenu(float screenX, float screenY) {
         closeMenu();
         mActiveMenu = new ViewportMenu(getContext());
         addView(mActiveMenu);
-        mActiveMenu.showAt(screenX, screenY, this);
+        mActiveMenu.showAt(screenX, screenY, this, mController);
     }
 
     @Override
@@ -330,17 +369,6 @@ public class Viewport extends FrameLayout implements InteractionContext {
         }
     }
 
-    @Override public void requestAddNode(float screenX, float screenY, String typeId) { if (mController != null) mController.executeAddNode(screenX, screenY, typeId); }
-    @Override public void requestAddFrame(float uiX, float uiY) { if (mController != null) mController.executeAddFrame(uiX, uiY); }
-    @Override public void requestGroupIntoFrame() { if (mController != null) mController.executeGroupIntoFrame(); }
-    @Override public void requestAddGroup(float uiX, float uiY) { if (mController != null) mController.executeAddGroup(uiX, uiY); }
-    @Override public void requestGroupIntoNodeGroup() { if (mController != null) mController.executeGroupIntoNodeGroup(); }
-    @Override public void requestDissolveNodeGroup(String nodeId) { if (mController != null) mController.executeDissolveNodeGroup(nodeId); }
-    @Override public void requestExitGroup() { if (mController != null) mController.executeExitGroup(); }
-    @Override public void requestSetFrameProperty(String frameId, String title, int color) { if (mController != null) mController.executeSetFrameProperty(frameId, title, color); }
-    @Override public void requestSetGroupNodeProperty(String nodeId, String title, int color, String comment) { if (mController != null) mController.executeSetGroupNodeProperty(nodeId, title, color, comment); }
-    @Override public void requestRenamePort(String nodeId, String category, String portId, String oldName, String newName) { if (mController != null) mController.executeRenamePort(nodeId, category, portId, oldName, newName); }
-    @Override public void requestSave() { if (mController != null) mController.onSaveRequested(); }
     @Override public void requestViewportFocus() { requestFocus(); }
     @Override public Context getUIContext() { return getContext(); }
 

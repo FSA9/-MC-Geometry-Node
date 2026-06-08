@@ -2,6 +2,8 @@ package com.mine.geometry_node.client.ui.viewport.menu;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
 import com.mine.geometry_node.core.node.FrameData;
@@ -114,7 +116,14 @@ public final class FrameMenu {
             String newTitle = titleInput.getText().toString().trim();
             if (newTitle.isEmpty()) newTitle = "New Frame";
             if (!newTitle.equals(oldTitle) || selectedColor[0] != initialColor) {
-                context.requestSetFrameProperty(frame.getFrameId(), newTitle, selectedColor[0]);
+                context.getActionSink().performAction(
+                        ViewportActionId.SET_FRAME_PROPERTY,
+                        ViewportActionRequest.builder()
+                                .frameId(frame.getFrameId())
+                                .title(newTitle)
+                                .color(selectedColor[0])
+                                .build()
+                );
             }
             close(context, popupOverlay);
         });

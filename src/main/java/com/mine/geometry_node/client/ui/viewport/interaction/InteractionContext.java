@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.viewport.interaction;
 
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionState;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
@@ -7,7 +9,7 @@ import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 
 import java.util.List;
 
-public interface InteractionContext {
+public interface InteractionContext extends ViewportActionState {
 
     // --- 状态 ---
     boolean isReady();
@@ -27,6 +29,7 @@ public interface InteractionContext {
     void updateBoxSelection(float uiX, float uiY, float uiW, float uiH);
 
     List<NodeVisualAdapter> getSelectedNodeVisuals();
+    boolean isNodeSelected(String nodeId);
     void clearSelection();
     void addToSelection(NodeVisualAdapter node);
     void addToSelection(FrameVisualAdapter frame);
@@ -49,21 +52,8 @@ public interface InteractionContext {
 
     // --- 环境上下文 ---
     icyllis.modernui.core.Context getUIContext();
+    ViewportActionSink getActionSink();
     float getLastMouseUiX();
     float getLastMouseUiY();
 
-    // ==========================================
-    // 意图请求边界 (Intent Boundary)
-    // ==========================================
-    void requestAddNode(float screenX, float screenY, String typeId);
-    void requestAddFrame(float uiX, float uiY);
-    void requestGroupIntoFrame();
-    void requestAddGroup(float uiX, float uiY);
-    void requestGroupIntoNodeGroup();
-    void requestDissolveNodeGroup(String nodeId);
-    void requestExitGroup();
-    void requestSetFrameProperty(String frameId, String title, int color);
-    void requestSetGroupNodeProperty(String nodeId, String title, int color, String comment);
-    void requestRenamePort(String nodeId, String category, String portId, String oldName, String newName);
-    void requestSave();
 }
