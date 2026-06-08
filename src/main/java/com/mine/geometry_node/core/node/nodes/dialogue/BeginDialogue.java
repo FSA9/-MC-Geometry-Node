@@ -34,7 +34,6 @@ public class BeginDialogue extends BaseNode {
     public static final String ALLOW_MULTI_PLAYER = "allow_multi_player";
     public static final String TIMEOUT_SECONDS = "timeout_seconds";
     public static final String BUSY_TEXT = "busy_text";
-    private static final String LEGACY_BUSY_TEXT_KEY = "busy_text_key";
     private static final String DEFAULT_BUSY_TEXT = "This dialogue is currently busy.";
 
     @Override
@@ -74,7 +73,7 @@ public class BeginDialogue extends BaseNode {
                 floatOrDefault(getInput(context, MAX_DISTANCE, Float.class), 0.0f),
                 boolOrDefault(getInput(context, ALLOW_MULTI_PLAYER, Boolean.class), true),
                 intOrDefault(getInput(context, TIMEOUT_SECONDS, Integer.class), 0),
-                stringOrDefault(getStringInput(context, BUSY_TEXT, LEGACY_BUSY_TEXT_KEY), DEFAULT_BUSY_TEXT)
+                stringOrDefault(getInput(context, BUSY_TEXT, String.class), DEFAULT_BUSY_TEXT)
         );
 
         context.setTempData(DialogueContext.TEMP_KEY, new DialogueContext(
@@ -166,13 +165,5 @@ public class BeginDialogue extends BaseNode {
 
     private static int intOrDefault(Integer value, int fallback) {
         return value == null ? fallback : value;
-    }
-
-    private String getStringInput(ExecutionContext context, String portName, String legacyPortName) {
-        String value = getInput(context, portName, String.class);
-        if (value != null) {
-            return value;
-        }
-        return getInput(context, legacyPortName, String.class);
     }
 }

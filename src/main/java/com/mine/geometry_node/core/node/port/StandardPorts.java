@@ -98,12 +98,9 @@ public enum StandardPorts {
     SPEAKER("speaker", PortType.STRING),
     ENTRY_ID("entry_id", PortType.STRING),
     GRAPH_ID("graph_id", PortType.STRING),
-    TEXT_KEY("text_key", PortType.STRING),
     TEMPLATE("template", PortType.STRING),
     STYLE_ID("style_id", PortType.STRING),
     VARIABLE_NAME("variable_name", PortType.STRING),
-    CHOICE_TEXT_KEY("choice_text_key", PortType.STRING),
-    CHOICE_DISABLED_REASON_KEY("choice_disabled_reason_key", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),

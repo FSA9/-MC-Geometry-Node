@@ -36,11 +36,8 @@ public class ShowDialoguePage extends BaseNode {
     public static final String CLOSED = StandardPorts.CLOSED.getId();
     public static final int DEFAULT_CHOICE_COUNT = 0;
     public static final int MAX_CHOICE_COUNT = 10;
-    private static final String LEGACY_TEXT_KEY = StandardPorts.TEXT_KEY.getId();
     private static final String CHOICE_TEXT = "choice_text";
-    private static final String LEGACY_CHOICE_TEXT_KEY = StandardPorts.CHOICE_TEXT_KEY.getId();
     private static final String CHOICE_DISABLED_REASON = "choice_disabled_reason";
-    private static final String LEGACY_CHOICE_DISABLED_REASON_KEY = StandardPorts.CHOICE_DISABLED_REASON_KEY.getId();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -122,7 +119,7 @@ public class ShowDialoguePage extends BaseNode {
             dialogueContext = withPlayer(dialogueContext, player);
             context.setTempData(DialogueContext.TEMP_KEY, dialogueContext);
         }
-        String text = stringOrEmpty(getStringInput(context, TEXT, LEGACY_TEXT_KEY));
+        String text = stringOrEmpty(getInput(context, TEXT, String.class));
         String styleId = dialogueContext != null ? dialogueContext.styleId() : "default";
 
         List<DialogueChoicePayload> choices = new ArrayList<>();
@@ -132,7 +129,7 @@ public class ShowDialoguePage extends BaseNode {
             if (Boolean.FALSE.equals(visible)) {
                 continue;
             }
-            String choiceText = stringOrEmpty(getStringInput(context, choiceTextPort(i), legacyChoiceTextKeyPort(i)));
+            String choiceText = stringOrEmpty(getInput(context, choiceTextPort(i), String.class));
             if (choiceText.isBlank()) {
                 continue;
             }
@@ -254,11 +251,9 @@ public class ShowDialoguePage extends BaseNode {
         for (int i = 1; i <= MAX_CHOICE_COUNT; i++) {
             if (context.hasPort(choiceOutputPort(i))
                     || context.hasPort(choiceTextPort(i))
-                    || context.hasPort(legacyChoiceTextKeyPort(i))
                     || context.hasPort(choiceVisiblePort(i))
                     || context.hasPort(choiceEnabledPort(i))
-                    || context.hasPort(choiceDisabledReasonPort(i))
-                    || context.hasPort(legacyChoiceDisabledReasonKeyPort(i))) {
+                    || context.hasPort(choiceDisabledReasonPort(i))) {
                 inferred = i;
             }
         }
@@ -281,10 +276,6 @@ public class ShowDialoguePage extends BaseNode {
         if (index > 0) {
             return index;
         }
-        index = parseIndexedPort(portId, LEGACY_CHOICE_TEXT_KEY);
-        if (index > 0) {
-            return index;
-        }
         index = parseIndexedPort(portId, StandardPorts.CHOICE_VISIBLE.getId());
         if (index > 0) {
             return index;
@@ -294,10 +285,6 @@ public class ShowDialoguePage extends BaseNode {
             return index;
         }
         index = parseIndexedPort(portId, CHOICE_DISABLED_REASON);
-        if (index > 0) {
-            return index;
-        }
-        index = parseIndexedPort(portId, LEGACY_CHOICE_DISABLED_REASON_KEY);
         if (index > 0) {
             return index;
         }
@@ -342,10 +329,6 @@ public class ShowDialoguePage extends BaseNode {
         return CHOICE_TEXT + "_" + index;
     }
 
-    private static String legacyChoiceTextKeyPort(int index) {
-        return StandardPorts.CHOICE_TEXT_KEY.getIdWithIndex(index);
-    }
-
     private static String choiceVisiblePort(int index) {
         return StandardPorts.CHOICE_VISIBLE.getIdWithIndex(index);
     }
@@ -358,20 +341,8 @@ public class ShowDialoguePage extends BaseNode {
         return CHOICE_DISABLED_REASON + "_" + index;
     }
 
-    private static String legacyChoiceDisabledReasonKeyPort(int index) {
-        return StandardPorts.CHOICE_DISABLED_REASON_KEY.getIdWithIndex(index);
-    }
-
     private String resolveChoiceDisabledReason(ExecutionContext context, int index) {
-        return stringOrEmpty(getStringInput(context, choiceDisabledReasonPort(index), legacyChoiceDisabledReasonKeyPort(index)));
-    }
-
-    private String getStringInput(ExecutionContext context, String portName, String legacyPortName) {
-        String value = getInput(context, portName, String.class);
-        if (value != null) {
-            return value;
-        }
-        return getInput(context, legacyPortName, String.class);
+        return stringOrEmpty(getInput(context, choiceDisabledReasonPort(index), String.class));
     }
 
     private static String stringOrEmpty(String value) {
