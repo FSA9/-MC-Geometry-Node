@@ -6,8 +6,6 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -24,7 +22,6 @@ public class DialogueSession {
     private final UUID playerId;
     private final String graphId;
     private final Instant createdAt;
-    private final Map<String, Object> variables = new LinkedHashMap<>();
     private State state = State.ACTIVE;
     private DialogueSessionPolicy policy = DialogueSessionPolicy.DEFAULT;
     private long createdGameTime = -1L;
@@ -118,10 +115,6 @@ public class DialogueSession {
 
     public void setPresenterId(@Nullable String presenterId) {
         this.presenterId = presenterId;
-    }
-
-    public Map<String, Object> getVariables() {
-        return variables;
     }
 
     public DialogueSessionPolicy getPolicy() {

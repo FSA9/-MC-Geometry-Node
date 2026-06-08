@@ -7,14 +7,14 @@ public record DialogueSessionPolicy(
         double maxDistance,
         boolean allowMultiPlayer,
         int timeoutSeconds,
-        String busyTextKey
+        String busyText
 ) {
     public static final DialogueSessionPolicy DEFAULT = new DialogueSessionPolicy(0.0, true, 0, "");
 
     public DialogueSessionPolicy {
         maxDistance = Math.max(0.0, maxDistance);
         timeoutSeconds = Math.max(0, timeoutSeconds);
-        busyTextKey = busyTextKey == null ? "" : busyTextKey;
+        busyText = busyText == null ? "" : busyText;
     }
 
     public boolean hasDistanceLimit() {

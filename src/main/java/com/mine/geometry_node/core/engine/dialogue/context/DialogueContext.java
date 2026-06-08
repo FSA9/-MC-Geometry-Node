@@ -6,8 +6,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -27,10 +25,9 @@ public final class DialogueContext {
     private final String graphId;
     private final String entryId;
     private final DialogueSessionPolicy policy;
-    private final Map<String, Object> variables;
 
     public DialogueContext(@Nullable ServerPlayer player, @Nullable String speaker, String styleId) {
-        this(player, null, null, speaker, styleId, "", "", DialogueSessionPolicy.DEFAULT, Map.of());
+        this(player, (UUID) null, null, speaker, styleId, "", "", DialogueSessionPolicy.DEFAULT);
     }
 
     public DialogueContext(@Nullable ServerPlayer player,
@@ -58,8 +55,7 @@ public final class DialogueContext {
                 styleId,
                 graphId,
                 entryId,
-                policy,
-                Map.of());
+                policy);
     }
 
     public DialogueContext(@Nullable ServerPlayer player,
@@ -69,19 +65,7 @@ public final class DialogueContext {
                            String styleId,
                            @Nullable String graphId,
                            @Nullable String entryId,
-                           Map<String, Object> variables) {
-        this(player, speakerEntityId, targetEntityId, speaker, styleId, graphId, entryId, DialogueSessionPolicy.DEFAULT, variables);
-    }
-
-    public DialogueContext(@Nullable ServerPlayer player,
-                           @Nullable UUID speakerEntityId,
-                           @Nullable UUID targetEntityId,
-                           @Nullable String speaker,
-                           String styleId,
-                           @Nullable String graphId,
-                           @Nullable String entryId,
-                           DialogueSessionPolicy policy,
-                           Map<String, Object> variables) {
+                           DialogueSessionPolicy policy) {
         this.player = player;
         this.speakerEntityId = speakerEntityId;
         this.targetEntityId = targetEntityId;
@@ -90,7 +74,6 @@ public final class DialogueContext {
         this.graphId = graphId == null ? "" : graphId;
         this.entryId = entryId == null || entryId.isBlank() ? "root" : entryId;
         this.policy = policy == null ? DialogueSessionPolicy.DEFAULT : policy;
-        this.variables = new LinkedHashMap<>(variables);
     }
 
     @Nullable
@@ -126,10 +109,6 @@ public final class DialogueContext {
 
     public DialogueSessionPolicy policy() {
         return policy;
-    }
-
-    public Map<String, Object> variables() {
-        return variables;
     }
 
     @Nullable

@@ -11,7 +11,6 @@ import com.mine.geometry_node.core.engine.dialogue.session.DialogueCloseReason;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionManager;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionPolicy;
-import com.mine.geometry_node.core.engine.dialogue.text.DialogueTextManager;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
@@ -33,24 +32,21 @@ public class DialogueRuntime implements GraphRuntime {
     public static final DialogueRuntime INSTANCE = new DialogueRuntime();
 
     private final DialogueSessionManager sessionManager;
-    private final DialogueTextManager textManager;
     private final DialoguePresenter chatPresenter;
     private final DialoguePresenter packetPresenter;
 
     public DialogueRuntime() {
-        this(new DialogueSessionManager(), new DialogueTextManager());
+        this(new DialogueSessionManager());
     }
 
-    public DialogueRuntime(DialogueSessionManager sessionManager, DialogueTextManager textManager) {
-        this(sessionManager, textManager, ChatDialoguePresenter.INSTANCE, PacketDialoguePresenter.INSTANCE);
+    public DialogueRuntime(DialogueSessionManager sessionManager) {
+        this(sessionManager, ChatDialoguePresenter.INSTANCE, PacketDialoguePresenter.INSTANCE);
     }
 
     public DialogueRuntime(DialogueSessionManager sessionManager,
-                           DialogueTextManager textManager,
                            DialoguePresenter chatPresenter,
                            DialoguePresenter packetPresenter) {
         this.sessionManager = sessionManager;
-        this.textManager = textManager;
         this.chatPresenter = chatPresenter;
         this.packetPresenter = packetPresenter;
     }
@@ -239,10 +235,6 @@ public class DialogueRuntime implements GraphRuntime {
         return sessionManager;
     }
 
-    public DialogueTextManager getTextManager() {
-        return textManager;
-    }
-
     private void openForPlayer(ServerPlayer player, DialogueSession session) {
         DialoguePagePayload page = session.getCurrentPage();
         DialoguePresenter presenter = page != null && "default".equals(page.getStyleId())
@@ -356,11 +348,11 @@ public class DialogueRuntime implements GraphRuntime {
     }
 
     private void sendBusyMessage(ServerPlayer player, DialogueSessionPolicy policy) {
-        String key = policy.busyTextKey();
-        if (key == null || key.isBlank()) {
-            key = "geometry_node.dialogue.busy";
+        String text = policy.busyText();
+        if (text == null || text.isBlank()) {
+            text = "This dialogue is currently busy.";
         }
-        player.sendSystemMessage(Component.literal(textManager.resolveText(key, key)));
+        player.sendSystemMessage(Component.literal(text));
     }
 
     private static boolean isDead(@Nullable Entity entity) {

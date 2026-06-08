@@ -2,7 +2,6 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
@@ -16,7 +15,9 @@ import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
+import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
@@ -31,10 +32,15 @@ public class ShowDialoguePage extends BaseNode {
     public static final String TYPE_ID = "show_dialogue_page";
 
     public static final String SPEAKER = StandardPorts.SPEAKER.getId();
-    public static final String TEXT_KEY = StandardPorts.TEXT_KEY.getId();
+    public static final String TEXT = "text";
     public static final String CLOSED = StandardPorts.CLOSED.getId();
     public static final int DEFAULT_CHOICE_COUNT = 0;
     public static final int MAX_CHOICE_COUNT = 10;
+    private static final String LEGACY_TEXT_KEY = StandardPorts.TEXT_KEY.getId();
+    private static final String CHOICE_TEXT = "choice_text";
+    private static final String LEGACY_CHOICE_TEXT_KEY = StandardPorts.CHOICE_TEXT_KEY.getId();
+    private static final String CHOICE_DISABLED_REASON = "choice_disabled_reason";
+    private static final String LEGACY_CHOICE_DISABLED_REASON_KEY = StandardPorts.CHOICE_DISABLED_REASON_KEY.getId();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -61,7 +67,7 @@ public class ShowDialoguePage extends BaseNode {
                         UIHint.INPUT, null, null
                 ))
                 .addRow(new PortRow(
-                        StandardPorts.TEXT_KEY.toInput(""),
+                        PortDef.create(TEXT, "geometry_node.port.message", PortType.STRING, ""),
                         null,
                         UIHint.INPUT, null, null
                 ));
@@ -73,7 +79,7 @@ public class ShowDialoguePage extends BaseNode {
                     UIHint.DEFAULT, null, dynamicGroupHead(i)
             ));
             builder.addRow(new PortRow(
-                    StandardPorts.CHOICE_TEXT_KEY.toInputWithIndex(i, ""),
+                    PortDef.create(choiceTextPort(i), "geometry_node.port.message", PortType.STRING, ""),
                     null, UIHint.INPUT, null, dynamicGroupRow()
             ));
             builder.addRow(new PortRow(
@@ -85,7 +91,7 @@ public class ShowDialoguePage extends BaseNode {
                     null, UIHint.CHECKBOX, null, dynamicGroupRow()
             ));
             builder.addRow(new PortRow(
-                    StandardPorts.CHOICE_DISABLED_REASON_KEY.toInputWithIndex(i, ""),
+                    PortDef.create(choiceDisabledReasonPort(i), "geometry_node.port.message", PortType.STRING, ""),
                     null, UIHint.INPUT, null, dynamicGroupRow()
             ));
         }
@@ -116,9 +122,8 @@ public class ShowDialoguePage extends BaseNode {
             dialogueContext = withPlayer(dialogueContext, player);
             context.setTempData(DialogueContext.TEMP_KEY, dialogueContext);
         }
-        String textKey = stringOrEmpty(getInput(context, TEXT_KEY, String.class));
+        String text = stringOrEmpty(getStringInput(context, TEXT, LEGACY_TEXT_KEY));
         String styleId = dialogueContext != null ? dialogueContext.styleId() : "default";
-        String bodyText = DialogueRuntime.INSTANCE.getTextManager().resolveText(textKey, textKey);
 
         List<DialogueChoicePayload> choices = new ArrayList<>();
         int choiceCount = resolveRuntimeChoiceCount(context);
@@ -127,8 +132,7 @@ public class ShowDialoguePage extends BaseNode {
             if (Boolean.FALSE.equals(visible)) {
                 continue;
             }
-            String choiceTextKey = stringOrEmpty(getInput(context, choiceTextKeyPort(i), String.class));
-            String choiceText = DialogueRuntime.INSTANCE.getTextManager().resolveText(choiceTextKey, choiceTextKey);
+            String choiceText = stringOrEmpty(getStringInput(context, choiceTextPort(i), legacyChoiceTextKeyPort(i)));
             if (choiceText.isBlank()) {
                 continue;
             }
@@ -148,8 +152,7 @@ public class ShowDialoguePage extends BaseNode {
         }
 
         if (choices.isEmpty() && choiceCount == 0) {
-            String continueText = DialogueRuntime.INSTANCE.getTextManager().resolveText("geometry_node.dialogue.continue", "Continue");
-            choices.add(new DialogueChoicePayload(StandardPorts.FLOW_OUT.getId(), continueText, null, true, null, Map.of()));
+            choices.add(new DialogueChoicePayload(StandardPorts.FLOW_OUT.getId(), "Continue", null, true, null, Map.of()));
         } else if (choices.isEmpty()) {
             choices.add(new DialogueChoicePayload(CLOSED, "Close", null, true, null, Map.of()));
         }
@@ -157,7 +160,7 @@ public class ShowDialoguePage extends BaseNode {
         DialoguePagePayload page = new DialoguePagePayload(
                 "node:" + context.getCurrentNodeId(),
                 speaker,
-                bodyText,
+                text,
                 styleId,
                 choices,
                 Map.of()
@@ -204,8 +207,7 @@ public class ShowDialoguePage extends BaseNode {
                 dialogueContext.styleId(),
                 dialogueContext.graphId(),
                 dialogueContext.entryId(),
-                dialogueContext.policy(),
-                dialogueContext.variables()
+                dialogueContext.policy()
         );
     }
 
@@ -251,10 +253,12 @@ public class ShowDialoguePage extends BaseNode {
         int inferred = DEFAULT_CHOICE_COUNT;
         for (int i = 1; i <= MAX_CHOICE_COUNT; i++) {
             if (context.hasPort(choiceOutputPort(i))
-                    || context.hasPort(choiceTextKeyPort(i))
+                    || context.hasPort(choiceTextPort(i))
+                    || context.hasPort(legacyChoiceTextKeyPort(i))
                     || context.hasPort(choiceVisiblePort(i))
                     || context.hasPort(choiceEnabledPort(i))
-                    || context.hasPort(choiceDisabledReasonKeyPort(i))) {
+                    || context.hasPort(choiceDisabledReasonPort(i))
+                    || context.hasPort(legacyChoiceDisabledReasonKeyPort(i))) {
                 inferred = i;
             }
         }
@@ -273,7 +277,11 @@ public class ShowDialoguePage extends BaseNode {
     }
 
     private static int parseChoiceIndex(String portId) {
-        int index = parseIndexedPort(portId, StandardPorts.CHOICE_TEXT_KEY.getId());
+        int index = parseIndexedPort(portId, CHOICE_TEXT);
+        if (index > 0) {
+            return index;
+        }
+        index = parseIndexedPort(portId, LEGACY_CHOICE_TEXT_KEY);
         if (index > 0) {
             return index;
         }
@@ -285,7 +293,11 @@ public class ShowDialoguePage extends BaseNode {
         if (index > 0) {
             return index;
         }
-        index = parseIndexedPort(portId, StandardPorts.CHOICE_DISABLED_REASON_KEY.getId());
+        index = parseIndexedPort(portId, CHOICE_DISABLED_REASON);
+        if (index > 0) {
+            return index;
+        }
+        index = parseIndexedPort(portId, LEGACY_CHOICE_DISABLED_REASON_KEY);
         if (index > 0) {
             return index;
         }
@@ -326,7 +338,11 @@ public class ShowDialoguePage extends BaseNode {
         return StandardPorts.CHOICE.getIdWithIndex(index);
     }
 
-    private static String choiceTextKeyPort(int index) {
+    private static String choiceTextPort(int index) {
+        return CHOICE_TEXT + "_" + index;
+    }
+
+    private static String legacyChoiceTextKeyPort(int index) {
         return StandardPorts.CHOICE_TEXT_KEY.getIdWithIndex(index);
     }
 
@@ -338,13 +354,24 @@ public class ShowDialoguePage extends BaseNode {
         return StandardPorts.CHOICE_ENABLED.getIdWithIndex(index);
     }
 
-    private static String choiceDisabledReasonKeyPort(int index) {
+    private static String choiceDisabledReasonPort(int index) {
+        return CHOICE_DISABLED_REASON + "_" + index;
+    }
+
+    private static String legacyChoiceDisabledReasonKeyPort(int index) {
         return StandardPorts.CHOICE_DISABLED_REASON_KEY.getIdWithIndex(index);
     }
 
     private String resolveChoiceDisabledReason(ExecutionContext context, int index) {
-        String reasonKey = stringOrEmpty(getInput(context, choiceDisabledReasonKeyPort(index), String.class));
-        return DialogueRuntime.INSTANCE.getTextManager().resolveText(reasonKey, reasonKey);
+        return stringOrEmpty(getStringInput(context, choiceDisabledReasonPort(index), legacyChoiceDisabledReasonKeyPort(index)));
+    }
+
+    private String getStringInput(ExecutionContext context, String portName, String legacyPortName) {
+        String value = getInput(context, portName, String.class);
+        if (value != null) {
+            return value;
+        }
+        return getInput(context, legacyPortName, String.class);
     }
 
     private static String stringOrEmpty(String value) {

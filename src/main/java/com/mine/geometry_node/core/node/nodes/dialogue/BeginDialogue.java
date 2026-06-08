@@ -33,7 +33,9 @@ public class BeginDialogue extends BaseNode {
     public static final String MAX_DISTANCE = "max_distance";
     public static final String ALLOW_MULTI_PLAYER = "allow_multi_player";
     public static final String TIMEOUT_SECONDS = "timeout_seconds";
-    public static final String BUSY_TEXT_KEY = "busy_text_key";
+    public static final String BUSY_TEXT = "busy_text";
+    private static final String LEGACY_BUSY_TEXT_KEY = "busy_text_key";
+    private static final String DEFAULT_BUSY_TEXT = "This dialogue is currently busy.";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -55,7 +57,7 @@ public class BeginDialogue extends BaseNode {
                 .addRow(new PortRow(PortDef.create(MAX_DISTANCE, "geometry_node.port.max_distance", PortType.FLOAT, 0.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(PortDef.create(ALLOW_MULTI_PLAYER, "geometry_node.port.allow_multi_player", PortType.BOOLEAN, true), null, UIHint.CHECKBOX, null, null))
                 .addRow(new PortRow(PortDef.create(TIMEOUT_SECONDS, "geometry_node.port.timeout_seconds", PortType.INTEGER, 0), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(PortDef.create(BUSY_TEXT_KEY, "geometry_node.port.busy_text_key", PortType.STRING, "geometry_node.dialogue.busy"), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(PortDef.create(BUSY_TEXT, "geometry_node.port.message", PortType.STRING, DEFAULT_BUSY_TEXT), null, UIHint.INPUT, null, null))
                 .build();
     }
 
@@ -72,7 +74,7 @@ public class BeginDialogue extends BaseNode {
                 floatOrDefault(getInput(context, MAX_DISTANCE, Float.class), 0.0f),
                 boolOrDefault(getInput(context, ALLOW_MULTI_PLAYER, Boolean.class), true),
                 intOrDefault(getInput(context, TIMEOUT_SECONDS, Integer.class), 0),
-                stringOrDefault(getInput(context, BUSY_TEXT_KEY, String.class), "geometry_node.dialogue.busy")
+                stringOrDefault(getStringInput(context, BUSY_TEXT, LEGACY_BUSY_TEXT_KEY), DEFAULT_BUSY_TEXT)
         );
 
         context.setTempData(DialogueContext.TEMP_KEY, new DialogueContext(
@@ -164,5 +166,13 @@ public class BeginDialogue extends BaseNode {
 
     private static int intOrDefault(Integer value, int fallback) {
         return value == null ? fallback : value;
+    }
+
+    private String getStringInput(ExecutionContext context, String portName, String legacyPortName) {
+        String value = getInput(context, portName, String.class);
+        if (value != null) {
+            return value;
+        }
+        return getInput(context, legacyPortName, String.class);
     }
 }
