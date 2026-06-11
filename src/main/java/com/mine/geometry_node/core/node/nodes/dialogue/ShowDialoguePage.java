@@ -20,6 +20,7 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.value.RichTextValue;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -64,7 +65,7 @@ public class ShowDialoguePage extends BaseNode {
                         UIHint.INPUT, null, null
                 ))
                 .addRow(new PortRow(
-                        PortDef.create(TEXT, "geometry_node.port.message", PortType.STRING, ""),
+                        PortDef.create(TEXT, "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.EMPTY),
                         null,
                         UIHint.INPUT, null, null
                 ));
@@ -76,7 +77,7 @@ public class ShowDialoguePage extends BaseNode {
                     UIHint.DEFAULT, null, dynamicGroupHead(i)
             ));
             builder.addRow(new PortRow(
-                    PortDef.create(choiceTextPort(i), "geometry_node.port.message", PortType.STRING, ""),
+                    PortDef.create(choiceTextPort(i), "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.EMPTY),
                     null, UIHint.INPUT, null, dynamicGroupRow()
             ));
             builder.addRow(new PortRow(
@@ -88,7 +89,7 @@ public class ShowDialoguePage extends BaseNode {
                     null, UIHint.CHECKBOX, null, dynamicGroupRow()
             ));
             builder.addRow(new PortRow(
-                    PortDef.create(choiceDisabledReasonPort(i), "geometry_node.port.message", PortType.STRING, ""),
+                    PortDef.create(choiceDisabledReasonPort(i), "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.EMPTY),
                     null, UIHint.INPUT, null, dynamicGroupRow()
             ));
         }
@@ -119,7 +120,7 @@ public class ShowDialoguePage extends BaseNode {
             dialogueContext = withPlayer(dialogueContext, player);
             context.setTempData(DialogueContext.TEMP_KEY, dialogueContext);
         }
-        String text = stringOrEmpty(getInput(context, TEXT, String.class));
+        String text = richTextJson(context, TEXT);
         String styleId = dialogueContext != null ? dialogueContext.styleId() : "default";
 
         List<DialogueChoicePayload> choices = new ArrayList<>();
@@ -129,8 +130,8 @@ public class ShowDialoguePage extends BaseNode {
             if (Boolean.FALSE.equals(visible)) {
                 continue;
             }
-            String choiceText = stringOrEmpty(getInput(context, choiceTextPort(i), String.class));
-            if (choiceText.isBlank()) {
+            RichTextValue choiceText = richText(context, choiceTextPort(i));
+            if (choiceText.plain().isBlank()) {
                 continue;
             }
             Boolean enabled = getInput(context, choiceEnabledPort(i), Boolean.class);
@@ -140,7 +141,7 @@ public class ShowDialoguePage extends BaseNode {
                     : resolveChoiceDisabledReason(context, i);
             choices.add(new DialogueChoicePayload(
                     choiceOutputPort(i),
-                    choiceText,
+                    choiceText.toJsonString(),
                     null,
                     choiceEnabled,
                     disabledReason,
@@ -149,9 +150,9 @@ public class ShowDialoguePage extends BaseNode {
         }
 
         if (choices.isEmpty() && choiceCount == 0) {
-            choices.add(new DialogueChoicePayload(StandardPorts.FLOW_OUT.getId(), "Continue", null, true, null, Map.of()));
+            choices.add(new DialogueChoicePayload(StandardPorts.FLOW_OUT.getId(), RichTextValue.plain("Continue").toJsonString(), null, true, null, Map.of()));
         } else if (choices.isEmpty()) {
-            choices.add(new DialogueChoicePayload(CLOSED, "Close", null, true, null, Map.of()));
+            choices.add(new DialogueChoicePayload(CLOSED, RichTextValue.plain("Close").toJsonString(), null, true, null, Map.of()));
         }
 
         DialoguePagePayload page = new DialoguePagePayload(
@@ -342,11 +343,16 @@ public class ShowDialoguePage extends BaseNode {
     }
 
     private String resolveChoiceDisabledReason(ExecutionContext context, int index) {
-        return stringOrEmpty(getInput(context, choiceDisabledReasonPort(index), String.class));
+        return richTextJson(context, choiceDisabledReasonPort(index));
     }
 
-    private static String stringOrEmpty(String value) {
-        return value == null ? "" : value;
+    private RichTextValue richText(ExecutionContext context, String portName) {
+        RichTextValue value = getInput(context, portName, RichTextValue.class);
+        return value == null ? RichTextValue.EMPTY : value;
+    }
+
+    private String richTextJson(ExecutionContext context, String portName) {
+        return richText(context, portName).toJsonString();
     }
 
     private static String stringOrDefault(String value, String fallback) {

@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node.port;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.value.DynamicData;
 import com.mine.geometry_node.core.node.value.ExpressionData;
+import com.mine.geometry_node.core.node.value.RichTextValue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -68,9 +69,15 @@ public class TypeConverter {
             if (type == Double.class) return type.cast(b ? 1.0 : 0.0);
         }
 
-        // 4. 万物皆可转 String (序列化)
+        // 4. 富文本值模型
+        if (type == RichTextValue.class) {
+            return type.cast(RichTextValue.from(val));
+        }
+
+        // 5. 万物皆可转 String (序列化)
         if (type == String.class) {
             return switch (val) {
+                case RichTextValue richText -> type.cast(richText.plain());
                 case Entity e -> type.cast(e.getStringUUID());
                 case Vec3 v -> type.cast(String.format(java.util.Locale.US, "[%.2f, %.2f, %.2f]", v.x, v.y, v.z));
                 case BlockPos p ->
@@ -85,7 +92,7 @@ public class TypeConverter {
 
         }
 
-        // 5. 特殊聚合转对象 (List -> Vec3)
+        // 6. 特殊聚合转对象 (List -> Vec3)
         if (type == Vec3.class && val instanceof List<?> list) {
             if (list.size() >= 3 && list.get(0) instanceof Number n1 && list.get(1) instanceof Number n2 && list.get(2) instanceof Number n3) {
                 return type.cast(new Vec3(n1.doubleValue(), n2.doubleValue(), n3.doubleValue()));
@@ -96,7 +103,7 @@ public class TypeConverter {
             return type.cast(new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5));
         }
 
-        // 6. 字符串反向解析 (反序列化)
+        // 7. 字符串反向解析 (反序列化)
         if (val instanceof String s) {
 
             // 解析数值 (Integer, Float, Double)

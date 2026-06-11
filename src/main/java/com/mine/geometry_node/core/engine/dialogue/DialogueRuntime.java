@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.engine.dialogue.payload.DialogueWaitRequest;
 import com.mine.geometry_node.core.engine.dialogue.presenter.ChatDialoguePresenter;
 import com.mine.geometry_node.core.engine.dialogue.presenter.DialoguePresenter;
 import com.mine.geometry_node.core.engine.dialogue.presenter.PacketDialoguePresenter;
+import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueTextParser;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueCloseReason;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionManager;
@@ -352,7 +353,7 @@ public class DialogueRuntime implements GraphRuntime {
         if (text == null || text.isBlank()) {
             text = "This dialogue is currently busy.";
         }
-        player.sendSystemMessage(Component.literal(text));
+        player.sendSystemMessage(DialogueTextParser.parse(text, player.registryAccess()).component());
     }
 
     private static boolean isDead(@Nullable Entity entity) {

@@ -13,6 +13,7 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.value.RichTextValue;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -56,7 +57,7 @@ public class BeginDialogue extends BaseNode {
                 .addRow(new PortRow(PortDef.create(MAX_DISTANCE, "geometry_node.port.max_distance", PortType.FLOAT, 0.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(PortDef.create(ALLOW_MULTI_PLAYER, "geometry_node.port.allow_multi_player", PortType.BOOLEAN, true), null, UIHint.CHECKBOX, null, null))
                 .addRow(new PortRow(PortDef.create(TIMEOUT_SECONDS, "geometry_node.port.timeout_seconds", PortType.INTEGER, 0), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(PortDef.create(BUSY_TEXT, "geometry_node.port.message", PortType.STRING, DEFAULT_BUSY_TEXT), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(PortDef.create(BUSY_TEXT, "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.plain(DEFAULT_BUSY_TEXT)), null, UIHint.INPUT, null, null))
                 .build();
     }
 
@@ -73,7 +74,7 @@ public class BeginDialogue extends BaseNode {
                 floatOrDefault(getInput(context, MAX_DISTANCE, Float.class), 0.0f),
                 boolOrDefault(getInput(context, ALLOW_MULTI_PLAYER, Boolean.class), true),
                 intOrDefault(getInput(context, TIMEOUT_SECONDS, Integer.class), 0),
-                stringOrDefault(getInput(context, BUSY_TEXT, String.class), DEFAULT_BUSY_TEXT)
+                richTextOrDefault(context, BUSY_TEXT, DEFAULT_BUSY_TEXT)
         );
 
         context.setTempData(DialogueContext.TEMP_KEY, new DialogueContext(
@@ -153,6 +154,14 @@ public class BeginDialogue extends BaseNode {
 
     private static String stringOrDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private String richTextOrDefault(ExecutionContext context, String portName, String fallback) {
+        RichTextValue value = getInput(context, portName, RichTextValue.class);
+        if (value == null || value.plain().isBlank()) {
+            return RichTextValue.plain(fallback).toJsonString();
+        }
+        return value.toJsonString();
     }
 
     private static boolean boolOrDefault(Boolean value, boolean fallback) {

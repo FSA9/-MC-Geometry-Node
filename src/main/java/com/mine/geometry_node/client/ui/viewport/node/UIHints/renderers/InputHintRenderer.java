@@ -9,6 +9,7 @@ import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.value.RichTextValue;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -36,13 +37,21 @@ public class InputHintRenderer implements UIHintRenderer {
         final Object finalOldVal = val;
 
         EditText et = new EditText(context);
-        et.setText(val != null ? val.toString() : "");
+        et.setText(displayText(val, expectedType));
 
         UIHintUtils.applyStandardInputStyle(et, expectedType);
 
         et.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus && editorContext != null) {
-                Object parsedValue = UIHintValueBinder.parseText(et.getText().toString(), expectedType);
+                Object parsedValue;
+                if (expectedType == PortType.RICH_TEXT) {
+                    parsedValue = richTextValueAfterInlineEdit(finalOldVal, et.getText().toString());
+                    if (parsedValue == null) {
+                        return;
+                    }
+                } else {
+                    parsedValue = UIHintValueBinder.parseText(et.getText().toString(), expectedType);
+                }
                 if (parsedValue == null && UIHintValueBinder.requiresNumericValue(expectedType)) {
                     et.setText(finalOldVal != null ? finalOldVal.toString() : "");
                     return;
@@ -57,7 +66,7 @@ public class InputHintRenderer implements UIHintRenderer {
         wrapper.setGravity(Gravity.CENTER_VERTICAL);
 
         wrapper.addView(et, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f));
-        wrapper.addView(createExpandButton(context, et, nodeData, portId, expectedType, editorContext),
+        wrapper.addView(createExpandButton(context, et, nodeData, portId, expectedType, editorContext, val),
                 new LinearLayout.LayoutParams(UIUtils.dp2pxInt(EXPAND_BUTTON_WIDTH), LinearLayout.LayoutParams.MATCH_PARENT));
         return wrapper;
     }
@@ -94,7 +103,7 @@ public class InputHintRenderer implements UIHintRenderer {
     }
 
     private View createExpandButton(Context context, EditText input, NodeData nodeData, String portId, PortType expectedType,
-                                    EditorContext editorContext) {
+                                    EditorContext editorContext, Object currentValue) {
         TextView button = new TextView(context);
         button.setText("...");
         button.setGravity(Gravity.CENTER);
@@ -109,14 +118,41 @@ public class InputHintRenderer implements UIHintRenderer {
 
         button.setOnClickListener(v -> ExpandedTextInputOverlay.show(
                 context,
-                button,
-                editorContext,
-                nodeData,
-                portId,
-                expectedType,
-                input.getText().toString()
+                    button,
+                    editorContext,
+                    nodeData,
+                    portId,
+                    expectedType,
+                    expectedType == PortType.RICH_TEXT
+                            ? richTextValueForEditor(currentValue, input.getText().toString())
+                            : input.getText().toString()
         ));
         return button;
+    }
+
+    private static String displayText(Object value, PortType expectedType) {
+        if (expectedType == PortType.RICH_TEXT) {
+            return RichTextValue.from(value).plain();
+        }
+        return value != null ? value.toString() : "";
+    }
+
+    private static Object richTextValueForEditor(Object value, String currentText) {
+        RichTextValue richText = RichTextValue.from(value);
+        String text = currentText == null ? "" : currentText;
+        if (text.equals(richText.plain())) {
+            return value;
+        }
+        return RichTextValue.plain(text).toMap();
+    }
+
+    private static Object richTextValueAfterInlineEdit(Object value, String currentText) {
+        RichTextValue richText = RichTextValue.from(value);
+        String text = currentText == null ? "" : currentText;
+        if (text.equals(richText.plain())) {
+            return null;
+        }
+        return RichTextValue.plain(text).toMap();
     }
 
 }

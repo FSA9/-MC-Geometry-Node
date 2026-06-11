@@ -172,9 +172,24 @@ public final class BlueprintCompiler {
             JsonArray jsonArray = element.getAsJsonArray();
             List<Object> list = new ArrayList<>();
             for (JsonElement item : jsonArray) {
-                list.add(unwrapJsonElement(item));
+                Object value = unwrapJsonElement(item);
+                if (value != null) {
+                    list.add(value);
+                }
             }
             return list;
+        }
+
+        if (element.isJsonObject()) {
+            JsonObject jsonObject = element.getAsJsonObject();
+            Map<String, Object> map = new HashMap<>();
+            for (String key : jsonObject.keySet()) {
+                Object value = unwrapJsonElement(jsonObject.get(key));
+                if (value != null) {
+                    map.put(key, value);
+                }
+            }
+            return Map.copyOf(map);
         }
         return null;
     }

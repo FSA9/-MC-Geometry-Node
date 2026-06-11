@@ -1,14 +1,17 @@
 package com.mine.geometry_node.client.dialogue.ui;
 
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
+import com.mine.geometry_node.client.dialogue.ModernDialogueText;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRichText;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.fragment.Fragment;
 import icyllis.modernui.fragment.OnBackPressedCallback;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.mc.UIManager;
+import icyllis.modernui.text.SpannableStringBuilder;
 import icyllis.modernui.util.DataSet;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
@@ -125,7 +128,9 @@ public class RpgDialogueFragment extends Fragment {
         column.setGravity(Gravity.BOTTOM);
         column.setPadding(0, 0, dp(40), 0);
 
-        String speaker = packet.speaker() == null || packet.speaker().isBlank() ? "Dialogue" : packet.speaker();
+        String speaker = packet.speaker() == null || packet.speaker().isBlank()
+                ? "Dialogue"
+                : ModernDialogueText.plain(packet.speaker());
         TextView speakerView = label(speaker, 22.0f, TEXT_ACCENT, Gravity.LEFT);
         speakerView.setPadding(0, 0, 0, dp(4));
         column.addView(speakerView, new LinearLayout.LayoutParams(
@@ -143,7 +148,7 @@ public class RpgDialogueFragment extends Fragment {
         dividerParams.bottomMargin = dp(12);
         column.addView(divider, dividerParams);
 
-        TextView body = label(packet.bodyText(), 18.0f, TEXT_MAIN, Gravity.LEFT | Gravity.BOTTOM);
+        TextView body = label(ModernDialogueText.display(ModernDialogueText.parse(packet.bodyText())), 18.0f, TEXT_MAIN, Gravity.LEFT | Gravity.BOTTOM);
         body.setMinLines(3);
         body.setLineSpacing(UIUtils.dp2px(3.0f), 1.06f);
         column.addView(body, new LinearLayout.LayoutParams(
@@ -204,10 +209,8 @@ public class RpgDialogueFragment extends Fragment {
     }
 
     private View createChoiceRow(PacketOpenDialogue.Choice choice) {
-        String reason = choice.disabledReason() == null || choice.disabledReason().isBlank()
-                ? ""
-                : " - " + choice.disabledReason();
-        String text = choice.enabled() ? choice.text() : choice.text() + reason;
+        DialogueRichText choiceText = ModernDialogueText.parse(choice.text());
+        CharSequence text = choice.enabled() ? ModernDialogueText.display(choiceText) : disabledChoiceText(choiceText, choice.disabledReason());
         TextView row = label(text, 14.0f, choice.enabled() ? TEXT_MAIN : TEXT_MUTED, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         row.setPadding(dp(12), 0, dp(12), 0);
         row.setEnabled(choice.enabled());
@@ -283,8 +286,19 @@ public class RpgDialogueFragment extends Fragment {
         view.setBackground(rect(background, 3.0f, 1, stroke));
     }
 
-    private TextView label(String text, float sizeDp, int color, int gravity) {
-        TextView view = UIUtils.createLockedTextView(getContext(), text == null ? "" : text, sizeDp, color);
+    private CharSequence disabledChoiceText(DialogueRichText choiceText, String disabledReason) {
+        SpannableStringBuilder text = new SpannableStringBuilder();
+        text.append(ModernDialogueText.display(choiceText));
+        if (disabledReason != null && !disabledReason.isBlank()) {
+            text.append(" - ");
+            text.append(ModernDialogueText.display(ModernDialogueText.parse(disabledReason)));
+        }
+        return text;
+    }
+
+    private TextView label(CharSequence text, float sizeDp, int color, int gravity) {
+        TextView view = UIUtils.createLockedTextView(getContext(), "", sizeDp, color);
+        view.setText(text == null ? "" : text);
         view.setGravity(gravity);
         return view;
     }

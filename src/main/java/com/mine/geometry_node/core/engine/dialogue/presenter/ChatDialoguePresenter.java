@@ -2,6 +2,8 @@ package com.mine.geometry_node.core.engine.dialogue.presenter;
 
 import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRichText;
+import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueTextParser;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
@@ -36,10 +38,10 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
         MutableComponent body = Component.empty();
         String speaker = page.getSpeaker();
         if (speaker != null && !speaker.isBlank()) {
-            body.append(Component.literal(speaker).withStyle(ChatFormatting.GOLD));
+            body.append(DialogueTextParser.parse(speaker, player.registryAccess()).component().copy().withStyle(ChatFormatting.GOLD));
             body.append(Component.literal(": ").withStyle(ChatFormatting.GRAY));
         }
-        body.append(Component.literal(page.getText()).withStyle(ChatFormatting.WHITE));
+        body.append(DialogueTextParser.parse(page.getText(), player.registryAccess()).component().copy().withStyle(ChatFormatting.WHITE));
         player.sendSystemMessage(body);
 
         boolean hasClosedChoice = false;
@@ -47,10 +49,10 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
         for (DialogueChoicePayload choice : page.getChoices()) {
             if ("closed".equals(choice.getId())) {
                 hasClosedChoice = true;
-                player.sendSystemMessage(closeLine(session, choice.getText(), choice.isEnabled(), choice.getDisabledReason()));
+                player.sendSystemMessage(closeLine(player, session, choice.getText(), choice.isEnabled(), choice.getDisabledReason()));
                 continue;
             }
-            player.sendSystemMessage(choiceLine(session, index, choice));
+            player.sendSystemMessage(choiceLine(player, session, index, choice));
             index++;
         }
 
@@ -59,10 +61,12 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
         }
     }
 
-    private static MutableComponent choiceLine(DialogueSession session, int index, DialogueChoicePayload choice) {
-        MutableComponent line = Component.literal("[" + index + "] " + choice.getText());
+    private static MutableComponent choiceLine(ServerPlayer player, DialogueSession session, int index, DialogueChoicePayload choice) {
+        DialogueRichText text = DialogueTextParser.parse(choice.getText(), player.registryAccess());
+        MutableComponent line = Component.literal("[" + index + "] ").append(text.component());
         if (!choice.isEnabled() && choice.getDisabledReason() != null && !choice.getDisabledReason().isBlank()) {
-            line.append(Component.literal(" - " + choice.getDisabledReason()).withStyle(ChatFormatting.DARK_GRAY));
+            line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
+            line.append(DialogueTextParser.parse(choice.getDisabledReason(), player.registryAccess()).component().copy().withStyle(ChatFormatting.DARK_GRAY));
         }
         boolean clickable = choice.isEnabled() && isCommandSafeIdentifier(choice.getId());
         line.withStyle(style -> choiceStyle(style, clickable, command("choose " + session.getSessionId() + " " + choice.getId())));
@@ -75,15 +79,16 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
         return line;
     }
 
-    private static MutableComponent closeLine(DialogueSession session, String text, boolean enabled, String disabledReason) {
+    private static MutableComponent closeLine(ServerPlayer player, DialogueSession session, String text, boolean enabled, String disabledReason) {
         MutableComponent line = Component.empty();
         if (text == null || text.isBlank() || "Close".equals(text)) {
             line.append(Component.translatable("geometry_node.dialogue.close"));
         } else {
-            line.append(Component.literal(text));
+            line.append(DialogueTextParser.parse(text, player.registryAccess()).component());
         }
         if (!enabled && disabledReason != null && !disabledReason.isBlank()) {
-            line.append(Component.literal(" - " + disabledReason).withStyle(ChatFormatting.DARK_GRAY));
+            line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
+            line.append(DialogueTextParser.parse(disabledReason, player.registryAccess()).component().copy().withStyle(ChatFormatting.DARK_GRAY));
         }
         line.withStyle(style -> choiceStyle(style, enabled, enabled ? command("choose " + session.getSessionId() + " closed") : ""));
         return line;

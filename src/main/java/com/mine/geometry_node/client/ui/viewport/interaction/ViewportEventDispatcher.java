@@ -50,12 +50,12 @@ public class ViewportEventDispatcher {
 
         // 1. 如果当前有捕获的交互控件（例如滑动输入框），优先将事件灌给它
         if (mCapturedHintView != null) {
-            boolean r = dispatchTransformedEvent(ev, mCapturedHintView, mHintCaptureUsesLogical, !mHintCaptureUsesLogical);
+            dispatchTransformedEvent(ev, mCapturedHintView, mHintCaptureUsesLogical, !mHintCaptureUsesLogical);
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 mCapturedHintView = null;
                 mHintCaptureUsesLogical = false;
             }
-            return r;
+            return true;
         }
 
         // 2. 如果点到了悬浮菜单或非图元UI，直接放行给 super
