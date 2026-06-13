@@ -358,6 +358,10 @@ final class NodeOverlayController {
             return null;
         }
 
+        if (view instanceof UIItemSlot) {
+            return view;
+        }
+
         float childLocalXpx = parentLocalXpx - view.getLeft();
         float childLocalYpx = parentLocalYpx - view.getTop();
         if (view instanceof ViewGroup group) {

@@ -136,7 +136,6 @@ public final class AreaTriggerDispatcher {
                                      Map<AreaConfigKey, AreaGroup> groups) {
         for (int nodeId : index.findNodesByType(AreaTriggerEvent.TYPE_ID)) {
             AreaConfig config = readConfig(index, nodeId);
-            if (!config.enabled) continue;
 
             AreaPhase phase = readPhase(index, nodeId);
             AreaGroup group = groups.computeIfAbsent(config.key(), key -> new AreaGroup(key, config));
@@ -170,8 +169,7 @@ public final class AreaTriggerDispatcher {
                 : readVec3(index.getNodeStaticInput(nodeId, StandardPorts.ROTATION.getId()), Vec3.ZERO);
         int interval = Math.max(1, index.getNodeStaticInput(nodeId, StandardPorts.INTERVAL.getId(), Integer.class, 1));
         int offset = Math.floorMod(index.getNodeStaticInput(nodeId, StandardPorts.OFFSET.getId(), Integer.class, 0), interval);
-        boolean enabled = readBoolean(index.getNodeStaticInput(nodeId, AreaTriggerEvent.ENABLED_PORT), true);
-        return new AreaConfig(anchor, shape, center, size, rotation, interval, offset, enabled);
+        return new AreaConfig(anchor, shape, center, size, rotation, interval, offset);
     }
 
     private static Vec3 readSize(RuntimeGraphIndex index, int nodeId, AreaShape shape) {
@@ -296,20 +294,6 @@ public final class AreaTriggerDispatcher {
         return null;
     }
 
-    private static boolean readBoolean(@Nullable Object raw, boolean fallback) {
-        if (raw instanceof Boolean value) {
-            return value;
-        }
-        if (raw instanceof Number number) {
-            return number.intValue() != 0;
-        }
-        if (raw instanceof String string) {
-            if ("true".equalsIgnoreCase(string)) return true;
-            if ("false".equalsIgnoreCase(string)) return false;
-        }
-        return fallback;
-    }
-
     private static double readPositiveDouble(@Nullable Object raw, double fallback) {
         Double value = readDouble(raw);
         if (value == null || !Double.isFinite(value)) {
@@ -382,8 +366,7 @@ public final class AreaTriggerDispatcher {
                               Vec3 size,
                               Vec3 rotation,
                               int interval,
-                              int offset,
-                              boolean enabled) {
+                              int offset) {
         AreaConfigKey key() {
             return new AreaConfigKey(
                     anchor,

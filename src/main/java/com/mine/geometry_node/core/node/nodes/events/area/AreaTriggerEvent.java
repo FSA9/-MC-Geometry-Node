@@ -25,7 +25,6 @@ public class AreaTriggerEvent extends BaseEventNode {
     public static final String HEIGHT_PORT = StandardPorts.HEIGHT.getId();
     public static final String TRIGGER_ID_PORT = "trigger_id";
     public static final String INSIDE_COUNT_PORT = "inside_count";
-    public static final String ENABLED_PORT = "enabled";
     public static final double DEFAULT_RADIUS = 1.0D;
     public static final double DEFAULT_HEIGHT = 2.0D;
 
@@ -114,7 +113,6 @@ public class AreaTriggerEvent extends BaseEventNode {
         return builder
                 .addRow(new PortRow(StandardPorts.INTERVAL.toInput(1).hiddenPin(), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.OFFSET.toInput(0).hiddenPin(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(PortDef.create(ENABLED_PORT, "geometry_node.port.enabled", PortType.BOOLEAN, true).hiddenPin(), null, UIHint.CHECKBOX, null, null))
                 .build();
     }
 
