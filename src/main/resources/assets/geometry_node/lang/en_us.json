@@ -136,9 +136,11 @@
   "geometry_node.port.target_entity": "Target Entity",
   "geometry_node.port.trigger_id": "Trigger ID",
   "geometry_node.port.inside_count": "Inside Count",
-  "geometry_node.node.on_area_enter": "On Area Enter",
-  "geometry_node.node.on_area_stay": "On Area Stay",
-  "geometry_node.node.on_area_exit": "On Area Exit",
+  "geometry_node.port.area_phase": "Area Phase",
+  "geometry_node.port.area_anchor": "Area Anchor",
+  "geometry_node.port.area_shape": "Area Shape",
+  "geometry_node.port.area_height": "Height",
+  "geometry_node.node.area_trigger_event": "Area Trigger Event",
   "geometry_node.node.on_multiblock_built": "On Multiblock Built"
 
 

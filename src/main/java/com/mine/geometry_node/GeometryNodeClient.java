@@ -3,6 +3,7 @@ package com.mine.geometry_node;
 import com.mine.geometry_node.client.key.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.key.KeyBindings;
 import com.mine.geometry_node.client.render.ClientVisualManager;
+import com.mine.geometry_node.client.render.debug.AreaDebugRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.core.command.registry.ModClientCommands;
 import net.minecraft.client.Minecraft;
@@ -48,6 +49,7 @@ public class GeometryNodeClient {
 
     private void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
+            AreaDebugRenderer.render(event.getPoseStack(), event.getCamera());
             ClientVisualManager.renderWorld(
                     event.getPoseStack(),
                     event.getCamera()

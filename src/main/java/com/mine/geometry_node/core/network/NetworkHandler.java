@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.client.render.ClientVisualManager;
+import com.mine.geometry_node.client.render.debug.AreaDebugRenderer;
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
@@ -41,6 +42,13 @@ public class NetworkHandler {
                 (payload, context) -> {
                     context.queue(() -> ClientVisualManager.spawnEffectFromPacket(payload));
                 }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketAreaDebugSnapshot.TYPE,
+                PacketAreaDebugSnapshot.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> AreaDebugRenderer.handleSnapshot(payload))
         );
 
         // ==========================================

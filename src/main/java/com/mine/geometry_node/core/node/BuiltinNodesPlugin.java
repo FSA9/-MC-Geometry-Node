@@ -251,9 +251,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // --- EVENTS ---
 
         // Events/Area
-        registry.register("events/area", new OnAreaEnter());
-        registry.register("events/area", new OnAreaStay());
-        registry.register("events/area", new OnAreaExit());
+        registry.register("events/area", new AreaTriggerEvent());
 
         // Events/Block
         registry.register("events/block", new OnBlockBreak());

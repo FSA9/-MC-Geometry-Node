@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
+import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -12,6 +13,7 @@ import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
+import net.minecraft.client.Minecraft;
 
 abstract class AssetDialogBase extends FrameLayout {
     protected final LinearLayout mPanel;
@@ -27,6 +29,8 @@ abstract class AssetDialogBase extends FrameLayout {
         super(context);
         setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         setBackground(rect(0x33000000, 0));
+        setFocusable(true);
+        setFocusableInTouchMode(true);
         setOnClickListener(v -> {});
 
         mWindow = new LinearLayout(context);
@@ -63,10 +67,25 @@ abstract class AssetDialogBase extends FrameLayout {
     public void showIn(ViewGroup parent) {
         ViewGroup host = findWindowHost(parent);
         host.addView(this, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        post(() -> {
+            if (findFocus() == null) {
+                requestFocus();
+            }
+        });
         if (!mRegisteredDragBlocker) {
             AssetDragDropRegistry.pushModalBlocker();
             mRegisteredDragBlocker = true;
         }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
+            dismissAndCloseScreen();
+            return true;
+        }
+        super.dispatchKeyEvent(event);
+        return true;
     }
 
     public void dismiss() {
@@ -125,6 +144,11 @@ abstract class AssetDialogBase extends FrameLayout {
         if (!mRegisteredDragBlocker) return;
         AssetDragDropRegistry.popModalBlocker();
         mRegisteredDragBlocker = false;
+    }
+
+    private void dismissAndCloseScreen() {
+        dismiss();
+        Minecraft.getInstance().setScreen(null);
     }
 
     private boolean onTitleBarTouch(View view, MotionEvent event) {

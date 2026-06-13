@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.command.registry;
 
 import com.mine.geometry_node.core.command.server.GraphBindCommand;
 import com.mine.geometry_node.core.command.server.DialogueCommand;
+import com.mine.geometry_node.core.command.server.GeometryNodeDebugCommand;
 import com.mine.geometry_node.core.command.server.GraphDownloadCommand;
 import com.mine.geometry_node.core.command.server.GraphUnbindCommand;
 import com.mine.geometry_node.core.command.server.ServerGraphListCommand;
@@ -19,6 +20,7 @@ public class ModServerCommands {
             ServerGraphListCommand.register(dispatcher);
             GraphDownloadCommand.register(dispatcher);
             DialogueCommand.register(dispatcher);
+            GeometryNodeDebugCommand.register(dispatcher);
         });
     }
 }

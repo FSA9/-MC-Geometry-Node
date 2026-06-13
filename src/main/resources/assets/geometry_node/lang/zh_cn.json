@@ -518,8 +518,10 @@
   "geometry_node.port.enabled": "启用",
   "geometry_node.port.trigger_id": "触发器 ID",
   "geometry_node.port.inside_count": "区域内数量",
-  "geometry_node.node.on_area_enter": "当实体进入区域时",
-  "geometry_node.node.on_area_stay": "当实体停留区域时",
-  "geometry_node.node.on_area_exit": "当实体离开区域时",
+  "geometry_node.port.area_phase": "区域阶段",
+  "geometry_node.port.area_anchor": "区域锚点",
+  "geometry_node.port.area_shape": "区域形状",
+  "geometry_node.port.area_height": "高度",
+  "geometry_node.node.area_trigger_event": "区域触发事件",
   "geometry_node.node.on_multiblock_built": "当多方块结构搭建完成时"
 }
