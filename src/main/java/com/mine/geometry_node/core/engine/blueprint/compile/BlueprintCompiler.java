@@ -4,7 +4,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.node.nodes.events.block.OnMultiblockBuilt;
+import com.mine.geometry_node.core.node.port.StandardPorts;
 
 import java.io.Reader;
 import java.util.ArrayList;
@@ -130,6 +133,22 @@ public final class BlueprintCompiler {
             receiveLookupImmutable.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
 
+        Map<String, List<Integer>> multiblockLookup = new HashMap<>();
+        List<Integer> multiblockNodes = typeToIntList.getOrDefault(OnMultiblockBuilt.TYPE_ID, List.of());
+        for (int nodeId : multiblockNodes) {
+            Object configuredId = staticInputArray[nodeId].get(StandardPorts.TYPE.getId());
+            String structureId = configuredId != null ? String.valueOf(configuredId).trim() : "";
+            if (structureId.isEmpty()) {
+                structureId = MultiblockStructureManager.ANY_STRUCTURE_ID;
+            }
+
+            multiblockLookup.computeIfAbsent(structureId, k -> new ArrayList<>()).add(nodeId);
+        }
+        Map<String, List<Integer>> multiblockLookupImmutable = new HashMap<>();
+        for (Map.Entry<String, List<Integer>> entry : multiblockLookup.entrySet()) {
+            multiblockLookupImmutable.put(entry.getKey(), List.copyOf(entry.getValue()));
+        }
+
         return RuntimeGraphIndex.createCompiled(
                 idToString,
                 stringToId,
@@ -139,6 +158,7 @@ public final class BlueprintCompiler {
                 inputArray,
                 typeToIntList,
                 Map.copyOf(receiveLookupImmutable),
+                Map.copyOf(multiblockLookupImmutable),
                 propertyArray,
                 staticInputArray,
                 keyDict,

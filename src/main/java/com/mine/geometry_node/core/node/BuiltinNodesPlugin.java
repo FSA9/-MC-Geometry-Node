@@ -18,6 +18,7 @@ import com.mine.geometry_node.core.node.nodes.data.player.*;
 import com.mine.geometry_node.core.node.nodes.data.type.*;
 import com.mine.geometry_node.core.node.nodes.data.value.*;
 import com.mine.geometry_node.core.node.nodes.data.world.*;
+import com.mine.geometry_node.core.node.nodes.events.area.*;
 import com.mine.geometry_node.core.node.nodes.events.block.*;
 import com.mine.geometry_node.core.node.nodes.dialogue.*;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
@@ -249,9 +250,15 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // --- EVENTS ---
 
+        // Events/Area
+        registry.register("events/area", new OnAreaEnter());
+        registry.register("events/area", new OnAreaStay());
+        registry.register("events/area", new OnAreaExit());
+
         // Events/Block
         registry.register("events/block", new OnBlockBreak());
 //        registry.register("events/block", new OnBlockIgnite());
+        registry.register("events/block", new OnMultiblockBuilt());
         registry.register("events/block", new OnBlockPlace());
 
         // Events/Entity

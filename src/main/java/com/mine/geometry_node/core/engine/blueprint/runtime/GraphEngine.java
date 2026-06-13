@@ -15,6 +15,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * [核心引擎门面]
@@ -157,6 +158,54 @@ public class GraphEngine {
         dispatchCustomEvent(currentLevel, frequency, applyEventData(eventData));
     }
 
+    public static Set<String> getInterestedMultiblockStructureIds(@NotNull ServerLevel level, @Nullable Entity target) {
+        Set<String> structureIds = new HashSet<>();
+
+        GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
+        for (String graphId : storage.getGraphs()) {
+            collectMultiblockStructureIds(graphId, structureIds);
+        }
+
+        if (target != null) {
+            EntityGraphAttachment entityAttachment = getAttachment(target);
+            if (entityAttachment != null) {
+                for (String graphId : entityAttachment.getBoundGraphs()) {
+                    collectMultiblockStructureIds(graphId, structureIds);
+                }
+            }
+        }
+
+        return structureIds.isEmpty() ? Collections.emptySet() : Collections.unmodifiableSet(structureIds);
+    }
+
+    public static void dispatchMultiblockBuilt(@NotNull ServerLevel level,
+                                               @Nullable Entity target,
+                                               String structureId,
+                                               @Nullable Map<String, Object> eventData) {
+        if (structureId == null || structureId.isBlank()) return;
+        Consumer<GraphProcess.ExecutionThread> initializer = applyEventData(eventData);
+
+        GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
+        LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
+        for (String graphId : storage.getGraphs()) {
+            triggerMultiblockOnProcess(level, target, graphId, structureId, initializer,
+                    id -> levelAttachment.getProcess(id),
+                    levelAttachment::addProcess);
+        }
+
+        if (target != null) {
+            EntityGraphAttachment entityAttachment = getAttachment(target);
+            if (entityAttachment != null) {
+                for (String graphId : entityAttachment.getBoundGraphs()) {
+                    triggerMultiblockOnProcess(level, target, graphId, structureId, initializer,
+                            id -> entityAttachment.getProcess(id),
+                            entityAttachment::addProcess);
+                }
+                GraphEventHandler.markActive(target);
+            }
+        }
+    }
+
     // ==========================================
     // 内部处理逻辑 (底层重构)
     // ==========================================
@@ -207,6 +256,58 @@ public class GraphEngine {
 
             process.setEnvironment(level, target);
             process.executeEvent(nodeId, initializer);
+        }
+    }
+
+    private static void triggerMultiblockOnProcess(ServerLevel level, @Nullable Entity target, String graphId, String structureId,
+                                                   @Nullable Consumer<GraphProcess.ExecutionThread> initializer,
+                                                   java.util.function.Function<String, GraphProcess> processFinder,
+                                                   Consumer<GraphProcess> mountAction) {
+        RuntimeGraphIndex index = getGraphIndex(graphId);
+        if (index == null) return;
+
+        List<Integer> startNodeIds = index.findMultiblockBuiltNodes(structureId);
+        if (startNodeIds.isEmpty()) return;
+
+        GraphProcess process = processFinder.apply(graphId);
+        if (process == null || process.getIndex() != index) {
+            process = new GraphProcess(graphId, index);
+            mountAction.accept(process);
+        }
+
+        process.setEnvironment(level, target);
+        for (int nodeId : startNodeIds) {
+            process.executeEvent(nodeId, initializer);
+        }
+    }
+
+    public static void executeEventNode(@NotNull ServerLevel level,
+                                        @Nullable Entity target,
+                                        String graphId,
+                                        RuntimeGraphIndex index,
+                                        int nodeId,
+                                        @Nullable Map<String, Object> eventData,
+                                        Function<String, GraphProcess> processFinder,
+                                        Consumer<GraphProcess> mountAction) {
+        if (index == null || nodeId < 0 || nodeId >= index.getNodeCount()) return;
+
+        GraphProcess process = processFinder.apply(graphId);
+        if (process == null || process.getIndex() != index) {
+            process = new GraphProcess(graphId, index);
+            mountAction.accept(process);
+        }
+
+        process.setEnvironment(level, target);
+        process.executeEvent(nodeId, applyEventData(eventData));
+        if (target != null) {
+            GraphEventHandler.markActive(target);
+        }
+    }
+
+    private static void collectMultiblockStructureIds(String graphId, Set<String> structureIds) {
+        RuntimeGraphIndex index = getGraphIndex(graphId);
+        if (index != null) {
+            structureIds.addAll(index.getMultiblockStructureIds());
         }
     }
 

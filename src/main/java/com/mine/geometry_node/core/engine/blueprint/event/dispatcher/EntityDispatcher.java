@@ -106,6 +106,7 @@ public class EntityDispatcher {
             if (attachment == null || attachment.getBoundGraphs().isEmpty()) return;
 
             long currentTick = level.getGameTime();
+            AreaTriggerDispatcher.tickEntity(level, entity, attachment, currentTick);
             for (String graphId : attachment.getBoundGraphs()) {
                 RuntimeGraphIndex index = GraphEngine.getGraphIndex(graphId);
                 if (index == null) continue;

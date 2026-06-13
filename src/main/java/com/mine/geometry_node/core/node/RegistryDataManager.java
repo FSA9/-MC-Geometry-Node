@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -127,13 +128,14 @@ public class RegistryDataManager {
      * [UI 专用路由] 根据传入的 Registry ID 动态分发并获取数据
      */
     public static List<String> getDynamicOptions(String registryId, RegistryAccess access) {
-        if (registryId == null || access == null) return List.of();
+        if (registryId == null) return List.of();
 
         return switch (registryId) {
-            case "minecraft:dimension" -> getDimensions(access);
-            case "minecraft:enchantment" -> getEnchantments(access);
-            case "minecraft:damage_type" -> getDamageTypes(access);
-            case "minecraft:attribute" -> getAttributes(access);
+            case MultiblockStructureManager.DYNAMIC_REGISTRY_ID -> MultiblockStructureManager.getInstance().getAllIds();
+            case "minecraft:dimension" -> access != null ? getDimensions(access) : List.of();
+            case "minecraft:enchantment" -> access != null ? getEnchantments(access) : List.of();
+            case "minecraft:damage_type" -> access != null ? getDamageTypes(access) : List.of();
+            case "minecraft:attribute" -> access != null ? getAttributes(access) : List.of();
             case "minecraft:entity_type" -> getEntityTypes();
             case "geometry_node:port_types" -> getPortTypes();
             default -> {

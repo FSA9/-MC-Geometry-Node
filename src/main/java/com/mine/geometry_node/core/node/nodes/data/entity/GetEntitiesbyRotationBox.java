@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.data.entity;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.blueprint.spatial.RotatedBoxEntityQuery;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -9,12 +10,8 @@ import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
@@ -50,54 +47,7 @@ public class GetEntitiesbyRotationBox extends BaseNode {
         }
         if (rot == null) rot = Vec3.ZERO;
 
-        double radius = size.length() * 0.6;
-        AABB broadBox = AABB.ofSize(center, radius * 2, radius * 2, radius * 2);
-        List<Entity> candidateEntities = context.getLevel().getEntities((Entity) null, broadBox, e -> !e.isSpectator());
-
-        Quaternionf q = new Quaternionf().rotationYXZ(
-                (float) Math.toRadians(rot.y),
-                (float) Math.toRadians(rot.x),
-                (float) Math.toRadians(rot.z)
-        );
-        Quaternionf invQ = new Quaternionf(q).invert();
-
-        List<Entity> hitEntities = new ArrayList<>();
-        float hX = (float) size.x * 0.5f;
-        float hY = (float) size.y * 0.5f;
-        float hZ = (float) size.z * 0.5f;
-
-        for (Entity e : candidateEntities) {
-            AABB aabb = e.getBoundingBox();
-            Vec3[] corners = new Vec3[]{
-                    new Vec3(aabb.minX, aabb.minY, aabb.minZ), new Vec3(aabb.minX, aabb.minY, aabb.maxZ),
-                    new Vec3(aabb.minX, aabb.maxY, aabb.minZ), new Vec3(aabb.minX, aabb.maxY, aabb.maxZ),
-                    new Vec3(aabb.maxX, aabb.minY, aabb.minZ), new Vec3(aabb.maxX, aabb.minY, aabb.maxZ),
-                    new Vec3(aabb.maxX, aabb.maxY, aabb.minZ), new Vec3(aabb.maxX, aabb.maxY, aabb.maxZ)
-            };
-
-            float minLX = Float.MAX_VALUE, maxLX = -Float.MAX_VALUE;
-            float minLY = Float.MAX_VALUE, maxLY = -Float.MAX_VALUE;
-            float minLZ = Float.MAX_VALUE, maxLZ = -Float.MAX_VALUE;
-
-            for (Vec3 corner : corners) {
-                Vector3f local = new Vector3f(
-                        (float) (corner.x - center.x),
-                        (float) (corner.y - center.y),
-                        (float) (corner.z - center.z)
-                );
-                local.rotate(invQ);
-
-                minLX = Math.min(minLX, local.x()); maxLX = Math.max(maxLX, local.x());
-                minLY = Math.min(minLY, local.y()); maxLY = Math.max(maxLY, local.y());
-                minLZ = Math.min(minLZ, local.z()); maxLZ = Math.max(maxLZ, local.z());
-            }
-
-            if (maxLX >= -hX && minLX <= hX &&
-                    maxLY >= -hY && minLY <= hY &&
-                    maxLZ >= -hZ && minLZ <= hZ) {
-                hitEntities.add(e);
-            }
-        }
+        List<Entity> hitEntities = RotatedBoxEntityQuery.find(context.getLevel(), center, size, rot, e -> !e.isSpectator());
 
         Boolean isDebug = getInput(context, StandardPorts.DEBUG.getId(), Boolean.class);
 

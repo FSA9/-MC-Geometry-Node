@@ -96,8 +96,6 @@
   "menu.node.item.add": "Add",
   "menu.node.item.subtract": "Subtract",
 
-
-  
   "geometry_node.node.event_on_block_break": "OnBlockBreak",
   "geometry_node.node.event_on_block_place": "OnBlockPlace",
   "geometry_node.node.event_on_entity_death": "OnEntityDeath",
@@ -130,7 +128,18 @@
   "geometry_node.port.choice_disabled_reason_key": "Disabled Reason Text",
   "geometry_node.dialogue.close": "Close",
   "geometry_node.dialogue.continue": "Continue",
-  "geometry_node.dialogue.busy": "This dialogue is currently busy."
+  "geometry_node.dialogue.busy": "This dialogue is currently busy.",
+  "geometry_node.menu.area": "Area",
+  "geometry_node.port.interval": "Interval",
+  "geometry_node.port.offset": "Offset",
+  "geometry_node.port.enabled": "Enabled",
+  "geometry_node.port.target_entity": "Target Entity",
+  "geometry_node.port.trigger_id": "Trigger ID",
+  "geometry_node.port.inside_count": "Inside Count",
+  "geometry_node.node.on_area_enter": "On Area Enter",
+  "geometry_node.node.on_area_stay": "On Area Stay",
+  "geometry_node.node.on_area_exit": "On Area Exit",
+  "geometry_node.node.on_multiblock_built": "On Multiblock Built"
 
 
 }

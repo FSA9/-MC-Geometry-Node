@@ -3,6 +3,7 @@ package com.mine.geometry_node;
 import com.mine.geometry_node.core.command.registry.ModServerCommands;
 import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
+import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
@@ -98,6 +99,7 @@ public class GeometryNode {
 
         // 注册蓝图资源管理器 (监听 data/*/graphs/ 目录下的 JSON)
         ReloadListenerRegistry.register(PackType.SERVER_DATA, GraphResourceManager.getInstance());
+        ReloadListenerRegistry.register(PackType.SERVER_DATA, MultiblockStructureManager.getInstance());
 
         ATTACHMENT_TYPES.register(modEventBus);
 

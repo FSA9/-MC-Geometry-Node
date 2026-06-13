@@ -39,6 +39,7 @@ public final class ColorPickerDialog extends FrameLayout {
 
     private final OnColorSelected mListener;
     private final View mReturnFocusTarget;
+    private final LinearLayout mWindow;
     private final SaturationValueView mSaturationValueView;
     private final HueStripView mHueStripView;
     private final ColorPreviewView mPreviewView;
@@ -55,25 +56,31 @@ public final class ColorPickerDialog extends FrameLayout {
     private float mSaturation;
     private float mValue;
     private boolean mSyncing;
+    private float mDragStartRawX;
+    private float mDragStartRawY;
+    private int mDragStartLeft;
+    private int mDragStartTop;
+    private boolean mDragging;
+    private boolean mPointerDownInsideWindow;
 
     private ColorPickerDialog(Context context, int initialColor, View returnFocusTarget, OnColorSelected listener) {
         super(context);
         mListener = listener;
         mReturnFocusTarget = returnFocusTarget;
         setBackground(rect(COLOR_DIM, 0.0f, 0, 0));
-        setOnClickListener(v -> dismiss());
         setFocusable(true);
         setFocusableInTouchMode(true);
 
-        LinearLayout window = new LinearLayout(context);
-        window.setOrientation(LinearLayout.VERTICAL);
-        window.setBackground(rect(COLOR_WINDOW, 6.0f, 1, COLOR_BORDER));
-        window.setOnClickListener(v -> {});
+        mWindow = new LinearLayout(context);
+        mWindow.setOrientation(LinearLayout.VERTICAL);
+        mWindow.setBackground(rect(COLOR_WINDOW, 6.0f, 1, COLOR_BORDER));
+        mWindow.setOnClickListener(v -> {});
 
         TextView title = label(context, "调色盘", 14.0f, COLOR_TEXT, Gravity.CENTER_VERTICAL);
         title.setPadding(dpPx(12), 0, dpPx(8), 0);
         title.setBackground(rect(COLOR_TITLE, 6.0f, 0, 0));
-        window.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpPx(34)));
+        title.setOnTouchListener(this::onTitleBarTouch);
+        mWindow.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpPx(34)));
 
         LinearLayout content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -135,11 +142,11 @@ public final class ColorPickerDialog extends FrameLayout {
         actions.addView(button(context, "取消", COLOR_BUTTON, v -> dismiss()), cancelLp);
         actions.addView(button(context, "应用", COLOR_PRIMARY, v -> applyAndDismiss()), new LinearLayout.LayoutParams(dpPx(86), dpPx(30)));
 
-        window.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mWindow.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         FrameLayout.LayoutParams windowLp = new FrameLayout.LayoutParams(dpPx(WINDOW_W_DP), ViewGroup.LayoutParams.WRAP_CONTENT);
         windowLp.gravity = Gravity.CENTER;
-        addView(window, windowLp);
+        addView(mWindow, windowLp);
 
         wireInputWatchers();
         setColor(ensureOpaque(initialColor), false);
@@ -174,26 +181,58 @@ public final class ColorPickerDialog extends FrameLayout {
             dismiss();
             return true;
         }
-        return super.dispatchKeyEvent(event);
+        super.dispatchKeyEvent(event);
+        return true;
     }
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        super.dispatchTouchEvent(event);
+        requestFocus();
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            mPointerDownInsideWindow = isInsideWindow(event.getX(), event.getY());
+        }
+
+        if (mDragging && action != MotionEvent.ACTION_DOWN) {
+            if (action == MotionEvent.ACTION_MOVE) {
+                int targetLeft = mDragStartLeft + Math.round(event.getRawX() - mDragStartRawX);
+                int targetTop = mDragStartTop + Math.round(event.getRawY() - mDragStartRawY);
+                moveWindowTo(targetLeft, targetTop);
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                mPointerDownInsideWindow = false;
+                mDragging = false;
+            }
+            return true;
+        }
+
+        if (mPointerDownInsideWindow || mDragging) {
+            super.dispatchTouchEvent(event);
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                mPointerDownInsideWindow = false;
+                mDragging = false;
+            }
+            return true;
+        }
+
+        if (action == MotionEvent.ACTION_UP) {
+            dismiss();
+        } else if (action == MotionEvent.ACTION_CANCEL) {
+            mPointerDownInsideWindow = false;
+            mDragging = false;
+        }
         return true;
     }
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        super.dispatchGenericMotionEvent(event);
+        if (isInsideWindow(event.getX(), event.getY())) {
+            super.dispatchGenericMotionEvent(event);
+        }
         return true;
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-            dismiss();
-        }
         requestFocus();
         return true;
     }
@@ -377,6 +416,56 @@ public final class ColorPickerDialog extends FrameLayout {
         } else {
             host.addView(dialog, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
+    }
+
+    private boolean onTitleBarTouch(View view, MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                requestFocus();
+                mDragStartRawX = event.getRawX();
+                mDragStartRawY = event.getRawY();
+                FrameLayout.LayoutParams downLp = (FrameLayout.LayoutParams) mWindow.getLayoutParams();
+                ensureWindowHasAbsolutePosition(downLp);
+                mDragStartLeft = downLp.leftMargin;
+                mDragStartTop = downLp.topMargin;
+                mDragging = true;
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                if (!mDragging) return true;
+                int targetLeft = mDragStartLeft + Math.round(event.getRawX() - mDragStartRawX);
+                int targetTop = mDragStartTop + Math.round(event.getRawY() - mDragStartRawY);
+                moveWindowTo(targetLeft, targetTop);
+                return true;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                mDragging = false;
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    private void ensureWindowHasAbsolutePosition(FrameLayout.LayoutParams lp) {
+        if (lp.gravity == (Gravity.TOP | Gravity.LEFT)) {
+            return;
+        }
+        lp.gravity = Gravity.TOP | Gravity.LEFT;
+        lp.leftMargin = mWindow.getLeft();
+        lp.topMargin = mWindow.getTop();
+        mWindow.setLayoutParams(lp);
+    }
+
+    private void moveWindowTo(int left, int top) {
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mWindow.getLayoutParams();
+        lp.gravity = Gravity.TOP | Gravity.LEFT;
+        lp.leftMargin = clamp(left, 0, Math.max(0, getWidth() - mWindow.getWidth()));
+        lp.topMargin = clamp(top, 0, Math.max(0, getHeight() - mWindow.getHeight()));
+        mWindow.setLayoutParams(lp);
+    }
+
+    private boolean isInsideWindow(float x, float y) {
+        return x >= mWindow.getLeft() && x < mWindow.getRight()
+                && y >= mWindow.getTop() && y < mWindow.getBottom();
     }
 
     private static ViewGroup findWindowHost(View anchor) {

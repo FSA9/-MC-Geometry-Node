@@ -21,20 +21,23 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
 public class PortMenu {
-    private static final int PANEL_W_DP = 230;
-    private static final int PANEL_PADDING_DP = 10;
+    private static final int PANEL_W_DP = 220;
+    private static final int PANEL_PADDING_DP = 8;
     private static final int EDGE_MARGIN_DP = 6;
-    private static final int INPUT_H_DP = 30;
-    private static final int ACTION_H_DP = 28;
+    private static final int INPUT_H_DP = 28;
+    private static final int ITEM_H_DP = 24;
+    private static final int ITEM_RADIUS_DP = 4;
+    private static final int SEARCH_RADIUS_DP = 5;
 
-    private static final int COLOR_PANEL_BG = 0xF02B2D33;
-    private static final int COLOR_PANEL_BORDER = 0xFF15171B;
-    private static final int COLOR_INPUT_BG = 0xFF181B20;
-    private static final int COLOR_INPUT_BORDER = 0xFF3A404A;
-    private static final int COLOR_LABEL = 0xFF8F98A6;
-    private static final int COLOR_TEXT = 0xFFE7EAF0;
-    private static final int COLOR_BUTTON = 0xFF3E4652;
-    private static final int COLOR_BUTTON_PRIMARY = 0xFF4B7FBD;
+    private static final int COLOR_PANEL_BG = 0xFF2B2B2B;
+    private static final int COLOR_PANEL_BORDER = 0xFF151515;
+    private static final int COLOR_INPUT_BG = 0xFF1E1E1E;
+    private static final int COLOR_INPUT_BORDER = 0xFF3A3A3A;
+    private static final int COLOR_DIVIDER = 0xFF171717;
+    private static final int COLOR_SECTION_TEXT = 0xFF777777;
+    private static final int COLOR_ACTION_TEXT = 0xFF8FC7FF;
+    private static final int COLOR_MUTED_TEXT = 0xFF999999;
+    private static final int COLOR_HOVER_BG = 0xFF3A4652;
 
     public static void show(InteractionContext context, NodeVisualAdapter node, String portId, float screenX, float screenY) {
         String category = "inputs";
@@ -68,36 +71,30 @@ public class PortMenu {
         LinearLayout panel = new LinearLayout(uiContext);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(PANEL_PADDING_DP), dp(PANEL_PADDING_DP), dp(PANEL_PADDING_DP), dp(PANEL_PADDING_DP));
-        panel.setBackground(rect(COLOR_PANEL_BG, 6.0f, 1, COLOR_PANEL_BORDER));
+        panel.setBackground(rect(COLOR_PANEL_BG, UIConstants.ViewPort.NodeMenu.BORDER_RADIUS + 5, 1, COLOR_PANEL_BORDER));
         panel.setOnClickListener(v -> {});
 
-        TextView title = label(uiContext, "重命名端口", 13f, COLOR_TEXT, Gravity.CENTER_VERTICAL);
-        panel.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(22)));
-
-        TextView nameLabel = label(uiContext, "名称", 10f, COLOR_LABEL, Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18));
-        labelLp.topMargin = dp(4);
-        panel.addView(nameLabel, labelLp);
+        TextView section = sectionLabel(uiContext, "重命名端口");
+        panel.addView(section, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
 
         EditText input = new EditText(uiContext);
         input.setText(oldName);
-        input.setTextColor(UIConstants.CLR_WHITE);
+        input.setHint("名称");
+        input.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
+        input.setHintTextColor(COLOR_SECTION_TEXT);
         input.setSingleLine(true);
         input.setTextSize(0, UIUtils.dp2px(12));
         input.setGravity(Gravity.CENTER_VERTICAL);
-        input.setPadding(dp(9), 0, dp(9), 0);
-        input.setBackground(rect(COLOR_INPUT_BG, 4.0f, 1, COLOR_INPUT_BORDER));
+        input.setPadding(dp(10), 0, dp(10), 0);
+        input.setBackground(rect(COLOR_INPUT_BG, SEARCH_RADIUS_DP, 1, COLOR_INPUT_BORDER));
 
-        panel.addView(input, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(INPUT_H_DP)));
+        LinearLayout.LayoutParams inputLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(INPUT_H_DP));
+        inputLp.bottomMargin = dp(8);
+        panel.addView(input, inputLp);
 
-        LinearLayout actions = new LinearLayout(uiContext);
-        actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams actionsLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ACTION_H_DP));
-        actionsLp.topMargin = dp(12);
-        panel.addView(actions, actionsLp);
+        addDivider(uiContext, panel);
 
-        TextView cancel = button(uiContext, "取消", COLOR_BUTTON, v -> close(context, popupOverlay));
-        TextView apply = button(uiContext, "应用", COLOR_BUTTON_PRIMARY, v -> {
+        panel.addView(menuItem(uiContext, "应用", COLOR_ACTION_TEXT, v -> {
             String newName = input.getText().toString().trim();
             if (!newName.equals(oldName)) {
                 context.getActionSink().performAction(
@@ -110,12 +107,10 @@ public class PortMenu {
                 );
             }
             close(context, popupOverlay);
-        });
+        }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ITEM_H_DP)));
 
-        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(dp(68), ViewGroup.LayoutParams.MATCH_PARENT);
-        cancelLp.rightMargin = dp(8);
-        actions.addView(cancel, cancelLp);
-        actions.addView(apply, new LinearLayout.LayoutParams(dp(68), ViewGroup.LayoutParams.MATCH_PARENT));
+        panel.addView(menuItem(uiContext, "取消", COLOR_MUTED_TEXT, v -> close(context, popupOverlay)),
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ITEM_H_DP)));
 
         if (context instanceof ViewGroup parent) {
             popupOverlay.addView(panel, createPanelLayout(parent, screenX, screenY));
@@ -127,7 +122,7 @@ public class PortMenu {
 
     private static FrameLayout.LayoutParams createPanelLayout(ViewGroup parent, float screenX, float screenY) {
         int panelW = dp(PANEL_W_DP);
-        int panelH = dp(130);
+        int panelH = dp(104);
         int edge = dp(EDGE_MARGIN_DP);
 
         int targetX = (int) screenX;
@@ -153,21 +148,35 @@ public class PortMenu {
         return view;
     }
 
-    private static TextView button(Context context, String text, int color, View.OnClickListener listener) {
-        TextView view = label(context, text, 12f, COLOR_TEXT, Gravity.CENTER);
-        view.setBackground(rect(color, 4.0f, 1, 0x553C4658));
+    private static TextView sectionLabel(Context context, String text) {
+        TextView view = label(context, text, 10f, COLOR_SECTION_TEXT, Gravity.CENTER_VERTICAL);
+        view.setPadding(dp(10), 0, dp(10), 0);
+        return view;
+    }
+
+    private static TextView menuItem(Context context, String text, int color, View.OnClickListener listener) {
+        TextView view = label(context, text, 12f, color, Gravity.CENTER_VERTICAL);
+        view.setPadding(dp(10), 0, dp(10), 0);
         view.setOnClickListener(listener);
         view.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                view.setTextColor(UIConstants.CLR_WHITE);
-                view.setBackground(rect(lighten(color, 0.13f), 4.0f, 1, 0x664D5B70));
+                view.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_HOVER);
+                view.setBackground(rect(COLOR_HOVER_BG, ITEM_RADIUS_DP));
             } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                view.setTextColor(COLOR_TEXT);
-                view.setBackground(rect(color, 4.0f, 1, 0x553C4658));
+                view.setTextColor(color);
+                view.setBackground(null);
             }
             return false;
         });
         return view;
+    }
+
+    private static void addDivider(Context context, LinearLayout panel) {
+        View divider = new View(context);
+        divider.setBackground(rect(COLOR_DIVIDER, 0));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1));
+        lp.setMargins(0, dp(6), 0, dp(6));
+        panel.addView(divider, lp);
     }
 
     private static void close(InteractionContext context, FrameLayout overlay) {
@@ -175,6 +184,10 @@ public class PortMenu {
             parent.removeView(overlay);
         }
         context.requestViewportFocus();
+    }
+
+    private static ShapeDrawable rect(int color, float radiusDp) {
+        return rect(color, radiusDp, 0, 0);
     }
 
     private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
@@ -189,16 +202,5 @@ public class PortMenu {
 
     private static int dp(float value) {
         return UIUtils.dp2pxInt(value);
-    }
-
-    private static int lighten(int color, float amount) {
-        int a = (color >>> 24) & 0xFF;
-        int r = (color >>> 16) & 0xFF;
-        int g = (color >>> 8) & 0xFF;
-        int b = color & 0xFF;
-        r = Math.min(255, Math.round(r + (255 - r) * amount));
-        g = Math.min(255, Math.round(g + (255 - g) * amount));
-        b = Math.min(255, Math.round(b + (255 - b) * amount));
-        return (a << 24) | (r << 16) | (g << 8) | b;
     }
 }

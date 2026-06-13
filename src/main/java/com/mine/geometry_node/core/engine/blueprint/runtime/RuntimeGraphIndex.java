@@ -49,6 +49,7 @@ public class RuntimeGraphIndex {
     // --- 分类与查询辅助 ---
     private final Map<String, List<Integer>> typeLookup;                  // 按节点类型归类 (常用于查找事件起始节点)
     private final Map<String, List<Integer>> receiveBlueprintLookup;
+    private final Map<String, List<Integer>> multiblockStructureLookup;
 
     // ====================================================
     // 3. 构造与工厂方法 (Constructors & Factory)
@@ -62,6 +63,7 @@ public class RuntimeGraphIndex {
                               IntConnectionSource[][] inputArray,
                               Map<String, List<Integer>> typeLookup,
                               Map<String, List<Integer>> receiveBlueprintLookup,
+                              Map<String, List<Integer>> multiblockStructureLookup,
                               Map<String, Object>[] propertyArray,
                               Map<String, Object>[] staticInputArray,
                               Map<String, Integer> keyDictionary,
@@ -74,6 +76,7 @@ public class RuntimeGraphIndex {
         this.inputArray = copyInputArray(inputArray);
         this.typeLookup = copyLookup(typeLookup);
         this.receiveBlueprintLookup = copyLookup(receiveBlueprintLookup);
+        this.multiblockStructureLookup = copyLookup(multiblockStructureLookup);
         this.propertyArray = copyObjectMapArray(propertyArray);
         this.staticInputArray = copyObjectMapArray(staticInputArray);
         this.keyDictionary = Map.copyOf(keyDictionary);
@@ -125,6 +128,7 @@ public class RuntimeGraphIndex {
                                                    IntConnectionSource[][] inputArray,
                                                    Map<String, List<Integer>> typeLookup,
                                                    Map<String, List<Integer>> receiveBlueprintLookup,
+                                                   Map<String, List<Integer>> multiblockStructureLookup,
                                                    Map<String, Object>[] propertyArray,
                                                    Map<String, Object>[] staticInputArray,
                                                    Map<String, Integer> keyDictionary,
@@ -138,6 +142,7 @@ public class RuntimeGraphIndex {
                 inputArray,
                 typeLookup,
                 receiveBlueprintLookup,
+                multiblockStructureLookup,
                 propertyArray,
                 staticInputArray,
                 keyDictionary,
@@ -289,6 +294,30 @@ public class RuntimeGraphIndex {
 
     public Set<String> getReceiveBlueprintFrequencies() {
         return receiveBlueprintLookup.keySet();
+    }
+
+    public List<Integer> findMultiblockBuiltNodes(String structureId) {
+        if (structureId == null || structureId.isBlank()) {
+            return multiblockStructureLookup.getOrDefault("*", List.of());
+        }
+
+        List<Integer> exact = multiblockStructureLookup.getOrDefault(structureId, List.of());
+        List<Integer> wildcard = multiblockStructureLookup.getOrDefault("*", List.of());
+        if (wildcard.isEmpty()) {
+            return exact;
+        }
+        if (exact.isEmpty()) {
+            return wildcard;
+        }
+
+        List<Integer> combined = new java.util.ArrayList<>(wildcard.size() + exact.size());
+        combined.addAll(exact);
+        combined.addAll(wildcard);
+        return List.copyOf(combined);
+    }
+
+    public Set<String> getMultiblockStructureIds() {
+        return multiblockStructureLookup.keySet();
     }
 
 
