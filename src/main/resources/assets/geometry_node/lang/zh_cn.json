@@ -417,6 +417,7 @@
   "geometry_node.node.get_input_data_type": "获取输入数据类型",
 
   "geometry_node.node.string_value": "字符串",
+  "geometry_node.node.string_expression": "字符串表达式",
   "geometry_node.node.int_value": "整数",
   "geometry_node.node.float_value": "浮点数",
   "geometry_node.node.bool_value": "布尔值",
