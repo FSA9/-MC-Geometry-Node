@@ -1,10 +1,6 @@
 package com.mine.geometry_node.client.ui.viewport.node.UIHints;
 
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.CheckBoxHintRenderer;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.InputHintRenderer;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.ItemSlotHintRenderer;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.SelectHintRenderer;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.VectorHintRenderer;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.*;
 import com.mine.geometry_node.core.node.port.UIHint;
 import java.util.EnumMap;
 import java.util.Map;
@@ -17,6 +13,7 @@ public class HintRendererFactory {
         RENDERERS.put(UIHint.INPUT, new InputHintRenderer());
         RENDERERS.put(UIHint.SELECT, new SelectHintRenderer());
         RENDERERS.put(UIHint.VECTOR, new VectorHintRenderer());
+        RENDERERS.put(UIHint.BUTTON, new ButtonHintRenderer());
         RENDERERS.put(UIHint.ITEM_SLOT, new ItemSlotHintRenderer());
     }
 

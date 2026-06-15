@@ -1,9 +1,10 @@
 package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.screen.PlayerInventoryPickerScreen;
-import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.utils.ItemTooltipProxy;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.InventoryItemPickerOverlay;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ItemStackTooltipOverlay;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
@@ -13,6 +14,7 @@ import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MotionEvent;
+import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.mc.MinecraftSurfaceView;
 import net.minecraft.client.Minecraft;
@@ -47,9 +49,16 @@ public class UIItemSlot extends FrameLayout {
 
         setWillNotDraw(false);
         setClipChildren(false);
+        setOnHoverListener((v, event) -> {
+            handleHover(event);
+            return true;
+        });
         updateCache();
 
         mSurfaceView = new MinecraftSurfaceView(context);
+        mSurfaceView.setEnabled(false);
+        mSurfaceView.setClickable(false);
+        mSurfaceView.setFocusable(false);
         mSurfaceView.setRenderer(new MinecraftSurfaceView.Renderer() {
             @Override
             public void onSurfaceChanged(int width, int height) {}
@@ -178,32 +187,55 @@ public class UIItemSlot extends FrameLayout {
 
     @Override
     public boolean onHoverEvent(MotionEvent event) {
+        handleHover(event);
+        return true;
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        super.dispatchGenericMotionEvent(event);
+        handleHover(event);
+        return true;
+    }
+
+    @Override
+    public PointerIcon onResolvePointerIcon(MotionEvent event) {
+        updateCache();
+        if (mCachedStack.isEmpty()) {
+            ItemStackTooltipOverlay.hide();
+            return PointerIcon.getSystemIcon(PointerIcon.TYPE_DEFAULT);
+        }
+        ItemStackTooltipOverlay.showForEvent(this, mCachedStack, event);
+        return PointerIcon.getSystemIcon(PointerIcon.TYPE_HAND);
+    }
+
+    private void handleHover(MotionEvent event) {
         updateCache();
         int action = event.getAction();
         if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE) {
             if (mCachedStack.isEmpty()) {
-                return super.onHoverEvent(event);
+                ItemStackTooltipOverlay.hide();
+                return;
             }
 
-            int[] loc = new int[2];
-            getLocationOnScreen(loc);
-
-            double guiScale = Minecraft.getInstance().getWindow().getGuiScale();
-            int guiX = (int) (loc[0] / guiScale) + 12;
-            int guiY = (int) (loc[1] / guiScale) + 12;
-
-            ItemTooltipProxy.setTooltipTask(mCachedStack, guiX, guiY);
+            ItemStackTooltipOverlay.showForEvent(this, mCachedStack, event);
 
         } else if (action == MotionEvent.ACTION_HOVER_EXIT) {
             ItemTooltipProxy.clearTooltipTask(mCachedStack);
+            ItemStackTooltipOverlay.hide();
         }
-        return super.onHoverEvent(event);
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         ItemTooltipProxy.clearTooltipTask(mCachedStack);
+        ItemStackTooltipOverlay.hide();
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        return onTouchEvent(event);
     }
 
     @Override
@@ -222,18 +254,19 @@ public class UIItemSlot extends FrameLayout {
     private void onDoubleClick() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
-        net.minecraft.client.gui.screens.Screen currentModernUIScreen = mc.screen;
 
-        mc.tell(() -> {
-            mc.setScreen(new PlayerInventoryPickerScreen(currentModernUIScreen, pickedStack -> {
-                if (mEditorContext != null) {
-                    String newJson = ItemCodecUtils.toJson(pickedStack, mc.level.registryAccess());
-                    UIHintValueBinder.commit(mEditorContext, mNodeData, mPortId, newJson);
-                    updateCache();
-                    this.invalidate();
-                    ItemTooltipProxy.clearTooltipTask(mCachedStack);
-                }
-            }));
+        InventoryItemPickerOverlay.showFor(this, pickedStack -> {
+            if (mEditorContext == null || mc.level == null) {
+                return;
+            }
+            String newJson = ItemCodecUtils.toJson(pickedStack, mc.level.registryAccess());
+            UIHintValueBinder.commit(mEditorContext, mNodeData, mPortId, newJson);
+            updateCache();
+            invalidate();
+            ItemTooltipProxy.clearTooltipTask();
+            ItemStackTooltipOverlay.hide();
+        }, () -> {
+            requestFocus();
         });
     }
 }

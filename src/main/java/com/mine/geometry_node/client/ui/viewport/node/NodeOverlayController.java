@@ -8,7 +8,7 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveGroupVirtual
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.HintRendererFactory;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintRenderer;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIHintRenderer;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIItemSlot;
 import com.mine.geometry_node.core.node.NodeData;

@@ -1,11 +1,14 @@
 package com.mine.geometry_node.client.ui.utils;
 
+import com.mine.geometry_node.GeometryNode;
+import net.neoforged.api.distmarker.Dist;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
+@EventBusSubscriber(modid = GeometryNode.MODID, value = Dist.CLIENT)
 public class ItemTooltipProxy {
 
     private static ItemStack currentStack = ItemStack.EMPTY;
@@ -30,6 +33,10 @@ public class ItemTooltipProxy {
         if (currentStack == stack) {
             currentStack = ItemStack.EMPTY;
         }
+    }
+
+    public static void clearTooltipTask() {
+        currentStack = ItemStack.EMPTY;
     }
 
     /**

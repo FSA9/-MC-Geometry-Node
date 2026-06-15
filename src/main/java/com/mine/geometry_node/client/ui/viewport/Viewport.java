@@ -4,6 +4,8 @@ import com.mine.geometry_node.client.ui.viewport.interaction.*;
 import com.mine.geometry_node.client.ui.viewport.connection.ConnectionLayer;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameLayer;
 import com.mine.geometry_node.client.ui.viewport.layers.BackgroundLayer;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.InventoryItemPickerOverlay;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ShopEditorOverlay;
 import com.mine.geometry_node.client.ui.viewport.node.NodeLayer;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import com.mine.geometry_node.client.ui.viewport.menu.ViewportMenu;
@@ -391,9 +393,38 @@ public class Viewport extends FrameLayout implements InteractionContext {
         return false;
     }
 
-    @Override public boolean dispatchTouchEvent(MotionEvent ev) { if (mEventDispatcher.handleTouchEvent(ev, isHitOverlay(ev.getX(), ev.getY()))) return true; return super.dispatchTouchEvent(ev); }
-    @Override public boolean dispatchGenericMotionEvent(MotionEvent ev) { if (mEventDispatcher.handleGenericMotionEvent(ev, isHitOverlay(ev.getX(), ev.getY()))) return true; return super.dispatchGenericMotionEvent(ev); }
-    @Override public PointerIcon onResolvePointerIcon(MotionEvent event) { PointerIcon icon = mEventDispatcher.resolvePointerIcon(event); return icon != null ? icon : super.onResolvePointerIcon(event); }
+    @Override public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (hasBlockingOverlay()) {
+            super.dispatchTouchEvent(ev);
+            return true;
+        }
+        if (mEventDispatcher.handleTouchEvent(ev, isHitOverlay(ev.getX(), ev.getY()))) return true;
+        return super.dispatchTouchEvent(ev);
+    }
+    @Override public boolean dispatchGenericMotionEvent(MotionEvent ev) {
+        if (hasBlockingOverlay()) {
+            super.dispatchGenericMotionEvent(ev);
+            return true;
+        }
+        if (mEventDispatcher.handleGenericMotionEvent(ev, isHitOverlay(ev.getX(), ev.getY()))) return true;
+        return super.dispatchGenericMotionEvent(ev);
+    }
+    @Override public PointerIcon onResolvePointerIcon(MotionEvent event) {
+        if (hasBlockingOverlay()) {
+            PointerIcon icon = super.onResolvePointerIcon(event);
+            return icon != null ? icon : PointerIcon.getSystemIcon(PointerIcon.TYPE_DEFAULT);
+        }
+        if (isHitOverlay(event.getX(), event.getY())) {
+            return super.onResolvePointerIcon(event);
+        }
+        PointerIcon icon = mEventDispatcher.resolvePointerIcon(event);
+        return icon != null ? icon : super.onResolvePointerIcon(event);
+    }
+
+    private boolean hasBlockingOverlay() {
+        return ShopEditorOverlay.hasVisibleOverlay()
+                || InventoryItemPickerOverlay.hasVisibleOverlay();
+    }
 
     @Override
     public boolean dispatchKeyEvent(icyllis.modernui.view.KeyEvent event) {

@@ -90,6 +90,7 @@
   "geometry_node.port.Z": "Z",
 
   "geometry_node.port.name": "名称",
+  "geometry_node.port.title": "标题",
   "geometry_node.port.string": "String",
   "geometry_node.port.type": "类型",
   "geometry_node.port.scope": "作用域",
@@ -113,6 +114,7 @@
   "geometry_node.port.item": "物品",
   "geometry_node.port.item_stack": "物品对象",
   "geometry_node.port.list": "列表",
+  "geometry_node.port.shop_data": "商店数据",
 
   "geometry_node.port.xyz": "坐标",
   "geometry_node.port.start_pos": "起点",
@@ -483,9 +485,11 @@
 
   "geometry_node.node.begin_dialogue": "开始对话",
   "geometry_node.node.show_dialogue_page": "显示对话页",
+  "geometry_node.node.open_shop": "打开商店",
   "geometry_node.node.close_dialogue": "关闭对话",
   "geometry_node.node.resolve_dialogue_text": "解析对话文本",
   "geometry_node.node.format_dialogue_text": "格式化对话文本",
+  "geometry_node.button.edit_shop": "编辑商店",
 
   "geometry_node.port.player": "玩家",
   "geometry_node.port.speaker_entity": "说话者实体",

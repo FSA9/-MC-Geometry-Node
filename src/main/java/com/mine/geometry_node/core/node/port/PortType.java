@@ -24,6 +24,7 @@ public enum PortType {
     XYZ("XYZ", 0xFF00BCD4, List.of(0.0f, 0.0f, 0.0f)),
     LIST("列表", 0xFFFF9800, List.of()),
     DICT("字典", 0xFFE67E22, java.util.Map.of()),
+    SHOP("商店", 0xFFFFB74D, java.util.Map.of("offers", List.of())),
     ANY("任意", 0xFF95A5A6, null);
 
     private final String displayName;
@@ -77,6 +78,11 @@ public enum PortType {
         // 同类兼容
         if (outputport == inputport) return true;
 
+        // Shop data is stored as a map, but kept as a distinct editor-facing type.
+        if ((outputport == SHOP && inputport == DICT) || (outputport == DICT && inputport == SHOP)) {
+            return true;
+        }
+
         // --- 隐式类型转换白名单 ---
 
         // 1. 基础三剑客互转 (INT, FLOAT, BOOLEAN)
@@ -88,7 +94,7 @@ public enum PortType {
         if (inputport == STRING) {
             if (outputport == INTEGER || outputport == FLOAT || outputport == BOOLEAN ||
                     outputport == RICH_TEXT || outputport == ENTITY || outputport == BLOCK || outputport == XYZ ||
-                    outputport == ITEM || outputport == LIST) {
+                    outputport == ITEM || outputport == LIST || outputport == DICT || outputport == SHOP) {
                 return true;
             }
         }

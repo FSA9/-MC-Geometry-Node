@@ -11,6 +11,7 @@ public enum UIHint {
     CHECKBOX,       // 勾选框
     INPUT,          // 输入框
     VECTOR,         // 矢量输入框
+    BUTTON,         // 按钮
     ITEM_SLOT,      // 物品槽
     CUSTOM          // 自定义复杂组件
 }

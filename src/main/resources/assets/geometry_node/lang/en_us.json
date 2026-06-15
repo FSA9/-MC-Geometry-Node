@@ -54,6 +54,7 @@
   "geometry_node.port.time": "Time",
 
   "geometry_node.port.name": "Name",
+  "geometry_node.port.title": "Title",
   "geometry_node.port.type": "Type",
   "geometry_node.port.scope": "Scope",
   "geometry_node.port.expression": "Expression",
@@ -69,7 +70,9 @@
 
   "geometry_node.port.block_state": "Block State",
   "geometry_node.port.item": "Item",
+  "geometry_node.port.item_stack": "Item Stack",
   "geometry_node.port.list": "List",
+  "geometry_node.port.shop_data": "Shop Data",
 
   "geometry_node.port.xyz": "XYZ",
   "geometry_node.port.start_pos": "Start Position",
@@ -103,10 +106,12 @@
   "geometry_node.menu.dialogue": "Dialogue",
   "geometry_node.node.begin_dialogue": "Begin Dialogue",
   "geometry_node.node.show_dialogue_page": "Show Dialogue Page",
+  "geometry_node.node.open_shop": "Open Shop",
   "geometry_node.node.close_dialogue": "Close Dialogue",
   "geometry_node.node.resolve_dialogue_text": "Resolve Dialogue Text",
   "geometry_node.node.format_dialogue_text": "Format Dialogue Text",
   "geometry_node.node.string_expression": "String Expression",
+  "geometry_node.button.edit_shop": "Edit Shop",
   "geometry_node.port.player": "Player",
   "geometry_node.port.speaker_entity": "Speaker Entity",
   "geometry_node.port.speaker": "Speaker",

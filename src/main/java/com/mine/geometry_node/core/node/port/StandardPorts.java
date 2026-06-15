@@ -78,6 +78,7 @@ public enum StandardPorts {
 
     // String
     NAME("name", PortType.STRING),
+    TITLE("title", PortType.STRING),
     STRING("string", PortType.STRING),
     TYPE("type", PortType.STRING),
     GAMEMODE("gamemode", PortType.STRING),
@@ -128,6 +129,7 @@ public enum StandardPorts {
     // DICT
     DICT("dict", PortType.DICT),
     DATA("data", PortType.DICT),
+    SHOP_DATA("shop_data", PortType.SHOP),
 
     // XYZ
     XYZ("xyz", PortType.XYZ),
