@@ -236,7 +236,9 @@ final class NodeOverlayController {
 
         boolean isInputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
         String propertyKey = isInputDynamic ? StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id() : StaticKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id();
-        int minCount = isInputDynamic ? 1 : mNodeDef.getMetaOrDefault(SchemaKeys.MIN_DYNAMIC_OUTPUT, 1);
+        int minCount = isInputDynamic
+                ? mNodeDef.getMetaOrDefault(SchemaKeys.MIN_DYNAMIC_INPUT, 1)
+                : mNodeDef.getMetaOrDefault(SchemaKeys.MIN_DYNAMIC_OUTPUT, 1);
         int currentCount = getDynamicCount(propertyKey, minCount);
 
         if (isAdd) {

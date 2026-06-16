@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.dialogue;
 
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketDialogueChoice;
+import com.mine.geometry_node.core.network.packet.c2s.PacketShopTradeRequest;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import org.jetbrains.annotations.Nullable;
@@ -10,7 +11,7 @@ import java.util.UUID;
 
 public final class ClientDialogueState {
     @Nullable
-    private static PacketOpenDialogue current;
+    private static volatile PacketOpenDialogue current;
 
     private ClientDialogueState() {
     }
@@ -40,6 +41,14 @@ public final class ClientDialogueState {
         }
         UUID sessionId = current.sessionId();
         NetworkHandler.sendToServer(new PacketDialogueChoice(sessionId, PacketDialogueChoice.ACTION_CHOOSE, choiceId));
+        return true;
+    }
+
+    public static boolean trade(String offerId) {
+        if (current == null || offerId == null || offerId.isBlank()) {
+            return false;
+        }
+        NetworkHandler.sendToServer(new PacketShopTradeRequest(current.sessionId(), offerId));
         return true;
     }
 

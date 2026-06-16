@@ -36,5 +36,6 @@ public class AppConfig {
         public String toggleGridAndAxis = "SHIFT+ALT+Z";
         public String groupIntoFrame = "CTRL+J";
         public String groupIntoNodeGroup = "CTRL+G";
+        public String shopEditorClearSlot = "CTRL+LEFT_CLICK";
     }
 }

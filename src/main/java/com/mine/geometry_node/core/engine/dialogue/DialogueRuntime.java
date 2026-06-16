@@ -16,13 +16,24 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
+import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -147,6 +158,96 @@ public class DialogueRuntime implements GraphRuntime {
             return null;
         }
         return choose(player, session.getSessionId(), choiceId);
+    }
+
+    @Nullable
+    public DialogueSession tradeShopOffer(ServerPlayer player, UUID sessionId, String offerId) {
+        DialogueSession session = sessionManager.getSession(sessionId);
+        if (session == null || !session.isActive() || !session.getPlayerId().equals(player.getUUID())) {
+            return null;
+        }
+        DialoguePagePayload page = session.getCurrentPage();
+        if (page == null || !"shop".equals(page.getStyleId())) {
+            return null;
+        }
+
+        Map<String, Object> shopData = shopData(page);
+        Map<String, Object> offerMap = findOfferMap(shopData, offerId);
+        if (offerMap == null) {
+            refreshShopSessionKey(player, session, "geometry_node.shop.message.offer_missing", false);
+            return session;
+        }
+
+        ShopOffer offer = parseShopOffer(offerMap, player);
+        if (!offer.enabled()) {
+            String reason = stringValue(offerMap.get("disabled_reason"), "");
+            if (reason.isBlank()) {
+                refreshShopSessionKey(player, session, "geometry_node.shop.message.condition_not_met", false);
+            } else {
+                refreshShopSession(player, session, reason, false);
+            }
+            return session;
+        }
+        if (offer.costs().isEmpty() && offer.rewards().isEmpty()) {
+            refreshShopSessionKey(player, session, "geometry_node.shop.message.empty_offer", false);
+            return session;
+        }
+        if (offer.maxUses() > 0 && offer.uses() >= offer.maxUses()) {
+            refreshShopSessionKey(player, session, "geometry_node.shop.message.sold_out", false);
+            return session;
+        }
+        if (!hasStacks(player.getInventory(), offer.costs())) {
+            refreshShopSessionKey(player, session, "geometry_node.shop.message.player_items_missing", false);
+            return session;
+        }
+
+        Entity seller = resolveSellerEntity(player.serverLevel(), session.getDialogueContext());
+        SellerInventory sellerInventory = seller == null ? null : sellerInventory(seller);
+        if (offer.consumeSellerItems() && seller != null) {
+            if (sellerInventory == null) {
+                refreshShopSessionKey(player, session, "geometry_node.shop.message.seller_inventory_unavailable", false);
+                return session;
+            }
+            if (!sellerInventory.hasAll(offer.rewards())) {
+                refreshShopSessionKey(player, session, "geometry_node.shop.message.seller_items_missing", false);
+                return session;
+            }
+        }
+
+        List<ItemStack> rewards = copyStacks(offer.rewards());
+        if (offer.consumeSellerItems() && sellerInventory != null) {
+            rewards = sellerInventory.extractAll(offer.rewards());
+        }
+        if (offer.consumeSellerItems() && sellerInventory != null && !hasStacks(copyStacks(rewards), offer.rewards())) {
+            sellerInventory.insertOrDrop(rewards, seller);
+            refreshShopSessionKey(player, session, "geometry_node.shop.message.seller_extract_failed", false);
+            return session;
+        }
+        if (!hasStacks(player.getInventory(), offer.costs())) {
+            if (offer.consumeSellerItems() && sellerInventory != null) {
+                sellerInventory.insertOrDrop(rewards, seller);
+            }
+            refreshShopSessionKey(player, session, "geometry_node.shop.message.player_items_missing", false);
+            return session;
+        }
+
+        removeStacks(player.getInventory(), offer.costs());
+        if (offer.sellerReceivesPayment() && seller != null) {
+            if (sellerInventory != null) {
+                sellerInventory.insertOrDrop(copyStacks(offer.costs()), seller);
+            } else {
+                for (ItemStack cost : copyStacks(offer.costs())) {
+                    dropAt(seller, cost);
+                }
+            }
+        }
+        giveStacks(player, rewards);
+
+        if (offer.maxUses() > 0) {
+            offerMap.put("uses", offer.uses() + 1);
+        }
+        refreshShopSessionKey(player, session, "geometry_node.shop.message.trade_complete", true);
+        return session;
     }
 
     @Nullable
@@ -356,6 +457,247 @@ public class DialogueRuntime implements GraphRuntime {
         player.sendSystemMessage(DialogueTextParser.parse(text, player.registryAccess()).component());
     }
 
+    private void refreshShopSession(ServerPlayer player, DialogueSession session, String message, boolean success) {
+        DialoguePagePayload page = session.getCurrentPage();
+        if (page != null) {
+            page.getMetadata().put("last_trade_message", message == null ? "" : message);
+            page.getMetadata().remove("last_trade_message_key");
+            page.getMetadata().put("last_trade_success", success);
+        }
+        session.touch(player.serverLevel().getGameTime());
+        getPresenter(session).open(player, session);
+    }
+
+    private void refreshShopSessionKey(ServerPlayer player, DialogueSession session, String messageKey, boolean success) {
+        DialoguePagePayload page = session.getCurrentPage();
+        if (page != null) {
+            page.getMetadata().remove("last_trade_message");
+            page.getMetadata().put("last_trade_message_key", messageKey == null ? "" : messageKey);
+            page.getMetadata().put("last_trade_success", success);
+        }
+        session.touch(player.serverLevel().getGameTime());
+        getPresenter(session).open(player, session);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> shopData(DialoguePagePayload page) {
+        Object value = page.getMetadata().get("shop_data");
+        if (value instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        Map<String, Object> created = new LinkedHashMap<>();
+        created.put("offers", List.of());
+        page.getMetadata().put("shop_data", created);
+        return created;
+    }
+
+    @Nullable
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> findOfferMap(Map<String, Object> shopData, String offerId) {
+        Object offersObj = shopData.get("offers");
+        if (!(offersObj instanceof List<?> offers)) {
+            return null;
+        }
+        for (Object offerObj : offers) {
+            if (!(offerObj instanceof Map<?, ?> rawOffer)) {
+                continue;
+            }
+            Object id = rawOffer.get("id");
+            if (Objects.equals(String.valueOf(id), offerId)) {
+                return (Map<String, Object>) rawOffer;
+            }
+        }
+        return null;
+    }
+
+    private static ShopOffer parseShopOffer(Map<String, Object> offerMap, ServerPlayer player) {
+        int maxUses = intValue(offerMap.get("max_uses"), 0);
+        int uses = Math.max(0, intValue(offerMap.get("uses"), 0));
+        boolean consumeSellerItems = boolValue(offerMap.get("consume_seller_items"), false);
+        boolean sellerReceivesPayment = boolValue(offerMap.get("seller_receives_payment"), false);
+        boolean enabled = boolValue(offerMap.get("enabled"), true);
+        return new ShopOffer(
+                maxUses,
+                uses,
+                consumeSellerItems,
+                sellerReceivesPayment,
+                enabled,
+                parseStacks(offerMap.get("costs"), player),
+                parseStacks(offerMap.get("rewards"), player)
+        );
+    }
+
+    private static List<ItemStack> parseStacks(Object raw, ServerPlayer player) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<ItemStack> result = new ArrayList<>();
+        for (Object item : list) {
+            String stackJson = "";
+            if (item instanceof Map<?, ?> map) {
+                Object stack = map.get("stack");
+                stackJson = stack instanceof String string ? string : "";
+            } else if (item instanceof String string) {
+                stackJson = string;
+            }
+            if (stackJson.isBlank()) {
+                continue;
+            }
+            ItemStack stack = ItemCodecUtils.fromJson(stackJson, player.registryAccess());
+            if (!stack.isEmpty()) {
+                result.add(stack);
+            }
+        }
+        return result;
+    }
+
+    @Nullable
+    private static Entity resolveSellerEntity(ServerLevel level, @Nullable DialogueContext context) {
+        if (context == null) {
+            return null;
+        }
+        Entity speaker = context.resolveSpeakerEntity(level);
+        if (speaker != null) {
+            return speaker;
+        }
+        return context.resolveTargetEntity(level);
+    }
+
+    @Nullable
+    private static SellerInventory sellerInventory(Entity seller) {
+        IItemHandler handler = seller.getCapability(Capabilities.ItemHandler.ENTITY);
+        if (handler != null) {
+            return new ItemHandlerSellerInventory(handler);
+        }
+        if (seller instanceof Player player) {
+            return new ContainerSellerInventory(player.getInventory());
+        }
+        if (seller instanceof Container container) {
+            return new ContainerSellerInventory(container);
+        }
+        return null;
+    }
+
+    private static boolean hasStacks(Container container, List<ItemStack> requiredStacks) {
+        if (requiredStacks == null || requiredStacks.isEmpty()) {
+            return true;
+        }
+        List<ItemStack> available = new ArrayList<>();
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            ItemStack stack = container.getItem(i);
+            if (!stack.isEmpty()) {
+                available.add(stack.copy());
+            }
+        }
+        return hasStacks(available, requiredStacks);
+    }
+
+    private static boolean hasStacks(List<ItemStack> available, List<ItemStack> requiredStacks) {
+        for (ItemStack required : requiredStacks) {
+            int remaining = required.getCount();
+            for (ItemStack candidate : available) {
+                if (remaining <= 0) {
+                    break;
+                }
+                if (!candidate.isEmpty() && ItemStack.isSameItemSameComponents(candidate, required)) {
+                    int taken = Math.min(remaining, candidate.getCount());
+                    candidate.shrink(taken);
+                    remaining -= taken;
+                }
+            }
+            if (remaining > 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void removeStacks(Inventory inventory, List<ItemStack> requiredStacks) {
+        if (requiredStacks == null || requiredStacks.isEmpty()) {
+            return;
+        }
+        for (ItemStack required : requiredStacks) {
+            int remaining = required.getCount();
+            for (int i = 0; i < inventory.getContainerSize() && remaining > 0; i++) {
+                ItemStack current = inventory.getItem(i);
+                if (current.isEmpty() || !ItemStack.isSameItemSameComponents(current, required)) {
+                    continue;
+                }
+                int taken = Math.min(remaining, current.getCount());
+                current.shrink(taken);
+                if (current.isEmpty()) {
+                    inventory.setItem(i, ItemStack.EMPTY);
+                }
+                remaining -= taken;
+            }
+        }
+        inventory.setChanged();
+    }
+
+    private static void giveStacks(ServerPlayer player, List<ItemStack> stacks) {
+        for (ItemStack stack : stacks) {
+            if (stack == null || stack.isEmpty()) {
+                continue;
+            }
+            ItemStack copy = stack.copy();
+            player.getInventory().add(copy);
+            if (!copy.isEmpty()) {
+                player.drop(copy, false);
+            }
+        }
+    }
+
+    private static List<ItemStack> copyStacks(List<ItemStack> stacks) {
+        List<ItemStack> result = new ArrayList<>();
+        for (ItemStack stack : stacks) {
+            if (stack != null && !stack.isEmpty()) {
+                result.add(stack.copy());
+            }
+        }
+        return result;
+    }
+
+    private static void dropAt(Entity entity, ItemStack stack) {
+        if (entity != null && stack != null && !stack.isEmpty()) {
+            entity.spawnAtLocation(stack);
+        }
+    }
+
+    private static int intValue(Object value, int fallback) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String string) {
+            try {
+                return Integer.parseInt(string.trim());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return fallback;
+    }
+
+    private static boolean boolValue(Object value, boolean fallback) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof String string) {
+            if ("true".equalsIgnoreCase(string) || "1".equals(string)) {
+                return true;
+            }
+            if ("false".equalsIgnoreCase(string) || "0".equals(string)) {
+                return false;
+            }
+        }
+        return fallback;
+    }
+
+    private static String stringValue(Object value, String fallback) {
+        if (value instanceof String string) {
+            return string;
+        }
+        return fallback;
+    }
+
     private static boolean isDead(@Nullable Entity entity) {
         return entity instanceof LivingEntity livingEntity && !livingEntity.isAlive();
     }
@@ -394,5 +736,152 @@ public class DialogueRuntime implements GraphRuntime {
             }
         }
         return null;
+    }
+
+    private record ShopOffer(
+            int maxUses,
+            int uses,
+            boolean consumeSellerItems,
+            boolean sellerReceivesPayment,
+            boolean enabled,
+            List<ItemStack> costs,
+            List<ItemStack> rewards
+    ) {
+    }
+
+    private interface SellerInventory {
+        boolean hasAll(List<ItemStack> requiredStacks);
+
+        List<ItemStack> extractAll(List<ItemStack> requiredStacks);
+
+        void insertOrDrop(List<ItemStack> stacks, Entity seller);
+    }
+
+    private static final class ContainerSellerInventory implements SellerInventory {
+        private final Container container;
+
+        private ContainerSellerInventory(Container container) {
+            this.container = container;
+        }
+
+        @Override
+        public boolean hasAll(List<ItemStack> requiredStacks) {
+            return DialogueRuntime.hasStacks(container, requiredStacks);
+        }
+
+        @Override
+        public List<ItemStack> extractAll(List<ItemStack> requiredStacks) {
+            List<ItemStack> extracted = new ArrayList<>();
+            for (ItemStack required : requiredStacks) {
+                int remaining = required.getCount();
+                for (int slot = 0; slot < container.getContainerSize() && remaining > 0; slot++) {
+                    ItemStack current = container.getItem(slot);
+                    if (current.isEmpty() || !ItemStack.isSameItemSameComponents(current, required)) {
+                        continue;
+                    }
+                    int taken = Math.min(remaining, current.getCount());
+                    ItemStack stack = container.removeItem(slot, taken);
+                    if (!stack.isEmpty()) {
+                        extracted.add(stack);
+                        remaining -= stack.getCount();
+                    }
+                }
+            }
+            container.setChanged();
+            return extracted;
+        }
+
+        @Override
+        public void insertOrDrop(List<ItemStack> stacks, Entity seller) {
+            for (ItemStack stack : stacks) {
+                ItemStack remaining = insert(stack.copy());
+                dropAt(seller, remaining);
+            }
+            container.setChanged();
+        }
+
+        private ItemStack insert(ItemStack stack) {
+            if (stack.isEmpty()) {
+                return ItemStack.EMPTY;
+            }
+            for (int slot = 0; slot < container.getContainerSize() && !stack.isEmpty(); slot++) {
+                ItemStack current = container.getItem(slot);
+                if (current.isEmpty() || !ItemStack.isSameItemSameComponents(current, stack)) {
+                    continue;
+                }
+                int limit = Math.min(container.getMaxStackSize(stack), current.getMaxStackSize());
+                int space = limit - current.getCount();
+                if (space <= 0) {
+                    continue;
+                }
+                int moved = Math.min(space, stack.getCount());
+                current.grow(moved);
+                stack.shrink(moved);
+            }
+            for (int slot = 0; slot < container.getContainerSize() && !stack.isEmpty(); slot++) {
+                ItemStack current = container.getItem(slot);
+                if (!current.isEmpty() || !container.canPlaceItem(slot, stack)) {
+                    continue;
+                }
+                int moved = Math.min(stack.getCount(), Math.min(container.getMaxStackSize(stack), stack.getMaxStackSize()));
+                container.setItem(slot, stack.copyWithCount(moved));
+                stack.shrink(moved);
+            }
+            return stack;
+        }
+    }
+
+    private static final class ItemHandlerSellerInventory implements SellerInventory {
+        private final IItemHandler handler;
+
+        private ItemHandlerSellerInventory(IItemHandler handler) {
+            this.handler = handler;
+        }
+
+        @Override
+        public boolean hasAll(List<ItemStack> requiredStacks) {
+            List<ItemStack> available = new ArrayList<>();
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                ItemStack stack = handler.getStackInSlot(slot);
+                if (!stack.isEmpty()) {
+                    ItemStack extractable = handler.extractItem(slot, stack.getCount(), true);
+                    if (!extractable.isEmpty()) {
+                        available.add(extractable);
+                    }
+                }
+            }
+            return DialogueRuntime.hasStacks(available, requiredStacks);
+        }
+
+        @Override
+        public List<ItemStack> extractAll(List<ItemStack> requiredStacks) {
+            List<ItemStack> extracted = new ArrayList<>();
+            for (ItemStack required : requiredStacks) {
+                int remaining = required.getCount();
+                for (int slot = 0; slot < handler.getSlots() && remaining > 0; slot++) {
+                    ItemStack current = handler.getStackInSlot(slot);
+                    if (current.isEmpty() || !ItemStack.isSameItemSameComponents(current, required)) {
+                        continue;
+                    }
+                    ItemStack stack = handler.extractItem(slot, remaining, false);
+                    if (!stack.isEmpty()) {
+                        extracted.add(stack);
+                        remaining -= stack.getCount();
+                    }
+                }
+            }
+            return extracted;
+        }
+
+        @Override
+        public void insertOrDrop(List<ItemStack> stacks, Entity seller) {
+            for (ItemStack stack : stacks) {
+                ItemStack remaining = stack.copy();
+                for (int slot = 0; slot < handler.getSlots() && !remaining.isEmpty(); slot++) {
+                    remaining = handler.insertItem(slot, remaining, false);
+                }
+                dropAt(seller, remaining);
+            }
+        }
     }
 }

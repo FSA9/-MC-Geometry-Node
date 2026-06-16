@@ -156,6 +156,16 @@ final class ConfigSanitizer {
             ReadKeyBinding groupIntoNodeGroup = readKeyBinding(keyBindings, "groupIntoNodeGroup", defaults.keyBindings.groupIntoNodeGroup);
             config.keyBindings.groupIntoNodeGroup = groupIntoNodeGroup.value;
             changed |= groupIntoNodeGroup.changed;
+
+            ReadString shopEditorClearSlot = readString(keyBindings, "shopEditorClearSlot");
+            if (shopEditorClearSlot.valid && !shopEditorClearSlot.value.isBlank()) {
+                String normalized = shopEditorClearSlot.value.trim();
+                config.keyBindings.shopEditorClearSlot = normalized;
+                changed |= shopEditorClearSlot.changed || !normalized.equals(shopEditorClearSlot.value);
+            } else {
+                config.keyBindings.shopEditorClearSlot = defaults.keyBindings.shopEditorClearSlot;
+                changed = true;
+            }
         }
 
         return new Result(config, changed);
@@ -234,6 +244,16 @@ final class ConfigSanitizer {
             changed |= sanitizeKeyBinding(config.keyBindings.toggleGridAndAxis, defaults.keyBindings.toggleGridAndAxis, value -> config.keyBindings.toggleGridAndAxis = value);
             changed |= sanitizeKeyBinding(config.keyBindings.groupIntoFrame, defaults.keyBindings.groupIntoFrame, value -> config.keyBindings.groupIntoFrame = value);
             changed |= sanitizeKeyBinding(config.keyBindings.groupIntoNodeGroup, defaults.keyBindings.groupIntoNodeGroup, value -> config.keyBindings.groupIntoNodeGroup = value);
+            if (config.keyBindings.shopEditorClearSlot == null || config.keyBindings.shopEditorClearSlot.isBlank()) {
+                config.keyBindings.shopEditorClearSlot = defaults.keyBindings.shopEditorClearSlot;
+                changed = true;
+            } else {
+                String normalized = config.keyBindings.shopEditorClearSlot.trim();
+                if (!normalized.equals(config.keyBindings.shopEditorClearSlot)) {
+                    config.keyBindings.shopEditorClearSlot = normalized;
+                    changed = true;
+                }
+            }
         }
 
         return new Result(config, changed);

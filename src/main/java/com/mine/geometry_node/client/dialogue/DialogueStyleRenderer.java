@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.dialogue;
 
 import com.mine.geometry_node.client.dialogue.ui.RpgDialogueFragment;
+import com.mine.geometry_node.client.dialogue.ui.ShopMenuFragment;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.mc.MuiScreen;
@@ -18,6 +19,8 @@ import java.util.UUID;
  */
 public final class DialogueStyleRenderer {
     public static final String STYLE_RPG = "rpg";
+    public static final String STYLE_SHOP = "shop";
+    public static final String STYLE_MENU = "menu";
 
     @Nullable
     private static Screen activeScreen;
@@ -28,7 +31,9 @@ public final class DialogueStyleRenderer {
     }
 
     public static boolean supports(String styleId) {
-        return STYLE_RPG.equals(styleId);
+        return STYLE_RPG.equals(styleId)
+                || STYLE_SHOP.equals(styleId)
+                || STYLE_MENU.equals(styleId);
     }
 
     public static void open(PacketOpenDialogue packet) {
@@ -36,33 +41,63 @@ public final class DialogueStyleRenderer {
             return;
         }
 
-        if (isActive(packet) && activeScreen instanceof MuiScreen muiScreen) {
-            Fragment fragment = muiScreen.getFragment();
-            if (fragment instanceof RpgDialogueFragment rpgDialogueFragment) {
-                rpgDialogueFragment.refresh(packet);
-                return;
-            }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!minecraft.isSameThread()) {
+            minecraft.tell(() -> open(packet));
+            return;
         }
 
-        Minecraft minecraft = Minecraft.getInstance();
+        if (isActive(packet) && activeScreen instanceof MuiScreen muiScreen) {
+            Fragment fragment = muiScreen.getFragment();
+            refreshOnUiThread(fragment, packet);
+            return;
+        }
+
         Screen previousScreen = minecraft.screen;
         if (previousScreen == activeScreen && activeScreen instanceof MuiScreen muiScreen) {
             previousScreen = muiScreen.getPreviousScreen();
         }
 
-        RpgDialogueFragment fragment = new RpgDialogueFragment();
-        Screen screen = MuiModApi.get().createScreen(fragment, new DialogueScreenCallback(), previousScreen, "Dialogue");
+        Fragment fragment = createFragment(packet.styleId());
+        String title = STYLE_SHOP.equals(packet.styleId()) || STYLE_MENU.equals(packet.styleId()) ? "Shop" : "Dialogue";
+        Screen screen = MuiModApi.get().createScreen(fragment, new DialogueScreenCallback(), previousScreen, title);
         activeScreen = screen;
         activeSessionId = packet.sessionId();
         minecraft.setScreen(screen);
     }
 
+    private static Fragment createFragment(String styleId) {
+        if (STYLE_SHOP.equals(styleId) || STYLE_MENU.equals(styleId)) {
+            return new ShopMenuFragment();
+        }
+        return new RpgDialogueFragment();
+    }
+
+    private static void refreshOnUiThread(Fragment fragment, PacketOpenDialogue packet) {
+        MuiModApi.postToUiThread(() -> refresh(fragment, packet));
+    }
+
+    private static void refresh(Fragment fragment, PacketOpenDialogue packet) {
+        if (fragment instanceof RpgDialogueFragment rpgDialogueFragment && STYLE_RPG.equals(packet.styleId())) {
+            rpgDialogueFragment.refresh(packet);
+            return;
+        }
+        if (fragment instanceof ShopMenuFragment shopMenuFragment
+                && (STYLE_SHOP.equals(packet.styleId()) || STYLE_MENU.equals(packet.styleId()))) {
+            shopMenuFragment.refresh(packet);
+        }
+    }
+
     public static void close(UUID sessionId) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!minecraft.isSameThread()) {
+            minecraft.tell(() -> close(sessionId));
+            return;
+        }
         if (activeSessionId == null || !activeSessionId.equals(sessionId)) {
             return;
         }
 
-        Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == activeScreen) {
             Screen previousScreen = activeScreen instanceof MuiScreen muiScreen ? muiScreen.getPreviousScreen() : null;
             minecraft.setScreen(previousScreen);

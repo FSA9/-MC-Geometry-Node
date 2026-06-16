@@ -305,6 +305,19 @@ public class NetworkHandler {
                     });
                 }
         );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketShopTradeRequest.TYPE,
+                PacketShopTradeRequest.STREAM_CODEC,
+                (payload, context) -> {
+                    context.queue(() -> {
+                        if (context.getPlayer() instanceof ServerPlayer player) {
+                            DialogueRuntime.INSTANCE.tradeShopOffer(player, payload.sessionId(), payload.offerId());
+                        }
+                    });
+                }
+        );
     }
 
     // ==========================================

@@ -1,9 +1,12 @@
 package com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.meta.StaticKeys;
+import com.mine.geometry_node.core.node.nodes.dialogue.OpenShop;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
@@ -14,8 +17,10 @@ import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
+import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
+import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
@@ -23,6 +28,7 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
@@ -50,6 +56,7 @@ public final class ShopEditorOverlay extends FrameLayout {
     private static final int OFFER_MIN_HEIGHT_DP = 178;
     private static final int SLOT_SIZE_DP = 38;
     private static final int MAX_SLOTS_PER_ROW = 6;
+    private static final int MENU_WIDTH_DP = 168;
 
     private static ShopEditorOverlay sOpenOverlay;
 
@@ -58,13 +65,20 @@ public final class ShopEditorOverlay extends FrameLayout {
     private final String mPortId;
     private final LinearLayout mOfferList;
     private final List<OfferEditor> mOfferEditors = new ArrayList<>();
+    private final float mTouchSlop;
     private InventoryItemPickerOverlay mInventoryPicker;
+    private StackSlotMenu mSlotMenu;
+    private ConditionDropdownMenu mConditionMenu;
+    private QuantityDialog mQuantityDialog;
+    private SlotGesture mSlotGesture;
+    private DropTarget mDropTarget;
 
     private ShopEditorOverlay(Context context, EditorContext editorContext, NodeData nodeData, String portId) {
         super(context);
         this.mEditorContext = editorContext;
         this.mNodeData = nodeData;
         this.mPortId = portId;
+        this.mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
         setBackground(rect(COLOR_DIM, 0.0f, 0, 0));
         setFocusable(true);
@@ -129,6 +143,18 @@ public final class ShopEditorOverlay extends FrameLayout {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
+            if (mQuantityDialog != null) {
+                closeQuantityDialog();
+                return true;
+            }
+            if (mSlotMenu != null) {
+                closeSlotMenu();
+                return true;
+            }
+            if (mConditionMenu != null) {
+                closeConditionMenu();
+                return true;
+            }
             if (mInventoryPicker != null) {
                 closeInventoryPicker();
                 return true;
@@ -162,10 +188,10 @@ public final class ShopEditorOverlay extends FrameLayout {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView title = label(context, "编辑商店", 15.0f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        TextView title = label(context, tr("geometry_node.shop.editor.title"), 15.0f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
-        TextView add = button(context, "+ 交易", COLOR_PRIMARY, v -> addOffer(defaultOffer()));
+        TextView add = button(context, tr("geometry_node.shop.editor.add_offer"), COLOR_PRIMARY, v -> addOffer(defaultOffer()));
         header.addView(add, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(84), UIUtils.dp2pxInt(30)));
         return header;
     }
@@ -176,16 +202,17 @@ public final class ShopEditorOverlay extends FrameLayout {
         actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         actions.setPadding(0, UIUtils.dp2pxInt(10), 0, 0);
 
-        actions.addView(button(context, "取消", COLOR_BUTTON, v -> dismiss()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(82), UIUtils.dp2pxInt(30)));
+        actions.addView(button(context, tr("geometry_node.common.cancel"), COLOR_BUTTON, v -> dismiss()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(82), UIUtils.dp2pxInt(30)));
         TextView spacer = label(context, "", 1.0f, 0, Gravity.CENTER);
         actions.addView(spacer, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(10), 1));
-        actions.addView(button(context, "保存", COLOR_PRIMARY, v -> commit()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(90), UIUtils.dp2pxInt(30)));
+        actions.addView(button(context, tr("geometry_node.common.save"), COLOR_PRIMARY, v -> commit()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(90), UIUtils.dp2pxInt(30)));
         return actions;
     }
 
     private void loadExistingData() {
         Object raw = mNodeData.inputs != null ? mNodeData.inputs.get(mPortId) : null;
-        List<OfferState> offers = parseOffers(raw);
+        ShopState state = parseShopState(raw);
+        List<OfferState> offers = new ArrayList<>(state.offers());
         if (offers.isEmpty()) {
             offers.add(defaultOffer());
         }
@@ -201,6 +228,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         lp.bottomMargin = UIUtils.dp2pxInt(10);
         mOfferList.addView(editor.root, lp);
         renumberOfferHeaders();
+        editor.refreshConditionLabels();
     }
 
     private void removeOffer(OfferEditor editor) {
@@ -221,10 +249,11 @@ public final class ShopEditorOverlay extends FrameLayout {
 
     private void commit() {
         Map<String, Object> shopData = new LinkedHashMap<>();
+        List<String> conditionPorts = conditionPorts();
         List<Object> offers = new ArrayList<>();
         Set<String> usedIds = new HashSet<>();
         for (int i = 0; i < mOfferEditors.size(); i++) {
-            Map<String, Object> offer = mOfferEditors.get(i).toMap(usedIds, i + 1);
+            Map<String, Object> offer = mOfferEditors.get(i).toMap(usedIds, i + 1, conditionPorts);
             if (offer != null) {
                 offers.add(offer);
             }
@@ -234,8 +263,38 @@ public final class ShopEditorOverlay extends FrameLayout {
         dismiss();
     }
 
+    private List<String> conditionPorts() {
+        int count = resolveConditionInputCount();
+        List<String> result = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            result.add(StandardPorts.BOOL.getIdWithIndex(i));
+        }
+        return result;
+    }
+
+    private int resolveConditionInputCount() {
+        Object raw = mNodeData.inputs != null ? mNodeData.inputs.get(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id()) : null;
+        return Math.max(0, Math.min(intValue(raw, 0), OpenShop.MAX_CONDITION_INPUTS));
+    }
+
+    private static String validConditionId(String conditionId, List<String> conditionPorts) {
+        if (conditionId == null || conditionId.isBlank() || conditionPorts == null) {
+            return "";
+        }
+        for (String portId : conditionPorts) {
+            if (portId.equals(conditionId)) {
+                return conditionId;
+            }
+        }
+        return "";
+    }
+
     private void dismiss() {
         closeInventoryPicker();
+        closeSlotMenu();
+        closeConditionMenu();
+        closeQuantityDialog();
+        cancelSlotDrag();
         if (sOpenOverlay == this) {
             sOpenOverlay = null;
         }
@@ -253,6 +312,7 @@ public final class ShopEditorOverlay extends FrameLayout {
 
     private void openInventoryPicker(java.util.function.Consumer<ItemStack> onPicked) {
         closeInventoryPicker();
+        closeConditionMenu();
         mInventoryPicker = InventoryItemPickerOverlay.showIn(this, stack -> {
             if (onPicked != null) {
                 onPicked.accept(stack.copy());
@@ -272,6 +332,224 @@ public final class ShopEditorOverlay extends FrameLayout {
         requestFocus();
     }
 
+    private void showSlotMenu(StackEntryView entry, float rawX, float rawY) {
+        if (entry == null) {
+            return;
+        }
+        closeSlotMenu();
+        closeConditionMenu();
+        closeQuantityDialog();
+        closeInventoryPicker();
+        mSlotMenu = new StackSlotMenu(getContext(), entry);
+        addView(mSlotMenu, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mSlotMenu.showAt(rawX, rawY);
+    }
+
+    private void closeSlotMenu() {
+        if (mSlotMenu == null) {
+            return;
+        }
+        mSlotMenu.dismiss();
+        mSlotMenu = null;
+        requestFocus();
+    }
+
+    private void showConditionMenu(ConditionSelector selector) {
+        if (selector == null) {
+            return;
+        }
+        closeConditionMenu();
+        closeSlotMenu();
+        closeQuantityDialog();
+        closeInventoryPicker();
+        mConditionMenu = new ConditionDropdownMenu(getContext(), selector);
+        mConditionMenu.layoutBelow(selector.view);
+        addView(mConditionMenu, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    private void closeConditionMenu() {
+        if (mConditionMenu == null) {
+            return;
+        }
+        mConditionMenu.dismiss();
+        mConditionMenu = null;
+        requestFocus();
+    }
+
+    private void showQuantityDialog(StackEntryView entry) {
+        if (entry == null || entry.stack().isEmpty()) {
+            return;
+        }
+        closeSlotMenu();
+        closeConditionMenu();
+        closeQuantityDialog();
+        closeInventoryPicker();
+        mQuantityDialog = new QuantityDialog(getContext(), entry);
+        addView(mQuantityDialog, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mQuantityDialog.focusInput();
+    }
+
+    private void closeQuantityDialog() {
+        if (mQuantityDialog == null) {
+            return;
+        }
+        mQuantityDialog.dismiss();
+        mQuantityDialog = null;
+        requestFocus();
+    }
+
+    private String clearSlotShortcutText() {
+        try {
+            String shortcut = ConfigManager.INSTANCE.getConfig().keyBindings.shopEditorClearSlot;
+            return shortcut == null || shortcut.isBlank() ? "CTRL+LEFT_CLICK" : shortcut;
+        } catch (Exception ignored) {
+            return "CTRL+LEFT_CLICK";
+        }
+    }
+
+    private boolean beginSlotGesture(StackEntryView entry, MotionEvent event) {
+        if (entry == null || event == null || isRightMouse(event)) {
+            return false;
+        }
+        mSlotGesture = new SlotGesture(entry, event.getRawX(), event.getRawY());
+        closeSlotMenu();
+        closeConditionMenu();
+        return true;
+    }
+
+    private boolean updateSlotGesture(MotionEvent event) {
+        if (mSlotGesture == null || event == null) {
+            return false;
+        }
+        float dx = event.getRawX() - mSlotGesture.startRawX();
+        float dy = event.getRawY() - mSlotGesture.startRawY();
+        if (!mSlotGesture.dragging() && Math.hypot(dx, dy) > mTouchSlop) {
+            startSlotDrag(mSlotGesture);
+        }
+        if (mSlotGesture.dragging()) {
+            highlightDropTarget(findDropTarget(event.getRawX(), event.getRawY(), mSlotGesture.entry()));
+            return true;
+        }
+        return false;
+    }
+
+    private boolean finishSlotGesture(MotionEvent event) {
+        if (mSlotGesture == null) {
+            return false;
+        }
+        SlotGesture gesture = mSlotGesture;
+        mSlotGesture = null;
+        if (gesture.dragging()) {
+            DropTarget target = findDropTarget(event.getRawX(), event.getRawY(), gesture.entry());
+            finishSlotDrag(gesture.entry(), target);
+            clearDropHighlight();
+            gesture.entry().setAlpha(1.0f);
+            mDropTarget = null;
+            return true;
+        }
+        return false;
+    }
+
+    private void cancelSlotDrag() {
+        if (mSlotGesture != null) {
+            mSlotGesture.entry().setAlpha(1.0f);
+            mSlotGesture = null;
+        }
+        clearDropHighlight();
+        mDropTarget = null;
+    }
+
+    private void startSlotDrag(SlotGesture gesture) {
+        if (gesture == null || gesture.entry().stackJson().isBlank()) {
+            return;
+        }
+        gesture.setDragging(true);
+        gesture.entry().setAlpha(0.45f);
+    }
+
+    private void finishSlotDrag(StackEntryView source, DropTarget target) {
+        if (source == null || target == null || source.stackJson().isBlank()) {
+            return;
+        }
+        StackListEditor sourceList = source.owner();
+        StackListEditor targetList = target.list();
+        if (sourceList == null || targetList == null) {
+            return;
+        }
+        boolean sameOffer = sourceList.offerEditor() == targetList.offerEditor();
+        if (sameOffer) {
+            sourceList.moveEntryTo(source, targetList, target.index());
+        } else {
+            targetList.insertStack(source.stackJson(), target.index());
+        }
+    }
+
+    private DropTarget findDropTarget(float rawX, float rawY, StackEntryView source) {
+        DropTarget fallback = null;
+        for (OfferEditor offerEditor : mOfferEditors) {
+            DropTarget costTarget = offerEditor.costs.dropTargetAt(rawX, rawY, source);
+            if (costTarget != null) {
+                return costTarget;
+            }
+            if (fallback == null && offerEditor.costs.containsRawPoint(rawX, rawY)) {
+                fallback = new DropTarget(offerEditor.costs, offerEditor.costs.size());
+            }
+            DropTarget rewardTarget = offerEditor.rewards.dropTargetAt(rawX, rawY, source);
+            if (rewardTarget != null) {
+                return rewardTarget;
+            }
+            if (fallback == null && offerEditor.rewards.containsRawPoint(rawX, rawY)) {
+                fallback = new DropTarget(offerEditor.rewards, offerEditor.rewards.size());
+            }
+        }
+        return fallback;
+    }
+
+    private void highlightDropTarget(DropTarget target) {
+        if (mDropTarget != null && !mDropTarget.equals(target)) {
+            mDropTarget.list().setDropHighlighted(false);
+        }
+        if (target != null) {
+            target.list().setDropHighlighted(true);
+        }
+        mDropTarget = target;
+    }
+
+    private void clearDropHighlight() {
+        if (mDropTarget != null) {
+            mDropTarget.list().setDropHighlighted(false);
+        }
+    }
+
+    private static boolean isRightMouse(MotionEvent event) {
+        return (event.getButtonState() & MotionEvent.BUTTON_SECONDARY) != 0
+                || event.getActionButton() == MotionEvent.BUTTON_SECONDARY;
+    }
+
+    private static boolean isLeftMouse(MotionEvent event) {
+        return event.getActionButton() == MotionEvent.BUTTON_PRIMARY
+                || (event.getButtonState() & MotionEvent.BUTTON_PRIMARY) != 0
+                || event.getActionMasked() == MotionEvent.ACTION_UP;
+    }
+
+    private boolean isInsideRaw(View view, float rawX, float rawY) {
+        if (view == null || view.getVisibility() != View.VISIBLE) {
+            return false;
+        }
+        int[] loc = new int[2];
+        view.getLocationOnScreen(loc);
+        return rawX >= loc[0]
+                && rawY >= loc[1]
+                && rawX < loc[0] + view.getWidth()
+                && rawY < loc[1] + view.getHeight();
+    }
+
+    private int rawToLocalX(View view, float rawX) {
+        int[] loc = new int[2];
+        view.getLocationOnScreen(loc);
+        return Math.round(rawX - loc[0]);
+    }
+
     private static ViewGroup findWindowHost(View anchor) {
         View current = anchor;
         ViewGroup best = anchor instanceof ViewGroup viewGroup ? viewGroup : null;
@@ -287,12 +565,15 @@ public final class ShopEditorOverlay extends FrameLayout {
         return best != null ? best : anchor.getParent() instanceof ViewGroup parent ? parent : null;
     }
 
-    private static List<OfferState> parseOffers(Object raw) {
-        List<OfferState> result = new ArrayList<>();
+    private static ShopState parseShopState(Object raw) {
         if (!(raw instanceof Map<?, ?> root)) {
-            return result;
+            return new ShopState(List.of());
         }
-        Object offersObj = root.get("offers");
+        return new ShopState(parseOffers(root.get("offers")));
+    }
+
+    private static List<OfferState> parseOffers(Object offersObj) {
+        List<OfferState> result = new ArrayList<>();
         if (!(offersObj instanceof List<?> offers)) {
             return result;
         }
@@ -304,7 +585,23 @@ public final class ShopEditorOverlay extends FrameLayout {
             String id = stringValue(offerMap.get("id"), "trade_" + index);
             String title = stringValue(offerMap.get("title"), "");
             int maxUses = intValue(offerMap.get("max_uses"), 0);
-            result.add(new OfferState(id, title, maxUses, parseStacks(offerMap.get("costs")), parseStacks(offerMap.get("rewards"))));
+            boolean consumeSellerItems = boolValue(offerMap.get("consume_seller_items"), false);
+            boolean sellerReceivesPayment = boolValue(offerMap.get("seller_receives_payment"), false);
+            String visibleCondition = stringValue(offerMap.get("visible_condition"), "");
+            String enabledCondition = stringValue(offerMap.get("enabled_condition"), "");
+            String disabledReason = stringValue(offerMap.get("disabled_reason"), "");
+            result.add(new OfferState(
+                    id,
+                    title,
+                    maxUses,
+                    consumeSellerItems,
+                    sellerReceivesPayment,
+                    visibleCondition,
+                    enabledCondition,
+                    disabledReason,
+                    parseStacks(offerMap.get("costs")),
+                    parseStacks(offerMap.get("rewards"))
+            ));
             index++;
         }
         return result;
@@ -330,8 +627,9 @@ public final class ShopEditorOverlay extends FrameLayout {
     }
 
     private static OfferState defaultOffer() {
-        return new OfferState("", "", 0, List.of(), List.of());
+        return new OfferState("", "", 0, false, false, "", "", "", List.of(), List.of());
     }
+
 
     private static String normalizeOfferId(String raw, Set<String> usedIds, int index) {
         String base = raw == null ? "" : raw.trim();
@@ -368,6 +666,21 @@ public final class ShopEditorOverlay extends FrameLayout {
         return fallback;
     }
 
+    private static boolean boolValue(Object value, boolean fallback) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof String string) {
+            if ("true".equalsIgnoreCase(string) || "1".equals(string)) {
+                return true;
+            }
+            if ("false".equalsIgnoreCase(string) || "0".equals(string)) {
+                return false;
+            }
+        }
+        return fallback;
+    }
+
     private static EditText field(Context context, String value, int gravity) {
         EditText input = new EditText(context);
         input.setSingleLine(true);
@@ -393,6 +706,10 @@ public final class ShopEditorOverlay extends FrameLayout {
         return view;
     }
 
+    private static String tr(String key, Object... args) {
+        return Component.translatable(key, args).getString();
+    }
+
     private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
         ShapeDrawable drawable = new ShapeDrawable();
         drawable.setColor(color);
@@ -403,7 +720,57 @@ public final class ShopEditorOverlay extends FrameLayout {
         return drawable;
     }
 
-    private record OfferState(String id, String title, int maxUses, List<String> costs, List<String> rewards) {
+    private record ShopState(List<OfferState> offers) {
+    }
+
+    private record OfferState(
+            String id,
+            String title,
+            int maxUses,
+            boolean consumeSellerItems,
+            boolean sellerReceivesPayment,
+            String visibleCondition,
+            String enabledCondition,
+            String disabledReason,
+            List<String> costs,
+            List<String> rewards
+    ) {
+    }
+
+    private record DropTarget(StackListEditor list, int index) {
+    }
+
+    private static final class SlotGesture {
+        private final StackEntryView entry;
+        private final float startRawX;
+        private final float startRawY;
+        private boolean dragging;
+
+        private SlotGesture(StackEntryView entry, float startRawX, float startRawY) {
+            this.entry = entry;
+            this.startRawX = startRawX;
+            this.startRawY = startRawY;
+        }
+
+        private StackEntryView entry() {
+            return entry;
+        }
+
+        private float startRawX() {
+            return startRawX;
+        }
+
+        private float startRawY() {
+            return startRawY;
+        }
+
+        private boolean dragging() {
+            return dragging;
+        }
+
+        private void setDragging(boolean dragging) {
+            this.dragging = dragging;
+        }
     }
 
     private final class OfferEditor {
@@ -412,6 +779,12 @@ public final class ShopEditorOverlay extends FrameLayout {
         private final EditText idInput;
         private final EditText titleInput;
         private final EditText maxUsesInput;
+        private final ToggleControl infiniteUses;
+        private final ToggleControl consumeSellerItems;
+        private final ToggleControl sellerReceivesPayment;
+        private final ConditionSelector visibleCondition;
+        private final ConditionSelector enabledCondition;
+        private final EditText disabledReasonInput;
         private final StackListEditor costs;
         private final StackListEditor rewards;
 
@@ -425,9 +798,9 @@ public final class ShopEditorOverlay extends FrameLayout {
             LinearLayout headerRow = new LinearLayout(context);
             headerRow.setOrientation(LinearLayout.HORIZONTAL);
             headerRow.setGravity(Gravity.CENTER_VERTICAL);
-            header = label(context, "交易", 13.5f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            header = label(context, tr("geometry_node.shop.editor.offer"), 13.5f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
             headerRow.addView(header, new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(30), 1.0f));
-            TextView remove = button(context, "删除", COLOR_DANGER, v -> removeOffer(this));
+            TextView remove = button(context, tr("geometry_node.common.delete"), COLOR_DANGER, v -> removeOffer(this));
             headerRow.addView(remove, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(64), UIUtils.dp2pxInt(28)));
             root.addView(headerRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(32)));
 
@@ -437,16 +810,36 @@ public final class ShopEditorOverlay extends FrameLayout {
             idInput = field(context, state.id(), Gravity.LEFT | Gravity.CENTER_VERTICAL);
             titleInput = field(context, state.title(), Gravity.LEFT | Gravity.CENTER_VERTICAL);
             maxUsesInput = field(context, String.valueOf(Math.max(0, state.maxUses())), Gravity.CENTER);
-            addField(fields, context, "ID", idInput, 0, 1.1f);
-            addField(fields, context, "标题", titleInput, UIUtils.dp2pxInt(8), 1.4f);
-            addField(fields, context, "次数", maxUsesInput, UIUtils.dp2pxInt(8), 0.55f);
+            addField(fields, context, tr("geometry_node.shop.editor.field.id"), idInput, 0, 1.1f);
+            addField(fields, context, tr("geometry_node.shop.editor.field.title"), titleInput, UIUtils.dp2pxInt(8), 1.4f);
+            addField(fields, context, tr("geometry_node.shop.editor.field.uses"), maxUsesInput, UIUtils.dp2pxInt(8), 0.55f);
             root.addView(fields, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
+
+            LinearLayout optionsRow = new LinearLayout(context);
+            optionsRow.setOrientation(LinearLayout.HORIZONTAL);
+            optionsRow.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            optionsRow.setPadding(0, UIUtils.dp2pxInt(8), 0, 0);
+            infiniteUses = new ToggleControl(context, tr("geometry_node.shop.editor.toggle.infinite_uses"), state.maxUses() <= 0, this::syncMaxUsesEnabled);
+            consumeSellerItems = new ToggleControl(context, tr("geometry_node.shop.editor.toggle.consume_seller_items"), state.consumeSellerItems(), null);
+            sellerReceivesPayment = new ToggleControl(context, tr("geometry_node.shop.editor.toggle.seller_receives_payment"), state.sellerReceivesPayment(), null);
+            visibleCondition = new ConditionSelector(context, tr("geometry_node.shop.editor.condition.visible"), state.visibleCondition(), null);
+            enabledCondition = new ConditionSelector(context, tr("geometry_node.shop.editor.condition.enabled"), state.enabledCondition(), this::syncDisabledReasonEnabled);
+            disabledReasonInput = field(context, state.disabledReason(), Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            addToggle(optionsRow, infiniteUses, 0, 92);
+            addToggle(optionsRow, consumeSellerItems, UIUtils.dp2pxInt(7), 102);
+            addToggle(optionsRow, sellerReceivesPayment, UIUtils.dp2pxInt(7), 102);
+            addSelector(optionsRow, visibleCondition, UIUtils.dp2pxInt(9), 112);
+            addSelector(optionsRow, enabledCondition, UIUtils.dp2pxInt(7), 112);
+            addField(optionsRow, context, tr("geometry_node.shop.editor.field.disabled_reason"), disabledReasonInput, UIUtils.dp2pxInt(7), 1.0f);
+            root.addView(optionsRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(38)));
+            syncMaxUsesEnabled();
+            syncDisabledReasonEnabled();
 
             LinearLayout tradeRow = new LinearLayout(context);
             tradeRow.setOrientation(LinearLayout.HORIZONTAL);
             tradeRow.setPadding(0, UIUtils.dp2pxInt(10), 0, 0);
-            costs = new StackListEditor(context, "买入", state.costs());
-            rewards = new StackListEditor(context, "卖出", state.rewards());
+            costs = new StackListEditor(context, this, tr("geometry_node.shop.editor.costs"), state.costs());
+            rewards = new StackListEditor(context, this, tr("geometry_node.shop.editor.rewards"), state.rewards());
             LinearLayout.LayoutParams leftLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
             leftLp.rightMargin = UIUtils.dp2pxInt(8);
             tradeRow.addView(costs.root, leftLp);
@@ -455,7 +848,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         }
 
         private void setIndex(int index) {
-            header.setText("交易 " + index);
+            header.setText(tr("geometry_node.shop.editor.offer_index", index));
             if (idInput.getText().toString().trim().isEmpty()) {
                 idInput.setText("trade_" + index);
             }
@@ -465,18 +858,57 @@ public final class ShopEditorOverlay extends FrameLayout {
             idInput.setText("trade_1");
             titleInput.setText("");
             maxUsesInput.setText("0");
+            infiniteUses.setChecked(true);
+            consumeSellerItems.setChecked(false);
+            sellerReceivesPayment.setChecked(false);
+            visibleCondition.setConditionId("");
+            enabledCondition.setConditionId("");
+            disabledReasonInput.setText("");
+            syncMaxUsesEnabled();
+            syncDisabledReasonEnabled();
             costs.clear();
             rewards.clear();
         }
 
-        private Map<String, Object> toMap(Set<String> usedIds, int index) {
+        private Map<String, Object> toMap(Set<String> usedIds, int index, List<String> conditionPorts) {
+            int maxUses = infiniteUses.isChecked()
+                    ? 0
+                    : Math.max(1, intValue(maxUsesInput.getText().toString(), 1));
             Map<String, Object> offer = new LinkedHashMap<>();
             offer.put("id", normalizeOfferId(idInput.getText().toString(), usedIds, index));
             offer.put("title", titleInput.getText().toString().trim());
             offer.put("costs", costs.toList());
             offer.put("rewards", rewards.toList());
-            offer.put("max_uses", Math.max(0, intValue(maxUsesInput.getText().toString(), 0)));
+            offer.put("max_uses", maxUses);
+            offer.put("consume_seller_items", consumeSellerItems.isChecked());
+            offer.put("seller_receives_payment", sellerReceivesPayment.isChecked());
+            offer.put("visible_condition", validConditionId(visibleCondition.conditionId(), conditionPorts));
+            offer.put("enabled_condition", validConditionId(enabledCondition.conditionId(), conditionPorts));
+            offer.put("disabled_reason", disabledReasonInput.getText().toString().trim());
             return offer;
+        }
+
+        private void refreshConditionLabels() {
+            visibleCondition.refreshLabel();
+            enabledCondition.refreshLabel();
+            syncDisabledReasonEnabled();
+        }
+
+        private void syncMaxUsesEnabled() {
+            boolean finite = !infiniteUses.isChecked();
+            maxUsesInput.setEnabled(finite);
+            maxUsesInput.setTextColor(finite ? COLOR_TEXT : COLOR_MUTED);
+            if (!finite) {
+                maxUsesInput.setText("0");
+            } else if (intValue(maxUsesInput.getText().toString(), 0) <= 0) {
+                maxUsesInput.setText("1");
+            }
+        }
+
+        private void syncDisabledReasonEnabled() {
+            boolean editable = !enabledCondition.conditionId().isBlank();
+            disabledReasonInput.setEnabled(editable);
+            disabledReasonInput.setTextColor(editable ? COLOR_TEXT : COLOR_MUTED);
         }
 
         private void addField(LinearLayout parent, Context context, String labelText, EditText input, int leftMargin, float weight) {
@@ -490,14 +922,202 @@ public final class ShopEditorOverlay extends FrameLayout {
             lp.leftMargin = leftMargin;
             parent.addView(group, lp);
         }
+
+        private void addToggle(LinearLayout parent, ToggleControl toggle, int leftMargin, int widthDp) {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(widthDp), UIUtils.dp2pxInt(26));
+            lp.leftMargin = leftMargin;
+            parent.addView(toggle.view, lp);
+        }
+
+        private void addSelector(LinearLayout parent, ConditionSelector selector, int leftMargin, int widthDp) {
+            LinearLayout group = new LinearLayout(getContext());
+            group.setOrientation(LinearLayout.HORIZONTAL);
+            group.setGravity(Gravity.CENTER_VERTICAL);
+            TextView label = label(getContext(), selector.label(), 11.0f, COLOR_MUTED, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            group.addView(label, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(44), ViewGroup.LayoutParams.MATCH_PARENT));
+            group.addView(selector.view, new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(widthDp), ViewGroup.LayoutParams.MATCH_PARENT);
+            lp.leftMargin = leftMargin;
+            parent.addView(group, lp);
+        }
+    }
+
+    private final class ConditionSelector {
+        private final TextView view;
+        private final String label;
+        private final Runnable onChanged;
+        private String conditionId;
+
+        private ConditionSelector(Context context, String label, String conditionId, Runnable onChanged) {
+            this.view = ShopEditorOverlay.label(context, "", 11.5f, COLOR_TEXT, Gravity.CENTER);
+            this.label = label;
+            this.onChanged = onChanged;
+            this.conditionId = conditionId == null ? "" : conditionId;
+            this.view.setBackground(rect(COLOR_FIELD, 4.0f, 1, 0xFF303846));
+            this.view.setOnClickListener(v -> showConditionMenu(this));
+            refreshLabel();
+        }
+
+        private String label() {
+            return label;
+        }
+
+        private String conditionId() {
+            return conditionId;
+        }
+
+        private void setConditionId(String conditionId) {
+            this.conditionId = conditionId == null ? "" : conditionId;
+            refreshLabel();
+            if (onChanged != null) {
+                onChanged.run();
+            }
+        }
+
+        private void refreshLabel() {
+            String validId = validConditionId(conditionId, conditionPorts());
+            conditionId = validId;
+            view.setText(validId.isBlank() ? tr("geometry_node.common.none") : validId);
+            view.setTextColor(validId.isBlank() ? COLOR_MUTED : COLOR_TEXT);
+        }
+    }
+
+    private final class ConditionDropdownMenu extends FrameLayout {
+        private static final int COLOR_MENU_BG = 0xFF2B2B2B;
+        private static final int COLOR_MENU_BORDER = 0xFF151515;
+        private static final int COLOR_MENU_HOVER = 0xFF3A4652;
+        private static final int COLOR_MENU_TEXT = 0xFFCCCCCC;
+
+        private final LinearLayout panel;
+
+        private ConditionDropdownMenu(Context context, ConditionSelector selector) {
+            super(context);
+            setOnClickListener(v -> closeConditionMenu());
+
+            panel = new LinearLayout(context);
+            panel.setOrientation(LinearLayout.VERTICAL);
+            panel.setPadding(UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(6));
+            panel.setBackground(rect(COLOR_MENU_BG, 5.0f, 1, COLOR_MENU_BORDER));
+            panel.setOnClickListener(v -> {
+            });
+            addView(panel);
+
+            addOption(tr("geometry_node.common.none"), "", selector);
+            for (String portId : conditionPorts()) {
+                addOption(portId, portId, selector);
+            }
+        }
+
+        private void layoutBelow(View anchor) {
+            if (anchor == null) {
+                return;
+            }
+            int[] anchorLoc = new int[2];
+            int[] rootLoc = new int[2];
+            anchor.getLocationOnScreen(anchorLoc);
+            ShopEditorOverlay.this.getLocationOnScreen(rootLoc);
+            layoutPanel(
+                    anchorLoc[0] - rootLoc[0],
+                    anchorLoc[1] - rootLoc[1] + anchor.getHeight(),
+                    anchor.getWidth(),
+                    ShopEditorOverlay.this.getWidth(),
+                    ShopEditorOverlay.this.getHeight()
+            );
+        }
+
+        private void dismiss() {
+            if (getParent() instanceof ViewGroup parent) {
+                parent.removeView(this);
+            }
+        }
+
+        private void addOption(String labelText, String value, ConditionSelector selector) {
+            TextView row = label(getContext(), labelText, 12.0f, COLOR_MENU_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            row.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+            row.setBackground(rect(value.equals(selector.conditionId()) ? 0xFF34485F : 0x00000000, 4.0f, 0, 0));
+            row.setOnClickListener(v -> {
+                selector.setConditionId(value);
+                closeConditionMenu();
+            });
+            row.setOnHoverListener((v, event) -> {
+                if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                    row.setBackground(rect(COLOR_MENU_HOVER, 4.0f, 0, 0));
+                    row.setTextColor(0xFFFFFFFF);
+                } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                    row.setBackground(rect(value.equals(selector.conditionId()) ? 0xFF34485F : 0x00000000, 4.0f, 0, 0));
+                    row.setTextColor(COLOR_MENU_TEXT);
+                }
+                return false;
+            });
+            panel.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(26)));
+        }
+
+        private void layoutPanel(float x, float y, int anchorWidth, int hostWidth, int hostHeight) {
+            int menuWidth = Math.max(UIUtils.dp2pxInt(MENU_WIDTH_DP), anchorWidth);
+            int widthSpec = MeasureSpec.makeMeasureSpec(menuWidth, MeasureSpec.EXACTLY);
+            int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+            panel.measure(widthSpec, heightSpec);
+            int menuHeight = panel.getMeasuredHeight();
+            if (menuHeight <= 0) {
+                menuHeight = UIUtils.dp2pxInt(42);
+            }
+            int edge = UIUtils.dp2pxInt(6);
+            int targetX = Math.round(x);
+            int targetY = Math.round(y);
+            if (hostWidth > 0 && targetX + menuWidth + edge > hostWidth) {
+                targetX = Math.max(edge, hostWidth - menuWidth - edge);
+            }
+            if (hostHeight > 0 && targetY + menuHeight + edge > hostHeight) {
+                targetY = Math.max(edge, Math.round(y) - menuHeight - UIUtils.dp2pxInt(30));
+            }
+
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(menuWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.gravity = Gravity.TOP | Gravity.LEFT;
+            lp.leftMargin = Math.max(edge, targetX);
+            lp.topMargin = Math.max(edge, targetY);
+            panel.setLayoutParams(lp);
+        }
+    }
+
+    private final class ToggleControl {
+        private final TextView view;
+        private final String label;
+        private final Runnable onChanged;
+        private boolean checked;
+
+        private ToggleControl(Context context, String label, boolean checked, Runnable onChanged) {
+            this.view = label(context, "", 11.5f, COLOR_TEXT, Gravity.CENTER);
+            this.label = label;
+            this.onChanged = onChanged;
+            this.view.setOnClickListener(v -> {
+                setChecked(!this.checked);
+                if (this.onChanged != null) {
+                    this.onChanged.run();
+                }
+            });
+            setChecked(checked);
+        }
+
+        private boolean isChecked() {
+            return checked;
+        }
+
+        private void setChecked(boolean checked) {
+            this.checked = checked;
+            view.setText(label);
+            view.setTextColor(checked ? COLOR_TEXT : COLOR_MUTED);
+            view.setBackground(rect(checked ? COLOR_PRIMARY : COLOR_FIELD, 4.0f, 1, checked ? 0x665D95D6 : 0xFF303846));
+        }
     }
 
     private final class StackListEditor {
+        private final OfferEditor offerEditor;
         private final LinearLayout root;
         private final LinearLayout list;
         private final List<StackEntryView> entries = new ArrayList<>();
 
-        private StackListEditor(Context context, String title, List<String> initialStacks) {
+        private StackListEditor(Context context, OfferEditor offerEditor, String title, List<String> initialStacks) {
+            this.offerEditor = offerEditor;
             root = new LinearLayout(context);
             root.setOrientation(LinearLayout.VERTICAL);
             root.setPadding(UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(8));
@@ -523,15 +1143,47 @@ public final class ShopEditorOverlay extends FrameLayout {
             }
         }
 
+        private OfferEditor offerEditor() {
+            return offerEditor;
+        }
+
+        private int size() {
+            return entries.size();
+        }
+
         private void addStack(String stackJson) {
-            StackEntryView entry = new StackEntryView(getContext(), stackJson, this::removeStack);
+            StackEntryView entry = new StackEntryView(getContext(), stackJson, this);
             entries.add(entry);
+            rebuildSlots();
+        }
+
+        private void insertStack(String stackJson, int index) {
+            StackEntryView entry = new StackEntryView(getContext(), stackJson, this);
+            entries.add(clampIndex(index, entries.size()), entry);
             rebuildSlots();
         }
 
         private void removeStack(StackEntryView entry) {
             entries.remove(entry);
             rebuildSlots();
+        }
+
+        private void moveEntryTo(StackEntryView entry, StackListEditor target, int targetIndex) {
+            if (entry == null || target == null || !entries.contains(entry)) {
+                return;
+            }
+            int oldIndex = entries.indexOf(entry);
+            entries.remove(entry);
+            int insertIndex = clampIndex(targetIndex, target.entries.size());
+            if (target == this && oldIndex >= 0 && oldIndex < targetIndex) {
+                insertIndex = Math.max(0, insertIndex - 1);
+            }
+            entry.setOwner(target);
+            target.entries.add(insertIndex, entry);
+            rebuildSlots();
+            if (target != this) {
+                target.rebuildSlots();
+            }
         }
 
         private void clear() {
@@ -573,20 +1225,51 @@ public final class ShopEditorOverlay extends FrameLayout {
                 row.addView(entry, lp);
             }
         }
+
+        private DropTarget dropTargetAt(float rawX, float rawY, StackEntryView source) {
+            for (int i = 0; i < entries.size(); i++) {
+                StackEntryView entry = entries.get(i);
+                if (entry == source) {
+                    continue;
+                }
+                if (!isInsideRaw(entry, rawX, rawY)) {
+                    continue;
+                }
+                int localX = rawToLocalX(entry, rawX);
+                int insertionIndex = localX < entry.getWidth() / 2 ? i : i + 1;
+                return new DropTarget(this, insertionIndex);
+            }
+            if (containsRawPoint(rawX, rawY)) {
+                return new DropTarget(this, entries.size());
+            }
+            return null;
+        }
+
+        private boolean containsRawPoint(float rawX, float rawY) {
+            return isInsideRaw(root, rawX, rawY);
+        }
+
+        private void setDropHighlighted(boolean highlighted) {
+            root.setBackground(rect(highlighted ? 0xFF24384A : COLOR_PANEL_ALT, 4.0f, 1, highlighted ? COLOR_ACCENT : 0xFF303846));
+        }
+
+        private int clampIndex(int index, int size) {
+            return Math.max(0, Math.min(index, size));
+        }
     }
 
     private final class StackEntryView extends FrameLayout {
         private final Paint paint = new Paint();
         private final RectF rect = new RectF();
-        private final StackRemoveHandler removeHandler;
         private final InventoryItemPickerOverlay.ItemStackView stackView;
+        private StackListEditor owner;
         private String stackJson;
         private ItemStack stack = ItemStack.EMPTY;
         private boolean rightClickPending;
 
-        private StackEntryView(Context context, String stackJson, StackRemoveHandler removeHandler) {
+        private StackEntryView(Context context, String stackJson, StackListEditor owner) {
             super(context);
-            this.removeHandler = removeHandler;
+            this.owner = owner;
             setWillNotDraw(false);
             setClipChildren(false);
 
@@ -599,6 +1282,18 @@ public final class ShopEditorOverlay extends FrameLayout {
             return stackJson;
         }
 
+        private StackListEditor owner() {
+            return owner;
+        }
+
+        private void setOwner(StackListEditor owner) {
+            this.owner = owner;
+        }
+
+        private ItemStack stack() {
+            return stack;
+        }
+
         private void setStackJson(String value) {
             stackJson = value == null ? "" : value;
             Minecraft mc = Minecraft.getInstance();
@@ -609,6 +1304,25 @@ public final class ShopEditorOverlay extends FrameLayout {
             }
             stackView.setStack(stack);
             invalidate();
+        }
+
+        private void setCount(int count) {
+            if (stack.isEmpty()) {
+                return;
+            }
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level == null) {
+                return;
+            }
+            ItemStack adjusted = stack.copy();
+            adjusted.setCount(Math.max(1, count));
+            setStackJson(ItemCodecUtils.toJson(adjusted, mc.level.registryAccess()));
+        }
+
+        private void removeFromOwner() {
+            if (owner != null) {
+                owner.removeStack(this);
+            }
         }
 
         @Override
@@ -646,27 +1360,35 @@ public final class ShopEditorOverlay extends FrameLayout {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN) {
                 rightClickPending = isRightMouse(event);
+                if (!rightClickPending) {
+                    beginSlotGesture(this, event);
+                }
+                return true;
+            }
+            if (action == MotionEvent.ACTION_MOVE) {
+                updateSlotGesture(event);
                 return true;
             }
             if (action == MotionEvent.ACTION_UP) {
+                boolean dragged = finishSlotGesture(event);
                 if (rightClickPending || isRightMouse(event)) {
-                    removeHandler.remove(this);
-                } else {
+                    showSlotMenu(this, event.getRawX(), event.getRawY());
+                } else if (!dragged && event.isCtrlPressed() && isLeftMouse(event)) {
+                    removeFromOwner();
+                } else if (!dragged) {
                     openPicker();
+                } else {
+                    requestFocus();
                 }
                 rightClickPending = false;
                 return true;
             }
             if (action == MotionEvent.ACTION_CANCEL) {
                 rightClickPending = false;
+                cancelSlotDrag();
                 return true;
             }
             return true;
-        }
-
-        private boolean isRightMouse(MotionEvent event) {
-            return (event.getButtonState() & MotionEvent.BUTTON_SECONDARY) != 0
-                    || event.getActionButton() == MotionEvent.BUTTON_SECONDARY;
         }
 
         private void openPicker() {
@@ -682,7 +1404,176 @@ public final class ShopEditorOverlay extends FrameLayout {
         }
     }
 
-    private interface StackRemoveHandler {
-        void remove(StackEntryView entry);
+    private final class StackSlotMenu extends FrameLayout {
+        private static final int COLOR_MENU_BG = 0xFF2B2B2B;
+        private static final int COLOR_MENU_BORDER = 0xFF151515;
+        private static final int COLOR_MENU_HOVER = 0xFF3A4652;
+        private static final int COLOR_MENU_TEXT = 0xFFCCCCCC;
+        private static final int COLOR_SHORTCUT = 0xFF8B949E;
+
+        private final StackEntryView entry;
+        private final LinearLayout panel;
+
+        private StackSlotMenu(Context context, StackEntryView entry) {
+            super(context);
+            this.entry = entry;
+            setOnClickListener(v -> closeSlotMenu());
+
+            panel = new LinearLayout(context);
+            panel.setOrientation(LinearLayout.VERTICAL);
+            panel.setPadding(UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(8));
+            panel.setBackground(rect(COLOR_MENU_BG, 5.0f, 1, COLOR_MENU_BORDER));
+            panel.setOnClickListener(v -> {
+            });
+            addView(panel);
+
+            addMenuItem(tr("geometry_node.shop.editor.menu.adjust_count"), "", () -> showQuantityDialog(entry));
+            addMenuItem(tr("geometry_node.common.clear"), clearSlotShortcutText(), entry::removeFromOwner);
+        }
+
+        private void showAt(float rawX, float rawY) {
+            int[] loc = new int[2];
+            getLocationOnScreen(loc);
+            layoutPanel(rawX - loc[0], rawY - loc[1]);
+        }
+
+        private void dismiss() {
+            if (getParent() instanceof ViewGroup parent) {
+                parent.removeView(this);
+            }
+        }
+
+        private void addMenuItem(String text, String shortcut, Runnable action) {
+            LinearLayout row = new LinearLayout(getContext());
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+            row.setOnClickListener(v -> {
+                closeSlotMenu();
+                if (action != null) {
+                    action.run();
+                }
+            });
+
+            TextView label = label(getContext(), text, 12.0f, COLOR_MENU_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+
+            TextView shortcutView = label(getContext(), shortcut == null ? "" : shortcut, 10.0f, COLOR_SHORTCUT, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            row.addView(shortcutView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+            row.setOnHoverListener((v, event) -> {
+                if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                    row.setBackground(rect(COLOR_MENU_HOVER, 4.0f, 0, 0));
+                    label.setTextColor(0xFFFFFFFF);
+                    shortcutView.setTextColor(0xFFFFFFFF);
+                } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                    row.setBackground(null);
+                    label.setTextColor(COLOR_MENU_TEXT);
+                    shortcutView.setTextColor(COLOR_SHORTCUT);
+                }
+                return false;
+            });
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(26));
+            panel.addView(row, lp);
+        }
+
+        private void layoutPanel(float x, float y) {
+            int menuWidth = UIUtils.dp2pxInt(MENU_WIDTH_DP);
+            int widthSpec = MeasureSpec.makeMeasureSpec(menuWidth, MeasureSpec.EXACTLY);
+            int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+            panel.measure(widthSpec, heightSpec);
+            int menuHeight = panel.getMeasuredHeight();
+            if (menuHeight <= 0) {
+                menuHeight = UIUtils.dp2pxInt(68);
+            }
+            int edge = UIUtils.dp2pxInt(6);
+            int targetX = Math.round(x);
+            int targetY = Math.round(y);
+            if (getWidth() > 0 && targetX + menuWidth + edge > getWidth()) {
+                targetX = Math.max(edge, getWidth() - menuWidth - edge);
+            }
+            if (getHeight() > 0 && targetY + menuHeight + edge > getHeight()) {
+                targetY = Math.max(edge, targetY - menuHeight);
+            }
+
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(menuWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.gravity = Gravity.TOP | Gravity.LEFT;
+            lp.leftMargin = Math.max(edge, targetX);
+            lp.topMargin = Math.max(edge, targetY);
+            panel.setLayoutParams(lp);
+        }
+    }
+
+    private final class QuantityDialog extends FrameLayout {
+        private final StackEntryView entry;
+        private final EditText input;
+
+        private QuantityDialog(Context context, StackEntryView entry) {
+            super(context);
+            this.entry = entry;
+            setBackground(rect(0x66000000, 0.0f, 0, 0));
+            setFocusable(true);
+            setFocusableInTouchMode(true);
+            setOnClickListener(v -> closeQuantityDialog());
+            setOnKeyListener((v, keyCode, event) -> {
+                if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ESCAPE) {
+                    closeQuantityDialog();
+                    return true;
+                }
+                if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
+                    apply();
+                    return true;
+                }
+                return false;
+            });
+
+            LinearLayout panel = new LinearLayout(context);
+            panel.setOrientation(LinearLayout.VERTICAL);
+            panel.setPadding(UIUtils.dp2pxInt(14), UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(14), UIUtils.dp2pxInt(14));
+            panel.setBackground(rect(COLOR_WINDOW, 6.0f, 1, COLOR_BORDER));
+            panel.setOnClickListener(v -> {
+            });
+
+            TextView title = label(context, tr("geometry_node.shop.editor.quantity.title"), 14.0f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            panel.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(28)));
+
+            input = field(context, String.valueOf(Math.max(1, entry.stack().getCount())), Gravity.CENTER);
+            panel.addView(input, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(32)));
+
+            LinearLayout actions = new LinearLayout(context);
+            actions.setOrientation(LinearLayout.HORIZONTAL);
+            actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            actions.setPadding(0, UIUtils.dp2pxInt(12), 0, 0);
+            actions.addView(button(context, tr("geometry_node.common.cancel"), COLOR_BUTTON, v -> closeQuantityDialog()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(72), UIUtils.dp2pxInt(28)));
+            TextView spacer = label(context, "", 1.0f, 0, Gravity.CENTER);
+            actions.addView(spacer, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(8), 1));
+            actions.addView(button(context, tr("geometry_node.common.confirm"), COLOR_PRIMARY, v -> apply()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(72), UIUtils.dp2pxInt(28)));
+            panel.addView(actions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(42)));
+
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(260), ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.gravity = Gravity.CENTER;
+            addView(panel, lp);
+        }
+
+        private void focusInput() {
+            post(() -> {
+                requestFocus();
+                input.requestFocus();
+                input.selectAll();
+            });
+        }
+
+        private void apply() {
+            int count = Math.max(1, intValue(input.getText().toString(), 1));
+            entry.setCount(count);
+            closeQuantityDialog();
+        }
+
+        private void dismiss() {
+            if (getParent() instanceof ViewGroup parent) {
+                parent.removeView(this);
+            }
+        }
     }
 }
