@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.dialogue.ShopTradeUseStore;
 import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
@@ -29,8 +30,10 @@ import java.util.Map;
 
 public class OpenShop extends BaseNode {
     public static final String TYPE_ID = "open_shop";
+    public static final String BUYER = StandardPorts.BUYER.getId();
     public static final String PLAYER = StandardPorts.PLAYER.getId();
     public static final String TITLE = StandardPorts.TITLE.getId();
+    public static final String SHOP_ID = StandardPorts.SHOP_ID.getId();
     public static final String SHOP_DATA = StandardPorts.SHOP_DATA.getId();
     public static final String TEMP_SHOP_DATA = "open_shop_data";
 
@@ -62,8 +65,9 @@ public class OpenShop extends BaseNode {
                 .addMeta(SchemaKeys.MIN_DYNAMIC_INPUT, 0)
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, MAX_CONDITION_INPUTS)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.PLAYER.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.BUYER.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.TITLE.toInput(""), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.SHOP_ID.toInput(""), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.SHOP_DATA.toInput(DEFAULT_SHOP_DATA).hiddenPin(),
                         null,
@@ -96,10 +100,16 @@ public class OpenShop extends BaseNode {
         Map<String, Object> shopData = normalizeMap(getInputDict(context, SHOP_DATA));
         String title = getInput(context, TITLE, String.class);
         String safeTitle = title == null ? "" : title;
+        String configuredShopId = getInput(context, SHOP_ID, String.class);
+        String fallbackShopId = ShopTradeUseStore.defaultShopId(context.getCurrentNodeStableId(), context.getCurrentNodeId());
+        String shopId = configuredShopId == null || configuredShopId.isBlank()
+                ? fallbackShopId
+                : configuredShopId.trim();
+        ShopTradeUseStore.attachShopId(shopData, shopId);
 
         Map<String, Object> state = new HashMap<>();
         if (player != null) {
-            state.put("player", player);
+            state.put("buyer", player);
         }
         state.put("title", safeTitle);
         state.put("shop_data", shopData);
@@ -111,7 +121,12 @@ public class OpenShop extends BaseNode {
 
         DialogueContext dialogueContext = createShopDialogueContext(context, player, safeTitle);
         Map<String, Boolean> conditionValues = evaluateConditionInputs(context);
-        Map<String, Object> displayShopData = resolveDisplayShopData(shopData, conditionValues);
+        Map<String, Object> displayShopData = resolveDisplayShopData(
+                context,
+                shopData,
+                conditionValues,
+                shopId
+        );
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("title", safeTitle);
         metadata.put("shop_data", displayShopData);
@@ -145,8 +160,12 @@ public class OpenShop extends BaseNode {
         return result;
     }
 
-    private static Map<String, Object> resolveDisplayShopData(Map<String, Object> shopData, Map<String, Boolean> conditionValues) {
+    private static Map<String, Object> resolveDisplayShopData(ExecutionContext context,
+                                                              Map<String, Object> shopData,
+                                                              Map<String, Boolean> conditionValues,
+                                                              String shopId) {
         Map<String, Object> display = normalizePlainMap(shopData);
+        ShopTradeUseStore.attachShopId(display, shopId);
         Object offersObj = shopData.get(OFFERS);
         if (!(offersObj instanceof List<?> offers)) {
             display.put(OFFERS, List.of());
@@ -167,6 +186,16 @@ public class OpenShop extends BaseNode {
             String enabledCondition = stringValue(offer.get(ENABLED_CONDITION), "");
             boolean enabled = enabledCondition.isBlank() || Boolean.TRUE.equals(conditionValues.get(enabledCondition));
             offer.put("enabled", enabled);
+            String offerId = stringValue(offer.get("id"), "");
+            if (!offerId.isBlank()) {
+                offer.put(USES, ShopTradeUseStore.getUses(
+                        context.getLevel(),
+                        context.getEntity(),
+                        context.getGraphId(),
+                        shopId,
+                        offerId
+                ));
+            }
             if (!enabled) {
                 offer.put(DISABLED_REASON, stringValue(offer.get(DISABLED_REASON), ""));
             }
@@ -205,7 +234,10 @@ public class OpenShop extends BaseNode {
     }
 
     private ServerPlayer resolvePlayer(ExecutionContext context) {
-        Entity target = getInput(context, PLAYER, Entity.class);
+        Entity target = getInput(context, BUYER, Entity.class);
+        if (target == null) {
+            target = getInput(context, PLAYER, Entity.class);
+        }
         if (target instanceof ServerPlayer player) {
             return player;
         }

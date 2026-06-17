@@ -22,6 +22,7 @@ import com.mine.geometry_node.core.node.nodes.events.area.*;
 import com.mine.geometry_node.core.node.nodes.events.block.*;
 import com.mine.geometry_node.core.node.nodes.dialogue.*;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
+import com.mine.geometry_node.core.node.nodes.events.dialogue.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
 import com.mine.geometry_node.core.node.nodes.events.world.*;
 import com.mine.geometry_node.core.node.nodes.functions.graph.*;
@@ -247,6 +248,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("dialogue", new BeginDialogue());
         registry.register("dialogue", new ShowDialoguePage());
         registry.register("dialogue", new OpenShop());
+        registry.register("dialogue", new AdjustShopTradeUses());
         registry.register("dialogue", new CloseDialogue());
         registry.register("dialogue", new FormatDialogueText());
 
@@ -254,6 +256,9 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // Events/Area
         registry.register("events/area", new AreaTriggerEvent());
+
+        // Events/Dialogue
+        registry.register("events/dialogue", new OnShopTradeSuccess());
 
         // Events/Block
         registry.register("events/block", new OnBlockBreak());

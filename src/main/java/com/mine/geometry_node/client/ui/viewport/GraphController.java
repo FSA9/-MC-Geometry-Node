@@ -863,8 +863,10 @@ public class GraphController {
                 targetMap.put(portId, config);
             }
 
-            // 如果新名字为空，也可以选择删除这个配置或者置空，这里选择保留对象更新属性
-            config.customName = newName;
+            config.customName = normalizeCustomName(newName);
+            if (isEmptyPortConfig(config)) {
+                targetMap.remove(portId);
+            }
 
             // 通知重新构建节点结构，这会自动刷新 UI 上的文字并重新计算排版宽度
             mContext.notifyNodeStructureChanged(node);
@@ -887,8 +889,22 @@ public class GraphController {
             config.order = GroupNodeFactory.nextFreeOrder(groupNode, GroupNodeFactory.isInputSide(category));
             targetMap.put(portId, config);
         }
-        config.customName = newName;
+        config.customName = normalizeCustomName(newName);
         notifyGroupBoundaryPortStructureChanged(boundaryNode);
+    }
+
+    private String normalizeCustomName(String name) {
+        if (name == null) return null;
+        String trimmed = name.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean isEmptyPortConfig(NodeData.PortConfig config) {
+        return config != null
+                && config.customName == null
+                && config.hidden == null
+                && config.type == null
+                && config.order == null;
     }
 
     public void addFrame(com.mine.geometry_node.core.node.FrameData frame) {

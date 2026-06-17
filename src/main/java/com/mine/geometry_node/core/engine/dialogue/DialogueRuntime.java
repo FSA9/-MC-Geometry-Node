@@ -12,10 +12,14 @@ import com.mine.geometry_node.core.engine.dialogue.session.DialogueCloseReason;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionManager;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionPolicy;
+import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
+import com.mine.geometry_node.core.node.nodes.events.dialogue.OnShopTradeSuccess;
+import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -178,6 +182,10 @@ public class DialogueRuntime implements GraphRuntime {
             return session;
         }
 
+        String graphId = session.getGraphId();
+        String shopId = ShopTradeUseStore.shopId(shopData, "");
+        int globalUses = ShopTradeUseStore.getUses(player.serverLevel(), player, graphId, shopId, offerId);
+        offerMap.put("uses", globalUses);
         ShopOffer offer = parseShopOffer(offerMap, player);
         if (!offer.enabled()) {
             String reason = stringValue(offerMap.get("disabled_reason"), "");
@@ -244,8 +252,9 @@ public class DialogueRuntime implements GraphRuntime {
         giveStacks(player, rewards);
 
         if (offer.maxUses() > 0) {
-            offerMap.put("uses", offer.uses() + 1);
+            offerMap.put("uses", ShopTradeUseStore.incrementUses(player.serverLevel(), player, graphId, shopId, offerId, offer.maxUses()));
         }
+        dispatchShopTradeSuccess(player, seller, offerId, shopData, offer.costs(), rewards);
         refreshShopSessionKey(player, session, "geometry_node.shop.message.trade_complete", true);
         return session;
     }
@@ -477,6 +486,43 @@ public class DialogueRuntime implements GraphRuntime {
         }
         session.touch(player.serverLevel().getGameTime());
         getPresenter(session).open(player, session);
+    }
+
+    private void dispatchShopTradeSuccess(ServerPlayer player,
+                                          @Nullable Entity seller,
+                                          String offerId,
+                                          Map<String, Object> shopData,
+                                          List<ItemStack> costs,
+                                          List<ItemStack> rewards) {
+        GraphEngine.dispatchEvent(player.serverLevel(), player, OnShopTradeSuccess.TYPE_ID, GraphEventData.of(
+                StandardPorts.BUYER.getId(), player,
+                StandardPorts.SELLER.getId(), seller,
+                StandardPorts.SHOP_ID.getId(), ShopTradeUseStore.shopId(shopData, ""),
+                StandardPorts.OFFER_ID.getId(), offerId,
+                StandardPorts.COSTS.getId(), copyStacks(costs),
+                StandardPorts.REWARDS.getId(), copyStacks(rewards),
+                StandardPorts.SHOP_DATA.getId(), copyPlainValue(shopData)
+        ));
+    }
+
+    private static Object copyPlainValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() instanceof String key) {
+                    copy.put(key, copyPlainValue(entry.getValue()));
+                }
+            }
+            return copy;
+        }
+        if (value instanceof List<?> list) {
+            List<Object> copy = new ArrayList<>();
+            for (Object item : list) {
+                copy.add(copyPlainValue(item));
+            }
+            return copy;
+        }
+        return value;
     }
 
     @SuppressWarnings("unchecked")

@@ -899,6 +899,11 @@ public class GraphProcess {
         public int getCurrentNodeId() { return this.activeNodeId; }
 
         @Override
+        public String getCurrentNodeStableId() {
+            return activeNodeId >= 0 ? index.getIdToString(activeNodeId) : null;
+        }
+
+        @Override
         public void scheduleNode(int nodeId, long delayTicks, String entryPortName) {
             ServerLevel currentLevel = getLevel();
             if (currentLevel == null) return;

@@ -98,6 +98,8 @@ public enum StandardPorts {
     BILLBOARD("billboard", PortType.STRING),
     SPEAKER("speaker", PortType.STRING),
     ENTRY_ID("entry_id", PortType.STRING),
+    SHOP_ID("shop_id", PortType.STRING),
+    OFFER_ID("offer_id", PortType.STRING),
     GRAPH_ID("graph_id", PortType.STRING),
     TEMPLATE("template", PortType.STRING),
     STYLE_ID("style_id", PortType.STRING),
@@ -106,6 +108,8 @@ public enum StandardPorts {
     // Entity
     ENTITY("entity", PortType.ENTITY),
     PLAYER("player", PortType.ENTITY),
+    BUYER("buyer", PortType.ENTITY),
+    SELLER("seller", PortType.ENTITY),
     SPEAKER_ENTITY("speaker_entity", PortType.ENTITY),
     TRIGGER_ENTITY("trigger_entity", PortType.ENTITY),
     SOURCE_ENTITY("source_entity", PortType.ENTITY),
@@ -125,6 +129,8 @@ public enum StandardPorts {
     // LIST
     LIST("list", PortType.LIST),
     LIST_XYZ("list_xyz", PortType.LIST),
+    COSTS("costs", PortType.LIST),
+    REWARDS("rewards", PortType.LIST),
 
     // DICT
     DICT("dict", PortType.DICT),

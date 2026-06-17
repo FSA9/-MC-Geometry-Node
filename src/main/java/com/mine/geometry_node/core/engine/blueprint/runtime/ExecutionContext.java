@@ -230,6 +230,15 @@ public interface ExecutionContext {
     int getCurrentNodeId();
 
     /**
+     * 获取当前节点在图 JSON 中的稳定字符串 ID。
+     */
+    @Nullable
+    default String getCurrentNodeStableId() {
+        int nodeId = getCurrentNodeId();
+        return nodeId >= 0 ? String.valueOf(nodeId) : null;
+    }
+
+    /**
      * [异步调度] 将指定的节点加入延迟唤醒队列，并显式指定唤醒时的执行输入端口。
      * <p>
      * 完美支持多执行输入节点（如 Merge 节点）。当延迟结束时，虚拟机将脉冲精准注入指定的入口。

@@ -6,6 +6,8 @@ import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
+import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 
@@ -19,6 +21,9 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
+
+import java.util.Map;
+import java.util.Objects;
 
 public class PortMenu {
     private static final int PANEL_W_DP = 220;
@@ -60,7 +65,11 @@ public class PortMenu {
         }
         if (!found) return;
 
-        String oldName = node.getNodeData().getEffectivePortName(category, portId, defaultName);
+        final String finalDefaultName = defaultName == null ? "" : defaultName;
+        String resolvedName = node.getNodeData().getEffectivePortName(category, portId, finalDefaultName);
+        final String effectiveName = resolvedName == null ? "" : resolvedName;
+        String oldCustomName = currentCustomName(node.getNodeData(), category, portId);
+        final boolean hasCustomName = normalizeName(oldCustomName) != null;
         final String finalCategory = category;
 
         Context uiContext = context.getUIContext();
@@ -78,7 +87,7 @@ public class PortMenu {
         panel.addView(section, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
 
         EditText input = new EditText(uiContext);
-        input.setText(oldName);
+        input.setText(effectiveName);
         input.setHint("名称");
         input.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
         input.setHintTextColor(COLOR_SECTION_TEXT);
@@ -95,14 +104,31 @@ public class PortMenu {
         addDivider(uiContext, panel);
 
         panel.addView(menuItem(uiContext, "应用", COLOR_ACTION_TEXT, v -> {
-            String newName = input.getText().toString().trim();
-            if (!newName.equals(oldName)) {
+            String desiredName = input.getText().toString().trim();
+            String newCustomName = desiredName.isEmpty() || desiredName.equals(finalDefaultName)
+                    ? null
+                    : desiredName;
+            if (!Objects.equals(newCustomName, normalizeName(oldCustomName))) {
                 context.getActionSink().performAction(
                         ViewportActionId.RENAME_PORT,
                         ViewportActionRequest.builder()
                                 .nodeId(node.getNodeData().id)
                                 .port(finalCategory, portId)
-                                .rename(oldName, newName)
+                                .rename(oldCustomName, newCustomName)
+                                .build()
+                );
+            }
+            close(context, popupOverlay);
+        }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ITEM_H_DP)));
+
+        panel.addView(menuItem(uiContext, "重置", hasCustomName ? COLOR_ACTION_TEXT : COLOR_MUTED_TEXT, v -> {
+            if (hasCustomName) {
+                context.getActionSink().performAction(
+                        ViewportActionId.RENAME_PORT,
+                        ViewportActionRequest.builder()
+                                .nodeId(node.getNodeData().id)
+                                .port(finalCategory, portId)
+                                .rename(oldCustomName, null)
                                 .build()
                 );
             }
@@ -116,13 +142,13 @@ public class PortMenu {
             popupOverlay.addView(panel, createPanelLayout(parent, screenX, screenY));
             parent.addView(popupOverlay);
             input.requestFocus();
-            input.setSelection(0, oldName.length());
+            input.setSelection(0, effectiveName.length());
         }
     }
 
     private static FrameLayout.LayoutParams createPanelLayout(ViewGroup parent, float screenX, float screenY) {
         int panelW = dp(PANEL_W_DP);
-        int panelH = dp(104);
+        int panelH = dp(156);
         int edge = dp(EDGE_MARGIN_DP);
 
         int targetX = (int) screenX;
@@ -139,6 +165,31 @@ public class PortMenu {
         lp.leftMargin = Math.max(edge, targetX);
         lp.topMargin = Math.max(edge, targetY);
         return lp;
+    }
+
+    private static String currentCustomName(NodeData node, String category, String portId) {
+        if (node == null || category == null || portId == null) return null;
+
+        if (GroupNodeFactory.isBoundaryNode(node)) {
+            NodeData groupNode = GroupNodeFactory.getBoundaryOwner(node);
+            String mappedCategory = GroupNodeFactory.mapBoundaryCategory(node, category);
+            if (mappedCategory == null) {
+                mappedCategory = GroupNodeFactory.findBoundaryPortCategory(node, portId);
+            }
+            if (groupNode == null || mappedCategory == null) return null;
+            NodeData.PortConfig config = GroupNodeFactory.getPortConfig(groupNode, mappedCategory, portId);
+            return config != null ? config.customName : null;
+        }
+
+        Map<String, NodeData.PortConfig> targetMap = node.getPortConfigMap(category);
+        NodeData.PortConfig config = targetMap != null ? targetMap.get(portId) : null;
+        return config != null ? config.customName : null;
+    }
+
+    private static String normalizeName(String name) {
+        if (name == null) return null;
+        String trimmed = name.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private static TextView label(Context context, String text, float sizeDp, int color, int gravity) {
