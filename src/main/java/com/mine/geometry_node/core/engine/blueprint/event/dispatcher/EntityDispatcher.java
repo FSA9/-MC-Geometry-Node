@@ -2,8 +2,8 @@ package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
@@ -104,10 +104,12 @@ public class EntityDispatcher {
             ServerLevel level = (ServerLevel) entity.level();
             EntityGraphAttachment attachment = entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
             if (attachment == null || attachment.getBoundGraphs().isEmpty()) return;
+            attachment.attachOwner(entity);
+            GraphEventHandler.markActive(entity);
 
             long currentTick = level.getGameTime();
             AreaTriggerDispatcher.tickEntity(level, entity, attachment, currentTick);
-            for (String graphId : attachment.getBoundGraphs()) {
+            for (String graphId : GraphEngine.getEntityGraphsForEvent(entity, OnEntityTick.TYPE_ID)) {
                 RuntimeGraphIndex index = GraphEngine.getGraphIndex(graphId);
                 if (index == null) continue;
 
@@ -117,11 +119,10 @@ public class EntityDispatcher {
                     int offset = index.getNodeStaticInput(nodeId, StandardPorts.OFFSET.getId(), Integer.class, 0);
 
                     if (interval == 1 || currentTick % interval == offset) {
-                        GraphProcess process = attachment.getProcess(graphId);
-                        if (process == null) continue;
-
-                        process.setEnvironment(level, entity);
-                        process.executeEvent(nodeId, thread -> thread.setEventData(StandardPorts.ENTITY.getId(), entity));
+                        GraphEngine.executeEventNode(level, entity, graphId, index, nodeId,
+                                GraphEventData.of(StandardPorts.ENTITY.getId(), entity),
+                                attachment::getProcess,
+                                attachment::addProcess);
                     }
                 }
             }

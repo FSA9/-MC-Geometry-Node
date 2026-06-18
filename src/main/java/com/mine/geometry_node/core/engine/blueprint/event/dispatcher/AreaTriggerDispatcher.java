@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityGraphAttachment;
-import com.mine.geometry_node.core.engine.blueprint.attachment.GlobalGraphStorage;
 import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugBox;
 import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
@@ -50,8 +49,7 @@ public final class AreaTriggerDispatcher {
         ScopeKey scope = ScopeKey.global(level.dimension().location());
         Set<StateKey> seenStates = new HashSet<>();
 
-        GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
-        for (String graphId : storage.getGraphs()) {
+        for (String graphId : GraphEngine.getGlobalGraphsForEvent(level, AreaTriggerEvent.TYPE_ID)) {
             String sourceKey = AreaDebugSessionManager.levelSourceKey(level, graphId);
             tickGraph(level, null, graphId, GraphEngine.getGraphIndex(graphId),
                     attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates);
@@ -67,7 +65,7 @@ public final class AreaTriggerDispatcher {
         ScopeKey scope = ScopeKey.entity(level.dimension().location(), owner.getUUID());
         Set<StateKey> seenStates = new HashSet<>();
 
-        for (String graphId : attachment.getBoundGraphs()) {
+        for (String graphId : GraphEngine.getEntityGraphsForEvent(owner, AreaTriggerEvent.TYPE_ID)) {
             String sourceKey = AreaDebugSessionManager.entitySourceKey(level, owner, graphId);
             tickGraph(level, owner, graphId, GraphEngine.getGraphIndex(graphId),
                     attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates);

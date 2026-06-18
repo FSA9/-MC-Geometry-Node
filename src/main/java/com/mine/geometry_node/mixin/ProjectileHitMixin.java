@@ -1,6 +1,7 @@
 package com.mine.geometry_node.mixin;
 
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
+import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnProjectileHit;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import net.minecraft.core.BlockPos;
@@ -46,24 +47,13 @@ public abstract class ProjectileHitMixin {
         // 以 Owner 优先作为分发主体，投掷物兜底
         Entity dispatchTarget = (owner != null) ? owner : projectile;
 
-        final Entity finalOwner = owner;
-        final Entity finalHitEntity = hitEntity;
-        final BlockState finalHitBlock = hitBlock;
-
-        BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, dispatchTarget, OnProjectileHit.TYPE_ID, process -> {
-            process.setEventData(StandardPorts.ENTITY.getId(), projectile);
-            process.setEventData(StandardPorts.XYZ.getId(), hitPos);
-            process.setEventData(StandardPorts.VECTOR.getId(), impactVelocity);
-
-            if (finalOwner != null) {
-                process.setEventData(StandardPorts.SOURCE_ENTITY.getId(), finalOwner);
-            }
-            if (finalHitEntity != null) {
-                process.setEventData(StandardPorts.TRIGGER_ENTITY.getId(), finalHitEntity);
-            }
-            if (finalHitBlock != null) {
-                process.setEventData(StandardPorts.BLOCK_STATE.getId(), finalHitBlock);
-            }
-        });
+        BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, dispatchTarget, OnProjectileHit.TYPE_ID, GraphEventData.of(
+                StandardPorts.ENTITY.getId(), projectile,
+                StandardPorts.XYZ.getId(), hitPos,
+                StandardPorts.VECTOR.getId(), impactVelocity,
+                StandardPorts.SOURCE_ENTITY.getId(), owner,
+                StandardPorts.TRIGGER_ENTITY.getId(), hitEntity,
+                StandardPorts.BLOCK_STATE.getId(), hitBlock
+        ));
     }
 }

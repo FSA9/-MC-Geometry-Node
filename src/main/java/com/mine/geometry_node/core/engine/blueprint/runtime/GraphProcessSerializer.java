@@ -290,7 +290,7 @@ public class GraphProcessSerializer {
     }
 
     public static void loadContainer(GraphContainer container, CompoundTag tag, HolderLookup.Provider provider) {
-        container.getProcessesMap().clear();
+        container.clearProcessesForSerialization();
         if (tag.contains("ActiveProcesses", Tag.TAG_LIST)) {
             ListTag list = tag.getList("ActiveProcesses", Tag.TAG_COMPOUND);
             for (int i = 0; i < list.size(); i++) {
@@ -298,7 +298,7 @@ public class GraphProcessSerializer {
                 String graphId = pTag.getString("GraphId");
                 RuntimeGraphIndex index = GraphEngine.getGraphIndex(graphId);
                 if (index != null) {
-                    container.getProcessesMap().put(graphId, load(pTag, index, provider));
+                    container.putProcessForSerialization(load(pTag, index, provider));
                 }
             }
         }

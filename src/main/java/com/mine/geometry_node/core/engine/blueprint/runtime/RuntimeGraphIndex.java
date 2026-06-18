@@ -288,6 +288,10 @@ public class RuntimeGraphIndex {
         return typeLookup.getOrDefault(nodeType, List.of());
     }
 
+    public Set<String> getNodeTypes() {
+        return typeLookup.keySet();
+    }
+
     public List<Integer> findReceiveBlueprintNodes(String frequency) {
         return receiveBlueprintLookup.getOrDefault(frequency, List.of());
     }

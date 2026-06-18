@@ -21,7 +21,6 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
-import java.util.function.Consumer;
 
 /**
  * [蓝图虚拟机进程 - 内存主板]
@@ -57,6 +56,7 @@ public class GraphProcess {
     final PriorityQueue<ExecutionThread> sleepingThreads = new PriorityQueue<>(Comparator.comparingLong(t -> t.wakeUpTick));  // 挂起的协程线程
     boolean needsTimeRebase = false;  // 读档标记
     private final Map<String, BranchJoin> branchJoins = new HashMap<>();
+    private Runnable tickScheduleCallback = () -> {};
 
     private static final int MAX_POOLED_THREADS = 128;
     private final ArrayDeque<ExecutionThread> THREAD_POOL = new ArrayDeque<>();
@@ -121,6 +121,22 @@ public class GraphProcess {
     public String getGraphId() { return graphId; }
     public RuntimeGraphIndex getIndex() { return index; }
 
+    public void setTickScheduleCallback(@Nullable Runnable callback) {
+        this.tickScheduleCallback = callback != null ? callback : () -> {};
+    }
+
+    public long getNextRequiredTick() {
+        if (needsTimeRebase) {
+            return Long.MIN_VALUE;
+        }
+        ExecutionThread thread = sleepingThreads.peek();
+        return thread != null ? thread.wakeUpTick : Long.MAX_VALUE;
+    }
+
+    private void notifyTickScheduleChanged() {
+        tickScheduleCallback.run();
+    }
+
     public Iterator<VariableScope> getVariableScopesDescendingForSerialization() {
         return variableStack.descendingIterator();
     }
@@ -147,6 +163,7 @@ public class GraphProcess {
 
     public void addSleepingThreadForSerialization(ExecutionThread thread) {
         sleepingThreads.add(thread);
+        notifyTickScheduleChanged();
     }
 
     public Collection<BranchJoin> getBranchJoinsForSerialization() {
@@ -167,6 +184,7 @@ public class GraphProcess {
 
     public void markNeedsTimeRebaseForSerialization() {
         needsTimeRebase = true;
+        notifyTickScheduleChanged();
     }
 
     // ================================
@@ -177,15 +195,13 @@ public class GraphProcess {
      * [派发事件线程]
      * 为蓝图入口分配一个独立的执行线程。支持多事件并发执行。
      */
-    public void executeEvent(int startNodeId, @Nullable Consumer<ExecutionThread> initializer) {
+    public void executeEvent(int startNodeId, @Nullable Map<String, Object> eventData) {
         if (this.level == null) return;
 
         // 调用修改后的 borrowThread，传入默认端口 "flow_in" 作为执行起点的占位
         ExecutionThread thread = borrowThread(startNodeId, "flow_in");
 
-        if (initializer != null) {
-            initializer.accept(thread);
-        }
+        thread.applyEventData(eventData);
 
         thread.run();
     }
@@ -519,6 +535,7 @@ public class GraphProcess {
                     this.currentFlowId = -1;
                     this.state = State.WAITING;
                     GraphProcess.this.sleepingThreads.add(this);
+                    GraphProcess.this.notifyTickScheduleChanged();
                 }
                 case ExecutionResult.ExternalWait externalWait -> {
                     GraphRuntime runtime = GraphRuntimeRegistry.INSTANCE.get(externalWait.runtimeKind());
@@ -614,7 +631,9 @@ public class GraphProcess {
             this.currentFlowId = -1;
             this.executionStack.clear();
             this.state = State.FINISHED;
-            GraphProcess.this.sleepingThreads.remove(this);
+            if (GraphProcess.this.sleepingThreads.remove(this)) {
+                GraphProcess.this.notifyTickScheduleChanged();
+            }
             GraphProcess.this.onThreadFinished(this);
             recycleIfNeeded();
         }
@@ -775,6 +794,13 @@ public class GraphProcess {
             }
         }
 
+        private void applyEventData(@Nullable Map<String, Object> eventData) {
+            if (eventData == null || eventData.isEmpty()) return;
+            for (Map.Entry<String, Object> entry : eventData.entrySet()) {
+                setEventData(entry.getKey(), entry.getValue());
+            }
+        }
+
         @Override
         public Object getInputValue(String portName) {
             if (activeNodeId == -1) return null;
@@ -921,6 +947,7 @@ public class GraphProcess {
 
             delayThread.tempData.putAll(this.tempData);
             GraphProcess.this.sleepingThreads.add(delayThread);
+            GraphProcess.this.notifyTickScheduleChanged();
         }
 
         @Override

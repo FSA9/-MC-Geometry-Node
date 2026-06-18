@@ -7,7 +7,6 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
@@ -20,7 +19,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Set;
 import java.util.Map;
-import java.util.function.Consumer;
 
 /**
  * Blueprint runtime facade. The blueprint VM implementation lives under this
@@ -86,27 +84,9 @@ public final class BlueprintRuntime implements GraphRuntime {
         return GraphEngine.getGlobalBoundGraphs(level);
     }
 
-    /**
-     * @deprecated Prefer {@link #dispatchEvent(ServerLevel, Entity, String, Map)} so callers do not depend on VM internals.
-     */
-    @Deprecated
-    public void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId,
-                              @Nullable Consumer<GraphProcess.ExecutionThread> initializer) {
-        GraphEngine.dispatchEvent(level, target, eventNodeId, initializer);
-    }
-
     public void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId,
                               @Nullable Map<String, Object> eventData) {
         GraphEngine.dispatchEvent(level, target, eventNodeId, eventData);
-    }
-
-    /**
-     * @deprecated Prefer {@link #dispatchCustomEvent(ServerLevel, String, Map)} so callers do not depend on VM internals.
-     */
-    @Deprecated
-    public void dispatchCustomEvent(@NotNull ServerLevel currentLevel, String frequency,
-                                    @Nullable Consumer<GraphProcess.ExecutionThread> initializer) {
-        GraphEngine.dispatchCustomEvent(currentLevel, frequency, initializer);
     }
 
     public void dispatchCustomEvent(@NotNull ServerLevel currentLevel, String frequency,

@@ -28,7 +28,10 @@ public class GraphEngine {
     // ==========================================
     // 高性能事件订阅字典 (保持现状)
     // ==========================================
+    private static final String RECEIVE_BLUEPRINT_EVENT_TYPE = "receive_blueprint";
+    private static final String MULTIBLOCK_BUILT_EVENT_TYPE = "on_multiblock_built";
     private static final Map<String, Map<Entity, Set<String>>> eventSubscribers = new HashMap<>();
+    private static final GraphSubscriptionIndex graphSubscriptions = new GraphSubscriptionIndex();
 
     private static void addSubscriber(String frequency, Entity entity, String graphId) {
         eventSubscribers
@@ -63,35 +66,19 @@ public class GraphEngine {
         dispatchEvent((ServerLevel) target.level(), target, eventNodeId, eventData);
     }
 
-    public static void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId, @Nullable Map<String, Object> eventData) {
-        dispatchEvent(level, target, eventNodeId, applyEventData(eventData));
-    }
-
-    /**
-     * @deprecated 外部 Addon 应使用 {@link com.mine.geometry_node.api.GeometryNodeEvents}。
-     * 这个入口暴露了 VM 内部线程，只保留给现有内部 dispatcher 过渡使用。
-     */
-    @Deprecated
-    public static void dispatchEvent(@NotNull Entity target, String eventNodeId, @Nullable Consumer<GraphProcess.ExecutionThread> initializer) {
-        if (target.level().isClientSide) return;
-        dispatchEvent((ServerLevel) target.level(), target, eventNodeId, initializer);
-    }
-
     /**
      * [通用事件分发]
      * 逻辑：查找关联的常驻进程 -> 从进程中派发轻量级执行线程
-     *
-     * @deprecated 外部 Addon 应使用 {@link com.mine.geometry_node.api.GeometryNodeEvents}。
-     * 这个入口暴露了 VM 内部线程，只保留给现有内部 dispatcher 过渡使用。
      */
-    @Deprecated
-    public static void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId, @Nullable Consumer<GraphProcess.ExecutionThread> initializer) {
+    public static void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId, @Nullable Map<String, Object> eventData) {
+        Map<String, Object> eventPayload = snapshotEventData(eventData);
+
         // 处理全局图
-        GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
+        refreshGlobalSubscriptions(level);
         LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
 
-        for (String graphId : storage.getGraphs()) {
-            triggerOnProcess(level, target, graphId, eventNodeId, initializer,
+        for (String graphId : graphSubscriptions.globalGraphsFor(eventNodeId)) {
+            triggerOnProcess(level, target, graphId, eventNodeId, eventPayload,
                     id -> levelAttachment.getProcess(id),
                     levelAttachment::addProcess);
         }
@@ -100,8 +87,8 @@ public class GraphEngine {
         if (target != null) {
             EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
-                for (String graphId : entityAttachment.getBoundGraphs()) {
-                    triggerOnProcess(level, target, graphId, eventNodeId, initializer,
+                for (String graphId : getEntityGraphsForEvent(target, eventNodeId)) {
+                    triggerOnProcess(level, target, graphId, eventNodeId, eventPayload,
                             id -> entityAttachment.getProcess(id),
                             process -> {
                                 entityAttachment.addProcess(process);
@@ -115,17 +102,16 @@ public class GraphEngine {
     /**
      * [自定义事件派发] O(1) 广播
      */
-    public static void dispatchCustomEvent(@NotNull ServerLevel currentLevel, String frequency, @Nullable Consumer<GraphProcess.ExecutionThread> initializer) {
+    public static void dispatchCustomEvent(@NotNull ServerLevel currentLevel, String frequency, @Nullable Map<String, Object> eventData) {
         if (frequency == null || frequency.trim().isEmpty()) return;
-
-        String targetEventType = "receive_blueprint";
+        Map<String, Object> eventPayload = snapshotEventData(eventData);
 
         // 全局作用域
-        GlobalGraphStorage storage = GlobalGraphStorage.get(currentLevel.getServer().overworld());
+        Set<String> globalGraphIds = getGlobalGraphsForEvent(currentLevel, RECEIVE_BLUEPRINT_EVENT_TYPE);
         for (ServerLevel level : currentLevel.getServer().getAllLevels()) {
             LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
-            for (String graphId : storage.getGraphs()) {
-                triggerCustomOnProcess(level, null, graphId, targetEventType, frequency, initializer,
+            for (String graphId : globalGraphIds) {
+                triggerCustomOnProcess(level, null, graphId, frequency, eventPayload,
                         id -> levelAttachment.getProcess(id),
                         levelAttachment::addProcess);
             }
@@ -144,7 +130,7 @@ public class GraphEngine {
                         if (graphIds == null || graphIds.isEmpty()) continue;
                         for (String graphId : entityAttachment.getBoundGraphs()) {
                             if (!graphIds.contains(normalizeSubscriptionGraphId(graphId))) continue;
-                            triggerCustomOnProcess(targetLevel, target, graphId, targetEventType, frequency, initializer,
+                            triggerCustomOnProcess(targetLevel, target, graphId, frequency, eventPayload,
                                     id -> entityAttachment.getProcess(id),
                                     entityAttachment::addProcess);
                         }
@@ -155,22 +141,17 @@ public class GraphEngine {
         }
     }
 
-    public static void dispatchCustomEvent(@NotNull ServerLevel currentLevel, String frequency, @Nullable Map<String, Object> eventData) {
-        dispatchCustomEvent(currentLevel, frequency, applyEventData(eventData));
-    }
-
     public static Set<String> getInterestedMultiblockStructureIds(@NotNull ServerLevel level, @Nullable Entity target) {
         Set<String> structureIds = new HashSet<>();
 
-        GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
-        for (String graphId : storage.getGraphs()) {
+        for (String graphId : getGlobalGraphsForEvent(level, MULTIBLOCK_BUILT_EVENT_TYPE)) {
             collectMultiblockStructureIds(graphId, structureIds);
         }
 
         if (target != null) {
             EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
-                for (String graphId : entityAttachment.getBoundGraphs()) {
+                for (String graphId : getEntityGraphsForEvent(target, MULTIBLOCK_BUILT_EVENT_TYPE)) {
                     collectMultiblockStructureIds(graphId, structureIds);
                 }
             }
@@ -184,12 +165,11 @@ public class GraphEngine {
                                                String structureId,
                                                @Nullable Map<String, Object> eventData) {
         if (structureId == null || structureId.isBlank()) return;
-        Consumer<GraphProcess.ExecutionThread> initializer = applyEventData(eventData);
+        Map<String, Object> eventPayload = snapshotEventData(eventData);
 
-        GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
-        for (String graphId : storage.getGraphs()) {
-            triggerMultiblockOnProcess(level, target, graphId, structureId, initializer,
+        for (String graphId : getGlobalGraphsForEvent(level, MULTIBLOCK_BUILT_EVENT_TYPE)) {
+            triggerMultiblockOnProcess(level, target, graphId, structureId, eventPayload,
                     id -> levelAttachment.getProcess(id),
                     levelAttachment::addProcess);
         }
@@ -197,8 +177,8 @@ public class GraphEngine {
         if (target != null) {
             EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
-                for (String graphId : entityAttachment.getBoundGraphs()) {
-                    triggerMultiblockOnProcess(level, target, graphId, structureId, initializer,
+                for (String graphId : getEntityGraphsForEvent(target, MULTIBLOCK_BUILT_EVENT_TYPE)) {
+                    triggerMultiblockOnProcess(level, target, graphId, structureId, eventPayload,
                             id -> entityAttachment.getProcess(id),
                             entityAttachment::addProcess);
                 }
@@ -215,7 +195,7 @@ public class GraphEngine {
      * 核心逻辑：确保进程存在，并执行指定的事件分支
      */
     private static void triggerOnProcess(ServerLevel level, @Nullable Entity target, String graphId, String eventNodeId,
-                                         @Nullable Consumer<GraphProcess.ExecutionThread> initializer,
+                                         @Nullable Map<String, Object> eventData,
                                          java.util.function.Function<String, GraphProcess> processFinder,
                                          Consumer<GraphProcess> mountAction) {
 
@@ -235,12 +215,12 @@ public class GraphEngine {
         // 注入环境并启动线程
         process.setEnvironment(level, target);
         for (int nodeId : startNodeIds) {
-            process.executeEvent(nodeId, initializer);
+            process.executeEvent(nodeId, eventData);
         }
     }
 
-    private static void triggerCustomOnProcess(ServerLevel level, @Nullable Entity target, String graphId, String eventNodeId,
-                                               String targetFrequency, @Nullable Consumer<GraphProcess.ExecutionThread> initializer,
+    private static void triggerCustomOnProcess(ServerLevel level, @Nullable Entity target, String graphId,
+                                               String targetFrequency, @Nullable Map<String, Object> eventData,
                                                java.util.function.Function<String, GraphProcess> processFinder,
                                                Consumer<GraphProcess> mountAction) {
 
@@ -256,12 +236,12 @@ public class GraphEngine {
             }
 
             process.setEnvironment(level, target);
-            process.executeEvent(nodeId, initializer);
+            process.executeEvent(nodeId, eventData);
         }
     }
 
     private static void triggerMultiblockOnProcess(ServerLevel level, @Nullable Entity target, String graphId, String structureId,
-                                                   @Nullable Consumer<GraphProcess.ExecutionThread> initializer,
+                                                   @Nullable Map<String, Object> eventData,
                                                    java.util.function.Function<String, GraphProcess> processFinder,
                                                    Consumer<GraphProcess> mountAction) {
         RuntimeGraphIndex index = getGraphIndex(graphId);
@@ -278,7 +258,7 @@ public class GraphEngine {
 
         process.setEnvironment(level, target);
         for (int nodeId : startNodeIds) {
-            process.executeEvent(nodeId, initializer);
+            process.executeEvent(nodeId, eventData);
         }
     }
 
@@ -299,7 +279,7 @@ public class GraphEngine {
         }
 
         process.setEnvironment(level, target);
-        process.executeEvent(nodeId, applyEventData(eventData));
+        process.executeEvent(nodeId, snapshotEventData(eventData));
         if (target != null) {
             GraphEventHandler.markActive(target);
         }
@@ -313,16 +293,31 @@ public class GraphEngine {
     }
 
     @Nullable
-    private static Consumer<GraphProcess.ExecutionThread> applyEventData(@Nullable Map<String, Object> eventData) {
+    private static Map<String, Object> snapshotEventData(@Nullable Map<String, Object> eventData) {
         if (eventData == null || eventData.isEmpty()) {
             return null;
         }
-        Map<String, Object> snapshot = new LinkedHashMap<>(eventData);
-        return thread -> {
-            for (Map.Entry<String, Object> entry : snapshot.entrySet()) {
-                thread.setEventData(entry.getKey(), entry.getValue());
+        return new LinkedHashMap<>(eventData);
+    }
+
+    public static Set<String> getGlobalGraphsForEvent(@NotNull ServerLevel level, String eventType) {
+        refreshGlobalSubscriptions(level);
+        return graphSubscriptions.globalGraphsFor(eventType);
+    }
+
+    public static Set<String> getEntityGraphsForEvent(@NotNull Entity entity, String eventType) {
+        registerEntityListeners(entity);
+        return graphSubscriptions.entityGraphsFor(entity, eventType);
+    }
+
+    private static void refreshGlobalSubscriptions(@NotNull ServerLevel level) {
+        GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
+        for (String graphId : storage.getGraphs()) {
+            RuntimeGraphIndex index = getGraphIndex(graphId);
+            if (index != null) {
+                graphSubscriptions.registerGlobalGraph(graphId, index);
             }
-        };
+        }
     }
 
     // ==========================================
@@ -342,6 +337,7 @@ public class GraphEngine {
             }
 
             registerEntityForGraph(entity, graphId);
+            GraphEventHandler.markActive(entity);
             AreaDebugSessionManager.markDirty();
         }
     }
@@ -352,6 +348,7 @@ public class GraphEngine {
 
         RuntimeGraphIndex index = getGraphIndex(graphId);
         if (index != null) {
+            graphSubscriptions.registerGlobalGraph(graphId, index);
             LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
             if (attachment.getProcess(graphId) == null) {
                 attachment.addProcess(new GraphProcess(graphId, index));
@@ -373,6 +370,7 @@ public class GraphEngine {
     }
 
     public static void unbindGlobalGraph(ServerLevel level, String graphId) {
+        graphSubscriptions.unregisterGlobalGraph(graphId, getGraphIndex(graphId));
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         storage.removeGraph(graphId);
         for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
@@ -403,6 +401,9 @@ public class GraphEngine {
             for (GraphProcess process : LevelGraphAttachment.get(loadedLevel).getProcesses()) {
                 graphIds.add(process.getGraphId());
             }
+        }
+        for (String graphId : graphIds) {
+            graphSubscriptions.unregisterGlobalGraph(graphId, getGraphIndex(graphId));
         }
         storage.clearGraphs();
         for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
@@ -441,6 +442,7 @@ public class GraphEngine {
     private static void registerEntityForGraph(Entity entity, String graphId) {
         RuntimeGraphIndex index = getGraphIndex(graphId);
         if (index == null) return;
+        graphSubscriptions.registerEntityGraph(entity, graphId, index);
         for (String frequency : index.getReceiveBlueprintFrequencies()) {
             addSubscriber(frequency, entity, graphId);
         }
@@ -452,9 +454,11 @@ public class GraphEngine {
     }
 
     private static void unregisterEntityForGraph(Entity entity, String graphId, @Nullable RuntimeGraphIndex index) {
-        if (index == null) return;
-        for (String frequency : index.getReceiveBlueprintFrequencies()) {
-            removeSubscriber(frequency, entity, graphId);
+        graphSubscriptions.unregisterEntityGraph(entity, graphId, index);
+        if (index != null) {
+            for (String frequency : index.getReceiveBlueprintFrequencies()) {
+                removeSubscriber(frequency, entity, graphId);
+            }
         }
     }
 
@@ -463,6 +467,14 @@ public class GraphEngine {
                                                  @Nullable RuntimeGraphIndex newIndex) {
         if (server == null) return;
 
+        GlobalGraphStorage storage = GlobalGraphStorage.get(server.overworld());
+        if (storage.getGraphs().contains(graphId)) {
+            graphSubscriptions.unregisterGlobalGraph(graphId, oldIndex);
+            if (newIndex != null) {
+                graphSubscriptions.registerGlobalGraph(graphId, newIndex);
+            }
+        }
+
         for (ServerLevel level : server.getAllLevels()) {
             for (Entity entity : level.getAllEntities()) {
                 EntityGraphAttachment attachment = getAttachment(entity);
@@ -470,6 +482,7 @@ public class GraphEngine {
 
                 unregisterEntityForGraph(entity, graphId, oldIndex);
                 if (newIndex != null) {
+                    graphSubscriptions.registerEntityGraph(entity, graphId, newIndex);
                     for (String frequency : newIndex.getReceiveBlueprintFrequencies()) {
                         addSubscriber(frequency, entity, graphId);
                     }
@@ -488,7 +501,11 @@ public class GraphEngine {
     }
 
     private static EntityGraphAttachment getAttachment(Entity entity) {
-        return entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
+        EntityGraphAttachment attachment = entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
+        if (attachment != null) {
+            attachment.attachOwner(entity);
+        }
+        return attachment;
     }
 
     private static String normalizeSubscriptionGraphId(String graphId) {

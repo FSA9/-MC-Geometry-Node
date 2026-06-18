@@ -13,9 +13,10 @@ import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 
 /**
  * [蓝图运行容器核心] (组合模式)
@@ -25,23 +26,57 @@ public class GraphContainer {
 
     private final Map<String, GraphProcess> processes = new HashMap<>();
     private final Map<String, Object> attributes = new HashMap<>();
+    private final PriorityQueue<ScheduledProcess> tickQueue = new PriorityQueue<>(Comparator.comparingLong(ScheduledProcess::nextTick));
+    private final Map<String, ScheduledProcess> activeTickSchedules = new HashMap<>();
 
     // 脏标记回调 (用于通知 Level 保存存档)
     private final Runnable dirtyMarker;
+    private final Runnable scheduleChangedCallback;
 
     public GraphContainer(Runnable dirtyMarker) {
-        this.dirtyMarker = dirtyMarker != null ? dirtyMarker : () -> {};
+        this(dirtyMarker, () -> {});
     }
 
+    public GraphContainer(Runnable dirtyMarker, Runnable scheduleChangedCallback) {
+        this.dirtyMarker = dirtyMarker != null ? dirtyMarker : () -> {};
+        this.scheduleChangedCallback = scheduleChangedCallback != null ? scheduleChangedCallback : () -> {};
+    }
+
+    private record ScheduledProcess(String graphId, GraphProcess process, long nextTick) {}
+
     /**
-     * [心跳驱动] 驱动所有常驻进程处理延时任务。
+     * [心跳驱动] 只唤醒真正存在到期等待任务的常驻进程。
      */
     public void tick(ServerLevel level, @Nullable Entity target) {
-        if (processes.isEmpty()) return;
+        if (tickQueue.isEmpty()) return;
         long currentTime = level.getGameTime();
-        for (GraphProcess process : List.copyOf(processes.values())) {
+
+        while (!tickQueue.isEmpty()) {
+            ScheduledProcess scheduled = tickQueue.peek();
+            if (activeTickSchedules.get(scheduled.graphId()) != scheduled) {
+                tickQueue.poll();
+                continue;
+            }
+            if (scheduled.nextTick() > currentTime) {
+                return;
+            }
+
+            tickQueue.poll();
+            activeTickSchedules.remove(scheduled.graphId(), scheduled);
+
+            GraphProcess process = processes.get(scheduled.graphId());
+            if (process != scheduled.process()) {
+                continue;
+            }
+
             process.setEnvironment(level, target);
             process.tick(currentTime);
+
+            long nextTick = process.getNextRequiredTick();
+            if (nextTick <= currentTime) {
+                nextTick = currentTime + 1;
+            }
+            scheduleProcessTick(process, nextTick);
         }
     }
 
@@ -66,7 +101,14 @@ public class GraphContainer {
      * [挂载进程]
      */
     public void addProcess(GraphProcess process) {
-        this.processes.put(process.getGraphId(), process);
+        GraphProcess previous = this.processes.put(process.getGraphId(), process);
+        if (previous != null && previous != process) {
+            previous.setTickScheduleCallback(null);
+            if (this.activeTickSchedules.remove(previous.getGraphId()) != null) {
+                notifyScheduleChanged();
+            }
+        }
+        attachProcess(process);
         this.dirtyMarker.run(); // 触发存盘
     }
 
@@ -74,7 +116,12 @@ public class GraphContainer {
      * [卸载进程]
      */
     public void removeProcess(String graphId) {
-        if (this.processes.remove(graphId) != null) {
+        GraphProcess removed = this.processes.remove(graphId);
+        if (removed != null) {
+            removed.setTickScheduleCallback(null);
+            if (this.activeTickSchedules.remove(graphId) != null) {
+                notifyScheduleChanged();
+            }
             this.dirtyMarker.run();
         }
     }
@@ -83,13 +130,46 @@ public class GraphContainer {
         return this.processes.values();
     }
 
+    public long getNextScheduledTick() {
+        discardStaleTickSchedules();
+        ScheduledProcess scheduled = this.tickQueue.peek();
+        return scheduled != null ? scheduled.nextTick() : Long.MAX_VALUE;
+    }
+
     /**
      * [清理全部]
      */
     public void clear() {
+        for (GraphProcess process : this.processes.values()) {
+            process.setTickScheduleCallback(null);
+        }
         this.processes.clear();
         this.attributes.clear();
+        if (clearTickSchedule()) {
+            notifyScheduleChanged();
+        }
         this.dirtyMarker.run();
+    }
+
+    public void clearProcessesForSerialization() {
+        for (GraphProcess process : this.processes.values()) {
+            process.setTickScheduleCallback(null);
+        }
+        this.processes.clear();
+        if (clearTickSchedule()) {
+            notifyScheduleChanged();
+        }
+    }
+
+    public void putProcessForSerialization(GraphProcess process) {
+        GraphProcess previous = this.processes.put(process.getGraphId(), process);
+        if (previous != null && previous != process) {
+            previous.setTickScheduleCallback(null);
+            if (this.activeTickSchedules.remove(previous.getGraphId()) != null) {
+                notifyScheduleChanged();
+            }
+        }
+        attachProcess(process);
     }
 
     /**
@@ -128,5 +208,58 @@ public class GraphContainer {
 
     public Map<String, Object> getAttributesMap() {
         return this.attributes;
+    }
+
+    private void attachProcess(GraphProcess process) {
+        process.setTickScheduleCallback(() -> scheduleProcessTick(process));
+        scheduleProcessTick(process);
+    }
+
+    private void scheduleProcessTick(GraphProcess process) {
+        scheduleProcessTick(process, process.getNextRequiredTick());
+    }
+
+    private void scheduleProcessTick(GraphProcess process, long nextTick) {
+        String graphId = process.getGraphId();
+        if (this.processes.get(graphId) != process) {
+            return;
+        }
+        if (nextTick == Long.MAX_VALUE) {
+            if (this.activeTickSchedules.remove(graphId) != null) {
+                notifyScheduleChanged();
+            }
+            return;
+        }
+
+        ScheduledProcess current = this.activeTickSchedules.get(graphId);
+        if (current != null && current.process() == process && current.nextTick() == nextTick) {
+            return;
+        }
+
+        ScheduledProcess scheduled = new ScheduledProcess(graphId, process, nextTick);
+        this.activeTickSchedules.put(graphId, scheduled);
+        this.tickQueue.offer(scheduled);
+        notifyScheduleChanged();
+    }
+
+    private boolean clearTickSchedule() {
+        boolean hadSchedule = !this.activeTickSchedules.isEmpty();
+        this.tickQueue.clear();
+        this.activeTickSchedules.clear();
+        return hadSchedule;
+    }
+
+    private void discardStaleTickSchedules() {
+        while (!this.tickQueue.isEmpty()) {
+            ScheduledProcess scheduled = this.tickQueue.peek();
+            if (this.activeTickSchedules.get(scheduled.graphId()) == scheduled) {
+                return;
+            }
+            this.tickQueue.poll();
+        }
+    }
+
+    private void notifyScheduleChanged() {
+        this.scheduleChangedCallback.run();
     }
 }

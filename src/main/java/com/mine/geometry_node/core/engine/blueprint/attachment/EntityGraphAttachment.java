@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.attachment;
 
+import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -9,6 +10,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
+import java.lang.ref.WeakReference;
 import java.util.*;
 
 /**
@@ -18,8 +20,9 @@ import java.util.*;
 public class EntityGraphAttachment {
 
     private final Set<String> boundGraphs = new HashSet<>();
+    private WeakReference<Entity> ownerRef = new WeakReference<>(null);
 
-    private final GraphContainer container = new GraphContainer(() -> {});
+    private final GraphContainer container = new GraphContainer(() -> {}, this::onScheduleChanged);
 
     public EntityGraphAttachment() {}
 
@@ -27,8 +30,20 @@ public class EntityGraphAttachment {
      * [心跳驱动] 委托给底座
      */
     public void tick(Entity entity) {
+        attachOwner(entity);
         if (entity.level() instanceof ServerLevel serverLevel) {
             container.tick(serverLevel, entity);
+        }
+    }
+
+    public void attachOwner(Entity entity) {
+        this.ownerRef = new WeakReference<>(entity);
+    }
+
+    private void onScheduleChanged() {
+        Entity owner = this.ownerRef.get();
+        if (owner != null) {
+            GraphEventHandler.markActive(owner);
         }
     }
 
@@ -56,6 +71,7 @@ public class EntityGraphAttachment {
 
     public void addProcess(GraphProcess process) { container.addProcess(process); }
     public Collection<GraphProcess> getProcesses() { return container.getProcesses(); }
+    public long getNextScheduledTick() { return container.getNextScheduledTick(); }
     public GraphProcess getProcess(String graphId) { return container.getProcess(graphId); }
     public void setAttribute(String key, Object value) { container.setAttribute(key, value); }
     public Object getAttribute(String key) { return container.getAttribute(key); }
