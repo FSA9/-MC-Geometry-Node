@@ -29,6 +29,15 @@ public interface NodeVisualAdapter extends CanvasVisualItem, ConnectionNodeVisua
 
     boolean hasOverlayViews();
 
+    default boolean ensureOverlayViews() { return hasOverlayViews(); }
+
+    default void releaseOverlayViews() {}
+
+    default boolean isOverlayActive() {
+        View overlayHost = getOverlayHostView();
+        return overlayHost != null && overlayHost.hasFocus();
+    }
+
     default void onOverlayScaleChanged(float scale) {}
 
     int getTotalHeightDp();

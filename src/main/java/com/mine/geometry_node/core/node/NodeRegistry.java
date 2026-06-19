@@ -203,7 +203,8 @@ public class NodeRegistry {
         if (b != null) {
             return b.getDefinition(data);
         }
-        return getDefaultDefinition(data.type);
+        NodeDef defaultDef = getDefaultDefinition(data.type);
+        return defaultDef != null ? defaultDef : MissingNodeDefinitions.resolve(data);
     }
 
     @Nullable

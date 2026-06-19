@@ -51,6 +51,9 @@ public class NodeLayer extends FrameLayout {
     }
 
     public void clearNodeVisuals() {
+        for (NodeVisualAdapter node : mNodeOrder) {
+            node.releaseOverlayViews();
+        }
         removeAllViews();
         mNodeVisuals.clear();
         mNodeOrder.clear();
@@ -69,6 +72,7 @@ public class NodeLayer extends FrameLayout {
             mNodeOrder.remove(node);
             View overlayHost = node.getOverlayHostView();
             if (overlayHost != null && overlayHost.getParent() == this) removeView(overlayHost);
+            node.releaseOverlayViews();
             invalidate();
         }
     }
@@ -77,8 +81,10 @@ public class NodeLayer extends FrameLayout {
 
     public void applySelection(List<String> selectedNodeIds) {
         Set<String> selectedNodeIdSet = selectedNodeIds != null ? new HashSet<>(selectedNodeIds) : new HashSet<>();
+        boolean canCull = prepareVisibleBounds(CULL_PADDING_DP);
         for (NodeVisualAdapter node : mNodeVisuals.values()) {
             node.setSelected(selectedNodeIdSet.contains(node.getNodeId()));
+            syncOverlayHost(node, canCull);
         }
         bringSelectedNodesToFront(getNodeVisuals(selectedNodeIds));
         invalidate();
@@ -125,8 +131,9 @@ public class NodeLayer extends FrameLayout {
     }
 
     public void updateOverlayTransforms() {
+        boolean canCull = prepareVisibleBounds(CULL_PADDING_DP);
         for (NodeVisualAdapter node : mNodeOrder) {
-            syncOverlayHost(node);
+            syncOverlayHost(node, canCull);
         }
         invalidate();
     }
@@ -139,13 +146,21 @@ public class NodeLayer extends FrameLayout {
     }
 
     private void syncOverlayHost(NodeVisualAdapter node) {
+        syncOverlayHost(node, prepareVisibleBounds(CULL_PADDING_DP));
+    }
+
+    private void syncOverlayHost(NodeVisualAdapter node, boolean canCull) {
         if (node == null) return;
 
         View overlayHost = node.getOverlayHostView();
-        boolean hasFocus = overlayHost != null && overlayHost.hasFocus();
-        boolean hasOverlay = overlayHost != null && node.hasOverlayViews() && (isNodeVisibleUi(node, CULL_PADDING_DP) || hasFocus);
+        boolean visible = canCull && isNodeVisibleUi(node, mTmpVisibleBounds);
+        boolean keepMounted = visible || node.isOverlayActive();
+        boolean hasOverlay = overlayHost != null && keepMounted && node.ensureOverlayViews();
         if (!hasOverlay) {
             if (overlayHost != null && overlayHost.getParent() == this) removeView(overlayHost);
+            if (!keepMounted) {
+                node.releaseOverlayViews();
+            }
             return;
         }
 
@@ -181,20 +196,32 @@ public class NodeLayer extends FrameLayout {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        boolean canCull = prepareVisibleBounds(CULL_PADDING_DP);
         for (NodeVisualAdapter node : mNodeOrder) {
-            if (isNodeVisibleUi(node, CULL_PADDING_DP)) {
+            if (!canCull || isNodeVisibleUi(node, mTmpVisibleBounds)) {
                 node.drawNode(canvas, mViewport.getCamera());
             }
         }
     }
 
-    private boolean isNodeVisibleUi(NodeVisualAdapter node, float paddingDp) {
+    private boolean prepareVisibleBounds(float paddingDp) {
         if (getWidth() <= 0 || getHeight() <= 0) {
-            return true;
+            return false;
         }
         mViewport.getCamera().getVisibleUiRect(mTmpVisibleBounds, getWidth(), getHeight(), paddingDp);
+        return true;
+    }
+
+    private boolean isNodeVisibleUi(NodeVisualAdapter node, float paddingDp) {
+        if (!prepareVisibleBounds(paddingDp)) {
+            return true;
+        }
+        return isNodeVisibleUi(node, mTmpVisibleBounds);
+    }
+
+    private boolean isNodeVisibleUi(NodeVisualAdapter node, RectF visibleBounds) {
         node.getLogicalBounds(mTmpNodeBounds);
-        return mTmpNodeBounds.intersects(mTmpVisibleBounds.left, mTmpVisibleBounds.top, mTmpVisibleBounds.right, mTmpVisibleBounds.bottom);
+        return mTmpNodeBounds.intersects(visibleBounds.left, visibleBounds.top, visibleBounds.right, visibleBounds.bottom);
     }
 
     // --- 碰撞检测逻辑 ---

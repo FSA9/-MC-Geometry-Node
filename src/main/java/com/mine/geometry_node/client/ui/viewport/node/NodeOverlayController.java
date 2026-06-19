@@ -46,6 +46,8 @@ final class NodeOverlayController {
     private TextView mCommentButton;
     private TextView mCommentTooltip;
     private int mTotalHeight;
+    private boolean mMounted;
+    private boolean mHasOverlayViews;
 
     NodeOverlayController(UINode host, NodeData nodeData, NodeDef nodeDef, EditorContext editorContext, NodeLayoutEngine layoutEngine) {
         this.mHost = host;
@@ -55,17 +57,26 @@ final class NodeOverlayController {
         this.mLayoutEngine = layoutEngine;
     }
 
-    void rebuild(Context context, NodeLayout layout) {
+    void setLayout(NodeLayout layout) {
         mTotalHeight = layout != null ? layout.totalHeight : 0;
+        mHasOverlayViews = computeOverlayPresence();
+    }
 
-        mHost.removeAllViews();
-        mHintViews.clear();
-        mRemoveButtons.clear();
-        mAddButton = null;
-        mCommentButton = null;
-        mCommentTooltip = null;
-        if (sOpenCommentOverlay == this) {
-            sOpenCommentOverlay = null;
+    boolean ensureMounted(Context context) {
+        if (mMounted) {
+            return true;
+        }
+        if (!hasOverlayViews()) {
+            return false;
+        }
+        rebuild(context);
+        return mMounted;
+    }
+
+    void rebuild(Context context) {
+        release();
+        if (!hasOverlayViews()) {
+            return;
         }
 
         float currentY = UIConstants.Node.HEADER_HEIGHT;
@@ -81,20 +92,53 @@ final class NodeOverlayController {
 
         addDynamicAddButton(context, currentY);
         createCommentOverlayIfNeeded(context);
+        mMounted = hasMountedViews();
+    }
+
+    void release() {
+        if (!mMounted && mHost.getChildCount() == 0) {
+            clearViewRefs();
+            return;
+        }
+        mHost.removeAllViews();
+        clearViewRefs();
+    }
+
+    boolean isMounted() {
+        return mMounted;
+    }
+
+    boolean isCommentPopupVisible() {
+        return sOpenCommentOverlay == this
+                && mCommentTooltip != null
+                && mCommentTooltip.getVisibility() == View.VISIBLE;
     }
 
     boolean hasOverlayViews() {
-        return mAddButton != null || mCommentButton != null || !mRemoveButtons.isEmpty() || !mHintViews.isEmpty();
+        return mHasOverlayViews;
+    }
+
+    private boolean computeOverlayPresence() {
+        if (hasDynamicAddButton() || hasCommentOverlay()) {
+            return true;
+        }
+        for (int i = 0; i < mNodeDef.rows().size(); i++) {
+            PortRow row = mNodeDef.rows().get(i);
+            if (hasHintOverlay(row) || hasDynamicRemoveButton(row)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     int getOverlayWidthDp() {
-        return mCommentButton != null
+        return hasCommentOverlay()
                 ? UIConstants.Node.NODE_WIDTH + COMMENT_POPUP_WIDTH_DP
                 : UIConstants.Node.NODE_WIDTH;
     }
 
     int getOverlayHeightDp() {
-        return mCommentButton != null
+        return hasCommentOverlay()
                 ? Math.max(mTotalHeight, estimateCommentPopupHeightDp())
                 : mTotalHeight;
     }
@@ -105,6 +149,15 @@ final class NodeOverlayController {
                 itemSlot.setViewportScale(scale);
             }
         }
+    }
+
+    boolean mayContainInteractiveView(float localXpx, float localYpx) {
+        if (!hasOverlayViews()) {
+            return false;
+        }
+        float widthPx = UIUtils.dp2px(getOverlayWidthDp());
+        float heightPx = UIUtils.dp2px(getOverlayHeightDp());
+        return localXpx >= 0 && localXpx < widthPx && localYpx >= 0 && localYpx < heightPx;
     }
 
     View findInteractiveViewAt(float localXpx, float localYpx) {
@@ -139,8 +192,24 @@ final class NodeOverlayController {
         return false;
     }
 
+    private void clearViewRefs() {
+        mHintViews.clear();
+        mRemoveButtons.clear();
+        mAddButton = null;
+        mCommentButton = null;
+        mCommentTooltip = null;
+        mMounted = false;
+        if (sOpenCommentOverlay == this) {
+            sOpenCommentOverlay = null;
+        }
+    }
+
+    private boolean hasMountedViews() {
+        return mAddButton != null || mCommentButton != null || !mRemoveButtons.isEmpty() || !mHintViews.isEmpty();
+    }
+
     private void addHintView(Context context, int rowIndex, PortRow row, float currentY) {
-        if (row.uiHint() == null) return;
+        if (!hasHintOverlay(row)) return;
 
         UIHintRenderer renderer = HintRendererFactory.getRenderer(row.uiHint());
         if (renderer == null) return;
@@ -157,7 +226,7 @@ final class NodeOverlayController {
     }
 
     private void addDynamicRemoveButton(Context context, PortRow row, float currentY) {
-        if (!isDynamicRow(row)) return;
+        if (!hasDynamicRemoveButton(row)) return;
 
         String portId = row.leftPort() != null ? row.leftPort().id() : (row.rightPort() != null ? row.rightPort().id() : "");
         Integer removeIndex = row.hintParams() != null ? (Integer) row.hintParams().get(PortMetaKeys.DYNAMIC_INDEX) : null;
@@ -181,10 +250,7 @@ final class NodeOverlayController {
     }
 
     private void addDynamicAddButton(Context context, float currentY) {
-        boolean isInputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent();
-        boolean isOutputDynamic = mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT).isPresent();
-        boolean isGroupVirtualDynamic = isGroupVirtualDynamicNode();
-        if (!isInputDynamic && !isOutputDynamic && !isGroupVirtualDynamic) return;
+        if (!hasDynamicAddButton()) return;
 
         mAddButton = createDynamicButton(context, "+", true, null, null);
 
@@ -379,6 +445,33 @@ final class NodeOverlayController {
 
     private boolean isDynamicRow(PortRow row) {
         return row.hintParams() != null && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC));
+    }
+
+    private boolean hasHintOverlay(PortRow row) {
+        return row.uiHint() != null
+                && !isInputConnected(row)
+                && HintRendererFactory.getRenderer(row.uiHint()) != null;
+    }
+
+    private boolean hasDynamicRemoveButton(PortRow row) {
+        return isDynamicRow(row)
+                && row.hintParams() != null
+                && row.hintParams().get(PortMetaKeys.DYNAMIC_INDEX) instanceof Integer;
+    }
+
+    private boolean hasDynamicAddButton() {
+        return mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).isPresent()
+                || mNodeDef.getMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT).isPresent()
+                || isGroupVirtualDynamicNode();
+    }
+
+    private boolean hasCommentOverlay() {
+        String comment = mNodeDef.comment();
+        return comment != null && !comment.isBlank();
+    }
+
+    private boolean isInputConnected(PortRow row) {
+        return mNodeData.isInputConnected(row.leftPort() != null ? row.leftPort().id() : "");
     }
 
     private boolean isGroupVirtualDynamicNode() {

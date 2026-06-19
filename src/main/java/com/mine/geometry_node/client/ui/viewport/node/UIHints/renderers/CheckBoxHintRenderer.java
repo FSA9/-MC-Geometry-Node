@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -15,6 +16,11 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 
 public class CheckBoxHintRenderer implements UIHintRenderer {
+    private static final int COLOR_BG_OFF = 0xFF252525;
+    private static final int COLOR_BG_ON = 0xFF3D6EA8;
+    private static final int COLOR_BORDER_OFF = 0xFF3A3A3A;
+    private static final int COLOR_BORDER_ON = 0xFF6FA2DD;
+    private static final int COLOR_CHECK = 0xFFFFFFFF;
 
     @Override
     public float getRequiredExtraRows(PortRow row) {
@@ -37,29 +43,29 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
                 boolean isChecked = getTag() != null && (Boolean) getTag();
                 float w = getWidth();
                 float h = getHeight();
-                float r = w * 0f;
+                int r = UIUtils.dp2pxInt(2.0f);
                 mPaint.setAntiAlias(true);
 
-                float strokeWidth = Math.max(1.0f, w * 0.08f);
+                float strokeWidth = UIUtils.dp2px(1.0f);
                 float offset = strokeWidth / 2.0f;
 
                 mPaint.setStyle(Paint.Style.FILL);
-                mPaint.setColor(isChecked ? 0xFF3B82F6 : 0xFF252525);
-                canvas.drawRoundRect(offset, offset, w - offset, h - offset, r, (int) r, mPaint);
+                mPaint.setColor(isChecked ? COLOR_BG_ON : COLOR_BG_OFF);
+                canvas.drawRoundRect(offset, offset, w - offset, h - offset, r, r, mPaint);
 
                 mPaint.setStyle(Paint.Style.STROKE);
                 mPaint.setStrokeWidth(strokeWidth);
-                mPaint.setColor(0xFF555555);
-                canvas.drawRoundRect(offset, offset, w - offset, h - offset, r, (int) r, mPaint);
+                mPaint.setColor(isChecked ? COLOR_BORDER_ON : COLOR_BORDER_OFF);
+                canvas.drawRoundRect(offset, offset, w - offset, h - offset, r, r, mPaint);
 
                 if (isChecked) {
-                    mPaint.setColor(0xFFFFFFFF);
-                    mPaint.setStrokeWidth(Math.max(1.5f, w * 0.12f));
+                    mPaint.setColor(COLOR_CHECK);
+                    mPaint.setStrokeWidth(UIUtils.dp2px(1.6f));
                     mPaint.setStrokeCap(Paint.Cap.ROUND);
                     mPaint.setStrokeJoin(Paint.Join.ROUND);
 
-                    canvas.drawLine(w * 0.25f, h * 0.5f, w * 0.45f, h * 0.7f, mPaint);
-                    canvas.drawLine(w * 0.45f, h * 0.7f, w * 0.75f, h * 0.3f, mPaint);
+                    canvas.drawLine(w * 0.27f, h * 0.52f, w * 0.43f, h * 0.68f, mPaint);
+                    canvas.drawLine(w * 0.43f, h * 0.68f, w * 0.74f, h * 0.32f, mPaint);
                 }
             }
         };
@@ -78,14 +84,14 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        int cbSizePx = UIUtils.dp2pxInt(UIConstants.Node.CHECKBOX_DEFAULT_WIDTH);
+        int cbSizePx = UIUtils.dp2pxInt(UIHintUtils.getStandardInputHeight());
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(cbSizePx, cbSizePx);
         lp.gravity = Gravity.LEFT | Gravity.TOP;
         lp.leftMargin = UIUtils.dp2pxInt(UIConstants.Node.LABEL_MARGIN_PORT);
 
-        int rowHeightPx = UIUtils.dp2pxInt(UIConstants.Node.ROW_HEIGHT);
-        lp.topMargin = UIUtils.dp2pxInt(currentY) + (rowHeightPx - cbSizePx) / 2;
+        float verticalMargin = (UIConstants.Node.ROW_HEIGHT - UIHintUtils.getStandardInputHeight()) / 2.0f;
+        lp.topMargin = UIUtils.dp2pxInt(currentY + verticalMargin);
 
         view.setLayoutParams(lp);
     }

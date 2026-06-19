@@ -58,8 +58,12 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
     }
 
     private void syncAndLayoutUI(Context context) {
+        boolean overlayWasMounted = mOverlayController.isMounted();
         mLayout = mLayoutEngine.build(mNodeData, mNodeDef);
-        mOverlayController.rebuild(context, mLayout);
+        mOverlayController.setLayout(mLayout);
+        if (overlayWasMounted) {
+            mOverlayController.rebuild(context);
+        }
 
         // --- 3. 刷新整体尺寸 ---
         mTotalHeight = mLayout.totalHeight;
@@ -86,6 +90,22 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
     @Override
     public boolean hasOverlayViews() {
         return mOverlayController.hasOverlayViews();
+    }
+
+    @Override
+    public boolean ensureOverlayViews() {
+        return mOverlayController.ensureMounted(getContext());
+    }
+
+    @Override
+    public void releaseOverlayViews() {
+        mOverlayController.release();
+    }
+
+    @Override
+    public boolean isOverlayActive() {
+        return mOverlayController.isMounted()
+                && (findFocus() != null || mOverlayController.isCommentPopupVisible());
     }
 
     public int getOverlayWidthDp() {
@@ -178,6 +198,12 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
 
     @Override
     public View findInteractiveViewAt(float localXpx, float localYpx) {
+        if (!mOverlayController.isMounted() && !mOverlayController.mayContainInteractiveView(localXpx, localYpx)) {
+            return null;
+        }
+        if (!mOverlayController.isMounted() && !mOverlayController.ensureMounted(getContext())) {
+            return null;
+        }
         return mOverlayController.findInteractiveViewAt(localXpx, localYpx);
     }
 

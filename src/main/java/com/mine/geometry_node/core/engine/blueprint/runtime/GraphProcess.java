@@ -458,7 +458,11 @@ public class GraphProcess {
                     String nodeType = index.getNodeType(currentFlowId);
                     BaseNode logic = NodeRegistry.INSTANCE.get(nodeType);
                     if (logic == null) {
+                        System.err.println("[GraphVM] Missing node type during execution: " + nodeType +
+                                " at node " + index.getIdToString(currentFlowId));
                         state = State.ERROR;
+                        currentFlowId = -1;
+                        executionStack.clear();
                         return;
                     }
 
@@ -672,7 +676,12 @@ public class GraphProcess {
 
             try {
                 BaseNode logic = NodeRegistry.INSTANCE.get(index.getNodeType(nodeId));
-                if (logic == null) return null;
+                if (logic == null) {
+                    System.err.println("[GraphVM] Missing data node type during compute: " +
+                            index.getNodeType(nodeId) + " at node " + index.getIdToString(nodeId) +
+                            ", port " + portName);
+                    return null;
+                }
 
                 this.activeNodeId = nodeId;
                 result = logic.compute(this, portName);
