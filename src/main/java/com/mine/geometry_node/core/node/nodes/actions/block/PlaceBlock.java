@@ -18,8 +18,8 @@ import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * 模拟玩家放置方块。
- * 除了设置方块外，还会播放方块的放置音效并触发相应的游戏事件（如振动）。
+ * Sets one block state and emits placement-style sound/game events.
+ * This is not the full player item placement flow.
  */
 public class PlaceBlock extends BaseNode {
 
@@ -42,16 +42,13 @@ public class PlaceBlock extends BaseNode {
         if (posVec != null && state != null && context.getLevel() instanceof ServerLevel level) {
             BlockPos pos = BlockPos.containing(posVec);
 
-            // 1. 设置方块
             boolean success = level.setBlock(pos, state, 3);
 
             if (success) {
-                // 2. 模拟放置效果：获取并播放方块自带的放置声音
                 SoundType soundType = state.getSoundType();
                 level.playSound(null, pos, soundType.getPlaceSound(), SoundSource.BLOCKS,
                         (soundType.getVolume() + 1.0F) / 2.0F, soundType.getPitch() * 0.8F);
 
-                // 3. 触发游戏事件（例如让幽匿感应体感知到“放置方块”）
                 level.gameEvent(GameEvent.BLOCK_PLACE, pos, GameEvent.Context.of(null, state));
             }
         }

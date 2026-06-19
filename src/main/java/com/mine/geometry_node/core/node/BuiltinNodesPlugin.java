@@ -62,10 +62,9 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 //        registry.register("actions/ai", new StopNavigation());
 
         // Actions/Block
-//        registry.register("actions/block", new BreakBlock());
-        registry.register("actions/block", new BreakBlockAndDrop());
+        registry.register("actions/block", new BreakBlock());
         registry.register("actions/block", new IgniteBlock());
-//        registry.register("actions/block", new SetBlockProperty());
+        registry.register("actions/block", new SetBlockProperty());
 //        registry.register("actions/block", new UpdateBlock());
         registry.register("actions/block", new FillBlock());
         registry.register("actions/block", new PlaceBlock());

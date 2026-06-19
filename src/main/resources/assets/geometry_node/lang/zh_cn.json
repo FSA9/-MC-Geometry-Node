@@ -167,13 +167,12 @@
   "geometry_node.node.stop_navigation": "停止寻路",
 
   "--- ACTIONS/BLOCK ---": "--- 方块动作 ---",
-  "geometry_node.node.break_block_and_drop": "破坏方块并掉落",
   "geometry_node.node.ignite_block": "点燃方块",
   "geometry_node.node.set_block_property": "设置方块属性",
   "geometry_node.node.update_block": "更新方块状态",
-  "geometry_node.node.break_block": "方块破坏",
+  "geometry_node.node.break_block": "破坏方块",
   "geometry_node.node.fill_block": "填充方块",
-  "geometry_node.node.place_block": "放置方块",
+  "geometry_node.node.place_block": "设置方块(放置效果)",
   "geometry_node.node.set_block_state": "设置方块状态",
   "geometry_node.node.spawn_falling_block": "生成掉落方块",
 
