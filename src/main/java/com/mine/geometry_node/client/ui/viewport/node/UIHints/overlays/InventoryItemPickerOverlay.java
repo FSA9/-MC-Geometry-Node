@@ -18,7 +18,7 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
@@ -315,7 +315,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
                 }
 
                 @Override
-                public void onDraw(@Nonnull GuiGraphics gr, int mouseX, int mouseY, float deltaTick, double guiScale, float alpha) {
+                public void onDraw(@Nonnull GuiGraphicsExtractor gr, int mouseX, int mouseY, float deltaTick, double guiScale, float alpha) {
                     if (ItemStackView.this.stack.isEmpty()) {
                         return;
                     }
@@ -339,8 +339,8 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             return stack;
         }
 
-        private void drawStack(GuiGraphics gr, double guiScale) {
-            gr.pose().pushPose();
+        private void drawStack(GuiGraphicsExtractor gr, double guiScale) {
+            gr.pose().pushMatrix();
             float safeGuiScale = guiScale > 0.0 ? (float) guiScale : 1.0f;
             float slotGuiW = getWidth() / safeGuiScale;
             float slotGuiH = getHeight() / safeGuiScale;
@@ -348,11 +348,11 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             float itemScale = contentSize / ITEM_SIZE_GUI;
             float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;
             float drawY = (slotGuiH - ITEM_SIZE_GUI * itemScale) / 2.0f;
-            gr.pose().translate(drawX, drawY, 0.0f);
-            gr.pose().scale(itemScale, itemScale, 1.0f);
-            gr.renderItem(stack, 0, 0);
-            gr.renderItemDecorations(Minecraft.getInstance().font, stack, 0, 0);
-            gr.pose().popPose();
+            gr.pose().translate(drawX, drawY);
+            gr.pose().scale(itemScale, itemScale);
+            gr.item(stack, 0, 0);
+            gr.itemDecorations(Minecraft.getInstance().font, stack, 0, 0);
+            gr.pose().popMatrix();
         }
 
         @Override

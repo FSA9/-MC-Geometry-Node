@@ -8,9 +8,11 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.Interaction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -34,7 +36,7 @@ public class SpawnInteractionEntity extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         Level level = context.getLevel();
-        if (level == null || level.isClientSide) return next(StandardPorts.FLOW_OUT.getId());
+        if (level == null || level.isClientSide()) return next(StandardPorts.FLOW_OUT.getId());
 
         Vec3 pos = getInput(context, StandardPorts.XYZ.getId(), Vec3.class);
         if (pos == null) pos = Vec3.ZERO;
@@ -43,16 +45,15 @@ public class SpawnInteractionEntity extends BaseNode {
         Float height = getInput(context, StandardPorts.HEIGHT.getId(), Float.class);
         Boolean responsive = getInput(context, StandardPorts.RESPONSIVE.getId(), Boolean.class);
 
-        Interaction interaction = EntityType.INTERACTION.create(level);
+        Interaction interaction = EntityType.INTERACTION.create(level, EntitySpawnReason.COMMAND);
         if (interaction != null) {
             interaction.setPos(pos.x, pos.y, pos.z);
 
-            CompoundTag nbt = new CompoundTag();
-            interaction.saveWithoutId(nbt);
+            CompoundTag nbt = EntityNbtCompat.saveWithoutId(interaction);
             nbt.putFloat("width", width != null ? width : 1.0f);
             nbt.putFloat("height", height != null ? height : 1.0f);
             nbt.putBoolean("response", responsive != null && responsive);
-            interaction.load(nbt);
+            EntityNbtCompat.load(interaction, nbt);
 
             level.addFreshEntity(interaction);
             context.setTempData("spawned_interaction_" + context.getCurrentNodeId(), interaction);

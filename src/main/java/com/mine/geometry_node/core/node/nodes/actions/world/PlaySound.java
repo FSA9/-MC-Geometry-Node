@@ -12,7 +12,7 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
@@ -50,9 +50,9 @@ public class PlaySound extends BaseNode {
         Float pitch = getInput(context, StandardPorts.PITCH.getIdWithIndex(1), Float.class);
 
         if (pos != null && soundId != null && context.getLevel() instanceof ServerLevel level) {
-            ResourceLocation rl = ResourceLocation.tryParse(soundId);
+            Identifier rl = Identifier.tryParse(soundId);
             if (rl != null) {
-                SoundEvent soundEvent = BuiltInRegistries.SOUND_EVENT.get(rl);
+                SoundEvent soundEvent = BuiltInRegistries.SOUND_EVENT.getValue(rl);
                 if (soundEvent != null) {
                     float vol = volume != null ? volume : 1.0f;
                     float p = pitch != null ? pitch : 1.0f;

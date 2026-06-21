@@ -13,8 +13,8 @@ import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.monster.ZombieVillager;
-import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.monster.zombie.ZombieVillager;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
@@ -142,7 +142,7 @@ public class EntityDispatcher {
             if (!event.getEntity().level().isClientSide()) {
                 GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityChangeDimension.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
-                        StandardPorts.DIMENSION.getId(), event.getDimension().location().toString()
+                        StandardPorts.DIMENSION.getId(), event.getDimension().identifier().toString()
                 ));
             }
         });
@@ -248,7 +248,7 @@ public class EntityDispatcher {
 
         bus.addListener((MobEffectEvent.Added event) -> {
             if (!event.getEntity().level().isClientSide() && event.getEffectInstance() != null) {
-                String effectId = event.getEffectInstance().getEffect().unwrapKey().map(key -> key.location().toString()).orElse("unknown");
+                String effectId = event.getEffectInstance().getEffect().unwrapKey().map(key -> key.identifier().toString()).orElse("unknown");
                 GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityPotionEffectApply.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.TYPE.getId(), effectId,
@@ -259,7 +259,7 @@ public class EntityDispatcher {
 
         bus.addListener((MobEffectEvent.Expired event) -> {
             if (!event.getEntity().level().isClientSide() && event.getEffectInstance() != null) {
-                String effectId = event.getEffectInstance().getEffect().unwrapKey().map(key -> key.location().toString()).orElse("unknown");
+                String effectId = event.getEffectInstance().getEffect().unwrapKey().map(key -> key.identifier().toString()).orElse("unknown");
                 GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityPotionEffectExpire.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.TYPE.getId(), effectId
@@ -269,7 +269,7 @@ public class EntityDispatcher {
 
         bus.addListener((MobEffectEvent.Remove event) -> {
             if (!event.getEntity().level().isClientSide() && event.getEffectInstance() != null) {
-                String effectId = event.getEffectInstance().getEffect().unwrapKey().map(key -> key.location().toString()).orElse("unknown");
+                String effectId = event.getEffectInstance().getEffect().unwrapKey().map(key -> key.identifier().toString()).orElse("unknown");
                 GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityPotionEffectRemove.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.TYPE.getId(), effectId

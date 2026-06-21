@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -59,18 +60,19 @@ public class ClientVisualManager {
         }
     }
 
-    public static void renderWorld(PoseStack poseStack, Camera camera) {
+    public static void renderWorld(PoseStack poseStack, SubmitNodeCollector submitNodeCollector) {
         if (ACTIVE_EFFECTS.isEmpty()) return;
 
-        Vec3 camPos = camera.getPosition();
-        float partialTick = (float) Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
+        Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        Vec3 camPos = camera.position();
+        float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
 
         MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
 
         poseStack.pushPose();
 
         for (int i = 0; i < ACTIVE_EFFECTS.size(); i++) {
-            ACTIVE_EFFECTS.get(i).render(poseStack, bufferSource, camPos, partialTick);
+            ACTIVE_EFFECTS.get(i).render(poseStack, bufferSource, submitNodeCollector, camPos, partialTick);
         }
 
         poseStack.popPose();

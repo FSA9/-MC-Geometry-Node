@@ -7,7 +7,8 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ClipContext;
@@ -38,17 +39,17 @@ public class RayBeamEffect extends AbstractVisualEffect {
         super(packet);
         CompoundTag data = packet.extraData();
         if (data != null) {
-            this.sourceEntityId = data.getInt("sourceId");
-            this.posOffset = new Vec3(data.getDouble("offX"), data.getDouble("offY"), data.getDouble("offZ"));
-            this.pitchOffset = data.getFloat("offPitch");
-            this.yawOffset = data.getFloat("offYaw");
-            this.maxLength = data.getFloat("length");
-            this.radius = data.getFloat("radius");
+            this.sourceEntityId = data.getIntOr("sourceId", -1);
+            this.posOffset = new Vec3(data.getDoubleOr("offX", 0.0), data.getDoubleOr("offY", 0.0), data.getDoubleOr("offZ", 0.0));
+            this.pitchOffset = data.getFloatOr("offPitch", 0.0f);
+            this.yawOffset = data.getFloatOr("offYaw", 0.0f);
+            this.maxLength = data.getFloatOr("length", 20.0f);
+            this.radius = data.getFloatOr("radius", 0.1f);
 
-            this.penSolid = data.getBoolean("penSolid");
-            this.penTrans = data.getBoolean("penTrans");
-            this.penEnt = data.getBoolean("penEnt");
-            this.maxEnt = data.getInt("maxEnt");
+            this.penSolid = data.getBooleanOr("penSolid", false);
+            this.penTrans = data.getBooleanOr("penTrans", true);
+            this.penEnt = data.getBooleanOr("penEnt", false);
+            this.maxEnt = data.getIntOr("maxEnt", 1);
         } else {
             this.sourceEntityId = -1; this.posOffset = Vec3.ZERO;
             this.pitchOffset = 0; this.yawOffset = 0; this.maxLength = 20; this.radius = 0.1f;
@@ -137,7 +138,7 @@ public class RayBeamEffect extends AbstractVisualEffect {
 
     // 【核心优化】：Render 彻底变成纯数学绘图，144Hz 跑起来毫无压力
     @Override
-    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos, float partialTick) {
+    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, SubmitNodeCollector submitNodeCollector, Vec3 camPos, float partialTick) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null || sourceEntityId == -1) return;
 
@@ -171,7 +172,7 @@ public class RayBeamEffect extends AbstractVisualEffect {
 
         Vec3 p5 = p1.add(d), p6 = p2.add(d), p7 = p3.add(d), p8 = p4.add(d);
 
-        VertexConsumer buffer = bufferSource.getBuffer(RenderType.lightning());
+        VertexConsumer buffer = bufferSource.getBuffer(RenderTypes.lightning());
         Matrix4f matrix = poseStack.last().pose();
         float[] c = RenderUtils.unpackColor(color);
 

@@ -12,7 +12,7 @@ public interface GeometryEventDispatcher {
     void dispatch(ServerLevel level, @Nullable Entity target, String eventTypeId, EventPayload payload);
 
     default void dispatch(Entity target, String eventTypeId, EventPayload payload) {
-        if (target == null || target.level().isClientSide) {
+        if (target == null || target.level().isClientSide()) {
             return;
         }
         dispatch((ServerLevel) target.level(), target, eventTypeId, payload);

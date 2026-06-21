@@ -11,7 +11,7 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -60,7 +60,7 @@ public class GetItemStack extends BaseNode {
         if (rawItem instanceof Item i) {
             item = i;
         } else if (rawItem instanceof String s) {
-            ResourceLocation loc = ResourceLocation.tryParse(s);
+            Identifier loc = Identifier.tryParse(s);
             if (loc != null) {
                 // 在 1.21 中，从注册表安全获取 Item
                 item = BuiltInRegistries.ITEM.getOptional(loc).orElse(Items.AIR);

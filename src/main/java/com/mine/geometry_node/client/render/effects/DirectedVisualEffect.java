@@ -18,11 +18,11 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
         CompoundTag data = packet.extraData();
 
         if (data != null) {
-            this.sourceEntityId = data.contains("sourceId") ? data.getInt("sourceId") : -1;
-            this.baseStart = new Vec3(data.getDouble("startX"), data.getDouble("startY"), data.getDouble("startZ"));
-            this.targetEntityId = data.contains("targetId") ? data.getInt("targetId") : -1;
-            this.baseEnd = new Vec3(data.getDouble("endX"), data.getDouble("endY"), data.getDouble("endZ"));
-            this.baseSize = data.contains("size") ? data.getFloat("size") : 1.0f;
+            this.sourceEntityId = data.getIntOr("sourceId", -1);
+            this.baseStart = new Vec3(data.getDoubleOr("startX", 0.0), data.getDoubleOr("startY", 0.0), data.getDoubleOr("startZ", 0.0));
+            this.targetEntityId = data.getIntOr("targetId", -1);
+            this.baseEnd = new Vec3(data.getDoubleOr("endX", 0.0), data.getDoubleOr("endY", 0.0), data.getDoubleOr("endZ", 0.0));
+            this.baseSize = data.getFloatOr("size", 1.0f);
         } else {
             this.sourceEntityId = -1;
             this.baseStart = Vec3.ZERO;

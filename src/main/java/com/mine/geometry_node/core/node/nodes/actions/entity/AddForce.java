@@ -36,7 +36,6 @@ public class AddForce extends BaseNode {
                 Vec3 currentVelocity = entity.getDeltaMovement();
                 entity.setDeltaMovement(currentVelocity.add(force));
 
-                entity.hasImpulse = true;
                 entity.hurtMarked = true;
 
                 // 构建原版物理同步数据包
@@ -51,7 +50,7 @@ public class AddForce extends BaseNode {
                 // 4. 发给周围所有“看着”这个实体的其他客户端！
                 // 绕过延迟，强制全服瞬间同步该实体的速度！
                 if (context.getLevel() != null) {
-                    context.getLevel().getChunkSource().broadcast(entity, packet);
+                    context.getLevel().getChunkSource().sendToTrackingPlayers(entity, packet);
                 }
             }
         }

@@ -6,7 +6,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.List;
 
@@ -25,7 +25,7 @@ public class RegistryDataManager {
     public static List<String> getAllBlocks() {
         if (BLOCK_CACHE == null) {
             BLOCK_CACHE = BuiltInRegistries.BLOCK.keySet().stream()
-                    .map(ResourceLocation::toString).sorted().toList();
+                    .map(id -> id.toString()).sorted().toList();
         }
         return BLOCK_CACHE;
     }
@@ -33,7 +33,7 @@ public class RegistryDataManager {
     public static List<String> getAllItems() {
         if (ITEM_CACHE == null) {
             ITEM_CACHE = BuiltInRegistries.ITEM.keySet().stream()
-                    .map(ResourceLocation::toString).sorted().toList();
+                    .map(id -> id.toString()).sorted().toList();
         }
         return ITEM_CACHE;
     }
@@ -41,7 +41,7 @@ public class RegistryDataManager {
     public static List<String> getAllEntityTypes() {
         if (ENTITY_TYPE_CACHE == null) {
             ENTITY_TYPE_CACHE = BuiltInRegistries.ENTITY_TYPE.keySet().stream()
-                    .map(ResourceLocation::toString).sorted().toList();
+                    .map(id -> id.toString()).sorted().toList();
         }
         return ENTITY_TYPE_CACHE;
     }
@@ -49,7 +49,7 @@ public class RegistryDataManager {
     public static List<String> getAllEffects() {
         if (EFFECT_CACHE == null) {
             EFFECT_CACHE = BuiltInRegistries.MOB_EFFECT.keySet().stream()
-                    .map(ResourceLocation::toString).sorted().toList();
+                    .map(id -> id.toString()).sorted().toList();
         }
         return EFFECT_CACHE;
     }
@@ -57,7 +57,7 @@ public class RegistryDataManager {
     public static List<String> getAllSounds() {
         if (SOUND_CACHE == null) {
             SOUND_CACHE = BuiltInRegistries.SOUND_EVENT.keySet().stream()
-                    .map(net.minecraft.resources.ResourceLocation::toString)
+                    .map(id -> id.toString())
                     .sorted()
                     .toList();
         }
@@ -67,7 +67,7 @@ public class RegistryDataManager {
     public static List<String> getAllParticles() {
         if (PARTICLE_CACHE == null) {
             PARTICLE_CACHE = BuiltInRegistries.PARTICLE_TYPE.keySet().stream()
-                    .map(ResourceLocation::toString).sorted().toList();
+                    .map(id -> id.toString()).sorted().toList();
         }
         return PARTICLE_CACHE;
     }
@@ -84,7 +84,7 @@ public class RegistryDataManager {
 
     public static List<String> getEntityTypes() {
         return BuiltInRegistries.ENTITY_TYPE.keySet().stream()
-                .map(ResourceLocation::toString)
+                .map(id -> id.toString())
                 .sorted()
                 .toList();
     }
@@ -111,7 +111,7 @@ public class RegistryDataManager {
             if (net.minecraft.client.Minecraft.getInstance().getConnection() != null) {
                 List<String> dynamicDims = net.minecraft.client.Minecraft.getInstance().getConnection().levels()
                         .stream()
-                        .map(key -> key.location().toString())
+                        .map(key -> key.identifier().toString())
                         .sorted()
                         .toList();
 
@@ -154,20 +154,13 @@ public class RegistryDataManager {
         }
 
         try {
-            var registryOpt = access.registry(registryKey);
-
-            if (registryOpt.isEmpty()) {
-                System.err.println("Registry not found for: " + registryKey.location());
-                return List.of();
-            }
-
-            return registryOpt.get().keySet().stream()
-                    .map(ResourceLocation::toString)
+            return access.lookupOrThrow(registryKey).keySet().stream()
+                    .map(id -> id.toString())
                     .sorted()
                     .toList();
 
         } catch (Exception e) {
-            System.err.println("[RegistryDataManager] Failed to fetch dynamic registry: " + registryKey.location());
+            System.err.println("[RegistryDataManager] Failed to fetch dynamic registry: " + registryKey.identifier());
             e.printStackTrace();
             return List.of();
         }

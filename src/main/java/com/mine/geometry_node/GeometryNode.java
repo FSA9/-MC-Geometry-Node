@@ -1,5 +1,6 @@
 package com.mine.geometry_node;
 
+import com.mojang.serialization.MapCodec;
 import com.mine.geometry_node.core.command.registry.ModServerCommands;
 import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
@@ -18,7 +19,10 @@ import dev.architectury.registry.ReloadListenerRegistry;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackType;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.attachment.IAttachmentHolder;
 import net.neoforged.neoforge.attachment.IAttachmentSerializer;
@@ -48,33 +52,44 @@ public class GeometryNode {
 
     public static final Supplier<AttachmentType<EntityGraphAttachment>> GRAPH_DATA_ATTACHMENT =
             ATTACHMENT_TYPES.register("graph_data", () -> AttachmentType.builder(() -> new EntityGraphAttachment())
-                    .serialize(new IAttachmentSerializer<CompoundTag, EntityGraphAttachment>() {
+                    .serialize(new IAttachmentSerializer<EntityGraphAttachment>() {
                         @Override
-                        public CompoundTag write(EntityGraphAttachment attachment, HolderLookup.Provider provider) {
-                            return attachment.save(new CompoundTag(), provider);
+                        public EntityGraphAttachment read(IAttachmentHolder holder, ValueInput input) {
+                            EntityGraphAttachment newAttachment = new EntityGraphAttachment();
+                            CompoundTag tag = input.read(MapCodec.assumeMapUnsafe(CompoundTag.CODEC)).orElseGet(CompoundTag::new);
+                            newAttachment.load(tag, input.lookup());
+                            return newAttachment;
                         }
 
                         @Override
-                        public EntityGraphAttachment read(IAttachmentHolder holder, CompoundTag tag, HolderLookup.Provider provider) {
-                            EntityGraphAttachment newAttachment = new EntityGraphAttachment();
-                            newAttachment.load(tag, provider);
-                            return newAttachment;
+                        public boolean write(EntityGraphAttachment attachment, ValueOutput output) {
+                            CompoundTag tag = attachment.save(new CompoundTag(), HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                            output.store(tag);
+                            return !tag.isEmpty();
                         }
                     }).build());
 
     public static final Supplier<AttachmentType<EntityImmunityAttachment>> IMMUNITY_ATTACHMENT =
             ATTACHMENT_TYPES.register("immunities", () -> AttachmentType.builder(EntityImmunityAttachment::new)
-                    .serialize(new IAttachmentSerializer<ListTag, EntityImmunityAttachment>() {
+                    .serialize(new IAttachmentSerializer<EntityImmunityAttachment>() {
                         @Override
-                        public ListTag write(EntityImmunityAttachment attachment, HolderLookup.Provider provider) {
-                            return attachment.save(provider);
+                        public EntityImmunityAttachment read(IAttachmentHolder holder, ValueInput input) {
+                            EntityImmunityAttachment attachment = new EntityImmunityAttachment();
+                            CompoundTag tag = input.read(MapCodec.assumeMapUnsafe(CompoundTag.CODEC)).orElseGet(CompoundTag::new);
+                            attachment.load(tag.getListOrEmpty("Immunities"), input.lookup());
+                            return attachment;
                         }
 
                         @Override
-                        public EntityImmunityAttachment read(IAttachmentHolder holder, ListTag tag, HolderLookup.Provider provider) {
-                            EntityImmunityAttachment attachment = new EntityImmunityAttachment();
-                            attachment.load(tag, provider);
-                            return attachment;
+                        public boolean write(EntityImmunityAttachment attachment, ValueOutput output) {
+                            ListTag list = attachment.save(HolderLookup.Provider.create(java.util.stream.Stream.empty()));
+                            if (list.isEmpty()) {
+                                return false;
+                            }
+                            CompoundTag tag = new CompoundTag();
+                            tag.put("Immunities", list);
+                            output.store(tag);
+                            return true;
                         }
                     })
                     .copyOnDeath()
@@ -98,8 +113,16 @@ public class GeometryNode {
         GraphEventHandler.init();
 
         // 注册蓝图资源管理器 (监听 data/*/graphs/ 目录下的 JSON)
-        ReloadListenerRegistry.register(PackType.SERVER_DATA, GraphResourceManager.getInstance());
-        ReloadListenerRegistry.register(PackType.SERVER_DATA, MultiblockStructureManager.getInstance());
+        ReloadListenerRegistry.register(
+                PackType.SERVER_DATA,
+                GraphResourceManager.getInstance(),
+                Identifier.fromNamespaceAndPath(MODID, "graphs")
+        );
+        ReloadListenerRegistry.register(
+                PackType.SERVER_DATA,
+                MultiblockStructureManager.getInstance(),
+                Identifier.fromNamespaceAndPath(MODID, "multiblocks")
+        );
 
         ATTACHMENT_TYPES.register(modEventBus);
 

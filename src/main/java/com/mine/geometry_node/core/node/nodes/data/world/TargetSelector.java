@@ -10,9 +10,13 @@ import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.*;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.permissions.PermissionSet;
+import net.minecraft.world.entity.Entity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -193,8 +197,8 @@ public class TargetSelector extends BaseNode {
                     Map<String, Object> dict = getInputDict(context, StandardPorts.DICT.getIdWithIndex(i));
                     if (!dict.isEmpty() && context.getLevel() != null) {
                         Tag gnTag = VariableRegistry.toTag(dict, context.getLevel().registryAccess());
-                        if (gnTag instanceof CompoundTag c && c.contains("data", Tag.TAG_COMPOUND)) {
-                            arguments.add("nbt=" + c.getCompound("data").toString());
+                        if (gnTag instanceof CompoundTag c && c.contains("data")) {
+                            arguments.add("nbt=" + c.getCompoundOrEmpty("data"));
                         }
                     }
                 }
@@ -220,14 +224,22 @@ public class TargetSelector extends BaseNode {
         String finalSelector = base + (!arguments.isEmpty() ? "[" + String.join(",", arguments) + "]" : "");
 
         try {
-            net.minecraft.world.entity.Entity explicitEntity = getInput(context, StandardPorts.ENTITY.getId(), net.minecraft.world.entity.Entity.class);
-            net.minecraft.commands.CommandSourceStack source;
+            Entity explicitEntity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+            CommandSourceStack source;
+            ServerLevel serverLevel = context.getLevel();
 
-            if (explicitEntity != null) source = explicitEntity.createCommandSourceStack().withPermission(4);
-            else if (context.getEntity() != null) source = context.getEntity().createCommandSourceStack().withPermission(4);
-            else if (context.getLevel() != null) {
-                net.minecraft.server.level.ServerLevel serverLevel = context.getLevel();
-                source = serverLevel.getServer().createCommandSourceStack().withLevel(serverLevel).withPermission(4);
+            if (explicitEntity != null && explicitEntity.level() instanceof ServerLevel level) {
+                source = explicitEntity.createCommandSourceStackForNameResolution(level)
+                        .withPermission(PermissionSet.ALL_PERMISSIONS);
+            }
+            else if (context.getEntity() != null && context.getEntity().level() instanceof ServerLevel level) {
+                source = context.getEntity().createCommandSourceStackForNameResolution(level)
+                        .withPermission(PermissionSet.ALL_PERMISSIONS);
+            }
+            else if (serverLevel != null) {
+                source = serverLevel.getServer().createCommandSourceStack()
+                        .withLevel(serverLevel)
+                        .withPermission(PermissionSet.ALL_PERMISSIONS);
             }
             else return List.of();
 

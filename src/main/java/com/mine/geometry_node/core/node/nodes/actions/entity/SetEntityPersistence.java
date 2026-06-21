@@ -8,7 +8,10 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
@@ -38,10 +41,11 @@ public class SetEntityPersistence extends BaseNode {
                     if (value) {
                         mob.setPersistenceRequired(); // 原生快捷方法
                     } else {
-                        CompoundTag tag = new CompoundTag();
-                        if (mob.saveAsPassenger(tag)) {
+                        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, mob.registryAccess());
+                        if (mob.saveAsPassenger(output)) {
+                            CompoundTag tag = output.buildResult();
                             tag.putBoolean("PersistenceRequired", false);
-                            mob.load(tag);
+                            EntityNbtCompat.load(mob, tag);
                         }
                     }
                 }

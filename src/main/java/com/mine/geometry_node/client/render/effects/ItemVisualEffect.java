@@ -4,10 +4,12 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
@@ -15,6 +17,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 
 public class ItemVisualEffect extends AbstractVisualEffect {
+    private static final int FULL_BRIGHT_LIGHT = 15728880;
 
     private final int sourceEntityId;
     private ItemStack itemStack = ItemStack.EMPTY;
@@ -29,13 +32,13 @@ public class ItemVisualEffect extends AbstractVisualEffect {
         CompoundTag data = packet.extraData();
 
         if (data != null) {
-            this.sourceEntityId = data.contains("sourceId") ? data.getInt("sourceId") : -1;
+            this.sourceEntityId = data.getIntOr("sourceId", -1);
 
-            this.bTrans = new Vec3(data.getDouble("bTransX"), data.getDouble("bTransY"), data.getDouble("bTransZ"));
-            this.bRot = new Vec3(data.getDouble("bRotX"), data.getDouble("bRotY"), data.getDouble("bRotZ"));
-            this.bScale = new Vec3(data.getDouble("bScaleX"), data.getDouble("bScaleY"), data.getDouble("bScaleZ"));
+            this.bTrans = new Vec3(data.getDoubleOr("bTransX", 0.0), data.getDoubleOr("bTransY", 0.0), data.getDoubleOr("bTransZ", 0.0));
+            this.bRot = new Vec3(data.getDoubleOr("bRotX", 0.0), data.getDoubleOr("bRotY", 0.0), data.getDoubleOr("bRotZ", 0.0));
+            this.bScale = new Vec3(data.getDoubleOr("bScaleX", 1.0), data.getDoubleOr("bScaleY", 1.0), data.getDoubleOr("bScaleZ", 1.0));
 
-            String contextStr = data.getString("item_display");
+            String contextStr = data.getStringOr("item_display", "fixed");
             try {
                 this.displayContext = ItemDisplayContext.valueOf(contextStr.toUpperCase());
             } catch (IllegalArgumentException e) {
@@ -44,8 +47,11 @@ public class ItemVisualEffect extends AbstractVisualEffect {
 
             ClientLevel level = Minecraft.getInstance().level;
             if (level != null && data.contains("item")) {
-                CompoundTag itemTag = data.getCompound("item");
-                this.itemStack = ItemStack.parseOptional(level.registryAccess(), itemTag);
+                CompoundTag itemTag = data.getCompoundOrEmpty("item");
+                this.itemStack = ItemStack.OPTIONAL_CODEC
+                        .parse(level.registryAccess().createSerializationContext(NbtOps.INSTANCE), itemTag)
+                        .result()
+                        .orElse(ItemStack.EMPTY);
 
                 if (this.itemStack.isEmpty()) {
                     System.err.println("[ItemVisualEffect] 警告：客户端接收到的物品为空！");
@@ -58,7 +64,7 @@ public class ItemVisualEffect extends AbstractVisualEffect {
     }
 
     @Override
-    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos, float partialTick) {
+    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, SubmitNodeCollector submitNodeCollector, Vec3 camPos, float partialTick) {
         if (this.itemStack.isEmpty()) return;
 
         updateVariables(partialTick);
@@ -113,17 +119,21 @@ public class ItemVisualEffect extends AbstractVisualEffect {
         poseStack.mulPose(rotationQuat);
         poseStack.scale((float) scale.x, (float) scale.y, (float) scale.z);
 
-        int light = LightTexture.FULL_BRIGHT;
-
-        Minecraft.getInstance().getItemRenderer().renderStatic(
+        ItemStackRenderState renderState = new ItemStackRenderState();
+        Minecraft.getInstance().getItemModelResolver().updateForTopItem(
+                renderState,
                 this.itemStack,
                 this.displayContext,
-                light,
-                OverlayTexture.NO_OVERLAY,
-                poseStack,
-                bufferSource,
                 level,
+                null,
                 sourceEntityId
+        );
+        renderState.submit(
+                poseStack,
+                submitNodeCollector,
+                FULL_BRIGHT_LIGHT,
+                OverlayTexture.NO_OVERLAY,
+                0
         );
 
         poseStack.popPose();

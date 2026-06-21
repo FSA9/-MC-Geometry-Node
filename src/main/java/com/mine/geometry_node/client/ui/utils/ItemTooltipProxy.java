@@ -46,7 +46,7 @@ public class ItemTooltipProxy {
     public static void onRenderGuiPost(RenderGuiEvent.Post event) {
         if (!currentStack.isEmpty()) {
             Minecraft mc = Minecraft.getInstance();
-            event.getGuiGraphics().renderTooltip(mc.font, currentStack, tooltipX, tooltipY);
+            event.getGuiGraphics().setTooltipForNextFrame(mc.font, currentStack, tooltipX, tooltipY);
         }
     }
 }

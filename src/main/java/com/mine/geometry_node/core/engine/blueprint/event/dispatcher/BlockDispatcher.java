@@ -17,7 +17,7 @@ public class BlockDispatcher {
         // 方块破坏
         BlockEvent.BREAK.register((level, pos, state, player, xp) -> {
             if (!level.isClientSide()) {
-                String dimensionId = level.dimension().location().toString();
+                String dimensionId = level.dimension().identifier().toString();
 
                 GraphEngine.dispatchEvent((ServerLevel) level, player, OnBlockBreak.TYPE_ID, GraphEventData.of(
                         StandardPorts.XYZ.getId(), pos,
@@ -33,7 +33,7 @@ public class BlockDispatcher {
         BlockEvent.PLACE.register((level, pos, state, entity) -> {
             if (!level.isClientSide()) {
                 ServerLevel serverLevel = (ServerLevel) level;
-                String dimensionId = level.dimension().location().toString();
+                String dimensionId = level.dimension().identifier().toString();
 
                 if (entity != null) {
                     GraphEngine.dispatchEvent(serverLevel, entity, OnBlockPlace.TYPE_ID, GraphEventData.of(

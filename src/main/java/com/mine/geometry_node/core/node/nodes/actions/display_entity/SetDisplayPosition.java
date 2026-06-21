@@ -10,6 +10,7 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Display;
@@ -48,10 +49,9 @@ public class SetDisplayPosition extends BaseNode {
             if (entity instanceof Display displayEntity) {
 
                 if (tpDuration != null) {
-                    CompoundTag nbt = new CompoundTag();
-                    displayEntity.saveWithoutId(nbt);
+                    CompoundTag nbt = EntityNbtCompat.saveWithoutId(displayEntity);
                     nbt.putInt("teleport_duration", Math.max(0, tpDuration));
-                    displayEntity.load(nbt);
+                    EntityNbtCompat.load(displayEntity, nbt);
                 }
 
                 // 真正的底层区块坐标转移

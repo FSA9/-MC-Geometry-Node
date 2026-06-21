@@ -13,7 +13,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EquipmentSlotGroup;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
@@ -76,9 +76,11 @@ public class AddAttributeModifier extends BaseNode {
         }
 
         if (stack != null && !stack.isEmpty() && attrId != null && !attrId.isEmpty() && amount != null) {
-            ResourceLocation loc = ResourceLocation.tryParse(attrId);
+            Identifier loc = Identifier.tryParse(attrId);
             if (loc != null) {
-                Optional<Holder.Reference<Attribute>> attrOpt = BuiltInRegistries.ATTRIBUTE.getHolder(loc);
+                Optional<Holder<Attribute>> attrOpt = BuiltInRegistries.ATTRIBUTE
+                        .getOptional(loc)
+                        .map(BuiltInRegistries.ATTRIBUTE::wrapAsHolder);
 
                 attrOpt.ifPresent(attributeHolder -> {
                     AttributeModifier.Operation operation = switch (opStr != null ? opStr : "ADD_VALUE") {
@@ -97,7 +99,7 @@ public class AddAttributeModifier extends BaseNode {
                         default -> EquipmentSlotGroup.ANY;
                     };
 
-                    ResourceLocation modifierId = ResourceLocation.fromNamespaceAndPath("geometry_node", "modifier_" + loc.getPath());
+                    Identifier modifierId = Identifier.fromNamespaceAndPath("geometry_node", "modifier_" + loc.getPath());
                     AttributeModifier modifier = new AttributeModifier(modifierId, amount, operation);
 
                     ItemAttributeModifiers current = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);

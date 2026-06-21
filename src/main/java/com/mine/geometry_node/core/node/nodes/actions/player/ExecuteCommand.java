@@ -42,7 +42,7 @@ public class ExecuteCommand extends BaseNode {
             for (Entity entity : entities) {
                 if (entity instanceof ServerPlayer player) {
                     // 以玩家身份在服务端执行指令
-                    player.server.getCommands().performPrefixedCommand(player.createCommandSourceStack(), command);
+                    player.level().getServer().getCommands().performPrefixedCommand(player.createCommandSourceStack(), command);
                 }
             }
         }

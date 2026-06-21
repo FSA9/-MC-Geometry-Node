@@ -13,7 +13,7 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.AreaEntityQuery;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
 import com.mine.geometry_node.core.node.nodes.events.area.AreaTriggerEvent;
 import com.mine.geometry_node.core.node.port.StandardPorts;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
@@ -46,7 +46,7 @@ public final class AreaTriggerDispatcher {
         cleanupStaleStates(currentTick);
 
         LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
-        ScopeKey scope = ScopeKey.global(level.dimension().location());
+        ScopeKey scope = ScopeKey.global(level.dimension().identifier());
         Set<StateKey> seenStates = new HashSet<>();
 
         for (String graphId : GraphEngine.getGlobalGraphsForEvent(level, AreaTriggerEvent.TYPE_ID)) {
@@ -62,7 +62,7 @@ public final class AreaTriggerDispatcher {
         if (owner == null || owner.isRemoved() || attachment == null || attachment.getBoundGraphs().isEmpty()) return;
         cleanupStaleStates(currentTick);
 
-        ScopeKey scope = ScopeKey.entity(level.dimension().location(), owner.getUUID());
+        ScopeKey scope = ScopeKey.entity(level.dimension().identifier(), owner.getUUID());
         Set<StateKey> seenStates = new HashSet<>();
 
         for (String graphId : GraphEngine.getEntityGraphsForEvent(owner, AreaTriggerEvent.TYPE_ID)) {
@@ -337,12 +337,12 @@ public final class AreaTriggerDispatcher {
     private record AreaQueryResult(ResolvedArea area, Map<UUID, Entity> entitiesById) {
     }
 
-    private record ScopeKey(String kind, ResourceLocation dimension, @Nullable UUID ownerId) {
-        static ScopeKey global(ResourceLocation dimension) {
+    private record ScopeKey(String kind, Identifier dimension, @Nullable UUID ownerId) {
+        static ScopeKey global(Identifier dimension) {
             return new ScopeKey("level", dimension, null);
         }
 
-        static ScopeKey entity(ResourceLocation dimension, UUID ownerId) {
+        static ScopeKey entity(Identifier dimension, UUID ownerId) {
             return new ScopeKey("entity", dimension, ownerId);
         }
     }

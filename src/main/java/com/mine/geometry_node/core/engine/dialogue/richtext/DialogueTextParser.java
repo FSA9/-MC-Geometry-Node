@@ -2,8 +2,10 @@ package com.mine.geometry_node.core.engine.dialogue.richtext;
 
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.node.value.RichTextValue;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
@@ -120,8 +122,10 @@ public final class DialogueTextParser {
             return null;
         }
         try {
-            JsonParser.parseString(trimmed);
-            return Component.Serializer.fromJson(trimmed, registries);
+            return ComponentSerialization.CODEC
+                    .parse(registries.createSerializationContext(JsonOps.INSTANCE), JsonParser.parseString(trimmed))
+                    .result()
+                    .orElse(null);
         } catch (RuntimeException ignored) {
             return null;
         }

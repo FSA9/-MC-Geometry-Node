@@ -13,7 +13,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.*;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
@@ -362,13 +362,13 @@ public class GraphProcess {
 
         void captureEnvironment() {
             this.threadLevel = GraphProcess.this.level;
-            this.threadDimensionId = this.threadLevel != null ? this.threadLevel.dimension().location().toString() : null;
+            this.threadDimensionId = this.threadLevel != null ? this.threadLevel.dimension().identifier().toString() : null;
             this.threadEntityUuid = GraphProcess.this.entity != null ? GraphProcess.this.entity.getUUID() : null;
         }
 
         public void restoreEnvironment(@Nullable ServerLevel level, @Nullable UUID entityUuid) {
             this.threadLevel = level;
-            this.threadDimensionId = level != null ? level.dimension().location().toString() : null;
+            this.threadDimensionId = level != null ? level.dimension().identifier().toString() : null;
             this.threadEntityUuid = entityUuid;
         }
 
@@ -381,7 +381,7 @@ public class GraphProcess {
         @Nullable
         public String getThreadDimensionId() {
             if (this.threadDimensionId != null) return this.threadDimensionId;
-            return this.threadLevel != null ? this.threadLevel.dimension().location().toString() : null;
+            return this.threadLevel != null ? this.threadLevel.dimension().identifier().toString() : null;
         }
 
         @Nullable
@@ -705,7 +705,7 @@ public class GraphProcess {
         public ServerLevel getLevel() {
             if (this.threadLevel != null) return this.threadLevel;
             if (this.threadDimensionId != null && GraphProcess.this.level != null) {
-                ResourceLocation dimensionLocation = ResourceLocation.tryParse(this.threadDimensionId);
+                Identifier dimensionLocation = Identifier.tryParse(this.threadDimensionId);
                 if (dimensionLocation != null) {
                     ResourceKey<Level> dimensionKey = ResourceKey.create(Registries.DIMENSION, dimensionLocation);
                     ServerLevel resolved = GraphProcess.this.level.getServer().getLevel(dimensionKey);

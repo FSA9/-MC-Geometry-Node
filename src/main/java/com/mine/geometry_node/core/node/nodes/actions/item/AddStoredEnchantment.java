@@ -13,7 +13,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -47,9 +47,9 @@ public class AddStoredEnchantment extends BaseNode {
         if (enchantId == null || enchantId.isEmpty()) enchantId = (String) context.getStaticInput(PROPERTY_SELECTED);
 
         if (stack != null && !stack.isEmpty() && enchantId != null && level != null && level > 0 && context.getLevel() instanceof ServerLevel serverLevel) {
-            ResourceLocation loc = ResourceLocation.tryParse(enchantId);
+            Identifier loc = Identifier.tryParse(enchantId);
             if (loc != null) {
-                Optional<Holder.Reference<Enchantment>> enchantOpt = serverLevel.registryAccess().registryOrThrow(Registries.ENCHANTMENT).getHolder(loc);
+                Optional<Holder.Reference<Enchantment>> enchantOpt = serverLevel.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).get(loc);
                 enchantOpt.ifPresent(holder -> {
                     ItemEnchantments current = stack.getOrDefault(DataComponents.STORED_ENCHANTMENTS, ItemEnchantments.EMPTY);
                     ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(current);

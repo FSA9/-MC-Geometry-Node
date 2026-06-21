@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +19,7 @@ public record PacketRemoteGraphUploadResponse(
         List<RemoteGraphConflict> conflicts
 ) implements CustomPacketPayload {
     public static final Type<PacketRemoteGraphUploadResponse> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath("geometry_node", "remote_graph_upload_response"));
+            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "remote_graph_upload_response"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketRemoteGraphUploadResponse> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> packet.write(buf),

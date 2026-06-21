@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.network.packet.s2c;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +14,7 @@ public record PacketAreaDebugSnapshot(
         List<AreaBox> boxes
 ) implements CustomPacketPayload {
     public static final Type<PacketAreaDebugSnapshot> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath("geometry_node", "area_debug_snapshot"));
+            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "area_debug_snapshot"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketAreaDebugSnapshot> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> packet.write(buf),

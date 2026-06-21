@@ -3,14 +3,17 @@ package com.mine.geometry_node.core.engine.graph.storage;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.FileToIdConverter;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener;
+import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.BufferedReader;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -21,17 +24,16 @@ import java.util.Set;
  * 负责监听数据包重载事件，读取 `data/[modid]/graphs/` 路径下的 JSON 文件，
  * 并将其编译为 {@link RuntimeGraphIndex}。
  */
-public class GraphResourceManager extends SimpleJsonResourceReloadListener {
+public class GraphResourceManager extends SimplePreparableReloadListener<Map<Identifier, JsonElement>> {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final String FOLDER_NAME = "graphs";
     private static GraphResourceManager INSTANCE;
 
-    // 核心缓存：图 ID (ResourceLocation) -> 运行时索引
+    // 核心缓存：图 ID (Identifier) -> 运行时索引
     private Map<String, RuntimeGraphIndex> indexCache = Collections.emptyMap();
 
     public GraphResourceManager() {
-        super(GSON, FOLDER_NAME);
         INSTANCE = this;
     }
 
@@ -55,7 +57,23 @@ public class GraphResourceManager extends SimpleJsonResourceReloadListener {
      * [重载触发]
      */
     @Override
-    protected void apply(Map<ResourceLocation, JsonElement> object, ResourceManager resourceManager, ProfilerFiller profiler) {
+    protected Map<Identifier, JsonElement> prepare(ResourceManager resourceManager, ProfilerFiller profiler) {
+        FileToIdConverter lister = FileToIdConverter.json(FOLDER_NAME);
+        Map<Identifier, JsonElement> objects = new HashMap<>();
+        lister.listMatchingResources(resourceManager).forEach((fileId, resource) -> {
+            Identifier id = lister.fileToId(fileId);
+            try (BufferedReader reader = resource.openAsReader()) {
+                objects.put(id, JsonParser.parseReader(reader));
+            } catch (Exception e) {
+                System.err.println("[GraphResourceManager]: Error loading graph " + fileId);
+                e.printStackTrace();
+            }
+        });
+        return objects;
+    }
+
+    @Override
+    protected void apply(Map<Identifier, JsonElement> object, ResourceManager resourceManager, ProfilerFiller profiler) {
         Map<String, RuntimeGraphIndex> newCache = new HashMap<>();
 
         object.forEach((location, json) -> {

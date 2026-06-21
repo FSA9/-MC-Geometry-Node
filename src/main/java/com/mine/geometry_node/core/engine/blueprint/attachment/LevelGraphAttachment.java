@@ -1,13 +1,17 @@
 package com.mine.geometry_node.core.engine.blueprint.attachment;
 
+import com.mine.geometry_node.GeometryNode;
+import com.mojang.serialization.Codec;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
-import org.jetbrains.annotations.NotNull;
+import net.minecraft.world.level.saveddata.SavedDataType;
 
 import java.util.Collection;
+import java.util.stream.Stream;
 
 /**
  * [世界级运行容器 - 组合版]
@@ -15,18 +19,16 @@ import java.util.Collection;
  */
 public class LevelGraphAttachment extends SavedData {
 
-    private static final String DATA_NAME = "geometry_node_level_processes";
+    public static final SavedDataType<LevelGraphAttachment> TYPE = new SavedDataType<>(
+            Identifier.fromNamespaceAndPath(GeometryNode.MODID, "level_processes"),
+            ignored -> new LevelGraphAttachment(),
+            LevelGraphAttachment::codec
+    );
 
     private final GraphContainer container = new GraphContainer(this::setDirty);
 
-    private static final SavedData.Factory<LevelGraphAttachment> FACTORY = new SavedData.Factory<>(
-            LevelGraphAttachment::new,
-            LevelGraphAttachment::load,
-            null
-    );
-
     public static LevelGraphAttachment get(ServerLevel level) {
-        return level.getDataStorage().computeIfAbsent(FACTORY, DATA_NAME);
+        return level.getDataStorage().computeIfAbsent(TYPE);
     }
 
     public LevelGraphAttachment() {}
@@ -49,14 +51,23 @@ public class LevelGraphAttachment extends SavedData {
 
     // --- 序列化层 ---
 
+    private static Codec<LevelGraphAttachment> codec(ServerLevel level) {
+        HolderLookup.Provider provider = level != null
+                ? level.registryAccess()
+                : HolderLookup.Provider.create(Stream.<HolderLookup.RegistryLookup<?>>empty());
+        return CompoundTag.CODEC.xmap(
+                tag -> load(tag, provider),
+                attachment -> attachment.saveToTag(new CompoundTag(), provider)
+        );
+    }
+
     public static LevelGraphAttachment load(CompoundTag tag, HolderLookup.Provider provider) {
         LevelGraphAttachment attachment = new LevelGraphAttachment();
         attachment.container.load(tag, provider);
         return attachment;
     }
 
-    @Override
-    public @NotNull CompoundTag save(@NotNull CompoundTag tag, HolderLookup.@NotNull Provider provider) {
+    private CompoundTag saveToTag(CompoundTag tag, HolderLookup.Provider provider) {
         return container.save(tag, provider);
     }
 }

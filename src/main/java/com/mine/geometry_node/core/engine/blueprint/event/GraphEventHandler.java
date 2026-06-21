@@ -48,7 +48,7 @@ public class GraphEventHandler {
      * 标记实体存在待唤醒任务，使其按下一次唤醒时间进入调度队列。
      */
     public static void markActive(Entity entity) {
-        if (entity != null && !entity.level().isClientSide) {
+        if (entity != null && !entity.level().isClientSide()) {
             EntityGraphAttachment attachment = entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
             if (attachment != null) {
                 attachment.attachOwner(entity);
@@ -110,7 +110,7 @@ public class GraphEventHandler {
 
     private static void scheduleEntityIfNeeded(Entity entity, EntityGraphAttachment attachment) {
         UUID entityId = entity.getUUID();
-        if (entity.isRemoved() || entity.level().isClientSide || !(entity.level() instanceof ServerLevel level)) {
+        if (entity.isRemoved() || entity.level().isClientSide() || !(entity.level() instanceof ServerLevel level)) {
             ACTIVE_ENTITY_SCHEDULES.remove(entityId);
             return;
         }

@@ -5,7 +5,8 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
@@ -16,11 +17,11 @@ public class LaserBeamEffect extends DirectedVisualEffect {
     }
 
     @Override
-    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos, float partialTick) {
+    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, SubmitNodeCollector submitNodeCollector, Vec3 camPos, float partialTick) {
         // 1. 获取当前帧被公式驱动后的最新坐标与粗细
         DirectedAnchors anchors = computeAnchors(partialTick);
 
-        VertexConsumer laserBuffer = bufferSource.getBuffer(RenderType.lightning());
+        VertexConsumer laserBuffer = bufferSource.getBuffer(RenderTypes.lightning());
         Matrix4f matrix = poseStack.last().pose();
 
         // 2. 解包颜色

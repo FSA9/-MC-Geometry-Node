@@ -13,7 +13,7 @@ public class ClientCommandUtils {
 
     public static void sendClientMsg(String message) {
         if (Minecraft.getInstance().player != null) {
-            Minecraft.getInstance().player.displayClientMessage(Component.literal(message), false);
+            Minecraft.getInstance().player.sendSystemMessage(Component.literal(message));
         }
     }
 }

@@ -55,7 +55,7 @@ final class GraphVisualEmitter {
         Vec3 center = null;
 
         if (extraData != null && extraData.contains("sourceId")) {
-            int sourceId = extraData.getInt("sourceId");
+            int sourceId = extraData.getIntOr("sourceId", -1);
             if (sourceId != -1) {
                 Entity sourceEntity = level.getEntity(sourceId);
                 if (sourceEntity != null) {
@@ -65,9 +65,9 @@ final class GraphVisualEmitter {
         }
 
         if (center == null && extraData != null && extraData.contains("startX")) {
-            center = new Vec3(extraData.getDouble("startX"),
-                              extraData.getDouble("startY"),
-                              extraData.getDouble("startZ"));
+            center = new Vec3(extraData.getDoubleOr("startX", 0.0),
+                              extraData.getDoubleOr("startY", 0.0),
+                              extraData.getDoubleOr("startZ", 0.0));
         }
 
         if (center == null) {

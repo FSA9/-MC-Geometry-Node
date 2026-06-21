@@ -152,15 +152,15 @@ public final class AreaDebugSessionManager {
     }
 
     public static String levelSourceKey(ServerLevel level, String graphId) {
-        return "level:" + level.dimension().location() + ":" + graphId;
+        return "level:" + level.dimension().identifier() + ":" + graphId;
     }
 
     public static String entitySourceKey(ServerLevel level, net.minecraft.world.entity.Entity entity, String graphId) {
-        return "entity:" + level.dimension().location() + ":" + entity.getUUID() + ":" + graphId;
+        return "entity:" + level.dimension().identifier() + ":" + entity.getUUID() + ":" + graphId;
     }
 
     private static Snapshot collectSnapshot(ServerPlayer player, Session session) {
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         LevelCache cache = LEVEL_CACHES.get(level);
         if (cache == null || cache.sources.isEmpty()) {
             return new Snapshot(List.of(), 1L);
@@ -244,7 +244,7 @@ public final class AreaDebugSessionManager {
 
     private static void updateBaseline(ServerPlayer player, Session session, Snapshot snapshot) {
         session.lastPosition = player.position();
-        session.lastDimension = player.serverLevel().dimension();
+        session.lastDimension = player.level().dimension();
         session.lastDirtyVersion = dirtyVersion;
         session.lastSignature = snapshot.signature;
     }

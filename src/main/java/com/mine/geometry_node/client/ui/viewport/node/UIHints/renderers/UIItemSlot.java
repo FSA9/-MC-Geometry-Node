@@ -18,8 +18,9 @@ import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.mc.MinecraftSurfaceView;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.client.gui.GuiGraphics;
+
 import javax.annotation.Nonnull;
 
 public class UIItemSlot extends FrameLayout {
@@ -64,9 +65,9 @@ public class UIItemSlot extends FrameLayout {
             public void onSurfaceChanged(int width, int height) {}
 
             @Override
-            public void onDraw(@Nonnull GuiGraphics gr, int mouseX, int mouseY, float deltaTick, double guiScale, float alpha) {
+            public void onDraw(@Nonnull GuiGraphicsExtractor gr, int mouseX, int mouseY, float deltaTick, double guiScale, float alpha) {
                 if (!mCachedStack.isEmpty()) {
-                    gr.pose().pushPose();
+                    gr.pose().pushMatrix();
 
                     float safeGuiScale = guiScale > 0.0 ? (float) guiScale : 1.0f;
                     float viewportScale = mViewportScale;
@@ -78,12 +79,12 @@ public class UIItemSlot extends FrameLayout {
                     float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;
                     float drawY = (slotGuiH - ITEM_SIZE_GUI * itemScale) / 2.0f;
 
-                    gr.pose().translate(drawX, drawY, 0.0f);
-                    gr.pose().scale(itemScale, itemScale, 1.0f);
-                    gr.renderItem(mCachedStack, 0, 0);
-                    gr.renderItemDecorations(Minecraft.getInstance().font, mCachedStack, 0, 0);
+                    gr.pose().translate(drawX, drawY);
+                    gr.pose().scale(itemScale, itemScale);
+                    gr.item(mCachedStack, 0, 0);
+                    gr.itemDecorations(Minecraft.getInstance().font, mCachedStack, 0, 0);
 
-                    gr.pose().popPose();
+                    gr.pose().popMatrix();
                 }
             }
         });

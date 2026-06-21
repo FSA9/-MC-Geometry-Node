@@ -113,18 +113,18 @@ public class GraphProcessSerializer {
     }
 
     public static GraphProcess load(CompoundTag tag, RuntimeGraphIndex index, HolderLookup.Provider provider) {
-        String graphId = tag.getString("GraphId");
+        String graphId = tag.getStringOr("GraphId", "");
         GraphProcess process = new GraphProcess(graphId, index);
         process.clearVariableScopesForSerialization(); // 清理构造函数默认放入的空栈
 
         int exactSize = index.getRegisterCount() + 8;
 
         // 1. 恢复变量栈
-        if (tag.contains("VariableStack", Tag.TAG_LIST)) {
-            ListTag list = tag.getList("VariableStack", Tag.TAG_COMPOUND);
+        if (tag.contains("VariableStack")) {
+            ListTag list = tag.getListOrEmpty("VariableStack");
             for (int i = 0; i < list.size(); i++) {
                 GraphProcess.VariableScope scope = new GraphProcess.VariableScope(exactSize);
-                loadVariablesFromTag(list.getCompound(i), scope.statics, scope, index, provider);
+                loadVariablesFromTag(list.getCompoundOrEmpty(i), scope.statics, scope, index, provider);
                 process.addVariableScopeLastForSerialization(scope);
             }
         } else {
@@ -132,40 +132,43 @@ public class GraphProcessSerializer {
         }
 
         // 2. 恢复线程
-        if (tag.contains("SleepingThreads", Tag.TAG_LIST)) {
-            ListTag list = tag.getList("SleepingThreads", Tag.TAG_COMPOUND);
+        if (tag.contains("SleepingThreads")) {
+            ListTag list = tag.getListOrEmpty("SleepingThreads");
             for (int i = 0; i < list.size(); i++) {
-                CompoundTag tTag = list.getCompound(i);
+                CompoundTag tTag = list.getCompoundOrEmpty(i);
                 int currentFlowId = -1;
-                if (tTag.contains("CurrentFlowId", Tag.TAG_STRING)) {
-                    currentFlowId = index.getStringToId(tTag.getString("CurrentFlowId"));
-                } else if (tTag.contains("CurrentFlowId", Tag.TAG_INT)) {
-                    currentFlowId = tTag.getInt("CurrentFlowId");
+                Tag currentFlowTag = tTag.get("CurrentFlowId");
+                if (currentFlowTag != null) {
+                    if (currentFlowTag.asString().isPresent()) {
+                        currentFlowId = index.getStringToId(currentFlowTag.asString().orElse(""));
+                    } else if (currentFlowTag.asInt().isPresent()) {
+                        currentFlowId = currentFlowTag.asInt().orElse(-1);
+                    }
                 }
-                String currentPort = tTag.getString("CurrentEntryPort");
-                if (currentPort == null || currentPort.isEmpty()) currentPort = "flow_in";
+                String currentPort = tTag.getStringOr("CurrentEntryPort", "flow_in");
+                if (currentPort.isEmpty()) currentPort = "flow_in";
 
                 GraphProcess.ExecutionThread thread = process.new ExecutionThread(currentFlowId, currentPort);
-                if (tTag.contains("ParentJoinId", Tag.TAG_STRING)) {
-                    thread.setParentJoinIdForSerialization(tTag.getString("ParentJoinId"));
+                if (tTag.contains("ParentJoinId")) {
+                    thread.setParentJoinIdForSerialization(tTag.getStringOr("ParentJoinId", ""));
                 }
                 UUID contextEntity = null;
-                if (tTag.contains("ContextEntity", Tag.TAG_STRING)) {
+                if (tTag.contains("ContextEntity")) {
                     try {
-                        contextEntity = UUID.fromString(tTag.getString("ContextEntity"));
+                        contextEntity = UUID.fromString(tTag.getStringOr("ContextEntity", ""));
                     } catch (IllegalArgumentException ignored) {}
                 }
-                String contextDimension = tTag.contains("ContextDimension", Tag.TAG_STRING)
-                        ? tTag.getString("ContextDimension")
+                String contextDimension = tTag.contains("ContextDimension")
+                        ? tTag.getStringOr("ContextDimension", "")
                         : null;
                 thread.restoreEnvironment(contextDimension, contextEntity);
 
-                if (tTag.contains("ExecutionStack", Tag.TAG_LIST)) {
-                    ListTag stackList = tTag.getList("ExecutionStack", Tag.TAG_COMPOUND);
+                if (tTag.contains("ExecutionStack")) {
+                    ListTag stackList = tTag.getListOrEmpty("ExecutionStack");
                     for (int j = 0; j < stackList.size(); j++) {
-                        CompoundTag frameTag = stackList.getCompound(j);
-                        int targetId = index.getStringToId(frameTag.getString("TargetNodeId"));
-                        String portName = frameTag.getString("TargetPortName");
+                        CompoundTag frameTag = stackList.getCompoundOrEmpty(j);
+                        int targetId = index.getStringToId(frameTag.getStringOr("TargetNodeId", ""));
+                        String portName = frameTag.getStringOr("TargetPortName", "");
                         if (targetId != -1) {
                             thread.getExecutionStackForSerialization().add(new RuntimeGraphIndex.IntFlowTarget(targetId, portName));
                         }
@@ -173,19 +176,19 @@ public class GraphProcessSerializer {
                 }
 
                 if (currentFlowId != -1 || !thread.getExecutionStackForSerialization().isEmpty()) {
-                    thread.wakeUpTick = tTag.getLong("WaitRemaining");
+                    thread.wakeUpTick = tTag.getLongOr("WaitRemaining", 0L);
                     thread.state = GraphProcess.ExecutionThread.State.WAITING;
 
                     GraphProcess.VariableScope tempScope = new GraphProcess.VariableScope(exactSize);
-                    loadVariablesFromTag(tTag.getCompound("Registers"), tempScope.statics, tempScope, index, provider);
+                    loadVariablesFromTag(tTag.getCompoundOrEmpty("Registers"), tempScope.statics, tempScope, index, provider);
                     thread.setEventRegistersForSerialization(tempScope.statics);
                     thread.setDynamicEventDataForSerialization(tempScope.dynamics);
 
                     process.addSleepingThreadForSerialization(thread);
 
-                    if (tTag.contains("TempData", Tag.TAG_COMPOUND)) {
-                        CompoundTag tempTag = tTag.getCompound("TempData");
-                        for (String key : tempTag.getAllKeys()) {
+                    if (tTag.contains("TempData")) {
+                        CompoundTag tempTag = tTag.getCompoundOrEmpty("TempData");
+                        for (String key : tempTag.keySet()) {
                             Object obj = VariableRegistry.fromTag(tempTag.get(key), provider);
                             if (obj != null) thread.tempData.put(key, obj);
                         }
@@ -195,24 +198,24 @@ public class GraphProcessSerializer {
             process.markNeedsTimeRebaseForSerialization();
         }
         process.clearBranchJoinsForSerialization();
-        if (tag.contains("BranchJoins", Tag.TAG_LIST)) {
-            ListTag list = tag.getList("BranchJoins", Tag.TAG_COMPOUND);
+        if (tag.contains("BranchJoins")) {
+            ListTag list = tag.getListOrEmpty("BranchJoins");
             for (int i = 0; i < list.size(); i++) {
-                CompoundTag joinTag = list.getCompound(i);
-                int ownerNodeId = index.getStringToId(joinTag.getString("OwnerNodeId"));
-                String completedPortName = joinTag.getString("CompletedPortName");
-                String joinId = joinTag.getString("JoinId");
-                if (ownerNodeId == -1 || joinId == null || joinId.isBlank() || completedPortName == null || completedPortName.isBlank()) {
+                CompoundTag joinTag = list.getCompoundOrEmpty(i);
+                int ownerNodeId = index.getStringToId(joinTag.getStringOr("OwnerNodeId", ""));
+                String completedPortName = joinTag.getStringOr("CompletedPortName", "");
+                String joinId = joinTag.getStringOr("JoinId", "");
+                if (ownerNodeId == -1 || joinId.isBlank() || completedPortName.isBlank()) {
                     continue;
                 }
 
                 GraphProcess.VariableScope regScope = new GraphProcess.VariableScope(exactSize);
-                loadVariablesFromTag(joinTag.getCompound("Registers"), regScope.statics, regScope, index, provider);
+                loadVariablesFromTag(joinTag.getCompoundOrEmpty("Registers"), regScope.statics, regScope, index, provider);
 
                 Map<String, Object> tempData = new HashMap<>();
-                if (joinTag.contains("TempData", Tag.TAG_COMPOUND)) {
-                    CompoundTag tempTag = joinTag.getCompound("TempData");
-                    for (String key : tempTag.getAllKeys()) {
+                if (joinTag.contains("TempData")) {
+                    CompoundTag tempTag = joinTag.getCompoundOrEmpty("TempData");
+                    for (String key : tempTag.keySet()) {
                         Object obj = VariableRegistry.fromTag(tempTag.get(key), provider);
                         if (obj != null) {
                             tempData.put(key, obj);
@@ -228,8 +231,8 @@ public class GraphProcessSerializer {
                         regScope.dynamics,
                         tempData
                 );
-                join.pendingChildren = Math.max(0, joinTag.getInt("PendingChildren"));
-                join.launchFinished = joinTag.getBoolean("LaunchFinished");
+                join.pendingChildren = Math.max(0, joinTag.getIntOr("PendingChildren", 0));
+                join.launchFinished = joinTag.getBooleanOr("LaunchFinished", false);
                 process.addBranchJoinForSerialization(join);
             }
         }
@@ -254,7 +257,7 @@ public class GraphProcessSerializer {
     }
 
     private static void loadVariablesFromTag(CompoundTag tag, Object[] statics, GraphProcess.VariableScope scope, RuntimeGraphIndex index, HolderLookup.Provider provider) {
-        for (String key : tag.getAllKeys()) {
+        for (String key : tag.keySet()) {
             Object obj = VariableRegistry.fromTag(tag.get(key), provider);
             if (obj != null) {
                 int id = index.getKeyId(key);
@@ -291,11 +294,11 @@ public class GraphProcessSerializer {
 
     public static void loadContainer(GraphContainer container, CompoundTag tag, HolderLookup.Provider provider) {
         container.clearProcessesForSerialization();
-        if (tag.contains("ActiveProcesses", Tag.TAG_LIST)) {
-            ListTag list = tag.getList("ActiveProcesses", Tag.TAG_COMPOUND);
+        if (tag.contains("ActiveProcesses")) {
+            ListTag list = tag.getListOrEmpty("ActiveProcesses");
             for (int i = 0; i < list.size(); i++) {
-                CompoundTag pTag = list.getCompound(i);
-                String graphId = pTag.getString("GraphId");
+                CompoundTag pTag = list.getCompoundOrEmpty(i);
+                String graphId = pTag.getStringOr("GraphId", "");
                 RuntimeGraphIndex index = GraphEngine.getGraphIndex(graphId);
                 if (index != null) {
                     container.putProcessForSerialization(load(pTag, index, provider));
@@ -304,9 +307,9 @@ public class GraphProcessSerializer {
         }
 
         container.getAttributesMap().clear();
-        if (tag.contains("Attributes", Tag.TAG_COMPOUND)) {
-            CompoundTag attrTag = tag.getCompound("Attributes");
-            for (String key : attrTag.getAllKeys()) {
+        if (tag.contains("Attributes")) {
+            CompoundTag attrTag = tag.getCompoundOrEmpty("Attributes");
+            for (String key : attrTag.keySet()) {
                 Object obj = VariableRegistry.fromTag(attrTag.get(key), provider);
                 if (obj != null) container.getAttributesMap().put(key, obj);
             }

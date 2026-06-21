@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.render.debug;
 
 import com.mine.geometry_node.core.network.packet.s2c.PacketAreaDebugSnapshot;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Camera;
@@ -46,10 +45,8 @@ public final class AreaDebugRenderer {
 
         Minecraft minecraft = Minecraft.getInstance();
         MultiBufferSource.BufferSource bufferSource = minecraft.renderBuffers().bufferSource();
-        Vec3 camPos = camera.getPosition();
+        Vec3 camPos = camera.position();
 
-        RenderSystem.disableDepthTest();
-        RenderSystem.depthMask(false);
         poseStack.pushPose();
         for (PacketAreaDebugSnapshot.AreaBox box : boxes) {
             renderFaces(box, poseStack, bufferSource, camPos);
@@ -60,8 +57,6 @@ public final class AreaDebugRenderer {
         }
         poseStack.popPose();
         bufferSource.endBatch(AreaDebugRenderTypes.AREA_LINE);
-        RenderSystem.depthMask(true);
-        RenderSystem.enableDepthTest();
     }
 
     private static void renderFaces(PacketAreaDebugSnapshot.AreaBox box,

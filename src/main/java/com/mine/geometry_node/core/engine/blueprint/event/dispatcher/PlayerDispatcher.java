@@ -7,7 +7,6 @@ import com.mine.geometry_node.core.node.nodes.events.display_entity.OnInteractio
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
 import com.mine.geometry_node.core.node.port.StandardPorts;
-import dev.architectury.event.CompoundEventResult;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.InteractionEvent;
 import net.minecraft.server.level.ServerLevel;
@@ -34,7 +33,7 @@ public class PlayerDispatcher {
                         StandardPorts.BLOCK_STATE.getId(), serverLevel.getBlockState(pos)
                 ));
             }
-            return EventResult.pass();
+            return EventResult.pass().asMinecraft();
         });
 
         InteractionEvent.LEFT_CLICK_BLOCK.register((player, hand, pos, face) -> {
@@ -44,10 +43,10 @@ public class PlayerDispatcher {
                         StandardPorts.ENTITY.getId(), player,
                         StandardPorts.XYZ.getId(), pos,
                         StandardPorts.BLOCK_STATE.getId(), serverLevel.getBlockState(pos),
-                        StandardPorts.DIMENSION.getId(), serverLevel.dimension().location().toString()
+                        StandardPorts.DIMENSION.getId(), serverLevel.dimension().identifier().toString()
                 ));
             }
-            return EventResult.pass();
+            return EventResult.pass().asMinecraft();
         });
 
         InteractionEvent.INTERACT_ENTITY.register((player, entity, hand) -> {
@@ -67,7 +66,7 @@ public class PlayerDispatcher {
                         StandardPorts.ITEM.getId(), player.getItemInHand(hand)
                 ));
             }
-            return CompoundEventResult.pass();
+            return EventResult.pass().asMinecraft();
         });
 
         var bus = NeoForge.EVENT_BUS;

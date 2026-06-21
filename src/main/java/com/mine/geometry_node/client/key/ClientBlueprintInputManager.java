@@ -3,7 +3,6 @@ package com.mine.geometry_node.client.key;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketPlayerInput;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.Screen;
 
 public class ClientBlueprintInputManager {
 
@@ -34,9 +33,9 @@ public class ClientBlueprintInputManager {
             else {
                 int modIndex = i - KeyBindings.SKILL_COUNT;
                 isCurrentlyDown = switch (modIndex) {
-                    case 0 -> Screen.hasControlDown();
-                    case 1 -> Screen.hasShiftDown();
-                    case 2 -> Screen.hasAltDown();
+                    case 0 -> mc.hasControlDown();
+                    case 1 -> mc.hasShiftDown();
+                    case 2 -> mc.hasAltDown();
                     default -> false;
                 };
                 keyId = switch (modIndex) {

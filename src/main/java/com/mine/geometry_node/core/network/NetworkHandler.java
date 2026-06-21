@@ -61,7 +61,7 @@ public class NetworkHandler {
                 (payload, context) -> {
                     context.queue(() -> {
                         if (context.getPlayer() instanceof ServerPlayer player) {
-                            MinecraftServer server = player.getServer();
+                            MinecraftServer server = player.level().getServer();
                             String graphId = payload.graphId();
                             String jsonContent = payload.jsonContent();
 
@@ -119,9 +119,9 @@ public class NetworkHandler {
                                             payload.requestId(), false, payload.directory(), "没有创建服务器图纸文件夹的权限。", Collections.emptyList()));
                                     return;
                                 }
-                                Files.createDirectories(RemoteGraphFileService.resolveDirectory(player.getServer(), directory));
+                                Files.createDirectories(RemoteGraphFileService.resolveDirectory(player.level().getServer(), directory));
                             }
-                            List<RemoteGraphEntry> entries = RemoteGraphFileService.list(player.getServer(), directory);
+                            List<RemoteGraphEntry> entries = RemoteGraphFileService.list(player.level().getServer(), directory);
                             sendToPlayer(player, new PacketRemoteGraphListResponse(payload.requestId(), true, directory, "", entries));
                         } catch (Exception e) {
                             sendToPlayer(player, new PacketRemoteGraphListResponse(
@@ -181,10 +181,7 @@ public class NetworkHandler {
                     context.queue(() -> {
                         if (context.getPlayer() != null) {
                             String prefix = payload.success() ? "§a[图纸同步成功]§r " : "§c[图纸同步失败]§r ";
-                            context.getPlayer().displayClientMessage(
-                                    Component.literal(prefix + payload.graphId() + " - " + payload.message()),
-                                    false
-                            );
+                            context.getPlayer().sendSystemMessage(Component.literal(prefix + payload.graphId() + " - " + payload.message()));
                         }
                     });
                 }
@@ -206,10 +203,7 @@ public class NetworkHandler {
                             LocalDraftManager.saveDraft(graphId, jsonContent);
 
                             // 弹出提示
-                            context.getPlayer().displayClientMessage(
-                                    Component.literal("§a[☁ 云端下载成功]§r 图纸 " + graphId + " 已保存到你的本地草稿箱！"),
-                                    false
-                            );
+                            context.getPlayer().sendSystemMessage(Component.literal("§a[☁ 云端下载成功]§r 图纸 " + graphId + " 已保存到你的本地草稿箱！"));
                         }
                     });
                 }
@@ -385,7 +379,7 @@ public class NetworkHandler {
             for (RemoteGraphUploadFile file : payload.files()) {
                 targetPaths.add(file.targetPath());
             }
-            List<RemoteGraphConflict> conflicts = RemoteGraphFileService.findUploadConflicts(player.getServer(), targetPaths);
+            List<RemoteGraphConflict> conflicts = RemoteGraphFileService.findUploadConflicts(player.level().getServer(), targetPaths);
             if (payload.preflightOnly()) {
                 sendToPlayer(player, new PacketRemoteGraphUploadResponse(
                         payload.requestId(), true, conflicts.isEmpty(), 0, payload.files().size(), "", conflicts));
@@ -410,7 +404,7 @@ public class NetworkHandler {
             int total = payload.files().size();
             for (RemoteGraphUploadFile file : payload.files()) {
                 RemoteGraphFileService.saveUpload(
-                        player.getServer(),
+                        player.level().getServer(),
                         file,
                         payload.overwrite() || allowedOverwritePaths.contains(file.targetPath())
                 );
@@ -434,13 +428,13 @@ public class NetworkHandler {
         }
 
         try {
-            List<RemoteGraphEntry> files = RemoteGraphFileService.flattenSelection(player.getServer(), payload.paths());
+            List<RemoteGraphEntry> files = RemoteGraphFileService.flattenSelection(player.level().getServer(), payload.paths());
             int total = files.size();
             int processed = 0;
             for (RemoteGraphEntry entry : files) {
                 RemoteGraphUploadFile downloaded = new RemoteGraphUploadFile(
                         entry.path(),
-                        RemoteGraphFileService.readGraph(player.getServer(), entry.path())
+                        RemoteGraphFileService.readGraph(player.level().getServer(), entry.path())
                 );
                 processed++;
                 sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
@@ -463,11 +457,11 @@ public class NetworkHandler {
 
         try {
             int count = switch (payload.operation()) {
-                case DELETE -> RemoteGraphFileService.deleteSelection(player.getServer(), payload.paths());
-                case COPY -> RemoteGraphFileService.copySelection(player.getServer(), payload.paths(), payload.targetDirectory());
-                case MOVE -> RemoteGraphFileService.moveSelection(player.getServer(), payload.paths(), payload.targetDirectory());
+                case DELETE -> RemoteGraphFileService.deleteSelection(player.level().getServer(), payload.paths());
+                case COPY -> RemoteGraphFileService.copySelection(player.level().getServer(), payload.paths(), payload.targetDirectory());
+                case MOVE -> RemoteGraphFileService.moveSelection(player.level().getServer(), payload.paths(), payload.targetDirectory());
             };
-            DynamicGraphManager.loadAllFromDisk(player.getServer());
+            DynamicGraphManager.loadAllFromDisk(player.level().getServer());
             String action = switch (payload.operation()) {
                 case DELETE -> "删除";
                 case COPY -> "复制";

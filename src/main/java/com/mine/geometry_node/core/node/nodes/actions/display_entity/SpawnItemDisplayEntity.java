@@ -9,13 +9,16 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -77,14 +80,16 @@ public class SpawnItemDisplayEntity extends BaseNode {
                 (float) Math.toRadians(rotation.z)
         );
 
-        Display.ItemDisplay displayEntity = EntityType.ITEM_DISPLAY.create(level);
+        Display.ItemDisplay displayEntity = EntityType.ITEM_DISPLAY.create(level, EntitySpawnReason.COMMAND);
         if (displayEntity != null) {
             displayEntity.setPos(pos.x, pos.y, pos.z);
 
-            CompoundTag nbt = new CompoundTag();
-            displayEntity.saveWithoutId(nbt);
+            CompoundTag nbt = EntityNbtCompat.saveWithoutId(displayEntity);
 
-            Tag itemTag = itemStack.saveOptional(level.registryAccess());
+            Tag itemTag = ItemStack.OPTIONAL_CODEC
+                    .encodeStart(level.registryAccess().createSerializationContext(NbtOps.INSTANCE), itemStack)
+                    .result()
+                    .orElseGet(CompoundTag::new);
             nbt.put("item", itemTag);
             nbt.putString("item_display", displayContext);
 
@@ -99,7 +104,7 @@ public class SpawnItemDisplayEntity extends BaseNode {
             nbt.putInt("interpolation_duration", interpDuration != null ? Math.max(0, interpDuration) : 0);
             nbt.putInt("start_interpolation", 0);
 
-            displayEntity.load(nbt);
+            EntityNbtCompat.load(displayEntity, nbt);
             level.addFreshEntity(displayEntity);
             context.setTempData("spawned_item_display", displayEntity);
         }

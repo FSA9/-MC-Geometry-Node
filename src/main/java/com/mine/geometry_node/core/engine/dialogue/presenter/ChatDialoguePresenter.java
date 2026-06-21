@@ -98,7 +98,7 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
         Style result = style.withColor(clickable ? ChatFormatting.AQUA : ChatFormatting.DARK_GRAY);
         if (clickable) {
             result = result.withUnderlined(true)
-                    .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command));
+                    .withClickEvent(new ClickEvent.SuggestCommand(command));
         }
         return result;
     }

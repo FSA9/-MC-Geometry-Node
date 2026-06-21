@@ -14,7 +14,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -53,13 +53,13 @@ public class RemoveEnchantment extends BaseNode {
         }
 
         if (stack != null && !stack.isEmpty() && enchantId != null && !enchantId.isEmpty()) {
-            ResourceLocation loc = ResourceLocation.tryParse(enchantId);
+            Identifier loc = Identifier.tryParse(enchantId);
             if (loc != null && context.getLevel() instanceof ServerLevel serverLevel) {
 
                 RegistryAccess registryAccess = serverLevel.registryAccess();
                 Optional<Holder.Reference<Enchantment>> enchantOpt = registryAccess
-                        .registryOrThrow(Registries.ENCHANTMENT)
-                        .getHolder(loc);
+                        .lookupOrThrow(Registries.ENCHANTMENT)
+                        .get(loc);
 
                 if (enchantOpt.isPresent()) {
                     Holder<Enchantment> holder = enchantOpt.get();

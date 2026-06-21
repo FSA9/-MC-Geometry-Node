@@ -15,7 +15,7 @@ public class GraphUnbindCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
                 Commands.literal("graph_unbind")
-                        .requires(source -> source.hasPermission(2))
+                        .requires(source -> source.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER))
 
                         .then(Commands.literal("target")
                                 .then(Commands.argument("targets", EntityArgument.entities())

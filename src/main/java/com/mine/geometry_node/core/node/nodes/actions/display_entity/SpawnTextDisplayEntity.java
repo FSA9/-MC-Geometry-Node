@@ -9,12 +9,16 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.EntityNbtCompat;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
@@ -85,14 +89,17 @@ public class SpawnTextDisplayEntity extends BaseNode {
                 (float) Math.toRadians(rotation.z)
         );
 
-        Display.TextDisplay displayEntity = EntityType.TEXT_DISPLAY.create(level);
+        Display.TextDisplay displayEntity = EntityType.TEXT_DISPLAY.create(level, EntitySpawnReason.COMMAND);
         if (displayEntity != null) {
             displayEntity.setPos(pos.x, pos.y, pos.z);
 
-            CompoundTag nbt = new CompoundTag();
-            displayEntity.saveWithoutId(nbt);
+            CompoundTag nbt = EntityNbtCompat.saveWithoutId(displayEntity);
 
-            nbt.putString("text", Component.Serializer.toJson(Component.literal(message), level.registryAccess()));
+            nbt.putString("text", ComponentSerialization.CODEC
+                    .encodeStart(level.registryAccess().createSerializationContext(JsonOps.INSTANCE), Component.literal(message))
+                    .result()
+                    .map(Object::toString)
+                    .orElse("\"\""));
             nbt.putString("alignment", alignment);
             if (lineWidth != null) nbt.putInt("line_width", Math.max(1, lineWidth));
             if (shadow != null) nbt.putBoolean("shadow", shadow);
@@ -120,7 +127,7 @@ public class SpawnTextDisplayEntity extends BaseNode {
             nbt.putInt("interpolation_duration", interpDuration != null ? Math.max(0, interpDuration) : 0);
             nbt.putInt("start_interpolation", 0);
 
-            displayEntity.load(nbt);
+            EntityNbtCompat.load(displayEntity, nbt);
             level.addFreshEntity(displayEntity);
             context.setTempData("spawn_text_display", displayEntity);
         }

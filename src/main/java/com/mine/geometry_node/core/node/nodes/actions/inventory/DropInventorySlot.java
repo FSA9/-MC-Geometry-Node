@@ -78,7 +78,9 @@ public class DropInventorySlot extends BaseNode {
                     int dropCount = Math.min(count, stack.getCount());
                     ItemStack dropStack = stack.split(dropCount);
                     // 容器物品直接掉落在其脚下
-                    entity.spawnAtLocation(dropStack);
+                    if (entity.level() instanceof net.minecraft.server.level.ServerLevel level) {
+                        entity.spawnAtLocation(level, dropStack);
+                    }
                 }
             }
             return;
@@ -87,13 +89,13 @@ public class DropInventorySlot extends BaseNode {
         // 情况3：其他通用实体（如马的装备、盔甲架上的物品等）
         // 借助原版的万能 SlotAccess（通常用于 /item 指令的槽位操作）
         SlotAccess slotAccess = entity.getSlot(slotIndex);
-        if (slotAccess != SlotAccess.NULL) {
-            ItemStack stack = slotAccess.get();
-            if (!stack.isEmpty()) {
-                int dropCount = Math.min(count, stack.getCount());
-                ItemStack dropStack = stack.split(dropCount);
-                slotAccess.set(stack); // 更新扣除数量后的物品回原槽位
-                entity.spawnAtLocation(dropStack);
+        ItemStack stack = slotAccess.get();
+        if (!stack.isEmpty()) {
+            int dropCount = Math.min(count, stack.getCount());
+            ItemStack dropStack = stack.split(dropCount);
+            slotAccess.set(stack); // 更新扣除数量后的物品回原槽位
+            if (entity.level() instanceof net.minecraft.server.level.ServerLevel level) {
+                entity.spawnAtLocation(level, dropStack);
             }
         }
     }

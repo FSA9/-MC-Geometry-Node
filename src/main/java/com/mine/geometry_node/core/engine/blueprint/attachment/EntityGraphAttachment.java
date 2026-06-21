@@ -6,7 +6,6 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
@@ -89,9 +88,12 @@ public class EntityGraphAttachment {
 
     public void load(CompoundTag tag, HolderLookup.Provider provider) {
         this.boundGraphs.clear();
-        if (tag.contains("BoundGraphs", Tag.TAG_LIST)) {
-            ListTag list = tag.getList("BoundGraphs", Tag.TAG_STRING);
-            for (int i = 0; i < list.size(); i++) this.boundGraphs.add(list.getString(i));
+        ListTag list = tag.getListOrEmpty("BoundGraphs");
+        for (int i = 0; i < list.size(); i++) {
+            String graphId = list.getStringOr(i, "");
+            if (!graphId.isEmpty()) {
+                this.boundGraphs.add(graphId);
+            }
         }
         container.load(tag, provider);
     }

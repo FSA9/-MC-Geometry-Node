@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.TypeConverter;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
@@ -18,6 +19,7 @@ import net.minecraft.nbt.NbtUtils;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -85,12 +87,11 @@ public class SpawnBlockDisplayEntity extends BaseNode {
                 (float) Math.toRadians(rotation.z)
         );
 
-        Display.BlockDisplay displayEntity = EntityType.BLOCK_DISPLAY.create(level);
+        Display.BlockDisplay displayEntity = EntityType.BLOCK_DISPLAY.create(level, EntitySpawnReason.COMMAND);
         if (displayEntity != null) {
             displayEntity.setPos(pos.x, pos.y, pos.z);
 
-            CompoundTag nbt = new CompoundTag();
-            displayEntity.saveWithoutId(nbt);
+            CompoundTag nbt = EntityNbtCompat.saveWithoutId(displayEntity);
 
             nbt.put("block_state", NbtUtils.writeBlockState(blockState));
 
@@ -105,7 +106,7 @@ public class SpawnBlockDisplayEntity extends BaseNode {
             nbt.putInt("interpolation_duration", interpDuration != null ? Math.max(0, interpDuration) : 0);
             nbt.putInt("start_interpolation", 0);
 
-            displayEntity.load(nbt);
+            EntityNbtCompat.load(displayEntity, nbt);
 
             level.addFreshEntity(displayEntity);
             context.setTempData("spawned_block_display", displayEntity);

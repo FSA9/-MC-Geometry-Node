@@ -4,7 +4,8 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
@@ -20,9 +21,9 @@ public class DebugBoxEffect extends AbstractVisualEffect {
         super(packet);
         CompoundTag data = packet.extraData();
         if (data != null) {
-            this.center = new Vec3(data.getDouble("startX"), data.getDouble("startY"), data.getDouble("startZ"));
-            this.size = new Vec3(data.getDouble("sizeX"), data.getDouble("sizeY"), data.getDouble("sizeZ"));
-            this.rot = new Vec3(data.getDouble("rotX"), data.getDouble("rotY"), data.getDouble("rotZ"));
+            this.center = new Vec3(data.getDoubleOr("startX", 0.0), data.getDoubleOr("startY", 0.0), data.getDoubleOr("startZ", 0.0));
+            this.size = new Vec3(data.getDoubleOr("sizeX", 1.0), data.getDoubleOr("sizeY", 1.0), data.getDoubleOr("sizeZ", 1.0));
+            this.rot = new Vec3(data.getDoubleOr("rotX", 0.0), data.getDoubleOr("rotY", 0.0), data.getDoubleOr("rotZ", 0.0));
         } else {
             this.center = Vec3.ZERO;
             this.size = new Vec3(1, 1, 1);
@@ -31,8 +32,8 @@ public class DebugBoxEffect extends AbstractVisualEffect {
     }
 
     @Override
-    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos, float partialTick) {
-        VertexConsumer buffer = bufferSource.getBuffer(RenderType.lines());
+    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, SubmitNodeCollector submitNodeCollector, Vec3 camPos, float partialTick) {
+        VertexConsumer buffer = bufferSource.getBuffer(RenderTypes.lines());
 
         int a = (color >> 24) & 0xFF;
         int r = (color >> 16) & 0xFF;

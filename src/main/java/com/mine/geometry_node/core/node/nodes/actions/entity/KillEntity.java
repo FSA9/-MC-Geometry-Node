@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
 import java.util.List;
@@ -30,7 +31,9 @@ public class KillEntity extends BaseNode {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
 
         for (Entity entity : entities) {
-            entity.kill();
+            if (entity.level() instanceof ServerLevel level) {
+                entity.kill(level);
+            }
         }
 
         return next(StandardPorts.FLOW_OUT.getId());

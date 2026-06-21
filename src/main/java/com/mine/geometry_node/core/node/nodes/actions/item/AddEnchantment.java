@@ -13,7 +13,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -52,12 +52,12 @@ public class AddEnchantment extends BaseNode {
             enchantId = (String) context.getStaticInput(PROPERTY_SELECTED);
         }
         if (stack != null && !stack.isEmpty() && enchantId != null && level != null && level > 0) {
-            ResourceLocation loc = ResourceLocation.tryParse(enchantId);
+            Identifier loc = Identifier.tryParse(enchantId);
             if (loc != null && context.getLevel() instanceof ServerLevel serverLevel) {
                 RegistryAccess registryAccess = serverLevel.registryAccess();
                 Optional<Holder.Reference<Enchantment>> enchantOpt = registryAccess
-                        .registryOrThrow(Registries.ENCHANTMENT)
-                        .getHolder(loc);
+                        .lookupOrThrow(Registries.ENCHANTMENT)
+                        .get(loc);
                 enchantOpt.ifPresent(enchantmentHolder -> stack.enchant(enchantmentHolder, level));
             }
         }

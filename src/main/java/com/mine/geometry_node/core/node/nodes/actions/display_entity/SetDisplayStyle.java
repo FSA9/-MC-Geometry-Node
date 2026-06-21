@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Display;
@@ -59,8 +60,7 @@ public class SetDisplayStyle extends BaseNode {
 
         for (Entity entity : entities) {
             if (entity instanceof Display displayEntity) {
-                CompoundTag nbt = new CompoundTag();
-                displayEntity.saveWithoutId(nbt);
+                CompoundTag nbt = EntityNbtCompat.saveWithoutId(displayEntity);
 
                 nbt.putString("billboard", billboard);
                 if (shadowRadius != null) nbt.putFloat("shadow_radius", shadowRadius);
@@ -86,7 +86,7 @@ public class SetDisplayStyle extends BaseNode {
                     nbt.remove("brightness");
                 }
 
-                displayEntity.load(nbt);
+                EntityNbtCompat.load(displayEntity, nbt);
             }
         }
         return next(StandardPorts.FLOW_OUT.getId());

@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -40,7 +40,7 @@ public record PacketOpenDialogue(
     }
 
     public static final Type<PacketOpenDialogue> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath("geometry_node", "open_dialogue"));
+            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "open_dialogue"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketOpenDialogue> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> packet.write(buf),

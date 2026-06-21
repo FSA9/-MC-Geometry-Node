@@ -43,7 +43,7 @@ public final class DialogueStyleRenderer {
 
         Minecraft minecraft = Minecraft.getInstance();
         if (!minecraft.isSameThread()) {
-            minecraft.tell(() -> open(packet));
+            minecraft.execute(() -> open(packet));
             return;
         }
 
@@ -91,7 +91,7 @@ public final class DialogueStyleRenderer {
     public static void close(UUID sessionId) {
         Minecraft minecraft = Minecraft.getInstance();
         if (!minecraft.isSameThread()) {
-            minecraft.tell(() -> close(sessionId));
+            minecraft.execute(() -> close(sessionId));
             return;
         }
         if (activeSessionId == null || !activeSessionId.equals(sessionId)) {
@@ -111,7 +111,7 @@ public final class DialogueStyleRenderer {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == null) {
             minecraft.mouseHandler.grabMouse();
-            minecraft.tell(() -> {
+            minecraft.execute(() -> {
                 if (minecraft.screen == null) {
                     minecraft.mouseHandler.grabMouse();
                 }

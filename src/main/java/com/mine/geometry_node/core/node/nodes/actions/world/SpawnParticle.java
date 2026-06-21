@@ -12,7 +12,7 @@ import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
@@ -56,7 +56,7 @@ public class SpawnParticle extends BaseNode {
             return next(StandardPorts.FLOW_OUT.getId());
         }
 
-        ParticleType<?> type = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.parse(particleId));
+        ParticleType<?> type = BuiltInRegistries.PARTICLE_TYPE.getValue(Identifier.parse(particleId));
         if (!(type instanceof ParticleOptions particleOptions)) {
             return next(StandardPorts.FLOW_OUT.getId());
         }

@@ -31,7 +31,10 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.item.ItemUtil;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -111,7 +114,7 @@ public class DialogueRuntime implements GraphRuntime {
         session.setExecutionHandle(handle);
         session.setDialogueContext(dialogueContext);
         session.setPolicy(policy);
-        long gameTime = player.serverLevel().getGameTime();
+        long gameTime = player.level().getGameTime();
         session.setCreatedGameTime(gameTime);
         session.touch(gameTime);
         openForPlayer(player, session);
@@ -184,7 +187,7 @@ public class DialogueRuntime implements GraphRuntime {
 
         String graphId = session.getGraphId();
         String shopId = ShopTradeUseStore.shopId(shopData, "");
-        int globalUses = ShopTradeUseStore.getUses(player.serverLevel(), player, graphId, shopId, offerId);
+        int globalUses = ShopTradeUseStore.getUses(player.level(), player, graphId, shopId, offerId);
         offerMap.put("uses", globalUses);
         ShopOffer offer = parseShopOffer(offerMap, player);
         if (!offer.enabled()) {
@@ -209,7 +212,7 @@ public class DialogueRuntime implements GraphRuntime {
             return session;
         }
 
-        Entity seller = resolveSellerEntity(player.serverLevel(), session.getDialogueContext());
+        Entity seller = resolveSellerEntity(player.level(), session.getDialogueContext());
         SellerInventory sellerInventory = seller == null ? null : sellerInventory(seller);
         if (offer.consumeSellerItems() && seller != null) {
             if (sellerInventory == null) {
@@ -252,7 +255,7 @@ public class DialogueRuntime implements GraphRuntime {
         giveStacks(player, rewards);
 
         if (offer.maxUses() > 0) {
-            offerMap.put("uses", ShopTradeUseStore.incrementUses(player.serverLevel(), player, graphId, shopId, offerId, offer.maxUses()));
+            offerMap.put("uses", ShopTradeUseStore.incrementUses(player.level(), player, graphId, shopId, offerId, offer.maxUses()));
         }
         dispatchShopTradeSuccess(player, seller, offerId, shopData, offer.costs(), rewards);
         refreshShopSessionKey(player, session, "geometry_node.shop.message.trade_complete", true);
@@ -473,7 +476,7 @@ public class DialogueRuntime implements GraphRuntime {
             page.getMetadata().remove("last_trade_message_key");
             page.getMetadata().put("last_trade_success", success);
         }
-        session.touch(player.serverLevel().getGameTime());
+        session.touch(player.level().getGameTime());
         getPresenter(session).open(player, session);
     }
 
@@ -484,7 +487,7 @@ public class DialogueRuntime implements GraphRuntime {
             page.getMetadata().put("last_trade_message_key", messageKey == null ? "" : messageKey);
             page.getMetadata().put("last_trade_success", success);
         }
-        session.touch(player.serverLevel().getGameTime());
+        session.touch(player.level().getGameTime());
         getPresenter(session).open(player, session);
     }
 
@@ -494,7 +497,7 @@ public class DialogueRuntime implements GraphRuntime {
                                           Map<String, Object> shopData,
                                           List<ItemStack> costs,
                                           List<ItemStack> rewards) {
-        GraphEngine.dispatchEvent(player.serverLevel(), player, OnShopTradeSuccess.TYPE_ID, GraphEventData.of(
+        GraphEngine.dispatchEvent(player.level(), player, OnShopTradeSuccess.TYPE_ID, GraphEventData.of(
                 StandardPorts.BUYER.getId(), player,
                 StandardPorts.SELLER.getId(), seller,
                 StandardPorts.SHOP_ID.getId(), ShopTradeUseStore.shopId(shopData, ""),
@@ -611,9 +614,9 @@ public class DialogueRuntime implements GraphRuntime {
 
     @Nullable
     private static SellerInventory sellerInventory(Entity seller) {
-        IItemHandler handler = seller.getCapability(Capabilities.ItemHandler.ENTITY);
+        ResourceHandler<ItemResource> handler = seller.getCapability(Capabilities.Item.ENTITY);
         if (handler != null) {
-            return new ItemHandlerSellerInventory(handler);
+            return new ResourceHandlerSellerInventory(handler);
         }
         if (seller instanceof Player player) {
             return new ContainerSellerInventory(player.getInventory());
@@ -704,8 +707,8 @@ public class DialogueRuntime implements GraphRuntime {
     }
 
     private static void dropAt(Entity entity, ItemStack stack) {
-        if (entity != null && stack != null && !stack.isEmpty()) {
-            entity.spawnAtLocation(stack);
+        if (entity != null && stack != null && !stack.isEmpty() && entity.level() instanceof ServerLevel level) {
+            entity.spawnAtLocation(level, stack);
         }
     }
 
@@ -877,22 +880,24 @@ public class DialogueRuntime implements GraphRuntime {
         }
     }
 
-    private static final class ItemHandlerSellerInventory implements SellerInventory {
-        private final IItemHandler handler;
+    private static final class ResourceHandlerSellerInventory implements SellerInventory {
+        private final ResourceHandler<ItemResource> handler;
 
-        private ItemHandlerSellerInventory(IItemHandler handler) {
+        private ResourceHandlerSellerInventory(ResourceHandler<ItemResource> handler) {
             this.handler = handler;
         }
 
         @Override
         public boolean hasAll(List<ItemStack> requiredStacks) {
             List<ItemStack> available = new ArrayList<>();
-            for (int slot = 0; slot < handler.getSlots(); slot++) {
-                ItemStack stack = handler.getStackInSlot(slot);
+            for (int slot = 0; slot < handler.size(); slot++) {
+                ItemStack stack = ItemUtil.getStack(handler, slot);
                 if (!stack.isEmpty()) {
-                    ItemStack extractable = handler.extractItem(slot, stack.getCount(), true);
-                    if (!extractable.isEmpty()) {
-                        available.add(extractable);
+                    try (Transaction transaction = Transaction.openRoot()) {
+                        int extractable = handler.extract(slot, ItemResource.of(stack), stack.getCount(), transaction);
+                        if (extractable > 0) {
+                            available.add(stack.copyWithCount(extractable));
+                        }
                     }
                 }
             }
@@ -904,15 +909,18 @@ public class DialogueRuntime implements GraphRuntime {
             List<ItemStack> extracted = new ArrayList<>();
             for (ItemStack required : requiredStacks) {
                 int remaining = required.getCount();
-                for (int slot = 0; slot < handler.getSlots() && remaining > 0; slot++) {
-                    ItemStack current = handler.getStackInSlot(slot);
+                for (int slot = 0; slot < handler.size() && remaining > 0; slot++) {
+                    ItemStack current = ItemUtil.getStack(handler, slot);
                     if (current.isEmpty() || !ItemStack.isSameItemSameComponents(current, required)) {
                         continue;
                     }
-                    ItemStack stack = handler.extractItem(slot, remaining, false);
-                    if (!stack.isEmpty()) {
-                        extracted.add(stack);
-                        remaining -= stack.getCount();
+                    try (Transaction transaction = Transaction.openRoot()) {
+                        int taken = handler.extract(slot, ItemResource.of(required), remaining, transaction);
+                        if (taken > 0) {
+                            transaction.commit();
+                            extracted.add(required.copyWithCount(taken));
+                            remaining -= taken;
+                        }
                     }
                 }
             }
@@ -923,8 +931,14 @@ public class DialogueRuntime implements GraphRuntime {
         public void insertOrDrop(List<ItemStack> stacks, Entity seller) {
             for (ItemStack stack : stacks) {
                 ItemStack remaining = stack.copy();
-                for (int slot = 0; slot < handler.getSlots() && !remaining.isEmpty(); slot++) {
-                    remaining = handler.insertItem(slot, remaining, false);
+                for (int slot = 0; slot < handler.size() && !remaining.isEmpty(); slot++) {
+                    try (Transaction transaction = Transaction.openRoot()) {
+                        int inserted = handler.insert(slot, ItemResource.of(remaining), remaining.getCount(), transaction);
+                        if (inserted > 0) {
+                            transaction.commit();
+                            remaining.shrink(inserted);
+                        }
+                    }
                 }
                 dropAt(seller, remaining);
             }

@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.TypeConverter;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.network.chat.Component;
@@ -54,12 +55,11 @@ public class SetBlockDisplayState extends BaseNode {
 
         for (Entity entity : entities) {
             if (entity instanceof Display.BlockDisplay blockDisplayEntity) {
-                CompoundTag nbt = new CompoundTag();
-                blockDisplayEntity.saveWithoutId(nbt);
+                CompoundTag nbt = EntityNbtCompat.saveWithoutId(blockDisplayEntity);
 
                 nbt.put("block_state", NbtUtils.writeBlockState(blockState));
 
-                blockDisplayEntity.load(nbt);
+                EntityNbtCompat.load(blockDisplayEntity, nbt);
             }
         }
         return next(StandardPorts.FLOW_OUT.getId());

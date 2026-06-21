@@ -15,6 +15,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 
@@ -30,6 +31,7 @@ public class GeometryNodeClient {
 
         // 监听世界渲染
         NeoForge.EVENT_BUS.addListener(this::onRenderLevelStage);
+        NeoForge.EVENT_BUS.addListener(this::onSubmitCustomGeometry);
 
         // 渲染注册
         ClientVisualManager.init();
@@ -47,14 +49,12 @@ public class GeometryNodeClient {
         ClientBlueprintInputManager.tick();
     }
 
-    private void onRenderLevelStage(RenderLevelStageEvent event) {
-        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
-            AreaDebugRenderer.render(event.getPoseStack(), event.getCamera());
-            ClientVisualManager.renderWorld(
-                    event.getPoseStack(),
-                    event.getCamera()
-            );
-        }
+    private void onRenderLevelStage(RenderLevelStageEvent.AfterTranslucentParticles event) {
+        AreaDebugRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
+    }
+
+    private void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
+        ClientVisualManager.renderWorld(event.getPoseStack(), event.getSubmitNodeCollector());
     }
 
     @SubscribeEvent

@@ -10,8 +10,8 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Unit;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.Unbreakable;
 
 public class SetUnbreakable extends BaseNode {
     public static final String TYPE_ID = "set_unbreakable";
@@ -32,7 +32,7 @@ public class SetUnbreakable extends BaseNode {
 
         if (stack != null && !stack.isEmpty() && value != null) {
             if (value) {
-                stack.set(DataComponents.UNBREAKABLE, new Unbreakable(true));
+                stack.set(DataComponents.UNBREAKABLE, Unit.INSTANCE);
             } else {
                 stack.remove(DataComponents.UNBREAKABLE);
             }

@@ -35,7 +35,7 @@ public class ClearEntityTags extends BaseNode {
 
         if (!entities.isEmpty()) {
             for (Entity entity : entities) {
-                Set<String> currentTags = entity.getTags();
+                Set<String> currentTags = entity.entityTags();
                 if (!currentTags.isEmpty()) {
                     // 【关键防御】: 必须将其拷贝到一个新的列表中再进行遍历删除！
                     // 否则会触发 ConcurrentModificationException 并发修改异常

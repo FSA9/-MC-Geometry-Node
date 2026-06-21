@@ -36,7 +36,7 @@ public class MountEntity extends BaseNode {
                 // 防止自己骑自己导致游戏死循环崩溃
                 if (passenger != vehicle) {
                     // true 表示强制骑乘（忽略某些原版的骑乘限制）
-                    passenger.startRiding(vehicle, true);
+                    passenger.startRiding(vehicle, true, true);
                 }
             }
         }

@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.node.value.ExpressionData;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -130,9 +130,9 @@ public class TypeConverter {
             // 解析 BlockState
             if (type == BlockState.class) {
                 try {
-                    ResourceLocation resLoc = ResourceLocation.tryParse(s);
+                    Identifier resLoc = Identifier.tryParse(s);
                     if (resLoc != null) {
-                        Block block = BuiltInRegistries.BLOCK.get(resLoc);
+                        Block block = BuiltInRegistries.BLOCK.getValue(resLoc);
                         return type.cast(block.defaultBlockState());
                     }
                 } catch (Exception ignored) {}
@@ -141,9 +141,9 @@ public class TypeConverter {
             // 解析 Item
             if (type == Item.class) {
                 try {
-                    ResourceLocation resLoc = ResourceLocation.tryParse(s);
+                    Identifier resLoc = Identifier.tryParse(s);
                     if (resLoc != null) {
-                        return type.cast(BuiltInRegistries.ITEM.get(resLoc));
+                        return type.cast(BuiltInRegistries.ITEM.getValue(resLoc));
                     }
                 } catch (Exception ignored) {}
             }

@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
@@ -61,8 +62,7 @@ public class SetDisplayTransform extends BaseNode {
 
         for (Entity entity : entities) {
             if (entity instanceof Display displayEntity) {
-                CompoundTag nbt = new CompoundTag();
-                displayEntity.saveWithoutId(nbt);
+                CompoundTag nbt = EntityNbtCompat.saveWithoutId(displayEntity);
 
                 CompoundTag transTag = new CompoundTag();
                 transTag.put("translation", createFloatList((float) translation.x, (float) translation.y, (float) translation.z));
@@ -76,7 +76,7 @@ public class SetDisplayTransform extends BaseNode {
 
                 nbt.putInt("start_interpolation", startInterp != null ? Math.max(0, startInterp) : 0);
 
-                displayEntity.load(nbt);
+                EntityNbtCompat.load(displayEntity, nbt);
             }
         }
         return next(StandardPorts.FLOW_OUT.getId());

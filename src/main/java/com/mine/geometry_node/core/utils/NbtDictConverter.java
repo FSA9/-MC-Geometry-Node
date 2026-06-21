@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.utils;
 
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.*;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
@@ -54,7 +55,10 @@ public class NbtDictConverter {
 
         // Minecraft 物品堆 (兼容 1.20.5+ 组件)
         if (val instanceof ItemStack itemStack) {
-            return itemStack.saveOptional(registryAccess);
+            return ItemStack.OPTIONAL_CODEC
+                    .encodeStart(registryAccess.createSerializationContext(NbtOps.INSTANCE), itemStack)
+                    .result()
+                    .orElseGet(CompoundTag::new);
         }
 
         // 嵌套字典 (Map)
@@ -91,7 +95,7 @@ public class NbtDictConverter {
         Map<String, Object> dict = new HashMap<>();
         if (tag == null) return dict;
 
-        for (String key : tag.getAllKeys()) {
+        for (String key : tag.keySet()) {
             dict.put(key, nbtToObject(tag.get(key), registryAccess));
         }
         return dict;
@@ -105,13 +109,16 @@ public class NbtDictConverter {
             // Heuristic: 检查是不是 Vec3
             if (comp.size() == 3 && comp.contains("x") && comp.contains("y") && comp.contains("z")) {
                 try {
-                    return new Vec3(comp.getDouble("x"), comp.getDouble("y"), comp.getDouble("z"));
+                    return new Vec3(comp.getDoubleOr("x", 0.0), comp.getDoubleOr("y", 0.0), comp.getDoubleOr("z", 0.0));
                 } catch (Exception ignored) {}
             }
 
             // Heuristic: 检查是不是 ItemStack (必须包含 id 并且可以被解析)
             if (comp.contains("id") && comp.contains("count")) {
-                ItemStack parsedStack = ItemStack.parseOptional(registryAccess, comp);
+                ItemStack parsedStack = ItemStack.OPTIONAL_CODEC
+                        .parse(registryAccess.createSerializationContext(NbtOps.INSTANCE), comp)
+                        .result()
+                        .orElse(ItemStack.EMPTY);
                 if (!parsedStack.isEmpty()) return parsedStack;
             }
 
@@ -130,17 +137,17 @@ public class NbtDictConverter {
 
         // 基础数字与布尔
         if (tag instanceof NumericTag num) {
-            if (num instanceof DoubleTag) return num.getAsDouble();
-            if (num instanceof FloatTag) return num.getAsFloat();
-            if (num instanceof IntTag) return num.getAsInt();
-            if (num instanceof LongTag) return num.getAsLong();
-            if (num instanceof ByteTag) return num.getAsByte() != 0; // Minecraft 常用 Byte(0/1) 存布尔
-            return num.getAsNumber();
+            if (num instanceof DoubleTag) return num.doubleValue();
+            if (num instanceof FloatTag) return num.floatValue();
+            if (num instanceof IntTag) return num.intValue();
+            if (num instanceof LongTag) return num.longValue();
+            if (num instanceof ByteTag) return num.byteValue() != 0; // Minecraft 常用 Byte(0/1) 存布尔
+            return num.box();
         }
 
         // 字符串
         if (tag instanceof StringTag s) {
-            return s.getAsString();
+            return s.value();
         }
 
         return tag.toString();

@@ -13,6 +13,7 @@ version = mod_version
 group = mod_group_id
 
 repositories {
+    mavenCentral()
     mavenLocal()
     maven {
         name = 'IzzelAliz Maven'
@@ -27,14 +28,16 @@ base {
     archivesName = mod_id
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 neoForge {
     version = project.neo_version
 
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
+    if (project.hasProperty('parchment_mappings_version') && project.parchment_mappings_version) {
+        parchment {
+            mappingsVersion = project.parchment_mappings_version
+            minecraftVersion = project.parchment_minecraft_version
+        }
     }
 
     runs {
@@ -54,8 +57,8 @@ neoForge {
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
-        data {
-            data()
+        clientData {
+            clientData()
             programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
         }
 
@@ -75,9 +78,9 @@ neoForge {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 dependencies {
-    implementation "icyllis.modernui:ModernUI-NeoForge:${minecraft_version}-${modernui_version}.+"
+    implementation "icyllis.modernui:ModernUI-NeoForge:${modernui_neoforge_version}"
 
-    additionalRuntimeClasspath(compileOnly("icyllis.modernui:ModernUI-Core:${modernui_version}")) {
+    implementation("icyllis.modernui:ModernUI-Markflow:${modernui_markflow_version}") {
         exclude group: "org.slf4j", module: "slf4j-api"
         exclude group: "org.apache.logging.log4j", module: "log4j-core"
         exclude group: "org.apache.logging.log4j", module: "log4j-api"
@@ -87,17 +90,7 @@ dependencies {
         exclude group: "it.unimi.dsi", module: "fastutil"
     }
 
-    additionalRuntimeClasspath(compileOnly("icyllis.modernui:ModernUI-Markflow:${modernui_version}")) {
-        exclude group: "org.slf4j", module: "slf4j-api"
-        exclude group: "org.apache.logging.log4j", module: "log4j-core"
-        exclude group: "org.apache.logging.log4j", module: "log4j-api"
-        exclude group: "com.google.code.findbugs", module: "jsr305"
-        exclude group: "org.jetbrains", module: "annotations"
-        exclude group: "com.ibm.icu", module: "icu4j"
-        exclude group: "it.unimi.dsi", module: "fastutil"
-    }
-
-    implementation("icyllis.modernui:ModernUI-Core:${modernui_version}") {
+    implementation("dev.icyllis:modernui-core:${modernui_core_version}") {
         exclude group: "com.ibm.icu", module: "icu4j"
         exclude group: "it.unimi.dsi", module: "fastutil"
     }

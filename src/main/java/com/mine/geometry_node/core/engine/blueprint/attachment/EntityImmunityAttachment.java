@@ -4,7 +4,6 @@ import com.mine.geometry_node.GeometryNode;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.world.entity.Entity;
 
 import java.util.HashSet;
@@ -52,7 +51,10 @@ public class EntityImmunityAttachment {
     public void load(ListTag tag, HolderLookup.Provider provider) {
         immunities.clear();
         for (int i = 0; i < tag.size(); i++) {
-            immunities.add(tag.getString(i));
+            String damageTypeId = tag.getStringOr(i, "");
+            if (!damageTypeId.isEmpty()) {
+                immunities.add(damageTypeId);
+            }
         }
     }
 

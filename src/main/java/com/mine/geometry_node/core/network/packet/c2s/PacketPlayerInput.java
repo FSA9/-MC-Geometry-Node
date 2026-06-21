@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.network.packet.c2s;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /**
  * [C2S 数据包] 客户端输入状态同步
@@ -15,7 +15,7 @@ public record PacketPlayerInput(
 ) implements CustomPacketPayload {
 
     public static final Type<PacketPlayerInput> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath("geometry_node", "player_input")
+            Identifier.fromNamespaceAndPath("geometry_node", "player_input")
     );
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketPlayerInput> STREAM_CODEC = StreamCodec.of(

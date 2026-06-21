@@ -12,8 +12,8 @@ import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.world.entity.Entity;
@@ -52,15 +52,14 @@ public class DamageEntity extends BaseNode {
 
             if (damageTypeId != null && !damageTypeId.isEmpty() && context.getLevel() != null) {
                 try {
-                    ResourceLocation typeRes = ResourceLocation.parse(damageTypeId);
-                    ResourceKey<DamageType> typeKey = ResourceKey.create(Registries.DAMAGE_TYPE, typeRes);
+                    Identifier typeRes = Identifier.parse(damageTypeId);
 
-                    var registry = context.getLevel().registryAccess().registry(Registries.DAMAGE_TYPE).orElse(null);
-                    if (registry != null) {
-                        Holder<DamageType> holder = registry.getHolder(typeKey).orElse(null);
-                        if (holder != null) {
-                            finalSource = new DamageSource(holder);
-                        }
+                    Holder<DamageType> holder = context.getLevel().registryAccess()
+                            .lookup(Registries.DAMAGE_TYPE)
+                            .flatMap(registry -> registry.get(ResourceKey.create(Registries.DAMAGE_TYPE, typeRes)))
+                            .orElse(null);
+                    if (holder != null) {
+                        finalSource = new DamageSource(holder);
                     }
                 } catch (Exception e) {
                     System.err.println("[DamageEntity] Illegal damage type ID: " + damageTypeId);

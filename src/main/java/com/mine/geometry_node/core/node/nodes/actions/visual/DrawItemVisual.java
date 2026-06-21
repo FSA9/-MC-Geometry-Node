@@ -100,7 +100,10 @@ public class DrawItemVisual extends BaseNode {
         extraData.putString("item_display", displayContext);
 
         // 1.21 物品序列化
-        net.minecraft.nbt.Tag itemTag = itemStack.saveOptional(level.registryAccess());
+        net.minecraft.nbt.Tag itemTag = ItemStack.OPTIONAL_CODEC
+                .encodeStart(level.registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE), itemStack)
+                .result()
+                .orElseGet(CompoundTag::new);
         extraData.put("item", itemTag);
 
         // 注意：如果你有办法修改 broadcastDynamicVisual 的方法签名，请把上面的 broadcastCenter 传进去作为发包中心！

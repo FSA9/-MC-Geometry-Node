@@ -13,7 +13,7 @@ public class ServerGraphListCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
                 Commands.literal("graph_list")
-                        .requires(source -> source.hasPermission(1))
+                        .requires(source -> source.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_MODERATOR))
                         .then(Commands.literal("server")
                                 .executes(context -> {
                                     Set<String> dynamicGraphs = DynamicGraphManager.getAllDynamicGraphIds();

@@ -8,10 +8,12 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.utils.EntityNbtCompat;
 import com.mine.geometry_node.core.utils.NbtDictConverter; // 引入我们的工具类
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.Marker;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -36,7 +38,7 @@ public class SpawnMarkerEntity extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         Level level = context.getLevel();
-        if (level == null || level.isClientSide) return next(StandardPorts.FLOW_OUT.getId());
+        if (level == null || level.isClientSide()) return next(StandardPorts.FLOW_OUT.getId());
 
         Vec3 pos = getInput(context, StandardPorts.XYZ.getId(), Vec3.class);
         if (pos == null) pos = Vec3.ZERO;
@@ -44,7 +46,7 @@ public class SpawnMarkerEntity extends BaseNode {
         String tag = getInput(context, StandardPorts.TAG.getId(), String.class);
         Map<String, Object> dataDict = getInputDict(context, StandardPorts.DATA.getId());
 
-        Marker marker = EntityType.MARKER.create(level);
+        Marker marker = EntityType.MARKER.create(level, EntitySpawnReason.COMMAND);
         if (marker != null) {
             marker.setPos(pos.x, pos.y, pos.z);
 
@@ -53,12 +55,11 @@ public class SpawnMarkerEntity extends BaseNode {
             }
 
             if (dataDict != null && !dataDict.isEmpty()) {
-                CompoundTag nbt = new CompoundTag();
-                marker.saveWithoutId(nbt);
+                CompoundTag nbt = EntityNbtCompat.saveWithoutId(marker);
 
                 nbt.put("data", NbtDictConverter.dictToNbt(dataDict, level.registryAccess()));
 
-                marker.load(nbt);
+                EntityNbtCompat.load(marker, nbt);
             }
 
             level.addFreshEntity(marker);

@@ -20,7 +20,7 @@ public class WorldDispatcher {
             if (event.getLevel() instanceof ServerLevel serverLevel) {
                 GraphEngine.dispatchEvent(serverLevel, null, OnChunkLoad.TYPE_ID, GraphEventData.of(
                         StandardPorts.XYZ.getId(), event.getChunk().getPos().getMiddleBlockPosition(64),
-                        StandardPorts.DIMENSION.getId(), serverLevel.dimension().location().toString()
+                        StandardPorts.DIMENSION.getId(), serverLevel.dimension().identifier().toString()
                 ));
             }
         });
@@ -48,7 +48,7 @@ public class WorldDispatcher {
             if (event.getLevel() instanceof ServerLevel serverLevel) {
                 GraphEngine.dispatchEvent(serverLevel, null, OnPortalCreate.TYPE_ID, GraphEventData.of(
                         StandardPorts.XYZ.getId(), event.getPos(),
-                        StandardPorts.DIMENSION.getId(), serverLevel.dimension().location().toString()
+                        StandardPorts.DIMENSION.getId(), serverLevel.dimension().identifier().toString()
                 ));
             }
         });

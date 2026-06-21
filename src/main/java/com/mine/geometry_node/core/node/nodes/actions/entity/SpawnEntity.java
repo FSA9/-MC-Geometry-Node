@@ -11,9 +11,10 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.Vec3;
 
@@ -50,14 +51,14 @@ public class SpawnEntity extends BaseNode {
         }
 
         if (pos != null && typeId != null && !typeId.isEmpty() && context.getLevel() instanceof ServerLevel serverLevel) {
-            ResourceLocation loc = ResourceLocation.tryParse(typeId);
+            Identifier loc = Identifier.tryParse(typeId);
             if (loc != null) {
                 EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.getOptional(loc).orElse(null);
 
                 if (entityType != null) {
-                    Entity entity = entityType.create(serverLevel);
+                    Entity entity = entityType.create(serverLevel, EntitySpawnReason.COMMAND);
                     if (entity != null) {
-                        entity.moveTo(pos.x(), pos.y(), pos.z(), 0.0F, 0.0F);
+                        entity.teleportTo(pos.x(), pos.y(), pos.z());
                         serverLevel.addFreshEntity(entity);
                         context.setTempData(StandardPorts.ENTITY.getId(), List.of(entity));
                     }

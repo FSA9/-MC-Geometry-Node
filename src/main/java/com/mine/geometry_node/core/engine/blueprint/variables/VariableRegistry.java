@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.*;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
@@ -39,8 +40,8 @@ public class VariableRegistry {
         register(new VariableSerializer<UUID>() {
             @Override public String getTypeId() { return "uuid"; }
             @Override public Class<UUID> getTargetClass() { return UUID.class; }
-            @Override public Tag serialize(UUID value) { return NbtUtils.createUUID(value); }
-            @Override public UUID deserialize(Tag tag) { return NbtUtils.loadUUID(tag); }
+            @Override public Tag serialize(UUID value) { return StringTag.valueOf(value.toString()); }
+            @Override public UUID deserialize(Tag tag) { return UUID.fromString(tag.asString().orElse("")); }
         });
 
         // BlockPos
@@ -48,7 +49,7 @@ public class VariableRegistry {
             @Override public String getTypeId() { return "block_pos"; }
             @Override public Class<BlockPos> getTargetClass() { return BlockPos.class; }
             @Override public Tag serialize(BlockPos value) { return LongTag.valueOf(value.asLong()); }
-            @Override public BlockPos deserialize(Tag tag) { return BlockPos.of(((LongTag) tag).getAsLong()); }
+            @Override public BlockPos deserialize(Tag tag) { return BlockPos.of(((LongTag) tag).longValue()); }
         });
 
         // Vec3
@@ -64,7 +65,7 @@ public class VariableRegistry {
             }
             @Override public Vec3 deserialize(Tag tag) {
                 ListTag list = (ListTag) tag;
-                return new Vec3(list.getDouble(0), list.getDouble(1), list.getDouble(2));
+                return new Vec3(list.getDoubleOr(0, 0.0), list.getDoubleOr(1, 0.0), list.getDoubleOr(2, 0.0));
             }
         });
 
@@ -74,7 +75,7 @@ public class VariableRegistry {
             @Override public Class<BlockState> getTargetClass() { return BlockState.class; }
             @Override public Tag serialize(BlockState value) { return NbtUtils.writeBlockState(value); }
             @Override public BlockState deserialize(Tag tag) {
-                return NbtUtils.readBlockState(BuiltInRegistries.BLOCK.asLookup(), (CompoundTag) tag);
+                return NbtUtils.readBlockState(BuiltInRegistries.BLOCK, (CompoundTag) tag);
             }
         });
 
@@ -89,10 +90,16 @@ public class VariableRegistry {
 
             // 重写带 Provider 的方法
             @Override public Tag serialize(ItemStack value, HolderLookup.Provider provider) {
-                return value.saveOptional(provider);
+                return ItemStack.OPTIONAL_CODEC
+                        .encodeStart(provider.createSerializationContext(NbtOps.INSTANCE), value)
+                        .result()
+                        .orElseGet(CompoundTag::new);
             }
             @Override public ItemStack deserialize(Tag tag, HolderLookup.Provider provider) {
-                return ItemStack.parseOptional(provider, (CompoundTag) tag);
+                return ItemStack.OPTIONAL_CODEC
+                        .parse(provider.createSerializationContext(NbtOps.INSTANCE), tag)
+                        .result()
+                        .orElse(ItemStack.EMPTY);
             }
         });
     }
@@ -171,33 +178,33 @@ public class VariableRegistry {
         if (tag == null) return null;
 
         // --- 快车道 ---
-        if (tag instanceof IntTag i) return i.getAsInt();
-        if (tag instanceof LongTag l) return l.getAsLong();
-        if (tag instanceof ShortTag s) return s.getAsShort();
-        if (tag instanceof DoubleTag d) return d.getAsDouble();
-        if (tag instanceof FloatTag f) return f.getAsFloat();
-        if (tag instanceof StringTag s) return s.getAsString();
-        if (tag instanceof ByteTag b) return b.getAsByte() != 0;
+        if (tag instanceof IntTag i) return i.intValue();
+        if (tag instanceof LongTag l) return l.longValue();
+        if (tag instanceof ShortTag s) return s.shortValue();
+        if (tag instanceof DoubleTag d) return d.doubleValue();
+        if (tag instanceof FloatTag f) return f.floatValue();
+        if (tag instanceof StringTag s) return s.value();
+        if (tag instanceof ByteTag b) return b.byteValue() != 0;
 
         // --- 拆包与慢车道 ---
-        if (tag instanceof CompoundTag compound && compound.contains(TYPE_KEY, Tag.TAG_STRING)) {
-            String typeId = compound.getString(TYPE_KEY);
+        if (tag instanceof CompoundTag compound && compound.contains(TYPE_KEY)) {
+            String typeId = compound.getStringOr(TYPE_KEY, "");
 
             // List
-            if ("_gn_list".equals(typeId) && compound.contains(DATA_KEY, Tag.TAG_LIST)) {
-                ListTag nbtList = compound.getList(DATA_KEY, Tag.TAG_COMPOUND);
+            if ("_gn_list".equals(typeId) && compound.contains(DATA_KEY)) {
+                ListTag nbtList = compound.getListOrEmpty(DATA_KEY);
                 List<Object> resultList = new ArrayList<>();
                 for (int i = 0; i < nbtList.size(); i++) {
-                    CompoundTag elementWrapper = nbtList.getCompound(i);
+                    CompoundTag elementWrapper = nbtList.getCompoundOrEmpty(i);
                     resultList.add(fromTag(elementWrapper.get("v"), provider));
                 }
                 return resultList;
             }
             // Dict
-            if ("_gn_dict".equals(typeId) && compound.contains(DATA_KEY, Tag.TAG_COMPOUND)) {
-                CompoundTag dataTag = compound.getCompound(DATA_KEY);
+            if ("_gn_dict".equals(typeId) && compound.contains(DATA_KEY)) {
+                CompoundTag dataTag = compound.getCompoundOrEmpty(DATA_KEY);
                 Map<String, Object> resultMap = new HashMap<>();
-                for (String key : dataTag.getAllKeys()) {
+                for (String key : dataTag.keySet()) {
                     resultMap.put(key, fromTag(dataTag.get(key), provider)); // 递归反序列化 Value
                 }
                 return resultMap;

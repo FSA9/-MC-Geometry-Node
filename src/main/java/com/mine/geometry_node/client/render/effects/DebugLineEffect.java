@@ -4,7 +4,8 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
@@ -17,11 +18,11 @@ public class DebugLineEffect extends DirectedVisualEffect {
 
     // 2. 渲染方法加上 partialTick 参数
     @Override
-    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Vec3 camPos, float partialTick) {
+    public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, SubmitNodeCollector submitNodeCollector, Vec3 camPos, float partialTick) {
         // 3. 获取当前帧动态计算后的起点和终点
         DirectedAnchors anchors = computeAnchors(partialTick);
 
-        VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderType.lines());
+        VertexConsumer vertexConsumer = bufferSource.getBuffer(RenderTypes.lines());
         Matrix4f matrix = poseStack.last().pose();
 
         int a = (color >> 24) & 0xFF;

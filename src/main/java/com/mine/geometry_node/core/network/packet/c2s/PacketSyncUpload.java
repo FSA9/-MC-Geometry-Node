@@ -4,7 +4,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /**
  * [C2S] 客户端请求上传/发布蓝图到服务器
@@ -13,7 +13,7 @@ public record PacketSyncUpload(String graphId, String jsonContent) implements Cu
 
     // 1. 定义数据包的唯一标识 (ID)
     public static final Type<PacketSyncUpload> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath("geometry_node", "sync_upload"));
+            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "sync_upload"));
 
     // 2. 定义序列化与反序列化器 (StreamCodec)
     public static final StreamCodec<FriendlyByteBuf, PacketSyncUpload> STREAM_CODEC = StreamCodec.composite(

@@ -38,7 +38,6 @@ public class SetEntityVelocity extends BaseNode {
                 // 覆盖速度（区别于 AddForce 的 add）
                 entity.setDeltaMovement(velocity);
 
-                entity.hasImpulse = true;
                 entity.hurtMarked = true;
 
                 ClientboundSetEntityMotionPacket packet = new ClientboundSetEntityMotionPacket(entity);
@@ -50,7 +49,7 @@ public class SetEntityVelocity extends BaseNode {
 
                 // 发送给周围玩家
                 if (context.getLevel() != null) {
-                    context.getLevel().getChunkSource().broadcast(entity, packet);
+                    context.getLevel().getChunkSource().sendToTrackingPlayers(entity, packet);
                 }
             }
         }

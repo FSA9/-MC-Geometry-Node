@@ -5,16 +5,19 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.FileToIdConverter;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener;
+import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.BufferedReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -23,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class MultiblockStructureManager extends SimpleJsonResourceReloadListener {
+public class MultiblockStructureManager extends SimplePreparableReloadListener<Map<Identifier, JsonElement>> {
     public static final String DYNAMIC_REGISTRY_ID = "geometry_node:multiblock_structure";
     public static final String ANY_STRUCTURE_ID = "*";
 
@@ -35,7 +38,6 @@ public class MultiblockStructureManager extends SimpleJsonResourceReloadListener
     private List<String> optionIds = List.of(ANY_STRUCTURE_ID);
 
     public MultiblockStructureManager() {
-        super(GSON, FOLDER_NAME);
         INSTANCE = this;
     }
 
@@ -51,7 +53,23 @@ public class MultiblockStructureManager extends SimpleJsonResourceReloadListener
     }
 
     @Override
-    protected void apply(Map<ResourceLocation, JsonElement> object, ResourceManager resourceManager, ProfilerFiller profiler) {
+    protected Map<Identifier, JsonElement> prepare(ResourceManager resourceManager, ProfilerFiller profiler) {
+        FileToIdConverter lister = FileToIdConverter.json(FOLDER_NAME);
+        Map<Identifier, JsonElement> objects = new HashMap<>();
+        lister.listMatchingResources(resourceManager).forEach((fileId, resource) -> {
+            Identifier id = lister.fileToId(fileId);
+            try (BufferedReader reader = resource.openAsReader()) {
+                objects.put(id, JsonParser.parseReader(reader));
+            } catch (Exception e) {
+                System.err.println("[MultiblockStructureManager]: Error loading multiblock " + fileId);
+                e.printStackTrace();
+            }
+        });
+        return objects;
+    }
+
+    @Override
+    protected void apply(Map<Identifier, JsonElement> object, ResourceManager resourceManager, ProfilerFiller profiler) {
         Map<String, MultiblockStructure> loaded = new HashMap<>();
 
         object.forEach((location, json) -> {
@@ -80,7 +98,7 @@ public class MultiblockStructureManager extends SimpleJsonResourceReloadListener
             return List.of();
         }
 
-        ResourceLocation changedBlockId = BuiltInRegistries.BLOCK.getKey(changedState.getBlock());
+        Identifier changedBlockId = BuiltInRegistries.BLOCK.getKey(changedState.getBlock());
         if (changedBlockId == null) {
             return List.of();
         }
@@ -135,7 +153,7 @@ public class MultiblockStructureManager extends SimpleJsonResourceReloadListener
         for (BlockEntry entry : structure.blocks()) {
             BlockPos worldPos = origin.offset(entry.offset().getX(), entry.offset().getY(), entry.offset().getZ());
             BlockState state = level.getBlockState(worldPos);
-            ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+            Identifier blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
             if (!entry.blockId().equals(blockId)) {
                 return false;
             }
@@ -162,7 +180,7 @@ public class MultiblockStructureManager extends SimpleJsonResourceReloadListener
             }
 
             BlockPos offset = readOffset(blockObj);
-            ResourceLocation blockId = readBlockId(blockObj);
+            Identifier blockId = readBlockId(blockObj);
             if (offset != null && blockId != null) {
                 blocks.add(new BlockEntry(offset, blockId));
             }
@@ -189,13 +207,13 @@ public class MultiblockStructureManager extends SimpleJsonResourceReloadListener
     }
 
     @Nullable
-    private static ResourceLocation readBlockId(JsonObject blockObj) {
+    private static Identifier readBlockId(JsonObject blockObj) {
         String raw = readString(blockObj, "block", null);
         if (raw == null || raw.isBlank()) {
             return null;
         }
 
-        ResourceLocation id = ResourceLocation.tryParse(raw);
+        Identifier id = Identifier.tryParse(raw);
         if (id == null || !BuiltInRegistries.BLOCK.containsKey(id)) {
             throw new IllegalArgumentException("Unknown block id: " + raw);
         }
@@ -240,7 +258,7 @@ public class MultiblockStructureManager extends SimpleJsonResourceReloadListener
 
     public record MultiblockStructure(String id, List<BlockEntry> blocks) {}
 
-    public record BlockEntry(BlockPos offset, ResourceLocation blockId) {}
+    public record BlockEntry(BlockPos offset, Identifier blockId) {}
 
     public record Match(String structureId, BlockPos origin, BlockPos triggerPos) {}
 }

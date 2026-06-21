@@ -62,7 +62,7 @@ public class GraphEngine {
     // ==========================================
 
     public static void dispatchEvent(@NotNull Entity target, String eventNodeId, @Nullable Map<String, Object> eventData) {
-        if (target.level().isClientSide) return;
+        if (target.level().isClientSide()) return;
         dispatchEvent((ServerLevel) target.level(), target, eventNodeId, eventData);
     }
 

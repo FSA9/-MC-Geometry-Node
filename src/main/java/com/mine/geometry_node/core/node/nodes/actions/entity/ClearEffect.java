@@ -12,7 +12,7 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -46,9 +46,11 @@ public class ClearEffect extends BaseNode {
         String effectId = getInput(context, StandardPorts.STRING.getId(), String.class);
 
         if (!entities.isEmpty() && effectId != null) {
-            ResourceLocation rl = ResourceLocation.tryParse(effectId);
+            Identifier rl = Identifier.tryParse(effectId);
             if (rl != null) {
-                var effectHolder = BuiltInRegistries.MOB_EFFECT.getHolder(rl);
+                var effectHolder = BuiltInRegistries.MOB_EFFECT
+                        .getOptional(rl)
+                        .map(BuiltInRegistries.MOB_EFFECT::wrapAsHolder);
                 if (effectHolder.isPresent()) {
                     for (Entity entity : entities) {
                         if (entity instanceof LivingEntity living) {

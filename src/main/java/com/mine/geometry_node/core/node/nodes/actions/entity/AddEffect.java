@@ -13,7 +13,7 @@ import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
@@ -54,9 +54,11 @@ public class AddEffect extends BaseNode {
         Integer amplifier = getInput(context, StandardPorts.INT.getId(), Integer.class);
 
         if (!entities.isEmpty() && effectId != null) {
-            ResourceLocation rl = ResourceLocation.tryParse(effectId);
+            Identifier rl = Identifier.tryParse(effectId);
             if (rl != null) {
-                var effectHolder = BuiltInRegistries.MOB_EFFECT.getHolder(rl);
+                var effectHolder = BuiltInRegistries.MOB_EFFECT
+                        .getOptional(rl)
+                        .map(BuiltInRegistries.MOB_EFFECT::wrapAsHolder);
                 if (effectHolder.isPresent()) {
                     int dur = duration != null ? duration : 600;
                     int amp = amplifier != null ? amplifier : 0;

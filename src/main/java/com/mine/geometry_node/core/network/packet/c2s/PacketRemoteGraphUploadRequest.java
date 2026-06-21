@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +17,7 @@ public record PacketRemoteGraphUploadRequest(
         List<RemoteGraphUploadFile> files
 ) implements CustomPacketPayload {
     public static final Type<PacketRemoteGraphUploadRequest> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath("geometry_node", "remote_graph_upload_request"));
+            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "remote_graph_upload_request"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketRemoteGraphUploadRequest> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> packet.write(buf),

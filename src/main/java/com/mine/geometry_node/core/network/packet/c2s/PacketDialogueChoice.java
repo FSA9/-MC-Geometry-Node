@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.network.packet.c2s;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.UUID;
 
@@ -12,7 +12,7 @@ public record PacketDialogueChoice(UUID sessionId, String action, String choiceI
     public static final String ACTION_CLOSE = "close";
 
     public static final Type<PacketDialogueChoice> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath("geometry_node", "dialogue_choice"));
+            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "dialogue_choice"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketDialogueChoice> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> {

@@ -31,6 +31,6 @@ public class GetEntityTags extends BaseNode {
         if (entities.isEmpty()) return null;
 
         // 原版的 getTags() 返回的是 Set<String>，我们转成 ArrayList 方便底层 LIST 类型处理
-        return new java.util.ArrayList<>(entities.getFirst().getTags());
+        return new java.util.ArrayList<>(entities.getFirst().entityTags());
     }
 }
