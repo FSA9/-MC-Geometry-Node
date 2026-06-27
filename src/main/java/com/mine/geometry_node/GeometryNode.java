@@ -16,6 +16,7 @@ import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.registry.ReloadListenerRegistry;
+import icyllis.modernui.mc.ModernUIMod;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -96,6 +97,8 @@ public class GeometryNode {
                     .build());
 
     public GeometryNode(IEventBus modEventBus, ModContainer modContainer) {
+        disableModernUiDevRegistries();
+
         NeoForge.EVENT_BUS.register(this);
 
         // 初始化网络包
@@ -128,6 +131,13 @@ public class GeometryNode {
 
         // 注册测试指令 (基于 Architectury API)
         ModServerCommands.register();
+    }
+
+    private static void disableModernUiDevRegistries() {
+        if (Boolean.getBoolean("geometry_node.keepModernUiDevRegistries")) {
+            return;
+        }
+        ModernUIMod.sDevelopment = false;
     }
 
     @SubscribeEvent

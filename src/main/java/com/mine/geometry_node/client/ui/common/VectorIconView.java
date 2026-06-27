@@ -1,0 +1,204 @@
+package com.mine.geometry_node.client.ui.common;
+
+import com.mine.geometry_node.client.ui.utils.UIUtils;
+import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Canvas;
+import icyllis.modernui.graphics.Paint;
+import icyllis.modernui.graphics.RectF;
+import icyllis.modernui.view.View;
+
+public class VectorIconView extends View {
+    public enum Kind {
+        FOLDER,
+        FILE,
+        TERMINAL,
+        CHART,
+        CLOUD,
+        NODE_GRAPH
+    }
+
+    private static final int DEFAULT_COLOR = 0xFFB8C0CC;
+
+    private final Paint mPaint = new Paint();
+    private final RectF mRect = new RectF();
+    private Kind mKind;
+    private int mColor;
+
+    public VectorIconView(Context context, Kind kind, int color) {
+        super(context);
+        mKind = kind;
+        mColor = color;
+        mPaint.setAntiAlias(true);
+        setWillNotDraw(false);
+    }
+
+    public void setKind(Kind kind) {
+        if (mKind == kind) {
+            return;
+        }
+        mKind = kind;
+        invalidate();
+    }
+
+    public void setIconColor(int color) {
+        int resolved = color == 0 ? DEFAULT_COLOR : color;
+        if (mColor == resolved) {
+            return;
+        }
+        mColor = resolved;
+        invalidate();
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        float w = getWidth();
+        float h = getHeight();
+        float size = Math.min(w, h);
+        float cx = w * 0.5f;
+        float cy = h * 0.5f;
+        float half = size * 0.36f;
+
+        mPaint.setAlpha(255);
+        mPaint.setColor(mColor == 0 ? DEFAULT_COLOR : mColor);
+
+        switch (mKind) {
+            case FOLDER -> drawFolder(canvas, cx, cy, half);
+            case FILE -> drawFile(canvas, cx, cy, half);
+            case TERMINAL -> drawTerminal(canvas, cx, cy, half);
+            case CHART -> drawChart(canvas, cx, cy, half);
+            case CLOUD -> drawCloud(canvas, cx, cy, half);
+            case NODE_GRAPH -> drawNodeGraph(canvas, cx, cy, half);
+        }
+    }
+
+    private void drawFolder(Canvas canvas, float cx, float cy, float half) {
+        float left = cx - half;
+        float top = cy - half * 0.55f;
+        float right = cx + half;
+        float bottom = cy + half * 0.62f;
+        float tabTop = top - half * 0.25f;
+        float tabRight = left + half * 0.82f;
+        float radius = Math.max(2.0f, half * 0.16f);
+
+        mPaint.setStyle(Paint.Style.FILL);
+        mPaint.setAlpha(190);
+        mRect.set(left, tabTop, tabRight, top + half * 0.18f);
+        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+        mPaint.setAlpha(255);
+        mRect.set(left, top, right, bottom);
+        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+        mPaint.setColor(0x33000000);
+        mRect.set(left + half * 0.1f, top + half * 0.28f, right - half * 0.1f, bottom - half * 0.12f);
+        canvas.drawRoundRect(mRect, radius * 0.8f, radius * 0.8f, radius * 0.8f, radius * 0.8f, mPaint);
+    }
+
+    private void drawFile(Canvas canvas, float cx, float cy, float half) {
+        float left = cx - half * 0.68f;
+        float top = cy - half * 0.86f;
+        float right = cx + half * 0.68f;
+        float bottom = cy + half * 0.86f;
+        float fold = half * 0.34f;
+        float radius = Math.max(2.0f, half * 0.12f);
+
+        mPaint.setStyle(Paint.Style.FILL);
+        mRect.set(left, top, right, bottom);
+        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+
+        mPaint.setColor(0x6636455A);
+        canvas.drawRect(right - fold, top, right, top + fold, mPaint);
+        mPaint.setColor(0x66FFFFFF);
+        mPaint.setStrokeWidth(Math.max(1.0f, UIUtils.dp2px(1.0f)));
+        canvas.drawLine(right - fold, top, right - fold, top + fold, mPaint);
+        canvas.drawLine(right - fold, top + fold, right, top + fold, mPaint);
+
+        mPaint.setColor(0xAA1D2734);
+        mPaint.setStrokeWidth(Math.max(1.0f, half * 0.08f));
+        float lineLeft = left + half * 0.24f;
+        float lineRight = right - half * 0.24f;
+        canvas.drawLine(lineLeft, cy - half * 0.12f, lineRight, cy - half * 0.12f, mPaint);
+        canvas.drawLine(lineLeft, cy + half * 0.22f, lineRight * 0.9f + lineLeft * 0.1f, cy + half * 0.22f, mPaint);
+    }
+
+    private void drawTerminal(Canvas canvas, float cx, float cy, float half) {
+        float left = cx - half;
+        float top = cy - half * 0.68f;
+        float right = cx + half;
+        float bottom = cy + half * 0.68f;
+        float radius = Math.max(2.0f, half * 0.14f);
+
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(Math.max(1.5f, half * 0.11f));
+        mRect.set(left, top, right, bottom);
+        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+
+        float promptLeft = left + half * 0.28f;
+        float promptY = cy;
+        canvas.drawLine(promptLeft, promptY - half * 0.28f, promptLeft + half * 0.28f, promptY, mPaint);
+        canvas.drawLine(promptLeft, promptY + half * 0.28f, promptLeft + half * 0.28f, promptY, mPaint);
+        canvas.drawLine(cx + half * 0.04f, cy + half * 0.28f, right - half * 0.22f, cy + half * 0.28f, mPaint);
+    }
+
+    private void drawChart(Canvas canvas, float cx, float cy, float half) {
+        float left = cx - half * 0.85f;
+        float bottom = cy + half * 0.72f;
+        float right = cx + half * 0.88f;
+        float top = cy - half * 0.78f;
+
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(Math.max(1.2f, half * 0.09f));
+        mPaint.setAlpha(170);
+        canvas.drawLine(left, top, left, bottom, mPaint);
+        canvas.drawLine(left, bottom, right, bottom, mPaint);
+
+        mPaint.setAlpha(255);
+        mPaint.setStrokeWidth(Math.max(1.8f, half * 0.13f));
+        float x1 = left + half * 0.2f;
+        float y1 = bottom - half * 0.22f;
+        float x2 = left + half * 0.62f;
+        float y2 = bottom - half * 0.58f;
+        float x3 = left + half * 1.0f;
+        float y3 = bottom - half * 0.38f;
+        float x4 = right - half * 0.12f;
+        float y4 = top + half * 0.18f;
+        canvas.drawLine(x1, y1, x2, y2, mPaint);
+        canvas.drawLine(x2, y2, x3, y3, mPaint);
+        canvas.drawLine(x3, y3, x4, y4, mPaint);
+    }
+
+    private void drawCloud(Canvas canvas, float cx, float cy, float half) {
+        mPaint.setStyle(Paint.Style.FILL);
+        canvas.drawCircle(cx - half * 0.42f, cy + half * 0.12f, half * 0.34f, mPaint);
+        canvas.drawCircle(cx - half * 0.08f, cy - half * 0.12f, half * 0.44f, mPaint);
+        canvas.drawCircle(cx + half * 0.38f, cy + half * 0.12f, half * 0.34f, mPaint);
+        mRect.set(cx - half * 0.65f, cy + half * 0.04f, cx + half * 0.68f, cy + half * 0.44f);
+        canvas.drawRoundRect(mRect, half * 0.18f, half * 0.18f, half * 0.18f, half * 0.18f, mPaint);
+    }
+
+    private void drawNodeGraph(Canvas canvas, float cx, float cy, float half) {
+        float nodeW = half * 0.58f;
+        float nodeH = half * 0.42f;
+        float radius = Math.max(2.0f, half * 0.12f);
+        float stroke = Math.max(1.2f, half * 0.09f);
+
+        float leftX = cx - half * 0.72f;
+        float rightX = cx + half * 0.48f;
+        float topY = cy - half * 0.42f;
+        float bottomY = cy + half * 0.34f;
+
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(stroke);
+        mPaint.setAlpha(180);
+        canvas.drawLine(leftX + nodeW * 0.5f, topY + nodeH, cx + half * 0.08f, cy, mPaint);
+        canvas.drawLine(cx + half * 0.08f, cy, rightX, bottomY + nodeH * 0.5f, mPaint);
+
+        mPaint.setStyle(Paint.Style.FILL);
+        mPaint.setAlpha(255);
+        mRect.set(leftX - nodeW * 0.5f, topY, leftX + nodeW * 0.5f, topY + nodeH);
+        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+        mRect.set(cx - nodeW * 0.35f, cy - nodeH * 0.5f, cx + nodeW * 0.35f, cy + nodeH * 0.5f);
+        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+        mRect.set(rightX, bottomY, rightX + nodeW, bottomY + nodeH);
+        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+    }
+}

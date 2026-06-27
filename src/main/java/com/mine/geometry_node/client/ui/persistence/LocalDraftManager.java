@@ -40,7 +40,7 @@ public class LocalDraftManager {
             }
 
             if (Minecraft.getInstance().player != null) {
-                Minecraft.getInstance().player.sendSystemMessage(Component.literal("§a[💾 本地保存]§r 成功保存至: " + relativePath));
+                Minecraft.getInstance().player.sendSystemMessage(Component.literal("§a[本地保存]§r 成功保存至: " + relativePath));
             }
         } catch (Exception e) {
             System.err.println("[LocalDraftManager] 保存失败: " + e.getMessage());

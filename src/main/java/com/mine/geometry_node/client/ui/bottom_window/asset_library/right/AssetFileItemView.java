@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library.right;
 
+import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -42,7 +43,7 @@ final class AssetFileItemView extends LinearLayout {
     private final AssetEntry mEntry;
     private final List<String> mTags;
     private final boolean mFavorite;
-    private final TextView mIconView;
+    private final VectorIconView mIconView;
     private final TextView mNameView;
     private final TextView mSubtitleView;
     private final Listener mListener;
@@ -64,8 +65,7 @@ final class AssetFileItemView extends LinearLayout {
         setPadding(dp2pxInt(6), dp2pxInt(4), dp2pxInt(6), dp2pxInt(4));
         setBackground(RightFileBrowserPanel.createRectDrawable(COLOR_ITEM_TRANSPARENT, 4));
 
-        mIconView = UIUtils.createLockedTextView(context, entry.isDirectory() ? "📁" : "📄", mode.iconTextSizeDp, entry.isDirectory() ? COLOR_FOLDER : COLOR_FILE);
-        mIconView.setGravity(Gravity.CENTER);
+        mIconView = new VectorIconView(context, iconKind(), iconColor());
         mNameView = UIUtils.createLockedTextView(context, displayName, mode.nameTextSizeDp, COLOR_TEXT);
         mNameView.setGravity(mode == AssetViewMode.LIST ? Gravity.CENTER_VERTICAL : Gravity.CENTER);
         mNameView.setSingleLine(true);
@@ -95,7 +95,8 @@ final class AssetFileItemView extends LinearLayout {
 
     private void buildLayoutForMode(AssetViewMode mode, String displayName, String parentLabel) {
         removeAllViews();
-        mIconView.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(mode.iconTextSizeDp));
+        mIconView.setKind(iconKind());
+        mIconView.setIconColor(iconColor());
         mNameView.setText(displayName);
         mNameView.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(mode.nameTextSizeDp));
         mSubtitleView.setText(parentLabel);
@@ -104,7 +105,6 @@ final class AssetFileItemView extends LinearLayout {
         if (mode == AssetViewMode.LIST) {
             setOrientation(LinearLayout.HORIZONTAL);
             setGravity(Gravity.CENTER_VERTICAL);
-            mIconView.setText((mEntry.isDirectory() ? "📁 " : "📄 "));
             addView(mIconView, new LinearLayout.LayoutParams(dp2pxInt(34), ViewGroup.LayoutParams.MATCH_PARENT));
 
             LinearLayout textColumn = new LinearLayout(getContext());
@@ -138,7 +138,6 @@ final class AssetFileItemView extends LinearLayout {
         setOrientation(LinearLayout.VERTICAL);
         setGravity(Gravity.CENTER);
         FrameLayout iconFrame = new FrameLayout(getContext());
-        mIconView.setText(mEntry.isDirectory() ? "📁" : "📄");
         iconFrame.addView(mIconView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         if (canFavorite()) {
             FrameLayout.LayoutParams starLp = new FrameLayout.LayoutParams(dp2pxInt(24), dp2pxInt(24));
@@ -180,6 +179,14 @@ final class AssetFileItemView extends LinearLayout {
             return false;
         });
         return star;
+    }
+
+    private VectorIconView.Kind iconKind() {
+        return mEntry.isDirectory() ? VectorIconView.Kind.FOLDER : VectorIconView.Kind.FILE;
+    }
+
+    private int iconColor() {
+        return mEntry.isDirectory() ? COLOR_FOLDER : COLOR_FILE;
     }
 
     private TextView createTagChip(String tag) {

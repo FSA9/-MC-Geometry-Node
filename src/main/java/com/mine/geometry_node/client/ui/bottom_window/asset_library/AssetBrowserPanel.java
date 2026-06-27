@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library;
 
-import com.mine.geometry_node.client.ui.bottom_window.IToolWindow;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.FolderPickerDialog;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.OverwriteConfirmDialog;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.TransferProgressDialog;
@@ -12,6 +11,7 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.RightF
 import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.PathUtils;
+import com.mine.geometry_node.client.ui.window.IToolWindow;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
 import com.mine.geometry_node.core.network.NetworkHandler;

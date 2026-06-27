@@ -24,12 +24,22 @@ public class PanelSplitter {
      */
     public static View create(Context context, boolean isVertical) {
         FrameLayout container = new FrameLayout(context);
+        container.setZ(1.0f);
+
         int hitSize = UIUtils.dp2pxInt(UIConstants.MainUI.SPLITTER_HITBOX_SIZE);
+        int visualSize = UIUtils.dp2pxInt(UIConstants.MainUI.SPLITTER_VISUAL_SIZE);
+        int overlap = Math.max(0, (hitSize - visualSize) / 2);
 
         if (isVertical) {
-            container.setLayoutParams(new LinearLayout.LayoutParams(hitSize, ViewGroup.LayoutParams.MATCH_PARENT));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(hitSize, ViewGroup.LayoutParams.MATCH_PARENT);
+            params.leftMargin = -overlap;
+            params.rightMargin = -(hitSize - visualSize - overlap);
+            container.setLayoutParams(params);
         } else {
-            container.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, hitSize));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, hitSize);
+            params.topMargin = -overlap;
+            params.bottomMargin = -(hitSize - visualSize - overlap);
+            container.setLayoutParams(params);
         }
 
         View visualLine = new View(context);
@@ -37,8 +47,6 @@ public class PanelSplitter {
         drawable.setShape(ShapeDrawable.RECTANGLE);
         drawable.setColor(UIConstants.MainUI.BG_SPLITTER);
         visualLine.setBackground(drawable);
-
-        int visualSize = UIUtils.dp2pxInt(UIConstants.MainUI.SPLITTER_VISUAL_SIZE);
 
         FrameLayout.LayoutParams lineParams = isVertical
                 ? new FrameLayout.LayoutParams(visualSize, ViewGroup.LayoutParams.MATCH_PARENT)

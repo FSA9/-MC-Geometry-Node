@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library.left;
 
+import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -124,9 +125,8 @@ public class LeftQuickAccessPanel extends ScrollView {
         rowParams.setMargins(0, 0, 0, dp2pxInt(2));
         row.setLayoutParams(rowParams);
 
-        TextView spacer = UIUtils.createLockedTextView(context, " ☁ ", TEXT_SIZE_HANDLE, 0xFF8FBFFF);
-        spacer.setGravity(Gravity.CENTER);
-        row.addView(spacer, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+        VectorIconView icon = new VectorIconView(context, VectorIconView.Kind.CLOUD, 0xFF8FBFFF);
+        row.addView(icon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
         TextView btnPath = UIUtils.createLockedTextView(context, "远程服务器", TEXT_SIZE_PATH, 0xFFE6F1FF);
         btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
@@ -242,8 +242,11 @@ public class LeftQuickAccessPanel extends ScrollView {
             return true;
         });
 
+        VectorIconView folderIcon = new VectorIconView(context, VectorIconView.Kind.FOLDER, 0xFFDDAA00);
+        row.addView(folderIcon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+
         String displayName = file.getName().isEmpty() ? file.getAbsolutePath() : file.getName();
-        TextView btnPath = UIUtils.createLockedTextView(context, "📂 " + displayName, TEXT_SIZE_PATH, 0xFFDDDDDD);
+        TextView btnPath = UIUtils.createLockedTextView(context, displayName, TEXT_SIZE_PATH, 0xFFDDDDDD);
         btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
         btnPath.setGravity(Gravity.CENTER_VERTICAL);
 

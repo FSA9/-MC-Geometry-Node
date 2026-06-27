@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.bottom_window.console;
 
-import com.mine.geometry_node.client.ui.bottom_window.IToolWindow;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.window.IToolWindow;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;

@@ -1,8 +1,7 @@
 package com.mine.geometry_node.client.ui;
 
 import com.mine.geometry_node.client.ui.bottom_window.BottomToolWindowManager;
-import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
-import com.mine.geometry_node.client.ui.viewport.ViewportPanel;
+import com.mine.geometry_node.client.ui.top_window.TopToolWindowManager;
 import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -75,27 +74,12 @@ public class MainUI extends Fragment {
     }
 
     private void setupMiddleSection(Context context, LinearLayout root) {
-        LinearLayout middleContainer = new LinearLayout(context);
-        middleContainer.setOrientation(LinearLayout.HORIZONTAL);
-
         LinearLayout.LayoutParams middleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0);
         middleParams.weight = 1.0f;
 
-        View leftPanel = createPanel(context, "Outliner", UIConstants.MainUI.BG_OUTLINER);
-        middleContainer.addView(leftPanel, createWeightParams(UIConstants.MainUI.WEIGHT_LEFT));
-
-        middleContainer.addView(PanelSplitter.create(context, true));
-
-        ViewportPanel centerPanel = new ViewportPanel(context);
-        middleContainer.addView(centerPanel, createWeightParams(UIConstants.MainUI.WEIGHT_CENTER));
-
-        middleContainer.addView(PanelSplitter.create(context, true));
-
-        View rightPanel = createPanel(context, "Properties", UIConstants.MainUI.BG_PROPERTIES);
-        middleContainer.addView(rightPanel, createWeightParams(UIConstants.MainUI.WEIGHT_RIGHT));
-
-        root.addView(middleContainer, middleParams);
+        TopToolWindowManager topPanel = new TopToolWindowManager(context);
+        root.addView(topPanel, middleParams);
     }
 
     private void setupBottomSection(Context context, LinearLayout root) {
@@ -127,12 +111,6 @@ public class MainUI extends Fragment {
         textParams.addRule(RelativeLayout.CENTER_IN_PARENT);
         panel.addView(textView, textParams);
         return panel;
-    }
-
-    private LinearLayout.LayoutParams createWeightParams(float weight) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT);
-        params.weight = weight;
-        return params;
     }
 
     private ShapeDrawable createColorDrawable(int color) {

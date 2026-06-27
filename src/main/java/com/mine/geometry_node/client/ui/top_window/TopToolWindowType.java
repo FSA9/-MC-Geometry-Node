@@ -1,21 +1,15 @@
-package com.mine.geometry_node.client.ui.bottom_window;
+package com.mine.geometry_node.client.ui.top_window;
 
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.window.ToolWindowEntry;
 
-/**
- * 底部工具窗口的类型定义
- */
-public enum ToolWindowType implements ToolWindowEntry {
-
-    ASSET_BROWSER("资产浏览器", VectorIconView.Kind.FOLDER),
-    TERMINAL("终端", VectorIconView.Kind.TERMINAL),
-    PERFORMANCE("性能监视器", VectorIconView.Kind.CHART);
+public enum TopToolWindowType implements ToolWindowEntry {
+    GRAPH_EDITOR("图编辑器", VectorIconView.Kind.NODE_GRAPH);
 
     private final String displayName;
     private final VectorIconView.Kind iconKind;
 
-    ToolWindowType(String displayName, VectorIconView.Kind iconKind) {
+    TopToolWindowType(String displayName, VectorIconView.Kind iconKind) {
         this.displayName = displayName;
         this.iconKind = iconKind;
     }

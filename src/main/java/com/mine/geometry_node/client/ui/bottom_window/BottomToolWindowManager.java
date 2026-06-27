@@ -1,6 +1,10 @@
 package com.mine.geometry_node.client.ui.bottom_window;
 
+import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
 import com.mine.geometry_node.client.ui.bottom_window.console.TerminalConsolePanel;
+import com.mine.geometry_node.client.ui.window.IToolWindow;
+import com.mine.geometry_node.client.ui.window.ToolWindowStripe;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -9,27 +13,26 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class BottomToolWindowManager extends LinearLayout {
 
-    private final ToolWindowStripe mStripe;
+    private final ToolWindowStripe<ToolWindowType> mStripe;
     private final FrameLayout mContainer;
     private final Map<ToolWindowType, IToolWindow> mActivatedWindows = new HashMap<>();
     private ToolWindowType mCurrentType = null;
 
-    private static final int COLOR_BG = 0xFF252526;
-    private static final int COLOR_CONTAINER_BG = 0xFF1E1E1E;
+    private static final int COLOR_BG = UIConstants.CLR_BG_DARK_3;
+    private static final int COLOR_CONTAINER_BG = UIConstants.CLR_BG_DARK_1;
 
     public BottomToolWindowManager(Context context) {
         super(context);
         setOrientation(LinearLayout.HORIZONTAL);
         setBackground(createColorDrawable(COLOR_BG));
 
-        mStripe = new ToolWindowStripe(context);
+        mStripe = new ToolWindowStripe<>(context, ToolWindowType.values());
         addView(mStripe);
 
         mContainer = new FrameLayout(context);
