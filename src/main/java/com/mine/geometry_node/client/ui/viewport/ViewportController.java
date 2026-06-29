@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.viewport;
 
+import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.*;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
@@ -9,14 +10,17 @@ import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
+import com.mine.geometry_node.client.ui.viewport.connection.ConnectionLayer;
 import com.mine.geometry_node.client.ui.viewport.frame.UIFrame;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionManager;
 import com.mine.geometry_node.client.ui.viewport.node.UINode;
+import com.mine.geometry_node.client.ui.viewport.node.UIRerouteNode;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 
@@ -329,6 +333,28 @@ public class ViewportController implements EditorContext.EditorListener,
     }
 
     @Override
+    public void onInsertReroute(ConnectionLayer.ConnectionHit connection) {
+        if (mEditorContext == null || connection == null) return;
+
+        float radius = UIConstants.Node.PORT_VISUAL_RADIUS;
+        CmdInsertRerouteOnConnection cmd = new CmdInsertRerouteOnConnection(
+                mEditorContext.getGraphController(),
+                mEditorContext.getCurrentGraph(),
+                connection.outNodeId(),
+                connection.outPortId(),
+                connection.inNodeId(),
+                connection.inPortId(),
+                connection.execution(),
+                UUID.randomUUID().toString(),
+                connection.uiX() - radius,
+                connection.uiY() - radius
+        );
+        if (cmd.canExecute()) {
+            mEditorContext.getCommandManager().execute(cmd);
+        }
+    }
+
+    @Override
     public void onNodeDoubleClicked(String nodeId) {
         executeEnterGroup(nodeId);
     }
@@ -359,6 +385,7 @@ public class ViewportController implements EditorContext.EditorListener,
             case DELETE -> deleteSelection();
             case TOGGLE_SNAP_TO_GRID -> toggleSnapToGrid();
             case TOGGLE_GRID_AND_AXIS -> toggleGridAndAxis();
+            case MOVE_SELECTION -> mViewport.beginKeyboardMoveSelection();
             case GROUP_INTO_FRAME -> groupIntoFrameFromAction();
             case GROUP_INTO_NODE_GROUP -> groupIntoNodeGroupFromAction();
             case EXIT_GROUP -> executeExitGroup();
@@ -526,7 +553,9 @@ public class ViewportController implements EditorContext.EditorListener,
     public void onNodeAdded(NodeData nodeData) {
         NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(nodeData);
         if (def == null) return;
-        UINode uiNode = new UINode(mViewport.getContext(), nodeData, def, mEditorContext);
+        NodeVisualAdapter uiNode = RerouteNodeSupport.isReroute(nodeData)
+                ? new UIRerouteNode(mViewport.getContext(), nodeData, def)
+                : new UINode(mViewport.getContext(), nodeData, def, mEditorContext);
         uiNode.setPreviewPosition(nodeData.getX(), nodeData.getY());
         mViewport.addNodeVisual(nodeData.id, uiNode);
     }

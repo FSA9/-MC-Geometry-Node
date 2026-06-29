@@ -279,6 +279,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override public void moveSelectedNodes(float uiDx, float uiDy) { if (mNodeLayer != null) mNodeLayer.moveSelectedNodes(uiDx, uiDy); }
     @Override public boolean isSnapToGridEnabled() { return mSnapToGridEnabled; }
     @Override public float getSnapGridSize() { return Math.max(1.0f, ConfigManager.INSTANCE.getConfig().viewport.gridSize); }
+    @Override public boolean hasSelectedNodes() { return !mSelection.nodeIds().isEmpty(); }
     @Override public List<NodeVisualAdapter> getSelectedNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getNodeVisuals(mSelection.nodeIds()) : new ArrayList<>(); }
     @Override public void previewFrameMove(String frameId, float totalUiDx, float totalUiDy) { if (mFrameLayer != null) { mFrameLayer.previewFrameMove(frameId, totalUiDx, totalUiDy); invalidate(); } }
 
@@ -287,6 +288,13 @@ public class Viewport extends FrameLayout implements InteractionContext {
         if (mConnectionLayer != null) {
             mConnectionLayer.intersectAndCut(lastUiX, lastUiY, currentUiX, currentUiY, listener);
         }
+    }
+
+    @Override
+    public List<ConnectionLayer.ConnectionHit> findIntersectingConnections(float lastUiX, float lastUiY, float currentUiX, float currentUiY) {
+        return mConnectionLayer != null
+                ? mConnectionLayer.findIntersectingConnections(lastUiX, lastUiY, currentUiX, currentUiY)
+                : List.of();
     }
 
     @Override
@@ -398,6 +406,9 @@ public class Viewport extends FrameLayout implements InteractionContext {
             super.dispatchTouchEvent(ev);
             return true;
         }
+        if (mInteractionManager.isKeyboardMoveActive()) {
+            return onTouchEvent(ev);
+        }
         if (mEventDispatcher.handleTouchEvent(ev, isHitOverlay(ev.getX(), ev.getY()))) return true;
         return super.dispatchTouchEvent(ev);
     }
@@ -405,6 +416,11 @@ public class Viewport extends FrameLayout implements InteractionContext {
         if (hasBlockingOverlay()) {
             super.dispatchGenericMotionEvent(ev);
             return true;
+        }
+        if (mInteractionManager.isKeyboardMoveActive()) {
+            return mInteractionManager.onHoverMove(ev.getX(), ev.getY())
+                    || mInteractionManager.onGenericMotionEvent(ev)
+                    || super.dispatchGenericMotionEvent(ev);
         }
         if (mEventDispatcher.handleGenericMotionEvent(ev, isHitOverlay(ev.getX(), ev.getY()))) return true;
         return super.dispatchGenericMotionEvent(ev);
@@ -431,14 +447,16 @@ public class Viewport extends FrameLayout implements InteractionContext {
         if (event.getAction() == icyllis.modernui.view.KeyEvent.ACTION_DOWN) {
             View focusedView = findFocus();
             if (focusedView instanceof EditText) return super.dispatchKeyEvent(event);
+            if (mInteractionManager.onKeyDown(event)) return true;
             if (mKeyManager.onKeyDown(event)) return true;
         }
         return super.dispatchKeyEvent(event);
     }
 
-    @Override public boolean onGenericMotionEvent(MotionEvent event) { return mInteractionManager.onGenericMotionEvent(event) || super.onGenericMotionEvent(event); }
+    @Override public boolean onGenericMotionEvent(MotionEvent event) { return mInteractionManager.onHoverMove(event.getX(), event.getY()) || mInteractionManager.onGenericMotionEvent(event) || super.onGenericMotionEvent(event); }
     @Override public boolean onTouchEvent(MotionEvent event) { return mInteractionManager.onTouchEvent(event) || super.onTouchEvent(event); }
-    @Override public boolean onKeyDown(int keyCode, icyllis.modernui.view.KeyEvent event) { return mKeyManager.onKeyDown(event) || super.onKeyDown(keyCode, event); }
+    @Override public boolean onKeyDown(int keyCode, icyllis.modernui.view.KeyEvent event) { return mInteractionManager.onKeyDown(event) || mKeyManager.onKeyDown(event) || super.onKeyDown(keyCode, event); }
+    public void beginKeyboardMoveSelection() { mInteractionManager.beginKeyboardMoveSelection(); }
 
     // ==========================================
     // 8. 内部桥接结构

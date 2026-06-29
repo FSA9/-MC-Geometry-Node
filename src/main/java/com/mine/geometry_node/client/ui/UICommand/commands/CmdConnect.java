@@ -5,9 +5,8 @@ import com.mine.geometry_node.client.ui.viewport.GraphController;
 import com.mine.geometry_node.core.node.Connection;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
-import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.List;
 import java.util.Map;
@@ -44,15 +43,7 @@ public class CmdConnect implements ICommand {
     }
 
     private PortType getPortType(String nodeId, String portId, boolean inputSide) {
-        if (mGraph == null || nodeId == null || portId == null) return null;
-        NodeData node = mGraph.getNode(nodeId);
-        var def = NodeRegistry.INSTANCE.resolveDefinition(node);
-        if (def == null) return null;
-        for (PortRow row : def.rows()) {
-            if (inputSide && row.leftPort() != null && row.leftPort().id().equals(portId)) return row.leftPort().type();
-            if (!inputSide && row.rightPort() != null && row.rightPort().id().equals(portId)) return row.rightPort().type();
-        }
-        return null;
+        return mController.getResolvedPortType(nodeId, portId, inputSide);
     }
 
     private boolean isBoundaryVirtualPort(String nodeId) {
@@ -66,6 +57,7 @@ public class CmdConnect implements ICommand {
      */
     private void findAndRecordOldConnection() {
         if (mGraph == null) return;
+        if (isExecutionFlow() && isRerouteInput(inNodeId, inPortId)) return;
 
         for (NodeData node : mGraph.nodes.values()) {
             if (isExecutionFlow()) {
@@ -94,6 +86,12 @@ public class CmdConnect implements ICommand {
                 }
             }
         }
+    }
+
+    private boolean isRerouteInput(String nodeId, String portId) {
+        if (mGraph == null || nodeId == null || portId == null) return false;
+        NodeData node = mGraph.getNode(nodeId);
+        return RerouteNodeSupport.isReroute(node) && RerouteNodeSupport.INPUT_PORT.equals(portId);
     }
 
     @Override

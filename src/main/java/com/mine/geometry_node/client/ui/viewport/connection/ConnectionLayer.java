@@ -9,6 +9,8 @@ import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +26,16 @@ public class ConnectionLayer {
 
     private final float[] mTempOutPos = new float[2];
     private final float[] mTempInPos  = new float[2];
+
+    public record ConnectionHit(
+            String outNodeId,
+            String outPortId,
+            String inNodeId,
+            String inPortId,
+            boolean execution,
+            float uiX,
+            float uiY
+    ) {}
 
     public ConnectionLayer(Viewport viewport) {
         this.mViewport = viewport;
@@ -48,6 +60,7 @@ public class ConnectionLayer {
             VisualConnection vc = mVisualConnections.get(i);
             if (canCull && !vc.intersects(mTmpVisibleBounds.left, mTmpVisibleBounds.top, mTmpVisibleBounds.right, mTmpVisibleBounds.bottom)) continue;
 
+            mConnectionPaint.setColor(vc.color);
             canvas.drawLine(
                     camera.uiToScreenX(vc.startUiX), camera.uiToScreenY(vc.startUiY),
                     camera.uiToScreenX(vc.endUiX), camera.uiToScreenY(vc.endUiY),
@@ -74,7 +87,8 @@ public class ConnectionLayer {
                     for (com.mine.geometry_node.core.node.Connection link : entry.getValue()) {
                         ConnectionNodeVisual inUi = nodeVisuals.get(link.targetNodeId());
                         if (inUi != null) {
-                            VisualConnection vc = new VisualConnection(outUi, outPortId, inUi, link.targetPortName(), false);
+                            int color = resolveConnectionColor(graph, outData, outPortId, false);
+                            VisualConnection vc = new VisualConnection(outUi, outPortId, inUi, link.targetPortName(), false, color);
                             vc.updateUiCoordinates(mTempOutPos, mTempInPos);
                             mVisualConnections.add(vc);
                             indexVisualConnection(vc);
@@ -91,7 +105,8 @@ public class ConnectionLayer {
 
                     ConnectionNodeVisual inUi = nodeVisuals.get(link.targetNodeId());
                     if (inUi != null) {
-                        VisualConnection vc = new VisualConnection(outUi, execOutPortId, inUi, link.targetPortName(), true);
+                        int color = resolveConnectionColor(graph, outData, execOutPortId, true);
+                        VisualConnection vc = new VisualConnection(outUi, execOutPortId, inUi, link.targetPortName(), true, color);
                         vc.updateUiCoordinates(mTempOutPos, mTempInPos);
                         mVisualConnections.add(vc);
                         indexVisualConnection(vc);
@@ -100,6 +115,14 @@ public class ConnectionLayer {
             }
         }
         mViewport.invalidate();
+    }
+
+    private int resolveConnectionColor(NodeGraph graph, NodeData outNode, String outPortId, boolean isExecution) {
+        if (isExecution) return PortType.EXECUTION.getColor();
+        PortType type = graph != null
+                ? RerouteNodeSupport.resolvePortType(graph.nodes, outNode, outPortId, false)
+                : null;
+        return type != null ? type.getColor() : PortType.ANY.getColor();
     }
 
     public void updateConnectionsForNode(String nodeId) {
@@ -127,29 +150,42 @@ public class ConnectionLayer {
     public void intersectAndCut(float lastUiX, float lastUiY, float currentUiX, float currentUiY, InteractionManager.InteractionListener listener) {
         if (listener == null || mVisualConnections.isEmpty()) return;
 
-        List<VisualConnection> cutConnections = new ArrayList<>();
+        List<ConnectionHit> cutConnections = findIntersectingConnections(lastUiX, lastUiY, currentUiX, currentUiY);
 
-        for (int i = 0; i < mVisualConnections.size(); i++) {
-            VisualConnection vc = mVisualConnections.get(i);
-
-            if (linesIntersect(lastUiX, lastUiY, currentUiX, currentUiY,
-                    vc.startUiX, vc.startUiY, vc.endUiX, vc.endUiY)) {
-                cutConnections.add(vc);
-            }
-        }
-
-        for (VisualConnection vc : cutConnections) {
-            listener.onDisconnectPorts(
-                    vc.outNode.getNodeId(), vc.outPortId,
-                    vc.inNode.getNodeId(), vc.inPortId
-            );
+        for (ConnectionHit hit : cutConnections) {
+            listener.onDisconnectPorts(hit.outNodeId(), hit.outPortId(), hit.inNodeId(), hit.inPortId());
         }
     }
 
-    private boolean linesIntersect(float x1, float y1, float x2, float y2,
-                                   float x3, float y3, float x4, float y4) {
+    public List<ConnectionHit> findIntersectingConnections(float lastUiX, float lastUiY, float currentUiX, float currentUiY) {
+        if (mVisualConnections.isEmpty()) return List.of();
+
+        List<ConnectionHit> hits = new ArrayList<>();
+        for (int i = 0; i < mVisualConnections.size(); i++) {
+            VisualConnection vc = mVisualConnections.get(i);
+            float[] point = intersectionPoint(
+                    lastUiX, lastUiY, currentUiX, currentUiY,
+                    vc.startUiX, vc.startUiY, vc.endUiX, vc.endUiY
+            );
+            if (point != null) {
+                hits.add(new ConnectionHit(
+                        vc.outNode.getNodeId(),
+                        vc.outPortId,
+                        vc.inNode.getNodeId(),
+                        vc.inPortId,
+                        vc.isExecution,
+                        point[0],
+                        point[1]
+                ));
+            }
+        }
+        return hits;
+    }
+
+    private float[] intersectionPoint(float x1, float y1, float x2, float y2,
+                                      float x3, float y3, float x4, float y4) {
         float denominator = ((x2 - x1) * (y4 - y3)) - ((y2 - y1) * (x4 - x3));
-        if (denominator == 0) return false;
+        if (Math.abs(denominator) < 0.00001f) return null;
 
         float num1 = ((y1 - y3) * (x4 - x3)) - ((x1 - x3) * (y4 - y3));
         float num2 = ((y1 - y3) * (x2 - x1)) - ((x1 - x3) * (y2 - y1));
@@ -157,7 +193,8 @@ public class ConnectionLayer {
         float r = num1 / denominator;
         float s = num2 / denominator;
 
-        return (r >= 0 && r <= 1) && (s >= 0 && s <= 1);
+        if (r < 0.0f || r > 1.0f || s < 0.0f || s > 1.0f) return null;
+        return new float[]{x1 + r * (x2 - x1), y1 + r * (y2 - y1)};
     }
 
     private static class VisualConnection {
@@ -166,16 +203,18 @@ public class ConnectionLayer {
         final ConnectionNodeVisual inNode;
         final String inPortId;
         final boolean isExecution;
+        final int color;
 
         float startUiX, startUiY;
         float endUiX, endUiY;
 
-        VisualConnection(ConnectionNodeVisual outNode, String outPortId, ConnectionNodeVisual inNode, String inPortId, boolean isExecution) {
+        VisualConnection(ConnectionNodeVisual outNode, String outPortId, ConnectionNodeVisual inNode, String inPortId, boolean isExecution, int color) {
             this.outNode = outNode;
             this.outPortId = outPortId;
             this.inNode = inNode;
             this.inPortId = inPortId;
             this.isExecution = isExecution;
+            this.color = color;
         }
 
         void updateUiCoordinates(float[] tempOutPos, float[] tempInPos) {

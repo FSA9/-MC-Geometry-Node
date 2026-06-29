@@ -113,60 +113,7 @@ final class ConfigSanitizer {
         }
 
         JsonObject keyBindings = readObject(root, "keyBindings");
-        if (keyBindings == null) {
-            config.keyBindings = defaults.keyBindings;
-            changed = true;
-        } else {
-            ReadKeyBinding undo = readKeyBinding(keyBindings, "undo", defaults.keyBindings.undo);
-            config.keyBindings.undo = undo.value;
-            changed |= undo.changed;
-
-            ReadKeyBinding redo = readKeyBinding(keyBindings, "redo", defaults.keyBindings.redo);
-            config.keyBindings.redo = redo.value;
-            changed |= redo.changed;
-
-            ReadKeyBinding save = readKeyBinding(keyBindings, "save", defaults.keyBindings.save);
-            config.keyBindings.save = save.value;
-            changed |= save.changed;
-
-            ReadKeyBinding copy = readKeyBinding(keyBindings, "copy", defaults.keyBindings.copy);
-            config.keyBindings.copy = copy.value;
-            changed |= copy.changed;
-
-            ReadKeyBinding paste = readKeyBinding(keyBindings, "paste", defaults.keyBindings.paste);
-            config.keyBindings.paste = paste.value;
-            changed |= paste.changed;
-
-            ReadKeyBinding delete = readKeyBinding(keyBindings, "delete", defaults.keyBindings.delete);
-            config.keyBindings.delete = delete.value;
-            changed |= delete.changed;
-
-            ReadKeyBinding toggleSnapToGrid = readKeyBinding(keyBindings, "toggleSnapToGrid", defaults.keyBindings.toggleSnapToGrid);
-            config.keyBindings.toggleSnapToGrid = toggleSnapToGrid.value;
-            changed |= toggleSnapToGrid.changed;
-
-            ReadKeyBinding toggleGridAndAxis = readKeyBinding(keyBindings, "toggleGridAndAxis", defaults.keyBindings.toggleGridAndAxis);
-            config.keyBindings.toggleGridAndAxis = toggleGridAndAxis.value;
-            changed |= toggleGridAndAxis.changed;
-
-            ReadKeyBinding groupIntoFrame = readKeyBinding(keyBindings, "groupIntoFrame", defaults.keyBindings.groupIntoFrame);
-            config.keyBindings.groupIntoFrame = groupIntoFrame.value;
-            changed |= groupIntoFrame.changed;
-
-            ReadKeyBinding groupIntoNodeGroup = readKeyBinding(keyBindings, "groupIntoNodeGroup", defaults.keyBindings.groupIntoNodeGroup);
-            config.keyBindings.groupIntoNodeGroup = groupIntoNodeGroup.value;
-            changed |= groupIntoNodeGroup.changed;
-
-            ReadString shopEditorClearSlot = readString(keyBindings, "shopEditorClearSlot");
-            if (shopEditorClearSlot.valid && !shopEditorClearSlot.value.isBlank()) {
-                String normalized = shopEditorClearSlot.value.trim();
-                config.keyBindings.shopEditorClearSlot = normalized;
-                changed |= shopEditorClearSlot.changed || !normalized.equals(shopEditorClearSlot.value);
-            } else {
-                config.keyBindings.shopEditorClearSlot = defaults.keyBindings.shopEditorClearSlot;
-                changed = true;
-            }
-        }
+        changed |= readKeyBindings(keyBindings, config, defaults);
 
         return new Result(config, changed);
     }
@@ -234,29 +181,117 @@ final class ConfigSanitizer {
             config.keyBindings = defaults.keyBindings;
             changed = true;
         } else {
-            changed |= sanitizeKeyBinding(config.keyBindings.undo, defaults.keyBindings.undo, value -> config.keyBindings.undo = value);
-            changed |= sanitizeKeyBinding(config.keyBindings.redo, defaults.keyBindings.redo, value -> config.keyBindings.redo = value);
-            changed |= sanitizeKeyBinding(config.keyBindings.save, defaults.keyBindings.save, value -> config.keyBindings.save = value);
-            changed |= sanitizeKeyBinding(config.keyBindings.copy, defaults.keyBindings.copy, value -> config.keyBindings.copy = value);
-            changed |= sanitizeKeyBinding(config.keyBindings.paste, defaults.keyBindings.paste, value -> config.keyBindings.paste = value);
-            changed |= sanitizeKeyBinding(config.keyBindings.delete, defaults.keyBindings.delete, value -> config.keyBindings.delete = value);
-            changed |= sanitizeKeyBinding(config.keyBindings.toggleSnapToGrid, defaults.keyBindings.toggleSnapToGrid, value -> config.keyBindings.toggleSnapToGrid = value);
-            changed |= sanitizeKeyBinding(config.keyBindings.toggleGridAndAxis, defaults.keyBindings.toggleGridAndAxis, value -> config.keyBindings.toggleGridAndAxis = value);
-            changed |= sanitizeKeyBinding(config.keyBindings.groupIntoFrame, defaults.keyBindings.groupIntoFrame, value -> config.keyBindings.groupIntoFrame = value);
-            changed |= sanitizeKeyBinding(config.keyBindings.groupIntoNodeGroup, defaults.keyBindings.groupIntoNodeGroup, value -> config.keyBindings.groupIntoNodeGroup = value);
-            if (config.keyBindings.shopEditorClearSlot == null || config.keyBindings.shopEditorClearSlot.isBlank()) {
-                config.keyBindings.shopEditorClearSlot = defaults.keyBindings.shopEditorClearSlot;
-                changed = true;
-            } else {
-                String normalized = config.keyBindings.shopEditorClearSlot.trim();
-                if (!normalized.equals(config.keyBindings.shopEditorClearSlot)) {
-                    config.keyBindings.shopEditorClearSlot = normalized;
-                    changed = true;
-                }
-            }
+            changed |= sanitizeKeyBindings(config.keyBindings, defaults.keyBindings);
         }
 
         return new Result(config, changed);
+    }
+
+    private static boolean readKeyBindings(JsonObject keyBindings, AppConfig config, AppConfig defaults) {
+        if (keyBindings == null) {
+            config.keyBindings = defaults.keyBindings;
+            return true;
+        }
+
+        boolean changed = false;
+        config.keyBindings = new AppConfig.KeyBindingsConfig();
+
+        JsonObject global = readObject(keyBindings, "global");
+        JsonObject viewport = readObject(keyBindings, "viewport");
+        JsonObject shopEditor = readObject(keyBindings, "shopEditor");
+        JsonObject legacy = keyBindings;
+
+        changed |= global == null || viewport == null || shopEditor == null;
+        changed |= hasAny(keyBindings,
+                "undo", "redo", "save", "copy", "paste", "delete",
+                "toggleSnapToGrid", "toggleGridAndAxis", "groupIntoFrame",
+                "groupIntoNodeGroup", "moveSelection", "shopEditorClearSlot");
+
+        ReadKeyBinding undo = readKeyBindingWithLegacy(global, legacy, "undo", defaults.keyBindings.global.undo);
+        config.keyBindings.global.undo = undo.value;
+        changed |= undo.changed;
+
+        ReadKeyBinding redo = readKeyBindingWithLegacy(global, legacy, "redo", defaults.keyBindings.global.redo);
+        config.keyBindings.global.redo = redo.value;
+        changed |= redo.changed;
+
+        ReadKeyBinding save = readKeyBindingWithLegacy(global, legacy, "save", defaults.keyBindings.global.save);
+        config.keyBindings.global.save = save.value;
+        changed |= save.changed;
+
+        ReadKeyBinding copy = readKeyBindingWithLegacy(global, legacy, "copy", defaults.keyBindings.global.copy);
+        config.keyBindings.global.copy = copy.value;
+        changed |= copy.changed;
+
+        ReadKeyBinding paste = readKeyBindingWithLegacy(global, legacy, "paste", defaults.keyBindings.global.paste);
+        config.keyBindings.global.paste = paste.value;
+        changed |= paste.changed;
+
+        ReadKeyBinding delete = readKeyBindingWithLegacy(viewport, legacy, "delete", defaults.keyBindings.viewport.delete);
+        config.keyBindings.viewport.delete = delete.value;
+        changed |= delete.changed;
+
+        ReadKeyBinding toggleSnapToGrid = readKeyBindingWithLegacy(viewport, legacy, "toggleSnapToGrid", defaults.keyBindings.viewport.toggleSnapToGrid);
+        config.keyBindings.viewport.toggleSnapToGrid = toggleSnapToGrid.value;
+        changed |= toggleSnapToGrid.changed;
+
+        ReadKeyBinding toggleGridAndAxis = readKeyBindingWithLegacy(viewport, legacy, "toggleGridAndAxis", defaults.keyBindings.viewport.toggleGridAndAxis);
+        config.keyBindings.viewport.toggleGridAndAxis = toggleGridAndAxis.value;
+        changed |= toggleGridAndAxis.changed;
+
+        ReadKeyBinding groupIntoFrame = readKeyBindingWithLegacy(viewport, legacy, "groupIntoFrame", defaults.keyBindings.viewport.groupIntoFrame);
+        config.keyBindings.viewport.groupIntoFrame = groupIntoFrame.value;
+        changed |= groupIntoFrame.changed;
+
+        ReadKeyBinding groupIntoNodeGroup = readKeyBindingWithLegacy(viewport, legacy, "groupIntoNodeGroup", defaults.keyBindings.viewport.groupIntoNodeGroup);
+        config.keyBindings.viewport.groupIntoNodeGroup = groupIntoNodeGroup.value;
+        changed |= groupIntoNodeGroup.changed;
+
+        ReadKeyBinding moveSelection = readKeyBindingWithLegacy(viewport, legacy, "moveSelection", defaults.keyBindings.viewport.moveSelection);
+        config.keyBindings.viewport.moveSelection = moveSelection.value;
+        changed |= moveSelection.changed;
+
+        ReadString clearSlot = readShortcutTextWithLegacy(shopEditor, legacy, "clearSlot", "shopEditorClearSlot", defaults.keyBindings.shopEditor.clearSlot);
+        config.keyBindings.shopEditor.clearSlot = clearSlot.value;
+        changed |= clearSlot.changed;
+
+        return changed;
+    }
+
+    private static boolean sanitizeKeyBindings(AppConfig.KeyBindingsConfig keyBindings, AppConfig.KeyBindingsConfig defaults) {
+        boolean changed = false;
+
+        if (keyBindings.global == null) {
+            keyBindings.global = defaults.global;
+            changed = true;
+        } else {
+            changed |= sanitizeKeyBinding(keyBindings.global.undo, defaults.global.undo, value -> keyBindings.global.undo = value);
+            changed |= sanitizeKeyBinding(keyBindings.global.redo, defaults.global.redo, value -> keyBindings.global.redo = value);
+            changed |= sanitizeKeyBinding(keyBindings.global.save, defaults.global.save, value -> keyBindings.global.save = value);
+            changed |= sanitizeKeyBinding(keyBindings.global.copy, defaults.global.copy, value -> keyBindings.global.copy = value);
+            changed |= sanitizeKeyBinding(keyBindings.global.paste, defaults.global.paste, value -> keyBindings.global.paste = value);
+        }
+
+        if (keyBindings.viewport == null) {
+            keyBindings.viewport = defaults.viewport;
+            changed = true;
+        } else {
+            changed |= sanitizeKeyBinding(keyBindings.viewport.delete, defaults.viewport.delete, value -> keyBindings.viewport.delete = value);
+            changed |= sanitizeKeyBinding(keyBindings.viewport.toggleSnapToGrid, defaults.viewport.toggleSnapToGrid, value -> keyBindings.viewport.toggleSnapToGrid = value);
+            changed |= sanitizeKeyBinding(keyBindings.viewport.toggleGridAndAxis, defaults.viewport.toggleGridAndAxis, value -> keyBindings.viewport.toggleGridAndAxis = value);
+            changed |= sanitizeKeyBinding(keyBindings.viewport.groupIntoFrame, defaults.viewport.groupIntoFrame, value -> keyBindings.viewport.groupIntoFrame = value);
+            changed |= sanitizeKeyBinding(keyBindings.viewport.groupIntoNodeGroup, defaults.viewport.groupIntoNodeGroup, value -> keyBindings.viewport.groupIntoNodeGroup = value);
+            changed |= sanitizeKeyBinding(keyBindings.viewport.moveSelection, defaults.viewport.moveSelection, value -> keyBindings.viewport.moveSelection = value);
+        }
+
+        if (keyBindings.shopEditor == null) {
+            keyBindings.shopEditor = defaults.shopEditor;
+            changed = true;
+        } else {
+            changed |= sanitizeShortcutText(keyBindings.shopEditor.clearSlot, defaults.shopEditor.clearSlot, value -> keyBindings.shopEditor.clearSlot = value);
+        }
+
+        return changed;
     }
 
     private static JsonObject readObject(JsonObject parent, String key) {
@@ -362,6 +397,29 @@ final class ConfigSanitizer {
         return new ReadKeyBinding(binding.text, value.changed || !binding.text.equals(value.value));
     }
 
+    private static ReadKeyBinding readKeyBindingWithLegacy(JsonObject parent, JsonObject legacy, String key, String defaultValue) {
+        if (parent != null && parent.has(key)) {
+            return readKeyBinding(parent, key, defaultValue);
+        }
+        return readKeyBinding(legacy, key, defaultValue);
+    }
+
+    private static ReadString readShortcutTextWithLegacy(JsonObject parent,
+                                                         JsonObject legacy,
+                                                         String key,
+                                                         String legacyKey,
+                                                         String defaultValue) {
+        ReadString value = parent != null && parent.has(key)
+                ? readString(parent, key)
+                : readString(legacy, legacyKey);
+        if (!value.valid || value.value == null || value.value.isBlank()) {
+            return ReadString.valid(defaultValue, true);
+        }
+
+        String normalized = value.value.trim();
+        return ReadString.valid(normalized, value.changed || !normalized.equals(value.value));
+    }
+
     private static boolean sanitizeKeyBinding(String value, String defaultValue, StringConsumer setter) {
         KeyBinding binding = KeyBinding.parse(value);
         if (binding == null) {
@@ -371,6 +429,28 @@ final class ConfigSanitizer {
         if (!binding.text.equals(value)) {
             setter.accept(binding.text);
             return true;
+        }
+        return false;
+    }
+
+    private static boolean sanitizeShortcutText(String value, String defaultValue, StringConsumer setter) {
+        if (value == null || value.isBlank()) {
+            setter.accept(defaultValue);
+            return true;
+        }
+
+        String normalized = value.trim();
+        if (!normalized.equals(value)) {
+            setter.accept(normalized);
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean hasAny(JsonObject object, String... keys) {
+        if (object == null || keys == null) return false;
+        for (String key : keys) {
+            if (object.has(key)) return true;
         }
         return false;
     }

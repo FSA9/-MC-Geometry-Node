@@ -26,16 +26,29 @@ public class AppConfig {
     }
 
     public static class KeyBindingsConfig {
+        public GlobalKeyBindingsConfig global = new GlobalKeyBindingsConfig();
+        public ViewportKeyBindingsConfig viewport = new ViewportKeyBindingsConfig();
+        public ShopEditorKeyBindingsConfig shopEditor = new ShopEditorKeyBindingsConfig();
+    }
+
+    public static class GlobalKeyBindingsConfig {
         public String undo = "CTRL+Z";
         public String redo = "CTRL+Y";
         public String save = "CTRL+S";
         public String copy = "CTRL+C";
         public String paste = "CTRL+V";
+    }
+
+    public static class ViewportKeyBindingsConfig {
         public String delete = "DELETE";
         public String toggleSnapToGrid = "SHIFT+TAB";
         public String toggleGridAndAxis = "SHIFT+ALT+Z";
         public String groupIntoFrame = "CTRL+J";
         public String groupIntoNodeGroup = "CTRL+G";
-        public String shopEditorClearSlot = "CTRL+LEFT_CLICK";
+        public String moveSelection = "G";
+    }
+
+    public static class ShopEditorKeyBindingsConfig {
+        public String clearSlot = "CTRL+LEFT_CLICK";
     }
 }

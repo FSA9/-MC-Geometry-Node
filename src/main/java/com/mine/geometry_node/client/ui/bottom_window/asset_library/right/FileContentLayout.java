@@ -18,6 +18,7 @@ final class FileContentLayout extends ViewGroup {
         void onContentRightClick(float rawX, float rawY);
         void onBoxSelection(RectF selectionRect, boolean additive, Set<String> baseSelection);
         void clearSelection();
+        void requestContentFocus();
         Set<String> selectedPathsSnapshot();
         void disallowScrollIntercept(boolean disallow);
     }
@@ -125,6 +126,7 @@ final class FileContentLayout extends ViewGroup {
     public boolean onTouchEvent(MotionEvent event) {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
+                mHost.requestContentFocus();
                 if (isRightMouse(event)) {
                     mHost.onContentRightClick(event.getRawX(), event.getRawY());
                     return true;

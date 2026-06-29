@@ -12,11 +12,16 @@ import java.util.function.Consumer;
 
 public class FileContextMenu extends FrameLayout {
     private static final int MENU_WIDTH_DP = 160;
+    private static final int MENU_ITEM_HEIGHT_DP = 26;
+    private static final int COLOR_TEXT = 0xFFCCCCCC;
+    private static final int COLOR_SHORTCUT_TEXT = 0xFF8B949E;
+    private static final int COLOR_HOVER_BG = 0xFF44AAFF;
+    private static final int COLOR_HOVER_TEXT = 0xFFFFFFFF;
 
     private final LinearLayout mContentLayout;
     private FileContextMenu mParentMenu;
     private FileContextMenu mChildMenu;
-    private TextView mOpenSubMenuItem;
+    private View mOpenSubMenuItem;
     private ViewGroup mHostParent;
 
     public FileContextMenu(Context context) {
@@ -39,59 +44,70 @@ public class FileContextMenu extends FrameLayout {
     }
 
     public void addMenuItem(String text, Runnable action) {
-        TextView tv = new TextView(getContext());
-        tv.setText(text);
-        tv.setTextColor(0xFFCCCCCC);
-        tv.setPadding(UIUtils.dp2pxInt(10), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(30), UIUtils.dp2pxInt(6));
+        addMenuItem(text, null, action);
+    }
 
-        tv.setOnClickListener(v -> {
+    public void addMenuItem(String text, String shortcut, Runnable action) {
+        LinearLayout row = createMenuRow();
+        TextView label = createMenuText(text, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL, 12.0f);
+        row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+
+        TextView shortcutView = null;
+        if (shortcut != null && !shortcut.isBlank()) {
+            shortcutView = createMenuText(shortcut, COLOR_SHORTCUT_TEXT, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 10.0f);
+            row.addView(shortcutView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+
+        TextView finalShortcutView = shortcutView;
+        row.setOnClickListener(v -> {
             action.run();
             dismissRoot();
         });
 
-        tv.setOnHoverListener((v, event) -> {
+        row.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
                 dismissChildMenu();
-                setItemHovered(tv, true);
+                setItemHovered(row, label, finalShortcutView, true);
             } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                setItemHovered(tv, false);
+                setItemHovered(row, label, finalShortcutView, false);
             }
             return false;
         });
 
-        mContentLayout.addView(tv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mContentLayout.addView(row, menuItemLayoutParams());
     }
 
     public void addSubMenuItem(String text, Consumer<FileContextMenu> builder) {
-        TextView tv = new TextView(getContext());
-        tv.setText(text + "    ›");
-        tv.setTextColor(0xFFCCCCCC);
-        tv.setPadding(UIUtils.dp2pxInt(10), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(16), UIUtils.dp2pxInt(6));
+        LinearLayout row = createMenuRow();
+        TextView label = createMenuText(text, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL, 12.0f);
+        TextView arrow = createMenuText("›", COLOR_TEXT, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 13.0f);
+        row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+        row.addView(arrow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        Runnable showAction = () -> showSubMenu(tv, builder);
-        tv.setOnClickListener(v -> showAction.run());
-        tv.setOnHoverListener((v, event) -> {
+        Runnable showAction = () -> showSubMenu(row, builder);
+        row.setOnClickListener(v -> showAction.run());
+        row.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
                 showAction.run();
             } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
                 if (mChildMenu == null) {
-                    setItemHovered(tv, false);
+                    setRowHovered(row, false);
                 }
             }
             return false;
         });
 
-        mContentLayout.addView(tv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mContentLayout.addView(row, menuItemLayoutParams());
     }
 
-    private void showSubMenu(TextView anchor, Consumer<FileContextMenu> builder) {
+    private void showSubMenu(View anchor, Consumer<FileContextMenu> builder) {
         FileContextMenu rootMenu = rootMenu();
         if (rootMenu.mHostParent == null) return;
         if (mChildMenu != null && mOpenSubMenuItem == anchor) {
             return;
         }
         dismissChildMenu();
-        setItemHovered(anchor, true);
+        setRowHovered(anchor, true);
 
         FileContextMenu childMenu = new FileContextMenu(getContext());
         childMenu.mParentMenu = this;
@@ -165,7 +181,7 @@ public class FileContextMenu extends FrameLayout {
         mChildMenu.dismiss();
         mChildMenu = null;
         if (mOpenSubMenuItem != null) {
-            setItemHovered(mOpenSubMenuItem, false);
+            setRowHovered(mOpenSubMenuItem, false);
             mOpenSubMenuItem = null;
         }
     }
@@ -218,15 +234,55 @@ public class FileContextMenu extends FrameLayout {
         panel.setLayoutParams(lp);
     }
 
-    private void setItemHovered(TextView tv, boolean hovered) {
+    private LinearLayout createMenuRow() {
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+        return row;
+    }
+
+    private TextView createMenuText(String text, int color, int gravity, float textSizeDp) {
+        TextView tv = new TextView(getContext());
+        tv.setText(text);
+        tv.setTextColor(color);
+        tv.setTextSize(0, UIUtils.dp2px(textSizeDp));
+        tv.setSingleLine(true);
+        tv.setGravity(gravity);
+        return tv;
+    }
+
+    private LinearLayout.LayoutParams menuItemLayoutParams() {
+        return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(MENU_ITEM_HEIGHT_DP));
+    }
+
+    private void setRowHovered(View row, boolean hovered) {
+        if (!(row instanceof LinearLayout layout)) return;
+        for (int i = 0; i < layout.getChildCount(); i++) {
+            View child = layout.getChildAt(i);
+            if (child instanceof TextView textView) {
+                textView.setTextColor(hovered ? COLOR_HOVER_TEXT : COLOR_TEXT);
+            }
+        }
         if (hovered) {
             ShapeDrawable hoverBg = new ShapeDrawable();
-            hoverBg.setColor(0xFF44AAFF);
-            tv.setBackground(hoverBg);
-            tv.setTextColor(0xFFFFFFFF);
+            hoverBg.setColor(COLOR_HOVER_BG);
+            row.setBackground(hoverBg);
         } else {
-            tv.setBackground(null);
-            tv.setTextColor(0xFFCCCCCC);
+            row.setBackground(null);
+        }
+    }
+
+    private void setItemHovered(View row, TextView label, TextView shortcutView, boolean hovered) {
+        row.setBackground(null);
+        if (hovered) {
+            ShapeDrawable hoverBg = new ShapeDrawable();
+            hoverBg.setColor(COLOR_HOVER_BG);
+            row.setBackground(hoverBg);
+        }
+        label.setTextColor(hovered ? COLOR_HOVER_TEXT : COLOR_TEXT);
+        if (shortcutView != null) {
+            shortcutView.setTextColor(hovered ? COLOR_HOVER_TEXT : COLOR_SHORTCUT_TEXT);
         }
     }
 }

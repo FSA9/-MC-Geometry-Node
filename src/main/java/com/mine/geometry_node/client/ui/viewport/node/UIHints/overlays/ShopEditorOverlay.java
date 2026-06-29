@@ -400,7 +400,7 @@ public final class ShopEditorOverlay extends FrameLayout {
 
     private String clearSlotShortcutText() {
         try {
-            String shortcut = ConfigManager.INSTANCE.getConfig().keyBindings.shopEditorClearSlot;
+            String shortcut = ConfigManager.INSTANCE.getConfig().keyBindings.shopEditor.clearSlot;
             return shortcut == null || shortcut.isBlank() ? "CTRL+LEFT_CLICK" : shortcut;
         } catch (Exception ignored) {
             return "CTRL+LEFT_CLICK";

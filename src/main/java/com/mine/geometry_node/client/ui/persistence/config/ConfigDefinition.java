@@ -18,6 +18,7 @@ public record ConfigDefinition(
         FLOAT,
         CHOICE,
         PATH_LIST,
+        SHORTCUT,
         KEY_BINDING
     }
 
@@ -43,5 +44,9 @@ public record ConfigDefinition(
 
     public static ConfigDefinition keyBinding(String key, String label, String description) {
         return new ConfigDefinition(key, label, description, Type.KEY_BINDING, 0, 0, 0, List.of());
+    }
+
+    public static ConfigDefinition shortcut(String key, String label, String description) {
+        return new ConfigDefinition(key, label, description, Type.SHORTCUT, 0, 0, 0, List.of());
     }
 }

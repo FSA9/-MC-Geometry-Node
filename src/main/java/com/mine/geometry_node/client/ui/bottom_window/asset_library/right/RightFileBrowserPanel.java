@@ -3,6 +3,8 @@ package com.mine.geometry_node.client.ui.bottom_window.asset_library.right;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetPathUtils;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.action.AssetLibraryActionId;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.action.AssetLibraryActionRegistry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.ConfirmDialog;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.GraphTagDialog;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.drag.AssetDragState;
@@ -12,6 +14,8 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetE
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.ui.shortcut.KeyScope;
+import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
@@ -66,6 +70,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final List<AssetEntry> mVisibleEntries = new ArrayList<>();
     private final AssetEntryLoader mEntryLoader = new AssetEntryLoader();
     private final GraphFavoriteStore mFavoriteStore = new GraphFavoriteStore();
+    private final ScopedKeyManager<AssetLibraryActionId, RightFileBrowserPanel> mKeyManager;
 
     private File mCurrentDirectory;
     private String mRemoteDirectory = "";
@@ -138,6 +143,14 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         mShowPickerContextActions = showPickerContextActions;
         mViewMode = AssetViewMode.fromConfig(ConfigManager.INSTANCE.getConfig().assetBrowser.viewMode);
         setOrientation(LinearLayout.VERTICAL);
+        setFocusable(true);
+        setFocusableInTouchMode(true);
+        mKeyManager = new ScopedKeyManager<>(
+                this,
+                KeyScope.ASSET_LIBRARY,
+                AssetLibraryActionRegistry::all,
+                this::executeAction
+        );
 
         LinearLayout navBar = new LinearLayout(context);
         navBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -264,6 +277,30 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         addView(mBodyFrame, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        mKeyManager.dispose();
+        super.onDetachedFromWindow();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            View focusedView = findFocus();
+            if (focusedView instanceof EditText) return super.dispatchKeyEvent(event);
+            if (mKeyManager.onKeyDown(event)) return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    private void executeAction(AssetLibraryActionId actionId) {
+        if (actionId == null) return;
+        switch (actionId) {
+            case COPY -> copySelectionToClipboard();
+            case PASTE -> pasteClipboard();
+        }
     }
 
     private void applySearch() {
@@ -531,6 +568,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     @Override
     public void onItemPressed(AssetEntry entry, MotionEvent event) {
+        requestFocus();
         AssetDragState.clear();
         if (isRightMouse(event)) {
             if (!mSelectedPaths.contains(entry.key())) {
@@ -604,6 +642,11 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         syncSelectionViews();
     }
 
+    @Override
+    public void requestContentFocus() {
+        requestFocus();
+    }
+
     private void syncSelectionViews() {
         for (Map.Entry<String, AssetFileItemView> entry : mItemViews.entrySet()) {
             entry.getValue().setSelected(mSelectedPaths.contains(entry.getKey()));
@@ -632,6 +675,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     @Override
     public void onContentRightClick(float rawX, float rawY) {
+        requestFocus();
         showContextMenuAtRaw(rawX, rawY, null);
     }
 
@@ -663,6 +707,23 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             }
         }
         return result;
+    }
+
+    public boolean canCopySelection() {
+        List<AssetEntry> entries = getSelectedEntries();
+        if (entries.isEmpty()) return false;
+        if (mSourceKind == AssetSourceKind.LOCAL) {
+            return mEnableLocalFileActions && !getSelectedLocalFiles().isEmpty();
+        }
+        return mEnableRemoteTransferActions && RemoteGraphClientState.canManage()
+                && entries.stream().anyMatch(entry -> entry.sourceKind() == AssetSourceKind.REMOTE);
+    }
+
+    public boolean canPasteClipboard() {
+        if (mSourceKind == AssetSourceKind.LOCAL) {
+            return mEnableLocalFileActions && !mFavoritesMode && !mClipboardFiles.isEmpty();
+        }
+        return mEnableRemoteTransferActions && RemoteGraphClientState.canManage() && !sRemoteClipboardPaths.isEmpty();
     }
 
     @Override
@@ -764,10 +825,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             menu.addMenuItem("编辑标签", () -> showGraphTagDialog(filesSnapshot.get(0)));
             menu.addDivider();
         }
-        menu.addMenuItem("复制" + suffix, () -> {
-            mClipboardFiles = new ArrayList<>(filesSnapshot);
-            mIsCutOperation = false;
-        });
+        menu.addMenuItem("复制" + suffix, shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
         menu.addMenuItem("剪切" + suffix, () -> {
             mClipboardFiles = new ArrayList<>(filesSnapshot);
             mIsCutOperation = true;
@@ -821,7 +879,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             menu.addDivider();
         }
         if (RemoteGraphClientState.canManage()) {
-            menu.addMenuItem("复制" + suffix, () -> setRemoteClipboard(entriesSnapshot, false));
+            menu.addMenuItem("复制" + suffix, shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
             menu.addMenuItem("剪切" + suffix, () -> setRemoteClipboard(entriesSnapshot, true));
             menu.addMenuItem("删除" + suffix, () -> deleteRemoteEntries(entriesSnapshot));
             menu.addDivider();
@@ -845,12 +903,12 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         }
 
         if (mEnableLocalFileActions && !mFavoritesMode && mSourceKind == AssetSourceKind.LOCAL && !mClipboardFiles.isEmpty()) {
-            menu.addMenuItem("粘贴", this::performPaste);
+            menu.addMenuItem("粘贴", shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
             menu.addDivider();
         }
         if (mEnableRemoteTransferActions && mSourceKind == AssetSourceKind.REMOTE
                 && RemoteGraphClientState.canManage() && !sRemoteClipboardPaths.isEmpty()) {
-            menu.addMenuItem(sRemoteCutOperation ? "移动到此处" : "粘贴", this::pasteRemoteEntries);
+            menu.addMenuItem(sRemoteCutOperation ? "移动到此处" : "粘贴", shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
             menu.addDivider();
         }
         if (mEnableLocalFileActions && !mFavoritesMode && mSourceKind == AssetSourceKind.LOCAL) {
@@ -967,6 +1025,29 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         }
     }
 
+    private void copySelectionToClipboard() {
+        if (mSourceKind == AssetSourceKind.LOCAL) {
+            List<File> files = getSelectedLocalFiles();
+            if (files.isEmpty()) return;
+            mClipboardFiles = new ArrayList<>(files);
+            mIsCutOperation = false;
+            return;
+        }
+
+        if (!mEnableRemoteTransferActions || !RemoteGraphClientState.canManage()) return;
+        List<AssetEntry> entries = getSelectedEntries();
+        if (entries.isEmpty()) return;
+        setRemoteClipboard(entries, false);
+    }
+
+    private void pasteClipboard() {
+        if (mSourceKind == AssetSourceKind.LOCAL) {
+            performPaste();
+        } else {
+            pasteRemoteEntries();
+        }
+    }
+
     private void setRemoteClipboard(List<AssetEntry> entries, boolean cutOperation) {
         sRemoteClipboardPaths = new ArrayList<>();
         for (AssetEntry entry : entries) {
@@ -975,6 +1056,10 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             }
         }
         sRemoteCutOperation = cutOperation;
+    }
+
+    private String shortcutText(AssetLibraryActionId actionId) {
+        return AssetLibraryActionRegistry.shortcutText(actionId, ConfigManager.INSTANCE.getConfig());
     }
 
     private void deleteRemoteEntries(List<AssetEntry> entries) {

@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.viewport.action.ViewportActionState;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
+import com.mine.geometry_node.client.ui.viewport.connection.ConnectionLayer;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 
@@ -47,6 +48,7 @@ public interface InteractionContext extends ViewportActionState {
     void updateFrameBounds(String frameId);
     void updateConnectionsForNode(String nodeId);
     void cutIntersectingConnections(float lastUiX, float lastUiY, float currentUiX, float currentUiY, InteractionManager.InteractionListener listener);
+    List<ConnectionLayer.ConnectionHit> findIntersectingConnections(float lastUiX, float lastUiY, float currentUiX, float currentUiY);
     Iterable<NodeVisualAdapter> getAllNodeVisuals();
     Iterable<FrameVisualAdapter> getAllFrameVisuals();
 

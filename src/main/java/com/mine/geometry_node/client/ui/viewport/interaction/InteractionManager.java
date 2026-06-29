@@ -3,11 +3,14 @@ package com.mine.geometry_node.client.ui.viewport.interaction;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.*;
+import com.mine.geometry_node.client.ui.viewport.connection.ConnectionLayer;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
+import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
+import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
 
 import java.util.ArrayList;
@@ -22,12 +25,15 @@ public class InteractionManager {
         void onChangeParent(List<String> elementIds, boolean isNode, String newParentId);
         void onConnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId);
         void onDisconnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId);
+        void onInsertReroute(ConnectionLayer.ConnectionHit connection);
         void onMoveElementsTo(Map<String, float[]> nodePositions, Map<String, float[]> framePositions);
         void onNodeDoubleClicked(String nodeId);
         boolean isCyclicFrame(String draggedFrameId, String potentialParentId);
     }
 
     private static final long DOUBLE_CLICK_TIMEOUT_MS = 300L;
+    private static final float DEFAULT_SNAP_DIVISIONS = 1.0f;
+    private static final float REROUTE_SNAP_DIVISIONS = 2.0f;
 
     private static final int MODE_NONE           = 0;
     private static final int MODE_PANNING        = 1;
@@ -36,6 +42,7 @@ public class InteractionManager {
     private static final int MODE_CONNECTING     = 4;
     private static final int MODE_DRAGGING_FRAME = 5;
     private static final int MODE_CUTTING        = 6;
+    private static final int MODE_KEYBOARD_MOVE  = 7;
 
     private FrameVisualAdapter mDraggedFrame = null;
     private final InteractionContext mContext;
@@ -52,6 +59,7 @@ public class InteractionManager {
     private float mDragStartUiX, mDragStartUiY;
     private float mDragAnchorStartUiX, mDragAnchorStartUiY;
     private float mAppliedDragUiDx, mAppliedDragUiDy;
+    private float mDragSnapDivisions = DEFAULT_SNAP_DIVISIONS;
     private float mSelectionStartUiX, mSelectionStartUiY;
     private final RectF mSelectionRectUi = new RectF();
 
@@ -100,7 +108,50 @@ public class InteractionManager {
         }
     }
 
+    public boolean isKeyboardMoveActive() {
+        return mCurrentMode == MODE_KEYBOARD_MOVE;
+    }
+
+    public boolean onHoverMove(float screenX, float screenY) {
+        if (mCurrentMode != MODE_KEYBOARD_MOVE) return false;
+        ViewportCamera camera = mContext.getCamera();
+        updateNodeDragPreview(camera.screenToUIX(screenX), camera.screenToUIY(screenY));
+        return true;
+    }
+
+    public boolean onKeyDown(KeyEvent event) {
+        if (mCurrentMode != MODE_KEYBOARD_MOVE || event == null || event.getAction() != KeyEvent.ACTION_DOWN) return false;
+        if (event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
+            cancelKeyboardMove();
+            return true;
+        }
+        return false;
+    }
+
+    public void beginKeyboardMoveSelection() {
+        if (!mContext.isReady() || mContext.getSelectedNodeVisuals().isEmpty()) return;
+
+        NodeVisualAdapter anchor = mContext.getSelectedNodeVisuals().get(0);
+
+        resetDoubleClickTracking();
+        startNodeMove(MODE_KEYBOARD_MOVE, anchor, mContext.getLastMouseUiX(), mContext.getLastMouseUiY());
+        mContext.requestViewportFocus();
+        mContext.invalidate();
+    }
+
     private void handleActionDown(MotionEvent event, float screenX, float screenY) {
+        if (mCurrentMode == MODE_KEYBOARD_MOVE) {
+            if (isRightMouse(event)) {
+                cancelKeyboardMove();
+                return;
+            }
+            ViewportCamera camera = mContext.getCamera();
+            finalizeNodeDragging(camera.screenToUIX(screenX), camera.screenToUIY(screenY), false);
+            mCurrentMode = MODE_NONE;
+            mContext.invalidate();
+            return;
+        }
+
         mLastScreenX = screenX; mLastScreenY = screenY;
         mDownScreenX = screenX; mDownScreenY = screenY;
         mHasMovedSignificantly = false;
@@ -109,9 +160,9 @@ public class InteractionManager {
         float uiX = camera.screenToUIX(screenX);
         float uiY = camera.screenToUIY(screenY);
 
-        if (event.isCtrlPressed() && !isRightMouse(event) && !isMiddleMouse(event)) {
+        if ((event.isCtrlPressed() || event.isShiftPressed()) && !isRightMouse(event) && !isMiddleMouse(event)) {
             mCurrentMode = MODE_CUTTING;
-            mConnectionInteraction.beginCut(uiX, uiY);
+            mConnectionInteraction.beginCut(uiX, uiY, event.isShiftPressed());
             return;
         }
 
@@ -169,6 +220,7 @@ public class InteractionManager {
         switch (mCurrentMode) {
             case MODE_PANNING: mContext.getCamera().pan(dx, dy); break;
             case MODE_DRAGGING_NODES: updateNodeDragPreview(uiX, uiY); break;
+            case MODE_KEYBOARD_MOVE: updateNodeDragPreview(uiX, uiY); break;
             case MODE_SELECTING: updateBoxSelection(uiX, uiY); break;
             case MODE_CONNECTING: mConnectionInteraction.updateDraft(uiX, uiY); break;
             case MODE_DRAGGING_FRAME:
@@ -182,6 +234,8 @@ public class InteractionManager {
     }
 
     private void handleActionUp(MotionEvent event, float screenX, float screenY) {
+        if (mCurrentMode == MODE_KEYBOARD_MOVE) return;
+
         ViewportCamera camera = mContext.getCamera();
         float uiX = camera.screenToUIX(screenX);
         float uiY = camera.screenToUIY(screenY);
@@ -215,16 +269,35 @@ public class InteractionManager {
     }
 
     private void enterDraggingMode(NodeVisualAdapter target, float uiX, float uiY) {
-        mCurrentMode = MODE_DRAGGING_NODES;
-        mDragStartUiX = uiX; mDragStartUiY = uiY;
-        mDragAnchorStartUiX = target.getUiX();
-        mDragAnchorStartUiY = target.getUiY();
-        mAppliedDragUiDx = 0.0f;
-        mAppliedDragUiDy = 0.0f;
         if (!target.isSelected()) {
             mContext.clearSelection();
         }
         mContext.addToSelection(target);
+        startNodeMove(MODE_DRAGGING_NODES, target, uiX, uiY);
+    }
+
+    private void startNodeMove(int mode, NodeVisualAdapter anchor, float startUiX, float startUiY) {
+        mCurrentMode = mode;
+        mDragStartUiX = startUiX;
+        mDragStartUiY = startUiY;
+        mAppliedDragUiDx = 0.0f;
+        mAppliedDragUiDy = 0.0f;
+        configureNodeSnapAnchor(anchor);
+    }
+
+    private void configureNodeSnapAnchor(NodeVisualAdapter anchor) {
+        boolean reroute = anchor != null && RerouteNodeSupport.isReroute(anchor.getNodeData());
+        mDragSnapDivisions = reroute ? REROUTE_SNAP_DIVISIONS : DEFAULT_SNAP_DIVISIONS;
+        mDragAnchorStartUiX = anchor != null ? anchor.getUiX() + getNodeSnapReferenceOffsetX(anchor, reroute) : 0.0f;
+        mDragAnchorStartUiY = anchor != null ? anchor.getUiY() + getNodeSnapReferenceOffsetY(anchor, reroute) : 0.0f;
+    }
+
+    private float getNodeSnapReferenceOffsetX(NodeVisualAdapter node, boolean reroute) {
+        return reroute ? node.getVisualWidthDp() * 0.5f : 0.0f;
+    }
+
+    private float getNodeSnapReferenceOffsetY(NodeVisualAdapter node, boolean reroute) {
+        return reroute ? node.getVisualHeightDp() * 0.5f : 0.0f;
     }
 
     private void updateNodeDragPreview(float currentUiX, float currentUiY) {
@@ -245,6 +318,15 @@ public class InteractionManager {
         }
     }
 
+    private void cancelKeyboardMove() {
+        for (NodeVisualAdapter node : mContext.getSelectedNodeVisuals()) {
+            node.setPreviewPosition(node.getNodeData().getX(), node.getNodeData().getY());
+            mContext.updateConnectionsForNode(node.getNodeId());
+        }
+        mCurrentMode = MODE_NONE;
+        mContext.invalidate();
+    }
+
     private void enterSelectingMode(float uiX, float uiY) {
         mCurrentMode = MODE_SELECTING;
         mContext.clearSelection();
@@ -263,6 +345,10 @@ public class InteractionManager {
     }
 
     private void finalizeNodeDragging(float endUiX, float endUiY) {
+        finalizeNodeDragging(endUiX, endUiY, true);
+    }
+
+    private void finalizeNodeDragging(float endUiX, float endUiY, boolean handleStationaryClick) {
         float rawTotalUiDx = endUiX - mDragStartUiX;
         float rawTotalUiDy = endUiY - mDragStartUiY;
         float totalUiDx = getSnappedDragDx(rawTotalUiDx);
@@ -294,9 +380,11 @@ public class InteractionManager {
             }
             if (!nodesToChange.isEmpty() && mListener != null) mListener.onChangeParent(nodesToChange, true, targetFrameId);
         } else {
-            NodeVisualAdapter clickedNode = mContext.findNodeAt(endUiX, endUiY);
-            if (clickedNode != null) {
-                handleNodeClick(clickedNode);
+            if (handleStationaryClick) {
+                NodeVisualAdapter clickedNode = mContext.findNodeAt(endUiX, endUiY);
+                if (clickedNode != null) {
+                    handleNodeClick(clickedNode);
+                }
             }
             for (NodeVisualAdapter node : mContext.getSelectedNodeVisuals()) {
                 node.setPreviewPosition(node.getNodeData().getX(), node.getNodeData().getY());
@@ -354,7 +442,10 @@ public class InteractionManager {
         float gridSize = mContext.getSnapGridSize();
         if (gridSize <= 0.0f) return rawTotalUiDelta;
 
-        float snappedAnchorUi = Math.round((anchorStartUi + rawTotalUiDelta) / gridSize) * gridSize;
+        float snapStep = gridSize / Math.max(DEFAULT_SNAP_DIVISIONS, mDragSnapDivisions);
+        if (snapStep <= 0.0f) return rawTotalUiDelta;
+
+        float snappedAnchorUi = Math.round((anchorStartUi + rawTotalUiDelta) / snapStep) * snapStep;
         return snappedAnchorUi - anchorStartUi;
     }
 

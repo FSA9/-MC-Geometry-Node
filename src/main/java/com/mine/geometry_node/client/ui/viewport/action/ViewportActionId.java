@@ -9,6 +9,7 @@ public enum ViewportActionId {
     DELETE,
     TOGGLE_SNAP_TO_GRID,
     TOGGLE_GRID_AND_AXIS,
+    MOVE_SELECTION,
     GROUP_INTO_FRAME,
     GROUP_INTO_NODE_GROUP,
     EXIT_GROUP,

@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.node.group.GroupNodeTypes;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -98,6 +99,7 @@ public class GraphController {
             }
 
             updateVirtualGroupPortTypeAfterDataConnection(outNodeId, outPortId, inNodeId, inPortId);
+            refreshRerouteTypes(outNodeId, inNodeId);
             mContext.notifyConnectionAdded(outNodeId, outPortId, inNodeId, inPortId);
         }
     }
@@ -113,6 +115,7 @@ public class GraphController {
             }
 
             refreshVirtualGroupPortTypeAfterRemoval(outNodeId, outPortId, inNodeId, inPortId);
+            refreshRerouteTypes(outNodeId, inNodeId);
             mContext.notifyConnectionRemoved(outNodeId, outPortId, inNodeId, inPortId);
         }
     }
@@ -124,6 +127,7 @@ public class GraphController {
         if (outNode != null) {
             outNode.addExecutionConnection(outPortId, inNodeId, inPortId);
             updateVirtualGroupPortTypeAfterExecutionConnection(outNodeId, outPortId, inNodeId, inPortId);
+            refreshRerouteTypes(outNodeId, inNodeId);
             mContext.notifyExecutionConnectionAdded(outNodeId, outPortId, inNodeId, inPortId);
         }
     }
@@ -135,6 +139,7 @@ public class GraphController {
             if (c != null) {
                 outNode.removeExecutionConnection(outPortId);
                 refreshVirtualGroupPortTypeAfterRemoval(outNodeId, outPortId, c.targetNodeId(), c.targetPortName());
+                refreshRerouteTypes(outNodeId, c.targetNodeId());
                 mContext.notifyExecutionConnectionRemoved(outNodeId, outPortId, c.targetNodeId(), c.targetPortName());
             }
         }
@@ -327,6 +332,7 @@ public class GraphController {
         PortType outType = getResolvedPortType(outNode, outPortId, false);
         PortType inType = getResolvedPortType(inNode, inPortId, true);
         if (isExecutionToVirtualAny(outNode, outType, inNode, inType)) return true;
+        if (isExecutionToUntypedReroute(outNode, outType, inNode, inType)) return true;
         return PortType.isCompatible(outType, inType);
     }
 
@@ -427,18 +433,7 @@ public class GraphController {
     }
 
     private PortType getResolvedPortType(NodeData node, String portId, boolean inputSide) {
-        if (node == null || portId == null) return null;
-        NodeDef def = NodeRegistry.INSTANCE.resolveDefinition(node);
-        if (def == null) return null;
-        for (PortRow row : def.rows()) {
-            if (inputSide && row.leftPort() != null && row.leftPort().id().equals(portId)) {
-                return row.leftPort().type();
-            }
-            if (!inputSide && row.rightPort() != null && row.rightPort().id().equals(portId)) {
-                return row.rightPort().type();
-            }
-        }
-        return null;
+        return RerouteNodeSupport.resolvePortType(mContext.getCurrentGraph().nodes, node, portId, inputSide);
     }
 
     private String getResolvedPortDisplayName(NodeData node, String portId, boolean inputSide) {
@@ -562,6 +557,17 @@ public class GraphController {
     private boolean isExecutionToVirtualAny(NodeData outNode, PortType outType, NodeData inNode, PortType inType) {
         return (outType == PortType.EXECUTION && inType == PortType.ANY && isInsideBoundaryNode(inNode))
                 || (inType == PortType.EXECUTION && outType == PortType.ANY && isInsideBoundaryNode(outNode));
+    }
+
+    private boolean isExecutionToUntypedReroute(NodeData outNode, PortType outType, NodeData inNode, PortType inType) {
+        return outType == PortType.EXECUTION && inType == PortType.ANY && RerouteNodeSupport.isReroute(inNode)
+                || inType == PortType.EXECUTION && outType == PortType.ANY && RerouteNodeSupport.isReroute(outNode);
+    }
+
+    private void refreshRerouteTypes(String outNodeId, String inNodeId) {
+        for (NodeData changed : RerouteNodeSupport.refreshLockedTypes(mContext.getCurrentGraph().nodes)) {
+            mContext.notifyNodeStructureChanged(changed);
+        }
     }
 
     private boolean isInsideBoundaryNode(NodeData node) {

@@ -31,6 +31,7 @@ import com.mine.geometry_node.core.node.nodes.maths.vector.*;
 import com.mine.geometry_node.core.node.nodes.logics.*;
 import com.mine.geometry_node.core.node.nodes.maths.*;
 import com.mine.geometry_node.core.node.nodes.maths.operation.*;
+import com.mine.geometry_node.core.node.nodes.special.RerouteNode;
 
 public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
@@ -42,6 +43,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
     @Override
     public void registerNodes(NodeRegistrationContext registry) {
         System.out.println("[BuiltinNodesPlugin] Start to register Nodes...");
+
+        registry.register("layout", new RerouteNode());
 
         // --- ACTIONS ---
 //        registry.register("actions", new CreateForceField());

@@ -4,13 +4,15 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.client.ui.viewport.connection.ConnectionLayer;
+import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 final class ConnectionInteraction {
     private final InteractionContext mContext;
@@ -23,6 +25,8 @@ final class ConnectionInteraction {
 
     private final List<Float> mCutPath = new ArrayList<>();
     private final Paint mCutLinePaint = new Paint();
+    private final Set<String> mHandledInsertKeys = new HashSet<>();
+    private boolean mInsertRerouteMode;
 
     ConnectionInteraction(InteractionContext context) {
         this.mContext = context;
@@ -59,9 +63,10 @@ final class ConnectionInteraction {
 
     void finalizeConnection(float endUiX, float endUiY) {
         Viewport.PortInfo endPort = mContext.findPortAt(endUiX, endUiY);
-        if (isValidConnection(mDraftStartPort, endPort)) {
-            Viewport.PortInfo input = mDraftStartPort.isInput ? mDraftStartPort : endPort;
-            Viewport.PortInfo output = mDraftStartPort.isInput ? endPort : mDraftStartPort;
+        ConnectionCandidate candidate = resolveConnectionCandidate(mDraftStartPort, endPort);
+        if (candidate != null) {
+            Viewport.PortInfo output = candidate.output;
+            Viewport.PortInfo input = candidate.input;
             if (!mContext.hasConnection(output.node, output.portId, input.node, input.portId)) {
                 if (mListener != null) {
                     mListener.onConnectPorts(output.node.getNodeId(), output.portId, input.node.getNodeId(), input.portId);
@@ -71,8 +76,48 @@ final class ConnectionInteraction {
         mDraftStartPort = null;
     }
 
-    void beginCut(float uiX, float uiY) {
+    private ConnectionCandidate resolveConnectionCandidate(Viewport.PortInfo start, Viewport.PortInfo end) {
+        ConnectionCandidate direct = createCandidateIfValid(start, end);
+        if (direct != null) return direct;
+
+        Viewport.PortInfo alternateStart = alternateReroutePort(start);
+        ConnectionCandidate startSwapped = createCandidateIfValid(alternateStart, end);
+        if (startSwapped != null) return startSwapped;
+
+        Viewport.PortInfo alternateEnd = alternateReroutePort(end);
+        ConnectionCandidate endSwapped = createCandidateIfValid(start, alternateEnd);
+        if (endSwapped != null) return endSwapped;
+
+        return createCandidateIfValid(alternateStart, alternateEnd);
+    }
+
+    private ConnectionCandidate createCandidateIfValid(Viewport.PortInfo start, Viewport.PortInfo end) {
+        if (start == null || end == null || start.node.getNodeId().equals(end.node.getNodeId()) || start.isInput == end.isInput) {
+            return null;
+        }
+        Viewport.PortInfo output = start.isInput ? end : start;
+        Viewport.PortInfo input = start.isInput ? start : end;
+        if (!mContext.canConnectPorts(output.node.getNodeId(), output.portId, input.node.getNodeId(), input.portId)) {
+            return null;
+        }
+        return new ConnectionCandidate(output, input);
+    }
+
+    private Viewport.PortInfo alternateReroutePort(Viewport.PortInfo port) {
+        if (port == null || port.node == null || !RerouteNodeSupport.isReroute(port.node.getNodeData())) {
+            return null;
+        }
+        return new Viewport.PortInfo(
+                port.node,
+                port.isInput ? RerouteNodeSupport.OUTPUT_PORT : RerouteNodeSupport.INPUT_PORT,
+                !port.isInput
+        );
+    }
+
+    void beginCut(float uiX, float uiY, boolean insertRerouteMode) {
         mCutPath.clear();
+        mHandledInsertKeys.clear();
+        mInsertRerouteMode = insertRerouteMode;
         mCutPath.add(uiX);
         mCutPath.add(uiY);
     }
@@ -87,7 +132,11 @@ final class ConnectionInteraction {
             if (distSq > minSegmentUi * minSegmentUi) {
                 mCutPath.add(uiX);
                 mCutPath.add(uiY);
-                mContext.cutIntersectingConnections(lastPathX, lastPathY, uiX, uiY, mListener);
+                if (mInsertRerouteMode) {
+                    insertRerouteOnIntersectingConnections(lastPathX, lastPathY, uiX, uiY);
+                } else {
+                    mContext.cutIntersectingConnections(lastPathX, lastPathY, uiX, uiY, mListener);
+                }
             }
         }
         mContext.invalidate();
@@ -95,6 +144,19 @@ final class ConnectionInteraction {
 
     void clearCut() {
         mCutPath.clear();
+        mHandledInsertKeys.clear();
+        mInsertRerouteMode = false;
+    }
+
+    private void insertRerouteOnIntersectingConnections(float lastUiX, float lastUiY, float currentUiX, float currentUiY) {
+        if (mListener == null) return;
+
+        for (ConnectionLayer.ConnectionHit hit : mContext.findIntersectingConnections(lastUiX, lastUiY, currentUiX, currentUiY)) {
+            String key = hit.outNodeId() + "#" + hit.outPortId() + ">" + hit.inNodeId() + "#" + hit.inPortId();
+            if (mHandledInsertKeys.add(key)) {
+                mListener.onInsertReroute(hit);
+            }
+        }
     }
 
     void drawDraftLine(Canvas canvas) {
@@ -122,36 +184,6 @@ final class ConnectionInteraction {
         }
     }
 
-    private boolean isValidConnection(Viewport.PortInfo s, Viewport.PortInfo e) {
-        if (s == null || e == null || s.node.getNodeId().equals(e.node.getNodeId()) || s.isInput == e.isInput) return false;
-        Viewport.PortInfo output = s.isInput ? e : s;
-        Viewport.PortInfo input = s.isInput ? s : e;
-        PortType outputType = getPortType(output);
-        PortType inputType = getPortType(input);
-        boolean typeCompatible = isExecutionToVirtualAny(output, outputType, input, inputType)
-                || PortType.isCompatible(outputType, inputType);
-        return typeCompatible && mContext.canConnectPorts(output.node.getNodeId(), output.portId, input.node.getNodeId(), input.portId);
-    }
-
-    private boolean isExecutionToVirtualAny(Viewport.PortInfo output, PortType outputType, Viewport.PortInfo input, PortType inputType) {
-        return (outputType == PortType.EXECUTION && inputType == PortType.ANY && isGroupVirtualBoundaryPort(input))
-                || (inputType == PortType.EXECUTION && outputType == PortType.ANY && isGroupVirtualBoundaryPort(output));
-    }
-
-    private boolean isGroupVirtualBoundaryPort(Viewport.PortInfo portInfo) {
-        if (portInfo == null || portInfo.node == null || portInfo.node.getNodeData() == null) return false;
-        return portInfo.node.getNodeData().isGroupInputNode() || portInfo.node.getNodeData().isGroupOutputNode();
-    }
-
-    private PortType getPortType(Viewport.PortInfo portInfo) {
-        if (portInfo == null || portInfo.node == null) return null;
-        for (PortRow row : portInfo.node.getNodeDef().rows()) {
-            if (portInfo.isInput) {
-                if (row.leftPort() != null && row.leftPort().id().equals(portInfo.portId)) return row.leftPort().type();
-            } else {
-                if (row.rightPort() != null && row.rightPort().id().equals(portInfo.portId)) return row.rightPort().type();
-            }
-        }
-        return null;
+    private record ConnectionCandidate(Viewport.PortInfo output, Viewport.PortInfo input) {
     }
 }

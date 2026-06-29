@@ -10,6 +10,7 @@ import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.*;
 
@@ -265,6 +266,12 @@ class GraphFlattener {
                 resolved = DataResolution.empty();
             }
 
+        } else if (isRerouteNode(nodeId)) {
+            RuntimeGraphIndex.ConnectionSource rerouteProvider = inputLookup.get(makeKey(nodeId, RerouteNodeSupport.INPUT_PORT));
+            resolved = rerouteProvider != null
+                    ? resolveDataSource(rerouteProvider, visited)
+                    : DataResolution.empty();
+
         } else if (isVirtualNode(nodeId)) {
             resolved = DataResolution.empty();
         } else {
@@ -307,6 +314,12 @@ class GraphFlattener {
             } else {
                 resolved = null;
             }
+
+        } else if (isRerouteNode(targetId)) {
+            TargetConnection nextHop = getFlowTarget(targetId, RerouteNodeSupport.OUTPUT_PORT);
+            resolved = nextHop != null
+                    ? resolveExecutionTarget(nextHop.targetNodeId, nextHop.targetPortName, visited)
+                    : null;
 
         } else if (isVirtualNode(targetId)) {
             resolved = null;
@@ -443,7 +456,13 @@ class GraphFlattener {
     private static boolean isVirtualType(String type) {
         return GroupNodeTypes.NODE_GROUP.equals(type)
                 || GroupNodeTypes.GROUP_IN.equals(type)
-                || GroupNodeTypes.GROUP_OUT.equals(type);
+                || GroupNodeTypes.GROUP_OUT.equals(type)
+                || RerouteNodeSupport.isRerouteType(type);
+    }
+
+    private boolean isRerouteNode(String nodeId) {
+        JsonObject nodeObj = nodeDataLookup.get(nodeId);
+        return nodeObj != null && RerouteNodeSupport.isRerouteType(readString(nodeObj, "node_type", null));
     }
 
     private static String makeKey(String nodeId, String portName) {

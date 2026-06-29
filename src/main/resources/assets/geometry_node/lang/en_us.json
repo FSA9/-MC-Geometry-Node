@@ -24,6 +24,7 @@
   "geometry_node.menu.text": "Text",
   "geometry_node.menu.time": "Time",
   "geometry_node.menu.vector": "Vector",
+  "geometry_node.menu.layout": "Layout",
   "geometry_node.menu.matrix": "Matrix",
   "geometry_node.menu.operation": "Operations",
 
@@ -36,6 +37,8 @@
   "geometry_node.port.completed_policy": "Completed Policy",
   "geometry_node.port.flow_true": "True",
   "geometry_node.port.flow_false": "False",
+  "geometry_node.port.reroute_in": "In",
+  "geometry_node.port.reroute_out": "Out",
 
   "geometry_node.port.int": "Integer",
   "geometry_node.port.index": "Index",
@@ -147,7 +150,6 @@
   "geometry_node.port.area_shape": "Area Shape",
   "geometry_node.port.area_height": "Height",
   "geometry_node.node.area_trigger_event": "Area Trigger Event",
-  "geometry_node.node.on_multiblock_built": "On Multiblock Built"
-
-
+  "geometry_node.node.on_multiblock_built": "On Multiblock Built",
+  "geometry_node.node.reroute": "Reroute"
 }

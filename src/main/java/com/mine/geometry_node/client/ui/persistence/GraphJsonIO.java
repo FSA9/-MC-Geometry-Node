@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.node.Connection;
 import com.mine.geometry_node.core.node.FrameData;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -71,6 +72,7 @@ public final class GraphJsonIO {
         }
 
         restoreConnectedInputs(g.nodes);
+        refreshRerouteTypes(g.nodes);
         return g;
     }
 
@@ -112,6 +114,16 @@ public final class GraphJsonIO {
         for (NodeData node : scopeNodes.values()) {
             if (node != null && node.subNodes != null) {
                 restoreConnectedInputs(node.subNodes);
+            }
+        }
+    }
+
+    private static void refreshRerouteTypes(Map<String, NodeData> scopeNodes) {
+        if (scopeNodes == null) return;
+        RerouteNodeSupport.refreshLockedTypes(scopeNodes);
+        for (NodeData node : scopeNodes.values()) {
+            if (node != null && node.subNodes != null) {
+                refreshRerouteTypes(node.subNodes);
             }
         }
     }
