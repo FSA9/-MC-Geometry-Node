@@ -170,7 +170,7 @@ public class NodeLayer extends FrameLayout {
 
         float scale = mViewport.getCamera().getScale();
         UINode uiNode = node instanceof UINode casted ? casted : null;
-        int overlayWidthDp = uiNode != null ? uiNode.getOverlayWidthDp() : UIConstants.Node.NODE_WIDTH;
+        int overlayWidthDp = uiNode != null ? uiNode.getOverlayWidthDp() : Math.round(node.getVisualWidthDp());
         int overlayHeightDp = uiNode != null ? uiNode.getOverlayHeightDp() : node.getTotalHeightDp();
         int widthPx = UIUtils.dp2pxInt(overlayWidthDp);
         int heightPx = UIUtils.dp2pxInt(overlayHeightDp);

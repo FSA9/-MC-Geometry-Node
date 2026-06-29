@@ -23,6 +23,21 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class SelectHintRenderer implements UIHintRenderer {
+    private static final int MENU_WIDTH_DP = 220;
+    private static final int MENU_PADDING_DP = 8;
+    private static final int SEARCH_HEIGHT_DP = 28;
+    private static final int SEARCH_RADIUS_DP = 5;
+    private static final int ITEM_HEIGHT_DP = 24;
+    private static final int ITEM_RADIUS_DP = 4;
+    private static final int MAX_VISIBLE_ITEMS = 6;
+
+    private static final int COLOR_PANEL_BG = 0xFF2B2B2B;
+    private static final int COLOR_PANEL_BORDER = 0xFF151515;
+    private static final int COLOR_SEARCH_BG = 0xFF1E1E1E;
+    private static final int COLOR_SEARCH_BORDER = 0xFF3A3A3A;
+    private static final int COLOR_NODE_TEXT = 0xFFCCCCCC;
+    private static final int COLOR_MUTED_TEXT = 0xFF999999;
+    private static final int COLOR_HOVER_BG = 0xFF3A4652;
 
     @Override
     public float getRequiredExtraRows(PortRow row) {
@@ -118,6 +133,19 @@ public class SelectHintRenderer implements UIHintRenderer {
         view.setLayoutParams(lp);
     }
 
+    private static ShapeDrawable createRectDrawable(int color, float radiusDp) {
+        ShapeDrawable drawable = new ShapeDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
+        return drawable;
+    }
+
+    private static ShapeDrawable createRectDrawable(int color, float radiusDp, float strokeWidthDp, int strokeColor) {
+        ShapeDrawable drawable = createRectDrawable(color, radiusDp);
+        drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
+        return drawable;
+    }
+
     private static class DropdownSearchMenu extends FrameLayout {
         private LinearLayout mContentLayout;
         private LinearLayout mListContainer;
@@ -126,9 +154,6 @@ public class SelectHintRenderer implements UIHintRenderer {
         private final List<String> mOptions;
         private final List<String> mFilteredOptions;
         private final Consumer<String> mOnSelect;
-
-        private float mCurrentScale = 1.0f;
-        private float mLastRenderedScale = -1.0f;
 
         private View mAnchor;
 
@@ -149,19 +174,31 @@ public class SelectHintRenderer implements UIHintRenderer {
 
             mContentLayout = new LinearLayout(context);
             mContentLayout.setOrientation(LinearLayout.VERTICAL);
-            mContentLayout.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.BG_COLOR, UIConstants.ViewPort.NodeMenu.BORDER_RADIUS));
+            mContentLayout.setBackground(createRectDrawable(COLOR_PANEL_BG, UIConstants.ViewPort.NodeMenu.BORDER_RADIUS + 5, 1, COLOR_PANEL_BORDER));
+            mContentLayout.setPadding(
+                    UIUtils.dp2pxInt(MENU_PADDING_DP),
+                    UIUtils.dp2pxInt(MENU_PADDING_DP),
+                    UIUtils.dp2pxInt(MENU_PADDING_DP),
+                    UIUtils.dp2pxInt(MENU_PADDING_DP)
+            );
             mContentLayout.setOnClickListener(v -> {});
 
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(MENU_WIDTH_DP), LayoutParams.WRAP_CONTENT);
             mContentLayout.setLayoutParams(lp);
 
             mSearchBox = new EditText(context);
             mSearchBox.setHint("Search...");
+            mSearchBox.setTextSize(0, UIUtils.dp2px(12));
             mSearchBox.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
-            mSearchBox.setHintTextColor(0xFF666666);
-            mSearchBox.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.SEARCH_BG_COLOR, (int) ConfigManager.INSTANCE.getConfig().node.cornerRadius));
+            mSearchBox.setHintTextColor(0xFF777777);
+            mSearchBox.setSingleLine(true);
+            mSearchBox.setGravity(Gravity.CENTER_VERTICAL);
+            mSearchBox.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+            mSearchBox.setBackground(createRectDrawable(COLOR_SEARCH_BG, SEARCH_RADIUS_DP, 1, COLOR_SEARCH_BORDER));
 
-            mContentLayout.addView(mSearchBox);
+            LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(SEARCH_HEIGHT_DP));
+            searchLp.setMargins(0, 0, 0, UIUtils.dp2pxInt(8));
+            mContentLayout.addView(mSearchBox, searchLp);
 
             mScrollView = new ScrollView(context);
             mListContainer = new LinearLayout(context);
@@ -180,42 +217,65 @@ public class SelectHintRenderer implements UIHintRenderer {
 
         private void renderList() {
             mListContainer.removeAllViews();
+            if (mFilteredOptions.isEmpty()) {
+                addEmptyItem("无匹配选项");
+                updateScrollHeight(1);
+                return;
+            }
+
             for (String item : mFilteredOptions) {
                 TextView tv = new TextView(getContext());
                 tv.setText(item);
 
-                float fontSize = 12f * mCurrentScale;
-                tv.setTextSize(0, UIUtils.dp2px(fontSize));
-                tv.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR);
+                tv.setTextSize(0, UIUtils.dp2px(12));
+                tv.setTextColor(COLOR_NODE_TEXT);
                 tv.setSingleLine(true);
 
-                int padH = (int)UIUtils.dp2px(8 * mCurrentScale);
-                int padV = (int)UIUtils.dp2px(2 * mCurrentScale);
-                tv.setPadding(padH, padV, padH, padV);
+                int padH = UIUtils.dp2pxInt(10);
+                tv.setPadding(padH, 0, padH, 0);
                 tv.setGravity(Gravity.CENTER_VERTICAL);
 
                 tv.setOnClickListener(v -> { mOnSelect.accept(item); post(this::dismiss); });
                 tv.setOnHoverListener((v, event) -> {
                     if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                        tv.setBackground(createRectDrawable(UIConstants.ViewPort.NodeMenu.HOVER_COLOR, 4));
+                        tv.setBackground(createRectDrawable(COLOR_HOVER_BG, ITEM_RADIUS_DP));
                         tv.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_HOVER);
                     } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
                         tv.setBackground(null);
-                        tv.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR);
+                        tv.setTextColor(COLOR_NODE_TEXT);
                     }
                     return false;
                 });
 
-                int itemHeight = (int)UIUtils.dp2px(20 * mCurrentScale);
+                int itemHeight = UIUtils.dp2pxInt(ITEM_HEIGHT_DP);
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, itemHeight);
-                lp.setMargins(UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(1), UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(1));
+                int marginV = UIUtils.dp2pxInt(1);
+                lp.setMargins(0, marginV, 0, marginV);
                 mListContainer.addView(tv, lp);
             }
 
-            int visibleItems = Math.min(mFilteredOptions.size(), 5);
-            if (visibleItems == 0) visibleItems = 1;
-            int itemTotalHeightDp = 22;
-            int targetHeightPx = (int) UIUtils.dp2px(visibleItems * itemTotalHeightDp * mCurrentScale);
+            updateScrollHeight(mFilteredOptions.size());
+        }
+
+        private void addEmptyItem(String text) {
+            TextView tv = new TextView(getContext());
+            tv.setText(text);
+            tv.setTextSize(0, UIUtils.dp2px(12));
+            tv.setTextColor(COLOR_MUTED_TEXT);
+            tv.setSingleLine(true);
+            tv.setGravity(Gravity.CENTER_VERTICAL);
+            tv.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    UIUtils.dp2pxInt(ITEM_HEIGHT_DP)
+            );
+            mListContainer.addView(tv, lp);
+        }
+
+        private void updateScrollHeight(int itemCount) {
+            int visibleItems = Math.min(Math.max(itemCount, 1), MAX_VISIBLE_ITEMS);
+            int targetHeightPx = UIUtils.dp2pxInt(visibleItems * (ITEM_HEIGHT_DP + 2));
 
             LinearLayout.LayoutParams svLp = (LinearLayout.LayoutParams) mScrollView.getLayoutParams();
             if (svLp.height != targetHeightPx) {
@@ -239,6 +299,7 @@ public class SelectHintRenderer implements UIHintRenderer {
             this.mAnchor = anchor;
             this.mContext = context;
 
+            renderList();
             updatePosition();
 
             if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
@@ -268,35 +329,6 @@ public class SelectHintRenderer implements UIHintRenderer {
         private void updatePosition() {
             if (mAnchor == null || mContext == null) return;
 
-            float newScale = mContext.getCamera().getScale();
-            this.mCurrentScale = newScale;
-
-            if (Math.abs(mLastRenderedScale - mCurrentScale) > 0.001f) {
-                mContentLayout.setPadding(
-                        (int)UIUtils.dp2px(4 * mCurrentScale),
-                        (int)UIUtils.dp2px(4 * mCurrentScale),
-                        (int)UIUtils.dp2px(4 * mCurrentScale),
-                        (int)UIUtils.dp2px(4 * mCurrentScale)
-                );
-
-                float scaledSearchFontSize = 12f * mCurrentScale;
-                mSearchBox.setTextSize(0, UIUtils.dp2px(scaledSearchFontSize));
-                mSearchBox.setPadding((int)UIUtils.dp2px(10 * mCurrentScale), 0, (int)UIUtils.dp2px(10 * mCurrentScale), 0);
-
-                LinearLayout.LayoutParams searchLp = (LinearLayout.LayoutParams) mSearchBox.getLayoutParams();
-                searchLp.height = (int) UIUtils.dp2px(24 * mCurrentScale);
-                searchLp.setMargins(
-                        (int)UIUtils.dp2px(4 * mCurrentScale),
-                        (int)UIUtils.dp2px(4 * mCurrentScale),
-                        (int)UIUtils.dp2px(4 * mCurrentScale),
-                        (int)UIUtils.dp2px(6 * mCurrentScale)
-                );
-                mSearchBox.setLayoutParams(searchLp);
-
-                renderList();
-                mLastRenderedScale = mCurrentScale;
-            }
-
             ViewGroup parentView = (ViewGroup) mContext;
 
             int[] btnLoc = new int[2]; mAnchor.getLocationOnScreen(btnLoc);
@@ -305,13 +337,12 @@ public class SelectHintRenderer implements UIHintRenderer {
             float relX = btnLoc[0] - vpLoc[0];
             float relY = btnLoc[1] - vpLoc[1];
 
-            float minMenuWidth = UIUtils.dp2px(200 * mCurrentScale);
-            float scaledTargetWidth = Math.max(mAnchor.getWidth() * mCurrentScale, minMenuWidth);
-            float scaledHeight = mAnchor.getHeight() * mCurrentScale;
+            int targetWidth = UIUtils.dp2pxInt(MENU_WIDTH_DP);
+            float scaledHeight = mAnchor.getHeight() * mContext.getCamera().getScale();
 
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
             lp.gravity = Gravity.TOP | Gravity.LEFT;
-            lp.width = (int) scaledTargetWidth;
+            lp.width = targetWidth;
 
             int targetX = (int) relX;
             int targetY = (int) (relY + scaledHeight);
@@ -342,13 +373,6 @@ public class SelectHintRenderer implements UIHintRenderer {
         public void dismiss() {
             if (getParent() != null) ((ViewGroup) getParent()).removeView(this);
             mIsTracking = false;
-        }
-
-        private ShapeDrawable createRectDrawable(int color, int radius) {
-            ShapeDrawable d = new ShapeDrawable();
-            d.setColor(color);
-            d.setCornerRadius(UIUtils.dp2px(radius));
-            return d;
         }
     }
 }

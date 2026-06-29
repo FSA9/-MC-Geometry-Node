@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.viewport.node;
 
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.viewport.CanvasVisualItem;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
 import com.mine.geometry_node.client.ui.viewport.connection.ConnectionNodeVisual;
@@ -54,7 +53,7 @@ public interface NodeVisualAdapter extends CanvasVisualItem, ConnectionNodeVisua
     }
 
     default float getVisualWidthDp() {
-        return UIConstants.Node.NODE_WIDTH;
+        return NodeUiMetrics.width(getNodeDef());
     }
 
     default float getVisualHeightDp() {

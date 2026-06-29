@@ -21,9 +21,6 @@ public class NodeData {
     @SerializedName("UI_pos")
     public float[] uiPos = new float[2];
 
-    @SerializedName("UI_size")
-    public float[] uiSize = new float[]{0, 0};
-
     @SerializedName("custom_name")
     public String customName;
 

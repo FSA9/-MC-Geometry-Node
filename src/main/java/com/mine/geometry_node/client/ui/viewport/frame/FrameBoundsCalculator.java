@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.viewport.frame;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.viewport.node.NodeUiMetrics;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.FrameData;
 import com.mine.geometry_node.core.node.NodeData;
@@ -11,7 +12,6 @@ import com.mine.geometry_node.core.node.NodeData;
 public final class FrameBoundsCalculator {
     public static final float CONTENT_PADDING = 30f;
     public static final float HEADER_HEIGHT = UIFrame.FRAME_HEADER_H;
-    public static final float FALLBACK_NODE_WIDTH = 150f;
     public static final float FALLBACK_NODE_HEIGHT = 100f;
 
     private FrameBoundsCalculator() {}
@@ -29,8 +29,8 @@ public final class FrameBoundsCalculator {
                 result.include(
                         node.uiPos[0],
                         node.uiPos[1],
-                        positiveSize(node.uiSize, 0, FALLBACK_NODE_WIDTH),
-                        positiveSize(node.uiSize, 1, FALLBACK_NODE_HEIGHT)
+                        NodeUiMetrics.width(node),
+                        NodeUiMetrics.height(node)
                 );
             }
         }

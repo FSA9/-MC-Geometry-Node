@@ -26,6 +26,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
     private final NodeData mNodeData;
     private final NodeDef mNodeDef;
     private boolean mIsSelected = false;
+    private int mWidth; // 逻辑单位 DP
     private int mTotalHeight; // 逻辑单位 DP
 
     private final Paint mPaint = new Paint();
@@ -66,9 +67,10 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         }
 
         // --- 3. 刷新整体尺寸 ---
+        mWidth = mLayout.width;
         mTotalHeight = mLayout.totalHeight;
 
-        LayoutParams lp = new LayoutParams(UIUtils.dp2pxInt(UIConstants.Node.NODE_WIDTH), UIUtils.dp2pxInt(mTotalHeight));
+        LayoutParams lp = new LayoutParams(UIUtils.dp2pxInt(mWidth), UIUtils.dp2pxInt(mTotalHeight));
         setLayoutParams(lp);
     }
 
@@ -136,7 +138,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
     }
 
     private void drawNodeLocal(Canvas canvas) {
-        float w = UIUtils.dp2px(UIConstants.Node.NODE_WIDTH);
+        float w = UIUtils.dp2px(mWidth);
         float h = UIUtils.dp2px(mTotalHeight);
 
         float scaledRadius = UIUtils.dp2px(com.mine.geometry_node.client.ui.persistence.config.ConfigManager.INSTANCE.getConfig().node.cornerRadius);
@@ -214,7 +216,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
 
     @Override
     public String hitTestPort(float localXdp, float localYdp, boolean checkInput, float touchRadiusDp) {
-        float targetX = checkInput ? 0 : UIConstants.Node.NODE_WIDTH;
+        float targetX = checkInput ? 0 : mWidth;
         float dx = localXdp - targetX;
         Map<String, Float> map = mLayout != null ? (checkInput ? mLayout.inputPortY : mLayout.outputPortY) : new HashMap<>();
         float thresholdSq = touchRadiusDp * touchRadiusDp;
@@ -229,7 +231,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
 
     @Override
     public void getPortPosition(String portId, boolean isInput, float[] outPos) {
-        outPos[0] = isInput ? 0 : UIConstants.Node.NODE_WIDTH;
+        outPos[0] = isInput ? 0 : mWidth;
         Float y = mLayout != null ? (isInput ? mLayout.inputPortY.get(portId) : mLayout.outputPortY.get(portId)) : null;
         outPos[1] = (y != null) ? y : UIConstants.Node.HEADER_HEIGHT + UIConstants.Node.ROW_HEIGHT / 2.0f;
     }
@@ -245,7 +247,12 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
 
     @Override
     public void getLogicalBounds(RectF outRect) {
-        outRect.set(mLogicX, mLogicY, mLogicX + UIConstants.Node.NODE_WIDTH, mLogicY + mTotalHeight);
+        outRect.set(mLogicX, mLogicY, mLogicX + mWidth, mLogicY + mTotalHeight);
+    }
+
+    @Override
+    public float getVisualWidthDp() {
+        return mWidth;
     }
 
     @Override

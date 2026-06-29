@@ -18,6 +18,7 @@ public class NodeLayout {
     public float titleX;
     public float titleBaseline;
 
+    public int width;
     public int totalHeight;
 
     public static class LabelRun {

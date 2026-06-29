@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes;
 
 import com.mine.geometry_node.core.node.meta.MetaKey;
+import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.port.PortRow;
 import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
@@ -56,6 +57,10 @@ public record NodeDef(
                 this.meta.put(key, value);
             }
             return this;
+        }
+
+        public Builder uiWidth(int width) {
+            return addMeta(SchemaKeys.UI_WIDTH, width);
         }
 
         public Builder addRow(PortRow row) {

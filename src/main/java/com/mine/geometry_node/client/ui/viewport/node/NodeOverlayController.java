@@ -45,6 +45,7 @@ final class NodeOverlayController {
     private View mAddButton;
     private TextView mCommentButton;
     private TextView mCommentTooltip;
+    private int mNodeWidth;
     private int mTotalHeight;
     private boolean mMounted;
     private boolean mHasOverlayViews;
@@ -58,6 +59,7 @@ final class NodeOverlayController {
     }
 
     void setLayout(NodeLayout layout) {
+        mNodeWidth = layout != null ? layout.width : NodeUiMetrics.width(mNodeDef);
         mTotalHeight = layout != null ? layout.totalHeight : 0;
         mHasOverlayViews = computeOverlayPresence();
     }
@@ -133,8 +135,8 @@ final class NodeOverlayController {
 
     int getOverlayWidthDp() {
         return hasCommentOverlay()
-                ? UIConstants.Node.NODE_WIDTH + COMMENT_POPUP_WIDTH_DP
-                : UIConstants.Node.NODE_WIDTH;
+                ? mNodeWidth + COMMENT_POPUP_WIDTH_DP
+                : mNodeWidth;
     }
 
     int getOverlayHeightDp() {
@@ -222,7 +224,7 @@ final class NodeOverlayController {
 
         boolean isConnected = mNodeData.isInputConnected(row.leftPort() != null ? row.leftPort().id() : "");
         hintView.setVisibility(isConnected ? View.GONE : View.VISIBLE);
-        renderer.updateLayout(hintView, row, currentY, UIConstants.Node.NODE_WIDTH);
+        renderer.updateLayout(hintView, row, currentY, mNodeWidth);
     }
 
     private void addDynamicRemoveButton(Context context, PortRow row, float currentY) {
@@ -242,7 +244,7 @@ final class NodeOverlayController {
         lp.topMargin = UIUtils.dp2pxInt(currentY + (UIConstants.Node.ROW_HEIGHT - buttonHeight) / 2.0f);
 
         if (row.leftPort() != null) {
-            lp.leftMargin = UIUtils.dp2pxInt(UIConstants.Node.NODE_WIDTH - UIConstants.Node.LABEL_MARGIN_PORT - buttonWidth);
+            lp.leftMargin = UIUtils.dp2pxInt(mNodeWidth - UIConstants.Node.LABEL_MARGIN_PORT - buttonWidth);
         } else {
             lp.leftMargin = UIUtils.dp2pxInt(UIConstants.Node.LABEL_MARGIN_PORT);
         }
@@ -257,7 +259,7 @@ final class NodeOverlayController {
         float inputBoxHeight = UIHintUtils.getStandardInputHeight();
         float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
         float startX = UIConstants.Node.LABEL_MARGIN_PORT;
-        float endX = UIConstants.Node.NODE_WIDTH - UIConstants.Node.LABEL_MARGIN_PORT;
+        float endX = mNodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 UIUtils.dp2pxInt(endX - startX),
@@ -351,7 +353,7 @@ final class NodeOverlayController {
         FrameLayout.LayoutParams buttonLp = new FrameLayout.LayoutParams(buttonSize, buttonSize);
         buttonLp.gravity = Gravity.TOP | Gravity.LEFT;
         buttonLp.topMargin = UIUtils.dp2pxInt((UIConstants.Node.HEADER_HEIGHT - 12) / 2.0f);
-        buttonLp.leftMargin = UIUtils.dp2pxInt(UIConstants.Node.NODE_WIDTH - 5 - 12);
+        buttonLp.leftMargin = UIUtils.dp2pxInt(mNodeWidth - 5 - 12);
         mHost.addView(mCommentButton, buttonLp);
 
         mCommentTooltip = UIUtils.createLockedTextView(context, comment.trim(), 9.0f, UIConstants.CLR_WHITE);
@@ -367,7 +369,7 @@ final class NodeOverlayController {
         int tooltipWidth = UIUtils.dp2pxInt(COMMENT_POPUP_WIDTH_DP);
         FrameLayout.LayoutParams tooltipLp = new FrameLayout.LayoutParams(tooltipWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
         tooltipLp.gravity = Gravity.TOP | Gravity.LEFT;
-        tooltipLp.leftMargin = UIUtils.dp2pxInt(UIConstants.Node.NODE_WIDTH);
+        tooltipLp.leftMargin = UIUtils.dp2pxInt(mNodeWidth);
         tooltipLp.topMargin = 0;
         mHost.addView(mCommentTooltip, tooltipLp);
     }

@@ -41,13 +41,15 @@ public class NodeLayoutEngine {
 
     public NodeLayout build(NodeData nodeData, NodeDef nodeDef) {
         NodeLayout layout = new NodeLayout();
+        int nodeWidth = NodeUiMetrics.width(nodeDef);
+        layout.width = nodeWidth;
 
         mHeaderPaint.getFontMetricsInt(mHeaderMetrics);
         mLabelPaint.getFontMetricsInt(mLabelMetrics);
 
         String title = nodeDef.displayName().getString();
         layout.titleText = shape(title, mHeaderPaint);
-        layout.titleX = (UIUtils.dp2px(UIConstants.Node.NODE_WIDTH) - layout.titleText.getAdvance()) / 2.0f;
+        layout.titleX = (UIUtils.dp2px(nodeWidth) - layout.titleText.getAdvance()) / 2.0f;
         layout.titleBaseline = centeredBaseline(0, UIConstants.Node.HEADER_HEIGHT, mHeaderMetrics);
 
         float currentY = UIConstants.Node.HEADER_HEIGHT;
@@ -60,13 +62,13 @@ public class NodeLayoutEngine {
                 if (!port.hidePin()) {
                     layout.inputPortY.put(port.id(), portCenterY);
                 }
-                addLabel(layout, nodeData, port, true, row.uiHint(), currentY);
+                addLabel(layout, nodeData, port, true, row.uiHint(), currentY, nodeWidth);
             }
 
             if (row.rightPort() != null) {
                 PortDef port = row.rightPort();
                 layout.outputPortY.put(port.id(), portCenterY);
-                addLabel(layout, nodeData, port, false, row.uiHint(), currentY);
+                addLabel(layout, nodeData, port, false, row.uiHint(), currentY, nodeWidth);
             }
 
             currentY += rowHeight;
@@ -80,11 +82,6 @@ public class NodeLayoutEngine {
         }
 
         layout.totalHeight = (int) currentY;
-        if (nodeData.uiSize == null) {
-            nodeData.uiSize = new float[2];
-        }
-        nodeData.uiSize[0] = UIConstants.Node.NODE_WIDTH;
-        nodeData.uiSize[1] = layout.totalHeight;
 
         return layout;
     }
@@ -100,7 +97,7 @@ public class NodeLayoutEngine {
         return height;
     }
 
-    private void addLabel(NodeLayout layout, NodeData nodeData, PortDef port, boolean isLeft, UIHint hint, float currentY) {
+    private void addLabel(NodeLayout layout, NodeData nodeData, PortDef port, boolean isLeft, UIHint hint, float currentY, int nodeWidth) {
         String category = getPortCategory(port, isLeft);
         String defaultName = port.displayName().getString();
         String effectiveName = nodeData.getEffectivePortName(category, port.id(), defaultName);
@@ -114,9 +111,9 @@ public class NodeLayoutEngine {
                 leftMargin = UIConstants.Node.LABEL_MARGIN_PORT + UIConstants.Node.CHECKBOX_DEFAULT_WIDTH + UIConstants.Node.MARGIN_CHECKBOX_GAP;
             }
             leftDp = leftMargin;
-            rightDp = Math.min(UIConstants.Node.NODE_WIDTH - UIConstants.Node.LABEL_MARGIN_PORT, leftDp + UIUtils.px2dp(shapedText.getAdvance()));
+            rightDp = Math.min(nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT, leftDp + UIUtils.px2dp(shapedText.getAdvance()));
         } else {
-            rightDp = UIConstants.Node.NODE_WIDTH - UIConstants.Node.LABEL_MARGIN_PORT;
+            rightDp = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
             leftDp = Math.max(UIConstants.Node.LABEL_MARGIN_PORT, rightDp - UIUtils.px2dp(shapedText.getAdvance()));
         }
 
