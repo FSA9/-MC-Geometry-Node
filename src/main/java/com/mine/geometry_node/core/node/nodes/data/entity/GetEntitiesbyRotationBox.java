@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node.nodes.data.entity;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.blueprint.spatial.RotatedBoxEntityQuery;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -14,6 +15,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class GetEntitiesbyRotationBox extends BaseNode {
 
@@ -28,7 +30,8 @@ public class GetEntitiesbyRotationBox extends BaseNode {
                 .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.DEBUG.toInput(false), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(20), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInput(20), null, UIHint.INPUT, null,
+                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
                 .build();
     }
 

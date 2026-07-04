@@ -39,4 +39,24 @@ public class PortMetaKeys {
      * [UI 指令] 按钮文字色 ARGB。
      */
     public static final MetaKey<Integer> BUTTON_TEXT_COLOR = new MetaKey<>("button_text_color");
+
+    /**
+     * [UI 指令] 数字输入最小值。适用于 INTEGER/FLOAT 输入控件。
+     */
+    public static final MetaKey<Number> NUMERIC_MIN = new MetaKey<>("numeric_min");
+
+    /**
+     * [UI 指令] 数字输入最大值。适用于 INTEGER/FLOAT 输入控件。
+     */
+    public static final MetaKey<Number> NUMERIC_MAX = new MetaKey<>("numeric_max");
+
+    /**
+     * [UI 指令] 数字拖拽/步进增量。不设置时 INTEGER 为 1，FLOAT 为 0.001。
+     */
+    public static final MetaKey<Number> NUMERIC_STEP = new MetaKey<>("numeric_step");
+
+    /**
+     * [UI 指令] FLOAT 拖拽后的显示/保存小数位数。不影响手动输入精度。
+     */
+    public static final MetaKey<Integer> NUMERIC_DECIMALS = new MetaKey<>("numeric_decimals");
 }

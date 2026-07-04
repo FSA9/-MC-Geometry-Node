@@ -33,7 +33,8 @@ public class ForEachLoop extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.LIST.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.LIMIT.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null,
+                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
                 .addRow(new PortRow(
                         PortDef.create(COMPLETED_POLICY, "geometry_node.port.completed_policy", PortType.STRING, POLICY_SCHEDULED).hiddenPin(),
                         null,

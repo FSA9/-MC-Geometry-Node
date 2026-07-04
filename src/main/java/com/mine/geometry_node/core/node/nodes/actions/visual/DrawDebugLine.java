@@ -2,12 +2,15 @@ package com.mine.geometry_node.core.node.nodes.actions.visual;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.Map;
 
 public class DrawDebugLine extends BaseNode {
 
@@ -24,7 +27,8 @@ public class DrawDebugLine extends BaseNode {
                 // 渲染参数端口：颜色 (ARGB)、粗细、持续时间(Tick)
                 .addRow(new PortRow(StandardPorts.COLOR.toInput(), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_1.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null,
+                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
                 .build();
     }
 

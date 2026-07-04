@@ -39,8 +39,14 @@ public class AddEffect extends BaseNode {
                         Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllEffects().toArray(new String[0]))
                 ))
 
-                .addRow(new PortRow(StandardPorts.TICK.toInput(600), null, UIHint.DEFAULT, null, null)) // 时长 (默认30秒)
-                .addRow(new PortRow(StandardPorts.INT.toInput(0), null, UIHint.DEFAULT, null, null))   // 等级 (Amplifier)
+                .addRow(new PortRow(
+                        StandardPorts.TICK.toInput(),
+                        null,
+                        UIHint.INPUT,
+                        null,
+                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)
+                )) // 时长
+                .addRow(new PortRow(StandardPorts.INT.toInput(), null, UIHint.DEFAULT, null, null))   // 等级 (Amplifier)
                 .build();
     }
 
@@ -60,7 +66,7 @@ public class AddEffect extends BaseNode {
                         .getOptional(rl)
                         .map(BuiltInRegistries.MOB_EFFECT::wrapAsHolder);
                 if (effectHolder.isPresent()) {
-                    int dur = duration != null ? duration : 600;
+                    int dur = Math.max(0, duration != null ? duration : 600);
                     int amp = amplifier != null ? amplifier : 0;
 
                     for (Entity entity : entities) {

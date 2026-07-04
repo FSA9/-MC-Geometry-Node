@@ -10,6 +10,7 @@ import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
+import net.minecraft.world.phys.Vec3;
 
 public class UIHintUtils {
 
@@ -84,6 +85,14 @@ public class UIHintUtils {
     }
 
     public static float getSafeVectorComponent(Object rawVal, int index) {
+        if (rawVal instanceof Vec3 vec) {
+            return switch (index) {
+                case 0 -> (float) vec.x;
+                case 1 -> (float) vec.y;
+                case 2 -> (float) vec.z;
+                default -> 0f;
+            };
+        }
         if (rawVal instanceof java.util.List<?> list && index < list.size()) {
             Object item = list.get(index);
             if (item instanceof Number) return ((Number) item).floatValue();

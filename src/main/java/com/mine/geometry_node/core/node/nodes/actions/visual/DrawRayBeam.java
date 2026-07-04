@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.visual;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -11,6 +12,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import java.util.HashMap;
+import java.util.Map;
 
 public class DrawRayBeam extends BaseNode {
 
@@ -27,7 +29,8 @@ public class DrawRayBeam extends BaseNode {
                 .addRow(new PortRow(StandardPorts.DIST.toInput(20.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.COLOR.toInput(-1), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.RADIUS.toInput(0.1f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(2), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInput(2), null, UIHint.INPUT, null,
+                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
 
                 // 【新增】：把物理检测规则也传进去
                 .addRow(new PortRow(StandardPorts.PENETRATE_SOLID.toInput(false), null, UIHint.CHECKBOX, null, null))

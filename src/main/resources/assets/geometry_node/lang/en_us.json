@@ -151,5 +151,6 @@
   "geometry_node.port.area_height": "Height",
   "geometry_node.node.area_trigger_event": "Area Trigger Event",
   "geometry_node.node.on_multiblock_built": "On Multiblock Built",
-  "geometry_node.node.reroute": "Reroute"
+  "geometry_node.node.reroute": "Reroute",
+  "geometry_node.node.on_entity_tick": "123"
 }
