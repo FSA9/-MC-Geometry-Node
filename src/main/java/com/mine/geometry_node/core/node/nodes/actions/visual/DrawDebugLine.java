@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.value.ColorValue;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 
@@ -24,7 +25,7 @@ public class DrawDebugLine extends BaseNode {
                 // 核心数据端口：使用 PortDef.create 创建具有默认值的自定义语义端口
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.END_POS.toInput(), null, UIHint.VECTOR, null, null))
-                // 渲染参数端口：颜色 (ARGB)、粗细、持续时间(Tick)
+                // 渲染参数端口：颜色、粗细、持续时间(Tick)
                 .addRow(new PortRow(StandardPorts.COLOR.toInput(), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_1.toInput(), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null,
@@ -36,11 +37,12 @@ public class DrawDebugLine extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Vec3 startPos = getInput(context, StandardPorts.START_POS.getId(), Vec3.class);
         Vec3 endPos = getInput(context, StandardPorts.END_POS.getId(), Vec3.class);
-        Integer color = getInput(context, StandardPorts.COLOR.getId(), Integer.class);
+        ColorValue color = getInput(context, StandardPorts.COLOR.getId(), ColorValue.class);
         Float size = getInput(context, StandardPorts.SIZE_1.getId(), Float.class);
         Integer duration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
+        int argb = color != null ? color.toArgb() : ColorValue.WHITE.toArgb();
 
-        context.broadcastVisual("debug_line", -1, startPos, -1, endPos, color, size, duration);
+        context.broadcastVisual("debug_line", -1, startPos, -1, endPos, argb, size, duration);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }

@@ -150,6 +150,7 @@ public final class ColorPickerDialog extends FrameLayout {
 
         wireInputWatchers();
         setColor(ensureOpaque(initialColor), false);
+        post(this::initializeWindowPosition);
         post(this::requestFocus);
     }
 
@@ -455,6 +456,12 @@ public final class ColorPickerDialog extends FrameLayout {
         mWindow.setLayoutParams(lp);
     }
 
+    private void initializeWindowPosition() {
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mWindow.getLayoutParams();
+        ensureWindowHasAbsolutePosition(lp);
+        moveWindowTo(lp.leftMargin, lp.topMargin);
+    }
+
     private void moveWindowTo(int left, int top) {
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mWindow.getLayoutParams();
         lp.gravity = Gravity.TOP | Gravity.LEFT;
@@ -652,6 +659,11 @@ public final class ColorPickerDialog extends FrameLayout {
         }
 
         @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            return onTouchEvent(event);
+        }
+
+        @Override
         public boolean onTouchEvent(MotionEvent event) {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE || action == MotionEvent.ACTION_UP) {
@@ -694,6 +706,11 @@ public final class ColorPickerDialog extends FrameLayout {
             mPaint.setColor(0xFF000000);
             canvas.drawLine(markerX - 2, 0, markerX - 2, height, mPaint);
             canvas.drawLine(markerX + 2, 0, markerX + 2, height, mPaint);
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            return onTouchEvent(event);
         }
 
         @Override

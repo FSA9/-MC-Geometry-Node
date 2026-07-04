@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.port;
 
+import com.mine.geometry_node.core.node.value.ColorValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import net.minecraft.world.phys.Vec3;
 
@@ -22,6 +23,7 @@ public enum PortType {
     ITEM_STACK("物品栈", 0xFFFF5252, null),
     BLOCK("方块", 0xFF8D6E63, null),
     XYZ("XYZ", 0xFF00BCD4, List.of(0.0f, 0.0f, 0.0f)),
+    COLOR("颜色", 0xFFFFD54F, ColorValue.WHITE),
     LIST("列表", 0xFFFF9800, List.of()),
     DICT("字典", 0xFFE67E22, java.util.Map.of()),
     SHOP("商店", 0xFFFFB74D, java.util.Map.of("offers", List.of())),
@@ -114,7 +116,12 @@ public enum PortType {
             return true;
         }
 
-        // 5. 列表聚合 (LIST -> ENTITY)
+        // 5. 新颜色值与旧 ARGB 整数端口互通
+        if ((outputport == COLOR && inputport == INTEGER) || (outputport == INTEGER && inputport == COLOR)) {
+            return true;
+        }
+
+        // 6. 列表聚合 (LIST -> ENTITY)
         // 允许将实体列表连入单个实体端口，由底层动作节点自动拆解执行
         if (outputport == LIST && inputport == ENTITY) {
             return true;
@@ -133,6 +140,7 @@ public enum PortType {
         if (value instanceof Boolean) return BOOLEAN;
         if (value instanceof String) return STRING;
         if (value instanceof RichTextValue) return RICH_TEXT;
+        if (value instanceof ColorValue) return COLOR;
         if (value instanceof net.minecraft.world.entity.Entity) return ENTITY;
         if (value instanceof net.minecraft.world.item.ItemStack) return ITEM_STACK;
         if (value instanceof java.util.List) return LIST;

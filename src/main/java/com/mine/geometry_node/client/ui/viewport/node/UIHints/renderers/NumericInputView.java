@@ -42,12 +42,15 @@ final class NumericInputView extends FrameLayout {
     private static final int COLOR_BG_ACTIVE = 0xFF343B45;
     private static final int COLOR_BORDER = 0xFF333333;
     private static final int COLOR_BORDER_HOVER = 0xFF566070;
-    private static final int COLOR_RANGE = 0x443D6EA8;
+    private static final int COLOR_RANGE = 0x8867A8FF;
     private static final int COLOR_TEXT = UIConstants.CLR_GRAY_LABEL;
+    private static final int COLOR_LABEL = 0xFF9EA7B5;
     private static final int COLOR_ARROW = 0xFF8C95A4;
 
     private static final float INTEGER_DRAG_STEP_DP = 8.0f;
     private static final float ARROW_HIT_WIDTH_DP = 18.0f;
+    private static final float TEXT_PADDING_DP = 8.0f;
+    private static final float ARROW_TEXT_GAP_DP = 10.0f;
 
     private final NumericValueBinding mBinding;
     private final NumericInputSpec mSpec;
@@ -61,6 +64,7 @@ final class NumericInputView extends FrameLayout {
     private Object mStoredValue;
     private Object mDisplayValue;
     private ShapedText mDisplayText;
+    private ShapedText mLabelText;
     private boolean mHovered;
     private boolean mPressed;
     private boolean mDragging;
@@ -71,15 +75,15 @@ final class NumericInputView extends FrameLayout {
     private EditText mEditor;
 
     NumericInputView(Context context, NodeData nodeData, PortDef port, NumericInputSpec spec, EditorContext editorContext) {
-        this(context, new PortNumericBinding(nodeData, port, editorContext), spec);
+        this(context, new PortNumericBinding(nodeData, port, editorContext), spec, inlineLabel(nodeData, port));
     }
 
     static NumericInputView vectorComponent(Context context, NodeData nodeData, PortDef port, int componentIndex,
                                             NumericInputSpec spec, EditorContext editorContext) {
-        return new NumericInputView(context, new VectorComponentBinding(nodeData, port, componentIndex, editorContext), spec);
+        return new NumericInputView(context, new VectorComponentBinding(nodeData, port, componentIndex, editorContext), spec, null);
     }
 
-    private NumericInputView(Context context, NumericValueBinding binding, NumericInputSpec spec) {
+    private NumericInputView(Context context, NumericValueBinding binding, NumericInputSpec spec, String inlineLabel) {
         super(context);
         this.mBinding = binding;
         this.mSpec = spec;
@@ -96,6 +100,7 @@ final class NumericInputView extends FrameLayout {
         mTextPaint.setColor(COLOR_TEXT);
 
         syncFromNode();
+        setInlineLabelText(inlineLabel);
         mHovered = PERSISTED_HOVER.getOrDefault(formatKey(), false);
     }
 
@@ -260,7 +265,7 @@ final class NumericInputView extends FrameLayout {
         EditText editor = new EditText(getContext());
         editor.setText(mSpec.display(mDisplayValue));
         UIHintUtils.applyStandardInputStyle(editor, mSpec.type());
-        editor.setGravity(Gravity.CENTER);
+        editor.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         editor.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus) {
                 closeEditor(true);
@@ -340,11 +345,36 @@ final class NumericInputView extends FrameLayout {
         if (mDisplayText == null) {
             return;
         }
-        mTextPaint.setColor(COLOR_TEXT);
         mTextPaint.getFontMetricsInt(mTextMetrics);
-        float textX = (w - mDisplayText.getAdvance()) * 0.5f;
         float baseline = h * 0.5f - (mTextMetrics.ascent + mTextMetrics.descent) * 0.5f;
-        canvas.drawShapedText(mDisplayText, textX, baseline, mTextPaint);
+
+        float padding = UIUtils.dp2px(TEXT_PADDING_DP);
+        float arrowInset = mHovered && mSpec.showArrows() ? UIUtils.dp2px(ARROW_HIT_WIDTH_DP + ARROW_TEXT_GAP_DP) : padding;
+        float leftTextX = Math.max(padding, arrowInset);
+        float rightBound = Math.max(leftTextX, w - arrowInset);
+        float valueTextWidth = mDisplayText.getAdvance();
+        float valueTextX = mHovered
+                ? leftTextX + Math.max(0.0f, rightBound - leftTextX - valueTextWidth) * 0.5f
+                : rightBound - valueTextWidth;
+        valueTextX = Math.max(leftTextX, Math.min(valueTextX, rightBound - valueTextWidth));
+
+        float minGap = UIUtils.dp2px(8.0f);
+        if (mLabelText != null && leftTextX + mLabelText.getAdvance() + minGap <= valueTextX) {
+            mTextPaint.setColor(COLOR_LABEL);
+            canvas.drawShapedText(mLabelText, leftTextX, baseline, mTextPaint);
+        }
+
+        mTextPaint.setColor(COLOR_TEXT);
+        canvas.drawShapedText(mDisplayText, valueTextX, baseline, mTextPaint);
+    }
+
+    private void setInlineLabelText(String label) {
+        if (label == null || label.isBlank()) {
+            mLabelText = null;
+            return;
+        }
+        String text = label.trim();
+        mLabelText = TextShaper.shapeText(text, 0, text.length(), TextDirectionHeuristics.FIRSTSTRONG_LTR, mTextPaint);
     }
 
     private void drawArrow(Canvas canvas, boolean left, float w, float h) {
@@ -409,6 +439,14 @@ final class NumericInputView extends FrameLayout {
         } else {
             PERSISTED_HOVER.remove(key);
         }
+    }
+
+    private static String inlineLabel(NodeData nodeData, PortDef port) {
+        if (port == null || port.displayName() == null) {
+            return "";
+        }
+        String defaultName = port.displayName().getString();
+        return nodeData != null ? nodeData.getEffectivePortName("inputs", port.id(), defaultName) : defaultName;
     }
 
     private static float clamp01(float value) {

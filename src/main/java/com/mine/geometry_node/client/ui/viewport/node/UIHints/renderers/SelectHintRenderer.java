@@ -12,8 +12,16 @@ import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.port.PortRow;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Canvas;
+import icyllis.modernui.graphics.Paint;
+import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
+import icyllis.modernui.graphics.text.FontMetricsInt;
+import icyllis.modernui.graphics.text.ShapedText;
 import icyllis.modernui.text.Editable;
+import icyllis.modernui.text.TextDirectionHeuristics;
+import icyllis.modernui.text.TextPaint;
+import icyllis.modernui.text.TextShaper;
 import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
@@ -26,13 +34,21 @@ public class SelectHintRenderer implements UIHintRenderer {
     private static final int MENU_WIDTH_DP = 220;
     private static final int MENU_PADDING_DP = 8;
     private static final int SEARCH_HEIGHT_DP = 28;
+    private static final int TITLE_HEIGHT_DP = 22;
     private static final int SEARCH_RADIUS_DP = 5;
     private static final int ITEM_HEIGHT_DP = 24;
     private static final int ITEM_RADIUS_DP = 4;
     private static final int MAX_VISIBLE_ITEMS = 6;
 
+    private static final int COLOR_BUTTON_BG = 0xFF252525;
+    private static final int COLOR_BUTTON_BG_HOVER = 0xFF30343B;
+    private static final int COLOR_BUTTON_BG_ACTIVE = 0xFF343B45;
+    private static final int COLOR_BUTTON_BORDER = 0xFF333333;
+    private static final int COLOR_BUTTON_BORDER_HOVER = 0xFF566070;
     private static final int COLOR_PANEL_BG = 0xFF2B2B2B;
     private static final int COLOR_PANEL_BORDER = 0xFF151515;
+    private static final int COLOR_TITLE_BG = 0xFF242424;
+    private static final int COLOR_TITLE_TEXT = 0xFFBFC7D5;
     private static final int COLOR_SEARCH_BG = 0xFF1E1E1E;
     private static final int COLOR_SEARCH_BORDER = 0xFF3A3A3A;
     private static final int COLOR_NODE_TEXT = 0xFFCCCCCC;
@@ -41,7 +57,7 @@ public class SelectHintRenderer implements UIHintRenderer {
 
     @Override
     public float getRequiredExtraRows(PortRow row) {
-        return 1.0f;
+        return 0.0f;
     }
 
     @Override
@@ -68,22 +84,10 @@ public class SelectHintRenderer implements UIHintRenderer {
             val = UIHintValueBinder.getValue(nodeData, row.leftPort());
         }
 
-        TextView dropdownBtn = new TextView(context);
         String displayVal = val != null ? val.toString() : (resolvedOptions.isEmpty() ? "" : resolvedOptions.get(0));
+        String title = selectTitle(nodeData, row);
 
-        dropdownBtn.setText(displayVal + " ▼");
-        dropdownBtn.setTextColor(UIConstants.CLR_GRAY_LABEL);
-
-        dropdownBtn.setTextSize(0, UIUtils.dp2px(UIConstants.Node.TEXT_SIZE_LABEL));
-        dropdownBtn.setSingleLine(true);
-        dropdownBtn.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        dropdownBtn.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
-
-        ShapeDrawable borderBg = new ShapeDrawable();
-        borderBg.setColor(0x05FFFFFF);
-        borderBg.setCornerRadius(UIUtils.dp2px(ConfigManager.INSTANCE.getConfig().node.cornerRadius));
-        borderBg.setStroke(UIUtils.dp2pxInt(1), 0xFF555555);
-        dropdownBtn.setBackground(borderBg);
+        SelectButtonView dropdownBtn = new SelectButtonView(context, displayVal);
 
         dropdownBtn.setOnClickListener(v -> {
             icyllis.modernui.view.ViewParent parent = v.getParent();
@@ -93,8 +97,8 @@ public class SelectHintRenderer implements UIHintRenderer {
             }
 
             if (parent instanceof InteractionContext interactionContext && !portId.isEmpty()) {
-                DropdownSearchMenu menu = new DropdownSearchMenu(context, resolvedOptions, selectedVal -> {
-                    dropdownBtn.setText(selectedVal + " ▼");
+                DropdownSearchMenu menu = new DropdownSearchMenu(context, title, resolvedOptions, selectedVal -> {
+                    dropdownBtn.setValue(selectedVal);
                     UIHintValueBinder.commit(editorContext, nodeData, portId, selectedVal);
                 });
 
@@ -108,9 +112,6 @@ public class SelectHintRenderer implements UIHintRenderer {
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
         float startX = UIConstants.Node.LABEL_MARGIN_PORT;
         float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
-
-        boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
-        float topOffset = hasLabel ? UIConstants.Node.ROW_HEIGHT : 0;
 
         float inputBoxHeight = UIHintUtils.getStandardInputHeight();
         float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
@@ -128,9 +129,17 @@ public class SelectHintRenderer implements UIHintRenderer {
 
         lp.gravity = Gravity.LEFT | Gravity.TOP;
         lp.leftMargin = UIUtils.dp2pxInt(startX);
-        lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + verticalMargin);
 
         view.setLayoutParams(lp);
+    }
+
+    private static String selectTitle(NodeData nodeData, PortRow row) {
+        if (row == null || row.leftPort() == null || row.leftPort().displayName() == null) {
+            return "";
+        }
+        String defaultName = row.leftPort().displayName().getString();
+        return nodeData != null ? nodeData.getEffectivePortName("inputs", row.leftPort().id(), defaultName) : defaultName;
     }
 
     private static ShapeDrawable createRectDrawable(int color, float radiusDp) {
@@ -146,11 +155,136 @@ public class SelectHintRenderer implements UIHintRenderer {
         return drawable;
     }
 
+    private static class SelectButtonView extends View {
+        private static final float TEXT_PADDING_DP = 8.0f;
+
+        private final Paint mPaint = new Paint();
+        private final RectF mRect = new RectF();
+        private final TextPaint mTextPaint = new TextPaint();
+        private final FontMetricsInt mMetrics = new FontMetricsInt();
+        private ShapedText mValueText;
+        private ShapedText mArrowText;
+        private boolean mHovered;
+        private boolean mPressed;
+
+        SelectButtonView(Context context, String value) {
+            super(context);
+            setWillNotDraw(false);
+            setFocusable(true);
+            setFocusableInTouchMode(true);
+            mPaint.setAntiAlias(true);
+            mTextPaint.setTextAntiAlias(true);
+            mTextPaint.setTextSize(UIUtils.dp2px(UIConstants.Node.TEXT_SIZE_LABEL));
+            mArrowText = shape("▼");
+            setValue(value);
+        }
+
+        void setValue(String value) {
+            String safeValue = value == null ? "" : value;
+            mValueText = shape(safeValue);
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float w = getWidth();
+            float h = getHeight();
+            if (w <= 0 || h <= 0) {
+                return;
+            }
+
+            float radius = UIUtils.dp2px(ConfigManager.INSTANCE.getConfig().node.cornerRadius);
+            float stroke = UIUtils.dp2px(1.0f);
+            mPaint.setStyle(Paint.Style.FILL);
+            mPaint.setColor(mPressed ? COLOR_BUTTON_BG_ACTIVE : (mHovered ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG));
+            mRect.set(0, 0, w, h);
+            canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setStrokeWidth(stroke);
+            mPaint.setColor(mHovered ? COLOR_BUTTON_BORDER_HOVER : COLOR_BUTTON_BORDER);
+            mRect.set(stroke * 0.5f, stroke * 0.5f, w - stroke * 0.5f, h - stroke * 0.5f);
+            canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+
+            mTextPaint.getFontMetricsInt(mMetrics);
+            float baseline = h * 0.5f - (mMetrics.ascent + mMetrics.descent) * 0.5f;
+            float padding = UIUtils.dp2px(TEXT_PADDING_DP);
+            float arrowX = Math.max(padding, w - padding - mArrowText.getAdvance());
+
+            if (mValueText != null) {
+                mTextPaint.setColor(UIConstants.CLR_GRAY_LABEL);
+                canvas.drawShapedText(mValueText, padding, baseline, mTextPaint);
+            }
+
+            mTextPaint.setColor(0xFF8C95A4);
+            canvas.drawShapedText(mArrowText, arrowX, baseline, mTextPaint);
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            return onTouchEvent(event);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                requestFocus();
+                mPressed = true;
+                invalidate();
+                return true;
+            }
+            if (action == MotionEvent.ACTION_UP) {
+                boolean wasPressed = mPressed;
+                mPressed = false;
+                invalidate();
+                if (wasPressed) {
+                    performClick();
+                }
+                return true;
+            }
+            if (action == MotionEvent.ACTION_CANCEL) {
+                mPressed = false;
+                invalidate();
+                return true;
+            }
+            return true;
+        }
+
+        @Override
+        public boolean dispatchGenericMotionEvent(MotionEvent event) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE) {
+                setControlHovered(true);
+                return true;
+            }
+            if (action == MotionEvent.ACTION_HOVER_EXIT) {
+                setControlHovered(false);
+                return true;
+            }
+            return super.dispatchGenericMotionEvent(event);
+        }
+
+        private void setControlHovered(boolean hovered) {
+            if (mHovered == hovered) {
+                return;
+            }
+            mHovered = hovered;
+            invalidate();
+        }
+
+        private ShapedText shape(String text) {
+            return TextShaper.shapeText(text, 0, text.length(), TextDirectionHeuristics.FIRSTSTRONG_LTR, mTextPaint);
+        }
+    }
+
     private static class DropdownSearchMenu extends FrameLayout {
         private LinearLayout mContentLayout;
         private LinearLayout mListContainer;
         private EditText mSearchBox;
         private ScrollView mScrollView;
+        private final String mTitle;
         private final List<String> mOptions;
         private final List<String> mFilteredOptions;
         private final Consumer<String> mOnSelect;
@@ -160,8 +294,9 @@ public class SelectHintRenderer implements UIHintRenderer {
         private InteractionContext mContext;
         private boolean mIsTracking = false;
 
-        public DropdownSearchMenu(Context context, List<String> options, Consumer<String> onSelect) {
+        public DropdownSearchMenu(Context context, String title, List<String> options, Consumer<String> onSelect) {
             super(context);
+            this.mTitle = title;
             this.mOptions = options;
             this.mFilteredOptions = new ArrayList<>(options);
             this.mOnSelect = onSelect;
@@ -185,6 +320,24 @@ public class SelectHintRenderer implements UIHintRenderer {
 
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(MENU_WIDTH_DP), LayoutParams.WRAP_CONTENT);
             mContentLayout.setLayoutParams(lp);
+
+            if (mTitle != null && !mTitle.isBlank()) {
+                TextView titleView = new TextView(context);
+                titleView.setText(mTitle);
+                titleView.setTextSize(0, UIUtils.dp2px(12));
+                titleView.setTextColor(COLOR_TITLE_TEXT);
+                titleView.setSingleLine(true);
+                titleView.setGravity(Gravity.CENTER_VERTICAL);
+                titleView.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+                titleView.setBackground(createRectDrawable(COLOR_TITLE_BG, ITEM_RADIUS_DP));
+
+                LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        UIUtils.dp2pxInt(TITLE_HEIGHT_DP)
+                );
+                titleLp.setMargins(0, 0, 0, UIUtils.dp2pxInt(6));
+                mContentLayout.addView(titleView, titleLp);
+            }
 
             mSearchBox = new EditText(context);
             mSearchBox.setHint("Search...");

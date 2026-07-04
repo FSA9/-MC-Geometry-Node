@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.port;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.value.ColorValue;
 import com.mine.geometry_node.core.node.value.DynamicData;
 import com.mine.geometry_node.core.node.value.ExpressionData;
 import com.mine.geometry_node.core.node.value.RichTextValue;
@@ -49,6 +50,13 @@ public class TypeConverter {
             return type.cast(new ExpressionData(String.valueOf(num.floatValue()), java.util.Map.of()));
         }
 
+        if (type == ColorValue.class) {
+            ColorValue color = ColorValue.from(val);
+            if (color != null) {
+                return type.cast(color);
+            }
+        }
+
         // 1. 完美匹配：本身就是目标类型或其子类
         if (type.isInstance(val)) {
             return type.cast(val);
@@ -60,6 +68,10 @@ public class TypeConverter {
             if (type == Float.class) return type.cast(n.floatValue());
             if (type == Double.class) return type.cast(n.doubleValue());
             if (type == Boolean.class) return type.cast(n.floatValue() > 0);
+        }
+
+        if (val instanceof ColorValue color) {
+            if (type == Integer.class) return type.cast(color.toArgb());
         }
 
         // 3. 布尔转数值
@@ -78,6 +90,7 @@ public class TypeConverter {
         if (type == String.class) {
             return switch (val) {
                 case RichTextValue richText -> type.cast(richText.plain());
+                case ColorValue color -> type.cast(String.format(java.util.Locale.US, "rgba(%.3f, %.3f, %.3f, %.3f)", color.r(), color.g(), color.b(), color.a()));
                 case Entity e -> type.cast(e.getStringUUID());
                 case Vec3 v -> type.cast(String.format(java.util.Locale.US, "[%.2f, %.2f, %.2f]", v.x, v.y, v.z));
                 case BlockPos p ->

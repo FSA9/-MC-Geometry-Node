@@ -22,9 +22,14 @@ import icyllis.modernui.widget.TextView;
 
 public class InputHintRenderer implements UIHintRenderer {
     private static final float EXPAND_BUTTON_WIDTH = 16.0f;
+    private static final float COLOR_SWATCH_WIDTH = 34.0f;
 
     @Override
     public float getRequiredExtraRows(PortRow row) {
+        if (row != null && row.leftPort() != null
+                && (NumericInputSpec.supports(row.leftPort().type()) || row.leftPort().type() == PortType.COLOR)) {
+            return 0.0f;
+        }
         return 1.0f;
     }
 
@@ -41,6 +46,10 @@ public class InputHintRenderer implements UIHintRenderer {
                     NumericInputSpec.from(row, expectedType),
                     editorContext
             );
+        }
+
+        if (expectedType == PortType.COLOR) {
+            return new ColorInputView(context, nodeData, row.leftPort(), editorContext);
         }
 
         Object val = UIHintValueBinder.getValue(nodeData, row.leftPort());
@@ -86,8 +95,11 @@ public class InputHintRenderer implements UIHintRenderer {
         float startX = UIConstants.Node.LABEL_MARGIN_PORT;
         float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
 
+        boolean isColorInput = row.leftPort() != null && row.leftPort().type() == PortType.COLOR;
+        boolean isInlineInput = row.leftPort() != null
+                && (NumericInputSpec.supports(row.leftPort().type()) || isColorInput);
         boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
-        float topOffset = hasLabel ? UIConstants.Node.ROW_HEIGHT : 0;
+        float topOffset = isInlineInput ? 0.0f : (hasLabel ? UIConstants.Node.ROW_HEIGHT : 0.0f);
 
         // 直接调用工具类获取高度
         float inputBoxHeight = UIHintUtils.getStandardInputHeight();
@@ -95,7 +107,7 @@ public class InputHintRenderer implements UIHintRenderer {
         float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
-        int widthPx = UIUtils.dp2pxInt(endX - startX);
+        int widthPx = UIUtils.dp2pxInt(isColorInput ? COLOR_SWATCH_WIDTH : endX - startX);
         int heightPx = UIUtils.dp2pxInt(inputBoxHeight);
 
         if (lp == null) {
@@ -106,7 +118,7 @@ public class InputHintRenderer implements UIHintRenderer {
         }
 
         lp.gravity = Gravity.LEFT | Gravity.TOP;
-        lp.leftMargin = UIUtils.dp2pxInt(startX);
+        lp.leftMargin = UIUtils.dp2pxInt(isColorInput ? endX - COLOR_SWATCH_WIDTH : startX);
         lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
 
         view.setLayoutParams(lp);

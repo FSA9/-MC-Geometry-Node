@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.viewport.node;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.HintRendererFactory;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.NumericInputSpec;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIHintRenderer;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -62,13 +63,17 @@ public class NodeLayoutEngine {
                 if (!port.hidePin()) {
                     layout.inputPortY.put(port.id(), portCenterY);
                 }
-                addLabel(layout, nodeData, port, true, row.uiHint(), currentY, nodeWidth);
+                if (!isInlineControl(nodeData, row)) {
+                    addLabel(layout, nodeData, port, true, row.uiHint(), currentY, nodeWidth);
+                }
             }
 
             if (row.rightPort() != null) {
                 PortDef port = row.rightPort();
                 layout.outputPortY.put(port.id(), portCenterY);
-                addLabel(layout, nodeData, port, false, row.uiHint(), currentY, nodeWidth);
+                if (!isInlineControl(nodeData, row)) {
+                    addLabel(layout, nodeData, port, false, row.uiHint(), currentY, nodeWidth);
+                }
             }
 
             currentY += rowHeight;
@@ -95,6 +100,14 @@ public class NodeLayoutEngine {
             height = UIConstants.Node.ROW_HEIGHT * (row.leftPort() != null || row.rightPort() != null ? 1.0f + extraRows : Math.max(1.0f, extraRows));
         }
         return height;
+    }
+
+    private boolean isInlineControl(NodeData nodeData, PortRow row) {
+        if (row == null || row.leftPort() == null || nodeData.isInputConnected(row.leftPort().id())) {
+            return false;
+        }
+        return row.uiHint() == UIHint.SELECT
+                || (row.uiHint() == UIHint.INPUT && NumericInputSpec.supports(row.leftPort().type()));
     }
 
     private void addLabel(NodeLayout layout, NodeData nodeData, PortDef port, boolean isLeft, UIHint hint, float currentY, int nodeWidth) {

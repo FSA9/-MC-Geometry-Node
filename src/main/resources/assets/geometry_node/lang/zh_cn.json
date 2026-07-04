@@ -39,6 +39,7 @@
 
   "--- 二级菜单: 函数 (Functions) ---": "",
   "geometry_node.menu.functions.graph": "图",
+  "geometry_node.menu.color": "颜色",
   "geometry_node.menu.functions.text": "文本",
   "geometry_node.menu.functions.time": "时间",
   "geometry_node.menu.functions.vector": "向量",
@@ -92,6 +93,7 @@
   "geometry_node.port.X": "X",
   "geometry_node.port.Y": "Y",
   "geometry_node.port.Z": "Z",
+  "geometry_node.port.alpha": "Alpha",
 
   "geometry_node.port.name": "名称",
   "geometry_node.port.title": "标题",
@@ -406,6 +408,8 @@
   "geometry_node.node.trigger_blueprint": "触发蓝图信号",
   "geometry_node.node.function_delay_s": "延迟(秒)",
   "geometry_node.node.function_delay_tick": "延迟(游戏刻)",
+  "geometry_node.node.combine_color": "合并颜色",
+  "geometry_node.node.separate_color": "分离颜色",
   "geometry_node.node.vector_add": "向量相加",
 
   "--- LOGICS ---": "--- 逻辑控制 ---",

@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.value.ColorValue;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
@@ -27,7 +28,7 @@ public class DrawRayBeam extends BaseNode {
                 .addRow(new PortRow(StandardPorts.PITCH.toInput(0.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.YAW.toInput(0.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.DIST.toInput(20.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.COLOR.toInput(-1), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.COLOR.toInput(ColorValue.WHITE), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.RADIUS.toInput(0.1f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(2), null, UIHint.INPUT, null,
                         Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
@@ -49,7 +50,7 @@ public class DrawRayBeam extends BaseNode {
         Float pitchOffset = getInput(context, StandardPorts.PITCH.getId(), Float.class);
         Float yawOffset = getInput(context, StandardPorts.YAW.getId(), Float.class);
         Float length = getInput(context, StandardPorts.DIST.getId(), Float.class);
-        Integer color = getInput(context, StandardPorts.COLOR.getId(), Integer.class);
+        ColorValue color = getInput(context, StandardPorts.COLOR.getId(), ColorValue.class);
         Float radius = getInput(context, StandardPorts.RADIUS.getId(), Float.class);
         Integer duration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
 
@@ -75,7 +76,7 @@ public class DrawRayBeam extends BaseNode {
         extraData.putBoolean("penEnt", penetrateEntities != null ? penetrateEntities : false);
         extraData.putInt("maxEnt", limit != null ? limit : 1);
 
-        context.broadcastDynamicVisual("ray_beam", color != null ? color : -1, duration != null ? duration : 2, new HashMap<>(), new HashMap<>(), extraData);
+        context.broadcastDynamicVisual("ray_beam", color != null ? color.toArgb() : ColorValue.WHITE.toArgb(), duration != null ? duration : 2, new HashMap<>(), new HashMap<>(), extraData);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 }

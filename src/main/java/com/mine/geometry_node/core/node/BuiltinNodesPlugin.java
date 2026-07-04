@@ -26,6 +26,7 @@ import com.mine.geometry_node.core.node.nodes.events.dialogue.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
 import com.mine.geometry_node.core.node.nodes.events.world.*;
 import com.mine.geometry_node.core.node.nodes.functions.graph.*;
+import com.mine.geometry_node.core.node.nodes.functions.color.*;
 import com.mine.geometry_node.core.node.nodes.functions.time.*;
 import com.mine.geometry_node.core.node.nodes.maths.vector.*;
 import com.mine.geometry_node.core.node.nodes.logics.*;
@@ -345,6 +346,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         registry.register("functions/time", new Function_Delay_s());
         registry.register("functions/time", new Function_Delay_tick());
+        registry.register("functions/color", new CombineColor());
+        registry.register("functions/color", new SeparateColor());
 
         // --- LOGICS ---
 //        registry.register("logics", new Contain());

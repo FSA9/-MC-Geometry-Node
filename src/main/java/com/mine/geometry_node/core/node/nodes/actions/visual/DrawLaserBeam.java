@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node.nodes.actions.visual;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.value.ColorValue;
 import com.mine.geometry_node.core.node.value.ExpressionData;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -51,13 +52,13 @@ public class DrawLaserBeam extends BaseNode {
         // 1. 获取基础物理数据 (20FPS的死坐标和死数值)
         Vec3 baseStart = getInput(context, StandardPorts.START_POS.getId(), Vec3.class);
         Vec3 baseEnd = getInput(context, StandardPorts.END_POS.getId(), Vec3.class);
-        Integer color = getInput(context, StandardPorts.COLOR.getId(), Integer.class);
+        ColorValue color = getInput(context, StandardPorts.COLOR.getId(), ColorValue.class);
         Float baseSize = getInput(context, StandardPorts.SIZE_1.getId(), Float.class);
         Integer duration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
 
         if (baseStart == null) baseStart = Vec3.ZERO;
         if (baseEnd == null) baseEnd = Vec3.ZERO;
-        if (color == null) color = 0xFFFFFFFF;
+        int argb = color != null ? color.toArgb() : ColorValue.WHITE.toArgb();
         if (baseSize == null) baseSize = 0.5f;
         if (duration == null) duration = 20;
 
@@ -95,7 +96,7 @@ public class DrawLaserBeam extends BaseNode {
         extraData.putFloat("size", baseSize);
 
         // 6. 广播
-        context.broadcastDynamicVisual("laser_beam", color, duration, expressions, bindings, extraData);
+        context.broadcastDynamicVisual("laser_beam", argb, duration, expressions, bindings, extraData);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }

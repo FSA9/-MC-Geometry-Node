@@ -22,7 +22,6 @@ public enum StandardPorts {
     LIMIT("limit", PortType.INTEGER),
     INDEX("index", PortType.INTEGER),
     TICK("tick", PortType.INTEGER),
-    COLOR("color", PortType.INTEGER),
     COUNT("count", PortType.INTEGER),
     INTERVAL("interval", PortType.INTEGER),
     OFFSET("offset", PortType.INTEGER),
@@ -74,6 +73,7 @@ public enum StandardPorts {
     WIDTH("width", PortType.FLOAT),
     HEIGHT("height", PortType.FLOAT),
     TEXT_OPACITY("text_opacity", PortType.FLOAT),
+    ALPHA("alpha", PortType.FLOAT),
 
 
     // String
@@ -147,6 +147,9 @@ public enum StandardPorts {
     SIZE_3("size_3", PortType.XYZ),
     SPREAD("spread", PortType.XYZ),
     TRANSLATION("translation", PortType.XYZ),
+
+    // Color
+    COLOR("color", PortType.COLOR),
 
     // ANY
 
