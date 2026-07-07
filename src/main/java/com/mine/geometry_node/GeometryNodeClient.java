@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.render.debug.AreaDebugRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.core.command.registry.ModClientCommands;
+import icyllis.modernui.mc.ModernUIMod;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -23,6 +24,8 @@ import net.neoforged.neoforge.common.NeoForge;
 @EventBusSubscriber(modid = GeometryNode.MODID, value = Dist.CLIENT)
 public class GeometryNodeClient {
     public GeometryNodeClient(IEventBus modBus) {
+        disableModernUiDevRegistries();
+
         // 注册按键
         modBus.addListener(KeyBindings::register);
 
@@ -37,6 +40,13 @@ public class GeometryNodeClient {
         ClientVisualManager.init();
 
         ModClientCommands.register();
+    }
+
+    private static void disableModernUiDevRegistries() {
+        if (Boolean.getBoolean("geometry_node.keepModernUiDevRegistries")) {
+            return;
+        }
+        ModernUIMod.sDevelopment = false;
     }
 
     private void onClientTick(ClientTickEvent.Post event) {

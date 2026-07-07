@@ -93,7 +93,7 @@ config="${mod_id}.mixins.json"
     type="required"
     versionRange="${modernui_version_range}"
     ordering="AFTER"
-    side="BOTH"
+    side="CLIENT"
 
 [[dependencies.${mod_id}]]
     modId="architectury"
