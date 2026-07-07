@@ -346,6 +346,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         registry.register("functions/time", new Function_Delay_s());
         registry.register("functions/time", new Function_Delay_tick());
+        registry.register("functions/color", new ColorRamp());
         registry.register("functions/color", new CombineColor());
         registry.register("functions/color", new SeparateColor());
 

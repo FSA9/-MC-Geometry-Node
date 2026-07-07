@@ -155,7 +155,7 @@ public class SelectHintRenderer implements UIHintRenderer {
         return drawable;
     }
 
-    private static class SelectButtonView extends View {
+    static class SelectButtonView extends View {
         private static final float TEXT_PADDING_DP = 8.0f;
 
         private final Paint mPaint = new Paint();
@@ -279,7 +279,7 @@ public class SelectHintRenderer implements UIHintRenderer {
         }
     }
 
-    private static class DropdownSearchMenu extends FrameLayout {
+    static class DropdownSearchMenu extends FrameLayout {
         private LinearLayout mContentLayout;
         private LinearLayout mListContainer;
         private EditText mSearchBox;

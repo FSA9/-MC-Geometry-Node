@@ -14,6 +14,7 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetE
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.PathUtils;
 import com.mine.geometry_node.client.ui.shortcut.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
@@ -196,9 +197,13 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         btnAdd.setOnClickListener(v -> {
             if (!mEnableQuickAccessAdd || mCoordinator == null) return;
             String path = mPathInput.getText().toString().trim();
-            if (!path.isEmpty() && new File(path).isDirectory()) {
-                if (!ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.contains(path)) {
-                    ConfigManager.INSTANCE.update(config -> config.assetBrowser.quickAccessPaths.add(path));
+            File directory = PathUtils.resolveConfigPath(path);
+            if (directory != null && directory.isDirectory()
+                    && !PathUtils.isLocalDraftsPath(path)
+                    && !PathUtils.isRootPath(path)) {
+                String configPath = PathUtils.toConfigPath(directory);
+                if (!ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.contains(configPath)) {
+                    ConfigManager.INSTANCE.update(config -> config.assetBrowser.quickAccessPaths.add(configPath));
                     mCoordinator.notifySidebarChanged();
                 }
             }

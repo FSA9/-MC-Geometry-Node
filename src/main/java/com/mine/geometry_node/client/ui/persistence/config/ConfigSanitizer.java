@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.persistence.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.mine.geometry_node.client.ui.persistence.PathUtils;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -464,17 +465,24 @@ final class ConfigSanitizer {
                 continue;
             }
 
-            File file = new File(path);
+            if (PathUtils.isLocalDraftsPath(path) || PathUtils.isRootPath(path)) {
+                changed = true;
+                continue;
+            }
+
+            File file = PathUtils.resolveConfigPath(path);
             if (!file.exists() || !file.isDirectory()) {
                 changed = true;
                 continue;
             }
 
-            if (normalized.contains(path)) {
+            String normalizedPath = PathUtils.toConfigPath(file);
+            if (normalized.contains(normalizedPath)) {
                 changed = true;
                 continue;
             }
-            normalized.add(path);
+            normalized.add(normalizedPath);
+            changed |= !normalizedPath.equals(path);
         }
         changed |= normalized.size() != source.size();
         return new NormalizeList(normalized, changed);

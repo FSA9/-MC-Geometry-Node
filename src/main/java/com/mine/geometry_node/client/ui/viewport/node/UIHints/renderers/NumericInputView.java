@@ -83,7 +83,7 @@ final class NumericInputView extends FrameLayout {
         return new NumericInputView(context, new VectorComponentBinding(nodeData, port, componentIndex, editorContext), spec, null);
     }
 
-    private NumericInputView(Context context, NumericValueBinding binding, NumericInputSpec spec, String inlineLabel) {
+    NumericInputView(Context context, NumericValueBinding binding, NumericInputSpec spec, String inlineLabel) {
         super(context);
         this.mBinding = binding;
         this.mSpec = spec;
@@ -102,6 +102,12 @@ final class NumericInputView extends FrameLayout {
         syncFromNode();
         setInlineLabelText(inlineLabel);
         mHovered = PERSISTED_HOVER.getOrDefault(formatKey(), false);
+    }
+
+    void refreshFromBinding() {
+        if (mEditor == null) {
+            syncFromNode();
+        }
     }
 
     @Override
@@ -319,11 +325,10 @@ final class NumericInputView extends FrameLayout {
         rememberDraggedFloatFormat(newValue, draggedFormat);
         boolean changed = mBinding.commit(oldValue, newValue);
         if (changed) {
-            mStoredValue = mBinding.currentCommitValue();
-            mCommittedValue = newValue;
-            setDisplayValue(newValue, draggedFormat);
+            syncFromNode();
         } else {
             rememberDraggedFloatFormat(newValue, false);
+            syncFromNode();
         }
     }
 
@@ -459,7 +464,7 @@ final class NumericInputView extends FrameLayout {
         return value;
     }
 
-    private interface NumericValueBinding {
+    interface NumericValueBinding {
         Object currentValue();
         Object currentCommitValue();
         Object defaultValue();

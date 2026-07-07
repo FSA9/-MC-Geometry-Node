@@ -165,6 +165,7 @@ public class GraphController {
         Set<String> validOutputs = new HashSet<>();
         for (PortRow row : newDef.rows()) {
             if (row.leftPort() != null) validInputs.add(row.leftPort().id());
+            if (row.customWidgetId() != null && !row.customWidgetId().isBlank()) validInputs.add(row.customWidgetId());
             if (row.rightPort() != null) validOutputs.add(row.rightPort().id());
         }
 

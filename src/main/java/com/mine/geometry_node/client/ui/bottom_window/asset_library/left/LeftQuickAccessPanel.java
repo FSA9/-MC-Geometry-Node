@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.bottom_window.asset_library.left;
 
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
+import com.mine.geometry_node.client.ui.persistence.PathUtils;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
@@ -78,6 +79,11 @@ public class LeftQuickAccessPanel extends ScrollView {
             mLeftSidebar.addView(createRemoteServerRow(context));
         }
 
+        mLeftSidebar.addView(createSystemQuickAccessRow(context, "本地草稿", PathUtils.getLocalDraftsDir()));
+        for (File root : PathUtils.listRoots()) {
+            mLeftSidebar.addView(createSystemQuickAccessRow(context, displayRoot(root), root));
+        }
+
         for (String pathStr : ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths) {
             mLeftSidebar.addView(createQuickAccessRow(context, pathStr));
         }
@@ -136,15 +142,47 @@ public class LeftQuickAccessPanel extends ScrollView {
         return row;
     }
 
-    private LinearLayout createQuickAccessRow(Context context, String pathStr) {
-        File file = new File(pathStr);
+    private LinearLayout createSystemQuickAccessRow(Context context, String label, File file) {
+        String key = "local:" + pathKey(file);
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        bindRowFeedback(row, "local:" + pathStr, COLOR_LOCAL_NORMAL, COLOR_LOCAL_HOVER, COLOR_LOCAL_PRESSED, COLOR_LOCAL_SELECTED,
+        bindRowFeedback(row, key, COLOR_LOCAL_NORMAL, COLOR_LOCAL_HOVER, COLOR_LOCAL_PRESSED, COLOR_LOCAL_SELECTED,
                 () -> {
-                    mSelectedKey = "local:" + pathStr;
+                    mSelectedKey = key;
                     mCoordinator.dispatchNavigateTo(file);
+                    buildSidebar();
+                });
+
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
+        rowParams.setMargins(0, 0, 0, dp2pxInt(2));
+        row.setLayoutParams(rowParams);
+
+        VectorIconView folderIcon = new VectorIconView(context, VectorIconView.Kind.FOLDER, 0xFFDDAA00);
+        row.addView(folderIcon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+
+        TextView btnPath = UIUtils.createLockedTextView(context, label, TEXT_SIZE_PATH, 0xFFDDDDDD);
+        btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
+        btnPath.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+
+        return row;
+    }
+
+    private LinearLayout createQuickAccessRow(Context context, String pathStr) {
+        File file = PathUtils.resolveConfigPath(pathStr);
+        if (file == null) {
+            file = new File(pathStr);
+        }
+        String key = "local:" + pathKey(file);
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        File targetFile = file;
+        bindRowFeedback(row, key, COLOR_LOCAL_NORMAL, COLOR_LOCAL_HOVER, COLOR_LOCAL_PRESSED, COLOR_LOCAL_SELECTED,
+                () -> {
+                    mSelectedKey = key;
+                    mCoordinator.dispatchNavigateTo(targetFile);
                     buildSidebar();
                 });
 
@@ -185,7 +223,7 @@ public class LeftQuickAccessPanel extends ScrollView {
                             indicatorY = lastChild.getBottom();
                         }
 
-                        int firstQuickAccessChild = mCoordinator.canBrowseRemote() ? 3 : 2;
+                        int firstQuickAccessChild = firstUserQuickAccessChild();
                         for (int i = firstQuickAccessChild; i < mLeftSidebar.getChildCount(); i++) {
                             View child = mLeftSidebar.getChildAt(i);
                             float centerY = child.getTop() + child.getHeight() / 2f;
@@ -205,7 +243,7 @@ public class LeftQuickAccessPanel extends ScrollView {
                         mLeftSidebar.getLocationOnScreen(loc);
                         float dropY = event.getRawY() - loc[1];
 
-                        int firstQuickAccessChild = mCoordinator.canBrowseRemote() ? 3 : 2;
+                        int firstQuickAccessChild = firstUserQuickAccessChild();
                         List<String> currentPaths = ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths;
                         int targetIdx = currentPaths.size() - 1;
                         for (int i = firstQuickAccessChild; i < mLeftSidebar.getChildCount(); i++) {
@@ -284,6 +322,29 @@ public class LeftQuickAccessPanel extends ScrollView {
         row.addView(btnDel, new LinearLayout.LayoutParams(dp2pxInt(ROW_HEIGHT), ViewGroup.LayoutParams.MATCH_PARENT));
 
         return row;
+    }
+
+    private String displayRoot(File root) {
+        if (root == null) return "";
+        String path = root.getPath();
+        return path == null || path.isEmpty() ? root.getAbsolutePath() : path;
+    }
+
+    private String pathKey(File file) {
+        if (file == null) return "";
+        try {
+            return file.getCanonicalPath();
+        } catch (Exception ignored) {
+            return file.getAbsolutePath();
+        }
+    }
+
+    private int firstUserQuickAccessChild() {
+        int fixedRows = 2; // title + favorites
+        if (mCoordinator.canBrowseRemote()) {
+            fixedRows++;
+        }
+        return fixedRows + 1 + PathUtils.listRoots().length;
     }
 
     private void bindRowFeedback(LinearLayout row, String key, int normalColor, int hoverColor, int pressedColor, int selectedColor, Runnable action) {

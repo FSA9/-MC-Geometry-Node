@@ -14,7 +14,7 @@ import java.util.stream.Stream;
 
 public class LocalDraftManager {
     private static Path getDraftFolder() {
-        return Minecraft.getInstance().gameDirectory.toPath().resolve("geometry_nodes").resolve("local_drafts");
+        return PathUtils.getLocalDraftsDir().toPath();
     }
 
     public static void saveDraft(String graphId, String jsonContent) {

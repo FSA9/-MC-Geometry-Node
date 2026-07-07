@@ -74,6 +74,7 @@ public enum StandardPorts {
     HEIGHT("height", PortType.FLOAT),
     TEXT_OPACITY("text_opacity", PortType.FLOAT),
     ALPHA("alpha", PortType.FLOAT),
+    FAC("fac", PortType.FLOAT),
 
 
     // String
