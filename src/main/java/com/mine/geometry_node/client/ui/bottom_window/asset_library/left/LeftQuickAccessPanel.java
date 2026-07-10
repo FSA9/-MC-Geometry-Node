@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.bottom_window.asset_library.left;
 
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
-import com.mine.geometry_node.client.ui.persistence.PathUtils;
+import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
@@ -79,8 +79,8 @@ public class LeftQuickAccessPanel extends ScrollView {
             mLeftSidebar.addView(createRemoteServerRow(context));
         }
 
-        mLeftSidebar.addView(createSystemQuickAccessRow(context, "本地草稿", PathUtils.getLocalDraftsDir()));
-        for (File root : PathUtils.listRoots()) {
+        mLeftSidebar.addView(createSystemQuickAccessRow(context, "本地草稿", AssetBrowserPathPolicy.getLocalDraftsDir()));
+        for (File root : AssetBrowserPathPolicy.listRootDirectories()) {
             mLeftSidebar.addView(createSystemQuickAccessRow(context, displayRoot(root), root));
         }
 
@@ -170,7 +170,7 @@ public class LeftQuickAccessPanel extends ScrollView {
     }
 
     private LinearLayout createQuickAccessRow(Context context, String pathStr) {
-        File file = PathUtils.resolveConfigPath(pathStr);
+        File file = AssetBrowserPathPolicy.resolveConfigPath(pathStr);
         if (file == null) {
             file = new File(pathStr);
         }
@@ -344,7 +344,7 @@ public class LeftQuickAccessPanel extends ScrollView {
         if (mCoordinator.canBrowseRemote()) {
             fixedRows++;
         }
-        return fixedRows + 1 + PathUtils.listRoots().length;
+        return fixedRows + 1 + AssetBrowserPathPolicy.listRootDirectories().length;
     }
 
     private void bindRowFeedback(LinearLayout row, String key, int normalColor, int hoverColor, int pressedColor, int selectedColor, Runnable action) {

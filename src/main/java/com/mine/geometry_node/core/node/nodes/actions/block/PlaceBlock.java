@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -42,7 +43,7 @@ public class PlaceBlock extends BaseNode {
         if (posVec != null && state != null && context.getLevel() instanceof ServerLevel level) {
             BlockPos pos = BlockPos.containing(posVec);
 
-            boolean success = level.setBlock(pos, state, 3);
+            boolean success = level.setBlock(pos, state, Block.UPDATE_ALL);
 
             if (success) {
                 SoundType soundType = state.getSoundType();

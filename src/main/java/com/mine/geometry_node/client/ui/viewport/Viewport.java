@@ -26,8 +26,10 @@ import icyllis.modernui.widget.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class Viewport extends FrameLayout implements InteractionContext {
 
@@ -272,16 +274,53 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override
     public void updateBoxSelection(float uiX, float uiY, float uiW, float uiH) {
         mSelection.setNodes(mNodeLayer != null ? mNodeLayer.findNodeIdsInRect(uiX, uiY, uiW, uiH) : new ArrayList<>());
-        mSelection.clearFrames();
+        mSelection.setFrames(mFrameLayer != null ? mFrameLayer.findFrameIdsInRect(uiX, uiY, uiW, uiH) : new ArrayList<>());
         applySelectionToLayers();
     }
 
-    @Override public void moveSelectedNodes(float uiDx, float uiDy) { if (mNodeLayer != null) mNodeLayer.moveSelectedNodes(uiDx, uiDy); }
     @Override public boolean isSnapToGridEnabled() { return mSnapToGridEnabled; }
     @Override public float getSnapGridSize() { return Math.max(1.0f, ConfigManager.INSTANCE.getConfig().viewport.gridSize); }
-    @Override public boolean hasSelectedNodes() { return !mSelection.nodeIds().isEmpty(); }
+    @Override public boolean hasSelection() { return !mSelection.isEmpty(); }
     @Override public List<NodeVisualAdapter> getSelectedNodeVisuals() { return mNodeLayer != null ? mNodeLayer.getNodeVisuals(mSelection.nodeIds()) : new ArrayList<>(); }
     @Override public void previewFrameMove(String frameId, float totalUiDx, float totalUiDy) { if (mFrameLayer != null) { mFrameLayer.previewFrameMove(frameId, totalUiDx, totalUiDy); invalidate(); } }
+
+    @Override
+    public void previewSelectedElementsMove(float totalUiDx, float totalUiDy) {
+        Set<String> selectedFrameIds = new HashSet<>(mSelection.frameIds());
+        List<String> rootFrameIds = getRootSelectedFrameIds(selectedFrameIds);
+
+        for (String frameId : rootFrameIds) {
+            if (mFrameLayer != null) {
+                mFrameLayer.previewFrameMove(frameId, totalUiDx, totalUiDy);
+            }
+        }
+
+        Set<String> affectedParentFrameIds = new HashSet<>();
+        for (NodeVisualAdapter node : getSelectedNodeVisuals()) {
+            if (isInsideSelectedFrame(node.getParentFrameId(), selectedFrameIds)) {
+                continue;
+            }
+            node.setPreviewPosition(
+                    node.getNodeData().getX() + totalUiDx,
+                    node.getNodeData().getY() + totalUiDy
+            );
+            notifyNodeVisualMoved(node);
+            updateConnectionsForNode(node.getNodeId());
+            if (node.getParentFrameId() != null) {
+                affectedParentFrameIds.add(node.getParentFrameId());
+            }
+        }
+
+        for (String frameId : affectedParentFrameIds) {
+            previewFrameBounds(frameId);
+        }
+        invalidate();
+    }
+
+    @Override
+    public void resetSelectedElementsPreview() {
+        previewSelectedElementsMove(0.0f, 0.0f);
+    }
 
     @Override
     public void cutIntersectingConnections(float lastUiX, float lastUiY, float currentUiX, float currentUiY, InteractionManager.InteractionListener listener) {
@@ -336,6 +375,29 @@ public class Viewport extends FrameLayout implements InteractionContext {
         if (mNodeLayer != null) mNodeLayer.applySelection(mSelection.nodeIds());
         if (mFrameLayer != null) mFrameLayer.applySelection(mSelection.frameIds());
         invalidate();
+    }
+
+    private List<String> getRootSelectedFrameIds(Set<String> selectedFrameIds) {
+        List<String> rootFrameIds = new ArrayList<>();
+        for (String frameId : selectedFrameIds) {
+            FrameVisualAdapter frame = mFrameLayer != null ? mFrameLayer.getFrameVisuals().get(frameId) : null;
+            if (frame != null && !isInsideSelectedFrame(frame.getParentFrameId(), selectedFrameIds)) {
+                rootFrameIds.add(frameId);
+            }
+        }
+        return rootFrameIds;
+    }
+
+    private boolean isInsideSelectedFrame(String frameId, Set<String> selectedFrameIds) {
+        String currentFrameId = frameId;
+        while (currentFrameId != null) {
+            if (selectedFrameIds.contains(currentFrameId)) {
+                return true;
+            }
+            FrameVisualAdapter frame = mFrameLayer != null ? mFrameLayer.getFrameVisuals().get(currentFrameId) : null;
+            currentFrameId = frame != null ? frame.getParentFrameId() : null;
+        }
+        return false;
     }
 
     @Override

@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -18,6 +19,7 @@ public class FillBlock extends BaseNode {
 
     public static final String TYPE_ID = "fill_block";
     private static final int MAX_VOLUME = 32768; // 上限
+    private static final int DIRECT_SET_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -55,7 +57,7 @@ public class FillBlock extends BaseNode {
             for (int x = minX; x <= maxX; x++) {
                 for (int y = minY; y <= maxY; y++) {
                     for (int z = minZ; z <= maxZ; z++) {
-                        level.setBlock(new BlockPos(x, y, z), state, 3);
+                        level.setBlock(new BlockPos(x, y, z), state, DIRECT_SET_FLAGS);
                     }
                 }
             }

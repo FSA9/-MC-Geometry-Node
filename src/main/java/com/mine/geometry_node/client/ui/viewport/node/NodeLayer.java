@@ -155,17 +155,18 @@ public class NodeLayer extends FrameLayout {
         View overlayHost = node.getOverlayHostView();
         boolean visible = canCull && isNodeVisibleUi(node, mTmpVisibleBounds);
         boolean keepMounted = visible || node.isOverlayActive();
-        boolean hasOverlay = overlayHost != null && keepMounted && node.ensureOverlayViews();
-        if (!hasOverlay) {
-            if (overlayHost != null && overlayHost.getParent() == this) removeView(overlayHost);
+        if (overlayHost == null || !keepMounted) {
+            if (overlayHost != null && overlayHost.getParent() == this) {
+                removeView(overlayHost);
+            }
             if (!keepMounted) {
                 node.releaseOverlayViews();
             }
             return;
         }
 
-        if (overlayHost.getParent() != this) {
-            addView(overlayHost);
+        if (node.hasOverlayViews()) {
+            node.ensureOverlayViews();
         }
 
         float scale = mViewport.getCamera().getScale();
@@ -185,12 +186,30 @@ public class NodeLayer extends FrameLayout {
 
         lp.leftMargin = Math.round(mViewport.getCamera().uiToScreenX(node.getUiX()));
         lp.topMargin = Math.round(mViewport.getCamera().uiToScreenY(node.getUiY()));
-        overlayHost.setLayoutParams(lp);
+        if (overlayHost.getParent() != this) {
+            addView(overlayHost, getOverlayHostInsertIndex(node), lp);
+        } else {
+            overlayHost.setLayoutParams(lp);
+        }
         overlayHost.setPivotX(0);
         overlayHost.setPivotY(0);
         overlayHost.setScaleX(scale);
         overlayHost.setScaleY(scale);
         node.onOverlayScaleChanged(scale);
+    }
+
+    private int getOverlayHostInsertIndex(NodeVisualAdapter node) {
+        int nodeIndex = mNodeOrder.indexOf(node);
+        if (nodeIndex <= 0) return 0;
+
+        int insertIndex = 0;
+        for (int i = 0; i < nodeIndex; i++) {
+            View host = mNodeOrder.get(i).getOverlayHostView();
+            if (host != null && host.getParent() == this) {
+                insertIndex++;
+            }
+        }
+        return Math.min(insertIndex, getChildCount());
     }
 
     @Override
@@ -199,7 +218,10 @@ public class NodeLayer extends FrameLayout {
         boolean canCull = prepareVisibleBounds(CULL_PADDING_DP);
         for (NodeVisualAdapter node : mNodeOrder) {
             if (!canCull || isNodeVisibleUi(node, mTmpVisibleBounds)) {
-                node.drawNode(canvas, mViewport.getCamera());
+                View overlayHost = node.getOverlayHostView();
+                if (overlayHost == null || overlayHost.getParent() != this) {
+                    node.drawNode(canvas, mViewport.getCamera());
+                }
             }
         }
     }
@@ -274,25 +296,6 @@ public class NodeLayer extends FrameLayout {
             }
         }
         return selectedNodeIds;
-    }
-
-    public void moveSelectedNodes(float uiDx, float uiDy) {
-        Set<String> affectedFrames = new HashSet<>();
-
-        for (NodeVisualAdapter node : mViewport.getSelectedNodeVisuals()) {
-            node.offsetPreviewPosition(uiDx, uiDy);
-            syncOverlayHost(node);
-            mViewport.updateConnectionsForNode(node.getNodeId());
-
-            if (node.getNodeData().parentFrame != null) {
-                affectedFrames.add(node.getNodeData().parentFrame);
-            }
-        }
-
-        for (String frameId : affectedFrames) {
-            mViewport.previewFrameBounds(frameId);
-        }
-        invalidate();
     }
 
     @Override

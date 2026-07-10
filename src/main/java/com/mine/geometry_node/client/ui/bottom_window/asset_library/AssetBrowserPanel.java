@@ -8,9 +8,9 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.left.LeftQui
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.RightFileBrowserPanel;
+import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.persistence.PathUtils;
 import com.mine.geometry_node.client.ui.window.IToolWindow;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
@@ -59,7 +59,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         mRightPanel = new RightFileBrowserPanel(context, this);
         mMainLayout.addView(mRightPanel, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.8f));
 
-        dispatchNavigateTo(PathUtils.getLocalDraftsDir());
+        dispatchNavigateTo(AssetBrowserPathPolicy.getLocalDraftsDir());
         requestRemoteCapabilities();
     }
 
@@ -104,7 +104,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         FolderPickerDialog dialog = FolderPickerDialog.local(
                 getContext(),
                 "下载到本地",
-                PathUtils.getLocalDraftsDir(),
+                AssetBrowserPathPolicy.getLocalDraftsDir(),
                 targetDirectory -> startDownload(remoteEntries, targetDirectory)
         );
         dialog.showIn(this);

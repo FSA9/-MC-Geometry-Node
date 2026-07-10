@@ -41,7 +41,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         this.mNodeDef = nodeDef;
         this.mOverlayController = new NodeOverlayController(this, nodeData, nodeDef, editorContext, mLayoutEngine);
 
-        setWillNotDraw(true);
+        setWillNotDraw(false);
         setClipChildren(false);
         mPaint.setAntiAlias(true);
 
@@ -135,6 +135,12 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         canvas.scale(camera.getScale(), camera.getScale());
         drawNodeLocal(canvas);
         canvas.restore();
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        drawNodeLocal(canvas);
     }
 
     private void drawNodeLocal(Canvas canvas) {

@@ -29,6 +29,7 @@ public class ViewportMenu extends FrameLayout {
     private static final int MENU_EDGE_MARGIN_DP = 6;
     private static final int SEARCH_HEIGHT_DP = 28;
     private static final int SEARCH_RADIUS_DP = 5;
+    private static final int SEARCH_BOTTOM_MARGIN_DP = 8;
     private static final int ITEM_HEIGHT_DP = 24;
     private static final int ITEM_RADIUS_DP = 4;
     private static final int MAX_LIST_HEIGHT_DP = 320;
@@ -108,7 +109,7 @@ public class ViewportMenu extends FrameLayout {
         });
 
         LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(SEARCH_HEIGHT_DP));
-        searchLp.setMargins(0, 0, 0, UIUtils.dp2pxInt(8));
+        searchLp.setMargins(0, 0, 0, UIUtils.dp2pxInt(SEARCH_BOTTOM_MARGIN_DP));
         mContentLayout.addView(mSearchBox, searchLp);
 
         mScrollView = new ScrollView(context);
@@ -350,11 +351,7 @@ public class ViewportMenu extends FrameLayout {
 
     private void updateScrollHeight() {
         LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) mScrollView.getLayoutParams();
-        if (mListContainer.getChildCount() > 12) {
-            lp.height = UIUtils.dp2pxInt(MAX_LIST_HEIGHT_DP);
-        } else {
-            lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
-        }
+        lp.height = calculateScrollHeight(getAvailableScrollHeightPx(null, 0));
         mScrollView.setLayoutParams(lp);
     }
 
@@ -370,12 +367,18 @@ public class ViewportMenu extends FrameLayout {
         lp.gravity = Gravity.TOP | Gravity.LEFT;
         lp.width = menuWidth;
 
+        LinearLayout.LayoutParams scrollLp = (LinearLayout.LayoutParams) mScrollView.getLayoutParams();
+        scrollLp.height = calculateScrollHeight(getAvailableScrollHeightPx(parent, y));
+        mScrollView.setLayoutParams(scrollLp);
+
         int widthSpec = MeasureSpec.makeMeasureSpec(menuWidth, MeasureSpec.EXACTLY);
         int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
         mContentLayout.measure(widthSpec, heightSpec);
 
         int actualH = mContentLayout.getMeasuredHeight();
-        if (actualH == 0) actualH = UIUtils.dp2pxInt(SEARCH_HEIGHT_DP + MAX_LIST_HEIGHT_DP + MENU_PADDING_DP * 2);
+        if (actualH == 0) {
+            actualH = UIUtils.dp2pxInt(SEARCH_HEIGHT_DP + SEARCH_BOTTOM_MARGIN_DP + MAX_LIST_HEIGHT_DP + MENU_PADDING_DP * 2);
+        }
 
         int edge = UIUtils.dp2pxInt(MENU_EDGE_MARGIN_DP);
         int parentW = parent.getWidth();
@@ -395,6 +398,42 @@ public class ViewportMenu extends FrameLayout {
         lp.leftMargin = Math.max(edge, targetX);
         lp.topMargin = Math.max(edge, targetY);
         mContentLayout.setLayoutParams(lp);
+    }
+
+    private int calculateScrollHeight(int maxAvailableHeightPx) {
+        int listHeight = measureListHeight();
+        if (listHeight <= 0) {
+            int fallbackItems = Math.max(1, mListContainer.getChildCount());
+            listHeight = UIUtils.dp2pxInt(fallbackItems * (ITEM_HEIGHT_DP + 2));
+        }
+
+        int maxListHeight = UIUtils.dp2pxInt(MAX_LIST_HEIGHT_DP);
+        int targetHeight = Math.min(listHeight, maxListHeight);
+        if (maxAvailableHeightPx > 0) {
+            targetHeight = Math.min(targetHeight, maxAvailableHeightPx);
+        }
+        return Math.max(UIUtils.dp2pxInt(ITEM_HEIGHT_DP), targetHeight);
+    }
+
+    private int measureListHeight() {
+        int listWidth = UIUtils.dp2pxInt(MENU_WIDTH_DP - MENU_PADDING_DP * 2);
+        int widthSpec = MeasureSpec.makeMeasureSpec(Math.max(0, listWidth), MeasureSpec.EXACTLY);
+        int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+        mListContainer.measure(widthSpec, heightSpec);
+        return mListContainer.getMeasuredHeight();
+    }
+
+    private int getAvailableScrollHeightPx(ViewGroup parent, float anchorY) {
+        if (parent == null || parent.getHeight() <= 0) {
+            return UIUtils.dp2pxInt(MAX_LIST_HEIGHT_DP);
+        }
+
+        int edge = UIUtils.dp2pxInt(MENU_EDGE_MARGIN_DP);
+        int nonListHeight = UIUtils.dp2pxInt(MENU_PADDING_DP * 2 + SEARCH_HEIGHT_DP + SEARCH_BOTTOM_MARGIN_DP);
+        int belowHeight = parent.getHeight() - (int) anchorY - edge - nonListHeight;
+        int aboveHeight = (int) anchorY - edge - nonListHeight;
+        int availableHeight = Math.max(belowHeight, aboveHeight);
+        return Math.max(UIUtils.dp2pxInt(ITEM_HEIGHT_DP), availableHeight);
     }
 
     private ShapeDrawable createRectDrawable(int color, int radius) {

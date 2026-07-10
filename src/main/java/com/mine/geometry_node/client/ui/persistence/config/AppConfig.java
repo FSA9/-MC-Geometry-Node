@@ -9,6 +9,10 @@ public class AppConfig {
     public NodeConfig node = new NodeConfig();
     public KeyBindingsConfig keyBindings = new KeyBindingsConfig();
 
+    public static AppConfig defaults() {
+        return new AppConfig();
+    }
+
     public static class AssetBrowserConfig {
         public List<String> quickAccessPaths = new ArrayList<>();
         public List<String> favoriteGraphPaths = new ArrayList<>();

@@ -20,7 +20,7 @@ public final class ViewportActionRegistry {
         register(KeyScope.VIEWPORT, ViewportActionId.TOGGLE_SNAP_TO_GRID, "吸附", config -> config.keyBindings.viewport.toggleSnapToGrid, state -> true);
         register(KeyScope.VIEWPORT, ViewportActionId.TOGGLE_GRID_AND_AXIS, "坐标轴", config -> config.keyBindings.viewport.toggleGridAndAxis, state -> true);
         register(KeyScope.VIEWPORT, ViewportActionId.MOVE_SELECTION, "移动", config -> config.keyBindings.viewport.moveSelection,
-                state -> state.isReady() && state.hasSelectedNodes());
+                state -> state.isReady() && state.hasSelection());
         register(KeyScope.VIEWPORT, ViewportActionId.GROUP_INTO_FRAME, "并入图框", config -> config.keyBindings.viewport.groupIntoFrame,
                 state -> state.isReady() && !state.isInsideGroupScope());
         register(KeyScope.VIEWPORT, ViewportActionId.GROUP_INTO_NODE_GROUP, "合并为图组", config -> config.keyBindings.viewport.groupIntoNodeGroup,

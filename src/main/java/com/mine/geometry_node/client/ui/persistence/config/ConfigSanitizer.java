@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.persistence.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mine.geometry_node.client.ui.persistence.PathUtils;
+import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -25,7 +25,7 @@ final class ConfigSanitizer {
     }
 
     static Result fromJson(JsonObject root) {
-        AppConfig defaults = ConfigDefaults.create();
+        AppConfig defaults = AppConfig.defaults();
         AppConfig config = new AppConfig();
         boolean changed = false;
 
@@ -120,10 +120,10 @@ final class ConfigSanitizer {
     }
 
     static Result sanitize(AppConfig config) {
-        if (config == null) return new Result(ConfigDefaults.create(), true);
+        if (config == null) return new Result(AppConfig.defaults(), true);
 
         boolean changed = false;
-        AppConfig defaults = ConfigDefaults.create();
+        AppConfig defaults = AppConfig.defaults();
 
         if (config.assetBrowser == null) {
             config.assetBrowser = defaults.assetBrowser;
@@ -465,18 +465,13 @@ final class ConfigSanitizer {
                 continue;
             }
 
-            if (PathUtils.isLocalDraftsPath(path) || PathUtils.isRootPath(path)) {
+            if (!AssetBrowserPathPolicy.canPersistQuickAccessPath(path)) {
                 changed = true;
                 continue;
             }
 
-            File file = PathUtils.resolveConfigPath(path);
-            if (!file.exists() || !file.isDirectory()) {
-                changed = true;
-                continue;
-            }
-
-            String normalizedPath = PathUtils.toConfigPath(file);
+            File file = AssetBrowserPathPolicy.resolveConfigPath(path);
+            String normalizedPath = AssetBrowserPathPolicy.toConfigPath(file);
             if (normalized.contains(normalizedPath)) {
                 changed = true;
                 continue;

@@ -14,7 +14,7 @@ import java.util.stream.Stream;
 
 public class LocalDraftManager {
     private static Path getDraftFolder() {
-        return PathUtils.getLocalDraftsDir().toPath();
+        return AssetBrowserPathPolicy.getLocalDraftsDir().toPath();
     }
 
     public static void saveDraft(String graphId, String jsonContent) {

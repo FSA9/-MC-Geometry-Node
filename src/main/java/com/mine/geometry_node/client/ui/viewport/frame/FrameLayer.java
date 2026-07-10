@@ -153,6 +153,20 @@ public class FrameLayer extends FrameLayout {
         return target;
     }
 
+    public List<String> findFrameIdsInRect(float uiX, float uiY, float uiW, float uiH) {
+        List<String> selectedFrameIds = new ArrayList<>();
+        float selRight = uiX + uiW;
+        float selBottom = uiY + uiH;
+
+        for (FrameVisualAdapter frame : mFrameOrder) {
+            frame.getLogicalBounds(mTmpFrameBounds);
+            if (mTmpFrameBounds.intersects(uiX, uiY, selRight, selBottom)) {
+                selectedFrameIds.add(frame.getFrameId());
+            }
+        }
+        return selectedFrameIds;
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);

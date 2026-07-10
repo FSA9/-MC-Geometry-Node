@@ -24,7 +24,8 @@ public interface InteractionContext extends ViewportActionState {
 
     NodeVisualAdapter findNodeAt(float uiX, float uiY);
     Viewport.PortInfo findPortAt(float uiX, float uiY);
-    void moveSelectedNodes(float uiDx, float uiDy);
+    void previewSelectedElementsMove(float totalUiDx, float totalUiDy);
+    void resetSelectedElementsPreview();
     boolean isSnapToGridEnabled();
     float getSnapGridSize();
     void updateBoxSelection(float uiX, float uiY, float uiW, float uiH);

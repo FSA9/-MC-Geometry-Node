@@ -14,7 +14,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-public class SetEntityRotation extends BaseNode {
+public class SetEntityRotation extends EntityPassthroughActionNode {
 
     public static final String TYPE_ID = "set_entity_rotation";
 
@@ -22,7 +22,7 @@ public class SetEntityRotation extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.set_entity_rotation"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(), null, UIHint.VECTOR, null, null))
                 .build();
     }

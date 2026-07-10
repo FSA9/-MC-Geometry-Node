@@ -1,0 +1,72 @@
+package com.mine.geometry_node.core.node.nodes.actions.block;
+
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.nodes.NodeType;
+import com.mine.geometry_node.core.node.port.PortDef;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.port.UIHint;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
+
+import java.util.Map;
+
+abstract class AbstractSetBlockIntegerProperty extends BaseNode {
+
+    private final String typeId;
+    private final String portId;
+    private final IntegerProperty property;
+    private final int defaultValue;
+    private final int minValue;
+    private final int maxValue;
+
+    protected AbstractSetBlockIntegerProperty(String typeId, String portId, IntegerProperty property, int defaultValue, int minValue, int maxValue) {
+        this.typeId = typeId;
+        this.portId = portId;
+        this.property = property;
+        this.defaultValue = defaultValue;
+        this.minValue = minValue;
+        this.maxValue = maxValue;
+    }
+
+    @Override
+    public NodeDef getDefaultDefinition() {
+        return NodeDef.builder(typeId, NodeType.ACTION, Component.translatable("geometry_node.node." + typeId))
+                .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.BLOCK_STATE.toInput(), StandardPorts.BLOCK_STATE.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(
+                        PortDef.create(portId, "geometry_node.port." + portId, PortType.INTEGER, defaultValue),
+                        null,
+                        UIHint.INPUT,
+                        null,
+                        Map.of(PortMetaKeys.NUMERIC_MIN, minValue, PortMetaKeys.NUMERIC_MAX, maxValue)
+                ))
+                .build();
+    }
+
+    @Override
+    public ExecutionResult execute(ExecutionContext context) {
+        return next(StandardPorts.FLOW_OUT.getId());
+    }
+
+    @Override
+    public Object compute(ExecutionContext context, String portName) {
+        if (!StandardPorts.BLOCK_STATE.getId().equals(portName)) {
+            return null;
+        }
+
+        BlockState state = getInput(context, StandardPorts.BLOCK_STATE.getId(), BlockState.class);
+        Integer value = getInput(context, portId, Integer.class);
+        if (state == null || value == null) {
+            return state;
+        }
+
+        return BlockPropertySetter.set(state, property, value);
+    }
+}

@@ -68,12 +68,48 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // Actions/Block
         registry.register("actions/block", new BreakBlock());
         registry.register("actions/block", new IgniteBlock());
-        registry.register("actions/block", new SetBlockProperty());
 //        registry.register("actions/block", new UpdateBlock());
         registry.register("actions/block", new FillBlock());
         registry.register("actions/block", new PlaceBlock());
         registry.register("actions/block", new SpawnFallingBlock());
         registry.register("actions/block", new SetBlockState());
+        // actions/block
+        registry.register("actions/block", new SetBlockFacing());
+        registry.register("actions/block", new SetBlockHorizontalFacing());
+        registry.register("actions/block", new SetBlockAxis());
+        registry.register("actions/block", new SetBlockHorizontalAxis());
+        registry.register("actions/block", new SetBlockPowered());
+        registry.register("actions/block", new SetBlockOpen());
+        registry.register("actions/block", new SetBlockLit());
+        registry.register("actions/block", new SetBlockEnabled());
+        registry.register("actions/block", new SetBlockWaterlogged());
+        registry.register("actions/block", new SetBlockAttached());
+        registry.register("actions/block", new SetBlockTriggered());
+        registry.register("actions/block", new SetBlockExtended());
+        registry.register("actions/block", new SetBlockEye());
+        registry.register("actions/block", new SetBlockInWall());
+        registry.register("actions/block", new SetBlockLocked());
+        registry.register("actions/block", new SetBlockPersistent());
+        registry.register("actions/block", new SetBlockSnowy());
+        registry.register("actions/block", new SetBlockDisarmed());
+        registry.register("actions/block", new SetBlockOccupied());
+        registry.register("actions/block", new SetBlockPower());
+        registry.register("actions/block", new SetBlockLevel());
+        registry.register("actions/block", new SetBlockAge());
+        registry.register("actions/block", new SetBlockDistance());
+        registry.register("actions/block", new SetBlockRotation());
+        registry.register("actions/block", new SetBlockDelay());
+        registry.register("actions/block", new SetBlockLayers());
+        registry.register("actions/block", new SetBlockCharges());
+        registry.register("actions/block", new SetBlockHalf());
+        registry.register("actions/block", new SetBlockDoubleBlockHalf());
+        registry.register("actions/block", new SetBlockSlabType());
+        registry.register("actions/block", new SetBlockStairsShape());
+        registry.register("actions/block", new SetBlockAttachFace());
+        registry.register("actions/block", new SetBlockDoorHinge());
+        registry.register("actions/block", new SetBlockComparatorMode());
+        registry.register("actions/block", new SetBlockChestType());
+        registry.register("actions/block", new SetBlockRailShape());
 
         // Actions/Entity
         registry.register("actions/entity", new AddForce());
@@ -218,6 +254,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/entity/attribution", new IsSwimming());
 
         // Data/Type
+        registry.register("data/type", new GetBlockState());
         registry.register("data/type", new GetBlockType());
         registry.register("data/type", new GetDamageType());
         registry.register("data/type", new GetDimension());

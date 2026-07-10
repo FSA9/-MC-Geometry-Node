@@ -29,7 +29,7 @@ public class UIRerouteNode extends FrameLayout implements NodeVisualAdapter {
         super(context);
         this.mNodeData = nodeData;
         this.mNodeDef = nodeDef;
-        setWillNotDraw(true);
+        setWillNotDraw(false);
         mPaint.setAntiAlias(true);
         int sizePx = UIUtils.dp2pxInt(DIAMETER_DP);
         setLayoutParams(new LayoutParams(sizePx, sizePx));
@@ -52,6 +52,12 @@ public class UIRerouteNode extends FrameLayout implements NodeVisualAdapter {
         canvas.scale(camera.getScale(), camera.getScale());
         drawLocal(canvas);
         canvas.restore();
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        drawLocal(canvas);
     }
 
     private void drawLocal(Canvas canvas) {
@@ -93,7 +99,7 @@ public class UIRerouteNode extends FrameLayout implements NodeVisualAdapter {
 
     @Override
     public View getOverlayHostView() {
-        return null;
+        return this;
     }
 
     @Override

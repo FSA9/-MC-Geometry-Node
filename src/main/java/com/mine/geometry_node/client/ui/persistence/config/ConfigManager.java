@@ -24,7 +24,7 @@ public class ConfigManager {
         try {
             JsonObject root = mStore.loadRoot();
             if (root == null || !ConfigSanitizer.looksLikeConfig(root)) {
-                loadedConfig = ConfigDefaults.create();
+                loadedConfig = AppConfig.defaults();
                 shouldSave = true;
                 if (root != null) mStore.delete();
             } else {
@@ -33,7 +33,7 @@ public class ConfigManager {
                 shouldSave = result.changed();
             }
         } catch (Exception ignored) {
-            loadedConfig = ConfigDefaults.create();
+            loadedConfig = AppConfig.defaults();
             shouldSave = true;
             try {
                 mStore.delete();

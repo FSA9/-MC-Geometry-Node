@@ -18,10 +18,6 @@ public class ViewportSelection {
         mSelectedFrameIds.clear();
     }
 
-    public void clearFrames() {
-        mSelectedFrameIds.clear();
-    }
-
     public boolean isEmpty() {
         return mSelectedNodeIds.isEmpty() && mSelectedFrameIds.isEmpty();
     }

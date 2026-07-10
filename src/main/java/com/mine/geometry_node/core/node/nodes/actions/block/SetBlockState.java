@@ -11,16 +11,18 @@ import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
  * 强制设置方块状态。
- * 对应底层的 setBlock 操作，不包含音效和特殊的玩家放置逻辑。
+ * 对应底层的 setBlock 操作，只同步客户端，不包含音效、游戏事件和邻居更新副作用。
  */
 public class SetBlockState extends BaseNode {
 
     public static final String TYPE_ID = "set_block_state";
+    private static final int DIRECT_SET_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -38,7 +40,7 @@ public class SetBlockState extends BaseNode {
 
         if (posVec != null && state != null && context.getLevel() instanceof ServerLevel level) {
             BlockPos pos = BlockPos.containing(posVec);
-            level.setBlock(pos, state, 3);
+            level.setBlock(pos, state, DIRECT_SET_FLAGS);
         }
 
         return next(StandardPorts.FLOW_OUT.getId());

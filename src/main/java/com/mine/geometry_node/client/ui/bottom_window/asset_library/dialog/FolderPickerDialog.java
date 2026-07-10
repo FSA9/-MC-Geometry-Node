@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog;
 
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetPathUtils;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.RightFileBrowserPanel;
-import com.mine.geometry_node.client.ui.persistence.PathUtils;
+import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
@@ -82,7 +82,7 @@ public class FolderPickerDialog extends AssetDialogBase {
             mBrowser.setRemoteDirectoryChangedListener(directory -> mCurrentRemoteDirectory = directory);
             mBrowser.navigateToRemote(mCurrentRemoteDirectory);
         } else {
-            mCurrentLocalDirectory = initialLocalDirectory != null ? initialLocalDirectory : PathUtils.getLocalDraftsDir();
+            mCurrentLocalDirectory = initialLocalDirectory != null ? initialLocalDirectory : AssetBrowserPathPolicy.getLocalDraftsDir();
             if (!mCurrentLocalDirectory.exists()) {
                 mCurrentLocalDirectory.mkdirs();
             }
