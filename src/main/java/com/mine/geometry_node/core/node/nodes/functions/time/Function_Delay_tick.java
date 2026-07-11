@@ -23,7 +23,7 @@ public class Function_Delay_tick extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Float tick = getInput(context, StandardPorts.TIME.getId(), Float.class);
 
-        if (tick > 0) {
+        if (tick != null && tick > 0) {
             long ticks = (long) (tick * 1);
             return ExecutionResult.delay(ticks, StandardPorts.FLOW_OUT.getId());
         }

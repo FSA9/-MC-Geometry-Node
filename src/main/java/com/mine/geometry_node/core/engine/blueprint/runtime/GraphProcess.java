@@ -120,6 +120,30 @@ public class GraphProcess {
 
     public String getGraphId() { return graphId; }
     public RuntimeGraphIndex getIndex() { return index; }
+    @Nullable
+    public Entity getEntity() {
+        return entity != null && !entity.isRemoved() ? entity : null;
+    }
+
+    @Nullable
+    public Object evaluateDataOutput(int nodeId, String portName) {
+        if (this.level == null || portName == null || portName.isBlank()
+                || nodeId < 0 || nodeId >= index.getNodeCount()) {
+            return null;
+        }
+
+        ExecutionThread thread = borrowThread(nodeId, "flow_in");
+        try {
+            return thread.evaluateDataOutput(nodeId, portName);
+        } catch (Exception e) {
+            System.err.println("[GraphVM] Failed to evaluate data output " + portName
+                    + " at node " + index.getIdToString(nodeId));
+            e.printStackTrace();
+            return null;
+        } finally {
+            thread.finishDetachedEvaluation();
+        }
+    }
 
     public void setTickScheduleCallback(@Nullable Runnable callback) {
         this.tickScheduleCallback = callback != null ? callback : () -> {};
@@ -695,6 +719,21 @@ public class GraphProcess {
             // ==========================================
             frameValueCache.put(nodeId, portName, portId, result);
             return result;
+        }
+
+        private Object evaluateDataOutput(int nodeId, String portName) {
+            frameValueCache.beginRootRun();
+            return executeDataNode(nodeId, portName);
+        }
+
+        private void finishDetachedEvaluation() {
+            this.currentFlowId = -1;
+            this.currentEntryPort = "flow_in";
+            this.activeNodeId = -1;
+            this.executionStack.clear();
+            this.state = State.FINISHED;
+            this.parentJoinId = null;
+            recycleIfNeeded();
         }
 
         // ==========================================

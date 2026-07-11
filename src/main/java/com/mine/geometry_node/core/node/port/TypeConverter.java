@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.node.value.ColorValue;
 import com.mine.geometry_node.core.node.value.DynamicData;
 import com.mine.geometry_node.core.node.value.ExpressionData;
 import com.mine.geometry_node.core.node.value.RichTextValue;
+import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -92,6 +93,7 @@ public class TypeConverter {
                 case RichTextValue richText -> type.cast(richText.plain());
                 case ColorValue color -> type.cast(String.format(java.util.Locale.US, "rgba(%.3f, %.3f, %.3f, %.3f)", color.r(), color.g(), color.b(), color.a()));
                 case Entity e -> type.cast(e.getStringUUID());
+                case GeometryValue geometry -> type.cast(geometry.toString());
                 case Vec3 v -> type.cast(String.format(java.util.Locale.US, "[%.2f, %.2f, %.2f]", v.x, v.y, v.z));
                 case BlockPos p ->
                         type.cast(String.format(java.util.Locale.US, "[%d, %d, %d]", p.getX(), p.getY(), p.getZ()));

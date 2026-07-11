@@ -28,6 +28,7 @@ import com.mine.geometry_node.core.node.nodes.events.world.*;
 import com.mine.geometry_node.core.node.nodes.functions.graph.*;
 import com.mine.geometry_node.core.node.nodes.functions.color.*;
 import com.mine.geometry_node.core.node.nodes.functions.time.*;
+import com.mine.geometry_node.core.node.nodes.geometry.*;
 import com.mine.geometry_node.core.node.nodes.maths.vector.*;
 import com.mine.geometry_node.core.node.nodes.logics.*;
 import com.mine.geometry_node.core.node.nodes.maths.*;
@@ -57,6 +58,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/visual", new DrawLaserBeam());
         registry.register("actions/visual", new DrawRayBeam());
         registry.register("actions/visual", new DrawItemVisual());
+
 //        registry.register("actions", new SpawnHitbox());
 
         // Actions/AI
@@ -73,6 +75,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/block", new PlaceBlock());
         registry.register("actions/block", new SpawnFallingBlock());
         registry.register("actions/block", new SetBlockState());
+        registry.register("actions/block", new SetBlocksOnGeometry());
         // actions/block
         registry.register("actions/block", new SetBlockFacing());
         registry.register("actions/block", new SetBlockHorizontalFacing());
@@ -283,6 +286,12 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/value", new IntValue());
         registry.register("data/value", new FloatValue());
         registry.register("data/value", new BoolValue());
+
+        // Geometry
+        registry.register("geometry/mesh", new MeshCube());
+        registry.register("geometry/mesh", new MeshCylinder());
+        registry.register("geometry/mesh", new CreateGeometryDebugMesh());
+        registry.register("geometry/mesh", new DeleteGeometryDebugMesh());
 
         // --- DIALOGUE ---
         registry.register("dialogue", new BeginDialogue());

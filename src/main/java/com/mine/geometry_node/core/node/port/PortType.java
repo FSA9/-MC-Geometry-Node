@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.port;
 
 import com.mine.geometry_node.core.node.value.ColorValue;
+import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import net.minecraft.world.phys.Vec3;
 
@@ -22,6 +23,7 @@ public enum PortType {
     ITEM("物品", 0xFFE91E63, null),
     ITEM_STACK("物品栈", 0xFFFF5252, null),
     BLOCK("方块", 0xFF8D6E63, null),
+    GEOMETRY("几何", 0xFF26A69A, GeometryValue.EMPTY),
     XYZ("XYZ", 0xFF00BCD4, List.of(0.0f, 0.0f, 0.0f)),
     COLOR("颜色", 0xFFFFD54F, ColorValue.WHITE),
     LIST("列表", 0xFFFF9800, List.of()),
@@ -141,6 +143,7 @@ public enum PortType {
         if (value instanceof String) return STRING;
         if (value instanceof RichTextValue) return RICH_TEXT;
         if (value instanceof ColorValue) return COLOR;
+        if (value instanceof GeometryValue) return GEOMETRY;
         if (value instanceof net.minecraft.world.entity.Entity) return ENTITY;
         if (value instanceof net.minecraft.world.item.ItemStack) return ITEM_STACK;
         if (value instanceof java.util.List) return LIST;

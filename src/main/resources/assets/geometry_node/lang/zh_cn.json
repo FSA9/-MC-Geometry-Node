@@ -154,6 +154,7 @@
   "geometry_node.port.direct_source": "直接来源",
 
   "geometry_node.port.block_state": "方块状态",
+  "geometry_node.port.geometry": "几何",
   "geometry_node.port.item": "物品",
   "geometry_node.port.item_stack": "物品对象",
   "geometry_node.port.list": "列表",
@@ -170,6 +171,18 @@
   "geometry_node.port.rotation": "旋转",
   "geometry_node.port.size_3": "三维尺寸",
   "geometry_node.port.velocity": "速度",
+  "geometry_node.port.translation": "平移",
+  "geometry_node.port.vertices": "顶点",
+  "geometry_node.port.vertices_x": "顶点 X",
+  "geometry_node.port.vertices_y": "顶点 Y",
+  "geometry_node.port.vertices_z": "顶点 Z",
+  "geometry_node.port.side_segments": "侧段",
+  "geometry_node.port.fill_segments": "填充段",
+  "geometry_node.port.fill_type": "填充类型",
+  "geometry_node.port.depth": "深度",
+  "geometry_node.port.voxel_mode": "体素模式",
+  "geometry_node.port.max_blocks": "最大方块数",
+  "geometry_node.port.replace_existing": "替换已有",
 
   "geometry_node.port.any_value": "任意",
 
@@ -213,6 +226,7 @@
   "geometry_node.node.fill_block": "填充方块",
   "geometry_node.node.place_block": "设置方块(放置效果)",
   "geometry_node.node.set_block_state": "设置方块状态",
+  "geometry_node.node.set_blocks_on_geometry": "在几何体上设置方块",
   "geometry_node.node.spawn_falling_block": "生成掉落方块",
   "geometry_node.node.set_block_facing": "设置方块朝向",
   "geometry_node.node.set_block_horizontal_facing": "设置方块水平朝向",
@@ -499,6 +513,12 @@
   "geometry_node.node.math_operation": "运算",
   "geometry_node.node.separate_xyz": "分离XYZ",
   "geometry_node.node.combine_xyz": "合并XYZ",
+
+  "--- GEOMETRY ---": "--- 几何 ---",
+  "geometry_node.node.mesh_cube": "网格立方体",
+  "geometry_node.node.mesh_cylinder": "网格柱体",
+  "geometry_node.node.create_geometry_debug_mesh": "创建几何调试网格",
+  "geometry_node.node.delete_geometry_debug_mesh": "删除几何调试网格",
 
 
   "geometry_node.node.get_input_data_type": "获取输入数据类型",

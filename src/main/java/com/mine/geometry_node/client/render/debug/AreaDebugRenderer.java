@@ -16,6 +16,7 @@ public final class AreaDebugRenderer {
     private static final int WHITE = 255;
     private static final int FACE_ALPHA = 38;
     private static final int LINE_ALPHA = 210;
+    private static final float LINE_WIDTH = 2.0f;
     private static final int SPHERE_SEGMENTS = 24;
     private static final int SPHERE_RINGS = 12;
     private static final int CYLINDER_SEGMENTS = 32;
@@ -252,8 +253,14 @@ public final class AreaDebugRenderer {
             ny /= len;
             nz /= len;
         }
-        buffer.addVertex(matrix, x1, y1, z1).setColor(WHITE, WHITE, WHITE, LINE_ALPHA).setNormal(pose, nx, ny, nz);
-        buffer.addVertex(matrix, x2, y2, z2).setColor(WHITE, WHITE, WHITE, LINE_ALPHA).setNormal(pose, nx, ny, nz);
+        buffer.addVertex(matrix, x1, y1, z1)
+                .setColor(WHITE, WHITE, WHITE, LINE_ALPHA)
+                .setNormal(pose, nx, ny, nz)
+                .setLineWidth(LINE_WIDTH);
+        buffer.addVertex(matrix, x2, y2, z2)
+                .setColor(WHITE, WHITE, WHITE, LINE_ALPHA)
+                .setNormal(pose, nx, ny, nz)
+                .setLineWidth(LINE_WIDTH);
     }
 
     private enum CirclePlane {

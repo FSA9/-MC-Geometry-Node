@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.key.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.key.KeyBindings;
 import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.render.debug.AreaDebugRenderer;
+import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.core.command.registry.ModClientCommands;
 import icyllis.modernui.mc.ModernUIMod;
@@ -61,6 +62,7 @@ public class GeometryNodeClient {
 
     private void onRenderLevelStage(RenderLevelStageEvent.AfterTranslucentParticles event) {
         AreaDebugRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
+        GeometryDebugRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
     }
 
     private void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {

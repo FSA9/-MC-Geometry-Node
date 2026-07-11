@@ -16,6 +16,13 @@ public abstract class BaseEventNode extends BaseNode {
     @Override
     @Nullable
     public Object compute(ExecutionContext context, String portName) {
-        return context.getEventData(portName);
+        Object eventValue = context.getEventData(portName);
+        if (eventValue != null) {
+            return eventValue;
+        }
+        if (StandardPorts.ENTITY.getId().equals(portName)) {
+            return context.getEntity();
+        }
+        return null;
     }
 }

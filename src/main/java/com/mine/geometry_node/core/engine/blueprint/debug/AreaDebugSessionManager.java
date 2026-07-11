@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.debug;
 
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketAreaDebugSnapshot;
+import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -23,6 +24,7 @@ import java.util.UUID;
 public final class AreaDebugSessionManager {
     public static final double DEFAULT_RADIUS = 256.0D;
     public static final int DEFAULT_MAX_BOXES = 100;
+    public static final int DEFAULT_MAX_MESHES = 100;
 
     private static final double MIN_RADIUS = 1.0D;
     private static final double MAX_RADIUS = 2048.0D;
@@ -54,6 +56,7 @@ public final class AreaDebugSessionManager {
                 if (session != null) {
                     session.forceRefresh();
                     NetworkHandler.sendToPlayer(player, new PacketAreaDebugSnapshot(true, session.radius, List.of()));
+                    NetworkHandler.sendToPlayer(player, new PacketGeometryDebugSnapshot(true, session.radius, List.of()));
                 }
             }
         });
@@ -74,7 +77,11 @@ public final class AreaDebugSessionManager {
         Session session = new Session(clampedRadius);
         session.forceRefresh();
         SESSIONS.put(player.getUUID(), session);
-        sendSnapshot(player, session, collectSnapshot(player, session));
+        AreaSnapshot areaSnapshot = collectAreaSnapshot(player, session);
+        GeometrySnapshot geometrySnapshot = collectGeometrySnapshot(player, session);
+        sendAreaSnapshot(player, session, areaSnapshot);
+        sendGeometrySnapshot(player, session, geometrySnapshot);
+        updateBaseline(player, session, areaSnapshot, geometrySnapshot);
         player.sendSystemMessage(Component.literal("Area debug enabled. radius=" + formatRadius(clampedRadius)
                 + ", max=" + DEFAULT_MAX_BOXES));
         return 1;
@@ -83,6 +90,7 @@ public final class AreaDebugSessionManager {
     public static int disable(ServerPlayer player, boolean notify) {
         Session removed = SESSIONS.remove(player.getUUID());
         NetworkHandler.sendToPlayer(player, new PacketAreaDebugSnapshot(false, 0.0D, List.of()));
+        NetworkHandler.sendToPlayer(player, new PacketGeometryDebugSnapshot(false, 0.0D, List.of()));
         if (notify) {
             player.sendSystemMessage(Component.literal(removed != null ? "Area debug disabled." : "Area debug is not enabled."));
         }
@@ -112,11 +120,19 @@ public final class AreaDebugSessionManager {
                 continue;
             }
 
-            Snapshot snapshot = collectSnapshot(player, session);
-            if (snapshot.signature != session.lastSignature) {
-                sendSnapshot(player, session, snapshot);
-            } else if (dimensionChanged || moved || dirty) {
-                updateBaseline(player, session, snapshot);
+            AreaSnapshot areaSnapshot = collectAreaSnapshot(player, session);
+            GeometrySnapshot geometrySnapshot = collectGeometrySnapshot(player, session);
+            boolean sent = false;
+            if (areaSnapshot.signature != session.lastAreaSignature) {
+                sendAreaSnapshot(player, session, areaSnapshot);
+                sent = true;
+            }
+            if (geometrySnapshot.signature != session.lastGeometrySignature) {
+                sendGeometrySnapshot(player, session, geometrySnapshot);
+                sent = true;
+            }
+            if (sent || dimensionChanged || moved || dirty) {
+                updateBaseline(player, session, areaSnapshot, geometrySnapshot);
             }
         }
     }
@@ -143,6 +159,22 @@ public final class AreaDebugSessionManager {
         }
     }
 
+    public static void replaceSourceGeometry(ServerLevel level,
+                                             String sourceKey,
+                                             List<GeometryDebugMesh> meshes) {
+        LevelCache cache = LEVEL_CACHES.computeIfAbsent(level, ignored -> new LevelCache());
+        if (cache.geometrySources.replace(sourceKey, meshes)) {
+            dirtyVersion++;
+        }
+    }
+
+    public static void removeSourceGeometry(ServerLevel level, String sourceKey) {
+        LevelCache cache = LEVEL_CACHES.get(level);
+        if (cache != null && cache.geometrySources.remove(sourceKey)) {
+            dirtyVersion++;
+        }
+    }
+
     public static void markDirty() {
         dirtyVersion++;
     }
@@ -159,11 +191,11 @@ public final class AreaDebugSessionManager {
         return "entity:" + level.dimension().identifier() + ":" + entity.getUUID() + ":" + graphId;
     }
 
-    private static Snapshot collectSnapshot(ServerPlayer player, Session session) {
+    private static AreaSnapshot collectAreaSnapshot(ServerPlayer player, Session session) {
         ServerLevel level = player.level();
         LevelCache cache = LEVEL_CACHES.get(level);
         if (cache == null || cache.sources.isEmpty()) {
-            return new Snapshot(List.of(), 1L);
+            return new AreaSnapshot(List.of(), 1L);
         }
 
         long currentTick = level.getGameTime();
@@ -209,7 +241,47 @@ public final class AreaDebugSessionManager {
         }
         signature = signature * 31L + count;
         signature = signature * 31L + Double.doubleToLongBits(session.radius);
-        return new Snapshot(boxes, signature);
+        return new AreaSnapshot(boxes, signature);
+    }
+
+    private static GeometrySnapshot collectGeometrySnapshot(ServerPlayer player, Session session) {
+        ServerLevel level = player.level();
+        LevelCache cache = LEVEL_CACHES.get(level);
+        if (cache == null || cache.geometrySources.isEmpty()) {
+            return new GeometrySnapshot(List.of(), 1L);
+        }
+
+        double radiusSqr = session.radius * session.radius;
+        Vec3 origin = player.position();
+        List<GeometryCandidate> candidates = new ArrayList<>();
+        for (GeometryDebugMeshStore.Source source : cache.geometrySources.sources()) {
+            for (GeometryDebugMesh mesh : source.meshes()) {
+                if (!isCenterChunkLoaded(level, mesh.center())) continue;
+                double distanceSqr = mesh.center().distanceToSqr(origin);
+                if (distanceSqr > radiusSqr) continue;
+                candidates.add(new GeometryCandidate(mesh, distanceSqr));
+            }
+        }
+
+        candidates.sort((left, right) -> {
+            int distanceOrder = Double.compare(left.distanceSqr, right.distanceSqr);
+            if (distanceOrder != 0) return distanceOrder;
+            int idOrder = left.mesh.id().compareTo(right.mesh.id());
+            if (idOrder != 0) return idOrder;
+            return left.mesh.graphId().compareTo(right.mesh.graphId());
+        });
+        int count = Math.min(DEFAULT_MAX_MESHES, candidates.size());
+        List<PacketGeometryDebugSnapshot.Mesh> meshes = new ArrayList<>(count);
+        long signature = 1469598103934665603L;
+        for (int i = 0; i < count; i++) {
+            GeometryDebugMesh mesh = candidates.get(i).mesh;
+            PacketGeometryDebugSnapshot.Mesh packetMesh = toPacketMesh(mesh);
+            meshes.add(packetMesh);
+            signature = mix(signature, packetMesh);
+        }
+        signature = signature * 31L + count;
+        signature = signature * 31L + Double.doubleToLongBits(session.radius);
+        return new GeometrySnapshot(meshes, signature);
     }
 
     private static boolean isCenterChunkLoaded(ServerLevel level, Vec3 center) {
@@ -237,16 +309,39 @@ public final class AreaDebugSessionManager {
         );
     }
 
-    private static void sendSnapshot(ServerPlayer player, Session session, Snapshot snapshot) {
-        NetworkHandler.sendToPlayer(player, new PacketAreaDebugSnapshot(true, session.radius, snapshot.boxes));
-        updateBaseline(player, session, snapshot);
+    private static PacketGeometryDebugSnapshot.Mesh toPacketMesh(GeometryDebugMesh mesh) {
+        Vec3 center = mesh.center();
+        return new PacketGeometryDebugSnapshot.Mesh(
+                mesh.id(),
+                mesh.graphId(),
+                center.x,
+                center.y,
+                center.z,
+                mesh.vertices(),
+                mesh.edges(),
+                mesh.faces()
+        );
     }
 
-    private static void updateBaseline(ServerPlayer player, Session session, Snapshot snapshot) {
+    private static void sendAreaSnapshot(ServerPlayer player, Session session, AreaSnapshot snapshot) {
+        NetworkHandler.sendToPlayer(player, new PacketAreaDebugSnapshot(true, session.radius, snapshot.boxes));
+        session.lastAreaSignature = snapshot.signature;
+    }
+
+    private static void sendGeometrySnapshot(ServerPlayer player, Session session, GeometrySnapshot snapshot) {
+        NetworkHandler.sendToPlayer(player, new PacketGeometryDebugSnapshot(true, session.radius, snapshot.meshes));
+        session.lastGeometrySignature = snapshot.signature;
+    }
+
+    private static void updateBaseline(ServerPlayer player,
+                                       Session session,
+                                       AreaSnapshot areaSnapshot,
+                                       GeometrySnapshot geometrySnapshot) {
         session.lastPosition = player.position();
         session.lastDimension = player.level().dimension();
         session.lastDirtyVersion = dirtyVersion;
-        session.lastSignature = snapshot.signature;
+        session.lastAreaSignature = areaSnapshot.signature;
+        session.lastGeometrySignature = geometrySnapshot.signature;
     }
 
     private static long sourceSignature(List<AreaDebugBox> boxes) {
@@ -283,6 +378,27 @@ public final class AreaDebugSessionManager {
         return mix(signature, Double.doubleToLongBits(box.rotationZ()));
     }
 
+    private static long mix(long signature, PacketGeometryDebugSnapshot.Mesh mesh) {
+        signature = mix(signature, mesh.id().hashCode());
+        signature = mix(signature, mesh.graphId().hashCode());
+        signature = mix(signature, Double.doubleToLongBits(mesh.centerX()));
+        signature = mix(signature, Double.doubleToLongBits(mesh.centerY()));
+        signature = mix(signature, Double.doubleToLongBits(mesh.centerZ()));
+        signature = mix(signature, mesh.vertexCount());
+        signature = mix(signature, mesh.edgeCount());
+        signature = mix(signature, mesh.faceCount());
+        for (float value : mesh.vertices()) {
+            signature = mix(signature, Float.floatToIntBits(value));
+        }
+        for (int value : mesh.edges()) {
+            signature = mix(signature, value);
+        }
+        for (int value : mesh.faces()) {
+            signature = mix(signature, value);
+        }
+        return signature;
+    }
+
     private static long mix(long signature, long value) {
         return (signature ^ value) * 1099511628211L;
     }
@@ -304,11 +420,18 @@ public final class AreaDebugSessionManager {
     private record Candidate(AreaDebugBox box, double distanceSqr) {
     }
 
-    private record Snapshot(List<PacketAreaDebugSnapshot.AreaBox> boxes, long signature) {
+    private record GeometryCandidate(GeometryDebugMesh mesh, double distanceSqr) {
+    }
+
+    private record AreaSnapshot(List<PacketAreaDebugSnapshot.AreaBox> boxes, long signature) {
+    }
+
+    private record GeometrySnapshot(List<PacketGeometryDebugSnapshot.Mesh> meshes, long signature) {
     }
 
     private static final class LevelCache {
         private final Map<String, SourceCache> sources = new HashMap<>();
+        private final GeometryDebugMeshStore geometrySources = new GeometryDebugMeshStore();
     }
 
     private static final class SourceCache {
@@ -328,7 +451,8 @@ public final class AreaDebugSessionManager {
         private Vec3 lastPosition;
         private ResourceKey<Level> lastDimension;
         private long lastDirtyVersion = Long.MIN_VALUE;
-        private long lastSignature = Long.MIN_VALUE;
+        private long lastAreaSignature = Long.MIN_VALUE;
+        private long lastGeometrySignature = Long.MIN_VALUE;
 
         private Session(double radius) {
             this.radius = radius;
@@ -338,7 +462,8 @@ public final class AreaDebugSessionManager {
             lastPosition = null;
             lastDimension = null;
             lastDirtyVersion = Long.MIN_VALUE;
-            lastSignature = Long.MIN_VALUE;
+            lastAreaSignature = Long.MIN_VALUE;
+            lastGeometrySignature = Long.MIN_VALUE;
         }
     }
 }

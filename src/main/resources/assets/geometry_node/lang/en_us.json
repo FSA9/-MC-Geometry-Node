@@ -227,5 +227,11 @@
   "geometry_node.node.area_trigger_event": "Area Trigger Event",
   "geometry_node.node.on_multiblock_built": "On Multiblock Built",
   "geometry_node.node.reroute": "Reroute",
-  "geometry_node.node.on_entity_tick": "123"
+  "geometry_node.node.on_entity_tick": "123",
+  "geometry_node.port.geometry": "Geometry",
+  "geometry_node.port.key": "Key",
+  "geometry_node.port.translation": "Translation",
+  "geometry_node.port.replace_existing": "Replace Existing",
+  "geometry_node.node.create_geometry_debug_mesh": "Create Geometry Debug Mesh",
+  "geometry_node.node.delete_geometry_debug_mesh": "Delete Geometry Debug Mesh"
 }

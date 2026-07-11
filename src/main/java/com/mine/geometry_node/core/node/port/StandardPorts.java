@@ -23,6 +23,13 @@ public enum StandardPorts {
     INDEX("index", PortType.INTEGER),
     TICK("tick", PortType.INTEGER),
     COUNT("count", PortType.INTEGER),
+    VERTICES("vertices", PortType.INTEGER),
+    VERTICES_X("vertices_x", PortType.INTEGER),
+    VERTICES_Y("vertices_y", PortType.INTEGER),
+    VERTICES_Z("vertices_z", PortType.INTEGER),
+    SIDE_SEGMENTS("side_segments", PortType.INTEGER),
+    FILL_SEGMENTS("fill_segments", PortType.INTEGER),
+    MAX_BLOCKS("max_blocks", PortType.INTEGER),
     INTERVAL("interval", PortType.INTEGER),
     OFFSET("offset", PortType.INTEGER),
     TELEPORT_DURATION("teleport_duration", PortType.INTEGER),
@@ -50,6 +57,7 @@ public enum StandardPorts {
     INVISIBLE("invisible", PortType.BOOLEAN),
     CHOICE_VISIBLE("choice_visible", PortType.BOOLEAN),
     CHOICE_ENABLED("choice_enabled", PortType.BOOLEAN),
+    REPLACE_EXISTING("replace_existing", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
@@ -72,6 +80,7 @@ public enum StandardPorts {
     VIEW_RANGE("view_range", PortType.FLOAT),
     WIDTH("width", PortType.FLOAT),
     HEIGHT("height", PortType.FLOAT),
+    DEPTH("depth", PortType.FLOAT),
     TEXT_OPACITY("text_opacity", PortType.FLOAT),
     ALPHA("alpha", PortType.FLOAT),
     FAC("fac", PortType.FLOAT),
@@ -105,6 +114,8 @@ public enum StandardPorts {
     TEMPLATE("template", PortType.STRING),
     STYLE_ID("style_id", PortType.STRING),
     VARIABLE_NAME("variable_name", PortType.STRING),
+    FILL_TYPE("fill_type", PortType.STRING),
+    VOXEL_MODE("voxel_mode", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),
@@ -120,6 +131,9 @@ public enum StandardPorts {
 
     // Block
     BLOCK_STATE("block_state", PortType.BLOCK),
+
+    // Geometry
+    GEOMETRY("geometry", PortType.GEOMETRY),
 
     // Item
     ITEM("item", PortType.ITEM),

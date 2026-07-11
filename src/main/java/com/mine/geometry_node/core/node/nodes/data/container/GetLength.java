@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -48,6 +49,9 @@ public class GetLength extends BaseNode {
         }
         else if (rawValue instanceof Object[] arr) {
             return arr.length; // 原生数组
+        }
+        else if (rawValue instanceof GeometryValue geometry) {
+            return geometry.primitiveCount();
         }
 
         System.err.println("[GetLength] Warning: Unsupported type: " + rawValue.getClass().getSimpleName());

@@ -23,7 +23,7 @@ public class Function_Delay_s extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Float seconds = getInput(context, StandardPorts.TIME.getId(), Float.class);
 
-        if (seconds > 0) {
+        if (seconds != null && seconds > 0) {
             long ticks = (long) (seconds * 20);
             return ExecutionResult.delay(ticks, StandardPorts.FLOW_OUT.getId());
         }
