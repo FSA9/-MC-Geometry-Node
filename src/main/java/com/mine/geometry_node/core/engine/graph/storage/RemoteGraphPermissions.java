@@ -8,11 +8,11 @@ public final class RemoteGraphPermissions {
     }
 
     public static boolean canBrowseRemoteGraphs(ServerPlayer player) {
-        return player != null && player.permissions().hasPermission(Permissions.COMMANDS_MODERATOR);
+        return player != null;
     }
 
     public static boolean canUploadGraphs(ServerPlayer player) {
-        return player != null && player.permissions().hasPermission(Permissions.COMMANDS_ADMIN);
+        return player != null;
     }
 
     public static boolean canCreateRemoteFolders(ServerPlayer player) {
@@ -20,7 +20,7 @@ public final class RemoteGraphPermissions {
     }
 
     public static boolean canDownloadGraphs(ServerPlayer player) {
-        return player != null && player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+        return player != null;
     }
 
     public static boolean canManageGraphs(ServerPlayer player) {

@@ -19,7 +19,6 @@ public class GraphDownloadCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
                 Commands.literal("graph_download")
-                        .requires(source -> source.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER))
                         .then(Commands.argument("graph_id", StringArgumentType.greedyString())
                                 .suggests(ServerCommandUtils.SUGGEST_GRAPHS)
                                 .executes(context -> {
