@@ -24,7 +24,14 @@ public class ForLoop extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
+        String comment = """
+                按整数范围重复执行 loop 分支。
+                min_int 到 max_int 闭区间遍历；min 大于 max 时会倒序遍历。
+                index 输出当前循环索引。
+                tick 大于 0 时跨 tick 调度；completed_policy 可选择是否等待分支完成后再触发 completed。""";
+
         return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.for_loop"))
+                .comment(comment)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.LOOP.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COMPLETED.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.INDEX.toOutput(), UIHint.DEFAULT, null, null))

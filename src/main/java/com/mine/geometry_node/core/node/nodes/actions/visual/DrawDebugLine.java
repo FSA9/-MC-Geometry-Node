@@ -19,7 +19,14 @@ public class DrawDebugLine extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
+        String comment = """
+                绘制一条临时调试直线。
+                start_pos/end_pos 使用世界坐标。
+                color、size_1、tick 控制颜色、粗细和持续时间。
+                只产生视觉效果，不做碰撞、伤害或方块修改。""";
+
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.draw_debug_line"))
+                .comment(comment)
                 // 执行流：输入与输出
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 核心数据端口：使用 PortDef.create 创建具有默认值的自定义语义端口

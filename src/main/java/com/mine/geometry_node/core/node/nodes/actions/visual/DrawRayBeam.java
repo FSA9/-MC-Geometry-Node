@@ -21,7 +21,14 @@ public class DrawRayBeam extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
+        String comment = """
+                从 source_entity 发射一条临时射线光束视觉效果。
+                start_pos 是相对实体的起点偏移，pitch/yaw 是朝向偏移，distance 是长度。
+                穿透选项会随视觉协议发送，用于表现射线被方块或实体截断。
+                不输出命中结果；需要命中数据时使用 Raycast 或 MultiRaycast。""";
+
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.draw_ray_beam"))
+                .comment(comment)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))

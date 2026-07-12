@@ -14,7 +14,13 @@ public class IF extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
+        String comment = """
+                根据布尔输入选择执行分支。
+                bool 为 true 时执行 true 分支。
+                bool 为 false 或空值时执行 false 分支。""";
+
         return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.if_branch"))
+                .comment(comment)
                 .addRow(new PortRow(
                         StandardPorts.FLOW_IN.toExec(),
                         StandardPorts.FLOW_TRUE.toExec(),

@@ -26,7 +26,14 @@ public class MultiRaycast extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
+        String comment = """
+                按 pitch/yaw/distance 执行一次可穿透射线检测。
+                radius 会扩大实体命中范围。
+                可分别控制是否穿透实体、透明方块和实体命中数量上限。
+                输出是否命中、最终射线位置，以及按距离排序的命中实体列表。""";
+
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.multi_raycast"))
+                .comment(comment)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
 
                 // 输出

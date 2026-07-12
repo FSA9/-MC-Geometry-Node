@@ -48,7 +48,14 @@ public class Switch extends BaseNode {
     }
 
     private NodeDef buildDef(int branchCount) {
-        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.switch"));
+        String comment = """
+                根据多个布尔 case 输入分发执行流。
+                每个为 true 的 case 都会触发对应输出分支。
+                如果没有任何 case 为 true，节点直接结束。
+                输出分支数量可动态增加，最多 10 个。""";
+
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.switch"))
+                .comment(comment);
 
         builder.addMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT, MAX_BRANCH_COUNT);
         builder.addRow(new PortRow(

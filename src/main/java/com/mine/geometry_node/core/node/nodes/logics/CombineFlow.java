@@ -46,7 +46,13 @@ public class CombineFlow extends BaseNode {
     }
 
     private NodeDef buildDef(int branchCount) {
-        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.combine_flow"));
+        String comment = """
+                将多个执行流入口合并到一个执行流出口。
+                任意 flow_in 输入触发时，都会继续执行同一个 flow_out。
+                输入分支数量可动态增加，最多 10 个。""";
+
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.combine_flow"))
+                .comment(comment);
         builder.addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, MAX_BRANCH_COUNT);
         builder.addRow(new PortRow(
                 null,

@@ -23,7 +23,14 @@ public class Raycast extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
+        String comment = """
+                从 start_pos 沿 vector 方向执行一次射线检测。
+                distance 控制最大距离，radius 会扩大实体命中范围。
+                输出是否命中、命中位置，以及最近命中的实体。
+                同一次执行中多个输出会复用缓存结果。""";
+
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.raycast"))
+                .comment(comment)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.IS_HIT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))

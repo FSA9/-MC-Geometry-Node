@@ -24,7 +24,14 @@ public class DrawLaserBeam extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
+        String comment = """
+                绘制一条临时激光束视觉效果。
+                可绑定 source_entity 和 target_entity，也可直接使用 start_pos/end_pos。
+                start_pos、end_pos、size_1 支持动态表达式输入。
+                tick 控制持续时间；只产生视觉效果。""";
+
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.draw_laser_beam"))
+                .comment(comment)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 【修复3】：必须在节点定义里暴露出这两个实体输入端口，否则玩家无法连线
                 // 注意：如果你的 StandardPorts 里没有 SOURCE_ENTITY，请去那里注册一下，或者直接用自定义 PortDef

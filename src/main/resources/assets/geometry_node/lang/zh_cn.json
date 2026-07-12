@@ -188,6 +188,10 @@
   "geometry_node.port.replace_existing": "替换已有",
 
   "geometry_node.port.any_value": "任意",
+  "geometry_node.port.tag": "标签",
+  "geometry_node.port.tags": "标签列表",
+  "geometry_node.port.container": "容器",
+  "geometry_node.port.count_mode": "数量模式",
 
   "geometry_node.port.dict": "Dict",
 
@@ -502,6 +506,8 @@
   "--- LOGICS ---": "--- 逻辑控制 ---",
   "geometry_node.node.contain": "包含",
   "geometry_node.node.equal": "等于",
+  "geometry_node.node.has_tag": "拥有标签",
+  "geometry_node.node.get_tags": "获取标签列表",
   "geometry_node.node.for_each_loop": "For Each Loop",
   "geometry_node.node.for_loop": "For Loop",
   "geometry_node.node.if_branch": "If",

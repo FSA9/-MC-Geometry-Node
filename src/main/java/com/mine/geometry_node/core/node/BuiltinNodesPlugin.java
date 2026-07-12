@@ -396,8 +396,10 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("functions/color", new SeparateColor());
 
         // --- LOGICS ---
-//        registry.register("logics", new Contain());
+        registry.register("logics", new Contain());
         registry.register("logics", new Equal());
+        registry.register("logics", new HasTag());
+        registry.register("logics", new GetTags());
         registry.register("logics", new ForEachLoop());
         registry.register("logics", new ForLoop());
         registry.register("logics", new IF());

@@ -30,7 +30,14 @@ public class DrawItemVisual extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
+        String comment = """
+                绘制一个临时物品视觉效果。
+                source_entity 为空时使用世界空间偏移；不为空时跟随该实体。
+                item_stack 和显示模式决定渲染的物品与姿态。
+                translation、rotation、size_3 支持动态表达式；tick 控制持续时间。""";
+
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.draw_item_visual"))
+                .comment(comment)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 绑定核心实体
                 .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))

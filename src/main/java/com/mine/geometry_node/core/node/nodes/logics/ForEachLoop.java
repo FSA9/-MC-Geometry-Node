@@ -26,7 +26,14 @@ public class ForEachLoop extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
+        String comment = """
+                遍历列表并重复执行 loop 分支。
+                index 输出当前下标，any_value 输出当前元素。
+                limit 大于 0 时限制最大遍历数量。
+                tick 大于 0 时跨 tick 调度；completed_policy 可选择是否等待分支完成后再触发 completed。""";
+
         return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.for_each_loop"))
+                .comment(comment)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.LOOP.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COMPLETED.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.INDEX.toOutput(), UIHint.DEFAULT, null, null))
