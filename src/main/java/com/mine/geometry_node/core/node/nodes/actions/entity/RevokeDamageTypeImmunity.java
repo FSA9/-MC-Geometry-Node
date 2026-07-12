@@ -25,8 +25,9 @@ public class RevokeDamageTypeImmunity extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.revoke_damage_type_immunity"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.DAMAGE_TYPE.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        StandardPorts.STRING.toInput(),
+                        StandardPorts.STRING.toInput().hiddenPin(),
                         null,
                         UIHint.SELECT,
                         null,
@@ -38,7 +39,11 @@ public class RevokeDamageTypeImmunity extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        String damageType = getInput(context, StandardPorts.STRING.getId(), String.class);
+        String damageType = getInput(context, StandardPorts.DAMAGE_TYPE.getId(), String.class);
+
+        if (damageType == null || damageType.isEmpty()) {
+            damageType = getInput(context, StandardPorts.STRING.getId(), String.class);
+        }
 
         if (damageType != null && !damageType.isEmpty() && !entities.isEmpty()) {
             for (Entity entity : entities) {

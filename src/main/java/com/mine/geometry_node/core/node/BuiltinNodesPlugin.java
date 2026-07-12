@@ -376,10 +376,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/player", new OnPlayerWakeUp());
         registry.register("events/player", new OnPlayerKeyEvent());
 
-        // Events/Server
-//        registry.register("events/server", new OnServerTick());
-//        registry.register("events/server", new OnWorldTick());
-
         // Events/World
         registry.register("events/world", new OnChunkLoad());
         registry.register("events/world", new OnChunkUnload());

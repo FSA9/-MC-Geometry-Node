@@ -4,9 +4,11 @@ import com.mine.geometry_node.GeometryNode;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -21,19 +23,22 @@ public class EntityImmunityAttachment {
     // ==========================================
 
     public void grant(String damageTypeId) {
-        if (damageTypeId != null && !damageTypeId.isBlank()) {
-            immunities.add(damageTypeId);
+        String key = normalizeDamageTypeId(damageTypeId);
+        if (!key.isEmpty()) {
+            immunities.add(key);
         }
     }
 
     public void revoke(String damageTypeId) {
-        if (damageTypeId != null) {
-            immunities.remove(damageTypeId);
+        String key = normalizeDamageTypeId(damageTypeId);
+        if (!key.isEmpty()) {
+            immunities.remove(key);
         }
     }
 
     public boolean has(String damageTypeId) {
-        return damageTypeId != null && immunities.contains(damageTypeId);
+        String key = normalizeDamageTypeId(damageTypeId);
+        return !key.isEmpty() && immunities.contains(key);
     }
 
     // ==========================================
@@ -51,9 +56,9 @@ public class EntityImmunityAttachment {
     public void load(ListTag tag, HolderLookup.Provider provider) {
         immunities.clear();
         for (int i = 0; i < tag.size(); i++) {
-            String damageTypeId = tag.getStringOr(i, "");
-            if (!damageTypeId.isEmpty()) {
-                immunities.add(damageTypeId);
+            String key = normalizeDamageTypeId(tag.getStringOr(i, ""));
+            if (!key.isEmpty()) {
+                immunities.add(key);
             }
         }
     }
@@ -79,5 +84,24 @@ public class EntityImmunityAttachment {
             return entity.getData(GeometryNode.IMMUNITY_ATTACHMENT).has(damageTypeId);
         }
         return false;
+    }
+
+    public static String damageTypeId(DamageSource source) {
+        if (source == null) {
+            return "";
+        }
+        return source.typeHolder()
+                .unwrapKey()
+                .map(key -> key.identifier().toString())
+                .orElse("");
+    }
+
+    private static String normalizeDamageTypeId(String damageTypeId) {
+        if (damageTypeId == null) {
+            return "";
+        }
+
+        String key = damageTypeId.trim().toLowerCase(Locale.ROOT);
+        return key.contains(":") ? key : "";
     }
 }

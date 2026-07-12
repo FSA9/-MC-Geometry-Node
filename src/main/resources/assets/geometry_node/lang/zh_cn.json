@@ -471,8 +471,6 @@
   "geometry_node.node.on_player_toggle_sneak": "当玩家切换潜行时",
   "geometry_node.node.on_player_toggle_sprint": "当玩家切换疾跑时",
   "geometry_node.node.on_player_wake_up": "当玩家醒来时",
-  "geometry_node.node.on_server_tick": "服务器逻辑刻(Tick)",
-  "geometry_node.node.on_world_tick": "世界逻辑刻(Tick)",
   "geometry_node.node.on_anvil_repair": "当铁砧修复物品时",
   "geometry_node.node.on_block_update": "当方块更新时",
   "geometry_node.node.on_chunk_load": "当区块加载时",

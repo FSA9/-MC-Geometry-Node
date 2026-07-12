@@ -49,7 +49,7 @@ public class EntityDispatcher {
                 ServerLevel serverLevel = (ServerLevel) entity.level();
                 Entity attacker = source.getEntity();
                 Entity directSource = source.getDirectEntity();
-                String damageTypeId = source.getMsgId();
+                String damageTypeId = EntityImmunityAttachment.damageTypeId(source);
 
                 if (EntityImmunityAttachment.hasImmunity(entity, damageTypeId)) {
                     return EventResult.interruptFalse();
@@ -82,7 +82,7 @@ public class EntityDispatcher {
                 ServerLevel serverLevel = (ServerLevel) entity.level();
                 Entity attacker = source.getEntity();
                 Entity directSource = source.getDirectEntity();
-                String damageTypeId = source.getMsgId();
+                String damageTypeId = EntityImmunityAttachment.damageTypeId(source);
 
                 GraphEngine.dispatchEvent(serverLevel, entity, OnEntityDeath.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), entity,
