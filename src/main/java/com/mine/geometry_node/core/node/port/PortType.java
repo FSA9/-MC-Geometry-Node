@@ -15,6 +15,7 @@ public enum PortType {
     EXECUTION("执行", 0xFFFFFFFF, null),
 
     INTEGER("整数", 0xFF4A90E2, 0),
+    LONG("长整数", 0xFF3F7DC2, 0L),
     FLOAT("浮点数", 0xFF50C878, 0.0f),
     BOOLEAN("布尔", 0xFFE74C3C, false),
     STRING("字符串", 0xFF9B59B6, ""),
@@ -89,14 +90,14 @@ public enum PortType {
 
         // --- 隐式类型转换白名单 ---
 
-        // 1. 基础三剑客互转 (INT, FLOAT, BOOLEAN)
-        boolean isOutMath = (outputport == INTEGER || outputport == FLOAT || outputport == BOOLEAN);
-        boolean isInMath  = (inputport == INTEGER || inputport == FLOAT || inputport == BOOLEAN);
+        // 1. 基础数值/布尔互转
+        boolean isOutMath = (outputport == INTEGER || outputport == LONG || outputport == FLOAT || outputport == BOOLEAN);
+        boolean isInMath  = (inputport == INTEGER || inputport == LONG || inputport == FLOAT || inputport == BOOLEAN);
         if (isOutMath && isInMath) return true;
 
         // 2. 万物皆可转STRING
         if (inputport == STRING) {
-            if (outputport == INTEGER || outputport == FLOAT || outputport == BOOLEAN ||
+            if (outputport == INTEGER || outputport == LONG || outputport == FLOAT || outputport == BOOLEAN ||
                     outputport == RICH_TEXT || outputport == ENTITY || outputport == BLOCK || outputport == XYZ ||
                     outputport == ITEM || outputport == LIST || outputport == DICT || outputport == SHOP) {
                 return true;
@@ -110,7 +111,7 @@ public enum PortType {
             if (inputport == BLOCK)  return true; // 字符串尝试解析为方块 Registry ID
             if (inputport == ITEM)   return true; // 字符串尝试解析为物品 Registry ID
             if (inputport == BOOLEAN) return true; // 字符串尝试解析为 "true"/"false"
-            if (inputport == INTEGER || inputport == FLOAT) return true;
+            if (inputport == INTEGER || inputport == LONG || inputport == FLOAT) return true;
         }
 
         // 4. 富文本可降级为字符串
@@ -138,6 +139,7 @@ public enum PortType {
     public static PortType getTypeOf(Object value) {
         if (value == null) return ANY;
         if (value instanceof Integer) return INTEGER;
+        if (value instanceof Long) return LONG;
         if (value instanceof Float || value instanceof Double) return FLOAT;
         if (value instanceof Boolean) return BOOLEAN;
         if (value instanceof String) return STRING;

@@ -24,6 +24,7 @@ public enum StandardPorts {
     TICK("tick", PortType.INTEGER),
     COUNT("count", PortType.INTEGER),
     VERTICES("vertices", PortType.INTEGER),
+    RINGS("rings", PortType.INTEGER),
     VERTICES_X("vertices_x", PortType.INTEGER),
     VERTICES_Y("vertices_y", PortType.INTEGER),
     VERTICES_Z("vertices_z", PortType.INTEGER),
@@ -39,6 +40,10 @@ public enum StandardPorts {
     GLOW_COLOR("glow_color", PortType.INTEGER),
     TEXT_LINE_WIDTH("text_line_width", PortType.INTEGER),
     BACKGROUND_COLOR("background_color", PortType.INTEGER),
+
+    // Long
+    GAME_TIME("game_time", PortType.LONG),
+    WORLD_TIME("world_time", PortType.LONG),
 
     // Bool
     BOOL("bool", PortType.BOOLEAN),
@@ -93,6 +98,7 @@ public enum StandardPorts {
     TYPE("type", PortType.STRING),
     GAMEMODE("gamemode", PortType.STRING),
     SORT("sort", PortType.STRING),
+    SHAPE("shape", PortType.STRING),
     TAG("tag", PortType.STRING),
     TEAM("team", PortType.STRING),
     PARTICLE("particle", PortType.STRING),

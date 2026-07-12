@@ -228,6 +228,10 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data", new SetScopeAttribute());
         registry.register("data", new IsKeyPressed());
 
+        // Data/World
+        registry.register("data/world", new GetGameTime());
+        registry.register("data/world", new GetWorldTime());
+
         // Data/Entity
         registry.register("data/entity", new GetEntitiesByRadius());
         registry.register("data/entity", new GetEntitiesbyRotationBox());
@@ -288,8 +292,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/value", new BoolValue());
 
         // Geometry
-        registry.register("geometry/mesh", new MeshCube());
-        registry.register("geometry/mesh", new MeshCylinder());
+        registry.register("geometry/mesh", new CreateMesh());
         registry.register("geometry/mesh", new CreateGeometryDebugMesh());
         registry.register("geometry/mesh", new DeleteGeometryDebugMesh());
 

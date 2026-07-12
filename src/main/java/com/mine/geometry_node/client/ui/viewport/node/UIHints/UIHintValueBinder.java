@@ -46,6 +46,9 @@ public final class UIHintValueBinder {
             if (expectedType == PortType.INTEGER) {
                 return Integer.parseInt(safeText);
             }
+            if (expectedType == PortType.LONG) {
+                return Long.parseLong(safeText);
+            }
             if (expectedType == PortType.FLOAT) {
                 return Float.parseFloat(safeText);
             }
@@ -56,6 +59,6 @@ public final class UIHintValueBinder {
     }
 
     public static boolean requiresNumericValue(PortType expectedType) {
-        return expectedType == PortType.INTEGER || expectedType == PortType.FLOAT;
+        return expectedType == PortType.INTEGER || expectedType == PortType.LONG || expectedType == PortType.FLOAT;
     }
 }

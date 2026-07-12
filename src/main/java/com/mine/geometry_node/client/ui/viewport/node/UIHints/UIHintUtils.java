@@ -35,7 +35,7 @@ public class UIHintUtils {
 
         et.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
 
-        if (expectedType == PortType.INTEGER) {
+        if (expectedType == PortType.INTEGER || expectedType == PortType.LONG) {
             et.addTextChangedListener(createRegexWatcher(et, "^-?\\d*$"));
         } else if (expectedType == PortType.FLOAT || expectedType == PortType.XYZ) {
             et.addTextChangedListener(createRegexWatcher(et, "^-?\\d*\\.?\\d*$"));

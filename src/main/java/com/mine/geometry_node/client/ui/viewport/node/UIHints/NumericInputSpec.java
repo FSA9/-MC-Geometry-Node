@@ -21,12 +21,13 @@ public record NumericInputSpec(
     private static final int DEFAULT_FLOAT_DECIMALS = 3;
 
     public static boolean supports(PortType type) {
-        return type == PortType.INTEGER || type == PortType.FLOAT;
+        return type == PortType.INTEGER || type == PortType.LONG || type == PortType.FLOAT;
     }
 
     public static NumericInputSpec from(PortRow row, PortType type) {
-        double defaultStep = type == PortType.INTEGER ? 1.0d : DEFAULT_FLOAT_STEP;
-        int defaultDecimals = type == PortType.INTEGER ? 0 : DEFAULT_FLOAT_DECIMALS;
+        boolean wholeNumber = type == PortType.INTEGER || type == PortType.LONG;
+        double defaultStep = wholeNumber ? 1.0d : DEFAULT_FLOAT_STEP;
+        int defaultDecimals = wholeNumber ? 0 : DEFAULT_FLOAT_DECIMALS;
         double step = Math.abs(hintNumber(row, PortMetaKeys.NUMERIC_STEP, defaultStep).doubleValue());
         if (step <= 0.0d || Double.isNaN(step) || Double.isInfinite(step)) {
             step = defaultStep;
@@ -74,6 +75,9 @@ public record NumericInputSpec(
         if (type == PortType.INTEGER) {
             return (int) Math.round(clamped);
         }
+        if (type == PortType.LONG) {
+            return Math.round(clamped);
+        }
         return (float) roundToDecimals(clamped, decimals);
     }
 
@@ -89,6 +93,9 @@ public record NumericInputSpec(
         if (type == PortType.INTEGER && value instanceof Number number) {
             return String.valueOf(number.intValue());
         }
+        if (type == PortType.LONG && value instanceof Number number) {
+            return String.valueOf(number.longValue());
+        }
         return value.toString();
     }
 
@@ -98,6 +105,9 @@ public record NumericInputSpec(
         }
         if (type == PortType.INTEGER && value instanceof Number number) {
             return String.valueOf(number.intValue());
+        }
+        if (type == PortType.LONG && value instanceof Number number) {
+            return String.valueOf(number.longValue());
         }
         if (value instanceof Number number) {
             return String.format(Locale.US, "%." + decimals + "f", number.doubleValue());
@@ -116,6 +126,9 @@ public record NumericInputSpec(
     private Object coerce(double value) {
         if (type == PortType.INTEGER) {
             return (int) Math.round(value);
+        }
+        if (type == PortType.LONG) {
+            return Math.round(value);
         }
         return (float) value;
     }

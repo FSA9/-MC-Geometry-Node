@@ -17,9 +17,9 @@ public class SetScopeAttribute extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.set_scope_attribute"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.SCOPE.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.NAME.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.ANY_VALUE.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.SCOPE.toInput(), StandardPorts.SCOPE.toOutput(), UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.NAME.toInput(), StandardPorts.NAME.toOutput(), UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.ANY_VALUE.toInput(), StandardPorts.ANY_VALUE.toOutput(), UIHint.INPUT, null, null))
                 .build();
     }
 
@@ -28,6 +28,9 @@ public class SetScopeAttribute extends BaseNode {
         String scopeId = getInput(context, StandardPorts.SCOPE.getId(), String.class);
         String attrName = getInput(context, StandardPorts.NAME.getId(), String.class);
         Object attrValue = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
+        context.setTempData(tempKey(context, StandardPorts.SCOPE.getId()), scopeId);
+        context.setTempData(tempKey(context, StandardPorts.NAME.getId()), attrName);
+        context.setTempData(tempKey(context, StandardPorts.ANY_VALUE.getId()), attrValue);
 
         if (scopeId != null && !scopeId.trim().isEmpty() && attrName != null && !attrName.trim().isEmpty()) {
             PersistentAttributeTarget target = "GLOBAL".equals(scopeId)
@@ -37,5 +40,19 @@ public class SetScopeAttribute extends BaseNode {
         }
 
         return next(StandardPorts.FLOW_OUT.getId());
+    }
+
+    @Override
+    public Object compute(ExecutionContext context, String portName) {
+        if (StandardPorts.SCOPE.getId().equals(portName)
+                || StandardPorts.NAME.getId().equals(portName)
+                || StandardPorts.ANY_VALUE.getId().equals(portName)) {
+            return context.getTempData(tempKey(context, portName));
+        }
+        return null;
+    }
+
+    private String tempKey(ExecutionContext context, String portName) {
+        return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + portName;
     }
 }

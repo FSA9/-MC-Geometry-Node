@@ -43,6 +43,8 @@
   "geometry_node.port.int": "Integer",
   "geometry_node.port.index": "Index",
   "geometry_node.port.tick": "Tick",
+  "geometry_node.port.game_time": "Game Time",
+  "geometry_node.port.world_time": "World Time",
   "geometry_node.port.color": "Color",
 
   "geometry_node.port.bool": "Boolean",
@@ -232,6 +234,18 @@
   "geometry_node.port.key": "Key",
   "geometry_node.port.translation": "Translation",
   "geometry_node.port.replace_existing": "Replace Existing",
+  "geometry_node.port.vertices": "Vertices",
+  "geometry_node.port.vertices_x": "Vertices X",
+  "geometry_node.port.vertices_y": "Vertices Y",
+  "geometry_node.port.vertices_z": "Vertices Z",
+  "geometry_node.port.rings": "Rings",
+  "geometry_node.port.side_segments": "Side Segments",
+  "geometry_node.port.fill_segments": "Fill Segments",
+  "geometry_node.port.fill_type": "Fill Type",
+  "geometry_node.port.depth": "Depth",
+  "geometry_node.node.get_game_time": "Get Game Time",
+  "geometry_node.node.get_world_time": "Get World Time",
+  "geometry_node.node.create_mesh": "Create Mesh",
   "geometry_node.node.create_geometry_debug_mesh": "Create Geometry Debug Mesh",
   "geometry_node.node.delete_geometry_debug_mesh": "Delete Geometry Debug Mesh"
 }

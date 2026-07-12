@@ -68,6 +68,8 @@
   "geometry_node.port.int": "Int",
   "geometry_node.port.index": "索引",
   "geometry_node.port.tick": "刻",
+  "geometry_node.port.game_time": "底层游戏时间",
+  "geometry_node.port.world_time": "世界时间",
   "geometry_node.port.color": "颜色",
 
   "geometry_node.port.bool": "Bool",
@@ -173,6 +175,7 @@
   "geometry_node.port.velocity": "速度",
   "geometry_node.port.translation": "平移",
   "geometry_node.port.vertices": "顶点",
+  "geometry_node.port.rings": "环数",
   "geometry_node.port.vertices_x": "顶点 X",
   "geometry_node.port.vertices_y": "顶点 Y",
   "geometry_node.port.vertices_z": "顶点 Z",
@@ -515,8 +518,9 @@
   "geometry_node.node.combine_xyz": "合并XYZ",
 
   "--- GEOMETRY ---": "--- 几何 ---",
-  "geometry_node.node.mesh_cube": "网格立方体",
-  "geometry_node.node.mesh_cylinder": "网格柱体",
+  "geometry_node.node.get_game_time": "获取底层游戏时间",
+  "geometry_node.node.get_world_time": "获取世界时间",
+  "geometry_node.node.create_mesh": "创建网格",
   "geometry_node.node.create_geometry_debug_mesh": "创建几何调试网格",
   "geometry_node.node.delete_geometry_debug_mesh": "删除几何调试网格",
 

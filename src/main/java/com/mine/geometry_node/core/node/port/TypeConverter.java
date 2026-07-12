@@ -66,6 +66,7 @@ public class TypeConverter {
         // 2. 数值体系的隐式互转
         if (val instanceof Number n) {
             if (type == Integer.class) return type.cast(n.intValue());
+            if (type == Long.class) return type.cast(n.longValue());
             if (type == Float.class) return type.cast(n.floatValue());
             if (type == Double.class) return type.cast(n.doubleValue());
             if (type == Boolean.class) return type.cast(n.floatValue() > 0);
@@ -78,6 +79,7 @@ public class TypeConverter {
         // 3. 布尔转数值
         if (val instanceof Boolean b) {
             if (type == Integer.class) return type.cast(b ? 1 : 0);
+            if (type == Long.class) return type.cast(b ? 1L : 0L);
             if (type == Float.class) return type.cast(b ? 1.0f : 0.0f);
             if (type == Double.class) return type.cast(b ? 1.0 : 0.0);
         }
@@ -121,12 +123,13 @@ public class TypeConverter {
         // 7. 字符串反向解析 (反序列化)
         if (val instanceof String s) {
 
-            // 解析数值 (Integer, Float, Double)
-            if (type == Integer.class || type == Float.class || type == Double.class) {
+            // 解析数值 (Integer, Long, Float, Double)
+            if (type == Integer.class || type == Long.class || type == Float.class || type == Double.class) {
                 try {
                     // 先统一解析为 Double 以兼容 "1.5" 这种格式，然后再向下转型
                     double d = Double.parseDouble(s);
                     if (type == Integer.class) return type.cast((int) d);
+                    if (type == Long.class) return type.cast((long) d);
                     if (type == Float.class) return type.cast((float) d);
                     return type.cast(d);
                 } catch (NumberFormatException ignored) {}

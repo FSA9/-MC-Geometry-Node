@@ -156,8 +156,32 @@ public final class GeometryValue {
     }
 
     public enum PrimitiveType {
-        CUBE,
-        CYLINDER
+        CUBE("cube"),
+        CYLINDER("cylinder"),
+        UV_SPHERE("uv_sphere");
+
+        public static final String[] OPTIONS = {CUBE.id, CYLINDER.id, UV_SPHERE.id};
+
+        private final String id;
+
+        PrimitiveType(String id) {
+            this.id = id;
+        }
+
+        public String id() {
+            return id;
+        }
+
+        public static PrimitiveType fromId(@Nullable String id) {
+            if (id != null) {
+                for (PrimitiveType type : values()) {
+                    if (type.id.equalsIgnoreCase(id)) {
+                        return type;
+                    }
+                }
+            }
+            return CUBE;
+        }
     }
 
     public enum CylinderFillType {
@@ -266,6 +290,18 @@ public final class GeometryValue {
             );
         }
 
+        public static Primitive uvSphere(Vec3 center, int segments, int rings, float radius) {
+            Vec3 safeCenter = center != null ? center : Vec3.ZERO;
+            float safeRadius = sanitizePositive(radius, 1.0f);
+            return new Primitive(
+                    PrimitiveType.UV_SPHERE,
+                    (float) safeCenter.x, (float) safeCenter.y, (float) safeCenter.z,
+                    safeRadius * 2.0f, safeRadius * 2.0f, safeRadius * 2.0f,
+                    1, 1, 1,
+                    segments, rings, 1, CylinderFillType.NGON
+            );
+        }
+
         public PrimitiveType type() {
             return type;
         }
@@ -306,10 +342,19 @@ public final class GeometryValue {
             return fillType;
         }
 
+        public int sphereSegments() {
+            return radialVertices;
+        }
+
+        public int sphereRings() {
+            return sideSegments;
+        }
+
         private long estimateBlockCount(VoxelMode mode) {
             return switch (type) {
                 case CUBE -> estimateCubeBlocks(mode);
                 case CYLINDER -> estimateCylinderBlocks(mode);
+                case UV_SPHERE -> estimateSphereBlocks(mode);
             };
         }
 
@@ -317,6 +362,7 @@ public final class GeometryValue {
             return switch (type) {
                 case CUBE -> forEachCubeBlock(mode, tx, ty, tz, consumer);
                 case CYLINDER -> forEachCylinderBlock(mode, tx, ty, tz, consumer);
+                case UV_SPHERE -> forEachSphereBlock(mode, tx, ty, tz, consumer);
             };
         }
 
@@ -434,6 +480,63 @@ public final class GeometryValue {
             return true;
         }
 
+        private long estimateSphereBlocks(VoxelMode mode) {
+            int radius = Math.max(1, blockCount(sizeX) / 2);
+            int diameter = radius * 2 + 1;
+            if (axisTooLarge(diameter)) {
+                return SATURATED_COUNT;
+            }
+
+            long boundingCube = saturatedMultiply(saturatedMultiply(diameter, diameter), diameter);
+            if (mode == VoxelMode.VOLUME) {
+                return boundingCube;
+            }
+
+            int innerDiameter = Math.max(0, (radius - 1) * 2 + 1);
+            long innerCube = saturatedMultiply(saturatedMultiply(innerDiameter, innerDiameter), innerDiameter);
+            return Math.max(0L, boundingCube - innerCube);
+        }
+
+        private boolean forEachSphereBlock(VoxelMode mode, double tx, double ty, double tz, BlockPositionConsumer consumer) {
+            int radius = Math.max(1, blockCount(sizeX) / 2);
+            int diameter = radius * 2 + 1;
+            if (axisTooLarge(diameter)) {
+                return false;
+            }
+
+            int centerBlockX = blockCenter(centerX + tx);
+            int centerBlockY = blockCenter(centerY + ty);
+            int centerBlockZ = blockCenter(centerZ + tz);
+            int innerRadius = Math.max(0, radius - 1);
+            int radiusSqr = radius * radius;
+            int innerSqr = innerRadius * innerRadius;
+
+            for (int dx = -radius; dx <= radius; dx++) {
+                int xSqr = dx * dx;
+                int x = centerBlockX + dx;
+                for (int dy = -radius; dy <= radius; dy++) {
+                    int xySqr = xSqr + dy * dy;
+                    if (xySqr > radiusSqr) {
+                        continue;
+                    }
+                    int y = centerBlockY + dy;
+                    for (int dz = -radius; dz <= radius; dz++) {
+                        int distSqr = xySqr + dz * dz;
+                        if (distSqr > radiusSqr) {
+                            continue;
+                        }
+                        if (mode == VoxelMode.SURFACE && distSqr < innerSqr) {
+                            continue;
+                        }
+                        if (!consumer.accept(BlockPos.asLong(x, y, centerBlockZ + dz))) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
         private static float sanitizePositive(float value, float fallback) {
             if (!Float.isFinite(value)) {
                 return fallback;
@@ -446,6 +549,7 @@ public final class GeometryValue {
             return switch (type) {
                 case CUBE -> String.format(Locale.ROOT, "Cube[size=%.3f,%.3f,%.3f]", sizeX, sizeY, sizeZ);
                 case CYLINDER -> String.format(Locale.ROOT, "Cylinder[r=%.3f,depth=%.3f,vertices=%d]", sizeX * 0.5f, sizeY, radialVertices);
+                case UV_SPHERE -> String.format(Locale.ROOT, "UVSphere[r=%.3f,segments=%d,rings=%d]", sizeX * 0.5f, radialVertices, sideSegments);
             };
         }
     }

@@ -15,6 +15,8 @@ public final class GeometryDebugMeshFactory {
     private static final int MAX_CYLINDER_RADIAL_VERTICES = 96;
     private static final int MAX_CYLINDER_SIDE_SEGMENTS = 32;
     private static final int MAX_CYLINDER_FILL_SEGMENTS = 16;
+    private static final int MAX_UV_SPHERE_SEGMENTS = 128;
+    private static final int MAX_UV_SPHERE_RINGS = 64;
 
     private GeometryDebugMeshFactory() {
     }
@@ -67,6 +69,14 @@ public final class GeometryDebugMeshFactory {
                     (float) Math.max(0.001D, size.x * 0.5D),
                     (float) Math.max(0.001D, size.y),
                     primitive.fillType()
+            );
+            case UV_SPHERE -> buildUvSphereMesh(
+                    id,
+                    graphId,
+                    center,
+                    clampInt(primitive.sphereSegments(), 3, MAX_UV_SPHERE_SEGMENTS),
+                    clampInt(primitive.sphereRings(), 2, MAX_UV_SPHERE_RINGS),
+                    (float) Math.max(0.001D, size.x * 0.5D)
             );
         };
     }
@@ -241,6 +251,64 @@ public final class GeometryDebugMeshFactory {
                 key(capKind, ring, radialIndex, 0),
                 (float) Math.cos(theta) * ringRadius,
                 y,
+                (float) Math.sin(theta) * ringRadius
+        );
+    }
+
+    private static GeometryDebugMesh buildUvSphereMesh(String id,
+                                                       String graphId,
+                                                       Vec3 center,
+                                                       int segments,
+                                                       int rings,
+                                                       float radius) {
+        MeshBuilder builder = new MeshBuilder();
+
+        for (int ring = 0; ring < rings; ring++) {
+            for (int segment = 0; segment < segments; segment++) {
+                int next = (segment + 1) % segments;
+                if (ring == 0) {
+                    int top = sphereVertex(builder, segments, rings, radius, 0, segment);
+                    int b = sphereVertex(builder, segments, rings, radius, 1, segment);
+                    int c = sphereVertex(builder, segments, rings, radius, 1, next);
+                    builder.addFaceWithEdges(top, b, c, top);
+                } else if (ring == rings - 1) {
+                    int a = sphereVertex(builder, segments, rings, radius, ring, segment);
+                    int b = sphereVertex(builder, segments, rings, radius, rings, segment);
+                    int c = sphereVertex(builder, segments, rings, radius, ring, next);
+                    builder.addFaceWithEdges(a, b, c, a);
+                } else {
+                    int a = sphereVertex(builder, segments, rings, radius, ring, segment);
+                    int b = sphereVertex(builder, segments, rings, radius, ring + 1, segment);
+                    int c = sphereVertex(builder, segments, rings, radius, ring + 1, next);
+                    int d = sphereVertex(builder, segments, rings, radius, ring, next);
+                    builder.addFaceWithEdges(a, b, c, d);
+                }
+            }
+        }
+
+        return builder.build(id, graphId, center);
+    }
+
+    private static int sphereVertex(MeshBuilder builder,
+                                    int segments,
+                                    int rings,
+                                    float radius,
+                                    int ring,
+                                    int segment) {
+        if (ring <= 0) {
+            return builder.addVertex(key(5, 0, 0, 0), 0.0f, radius, 0.0f);
+        }
+        if (ring >= rings) {
+            return builder.addVertex(key(5, rings, 0, 0), 0.0f, -radius, 0.0f);
+        }
+
+        float phi = (float) (Math.PI * ring / rings);
+        float theta = (float) (Math.PI * 2.0D * segment / segments);
+        float ringRadius = (float) Math.sin(phi) * radius;
+        return builder.addVertex(
+                key(5, ring, segment, 0),
+                (float) Math.cos(theta) * ringRadius,
+                (float) Math.cos(phi) * radius,
                 (float) Math.sin(theta) * ringRadius
         );
     }
