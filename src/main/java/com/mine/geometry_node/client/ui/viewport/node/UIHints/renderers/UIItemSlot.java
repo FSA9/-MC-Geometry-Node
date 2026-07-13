@@ -3,8 +3,8 @@ package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.utils.ItemTooltipProxy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.InventoryItemPickerOverlay;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ItemStackTooltipOverlay;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaInventoryItemPicker;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
@@ -36,7 +36,6 @@ public class UIItemSlot extends FrameLayout {
 
     private volatile ItemStack mCachedStack = ItemStack.EMPTY;
     private String mLastJson = null;
-    private long mLastClickTime = 0;
     private MinecraftSurfaceView mSurfaceView;
     private volatile float mViewportScale = 1.0f;
     private int mLastSurfaceWidth = -1;
@@ -241,22 +240,22 @@ public class UIItemSlot extends FrameLayout {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_UP) {
-            long currentTime = System.currentTimeMillis();
-            if (currentTime - mLastClickTime < 300) {
-                onDoubleClick();
-            }
-            mLastClickTime = currentTime;
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_UP) {
+            openPicker();
             return true;
         }
         return true;
     }
 
-    private void onDoubleClick() {
+    private void openPicker() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        InventoryItemPickerOverlay.showFor(this, pickedStack -> {
+        ItemTooltipProxy.clearTooltipTask();
+        ItemStackTooltipOverlay.hide();
+
+        VanillaInventoryItemPicker.open(pickedStack -> {
             if (mEditorContext == null || mc.level == null) {
                 return;
             }

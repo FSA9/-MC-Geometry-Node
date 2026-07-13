@@ -34,6 +34,7 @@ public class ViewportController implements EditorContext.EditorListener,
     private EditorContext mEditorContext;
 
     private GraphSession mCurrentSession;
+    private boolean mApplyingSessionViewport;
 
     private static String sClipboardJson = null;
 
@@ -50,8 +51,25 @@ public class ViewportController implements EditorContext.EditorListener,
         if (session != null) {
             mViewport.prepareLayers();
 
-            mViewport.getCamera().setPosition(session.viewportX, session.viewportY);
-            mViewport.getCamera().setScale(session.currentScale);
+            mApplyingSessionViewport = true;
+            try {
+                if (session.hasViewportState) {
+                    mViewport.getCamera().setPosition(session.viewportX, session.viewportY);
+                    mViewport.getCamera().setScale(session.currentScale);
+                } else {
+                    mViewport.getCamera().setScale(1.0f);
+                    if (mViewport.getWidth() > 0 && mViewport.getHeight() > 0) {
+                        mViewport.getCamera().setPosition(mViewport.getWidth() / 2.0f, mViewport.getHeight() / 2.0f);
+                    } else {
+                        mViewport.getCamera().setPosition(0.0f, 0.0f);
+                    }
+                }
+            } finally {
+                mApplyingSessionViewport = false;
+            }
+            if (!session.hasViewportState && mViewport.getWidth() > 0 && mViewport.getHeight() > 0) {
+                saveCurrentViewportTransform();
+            }
 
             setEditorContext(session.editorContext);
 
@@ -73,9 +91,7 @@ public class ViewportController implements EditorContext.EditorListener,
 
     public void saveCurrentSessionState() {
         if (mCurrentSession != null) {
-            mCurrentSession.viewportX = mViewport.getCamera().getX();
-            mCurrentSession.viewportY = mViewport.getCamera().getY();
-            mCurrentSession.currentScale = mViewport.getCamera().getScale();
+            saveCurrentViewportTransform();
 
             if (mEditorContext == null || !mEditorContext.isInsideGroupScope()) {
                 mViewport.syncSelectionToSession(mCurrentSession.selectedNodeIds, mCurrentSession.selectedFrameIds);
@@ -84,6 +100,23 @@ public class ViewportController implements EditorContext.EditorListener,
                 mCurrentSession.selectedFrameIds.clear();
             }
         }
+    }
+
+    public void saveCurrentViewportTransform() {
+        if (mCurrentSession == null || mApplyingSessionViewport) {
+            return;
+        }
+        if (!mCurrentSession.hasViewportState && (mViewport.getWidth() <= 0 || mViewport.getHeight() <= 0)) {
+            return;
+        }
+        mCurrentSession.viewportX = mViewport.getCamera().getX();
+        mCurrentSession.viewportY = mViewport.getCamera().getY();
+        mCurrentSession.currentScale = mViewport.getCamera().getScale();
+        mCurrentSession.hasViewportState = true;
+    }
+
+    public boolean currentSessionHasViewportState() {
+        return mCurrentSession != null && mCurrentSession.hasViewportState;
     }
 
     public boolean hasActiveSession() {

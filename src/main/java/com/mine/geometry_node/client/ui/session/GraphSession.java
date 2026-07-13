@@ -15,6 +15,7 @@ public class GraphSession {
     public float viewportX = 0;
     public float viewportY = 0;
     public float currentScale = 1.0f;
+    public boolean hasViewportState = false;
 
     // --- 【关键】只存储选中图元的 ID，不再存储 UI 对象 ---
     public final List<String> selectedNodeIds = new ArrayList<>();

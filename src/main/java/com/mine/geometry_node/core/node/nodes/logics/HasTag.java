@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.util.ValueTagUtils;
 import net.minecraft.network.chat.Component;
 
 public class HasTag extends BaseNode {
@@ -35,6 +36,6 @@ public class HasTag extends BaseNode {
 
         Object value = getRawInput(context, StandardPorts.ANY_VALUE.getId());
         String tag = getInput(context, StandardPorts.TAG.getId(), String.class);
-        return _ValueTagSupport.hasTag(value, tag, context);
+        return ValueTagUtils.hasTag(value, tag, context);
     }
 }

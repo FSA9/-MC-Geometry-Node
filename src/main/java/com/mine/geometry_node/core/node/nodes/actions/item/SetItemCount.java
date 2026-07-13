@@ -8,33 +8,37 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
-public class ClearAllAttributeModifiers extends BaseNode {
-    public static final String TYPE_ID = "clear_all_attribute_modifiers";
+public class SetItemCount extends BaseNode {
+    public static final String TYPE_ID = "set_item_count";
 
     @Override
     public NodeDef getDefaultDefinition() {
         String comment = """
-                清除物品栈上的所有属性修饰符。
-                只移除 ATTRIBUTE_MODIFIERS 组件，不改变物品类型、数量或附魔。
-                输出 ItemStack 为清理后的物品栈。""";
+                设置物品栈数量。
+                count 小于等于 0 时输出空物品栈。
+                不修改物品类型和组件，仅改变堆叠数量。""";
 
-        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.clear_all_attribute_modifiers"))
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.set_item_count"))
                 .comment(comment)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.COUNT.toInput(1), null, UIHint.INPUT, null, null))
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
+        Integer count = getInput(context, StandardPorts.COUNT.getId(), Integer.class);
         ItemStack result = stack != null ? stack.copy() : ItemStack.EMPTY;
-        if (!result.isEmpty()) {
-            result.remove(DataComponents.ATTRIBUTE_MODIFIERS);
+        int value = count != null ? count : 1;
+        if (result.isEmpty() || value <= 0) {
+            result = ItemStack.EMPTY;
+        } else {
+            result.setCount(value);
         }
         context.setTempData(StandardPorts.ITEM_STACK.getId(), result);
         return next(StandardPorts.FLOW_OUT.getId());

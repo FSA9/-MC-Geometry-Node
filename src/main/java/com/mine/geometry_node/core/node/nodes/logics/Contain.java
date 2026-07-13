@@ -9,6 +9,8 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.util.ValueMatchUtils;
+import com.mine.geometry_node.core.node.util.ValueTagUtils;
 import net.minecraft.network.chat.Component;
 
 import java.lang.reflect.Array;
@@ -50,8 +52,8 @@ public class Contain extends BaseNode {
     }
 
     private static boolean contains(Object container, Object target, ExecutionContext context) {
-        container = _ValueTagSupport.unwrap(container);
-        target = _ValueTagSupport.unwrap(target);
+        container = ValueTagUtils.unwrap(container);
+        target = ValueTagUtils.unwrap(target);
         if (container == null || target == null) {
             return false;
         }
@@ -88,7 +90,7 @@ public class Contain extends BaseNode {
             return false;
         }
 
-        if (target instanceof String tagId && _ValueTagSupport.hasTag(container, tagId, context)) {
+        if (target instanceof String tagId && ValueTagUtils.hasTag(container, tagId, context)) {
             return true;
         }
 
@@ -96,12 +98,12 @@ public class Contain extends BaseNode {
     }
 
     private static boolean valueMatches(Object value, Object target, ExecutionContext context) {
-        value = _ValueTagSupport.unwrap(value);
-        target = _ValueTagSupport.unwrap(target);
+        value = ValueTagUtils.unwrap(value);
+        target = ValueTagUtils.unwrap(target);
 
-        if (value instanceof String left && target instanceof String right && _ValueTagSupport.tagStringsEqual(left, right)) {
+        if (value instanceof String left && target instanceof String right && ValueTagUtils.tagStringsEqual(left, right)) {
             return true;
         }
-        return Equal.valuesEqual(value, target, "exact", "exact_count", context);
+        return ValueMatchUtils.valuesEqual(value, target, ValueMatchUtils.MODE_EXACT, ValueMatchUtils.COUNT_EXACT, context);
     }
 }

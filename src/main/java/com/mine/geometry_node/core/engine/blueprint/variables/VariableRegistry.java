@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.variables;
 
+import com.mine.geometry_node.core.node.value.SlotRef;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -67,6 +68,14 @@ public class VariableRegistry {
                 ListTag list = (ListTag) tag;
                 return new Vec3(list.getDoubleOr(0, 0.0), list.getDoubleOr(1, 0.0), list.getDoubleOr(2, 0.0));
             }
+        });
+
+        // SlotRef
+        register(new VariableSerializer<SlotRef>() {
+            @Override public String getTypeId() { return "slot_ref"; }
+            @Override public Class<SlotRef> getTargetClass() { return SlotRef.class; }
+            @Override public Tag serialize(SlotRef value) { return StringTag.valueOf(value.serialize()); }
+            @Override public SlotRef deserialize(Tag tag) { return SlotRef.parse(tag.asString().orElse("")); }
         });
 
         // BlockState

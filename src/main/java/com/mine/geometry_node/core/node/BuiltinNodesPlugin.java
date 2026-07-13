@@ -14,6 +14,8 @@ import com.mine.geometry_node.core.node.nodes.data.*;
 import com.mine.geometry_node.core.node.nodes.data.container.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.attribution.*;
+import com.mine.geometry_node.core.node.nodes.data.inventory.*;
+import com.mine.geometry_node.core.node.nodes.data.item.attribution.*;
 import com.mine.geometry_node.core.node.nodes.data.player.*;
 import com.mine.geometry_node.core.node.nodes.data.type.*;
 import com.mine.geometry_node.core.node.nodes.data.value.*;
@@ -170,15 +172,12 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/display_entity", new SetDisplayPosition());
 
         // Actions/Inventory
-        registry.register("actions/inventory", new ClearInventory());
-        registry.register("actions/inventory", new ClearItem());
+        registry.register("actions/inventory", new ClearSlots());
         registry.register("actions/inventory", new ClearSlot());
-        registry.register("actions/inventory", new DropInventorySlot());
-//        registry.register("actions/inventory", new _DropItem());
-//        registry.register("actions/inventory", new _EquipItem());
-//        registry.register("actions/inventory", new _GiveItem());
-//        registry.register("actions/inventory", new _MoveItemToSlot());
-//        registry.register("actions/inventory", new _TakeItem());
+        registry.register("actions/inventory", new SetSlotItem());
+        registry.register("actions/inventory", new DropSlotItem());
+        registry.register("actions/inventory", new RemoveItemsFromInventory());
+        registry.register("actions/inventory", new AddItemToInventory());
 
         // Actions/Item
         registry.register("actions/item", new DamageItemStack());
@@ -192,6 +191,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/item", new AddStoredEnchantment());
         registry.register("actions/item", new ClearAllStoredEnchantments());
         registry.register("actions/item", new SetDamage());
+        registry.register("actions/item", new SetItemCount());
         registry.register("actions/item", new SetEnchantmentGlintOverride());
         registry.register("actions/item", new SetMaxDamage());
         registry.register("actions/item", new SetMaxStackSize());
@@ -269,9 +269,29 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/type", new GetEntityType());
         registry.register("data/type", new GetItemType());
         registry.register("data/type", new GetItemStack());
-        registry.register("data/type", new GetItemSlot());
         registry.register("data/type", new GetSound());
         registry.register("data/type", new GetPortType());
+
+        // Data/Inventory
+        registry.register("data/inventory", new GetSlot());
+        registry.register("data/inventory", new SlotFromIndex());
+        registry.register("data/inventory", new PickItemStack());
+        registry.register("data/inventory", new GetSlotItem());
+        registry.register("data/inventory", new CountInventoryItem());
+        registry.register("data/inventory", new FindInventorySlots());
+
+        // Data/Item/Attribution
+        registry.register("data/item/attribution", new GetItemId());
+        registry.register("data/item/attribution", new GetItemCount());
+        registry.register("data/item/attribution", new GetItemName());
+        registry.register("data/item/attribution", new IsItemEmpty());
+        registry.register("data/item/attribution", new IsItemDamageable());
+        registry.register("data/item/attribution", new GetItemDamage());
+        registry.register("data/item/attribution", new GetItemMaxDamage());
+        registry.register("data/item/attribution", new GetItemDurability());
+        registry.register("data/item/attribution", new GetItemMaxStackSize());
+        registry.register("data/item/attribution", new HasItemEnchantments());
+        registry.register("data/item/attribution", new HasItemCustomName());
 
         // Data/Container
         registry.register("data/container", new GetInputDataType());

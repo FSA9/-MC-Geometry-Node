@@ -185,6 +185,9 @@ public class Viewport extends FrameLayout implements InteractionContext {
     public ViewportCamera getCamera() { return mCamera; }
 
     public void updateTransform() {
+        if (mController != null) {
+            mController.saveCurrentViewportTransform();
+        }
         if (mNodeLayer != null) {
             mNodeLayer.updateOverlayTransforms();
 
@@ -199,7 +202,11 @@ public class Viewport extends FrameLayout implements InteractionContext {
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         if (mFirstLayout && w > 0 && h > 0) {
-            mCamera.setPosition(w / 2f, h / 2f);
+            if (mController == null || !mController.currentSessionHasViewportState()) {
+                mCamera.setPosition(w / 2f, h / 2f);
+            } else {
+                updateTransform();
+            }
             mFirstLayout = false;
         } else {
             updateTransform();

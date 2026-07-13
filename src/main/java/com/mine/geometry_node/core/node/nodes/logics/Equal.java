@@ -10,14 +10,10 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.util.ValueMatchUtils;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.item.ItemStack;
 
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 
 public class Equal extends BaseNode {
 
@@ -25,18 +21,6 @@ public class Equal extends BaseNode {
     private static final String PORT_A = "A";
     private static final String PORT_B = "B";
     private static final String COUNT_MODE = "count_mode";
-
-    private static final String MODE_TYPE_ONLY = "type_only";
-    private static final String MODE_REGISTRY_ID = "registry_id";
-    private static final String MODE_COMPONENTS = "components";
-    private static final String MODE_EXACT = "exact";
-    private static final String[] MODE_OPTIONS = {MODE_TYPE_ONLY, MODE_REGISTRY_ID, MODE_COMPONENTS, MODE_EXACT};
-
-    private static final String COUNT_IGNORE = "ignore_count";
-    private static final String COUNT_EXACT = "exact_count";
-    private static final String COUNT_AT_LEAST = "at_least";
-    private static final String COUNT_AT_MOST = "at_most";
-    private static final String[] COUNT_OPTIONS = {COUNT_IGNORE, COUNT_EXACT, COUNT_AT_LEAST, COUNT_AT_MOST};
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -59,18 +43,18 @@ public class Equal extends BaseNode {
                         UIHint.DEFAULT, null, null
                 ))
                 .addRow(new PortRow(
-                        StandardPorts.TYPE.toInput(MODE_COMPONENTS).hiddenPin(),
+                        StandardPorts.TYPE.toInput(ValueMatchUtils.MODE_COMPONENTS).hiddenPin(),
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(PortMetaKeys.OPTIONS, MODE_OPTIONS)
+                        Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.MODE_OPTIONS)
                 ))
                 .addRow(new PortRow(
-                        PortDef.create(COUNT_MODE, "geometry_node.port.count_mode", PortType.STRING, COUNT_IGNORE).hiddenPin(),
+                        PortDef.create(COUNT_MODE, "geometry_node.port.count_mode", PortType.STRING, ValueMatchUtils.COUNT_IGNORE).hiddenPin(),
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(PortMetaKeys.OPTIONS, COUNT_OPTIONS)
+                        Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.COUNT_OPTIONS)
                 ))
                 .build();
     }
@@ -88,117 +72,6 @@ public class Equal extends BaseNode {
     }
 
     static boolean valuesEqual(Object a, Object b, String rawMode, String rawCountMode, ExecutionContext context) {
-        a = _ValueTagSupport.unwrap(a);
-        b = _ValueTagSupport.unwrap(b);
-
-        if (a == null && b == null) return true;
-        if (a == null || b == null) return false;
-
-        String mode = normalizeMode(rawMode);
-        boolean baseMatch = switch (mode) {
-            case MODE_TYPE_ONLY -> typeOnlyEqual(a, b, context);
-            case MODE_REGISTRY_ID -> registryIdEqual(a, b, context);
-            case MODE_EXACT -> exactEqual(a, b);
-            default -> componentsEqual(a, b, context);
-        };
-        if (!baseMatch) {
-            return false;
-        }
-
-        return countMatches(a, b, normalizeCountMode(rawCountMode), mode);
-    }
-
-    private static boolean typeOnlyEqual(Object a, Object b, ExecutionContext context) {
-        Set<String> left = _ValueTagSupport.kindKeys(a, context);
-        Set<String> right = _ValueTagSupport.kindKeys(b, context);
-        return intersects(left, right);
-    }
-
-    private static boolean registryIdEqual(Object a, Object b, ExecutionContext context) {
-        Set<String> left = _ValueTagSupport.registryIdentities(a, context);
-        Set<String> right = _ValueTagSupport.registryIdentities(b, context);
-        return !left.isEmpty() && intersects(left, right);
-    }
-
-    private static boolean componentsEqual(Object a, Object b, ExecutionContext context) {
-        if (a instanceof Number numA && b instanceof Number numB) {
-            return Double.compare(numA.doubleValue(), numB.doubleValue()) == 0;
-        }
-        if (a instanceof Entity entA && b instanceof Entity entB) {
-            return entA.getUUID().equals(entB.getUUID());
-        }
-        if (a instanceof ItemStack stackA && b instanceof ItemStack stackB) {
-            return ItemStack.isSameItemSameComponents(stackA, stackB);
-        }
-
-        Set<String> left = _ValueTagSupport.registryIdentities(a, context);
-        Set<String> right = _ValueTagSupport.registryIdentities(b, context);
-        if (!left.isEmpty() || !right.isEmpty()) {
-            return intersects(left, right);
-        }
-
-        return Objects.equals(a, b);
-    }
-
-    private static boolean exactEqual(Object a, Object b) {
-        if (a instanceof Number numA && b instanceof Number numB) {
-            return Double.compare(numA.doubleValue(), numB.doubleValue()) == 0;
-        }
-        if (a instanceof Entity entA && b instanceof Entity entB) {
-            return entA.getUUID().equals(entB.getUUID());
-        }
-        if (a instanceof ItemStack stackA && b instanceof ItemStack stackB) {
-            return ItemStack.matches(stackA, stackB);
-        }
-        return Objects.equals(a, b);
-    }
-
-    private static boolean countMatches(Object a, Object b, String countMode, String compareMode) {
-        if (MODE_EXACT.equals(compareMode) || COUNT_IGNORE.equals(countMode)) {
-            return true;
-        }
-        if (!(a instanceof ItemStack stackA) || !(b instanceof ItemStack stackB)) {
-            return true;
-        }
-
-        int left = stackA.getCount();
-        int right = stackB.getCount();
-        return switch (countMode) {
-            case COUNT_EXACT -> left == right;
-            case COUNT_AT_LEAST -> left >= right;
-            case COUNT_AT_MOST -> left <= right;
-            default -> true;
-        };
-    }
-
-    private static boolean intersects(Set<String> left, Set<String> right) {
-        for (String value : left) {
-            if (right.contains(value)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String normalizeMode(String rawMode) {
-        if (rawMode == null) {
-            return MODE_COMPONENTS;
-        }
-        String mode = rawMode.trim().toLowerCase(Locale.ROOT);
-        return switch (mode) {
-            case MODE_TYPE_ONLY, MODE_REGISTRY_ID, MODE_EXACT -> mode;
-            default -> MODE_COMPONENTS;
-        };
-    }
-
-    private static String normalizeCountMode(String rawCountMode) {
-        if (rawCountMode == null) {
-            return COUNT_IGNORE;
-        }
-        String mode = rawCountMode.trim().toLowerCase(Locale.ROOT);
-        return switch (mode) {
-            case COUNT_EXACT, COUNT_AT_LEAST, COUNT_AT_MOST -> mode;
-            default -> COUNT_IGNORE;
-        };
+        return ValueMatchUtils.valuesEqual(a, b, rawMode, rawCountMode, context);
     }
 }

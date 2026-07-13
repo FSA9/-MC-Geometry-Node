@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes.logics;
+package com.mine.geometry_node.core.node.util;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.value.DynamicData;
@@ -25,16 +25,15 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
 
-final class _ValueTagSupport {
-
-    private _ValueTagSupport() {
+public final class ValueTagUtils {
+    private ValueTagUtils() {
     }
 
-    static Object unwrap(Object value) {
+    public static Object unwrap(Object value) {
         return value instanceof DynamicData dynamicData ? dynamicData.value() : value;
     }
 
-    static boolean hasTag(Object value, String rawTag, ExecutionContext context) {
+    public static boolean hasTag(Object value, String rawTag, ExecutionContext context) {
         Identifier tagId = parseIdentifier(rawTag);
         if (tagId == null) {
             return false;
@@ -48,7 +47,7 @@ final class _ValueTagSupport {
         return false;
     }
 
-    static List<String> tags(Object value, ExecutionContext context) {
+    public static List<String> tags(Object value, ExecutionContext context) {
         Set<String> tags = new TreeSet<>();
         for (TagSubject<?> subject : subjects(value, context)) {
             subject.tags().forEach(tags::add);
@@ -56,7 +55,7 @@ final class _ValueTagSupport {
         return new ArrayList<>(tags);
     }
 
-    static Set<String> kindKeys(Object value, ExecutionContext context) {
+    public static Set<String> kindKeys(Object value, ExecutionContext context) {
         value = unwrap(value);
         Set<String> keys = new LinkedHashSet<>();
         for (TagSubject<?> subject : subjects(value, context)) {
@@ -84,7 +83,7 @@ final class _ValueTagSupport {
         return keys;
     }
 
-    static Set<String> registryIdentities(Object value, ExecutionContext context) {
+    public static Set<String> registryIdentities(Object value, ExecutionContext context) {
         Set<String> identities = new LinkedHashSet<>();
         for (TagSubject<?> subject : subjects(value, context)) {
             identities.add(subject.identity());
@@ -92,7 +91,7 @@ final class _ValueTagSupport {
         return identities;
     }
 
-    static boolean tagStringsEqual(String a, String b) {
+    public static boolean tagStringsEqual(String a, String b) {
         Identifier left = parseIdentifier(a);
         Identifier right = parseIdentifier(b);
         return left != null && left.equals(right);

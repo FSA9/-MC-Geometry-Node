@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.node.value.ColorValue;
 import com.mine.geometry_node.core.node.value.DynamicData;
 import com.mine.geometry_node.core.node.value.ExpressionData;
 import com.mine.geometry_node.core.node.value.RichTextValue;
+import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -94,6 +95,7 @@ public class TypeConverter {
             return switch (val) {
                 case RichTextValue richText -> type.cast(richText.plain());
                 case ColorValue color -> type.cast(String.format(java.util.Locale.US, "rgba(%.3f, %.3f, %.3f, %.3f)", color.r(), color.g(), color.b(), color.a()));
+                case SlotRef slotRef -> type.cast(slotRef.serialize());
                 case Entity e -> type.cast(e.getStringUUID());
                 case GeometryValue geometry -> type.cast(geometry.toString());
                 case Vec3 v -> type.cast(String.format(java.util.Locale.US, "[%.2f, %.2f, %.2f]", v.x, v.y, v.z));
@@ -156,6 +158,11 @@ public class TypeConverter {
                 } catch (Exception ignored) {}
             }
 
+            // 解析 SlotRef
+            if (type == SlotRef.class) {
+                return type.cast(SlotRef.parse(s));
+            }
+
             // 解析 Item
             if (type == Item.class) {
                 try {
@@ -170,6 +177,13 @@ public class TypeConverter {
             if (type == Boolean.class) {
                 if ("true".equalsIgnoreCase(s)) return type.cast(true);
                 if ("false".equalsIgnoreCase(s)) return type.cast(false);
+            }
+        }
+
+        if (type == SlotRef.class) {
+            SlotRef slotRef = SlotRef.from(val);
+            if (slotRef != null) {
+                return type.cast(slotRef);
             }
         }
 

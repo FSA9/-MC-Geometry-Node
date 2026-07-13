@@ -23,6 +23,7 @@ public enum StandardPorts {
     INDEX("index", PortType.INTEGER),
     TICK("tick", PortType.INTEGER),
     COUNT("count", PortType.INTEGER),
+    REMOVED_COUNT("removed_count", PortType.INTEGER),
     VERTICES("vertices", PortType.INTEGER),
     RINGS("rings", PortType.INTEGER),
     VERTICES_X("vertices_x", PortType.INTEGER),
@@ -96,6 +97,7 @@ public enum StandardPorts {
     TITLE("title", PortType.STRING),
     STRING("string", PortType.STRING),
     TYPE("type", PortType.STRING),
+    MATCH_MODE("match_mode", PortType.STRING),
     GAMEMODE("gamemode", PortType.STRING),
     SORT("sort", PortType.STRING),
     SHAPE("shape", PortType.STRING),
@@ -146,6 +148,9 @@ public enum StandardPorts {
 
     // Item Stack
     ITEM_STACK("item_stack", PortType.ITEM_STACK),
+
+    // Slot
+    SLOT("slot", PortType.SLOT),
 
     // LIST
     LIST("list", PortType.LIST),

@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node.port;
 import com.mine.geometry_node.core.node.value.ColorValue;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
+import com.mine.geometry_node.core.node.value.SlotRef;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -23,6 +24,7 @@ public enum PortType {
     ENTITY("实体", 0xFFE91E63, null),
     ITEM("物品", 0xFFE91E63, null),
     ITEM_STACK("物品栈", 0xFFFF5252, null),
+    SLOT("槽位", 0xFFB0BEC5, SlotRef.DEFAULT.serialize()),
     BLOCK("方块", 0xFF8D6E63, null),
     GEOMETRY("几何", 0xFF26A69A, GeometryValue.EMPTY),
     XYZ("XYZ", 0xFF00BCD4, List.of(0.0f, 0.0f, 0.0f)),
@@ -98,7 +100,7 @@ public enum PortType {
         // 2. 万物皆可转STRING
         if (inputport == STRING) {
             if (outputport == INTEGER || outputport == LONG || outputport == FLOAT || outputport == BOOLEAN ||
-                    outputport == RICH_TEXT || outputport == ENTITY || outputport == BLOCK || outputport == XYZ ||
+                    outputport == RICH_TEXT || outputport == ENTITY || outputport == BLOCK || outputport == SLOT || outputport == XYZ ||
                     outputport == ITEM || outputport == LIST || outputport == DICT || outputport == SHOP) {
                 return true;
             }
@@ -110,6 +112,7 @@ public enum PortType {
             if (inputport == ENTITY) return true; // 字符串尝试解析为 UUID 寻找实体
             if (inputport == BLOCK)  return true; // 字符串尝试解析为方块 Registry ID
             if (inputport == ITEM)   return true; // 字符串尝试解析为物品 Registry ID
+            if (inputport == SLOT)   return true; // 字符串解析为槽位引用
             if (inputport == BOOLEAN) return true; // 字符串尝试解析为 "true"/"false"
             if (inputport == INTEGER || inputport == LONG || inputport == FLOAT) return true;
         }
@@ -146,6 +149,7 @@ public enum PortType {
         if (value instanceof RichTextValue) return RICH_TEXT;
         if (value instanceof ColorValue) return COLOR;
         if (value instanceof GeometryValue) return GEOMETRY;
+        if (value instanceof SlotRef) return SLOT;
         if (value instanceof net.minecraft.world.entity.Entity) return ENTITY;
         if (value instanceof net.minecraft.world.item.ItemStack) return ITEM_STACK;
         if (value instanceof java.util.List) return LIST;

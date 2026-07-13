@@ -14,23 +14,22 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
-public class ClearSlot extends BaseNode {
-
-    public static final String TYPE_ID = "clear_slot";
+public class DropSlotItem extends BaseNode {
+    public static final String TYPE_ID = "drop_slot_item";
 
     @Override
     public NodeDef getDefaultDefinition() {
         String comment = """
-                清空目标实体的指定槽位。
-                槽位由 SlotRef 决定，可指向玩家背包、装备栏、容器或实体物品能力。
-                输出 ItemStack 为被清除的原物品。""";
+                从指定槽位取出物品并掉落到目标实体位置。
+                count 小于等于 0 时丢出整个槽位。
+                输出 ItemStack 为实际掉落的物品栈。""";
 
-        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.clear_slot"))
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.drop_slot_item"))
                 .comment(comment)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), null, UIHint.SLOT_REF, null, null))
-                .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.COUNT.toInput(1), null, UIHint.INPUT, null, null))
                 .build();
     }
 
@@ -38,9 +37,12 @@ public class ClearSlot extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
         SlotRef slotRef = getInput(context, StandardPorts.SLOT.getId(), SlotRef.class);
-        ItemStack removed = SlotAccessUtils.clearItem(entity, slotRef != null ? slotRef : SlotRef.DEFAULT);
-        context.setTempData(StandardPorts.ITEM_STACK.getId(), removed);
-
+        Integer count = getInput(context, StandardPorts.COUNT.getId(), Integer.class);
+        ItemStack dropped = SlotAccessUtils.extractItem(entity, slotRef != null ? slotRef : SlotRef.DEFAULT, count != null ? count : 1);
+        if (!dropped.isEmpty()) {
+            SlotAccessUtils.dropItem(entity, dropped);
+        }
+        context.setTempData(StandardPorts.ITEM_STACK.getId(), dropped);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
