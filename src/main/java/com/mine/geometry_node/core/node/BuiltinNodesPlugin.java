@@ -26,6 +26,7 @@ import com.mine.geometry_node.core.node.nodes.dialogue.*;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.dialogue.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
+import com.mine.geometry_node.core.node.nodes.events.inventory.*;
 import com.mine.geometry_node.core.node.nodes.events.world.*;
 import com.mine.geometry_node.core.node.nodes.functions.graph.*;
 import com.mine.geometry_node.core.node.nodes.functions.color.*;
@@ -369,7 +370,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // Events/Inventory
 //        registry.register("events/inventory", new OnContainerClose());
-//        registry.register("events/inventory", new OnContainerOpen());
+        registry.register("events/inventory", new OnContainerOpen());
 //        registry.register("events/inventory", new OnItemCrafted());
 //        registry.register("events/inventory", new OnItemSmelted());
 //        registry.register("events/inventory", new OnSlotClick());

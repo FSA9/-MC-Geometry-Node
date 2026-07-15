@@ -1,18 +1,22 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.core.engine.blueprint.event.GraphEventFields;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputStateManager;
 import com.mine.geometry_node.core.node.nodes.events.display_entity.OnInteraction;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
+import com.mine.geometry_node.core.node.nodes.events.inventory.OnContainerOpen;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.InteractionEvent;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Interaction;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.CommandEvent;
@@ -67,6 +71,19 @@ public class PlayerDispatcher {
                 ));
             }
             return EventResult.pass().asMinecraft();
+        });
+
+        dev.architectury.event.events.common.PlayerEvent.OPEN_MENU.register((player, menu) -> {
+            if (!player.level().isClientSide()) {
+                String containerType = menuTypeId(menu);
+                GraphEngine.dispatchEvent((ServerLevel) player.level(), player, OnContainerOpen.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), player,
+                        StandardPorts.PLAYER.getId(), player,
+                        StandardPorts.TYPE.getId(), containerType,
+                        GraphEventFields.CONTAINER_TYPE, containerType,
+                        StandardPorts.COUNT.getId(), slotCount(menu)
+                ));
+            }
         });
 
         var bus = NeoForge.EVENT_BUS;
@@ -219,5 +236,17 @@ public class PlayerDispatcher {
                 ));
             }
         });
+    }
+
+    private static String menuTypeId(AbstractContainerMenu menu) {
+        if (menu == null || menu.getType() == null) {
+            return "";
+        }
+        Object id = BuiltInRegistries.MENU.getKey(menu.getType());
+        return id != null ? id.toString() : "";
+    }
+
+    private static int slotCount(AbstractContainerMenu menu) {
+        return menu != null ? menu.slots.size() : 0;
     }
 }

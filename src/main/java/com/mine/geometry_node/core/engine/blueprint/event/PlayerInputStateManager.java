@@ -43,9 +43,10 @@ public class PlayerInputStateManager {
                 OnPlayerKeyEvent.TYPE_ID,
                 EventPayload.builder()
                         .put(StandardPorts.ENTITY.getId(), player)
-                        .put("key_id", keyId)
-                        .put("action", action)
-                        .put("duration", payload.durationMs() / 1000.0f)
+                        .put(GraphEventFields.KEY_ID, keyId)
+                        .put(GraphEventFields.ACTION, action)
+                        .put(GraphEventFields.DURATION, payload.durationMs() / 1000.0f)
+                        .put(StandardPorts.TIME.getId(), payload.durationMs() / 1000.0f)
                         .build()
         );
     }

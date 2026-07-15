@@ -5,6 +5,8 @@ import com.mine.geometry_node.core.engine.blueprint.attachment.*;
 import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.attachment.GlobalGraphStorage;
+import com.mine.geometry_node.core.engine.blueprint.event.subscription.EventSubscription;
+import com.mine.geometry_node.core.engine.blueprint.event.subscription.GraphSubscriptionIndex;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
@@ -77,8 +79,8 @@ public class GraphEngine {
         refreshGlobalSubscriptions(level);
         LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
 
-        for (String graphId : graphSubscriptions.globalGraphsFor(eventNodeId)) {
-            triggerOnProcess(level, target, graphId, eventNodeId, eventPayload,
+        for (EventSubscription subscription : graphSubscriptions.globalSubscriptionsFor(eventNodeId)) {
+            triggerSubscriptionOnProcess(level, target, subscription, eventPayload,
                     id -> levelAttachment.getProcess(id),
                     levelAttachment::addProcess);
         }
@@ -87,8 +89,8 @@ public class GraphEngine {
         if (target != null) {
             EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
-                for (String graphId : getEntityGraphsForEvent(target, eventNodeId)) {
-                    triggerOnProcess(level, target, graphId, eventNodeId, eventPayload,
+                for (EventSubscription subscription : getEntitySubscriptionsForEvent(target, eventNodeId)) {
+                    triggerSubscriptionOnProcess(level, target, subscription, eventPayload,
                             id -> entityAttachment.getProcess(id),
                             process -> {
                                 entityAttachment.addProcess(process);
@@ -194,29 +196,24 @@ public class GraphEngine {
     /**
      * 核心逻辑：确保进程存在，并执行指定的事件分支
      */
-    private static void triggerOnProcess(ServerLevel level, @Nullable Entity target, String graphId, String eventNodeId,
-                                         @Nullable Map<String, Object> eventData,
-                                         java.util.function.Function<String, GraphProcess> processFinder,
-                                         Consumer<GraphProcess> mountAction) {
+    private static void triggerSubscriptionOnProcess(ServerLevel level,
+                                                     @Nullable Entity target,
+                                                     EventSubscription subscription,
+                                                     @Nullable Map<String, Object> eventData,
+                                                     Function<String, GraphProcess> processFinder,
+                                                     Consumer<GraphProcess> mountAction) {
+        if (subscription == null || !subscription.shouldDispatch(level, target, eventData)) return;
 
-        RuntimeGraphIndex index = getGraphIndex(graphId);
-        if (index == null) return;
-
-        List<Integer> startNodeIds = index.findNodesByType(eventNodeId);
-        if (startNodeIds.isEmpty()) return;
-
-        // 获取或创建常驻进程
+        String graphId = subscription.graphId();
+        RuntimeGraphIndex index = subscription.index();
         GraphProcess process = processFinder.apply(graphId);
         if (process == null || process.getIndex() != index) {
             process = new GraphProcess(graphId, index);
             mountAction.accept(process);
         }
 
-        // 注入环境并启动线程
         process.setEnvironment(level, target);
-        for (int nodeId : startNodeIds) {
-            process.executeEvent(nodeId, eventData);
-        }
+        process.executeEvent(subscription.nodeId(), eventData);
     }
 
     private static void triggerCustomOnProcess(ServerLevel level, @Nullable Entity target, String graphId,
@@ -308,6 +305,28 @@ public class GraphEngine {
     public static Set<String> getEntityGraphsForEvent(@NotNull Entity entity, String eventType) {
         registerEntityListeners(entity);
         return graphSubscriptions.entityGraphsFor(entity, eventType);
+    }
+
+    public static void dispatchBoundEntityEvent(@NotNull ServerLevel level,
+                                                @NotNull Entity target,
+                                                String eventNodeId,
+                                                @Nullable Map<String, Object> eventData) {
+        Map<String, Object> eventPayload = snapshotEventData(eventData);
+
+        EntityGraphAttachment entityAttachment = getAttachment(target);
+        if (entityAttachment == null) return;
+
+        for (EventSubscription subscription : getEntitySubscriptionsForEvent(target, eventNodeId)) {
+            triggerSubscriptionOnProcess(level, target, subscription, eventPayload,
+                    entityAttachment::getProcess,
+                    entityAttachment::addProcess);
+        }
+        GraphEventHandler.markActive(target);
+    }
+
+    private static List<EventSubscription> getEntitySubscriptionsForEvent(@NotNull Entity entity, String eventType) {
+        registerEntityListeners(entity);
+        return graphSubscriptions.entitySubscriptionsFor(entity, eventType);
     }
 
     private static void refreshGlobalSubscriptions(@NotNull ServerLevel level) {

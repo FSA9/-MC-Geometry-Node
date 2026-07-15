@@ -4,7 +4,6 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
@@ -25,8 +24,6 @@ import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
 import net.neoforged.neoforge.event.entity.living.*;
 import net.neoforged.neoforge.event.entity.player.TradeWithVillagerEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
-
-import java.util.List;
 
 public class EntityDispatcher {
 
@@ -109,23 +106,9 @@ public class EntityDispatcher {
 
             long currentTick = level.getGameTime();
             AreaTriggerDispatcher.tickEntity(level, entity, attachment, currentTick);
-            for (String graphId : GraphEngine.getEntityGraphsForEvent(entity, OnEntityTick.TYPE_ID)) {
-                RuntimeGraphIndex index = GraphEngine.getGraphIndex(graphId);
-                if (index == null) continue;
-
-                List<Integer> tickNodes = index.findNodesByType(OnEntityTick.TYPE_ID);
-                for (int nodeId : tickNodes) {
-                    int interval = Math.max(1, index.getNodeStaticInput(nodeId, StandardPorts.INTERVAL.getId(), Integer.class, 1));
-                    int offset = index.getNodeStaticInput(nodeId, StandardPorts.OFFSET.getId(), Integer.class, 0);
-
-                    if (interval == 1 || currentTick % interval == offset) {
-                        GraphEngine.executeEventNode(level, entity, graphId, index, nodeId,
-                                GraphEventData.of(StandardPorts.ENTITY.getId(), entity),
-                                attachment::getProcess,
-                                attachment::addProcess);
-                    }
-                }
-            }
+            GraphEngine.dispatchBoundEntityEvent(level, entity, OnEntityTick.TYPE_ID, GraphEventData.of(
+                    StandardPorts.ENTITY.getId(), entity
+            ));
         });
 
         bus.addListener((BabyEntitySpawnEvent event) -> {

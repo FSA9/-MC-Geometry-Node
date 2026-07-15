@@ -21,6 +21,7 @@ public class RegistryDataManager {
     private static List<String> EFFECT_CACHE = null;  // 效果
     private static List<String> SOUND_CACHE = null;  // 音效
     private static List<String> PARTICLE_CACHE = null;
+    private static List<String> MENU_CACHE = null;
 
     public static List<String> getAllBlocks() {
         if (BLOCK_CACHE == null) {
@@ -70,6 +71,38 @@ public class RegistryDataManager {
                     .map(id -> id.toString()).sorted().toList();
         }
         return PARTICLE_CACHE;
+    }
+
+    public static List<String> getAllMenus() {
+        if (MENU_CACHE == null) {
+            MENU_CACHE = BuiltInRegistries.MENU.keySet().stream()
+                    .map(id -> id.toString()).sorted().toList();
+        }
+        return MENU_CACHE;
+    }
+
+    public static String[] withEmptyOption(List<String> options) {
+        if (options == null || options.isEmpty()) {
+            return new String[]{""};
+        }
+
+        String[] result = new String[options.size() + 1];
+        result[0] = "";
+        for (int i = 0; i < options.size(); i++) {
+            result[i + 1] = options.get(i);
+        }
+        return result;
+    }
+
+    public static String[] withEmptyOption(String[] options) {
+        if (options == null || options.length == 0) {
+            return new String[]{""};
+        }
+
+        String[] result = new String[options.length + 1];
+        result[0] = "";
+        System.arraycopy(options, 0, result, 1, options.length);
+        return result;
     }
 
     // 动态类型
@@ -137,6 +170,7 @@ public class RegistryDataManager {
             case "minecraft:damage_type" -> access != null ? getDamageTypes(access) : List.of();
             case "minecraft:attribute" -> access != null ? getAttributes(access) : List.of();
             case "minecraft:entity_type" -> getEntityTypes();
+            case "minecraft:menu" -> getAllMenus();
             case "geometry_node:port_types" -> getPortTypes();
             default -> {
                 System.err.println("[RegistryDataManager] 未知的动态注册表 ID: " + registryId);
