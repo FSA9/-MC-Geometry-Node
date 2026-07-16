@@ -19,6 +19,15 @@ public final class RotatedBoxEntityQuery {
         return AreaEntityQuery.find(level, AreaShape.BOX, center, size, rotation, predicate);
     }
 
+    public static List<Entity> find(ServerLevel level,
+                                    Vec3 center,
+                                    Vec3 size,
+                                    Vec3 rotation,
+                                    AreaTargetType targetType,
+                                    Predicate<Entity> predicate) {
+        return AreaEntityQuery.find(level, AreaShape.BOX, center, size, rotation, targetType, predicate);
+    }
+
     public static Vec3 sanitizeSize(Vec3 size) {
         return AreaEntityQuery.sanitizeSize(size);
     }

@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAnchor;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaEntityQuery;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
+import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
 import com.mine.geometry_node.core.node.nodes.events.area.AreaTriggerEvent;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import net.minecraft.resources.Identifier;
@@ -20,6 +21,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -36,6 +39,7 @@ public final class AreaTriggerDispatcher {
     private static final int STALE_STATE_TICKS = 20 * 60;
     private static final int STALE_CLEANUP_INTERVAL = 20 * 10;
     private static final Map<StateKey, AreaState> STATES = new HashMap<>();
+    private static final Map<RuntimeGraphIndex, List<CompiledAreaNode>> CONFIG_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
     private static long lastCleanupTick = Long.MIN_VALUE;
 
     private AreaTriggerDispatcher() {
@@ -48,11 +52,12 @@ public final class AreaTriggerDispatcher {
         LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
         ScopeKey scope = ScopeKey.global(level.dimension().identifier());
         Set<StateKey> seenStates = new HashSet<>();
+        Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
 
         for (String graphId : GraphEngine.getGlobalGraphsForEvent(level, AreaTriggerEvent.TYPE_ID)) {
             String sourceKey = AreaDebugSessionManager.levelSourceKey(level, graphId);
             tickGraph(level, null, graphId, GraphEngine.getGraphIndex(graphId),
-                    attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates);
+                    attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates, queryCache);
         }
 
         pruneScope(scope, seenStates);
@@ -64,11 +69,12 @@ public final class AreaTriggerDispatcher {
 
         ScopeKey scope = ScopeKey.entity(level.dimension().identifier(), owner.getUUID());
         Set<StateKey> seenStates = new HashSet<>();
+        Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
 
         for (String graphId : GraphEngine.getEntityGraphsForEvent(owner, AreaTriggerEvent.TYPE_ID)) {
             String sourceKey = AreaDebugSessionManager.entitySourceKey(level, owner, graphId);
             tickGraph(level, owner, graphId, GraphEngine.getGraphIndex(graphId),
-                    attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates);
+                    attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates, queryCache);
         }
 
         pruneScope(scope, seenStates);
@@ -83,7 +89,8 @@ public final class AreaTriggerDispatcher {
                                   ScopeKey scope,
                                   String sourceKey,
                                   long currentTick,
-                                  Set<StateKey> seenStates) {
+                                  Set<StateKey> seenStates,
+                                  Map<QueryCacheKey, AreaQueryResult> queryCache) {
         if (index == null) {
             AreaDebugSessionManager.removeSourceBoxes(level, sourceKey);
             return;
@@ -111,9 +118,9 @@ public final class AreaTriggerDispatcher {
             if (resolved == null) {
                 resolved = group.config.resolve(target);
             }
-            AreaQueryResult result = findEntities(level, resolved);
+            AreaQueryResult result = findEntities(level, resolved, group.config.targetType, queryCache);
             Set<UUID> previous = state.inside;
-            Set<UUID> current = result.entitiesById.keySet();
+            Set<UUID> current = result.hitsById.keySet();
 
             dispatchPhase(level, target, graphId, index, group, AreaPhase.ENTER,
                     difference(current, previous), result, processFinder, mountAction);
@@ -132,17 +139,40 @@ public final class AreaTriggerDispatcher {
     private static void collectNodes(RuntimeGraphIndex index,
                                      long currentTick,
                                      Map<AreaConfigKey, AreaGroup> groups) {
-        for (int nodeId : index.findNodesByType(AreaTriggerEvent.TYPE_ID)) {
-            AreaConfig config = readConfig(index, nodeId);
-
-            AreaPhase phase = readPhase(index, nodeId);
+        for (CompiledAreaNode node : getCompiledNodes(index)) {
+            AreaConfig config = node.config;
+            AreaPhase phase = node.phase;
             AreaGroup group = groups.computeIfAbsent(config.key(), key -> new AreaGroup(key, config));
-            group.nodes.computeIfAbsent(phase, ignored -> new ArrayList<>()).add(nodeId);
+            group.nodes.computeIfAbsent(phase, ignored -> new ArrayList<>()).add(node.nodeId);
             if (group.debugNodeId == null) {
-                group.debugNodeId = index.getIdToString(nodeId);
+                group.debugNodeId = node.nodeIdString;
             }
             group.scheduled = group.scheduled || shouldTick(currentTick, config.interval, config.offset);
         }
+    }
+
+    private static List<CompiledAreaNode> getCompiledNodes(RuntimeGraphIndex index) {
+        synchronized (CONFIG_CACHE) {
+            return CONFIG_CACHE.computeIfAbsent(index, AreaTriggerDispatcher::compileNodes);
+        }
+    }
+
+    private static List<CompiledAreaNode> compileNodes(RuntimeGraphIndex index) {
+        List<Integer> nodeIds = index.findNodesByType(AreaTriggerEvent.TYPE_ID);
+        if (nodeIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<CompiledAreaNode> nodes = new ArrayList<>(nodeIds.size());
+        for (int nodeId : nodeIds) {
+            nodes.add(new CompiledAreaNode(
+                    nodeId,
+                    index.getIdToString(nodeId),
+                    readConfig(index, nodeId),
+                    readPhase(index, nodeId)
+            ));
+        }
+        return List.copyOf(nodes);
     }
 
     private static AreaPhase readPhase(RuntimeGraphIndex index, int nodeId) {
@@ -160,6 +190,7 @@ public final class AreaTriggerDispatcher {
     private static AreaConfig readConfig(RuntimeGraphIndex index, int nodeId) {
         AreaAnchor anchor = AreaAnchor.fromId(index.getNodeStaticInput(nodeId, AreaTriggerEvent.ANCHOR_PORT, String.class, AreaAnchor.WORLD.id()));
         AreaShape shape = AreaShape.fromId(index.getNodeStaticInput(nodeId, AreaTriggerEvent.SHAPE_PORT, String.class, AreaShape.BOX.id()));
+        AreaTargetType targetType = AreaTargetType.fromId(index.getNodeStaticInput(nodeId, AreaTriggerEvent.TARGET_PORT, String.class, AreaTargetType.ALL.id()));
         Vec3 center = readVec3(index.getNodeStaticInput(nodeId, StandardPorts.CENTER.getId()), Vec3.ZERO);
         Vec3 size = readSize(index, nodeId, shape);
         Vec3 rotation = shape == AreaShape.SPHERE
@@ -167,7 +198,7 @@ public final class AreaTriggerDispatcher {
                 : readVec3(index.getNodeStaticInput(nodeId, StandardPorts.ROTATION.getId()), Vec3.ZERO);
         int interval = Math.max(1, index.getNodeStaticInput(nodeId, StandardPorts.INTERVAL.getId(), Integer.class, 1));
         int offset = Math.floorMod(index.getNodeStaticInput(nodeId, StandardPorts.OFFSET.getId(), Integer.class, 0), interval);
-        return new AreaConfig(anchor, shape, center, size, rotation, interval, offset);
+        return new AreaConfig(anchor, shape, targetType, center, size, rotation, interval, offset);
     }
 
     private static Vec3 readSize(RuntimeGraphIndex index, int nodeId, AreaShape shape) {
@@ -204,9 +235,10 @@ public final class AreaTriggerDispatcher {
         List<Integer> nodes = group.nodes.get(phase);
         if (nodes == null || nodes.isEmpty() || entityIds.isEmpty()) return;
 
-        int insideCount = result.entitiesById.size();
+        int insideCount = result.hitsById.size();
         for (UUID entityId : entityIds) {
-            Entity triggerEntity = result.entitiesById.get(entityId);
+            AreaEntityQuery.Hit hit = result.hitsById.get(entityId);
+            Entity triggerEntity = hit != null ? hit.entity() : null;
             if (triggerEntity == null) {
                 triggerEntity = level.getEntity(entityId);
             }
@@ -219,13 +251,19 @@ public final class AreaTriggerDispatcher {
                     StandardPorts.TRIGGER_ENTITY.getId(), triggerEntity,
                     StandardPorts.TARGET_ENTITY.getId(), triggerEntity,
                     StandardPorts.XYZ.getId(), triggerEntity.position(),
+                    StandardPorts.HIT_POS.getId(), hit != null ? hit.hitPos() : triggerEntity.position(),
+                    StandardPorts.NORMAL.getId(), hit != null ? hit.normal() : Vec3.ZERO,
+                    StandardPorts.VECTOR.getId(), hit != null ? hit.velocity() : triggerEntity.getDeltaMovement(),
+                    StandardPorts.START_POS.getId(), hit != null ? hit.startPos() : triggerEntity.position(),
+                    StandardPorts.END_POS.getId(), hit != null ? hit.endPos() : triggerEntity.position(),
                     StandardPorts.CENTER.getId(), result.area.center,
                     StandardPorts.SIZE_3.getId(), group.config.size,
                     StandardPorts.RADIUS.getId(), (float) group.config.radius(),
                     AreaTriggerEvent.HEIGHT_PORT, (float) group.config.height(),
                     StandardPorts.ROTATION.getId(), group.config.rotation,
                     StandardPorts.TYPE.getId(), phase.payloadName,
-                    AreaTriggerEvent.INSIDE_COUNT_PORT, insideCount
+                    AreaTriggerEvent.INSIDE_COUNT_PORT, insideCount,
+                    AreaTriggerEvent.TARGET_PORT, group.config.targetType.id()
             );
 
             for (int nodeId : nodes) {
@@ -236,13 +274,21 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private static AreaQueryResult findEntities(ServerLevel level, ResolvedArea area) {
-        Map<UUID, Entity> hitEntities = new LinkedHashMap<>();
-        for (Entity entity : AreaEntityQuery.find(level, area.shape, area.center, area.size, area.rotation, e -> !e.isSpectator())) {
-            hitEntities.put(entity.getUUID(), entity);
+    private static AreaQueryResult findEntities(ServerLevel level,
+                                                ResolvedArea area,
+                                                AreaTargetType targetType,
+                                                Map<QueryCacheKey, AreaQueryResult> queryCache) {
+        QueryCacheKey key = QueryCacheKey.of(area, targetType);
+        return queryCache.computeIfAbsent(key, ignored -> queryEntities(level, area, targetType));
+    }
+
+    private static AreaQueryResult queryEntities(ServerLevel level, ResolvedArea area, AreaTargetType targetType) {
+        Map<UUID, AreaEntityQuery.Hit> hits = new LinkedHashMap<>();
+        for (AreaEntityQuery.Hit hit : AreaEntityQuery.findHits(level, area.shape, area.center, area.size, area.rotation, targetType, e -> !e.isSpectator())) {
+            hits.put(hit.entity().getUUID(), hit);
         }
 
-        return new AreaQueryResult(area, hitEntities);
+        return new AreaQueryResult(area, hits);
     }
 
     private static Set<UUID> difference(Set<UUID> left, Set<UUID> right) {
@@ -334,7 +380,10 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private record AreaQueryResult(ResolvedArea area, Map<UUID, Entity> entitiesById) {
+    private record AreaQueryResult(ResolvedArea area, Map<UUID, AreaEntityQuery.Hit> hitsById) {
+    }
+
+    private record CompiledAreaNode(int nodeId, String nodeIdString, AreaConfig config, AreaPhase phase) {
     }
 
     private record ScopeKey(String kind, Identifier dimension, @Nullable UUID ownerId) {
@@ -352,6 +401,7 @@ public final class AreaTriggerDispatcher {
 
     private record AreaConfigKey(AreaAnchor anchor,
                                  AreaShape shape,
+                                 AreaTargetType targetType,
                                  double centerX, double centerY, double centerZ,
                                  double sizeX, double sizeY, double sizeZ,
                                  double rotationX, double rotationY, double rotationZ,
@@ -360,6 +410,7 @@ public final class AreaTriggerDispatcher {
 
     private record AreaConfig(AreaAnchor anchor,
                               AreaShape shape,
+                              AreaTargetType targetType,
                               Vec3 center,
                               Vec3 size,
                               Vec3 rotation,
@@ -369,6 +420,7 @@ public final class AreaTriggerDispatcher {
             return new AreaConfigKey(
                     anchor,
                     shape,
+                    targetType,
                     center.x, center.y, center.z,
                     size.x, size.y, size.z,
                     rotation.x, rotation.y, rotation.z,
@@ -397,6 +449,22 @@ public final class AreaTriggerDispatcher {
     }
 
     private record ResolvedArea(AreaShape shape, Vec3 center, Vec3 size, Vec3 rotation) {
+    }
+
+    private record QueryCacheKey(AreaShape shape,
+                                 AreaTargetType targetType,
+                                 double centerX, double centerY, double centerZ,
+                                 double sizeX, double sizeY, double sizeZ,
+                                 double rotationX, double rotationY, double rotationZ) {
+        static QueryCacheKey of(ResolvedArea area, AreaTargetType targetType) {
+            return new QueryCacheKey(
+                    area.shape,
+                    targetType,
+                    area.center.x, area.center.y, area.center.z,
+                    area.size.x, area.size.y, area.size.z,
+                    area.rotation.x, area.rotation.y, area.rotation.z
+            );
+        }
     }
 
     private static final class AreaGroup {

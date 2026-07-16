@@ -525,6 +525,7 @@
   "geometry_node.node.combine_color": "合并颜色",
   "geometry_node.node.separate_color": "分离颜色",
   "geometry_node.node.vector_add": "向量相加",
+  "geometry_node.node.reflect_vector": "反射向量",
 
   "--- LOGICS ---": "--- 逻辑控制 ---",
   "geometry_node.node.contain": "包含",
@@ -703,11 +704,14 @@
   "geometry_node.menu.area": "区域",
   "geometry_node.port.count": "数量",
   "geometry_node.port.enabled": "启用",
+  "geometry_node.port.hit_pos": "命中位置",
+  "geometry_node.port.normal": "法线",
   "geometry_node.port.trigger_id": "触发器 ID",
   "geometry_node.port.inside_count": "区域内数量",
   "geometry_node.port.area_phase": "区域阶段",
   "geometry_node.port.area_anchor": "区域锚点",
   "geometry_node.port.area_shape": "区域形状",
+  "geometry_node.port.area_target": "区域目标",
   "geometry_node.port.area_height": "高度",
   "geometry_node.node.area_trigger_event": "区域触发事件",
   "geometry_node.node.on_multiblock_built": "当多方块结构搭建完成时"

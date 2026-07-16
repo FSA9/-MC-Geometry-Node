@@ -165,10 +165,12 @@ public enum StandardPorts {
 
     // XYZ
     XYZ("xyz", PortType.XYZ),
+    HIT_POS("hit_pos", PortType.XYZ),
     START_POS("start_pos", PortType.XYZ),
     END_POS("end_pos", PortType.XYZ),
     CENTER("center", PortType.XYZ),
     VECTOR("vector", PortType.XYZ),
+    NORMAL("normal", PortType.XYZ),
     ROTATION("rotation", PortType.XYZ),
     SIZE_3("size_3", PortType.XYZ),
     SPREAD("spread", PortType.XYZ),

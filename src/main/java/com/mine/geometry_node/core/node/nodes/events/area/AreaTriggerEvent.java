@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.events.area;
 
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAnchor;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
+import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -22,6 +23,7 @@ public class AreaTriggerEvent extends BaseEventNode {
     public static final String PHASE_PORT = "phase";
     public static final String ANCHOR_PORT = "anchor";
     public static final String SHAPE_PORT = "shape";
+    public static final String TARGET_PORT = "target";
     public static final String HEIGHT_PORT = StandardPorts.HEIGHT.getId();
     public static final String TRIGGER_ID_PORT = "trigger_id";
     public static final String INSIDE_COUNT_PORT = "inside_count";
@@ -33,15 +35,20 @@ public class AreaTriggerEvent extends BaseEventNode {
     public static final String PHASE_EXIT = "exit";
     public static final String[] PHASE_OPTIONS = {PHASE_ENTER, PHASE_STAY, PHASE_EXIT};
     private static final String AREA_COMMENT = """
-            在区域内实体进入、停留或离开时触发。
-            phase: 选择 enter / stay / exit。
+            检测实体与区域体积的进入、停留或离开。
+            phase: enter 只在进入时触发；stay 在区域内持续触发；exit 在离开时触发。
+            target: all / living / player / projectile / item，用于在底层提前筛选候选实体。
             anchor: world 使用世界坐标；owner 在实体绑定图中跟随绑定实体，center 作为偏移量；没有绑定实体时退化为世界坐标。
-            shape: 选择 box / sphere / cylinder，并动态切换对应尺寸端口。
+            shape: box / sphere / cylinder，并动态切换对应尺寸端口。
+            interval / offset: 控制检测频率；投射物护盾等高速检测建议 interval 保持 1。
             entity: 实体绑定图中是绑定该图的实体；全局图中没有绑定实体时等同于触发实体。
             trigger_entity: 本次进入、停留或离开区域的实体。
             target_entity: 当前与 trigger_entity 相同，用作通用目标实体输出。
             xyz: trigger_entity 的当前位置。
-            inside_count: 当前区域内实体数量。""";
+            hit_pos / normal / vector: 命中点、表面法线和实体速度；projectile 会使用上一 tick 到当前 tick 的 swept 检测，适合反弹或吸收护盾。
+            start_pos / end_pos: 本次检测的运动线段；projectile 为上一 tick 到当前 tick。
+            inside_count: 当前区域内实体数量。
+            同一图内相同区域配置的不同 phase 会共享一次底层查询。""";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -64,6 +71,11 @@ public class AreaTriggerEvent extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.TRIGGER_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.HIT_POS.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.NORMAL.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.START_POS.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.END_POS.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.TARGET_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.CENTER.toOutput(), UIHint.DEFAULT, null, null));
@@ -95,6 +107,10 @@ public class AreaTriggerEvent extends BaseEventNode {
                         PortDef.create(SHAPE_PORT, "geometry_node.port.area_shape", PortType.STRING, AreaShape.BOX.id()).hiddenPin(),
                         null, UIHint.SELECT, null,
                         Map.of(PortMetaKeys.OPTIONS, AreaShape.OPTIONS)))
+                .addRow(new PortRow(
+                        PortDef.create(TARGET_PORT, "geometry_node.port.area_target", PortType.STRING, AreaTargetType.ALL.id()).hiddenPin(),
+                        null, UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.OPTIONS, AreaTargetType.OPTIONS)))
                 .addRow(new PortRow(StandardPorts.CENTER.toInput(Vec3.ZERO).hiddenPin(), null, UIHint.VECTOR, null, null));
 
         switch (shape) {

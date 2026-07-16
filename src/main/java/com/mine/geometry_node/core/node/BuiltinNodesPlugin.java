@@ -433,6 +433,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("maths/operation", new MathExpression());
         registry.register("maths/operation", new MathOperation());
         registry.register("maths/vector", new VectorAdd());
+        registry.register("maths/vector", new ReflectVector());
         registry.register("maths/vector", new SeparateXYZ());
         registry.register("maths/vector", new CombineXYZ());
 

@@ -221,10 +221,14 @@ public class EntityDispatcher {
         });
 
         bus.addListener((EntityJoinLevelEvent event) -> {
-            if (!event.getLevel().isClientSide() && event.getEntity() instanceof Projectile projectile && projectile.getOwner() != null) {
-                GraphEngine.dispatchEvent((ServerLevel) event.getLevel(), projectile.getOwner(), OnProjectileShoot.TYPE_ID, GraphEventData.of(
-                        StandardPorts.ENTITY.getId(), projectile.getOwner(),
-                        StandardPorts.DIRECT_SOURCE.getId(), projectile
+            if (!event.getLevel().isClientSide() && event.getEntity() instanceof Projectile projectile) {
+                Entity owner = projectile.getOwner();
+                Entity dispatchTarget = owner != null ? owner : projectile;
+                GraphEngine.dispatchEvent((ServerLevel) event.getLevel(), dispatchTarget, OnProjectileShoot.TYPE_ID, GraphEventData.of(
+                        StandardPorts.ENTITY.getId(), projectile,
+                        StandardPorts.SOURCE_ENTITY.getId(), owner,
+                        StandardPorts.XYZ.getId(), projectile.position(),
+                        StandardPorts.VECTOR.getId(), projectile.getDeltaMovement()
                 ));
             }
         });
