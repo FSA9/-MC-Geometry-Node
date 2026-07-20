@@ -220,7 +220,7 @@ final class AssetEntryLoader {
     }
 
     private boolean isDisplayable(File file) {
-        return file != null && (file.isDirectory() || file.getName().toLowerCase(Locale.ROOT).endsWith(".json"));
+        return file != null && (file.isDirectory() || isLocalAssetFile(file));
     }
 
     private void sortFiles(List<File> files, File baseDirectory, boolean favoritesMode) {
@@ -235,6 +235,16 @@ final class AssetEntryLoader {
         return file != null
                 && file.isFile()
                 && file.getName().toLowerCase(Locale.ROOT).endsWith(".json");
+    }
+
+    static boolean isLocalSchematicFile(File file) {
+        if (file == null || !file.isFile()) return false;
+        String name = file.getName().toLowerCase(Locale.ROOT);
+        return name.endsWith(".schem") || name.endsWith(".schematic");
+    }
+
+    static boolean isLocalAssetFile(File file) {
+        return isLocalGraphFile(file) || isLocalSchematicFile(file);
     }
 
     static String pathKey(File file) {

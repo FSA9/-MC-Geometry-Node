@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.bottom_window.asset_library.right;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.resources.TypedValue;
@@ -33,6 +34,7 @@ final class AssetFileItemView extends LinearLayout {
     private static final int COLOR_ITEM_TRANSPARENT = 0x00000000;
     private static final int COLOR_FOLDER = 0xFFDDAA00;
     private static final int COLOR_FILE = 0xFF88CCFF;
+    private static final int COLOR_SCHEMATIC = 0xFF86B8FF;
     private static final int COLOR_TEXT = 0xFFDDDDDD;
     private static final int COLOR_SUBTEXT = 0xFF888888;
     private static final int COLOR_TAG_BG = 0xFF344458;
@@ -44,6 +46,7 @@ final class AssetFileItemView extends LinearLayout {
     private final List<String> mTags;
     private final boolean mFavorite;
     private final VectorIconView mIconView;
+    private final SchematicThumbnailView mSchematicThumbnailView;
     private final TextView mNameView;
     private final TextView mSubtitleView;
     private final Listener mListener;
@@ -66,6 +69,9 @@ final class AssetFileItemView extends LinearLayout {
         setBackground(RightFileBrowserPanel.createRectDrawable(COLOR_ITEM_TRANSPARENT, 4));
 
         mIconView = new VectorIconView(context, iconKind(), iconColor());
+        mSchematicThumbnailView = entry.isSchematicFile() && entry.localFile() != null
+                ? new SchematicThumbnailView(context, entry.localFile())
+                : null;
         mNameView = UIUtils.createLockedTextView(context, displayName, mode.nameTextSizeDp, COLOR_TEXT);
         mNameView.setGravity(mode == AssetViewMode.LIST ? Gravity.CENTER_VERTICAL : Gravity.CENTER);
         mNameView.setSingleLine(true);
@@ -97,6 +103,7 @@ final class AssetFileItemView extends LinearLayout {
         removeAllViews();
         mIconView.setKind(iconKind());
         mIconView.setIconColor(iconColor());
+        View iconView = iconView();
         mNameView.setText(displayName);
         mNameView.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(mode.nameTextSizeDp));
         mSubtitleView.setText(parentLabel);
@@ -105,7 +112,7 @@ final class AssetFileItemView extends LinearLayout {
         if (mode == AssetViewMode.LIST) {
             setOrientation(LinearLayout.HORIZONTAL);
             setGravity(Gravity.CENTER_VERTICAL);
-            addView(mIconView, new LinearLayout.LayoutParams(dp2pxInt(34), ViewGroup.LayoutParams.MATCH_PARENT));
+            addView(iconView, new LinearLayout.LayoutParams(dp2pxInt(34), ViewGroup.LayoutParams.MATCH_PARENT));
 
             LinearLayout textColumn = new LinearLayout(getContext());
             textColumn.setOrientation(LinearLayout.VERTICAL);
@@ -138,7 +145,7 @@ final class AssetFileItemView extends LinearLayout {
         setOrientation(LinearLayout.VERTICAL);
         setGravity(Gravity.CENTER);
         FrameLayout iconFrame = new FrameLayout(getContext());
-        iconFrame.addView(mIconView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        iconFrame.addView(iconView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         if (canFavorite()) {
             FrameLayout.LayoutParams starLp = new FrameLayout.LayoutParams(dp2pxInt(24), dp2pxInt(24));
             starLp.gravity = Gravity.TOP | Gravity.RIGHT;
@@ -186,7 +193,13 @@ final class AssetFileItemView extends LinearLayout {
     }
 
     private int iconColor() {
-        return mEntry.isDirectory() ? COLOR_FOLDER : COLOR_FILE;
+        if (mEntry.isDirectory()) return COLOR_FOLDER;
+        if (mEntry.isSchematicFile()) return COLOR_SCHEMATIC;
+        return COLOR_FILE;
+    }
+
+    private View iconView() {
+        return mSchematicThumbnailView != null ? mSchematicThumbnailView : mIconView;
     }
 
     private TextView createTagChip(String tag) {

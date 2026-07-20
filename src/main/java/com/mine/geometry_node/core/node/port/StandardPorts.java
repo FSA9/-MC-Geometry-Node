@@ -64,6 +64,9 @@ public enum StandardPorts {
     CHOICE_VISIBLE("choice_visible", PortType.BOOLEAN),
     CHOICE_ENABLED("choice_enabled", PortType.BOOLEAN),
     REPLACE_EXISTING("replace_existing", PortType.BOOLEAN),
+    REPLACE_AIR("replace_air", PortType.BOOLEAN),
+    REPLACE_BLOCKS("replace_blocks", PortType.BOOLEAN),
+    ONLY_SELF_VISIBLE("only_self_visible", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
@@ -96,6 +99,7 @@ public enum StandardPorts {
     NAME("name", PortType.STRING),
     TITLE("title", PortType.STRING),
     STRING("string", PortType.STRING),
+    PATH("path", PortType.PATH),
     TYPE("type", PortType.STRING),
     MATCH_MODE("match_mode", PortType.STRING),
     GAMEMODE("gamemode", PortType.STRING),
@@ -172,6 +176,7 @@ public enum StandardPorts {
     VECTOR("vector", PortType.XYZ),
     NORMAL("normal", PortType.XYZ),
     ROTATION("rotation", PortType.XYZ),
+    MIRROR("mirror", PortType.XYZ),
     SIZE_3("size_3", PortType.XYZ),
     SPREAD("spread", PortType.XYZ),
     TRANSLATION("translation", PortType.XYZ),

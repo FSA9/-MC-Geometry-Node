@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library.model;
 
 import java.io.File;
+import java.util.Locale;
 
 public final class AssetEntry {
     private final AssetSourceKind mSourceKind;
@@ -10,6 +11,7 @@ public final class AssetEntry {
     private final boolean mDirectory;
     private final long mSize;
     private final File mLocalFile;
+    private final AssetKind mKind;
 
     private AssetEntry(AssetSourceKind sourceKind, String key, String name, String path, boolean directory, long size, File localFile) {
         mSourceKind = sourceKind;
@@ -19,6 +21,7 @@ public final class AssetEntry {
         mDirectory = directory;
         mSize = size;
         mLocalFile = localFile;
+        mKind = resolveKind(name, directory);
     }
 
     public static AssetEntry local(File file, String key, String displayPath) {
@@ -60,7 +63,23 @@ public final class AssetEntry {
         return mLocalFile;
     }
 
+    public AssetKind kind() {
+        return mKind;
+    }
+
     public boolean isJsonFile() {
-        return !mDirectory && mName.toLowerCase(java.util.Locale.ROOT).endsWith(".json");
+        return mKind == AssetKind.GRAPH;
+    }
+
+    public boolean isSchematicFile() {
+        return mKind == AssetKind.SCHEMATIC;
+    }
+
+    private static AssetKind resolveKind(String name, boolean directory) {
+        if (directory) return AssetKind.DIRECTORY;
+        String lowerName = name == null ? "" : name.toLowerCase(Locale.ROOT);
+        if (lowerName.endsWith(".json")) return AssetKind.GRAPH;
+        if (lowerName.endsWith(".schem") || lowerName.endsWith(".schematic")) return AssetKind.SCHEMATIC;
+        return AssetKind.FILE;
     }
 }

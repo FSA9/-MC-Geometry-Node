@@ -50,6 +50,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -98,6 +99,8 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private Consumer<File> mLocalDirectoryChangedListener;
     private Consumer<String> mRemoteDirectoryChangedListener;
     private Runnable mPickCurrentDirectoryAction;
+    private Consumer<AssetEntry> mPickFileAction;
+    private Predicate<AssetEntry> mEntryFilter;
 
     private static List<String> sRemoteClipboardPaths = new ArrayList<>();
     private static boolean sRemoteCutOperation = false;
@@ -274,6 +277,8 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         mScrollView = new ScrollView(context);
         mFileContent = new FileContentLayout(context, this);
         mFileContent.setViewMode(mViewMode);
+        mScrollView.setOnScrollChangeListener((view, scrollX, scrollY, oldScrollX, oldScrollY) -> updateVirtualViewport());
+        mScrollView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> updateVirtualViewport());
         mScrollView.addView(mFileContent, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         mBodyFrame.addView(mScrollView, new FrameLayout.LayoutParams(
@@ -319,6 +324,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         super.onSizeChanged(w, h, oldw, oldh);
         if (mFileContent != null) {
             mFileContent.setMinimumContentHeight(Math.max(0, h - dp2pxInt(NAV_BAR_HEIGHT)));
+            updateVirtualViewport();
         }
     }
 
@@ -400,6 +406,14 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         mPickCurrentDirectoryAction = action;
     }
 
+    public void setPickFileAction(Consumer<AssetEntry> action) {
+        mPickFileAction = action;
+    }
+
+    public void setEntryFilter(Predicate<AssetEntry> filter) {
+        mEntryFilter = filter;
+    }
+
     private void navigateUp() {
         if (mFavoritesMode) {
             return;
@@ -422,7 +436,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void refreshFileList(Runnable afterRender) {
         cancelLocalLoad();
-        mFileContent.removeAllViews();
+        mFileContent.setEntries(List.of());
         mItemViews.clear();
         mVisibleEntries.clear();
         mCurrentEntryResult = AssetEntryLoader.Result.empty();
@@ -509,27 +523,25 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void renderEntries(AssetEntryLoader.Result result) {
         mCurrentEntryResult = result == null ? AssetEntryLoader.Result.empty() : result;
-        mFileContent.removeAllViews();
         mItemViews.clear();
         mVisibleEntries.clear();
         List<AssetEntry> entries = mCurrentEntryResult.entries();
-        mVisibleEntries.addAll(entries);
         Set<String> visibleKeys = new LinkedHashSet<>();
 
-        Context context = getContext();
         for (AssetEntry entry : entries) {
+            if (mEntryFilter != null && !mEntryFilter.test(entry)) {
+                continue;
+            }
+            mVisibleEntries.add(entry);
             String key = entry.key();
             visibleKeys.add(key);
-            String parentLabel = (mFavoritesMode || !mSearchQuery.isEmpty() || !mTagSearchQuery.isEmpty()) ? parentLabel(entry) : "";
-            List<String> tags = mViewMode == AssetViewMode.LIST ? mCurrentEntryResult.tagsFor(entry) : List.of();
-            AssetFileItemView item = new AssetFileItemView(context, entry, mViewMode, displayName(entry), parentLabel, tags, isFavorite(entry), this);
-            item.setSelected(mSelectedPaths.contains(key));
-            mItemViews.put(key, item);
-            mFileContent.addView(item);
         }
 
         mSelectedPaths.retainAll(visibleKeys);
         mFileContent.setViewMode(mViewMode);
+        mScrollView.scrollTo(0, 0);
+        mFileContent.setEntries(mVisibleEntries);
+        updateVirtualViewport();
         mFileContent.requestLayout();
         mFileContent.invalidate();
     }
@@ -666,13 +678,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             mSelectedPaths.addAll(baseSelection);
         }
 
-        RectF itemRect = new RectF();
-        for (AssetFileItemView item : mItemViews.values()) {
-            itemRect.set(item.getLeft(), item.getTop(), item.getRight(), item.getBottom());
-            if (itemRect.intersects(selectionRect.left, selectionRect.top, selectionRect.right, selectionRect.bottom)) {
-                mSelectedPaths.add(item.getEntry().key());
-            }
-        }
+        mFileContent.collectEntriesIntersecting(selectionRect, mSelectedPaths);
         syncSelectionViews();
     }
 
@@ -690,6 +696,24 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     @Override
     public void disallowScrollIntercept(boolean disallow) {
         mScrollView.requestDisallowInterceptTouchEvent(disallow);
+    }
+
+    @Override
+    public AssetFileItemView createItemView(AssetEntry entry) {
+        String parentLabel = (mFavoritesMode || !mSearchQuery.isEmpty() || !mTagSearchQuery.isEmpty()) ? parentLabel(entry) : "";
+        List<String> tags = mViewMode == AssetViewMode.LIST ? mCurrentEntryResult.tagsFor(entry) : List.of();
+        AssetFileItemView item = new AssetFileItemView(getContext(), entry, mViewMode, displayName(entry), parentLabel, tags, isFavorite(entry), this);
+        item.setSelected(mSelectedPaths.contains(entry.key()));
+        return item;
+    }
+
+    @Override
+    public void onMountedItemViewsChanged(Map<String, AssetFileItemView> mountedItems) {
+        mItemViews.clear();
+        if (mountedItems != null) {
+            mItemViews.putAll(mountedItems);
+        }
+        syncSelectionViews();
     }
 
     private List<AssetEntry> getSelectedEntries() {
@@ -763,12 +787,8 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private AssetEntry findDirectoryEntryAt(float rawX, float rawY) {
-        for (AssetFileItemView item : mItemViews.values()) {
-            AssetEntry candidate = item.getEntry();
-            if (!candidate.isDirectory() || !isRawPointInside(item, rawX, rawY)) continue;
-            return candidate;
-        }
-        return null;
+        AssetEntry candidate = mFileContent.entryAtRaw(rawX, rawY);
+        return candidate != null && candidate.isDirectory() ? candidate : null;
     }
 
     private boolean moveLocalEntries(List<AssetEntry> entries, AssetEntry targetDirectoryEntry) {
@@ -819,8 +839,10 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private void addLocalContextActions(FileContextMenu menu, List<File> filesSnapshot) {
         if (filesSnapshot.isEmpty()) return;
         String suffix = filesSnapshot.size() > 1 ? " (" + filesSnapshot.size() + ")" : "";
-        if (mEnableRemoteTransferActions && mCoordinator != null && RemoteGraphClientState.canUpload()) {
-            menu.addMenuItem("上传到服务器" + suffix, () -> mCoordinator.showUploadDialog(filesSnapshot));
+        List<File> uploadableGraphs = getUploadableGraphFiles(filesSnapshot);
+        if (mEnableRemoteTransferActions && mCoordinator != null && RemoteGraphClientState.canUpload() && !uploadableGraphs.isEmpty()) {
+            String uploadSuffix = uploadableGraphs.size() > 1 ? " (" + uploadableGraphs.size() + ")" : "";
+            menu.addMenuItem("上传到服务器" + uploadSuffix, () -> mCoordinator.showUploadDialog(uploadableGraphs));
             menu.addDivider();
         }
         if (!mEnableLocalFileActions) return;
@@ -854,6 +876,29 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private boolean isLocalGraphFile(File file) {
         return AssetEntryLoader.isLocalGraphFile(file);
+    }
+
+    private List<File> getUploadableGraphFiles(List<File> files) {
+        List<File> result = new ArrayList<>();
+        for (File file : files) {
+            collectUploadableGraphFiles(file, result);
+        }
+        return result;
+    }
+
+    private void collectUploadableGraphFiles(File file, List<File> out) {
+        if (file == null || !file.exists()) return;
+        if (file.isFile()) {
+            if (isLocalGraphFile(file)) {
+                out.add(file);
+            }
+            return;
+        }
+        File[] children = file.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            collectUploadableGraphFiles(child, out);
+        }
     }
 
     private void showGraphTagDialog(File file) {
@@ -918,12 +963,15 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             menu.addMenuItem("新建文件夹", () -> triggerNewItem(true));
             menu.addMenuItem("新建文件", () -> triggerNewItem(false));
         }
-        if (mShowPickerContextActions) {
+        if (mShowPickerContextActions && mPickFileAction != null && targetEntry != null && !targetEntry.isDirectory()) {
+            menu.addMenuItem("选择文件", () -> mPickFileAction.accept(targetEntry));
+        }
+        if (mShowPickerContextActions && mPickCurrentDirectoryAction != null) {
             menu.addMenuItem("选择当前文件夹", () -> {
-                if (mPickCurrentDirectoryAction != null) {
-                    mPickCurrentDirectoryAction.run();
-                }
+                mPickCurrentDirectoryAction.run();
             });
+        }
+        if (mShowPickerContextActions) {
             menu.addMenuItem("刷新", this::refreshFileList);
         }
 
@@ -939,7 +987,16 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void startInlineEdit(File targetFile) {
-        AssetFileItemView itemView = mItemViews.get(pathKey(targetFile));
+        String key = pathKey(targetFile);
+        AssetFileItemView itemView = mItemViews.get(key);
+        if (itemView == null) {
+            int top = mFileContent.entryTop(key);
+            if (top < 0) return;
+            mScrollView.scrollTo(0, Math.max(0, top - dp2pxInt(8)));
+            updateVirtualViewport();
+            mFileContent.forceRefreshMountedItems();
+            itemView = mItemViews.get(key);
+        }
         if (itemView == null) return;
 
         TextView originalTextView = itemView.getNameView();
@@ -1162,6 +1219,11 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void handleDoubleClick(AssetEntry entry) {
+        if (mPickFileAction != null && !entry.isDirectory()) {
+            mPickFileAction.accept(entry);
+            return;
+        }
+
         if (entry.sourceKind() == AssetSourceKind.REMOTE) {
             if (entry.isDirectory()) {
                 navigateToRemote(entry.path());
@@ -1254,11 +1316,9 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         return text.substring(0, keepStart) + "…" + text.substring(text.length() - keepEnd);
     }
 
-    private boolean isRawPointInside(View view, float rawX, float rawY) {
-        int[] loc = new int[2];
-        view.getLocationOnScreen(loc);
-        return rawX >= loc[0] && rawX <= loc[0] + view.getWidth()
-                && rawY >= loc[1] && rawY <= loc[1] + view.getHeight();
+    private void updateVirtualViewport() {
+        if (mFileContent == null || mScrollView == null) return;
+        mFileContent.updateViewport(mScrollView.getScrollY(), mScrollView.getHeight());
     }
 
     private boolean isRightMouse(MotionEvent e) {

@@ -79,6 +79,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/block", new SpawnFallingBlock());
         registry.register("actions/block", new SetBlockState());
         registry.register("actions/block", new SetBlocksOnGeometry());
+        registry.register("actions/block", new CreateSchematicProjection());
         // actions/block
         registry.register("actions/block", new SetBlockFacing());
         registry.register("actions/block", new SetBlockHorizontalFacing());

@@ -20,6 +20,7 @@ public enum PortType {
     FLOAT("浮点数", 0xFF50C878, 0.0f),
     BOOLEAN("布尔", 0xFFE74C3C, false),
     STRING("字符串", 0xFF9B59B6, ""),
+    PATH("路径", 0xFF5F6670, ""),
     RICH_TEXT("富文本", 0xFFD56BE8, RichTextValue.EMPTY),
     ENTITY("实体", 0xFFE91E63, null),
     ITEM("物品", 0xFFE91E63, null),
@@ -101,9 +102,14 @@ public enum PortType {
         if (inputport == STRING) {
             if (outputport == INTEGER || outputport == LONG || outputport == FLOAT || outputport == BOOLEAN ||
                     outputport == RICH_TEXT || outputport == ENTITY || outputport == BLOCK || outputport == SLOT || outputport == XYZ ||
-                    outputport == ITEM || outputport == LIST || outputport == DICT || outputport == SHOP) {
+                    outputport == ITEM || outputport == LIST || outputport == DICT || outputport == SHOP || outputport == PATH) {
                 return true;
             }
+        }
+
+        // PATH uses String storage but keeps a distinct editor-facing type.
+        if ((outputport == PATH && inputport == STRING) || (outputport == STRING && inputport == PATH)) {
+            return true;
         }
 
         // 3. 字符串 (STRING) 反向解析

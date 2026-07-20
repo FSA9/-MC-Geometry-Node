@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.network;
 import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.render.debug.AreaDebugRenderer;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
+import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
@@ -57,6 +58,13 @@ public class NetworkHandler {
                 PacketGeometryDebugSnapshot.TYPE,
                 PacketGeometryDebugSnapshot.STREAM_CODEC,
                 (payload, context) -> context.queue(() -> GeometryDebugRenderer.handleSnapshot(payload))
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketSchematicProjection.TYPE,
+                PacketSchematicProjection.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> SchematicProjectionRenderer.handleProjection(payload))
         );
 
         // ==========================================

@@ -10,6 +10,7 @@ public enum UIHint {
     SELECT,         // 下拉框
     CHECKBOX,       // 勾选框
     INPUT,          // 输入框
+    PATH,           // 路径输入框
     VECTOR,         // 矢量输入框
     BUTTON,         // 按钮
     ITEM_SLOT,      // 物品槽
