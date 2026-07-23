@@ -24,8 +24,10 @@ final class SchematicThumbnailReader {
     private SchematicThumbnailReader() {
     }
 
-    static SchematicThumbnail read(File file) throws IOException {
+    static SchematicThumbnail read(File file) throws IOException, InterruptedException {
+        checkInterrupted();
         CompoundTag root = readRoot(file.toPath());
+        checkInterrupted();
         if (looksLikeSponge(root)) {
             return readSponge(root);
         }
@@ -67,7 +69,7 @@ final class SchematicThumbnailReader {
                 && root.contains("Length");
     }
 
-    private static SchematicThumbnail readSponge(CompoundTag root) {
+    private static SchematicThumbnail readSponge(CompoundTag root) throws InterruptedException {
         int width = positive(intOrZero(root, "Width"));
         int height = positive(intOrZero(root, "Height"));
         int length = positive(intOrZero(root, "Length"));
@@ -102,7 +104,11 @@ final class SchematicThumbnailReader {
         int maxBlocks = Math.min(volume, MAX_DECODED_BLOCKS);
         int index = 0;
         int offset = 0;
+        int layer = width * length;
         while (offset < blockData.length && index < maxBlocks) {
+            if ((index & 4095) == 0) {
+                checkInterrupted();
+            }
             VarIntResult result = readVarInt(blockData, offset);
             if (!result.valid()) {
                 break;
@@ -111,7 +117,6 @@ final class SchematicThumbnailReader {
             String state = paletteById.get(result.value());
             int color = SchematicBlockColor.forBlockState(state);
             if (color != 0) {
-                int layer = width * length;
                 int y = index / layer;
                 int rem = index - y * layer;
                 int z = rem / width;
@@ -123,7 +128,7 @@ final class SchematicThumbnailReader {
         return columns.toThumbnail(index < volume);
     }
 
-    private static SchematicThumbnail readLegacy(CompoundTag root) {
+    private static SchematicThumbnail readLegacy(CompoundTag root) throws InterruptedException {
         int width = positive(intOrZero(root, "Width"));
         int height = positive(intOrZero(root, "Height"));
         int length = positive(intOrZero(root, "Length"));
@@ -141,7 +146,20 @@ final class SchematicThumbnailReader {
         ColumnBuffer columns = new ColumnBuffer(width, height, length);
         int expectedVolume = safeVolume(width, height, length);
         int volume = Math.min(expectedVolume, Math.min(blocks.length, MAX_DECODED_BLOCKS));
-        for (int index = 0; index < volume; index++) {
+        int layer = width * length;
+        int filledColumns = 0;
+        for (int index = volume - 1; index >= 0; index--) {
+            if (((volume - index) & 4095) == 0) {
+                checkInterrupted();
+            }
+            int y = index / layer;
+            int rem = index - y * layer;
+            int z = rem / width;
+            int x = rem - z * width;
+            if (columns.hasColumn(x, z)) {
+                continue;
+            }
+
             int id = blocks[index] & 0xFF;
             if (addBlocks.length > (index >> 1)) {
                 int packed = addBlocks[index >> 1] & 0xFF;
@@ -152,12 +170,12 @@ final class SchematicThumbnailReader {
 
             int meta = data.length > index ? data[index] & 0x0F : 0;
             int color = SchematicBlockColor.forLegacyBlock(id, meta);
-            int layer = width * length;
-            int y = index / layer;
-            int rem = index - y * layer;
-            int z = rem / width;
-            int x = rem - z * width;
-            columns.accept(x, y, z, color, "legacy:" + id + ":" + meta);
+            if (columns.accept(x, y, z, color, "legacy:" + id + ":" + meta)) {
+                filledColumns++;
+                if (filledColumns >= columns.capacity()) {
+                    break;
+                }
+            }
         }
         return columns.toThumbnail(volume < expectedVolume);
     }
@@ -184,6 +202,12 @@ final class SchematicThumbnailReader {
     private static int safeVolume(int width, int height, int length) {
         long volume = (long) width * height * length;
         return (int) Math.min(Integer.MAX_VALUE, Math.max(0, volume));
+    }
+
+    private static void checkInterrupted() throws InterruptedException {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedException("schematic thumbnail load cancelled");
+        }
     }
 
     private static int intOrZero(CompoundTag tag, String key) {
@@ -224,15 +248,28 @@ final class SchematicThumbnailReader {
             Arrays.fill(topY, -1);
         }
 
-        private void accept(int x, int y, int z, int color, String state) {
+        private boolean accept(int x, int y, int z, int color, String state) {
             int sx = Math.min(gridWidth - 1, Math.max(0, x / stepX));
             int sz = Math.min(gridLength - 1, Math.max(0, z / stepZ));
             int index = sz * gridWidth + sx;
             if (y >= topY[index]) {
+                boolean firstFill = topY[index] < 0;
                 topY[index] = y;
                 colors[index] = color;
                 states[index] = state == null ? "" : state;
+                return firstFill;
             }
+            return false;
+        }
+
+        private boolean hasColumn(int x, int z) {
+            int sx = Math.min(gridWidth - 1, Math.max(0, x / stepX));
+            int sz = Math.min(gridLength - 1, Math.max(0, z / stepZ));
+            return topY[sz * gridWidth + sx] >= 0;
+        }
+
+        private int capacity() {
+            return topY.length;
         }
 
         private SchematicThumbnail toThumbnail(boolean incomplete) {

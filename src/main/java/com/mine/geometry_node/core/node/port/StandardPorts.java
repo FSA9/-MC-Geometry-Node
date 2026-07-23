@@ -67,6 +67,9 @@ public enum StandardPorts {
     REPLACE_AIR("replace_air", PortType.BOOLEAN),
     REPLACE_BLOCKS("replace_blocks", PortType.BOOLEAN),
     ONLY_SELF_VISIBLE("only_self_visible", PortType.BOOLEAN),
+    REPAIR_AIR("repair_air", PortType.BOOLEAN),
+    AFFECT_ENTITIES("affect_entities", PortType.BOOLEAN),
+    UNIQUE_IF_EXISTS("unique_if_exists", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
@@ -165,6 +168,7 @@ public enum StandardPorts {
     // DICT
     DICT("dict", PortType.DICT),
     DATA("data", PortType.DICT),
+    BLOCK_STATS("block_stats", PortType.DICT),
     SHOP_DATA("shop_data", PortType.SHOP),
 
     // XYZ

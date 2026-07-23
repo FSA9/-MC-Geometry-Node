@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.bottom_window.asset_library.right;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetPathUtils;
-import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.action.AssetLibraryActionId;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.action.AssetLibraryActionRegistry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.ConfirmDialog;
@@ -60,7 +60,7 @@ import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 public class RightFileBrowserPanel extends LinearLayout implements AssetFileItemView.Listener, FileContentLayout.SelectionHost {
 
-    private final AssetBrowserPanel mCoordinator;
+    private final AssetBrowserCoordinator mCoordinator;
     private final EditText mPathInput;
     private final EditText mSearchInput;
     private final EditText mTagSearchInput;
@@ -121,7 +121,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private static final float TEXT_SIZE_LIST_ITEM = 14.0f;
     private static final float TEXT_SIZE_BTN_ADD = 14.0f;
 
-    public RightFileBrowserPanel(Context context, AssetBrowserPanel coordinator) {
+    public RightFileBrowserPanel(Context context, AssetBrowserCoordinator coordinator) {
         this(context, coordinator, true, true, true, true, false);
     }
 
@@ -129,9 +129,13 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         this(context, null, false, false, true, false, true);
     }
 
+    public static RightFileBrowserPanel picker(Context context, AssetBrowserCoordinator coordinator) {
+        return new RightFileBrowserPanel(context, coordinator, false, false, false, false, true);
+    }
+
     private RightFileBrowserPanel(
             Context context,
-            AssetBrowserPanel coordinator,
+            AssetBrowserCoordinator coordinator,
             boolean enableQuickAccessAdd,
             boolean enableLocalFileActions,
             boolean enableRemoteTransferActions,
@@ -392,6 +396,10 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     public File getCurrentDirectory() {
         return mCurrentDirectory;
+    }
+
+    public AssetSourceKind getSourceKind() {
+        return mSourceKind;
     }
 
     public String getRemoteDirectory() {
@@ -712,6 +720,9 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         mItemViews.clear();
         if (mountedItems != null) {
             mItemViews.putAll(mountedItems);
+        }
+        for (AssetFileItemView view : mItemViews.values()) {
+            view.preloadSchematicThumbnail();
         }
         syncSelectionViews();
     }

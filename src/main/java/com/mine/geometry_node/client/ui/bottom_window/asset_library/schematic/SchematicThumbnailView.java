@@ -18,12 +18,29 @@ public final class SchematicThumbnailView extends View {
     private final RectF mRect = new RectF();
     private final float[] mQuadVertices = new float[8];
     private final int[] mQuadColors = new int[4];
+    private boolean mMaterialRefreshScheduled;
 
     public SchematicThumbnailView(Context context, File file) {
         super(context);
         mFile = file;
         mPaint.setAntiAlias(true);
         setWillNotDraw(false);
+    }
+
+    public void preload() {
+        SchematicThumbnailCache.preload(mFile, this);
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        preload();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        SchematicThumbnailCache.unobserve(mFile, this);
+        super.onDetachedFromWindow();
     }
 
     @Override
@@ -55,6 +72,7 @@ public final class SchematicThumbnailView extends View {
         float originX = getWidth() * 0.5f + (gridLength - gridWidth) * tileW * 0.25f;
         float originY = Math.max(padding + maxLift, (getHeight() - isoHeight) * 0.5f + maxLift) + tileH;
         int maxY = Math.max(1, thumbnail.height() - 1);
+        boolean[] deferredMaterials = {false};
 
         for (SchematicThumbnail.Column column : thumbnail.columns()) {
             float cx = originX + (column.x() - column.z()) * tileW * 0.5f;
@@ -63,8 +81,12 @@ public final class SchematicThumbnailView extends View {
             float lift = maxLift * heightRatio;
             float sideDepth = sideDepthBase + lift * 0.46f;
             SchematicThumbnailMaterialResolver.MaterialColors colors =
-                    SchematicThumbnailMaterialResolver.resolve(column.state(), column.color());
+                    SchematicThumbnailMaterialResolver.resolveBudgeted(column.state(), column.color(), deferredMaterials);
             drawColumn(canvas, cx, baseY - lift, tileW * 0.54f, tileH * 0.60f, sideDepth, colors, heightRatio);
+        }
+
+        if (deferredMaterials[0]) {
+            scheduleMaterialRefresh();
         }
 
         if (thumbnail.incomplete()) {
@@ -75,6 +97,17 @@ public final class SchematicThumbnailView extends View {
             mRect.set(inset, inset, getWidth() - inset, getHeight() - inset);
             canvas.drawRoundRect(mRect, UIUtils.dp2px(4.0f), mPaint);
         }
+    }
+
+    private void scheduleMaterialRefresh() {
+        if (mMaterialRefreshScheduled) {
+            return;
+        }
+        mMaterialRefreshScheduled = true;
+        postDelayed(() -> {
+            mMaterialRefreshScheduled = false;
+            invalidate();
+        }, 33L);
     }
 
     private void drawColumn(Canvas canvas,

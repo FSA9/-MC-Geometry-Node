@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.render.debug;
 
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
+import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
 import com.mine.geometry_node.core.schematic.LegacySchematicBlockStateMapper;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
@@ -89,6 +90,7 @@ public final class SchematicProjectionRenderer {
     private static final int FALLBACK_EDGE_ALPHA_SCALE = 210;
     private static final float EDGE_WIDTH = 1.2f;
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
+    private static final String PROJECTION_SOURCE_PREFIX = "schematic:projection:";
 
     private static final Map<String, Projection> PROJECTIONS = new HashMap<>();
     private static ModelBlockRenderer modelRenderer;
@@ -102,17 +104,25 @@ public final class SchematicProjectionRenderer {
         if (packet == null || packet.key().isBlank()) {
             return;
         }
+        String cacheKey = projectionCacheKey(packet.dimension(), packet.key());
         if (packet.blocks().isEmpty() && packet.blockEntities().isEmpty() && packet.entities().isEmpty()) {
-            Projection removed = PROJECTIONS.remove(packet.key());
+            Projection removed = PROJECTIONS.remove(cacheKey);
             if (removed != null) {
                 removed.close();
             }
             return;
         }
-        Projection previous = PROJECTIONS.put(packet.key(), new Projection(packet, Minecraft.getInstance().level));
+        Projection previous = PROJECTIONS.put(cacheKey, new Projection(packet, Minecraft.getInstance().level));
         if (previous != null) {
             previous.close();
         }
+    }
+
+    private static String projectionCacheKey(String dimension, String key) {
+        return PROJECTION_SOURCE_PREFIX
+                + (dimension == null ? "" : dimension.trim())
+                + ":"
+                + (key == null ? "" : key.trim());
     }
 
     public static void clear() {
@@ -1385,17 +1395,7 @@ public final class SchematicProjectionRenderer {
                                                    PacketSchematicProjection.BlockEntity data,
                                                    BlockPos worldPos,
                                                    BlockState state) {
-            try {
-                CompoundTag tag = absoluteBlockEntityTag(data.tag(), worldPos);
-                BlockEntity blockEntity = BlockEntity.loadStatic(worldPos, state, tag, level.registryAccess());
-                if (blockEntity != null) {
-                    blockEntity.setLevel(level);
-                    blockEntity.clearRemoved();
-                }
-                return blockEntity;
-            } catch (Exception ignored) {
-                return null;
-            }
+            return SchematicBlockEntityUtils.loadBlockEntity(level, worldPos, state, data.tag());
         }
 
         private static Entity loadEntity(ClientLevel level,
@@ -1414,14 +1414,6 @@ public final class SchematicProjectionRenderer {
             } catch (Exception ignored) {
                 return null;
             }
-        }
-
-        private static CompoundTag absoluteBlockEntityTag(CompoundTag source, BlockPos worldPos) {
-            CompoundTag tag = source == null ? new CompoundTag() : source.copy();
-            tag.putInt("x", worldPos.getX());
-            tag.putInt("y", worldPos.getY());
-            tag.putInt("z", worldPos.getZ());
-            return tag;
         }
 
         private static CompoundTag absoluteEntityTag(CompoundTag source, double x, double y, double z) {

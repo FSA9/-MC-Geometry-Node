@@ -125,6 +125,13 @@ abstract class AssetDialogBase extends FrameLayout {
         return drawable;
     }
 
+    protected void setWindowSizeDp(float widthDp, float heightDp) {
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mWindow.getLayoutParams();
+        lp.width = widthDp > 0 ? UIUtils.dp2pxInt(widthDp) : ViewGroup.LayoutParams.WRAP_CONTENT;
+        lp.height = heightDp > 0 ? UIUtils.dp2pxInt(heightDp) : ViewGroup.LayoutParams.WRAP_CONTENT;
+        mWindow.setLayoutParams(lp);
+    }
+
     private ViewGroup findWindowHost(ViewGroup parent) {
         View current = parent;
         ViewGroup best = parent;

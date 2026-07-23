@@ -34,7 +34,7 @@ public class DeleteGeometryDebugMesh extends BaseNode {
             return next(StandardPorts.FLOW_OUT.getId());
         }
 
-        AreaDebugSessionManager.removeSourceGeometry(level, key.trim());
+        AreaDebugSessionManager.removeSourceGeometry(level, AreaDebugSessionManager.geometryMeshSourceKey(level, key));
         return next(StandardPorts.FLOW_OUT.getId());
     }
 }

@@ -206,7 +206,7 @@ public final class SchematicReader {
 
             int[] pos = blockEntityPos(tag);
             if (pos == null) continue;
-            normalizeId(tag);
+            SchematicBlockEntityUtils.normalizeId(tag);
             result.add(new SchematicData.BlockEntity(pos[0], pos[1], pos[2], tag));
         }
         return result;
@@ -221,7 +221,7 @@ public final class SchematicReader {
 
             double[] pos = entityPos(tag);
             if (pos == null) continue;
-            normalizeId(tag);
+            normalizeEntityId(tag);
             result.add(new SchematicData.Entity(pos[0], pos[1], pos[2], tag));
         }
         return result;
@@ -267,7 +267,7 @@ public final class SchematicReader {
         };
     }
 
-    private static void normalizeId(CompoundTag tag) {
+    private static void normalizeEntityId(CompoundTag tag) {
         if (!tag.contains("id") && tag.contains("Id")) {
             tag.putString("id", tag.getStringOr("Id", ""));
         }

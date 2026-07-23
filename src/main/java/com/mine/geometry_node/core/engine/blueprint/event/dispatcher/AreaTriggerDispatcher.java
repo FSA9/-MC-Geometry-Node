@@ -98,7 +98,7 @@ public final class AreaTriggerDispatcher {
 
         Map<AreaConfigKey, AreaGroup> groups = new LinkedHashMap<>();
         collectNodes(index, currentTick, groups);
-        List<AreaDebugBox> debugBoxes = AreaDebugSessionManager.hasSessions()
+        List<AreaDebugBox> debugBoxes = AreaDebugSessionManager.hasAreaBoxSessions()
                 ? new ArrayList<>(groups.size())
                 : null;
 

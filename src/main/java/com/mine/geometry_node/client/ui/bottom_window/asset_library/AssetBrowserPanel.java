@@ -36,7 +36,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.function.Function;
 
-public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
+public class AssetBrowserPanel extends FrameLayout implements IToolWindow, AssetBrowserCoordinator {
 
     private final LinearLayout mMainLayout;
     private final LeftQuickAccessPanel mLeftPanel;
@@ -66,28 +66,33 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
     /**
      * 跨区协调总线：将来自左侧边栏选中的目录精准分发给右侧文件浏览器
      */
+    @Override
     public void dispatchNavigateTo(File directory) {
         if (mRightPanel != null) {
             mRightPanel.navigateTo(directory);
         }
     }
 
+    @Override
     public void dispatchNavigateToFavorites() {
         if (mRightPanel != null) {
             mRightPanel.navigateToFavorites();
         }
     }
 
+    @Override
     public void dispatchNavigateToRemoteRoot() {
         if (RemoteGraphClientState.canBrowse() && mRightPanel != null) {
             mRightPanel.navigateToRemoteRoot();
         }
     }
 
+    @Override
     public boolean canBrowseRemote() {
         return RemoteGraphClientState.canBrowse();
     }
 
+    @Override
     public void showUploadDialog(List<File> selectedFiles) {
         if (selectedFiles == null || selectedFiles.isEmpty()) return;
         FolderPickerDialog dialog = FolderPickerDialog.remote(
@@ -99,6 +104,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
         dialog.showIn(this);
     }
 
+    @Override
     public void showDownloadDialog(List<AssetEntry> remoteEntries) {
         if (remoteEntries == null || remoteEntries.isEmpty()) return;
         FolderPickerDialog dialog = FolderPickerDialog.local(
@@ -113,6 +119,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow {
     /**
      * 跨区协调总线：当右侧通过 NavBar 的 "+" 添加了新的快速路径后，驱动左侧状态重塑
      */
+    @Override
     public void notifySidebarChanged() {
         if (mLeftPanel != null) {
             mLeftPanel.buildSidebar();

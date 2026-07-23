@@ -19,28 +19,51 @@ public final class GeometryNodeDebugCommand {
                         .then(Commands.literal("debug")
                                 .then(Commands.literal("area")
                                         .then(Commands.literal("on")
-                                                .executes(context -> enable(context, AreaDebugSessionManager.DEFAULT_RADIUS))
+                                                .executes(context -> enableArea(context, AreaDebugSessionManager.DEFAULT_RADIUS))
                                                 .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
-                                                        .executes(context -> enable(context, DoubleArgumentType.getDouble(context, "radius")))
+                                                        .executes(context -> enableArea(context, DoubleArgumentType.getDouble(context, "radius")))
                                                 )
                                         )
                                         .then(Commands.literal("off")
-                                                .executes(GeometryNodeDebugCommand::disable)
+                                                .executes(GeometryNodeDebugCommand::disableArea)
+                                        )
+                                )
+                                .then(Commands.literal("schem")
+                                        .then(Commands.literal("on")
+                                                .executes(context -> enableSchematic(context, AreaDebugSessionManager.DEFAULT_RADIUS))
+                                                .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
+                                                        .executes(context -> enableSchematic(context, DoubleArgumentType.getDouble(context, "radius")))
+                                                )
+                                        )
+                                        .then(Commands.literal("off")
+                                                .executes(GeometryNodeDebugCommand::disableSchematic)
                                         )
                                 )
                         )
         );
     }
 
-    private static int enable(CommandContext<CommandSourceStack> context, double radius)
+    private static int enableArea(CommandContext<CommandSourceStack> context, double radius)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return AreaDebugSessionManager.enable(player, radius);
+        return AreaDebugSessionManager.enableArea(player, radius);
     }
 
-    private static int disable(CommandContext<CommandSourceStack> context)
+    private static int disableArea(CommandContext<CommandSourceStack> context)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return AreaDebugSessionManager.disable(player, true);
+        return AreaDebugSessionManager.disableArea(player, true);
+    }
+
+    private static int enableSchematic(CommandContext<CommandSourceStack> context, double radius)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        return AreaDebugSessionManager.enableSchematic(player, radius);
+    }
+
+    private static int disableSchematic(CommandContext<CommandSourceStack> context)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        return AreaDebugSessionManager.disableSchematic(player, true);
     }
 }

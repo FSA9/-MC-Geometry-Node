@@ -26,6 +26,9 @@ public final class AreaDebugSessionManager {
     public static final int DEFAULT_MAX_BOXES = 100;
     public static final int DEFAULT_MAX_MESHES = 100;
 
+    private static final String AREA_SOURCE_PREFIX = "area:";
+    private static final String GEOMETRY_SOURCE_PREFIX = "geometry:";
+    private static final String SCHEMATIC_SOURCE_PREFIX = "schematic:";
     private static final double MIN_RADIUS = 1.0D;
     private static final double MAX_RADIUS = 2048.0D;
     private static final double MOVE_REFRESH_DISTANCE = 32.0D;
@@ -55,8 +58,8 @@ public final class AreaDebugSessionManager {
                 Session session = SESSIONS.get(player.getUUID());
                 if (session != null) {
                     session.forceRefresh();
-                    NetworkHandler.sendToPlayer(player, new PacketAreaDebugSnapshot(true, session.radius, List.of()));
-                    NetworkHandler.sendToPlayer(player, new PacketGeometryDebugSnapshot(true, session.radius, List.of()));
+                    sendAreaSnapshot(player, session, new AreaSnapshot(List.of(), 1L));
+                    sendGeometrySnapshot(player, session, new GeometrySnapshot(List.of(), 1L));
                 }
             }
         });
@@ -73,33 +76,71 @@ public final class AreaDebugSessionManager {
     }
 
     public static int enable(ServerPlayer player, double radius) {
+        return enableArea(player, radius);
+    }
+
+    public static int enableArea(ServerPlayer player, double radius) {
         double clampedRadius = clampRadius(radius);
-        Session session = new Session(clampedRadius);
+        Session session = SESSIONS.computeIfAbsent(player.getUUID(), ignored -> new Session());
+        session.radius = clampedRadius;
+        session.areaBoxesEnabled = true;
+        session.geometryEnabled = true;
         session.forceRefresh();
-        SESSIONS.put(player.getUUID(), session);
-        AreaSnapshot areaSnapshot = collectAreaSnapshot(player, session);
-        GeometrySnapshot geometrySnapshot = collectGeometrySnapshot(player, session);
-        sendAreaSnapshot(player, session, areaSnapshot);
-        sendGeometrySnapshot(player, session, geometrySnapshot);
-        updateBaseline(player, session, areaSnapshot, geometrySnapshot);
+        refreshPlayer(player, session);
         player.sendSystemMessage(Component.literal("Area debug enabled. radius=" + formatRadius(clampedRadius)
                 + ", max=" + DEFAULT_MAX_BOXES));
         return 1;
     }
 
     public static int disable(ServerPlayer player, boolean notify) {
-        Session removed = SESSIONS.remove(player.getUUID());
-        NetworkHandler.sendToPlayer(player, new PacketAreaDebugSnapshot(false, 0.0D, List.of()));
-        NetworkHandler.sendToPlayer(player, new PacketGeometryDebugSnapshot(false, 0.0D, List.of()));
-        if (notify) {
-            player.sendSystemMessage(Component.literal(removed != null ? "Area debug disabled." : "Area debug is not enabled."));
+        return disableArea(player, notify);
+    }
+
+    public static int disableArea(ServerPlayer player, boolean notify) {
+        Session session = SESSIONS.get(player.getUUID());
+        boolean changed = session != null && (session.areaBoxesEnabled || session.geometryEnabled);
+        if (session != null) {
+            session.areaBoxesEnabled = false;
+            session.geometryEnabled = false;
+            finishDisableOrRefresh(player, session);
+        } else {
+            sendDisabledSnapshots(player);
         }
-        return removed != null ? 1 : 0;
+        if (notify) {
+            player.sendSystemMessage(Component.literal(changed ? "Area debug disabled." : "Area debug is not enabled."));
+        }
+        return changed ? 1 : 0;
+    }
+
+    public static int enableSchematic(ServerPlayer player, double radius) {
+        double clampedRadius = clampRadius(radius);
+        Session session = SESSIONS.computeIfAbsent(player.getUUID(), ignored -> new Session());
+        session.radius = clampedRadius;
+        session.schematicBoxesEnabled = true;
+        session.forceRefresh();
+        refreshPlayer(player, session);
+        player.sendSystemMessage(Component.literal("Schematic debug enabled. radius=" + formatRadius(clampedRadius)
+                + ", max=" + DEFAULT_MAX_BOXES));
+        return 1;
+    }
+
+    public static int disableSchematic(ServerPlayer player, boolean notify) {
+        Session session = SESSIONS.get(player.getUUID());
+        boolean changed = session != null && session.schematicBoxesEnabled;
+        if (session != null) {
+            session.schematicBoxesEnabled = false;
+            finishDisableOrRefresh(player, session);
+        } else {
+            sendDisabledSnapshots(player);
+        }
+        if (notify) {
+            player.sendSystemMessage(Component.literal(changed ? "Schematic debug disabled." : "Schematic debug is not enabled."));
+        }
+        return changed ? 1 : 0;
     }
 
     public static void tickLevel(ServerLevel level) {
         if (SESSIONS.isEmpty()) {
-            LEVEL_CACHES.clear();
             return;
         }
 
@@ -138,17 +179,25 @@ public final class AreaDebugSessionManager {
     }
 
     public static void replaceSourceBoxes(ServerLevel level, String sourceKey, List<AreaDebugBox> boxes, long seenTick) {
+        replaceSourceBoxes(level, sourceKey, boxes, seenTick, -1L);
+    }
+
+    public static void replacePersistentSourceBoxes(ServerLevel level, String sourceKey, List<AreaDebugBox> boxes, long seenTick) {
+        replaceSourceBoxes(level, sourceKey, boxes, seenTick, Long.MAX_VALUE);
+    }
+
+    private static void replaceSourceBoxes(ServerLevel level, String sourceKey, List<AreaDebugBox> boxes, long seenTick, long expiresAt) {
         LevelCache cache = LEVEL_CACHES.computeIfAbsent(level, ignored -> new LevelCache());
         SourceCache source = cache.sources.get(sourceKey);
         long signature = sourceSignature(boxes);
-        if (source != null && source.lastSeenTick == seenTick && source.signature == signature) {
+        if (source != null && source.lastSeenTick == seenTick && source.signature == signature && source.expiresAt == expiresAt) {
             return;
         }
-        if (source != null && source.signature == signature) {
+        if (source != null && source.signature == signature && source.expiresAt == expiresAt) {
             source.lastSeenTick = seenTick;
             return;
         }
-        cache.sources.put(sourceKey, new SourceCache(List.copyOf(boxes), seenTick, signature));
+        cache.sources.put(sourceKey, new SourceCache(List.copyOf(boxes), seenTick, signature, expiresAt));
         dirtyVersion++;
     }
 
@@ -179,22 +228,35 @@ public final class AreaDebugSessionManager {
         dirtyVersion++;
     }
 
-    public static boolean hasSessions() {
-        return !SESSIONS.isEmpty();
+    public static boolean hasAreaBoxSessions() {
+        for (Session session : SESSIONS.values()) {
+            if (session.areaBoxesEnabled) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static String levelSourceKey(ServerLevel level, String graphId) {
-        return "level:" + level.dimension().identifier() + ":" + graphId;
+        return AREA_SOURCE_PREFIX + "level:" + level.dimension().identifier() + ":" + graphId;
     }
 
     public static String entitySourceKey(ServerLevel level, net.minecraft.world.entity.Entity entity, String graphId) {
-        return "entity:" + level.dimension().identifier() + ":" + entity.getUUID() + ":" + graphId;
+        return AREA_SOURCE_PREFIX + "entity:" + level.dimension().identifier() + ":" + entity.getUUID() + ":" + graphId;
+    }
+
+    public static String geometryMeshSourceKey(ServerLevel level, String key) {
+        return GEOMETRY_SOURCE_PREFIX + "mesh:" + level.dimension().identifier() + ":" + key.trim();
+    }
+
+    public static String schematicPlacementSourceKey(ServerLevel level, String key) {
+        return SCHEMATIC_SOURCE_PREFIX + "placement:" + level.dimension().identifier() + ":" + key.trim();
     }
 
     private static AreaSnapshot collectAreaSnapshot(ServerPlayer player, Session session) {
         ServerLevel level = player.level();
         LevelCache cache = LEVEL_CACHES.get(level);
-        if (cache == null || cache.sources.isEmpty()) {
+        if (!session.hasBoxChannels() || cache == null || cache.sources.isEmpty()) {
             return new AreaSnapshot(List.of(), 1L);
         }
 
@@ -207,9 +269,12 @@ public final class AreaDebugSessionManager {
         while (iterator.hasNext()) {
             Map.Entry<String, SourceCache> entry = iterator.next();
             SourceCache source = entry.getValue();
-            if (currentTick - source.lastSeenTick > IDLE_CHECK_INTERVAL_TICKS) {
+            if (source.isExpired(currentTick)) {
                 iterator.remove();
                 removedStaleSource = true;
+                continue;
+            }
+            if (!session.isBoxSourceVisible(entry.getKey())) {
                 continue;
             }
             for (AreaDebugBox box : source.boxes) {
@@ -245,6 +310,9 @@ public final class AreaDebugSessionManager {
     }
 
     private static GeometrySnapshot collectGeometrySnapshot(ServerPlayer player, Session session) {
+        if (!session.geometryEnabled) {
+            return new GeometrySnapshot(List.of(), 1L);
+        }
         ServerLevel level = player.level();
         LevelCache cache = LEVEL_CACHES.get(level);
         if (cache == null || cache.geometrySources.isEmpty()) {
@@ -324,13 +392,38 @@ public final class AreaDebugSessionManager {
     }
 
     private static void sendAreaSnapshot(ServerPlayer player, Session session, AreaSnapshot snapshot) {
-        NetworkHandler.sendToPlayer(player, new PacketAreaDebugSnapshot(true, session.radius, snapshot.boxes));
+        boolean enabled = session.hasBoxChannels();
+        NetworkHandler.sendToPlayer(player, new PacketAreaDebugSnapshot(enabled, session.radius, enabled ? snapshot.boxes : List.of()));
         session.lastAreaSignature = snapshot.signature;
     }
 
     private static void sendGeometrySnapshot(ServerPlayer player, Session session, GeometrySnapshot snapshot) {
-        NetworkHandler.sendToPlayer(player, new PacketGeometryDebugSnapshot(true, session.radius, snapshot.meshes));
+        NetworkHandler.sendToPlayer(player, new PacketGeometryDebugSnapshot(session.geometryEnabled, session.radius,
+                session.geometryEnabled ? snapshot.meshes : List.of()));
         session.lastGeometrySignature = snapshot.signature;
+    }
+
+    private static void refreshPlayer(ServerPlayer player, Session session) {
+        AreaSnapshot areaSnapshot = collectAreaSnapshot(player, session);
+        GeometrySnapshot geometrySnapshot = collectGeometrySnapshot(player, session);
+        sendAreaSnapshot(player, session, areaSnapshot);
+        sendGeometrySnapshot(player, session, geometrySnapshot);
+        updateBaseline(player, session, areaSnapshot, geometrySnapshot);
+    }
+
+    private static void finishDisableOrRefresh(ServerPlayer player, Session session) {
+        if (!session.hasAnyChannel()) {
+            SESSIONS.remove(player.getUUID());
+            sendDisabledSnapshots(player);
+            return;
+        }
+        session.forceRefresh();
+        refreshPlayer(player, session);
+    }
+
+    private static void sendDisabledSnapshots(ServerPlayer player) {
+        NetworkHandler.sendToPlayer(player, new PacketAreaDebugSnapshot(false, 0.0D, List.of()));
+        NetworkHandler.sendToPlayer(player, new PacketGeometryDebugSnapshot(false, 0.0D, List.of()));
     }
 
     private static void updateBaseline(ServerPlayer player,
@@ -438,24 +531,53 @@ public final class AreaDebugSessionManager {
         private final List<AreaDebugBox> boxes;
         private long lastSeenTick;
         private final long signature;
+        private final long expiresAt;
 
-        private SourceCache(List<AreaDebugBox> boxes, long lastSeenTick, long signature) {
+        private SourceCache(List<AreaDebugBox> boxes, long lastSeenTick, long signature, long expiresAt) {
             this.boxes = boxes;
             this.lastSeenTick = lastSeenTick;
             this.signature = signature;
+            this.expiresAt = expiresAt;
+        }
+
+        private boolean isExpired(long currentTick) {
+            if (expiresAt == Long.MAX_VALUE) {
+                return false;
+            }
+            if (expiresAt > 0L) {
+                return currentTick > expiresAt;
+            }
+            return currentTick - lastSeenTick > IDLE_CHECK_INTERVAL_TICKS;
         }
     }
 
     private static final class Session {
-        private final double radius;
+        private double radius = DEFAULT_RADIUS;
+        private boolean areaBoxesEnabled;
+        private boolean schematicBoxesEnabled;
+        private boolean geometryEnabled;
         private Vec3 lastPosition;
         private ResourceKey<Level> lastDimension;
         private long lastDirtyVersion = Long.MIN_VALUE;
         private long lastAreaSignature = Long.MIN_VALUE;
         private long lastGeometrySignature = Long.MIN_VALUE;
 
-        private Session(double radius) {
-            this.radius = radius;
+        private boolean hasBoxChannels() {
+            return areaBoxesEnabled || schematicBoxesEnabled;
+        }
+
+        private boolean hasAnyChannel() {
+            return hasBoxChannels() || geometryEnabled;
+        }
+
+        private boolean isBoxSourceVisible(String sourceKey) {
+            if (sourceKey.startsWith(AREA_SOURCE_PREFIX)) {
+                return areaBoxesEnabled;
+            }
+            if (sourceKey.startsWith(SCHEMATIC_SOURCE_PREFIX)) {
+                return schematicBoxesEnabled;
+            }
+            return false;
         }
 
         private void forceRefresh() {

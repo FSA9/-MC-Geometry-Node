@@ -29,6 +29,8 @@ import java.util.Map;
 final class SchematicThumbnailMaterialResolver {
     private static final int MAX_CACHE_ENTRIES = 512;
     private static final int SAMPLE_STEPS = 5;
+    private static final int MAX_UNCACHED_RESOLVES_PER_FRAME = 4;
+    private static final long FRAME_BUDGET_WINDOW_NANOS = 16_000_000L;
     private static final Map<String, MaterialColors> CACHE = new LinkedHashMap<>(64, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, MaterialColors> eldest) {
@@ -42,6 +44,8 @@ final class SchematicThumbnailMaterialResolver {
     private static boolean sOriginalImageChecked;
     private static Field sOriginalImageField;
     private static boolean sOriginalImageFieldChecked;
+    private static long sResolveBudgetWindowNanos;
+    private static int sUncachedResolveCount;
 
     private SchematicThumbnailMaterialResolver() {
     }
@@ -60,6 +64,41 @@ final class SchematicThumbnailMaterialResolver {
             CACHE.put(key, resolved);
         }
         return resolved;
+    }
+
+    static MaterialColors resolveBudgeted(String stateText, int fallbackColor, boolean[] deferred) {
+        String key = (stateText == null ? "" : stateText) + "|" + fallbackColor;
+        synchronized (CACHE) {
+            MaterialColors cached = CACHE.get(key);
+            if (cached != null) {
+                return cached;
+            }
+            if (!consumeResolveBudgetLocked()) {
+                if (deferred != null && deferred.length > 0) {
+                    deferred[0] = true;
+                }
+                return MaterialColors.fromFallback(fallbackColor);
+            }
+        }
+
+        MaterialColors resolved = resolveUncached(stateText, fallbackColor);
+        synchronized (CACHE) {
+            CACHE.put(key, resolved);
+        }
+        return resolved;
+    }
+
+    private static boolean consumeResolveBudgetLocked() {
+        long now = System.nanoTime();
+        if (now - sResolveBudgetWindowNanos > FRAME_BUDGET_WINDOW_NANOS) {
+            sResolveBudgetWindowNanos = now;
+            sUncachedResolveCount = 0;
+        }
+        if (sUncachedResolveCount >= MAX_UNCACHED_RESOLVES_PER_FRAME) {
+            return false;
+        }
+        sUncachedResolveCount++;
+        return true;
     }
 
     private static MaterialColors resolveUncached(String stateText, int fallbackColor) {

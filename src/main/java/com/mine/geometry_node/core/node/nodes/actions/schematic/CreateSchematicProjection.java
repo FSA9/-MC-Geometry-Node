@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes.actions.visual;
+package com.mine.geometry_node.core.node.nodes.actions.schematic;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
@@ -15,8 +15,13 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import com.mine.geometry_node.core.schematic.SchematicData;
 import com.mine.geometry_node.core.schematic.LegacySchematicBlockStateMapper;
+import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
+import com.mine.geometry_node.core.schematic.SchematicPlacementManager;
 import com.mine.geometry_node.core.schematic.SchematicPaths;
 import com.mine.geometry_node.core.schematic.SchematicReader;
+import com.mine.geometry_node.core.schematic.SchematicPlacementManager.BlockSnapshot;
+import com.mine.geometry_node.core.schematic.SchematicPlacementManager.ChangedBlock;
+import com.mine.geometry_node.core.schematic.SchematicPlacementManager.PlacedEntity;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
@@ -36,7 +41,6 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -73,19 +77,23 @@ public class CreateSchematicProjection extends BaseNode {
         String comment = """
                 在指定坐标放置 .schem/.schematic。
                 debug 开启时只向客户端发送投影视觉，不修改世界；关闭时会实际写入世界方块。
-                path 是服务端可读取的文件路径；相对路径从存档的 geometry_nodes 目录解析。
+                path 是存档 geometry_nodes 目录下的相对结构文件路径，例如 demo/castle.schem。
+                禁止绝对路径、路径前缀、. 和 ..；结构文件只能从服务器资产目录读取。
                 xyz 是结构最小角坐标，执行时会吸附到方块网格。
                 debug 模式支持普通方块、液体、可渲染方块实体和实体投影；key 相同会替换已有投影。
                 放置模式下 replace_air 控制是否用结构空气清空目标位置，replace_blocks 控制是否覆盖已有非空气方块。
+                放置模式会用 key 记录放置前后快照，供还原结构放置和修复结构放置使用。
+                unique_if_exists 开启时，如果 key 已存在，会自动追加 _1、_2 等后缀，并从 key 输出实际名称。
+                放置记录会自动维护结构包围盒；玩家可通过 /geometry_node debug schem on/off 控制是否可见。
                 rotation 使用 Y 轴角度，按 90 度步进取整；mirror 的 X/Z 为负数时分别沿 X/Z 镜像。""";
 
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.create_schematic_projection"))
                 .comment(comment);
 
         builder.addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(StandardPorts.PATH.toInput(""), null, UIHint.PATH, null, null));
-        builder.addRow(new PortRow(StandardPorts.XYZ.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
+        builder.addRow(new PortRow(StandardPorts.PATH.toInput(""), StandardPorts.PATH.toOutput(), UIHint.PATH, null, null));
         builder.addRow(new PortRow(StandardPorts.KEY.toInput(""), StandardPorts.KEY.toOutput(), UIHint.INPUT, null, null));
+        builder.addRow(new PortRow(StandardPorts.XYZ.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
         builder.addRow(new PortRow(StandardPorts.DEBUG.toInput(debugMode), null, UIHint.CHECKBOX, null, null));
 
         if (debugMode) {
@@ -110,6 +118,7 @@ public class CreateSchematicProjection extends BaseNode {
     }
 
     private static void addPlacementRows(NodeDef.Builder builder) {
+        builder.addRow(new PortRow(StandardPorts.UNIQUE_IF_EXISTS.toInput(true), null, UIHint.CHECKBOX, null, null));
         builder.addRow(new PortRow(StandardPorts.REPLACE_AIR.toInput(false), null, UIHint.CHECKBOX, null, null));
         builder.addRow(new PortRow(StandardPorts.REPLACE_BLOCKS.toInput(true), null, UIHint.CHECKBOX, null, null));
         builder.addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
@@ -137,15 +146,18 @@ public class CreateSchematicProjection extends BaseNode {
 
         try {
             Path path = SchematicPaths.resolveServerPath(level.getServer(), pathValue);
+            String actualKey = key;
             if (debugMode) {
                 SchematicData data = SchematicReader.read(path, maxBlocks, false);
                 createDebugProjection(context, level, data, originValue, key);
             } else {
                 boolean replaceAir = boolOrDefault(getInput(context, StandardPorts.REPLACE_AIR.getId(), Boolean.class), false);
+                boolean uniqueIfExists = boolOrDefault(getInput(context, StandardPorts.UNIQUE_IF_EXISTS.getId(), Boolean.class), true);
+                actualKey = SchematicPlacementManager.resolveKey(level, key, uniqueIfExists);
                 SchematicData data = SchematicReader.read(path, maxBlocks, replaceAir);
-                placeSchematic(context, level, data, originValue, replaceAir);
+                actualKey = placeSchematic(context, level, data, originValue, actualKey, replaceAir);
             }
-            context.setTempData(tempKey(context), key);
+            context.setTempData(tempKey(context), actualKey);
         } catch (Exception e) {
             GeometryNode.LOGGER.warn("[GeometryNode] Failed to place schematic projection from '{}': {}", pathValue, e.getMessage());
         }
@@ -157,6 +169,9 @@ public class CreateSchematicProjection extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.KEY.getId().equals(portName)) {
             return context.getTempData(tempKey(context));
+        }
+        if (StandardPorts.PATH.getId().equals(portName)) {
+            return getInput(context, StandardPorts.PATH.getId(), String.class);
         }
         return null;
     }
@@ -201,13 +216,15 @@ public class CreateSchematicProjection extends BaseNode {
         }
     }
 
-    private void placeSchematic(ExecutionContext context,
-                                ServerLevel level,
-                                SchematicData data,
-                                Vec3 originValue,
-                                boolean replaceAir) {
+    private String placeSchematic(ExecutionContext context,
+                                  ServerLevel level,
+                                  SchematicData data,
+                                  Vec3 originValue,
+                                  String key,
+                                  boolean replaceAir) {
         if (data.isEmpty()) {
-            return;
+            GeometryNode.LOGGER.warn("[GeometryNode] Schematic placement '{}' read no blocks/entities; revert/repair will have nothing to target.", key);
+            return key;
         }
 
         boolean replaceBlocks = boolOrDefault(getInput(context, StandardPorts.REPLACE_BLOCKS.getId(), Boolean.class), true);
@@ -221,6 +238,7 @@ public class CreateSchematicProjection extends BaseNode {
         LongOpenHashSet loadedChunks = new LongOpenHashSet();
         LongOpenHashSet unloadedChunks = new LongOpenHashSet();
         LongOpenHashSet placedBlocks = new LongOpenHashSet();
+        Map<Long, BlockSnapshot> beforeSnapshots = new HashMap<>();
         Map<String, BlockState> stateCache = new HashMap<>();
 
         for (SchematicData.Block block : data.blocks()) {
@@ -245,20 +263,40 @@ public class CreateSchematicProjection extends BaseNode {
                 }
             }
 
-            if (level.setBlock(worldPos, state, DIRECT_SET_FLAGS)) {
-                placedBlocks.add(worldPos.asLong());
+            BlockSnapshot before = SchematicPlacementManager.captureBlock(level, worldPos);
+            boolean sameState = before.state().equals(state);
+            if (level.setBlock(worldPos, state, DIRECT_SET_FLAGS) || sameState) {
+                long posKey = worldPos.asLong();
+                placedBlocks.add(posKey);
+                beforeSnapshots.put(posKey, before);
             }
         }
 
-        placeBlockEntities(level, data.blockEntities(), origin, transform, placedBlocks);
-        placeEntities(level, data.entities(), origin, transform);
+        int failedBlockEntities = placeBlockEntities(level, data.blockEntities(), origin, transform, placedBlocks);
+        if (failedBlockEntities > 0) {
+            GeometryNode.LOGGER.warn("[GeometryNode] Schematic placement '{}' failed to apply {} block entities.",
+                    key, failedBlockEntities);
+        }
+        List<PlacedEntity> spawnedEntities = placeEntities(level, data.entities(), origin, transform);
+        SchematicPlacementManager.SchematicPlacementRecord record = recordPlacement(
+                context, level, data, origin, transform, key, placedBlocks, beforeSnapshots, spawnedEntities);
+        if (record != null) {
+            _SchematicActionUtils.syncDebugBounds(level, record.key(), record, level.getGameTime());
+            GeometryNode.LOGGER.info("[GeometryNode] Schematic placement '{}' recorded {} blocks and {} entities at {} in dimension '{}'.",
+                    record.key(), record.changedBlocks().size(), record.spawnedEntities().size(),
+                    formatPos(record.origin()), level.dimension().identifier());
+            return record.key();
+        }
+        GeometryNode.LOGGER.warn("[GeometryNode] Schematic placement '{}' created no placement record; revert/repair will have nothing to target.", key);
+        return key;
     }
 
-    private static void placeBlockEntities(ServerLevel level,
+    private static int placeBlockEntities(ServerLevel level,
                                            List<SchematicData.BlockEntity> blockEntities,
                                            BlockPos origin,
                                            Transform transform,
                                            LongOpenHashSet placedBlocks) {
+        int failed = 0;
         for (SchematicData.BlockEntity blockEntityData : blockEntities) {
             BlockPos worldPos = transform.blockPos(origin, blockEntityData.x(), blockEntityData.y(), blockEntityData.z());
             if (!placedBlocks.contains(worldPos.asLong())) {
@@ -270,24 +308,20 @@ public class CreateSchematicProjection extends BaseNode {
                 continue;
             }
 
-            try {
-                CompoundTag tag = absoluteBlockEntityTag(blockEntityData.tag(), worldPos);
-                BlockEntity blockEntity = BlockEntity.loadStatic(worldPos, state, tag, level.registryAccess());
-                if (blockEntity != null) {
-                    blockEntity.setLevel(level);
-                    blockEntity.clearRemoved();
-                    level.setBlockEntity(blockEntity);
-                    blockEntity.setChanged();
-                }
-            } catch (Exception ignored) {
+            if (SchematicBlockEntityUtils.setBlockEntity(level, worldPos, state, blockEntityData.tag())) {
+                level.sendBlockUpdated(worldPos, state, state, DIRECT_SET_FLAGS);
+            } else {
+                failed++;
             }
         }
+        return failed;
     }
 
-    private static void placeEntities(ServerLevel level,
-                                      List<SchematicData.Entity> entities,
-                                      BlockPos origin,
-                                      Transform transform) {
+    private static List<PlacedEntity> placeEntities(ServerLevel level,
+                                                    List<SchematicData.Entity> entities,
+                                                    BlockPos origin,
+                                                    Transform transform) {
+        List<PlacedEntity> spawnedEntities = new ArrayList<>();
         for (SchematicData.Entity entityData : entities) {
             Vec3 worldPos = transform.entityPos(origin, entityData.x(), entityData.y(), entityData.z());
             try {
@@ -297,11 +331,54 @@ public class CreateSchematicProjection extends BaseNode {
                     entity.snapTo(worldPos.x, worldPos.y, worldPos.z,
                             transform.yaw(entity.getYRot()),
                             entity.getXRot());
-                    level.tryAddFreshEntityWithPassengers(entity);
+                    if (level.tryAddFreshEntityWithPassengers(entity)) {
+                        spawnedEntities.add(new PlacedEntity(entity.getUUID(), tag));
+                    }
                 }
             } catch (Exception ignored) {
             }
         }
+        return spawnedEntities;
+    }
+
+    private static SchematicPlacementManager.SchematicPlacementRecord recordPlacement(ExecutionContext context,
+                                                                                     ServerLevel level,
+                                                                                     SchematicData data,
+                                                                                     BlockPos origin,
+                                                                                     Transform transform,
+                                                                                     String key,
+                                                                                     LongOpenHashSet placedBlocks,
+                                                                                     Map<Long, BlockSnapshot> beforeSnapshots,
+                                                                                     List<PlacedEntity> spawnedEntities) {
+        if (placedBlocks.isEmpty() && spawnedEntities.isEmpty()) {
+            return null;
+        }
+
+        List<ChangedBlock> changedBlocks = new ArrayList<>(placedBlocks.size());
+        for (long posLong : placedBlocks) {
+            BlockSnapshot before = beforeSnapshots.get(posLong);
+            if (before == null) {
+                continue;
+            }
+            changedBlocks.add(new ChangedBlock(before, SchematicPlacementManager.captureBlock(level, BlockPos.of(posLong))));
+        }
+
+        SchematicPlacementManager.SchematicPlacementRecord record = new SchematicPlacementManager.SchematicPlacementRecord(
+                key,
+                context.getGraphId(),
+                level.dimension(),
+                origin,
+                transform.boundsMin(origin, data.height()),
+                transform.boundsMax(origin, data.height()),
+                data.width(),
+                data.height(),
+                data.length(),
+                transform.info(),
+                changedBlocks,
+                spawnedEntities,
+                level.getGameTime()
+        );
+        return SchematicPlacementManager.put(level, record);
     }
 
     private static PacketPayloadData toPacketPayload(List<SchematicData.Block> blocks) {
@@ -399,6 +476,10 @@ public class CreateSchematicProjection extends BaseNode {
         return prefix + ":" + nodePart + ":" + level.getGameTime() + ":" + SEQUENCE.incrementAndGet();
     }
 
+    private static String formatPos(BlockPos pos) {
+        return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+    }
+
     private static String tempKey(ExecutionContext context) {
         return TYPE_ID + ":key:" + context.getCurrentNodeId();
     }
@@ -475,15 +556,6 @@ public class CreateSchematicProjection extends BaseNode {
         } catch (Exception ignored) {
             return null;
         }
-    }
-
-    private static CompoundTag absoluteBlockEntityTag(CompoundTag source, BlockPos worldPos) {
-        CompoundTag tag = source == null ? new CompoundTag() : source.copy();
-        tag.putInt("x", worldPos.getX());
-        tag.putInt("y", worldPos.getY());
-        tag.putInt("z", worldPos.getZ());
-        tag.putIntArray("Pos", new int[]{worldPos.getX(), worldPos.getY(), worldPos.getZ()});
-        return tag;
     }
 
     private static CompoundTag absoluteEntityTag(CompoundTag source, Vec3 worldPos) {
@@ -580,6 +652,28 @@ public class CreateSchematicProjection extends BaseNode {
             };
         }
 
+        private SchematicPlacementManager.TransformInfo info() {
+            return new SchematicPlacementManager.TransformInfo(mirrorX, mirrorZ, rotationSteps);
+        }
+
+        private BlockPos boundsMin(BlockPos origin, int height) {
+            BoundsXZ bounds = boundsXZ();
+            return new BlockPos(
+                    origin.getX() + bounds.minX(),
+                    origin.getY(),
+                    origin.getZ() + bounds.minZ()
+            );
+        }
+
+        private BlockPos boundsMax(BlockPos origin, int height) {
+            BoundsXZ bounds = boundsXZ();
+            return new BlockPos(
+                    origin.getX() + bounds.maxX(),
+                    origin.getY() + Math.max(1, height) - 1,
+                    origin.getZ() + bounds.maxZ()
+            );
+        }
+
         private LocalXZ localBlockXZ(int x, int z) {
             int tx = mirrorX ? width - 1 - x : x;
             int tz = mirrorZ ? length - 1 - z : z;
@@ -601,11 +695,26 @@ public class CreateSchematicProjection extends BaseNode {
                 default -> new LocalDoubleXZ(tx, tz);
             };
         }
+
+        private BoundsXZ boundsXZ() {
+            LocalXZ a = localBlockXZ(0, 0);
+            LocalXZ b = localBlockXZ(width - 1, 0);
+            LocalXZ c = localBlockXZ(0, length - 1);
+            LocalXZ d = localBlockXZ(width - 1, length - 1);
+            int minX = Math.min(Math.min(a.x(), b.x()), Math.min(c.x(), d.x()));
+            int maxX = Math.max(Math.max(a.x(), b.x()), Math.max(c.x(), d.x()));
+            int minZ = Math.min(Math.min(a.z(), b.z()), Math.min(c.z(), d.z()));
+            int maxZ = Math.max(Math.max(a.z(), b.z()), Math.max(c.z(), d.z()));
+            return new BoundsXZ(minX, minZ, maxX, maxZ);
+        }
     }
 
     private record LocalXZ(int x, int z) {
     }
 
     private record LocalDoubleXZ(double x, double z) {
+    }
+
+    private record BoundsXZ(int minX, int minZ, int maxX, int maxZ) {
     }
 }

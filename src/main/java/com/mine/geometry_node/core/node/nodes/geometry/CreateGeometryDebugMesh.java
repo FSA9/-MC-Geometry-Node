@@ -48,7 +48,7 @@ public class CreateGeometryDebugMesh extends BaseNode {
 
         Vec3 translation = getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class);
         String key = resolveKey(context, level);
-        String sourceKey = key;
+        String sourceKey = AreaDebugSessionManager.geometryMeshSourceKey(level, key);
 
         List<GeometryDebugMesh> meshes = GeometryDebugMeshFactory.buildMeshes(
                 sourceKey,

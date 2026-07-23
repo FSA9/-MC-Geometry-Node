@@ -198,6 +198,9 @@
   "geometry_node.port.replace_air": "替换空气",
   "geometry_node.port.replace_blocks": "替换方块",
   "geometry_node.port.only_self_visible": "仅自己可见",
+  "geometry_node.port.repair_air": "修复空气",
+  "geometry_node.port.affect_entities": "影响实体",
+  "geometry_node.port.unique_if_exists": "重名时自动后缀",
 
   "geometry_node.port.any_value": "任意",
   "geometry_node.port.tag": "标签",
@@ -207,6 +210,7 @@
   "geometry_node.port.include_empty": "包含空槽",
 
   "geometry_node.port.dict": "Dict",
+  "geometry_node.port.block_stats": "方块统计",
 
 
 
@@ -557,6 +561,9 @@
   "geometry_node.node.create_geometry_debug_mesh": "创建几何调试网格",
   "geometry_node.node.delete_geometry_debug_mesh": "删除几何调试网格",
   "geometry_node.node.create_schematic_projection": "放置结构投影",
+  "geometry_node.node.remove_schematic_projection": "删除结构投影",
+  "geometry_node.node.revert_schematic_placement": "还原结构放置",
+  "geometry_node.node.repair_schematic_placement": "修复结构放置",
 
 
   "geometry_node.node.get_input_data_type": "获取输入数据类型",

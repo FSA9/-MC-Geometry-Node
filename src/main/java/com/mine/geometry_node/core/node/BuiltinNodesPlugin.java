@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
 import com.mine.geometry_node.core.node.nodes.actions.item.*;
 import com.mine.geometry_node.core.node.nodes.actions.player.*;
+import com.mine.geometry_node.core.node.nodes.actions.schematic.*;
 import com.mine.geometry_node.core.node.nodes.actions.visual.*;
 import com.mine.geometry_node.core.node.nodes.actions.world.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
@@ -79,7 +80,10 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/block", new SpawnFallingBlock());
         registry.register("actions/block", new SetBlockState());
         registry.register("actions/block", new SetBlocksOnGeometry());
-        registry.register("actions/block", new CreateSchematicProjection());
+        registry.register("actions/schematic", new CreateSchematicProjection());
+        registry.register("actions/schematic", new RemoveSchematicProjection());
+        registry.register("actions/schematic", new RevertSchematicPlacement());
+        registry.register("actions/schematic", new RepairSchematicPlacement());
         // actions/block
         registry.register("actions/block", new SetBlockFacing());
         registry.register("actions/block", new SetBlockHorizontalFacing());

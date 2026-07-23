@@ -3,8 +3,6 @@ package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.FilePickerDialog;
-import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
-import com.mine.geometry_node.client.ui.persistence.PathUtils;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
@@ -19,8 +17,6 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
-import java.io.File;
 
 public class PathHintRenderer implements UIHintRenderer {
     private static final float PICK_BUTTON_WIDTH = 22.0f;
@@ -92,37 +88,11 @@ public class PathHintRenderer implements UIHintRenderer {
         button.setBackground(bg);
 
         button.setOnClickListener(v -> {
-            File initialDirectory = resolveInitialDirectory(input.getText().toString());
-            FilePickerDialog.showSchematic(button, initialDirectory, selectedPath -> {
+            FilePickerDialog.showPath(button, input.getText().toString(), selectedPath -> {
                 input.setText(selectedPath);
                 UIHintValueBinder.commit(editorContext, nodeData, portId, selectedPath);
             });
         });
         return button;
-    }
-
-    private static File resolveInitialDirectory(String currentPath) {
-        String value = currentPath == null ? "" : currentPath.trim();
-        if (!value.isEmpty()) {
-            File direct = AssetBrowserPathPolicy.resolveConfigPath(value);
-            File directDirectory = directoryOfExistingPath(direct);
-            if (directDirectory != null) {
-                return directDirectory;
-            }
-
-            File geometryPath = new File(PathUtils.resolveWorkspacePath("geometry_nodes"), value.replace('\\', File.separatorChar));
-            File geometryDirectory = directoryOfExistingPath(geometryPath);
-            if (geometryDirectory != null) {
-                return geometryDirectory;
-            }
-        }
-        return AssetBrowserPathPolicy.getLocalDraftsDir();
-    }
-
-    private static File directoryOfExistingPath(File file) {
-        if (file == null || !file.exists()) {
-            return null;
-        }
-        return file.isDirectory() ? file : file.getParentFile();
     }
 }

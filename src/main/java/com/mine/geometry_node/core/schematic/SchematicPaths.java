@@ -1,13 +1,12 @@
 package com.mine.geometry_node.core.schematic;
 
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.utils.ServerAssetPaths;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 
 public final class SchematicPaths {
@@ -18,85 +17,27 @@ public final class SchematicPaths {
         if (server == null) {
             throw new IOException("Missing server");
         }
-        String value = rawPath == null ? "" : rawPath.trim();
-        if (value.isEmpty()) {
-            throw new IOException("Schematic path is empty");
+
+        String relative = normalizeSchematicPath(rawPath);
+        Path root = server.getWorldPath(DynamicGraphManager.GRAPH_DIR).toAbsolutePath().normalize();
+        Path path = ServerAssetPaths.resolveUnderRoot(root, relative, false);
+        if (!Files.isRegularFile(path)) {
+            throw new IOException("Schematic file does not exist in geometry_nodes: " + relative);
         }
-        if (value.indexOf('\0') >= 0) {
-            throw new IOException("Invalid schematic path");
+        return path;
+    }
+
+    public static String normalizeSchematicPath(String rawPath) throws IOException {
+        String relative;
+        try {
+            relative = ServerAssetPaths.normalizeRelativePath(rawPath, false);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Invalid schematic path: " + e.getMessage(), e);
         }
-        String lower = value.toLowerCase(Locale.ROOT);
+        String lower = relative.toLowerCase(Locale.ROOT);
         if (!lower.endsWith(".schem") && !lower.endsWith(".schematic")) {
-            throw new IOException("Schematic path must end with .schem or .schematic");
+            throw new IOException("Schematic path must end with .schem or .schematic: " + relative);
         }
-
-        List<Path> candidates = resolveCandidates(server, value);
-        for (Path candidate : candidates) {
-            if (Files.isRegularFile(candidate)) {
-                return candidate;
-            }
-        }
-
-        throw new IOException("Schematic file does not exist: " + candidates);
-    }
-
-    private static List<Path> resolveCandidates(MinecraftServer server, String value) throws IOException {
-        List<Path> candidates = new ArrayList<>();
-
-        Path raw = Path.of(value);
-        if (raw.isAbsolute()) {
-            candidates.add(raw.normalize());
-            return candidates;
-        }
-
-        Path mountedWindowsPath = mountedWindowsPath(value);
-        if (mountedWindowsPath != null) {
-            candidates.add(mountedWindowsPath);
-            return candidates;
-        }
-
-        String relative = value.replace('\\', '/');
-        Path worldRoot = server.getWorldPath(DynamicGraphManager.GRAPH_DIR).toAbsolutePath().normalize();
-        Path worldCandidate = worldRoot.resolve(relative).normalize();
-        if (!worldCandidate.startsWith(worldRoot)) {
-            throw new IOException("Schematic path escapes geometry_nodes");
-        }
-        candidates.add(worldCandidate);
-
-        Path serverRoot = server.getServerDirectory().toAbsolutePath().normalize();
-        Path sharedRoot = serverRoot.resolve("geometry_nodes").normalize();
-        Path sharedCandidate = sharedRoot.resolve(relative).normalize();
-        if (!sharedCandidate.startsWith(sharedRoot)) {
-            throw new IOException("Schematic path escapes server geometry_nodes");
-        }
-        if (!sharedCandidate.equals(worldCandidate)) {
-            candidates.add(sharedCandidate);
-        }
-
-        Path serverCandidate = serverRoot.resolve(relative).normalize();
-        if (relative.startsWith("geometry_nodes/") && serverCandidate.startsWith(serverRoot) && !serverCandidate.equals(sharedCandidate)) {
-            candidates.add(serverCandidate);
-        }
-        return candidates;
-    }
-
-    private static Path mountedWindowsPath(String value) {
-        if (value.length() < 3 || value.charAt(1) != ':' || !isSeparator(value.charAt(2))) {
-            return null;
-        }
-        char drive = Character.toLowerCase(value.charAt(0));
-        if (drive < 'a' || drive > 'z') {
-            return null;
-        }
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (os.contains("win")) {
-            return null;
-        }
-        String rest = value.substring(3).replace('\\', '/');
-        return Path.of("/mnt/" + drive, rest).normalize();
-    }
-
-    private static boolean isSeparator(char value) {
-        return value == '\\' || value == '/';
+        return relative;
     }
 }

@@ -91,6 +91,12 @@ final class AssetFileItemView extends LinearLayout {
         return mNameView;
     }
 
+    void preloadSchematicThumbnail() {
+        if (mSchematicThumbnailView != null) {
+            mSchematicThumbnailView.preload();
+        }
+    }
+
     @Override
     public void setSelected(boolean selected) {
         if (mIsSelected == selected) return;

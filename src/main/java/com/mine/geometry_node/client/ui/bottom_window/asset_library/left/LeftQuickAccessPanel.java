@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library.left;
 
 import com.mine.geometry_node.client.ui.common.VectorIconView;
-import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -25,7 +25,7 @@ import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 public class LeftQuickAccessPanel extends ScrollView {
 
-    private final AssetBrowserPanel mCoordinator;
+    private final AssetBrowserCoordinator mCoordinator;
     private final QuickAccessListLayout mLeftSidebar;
     private final float mTouchSlop;
     private String mSelectedKey = "";
@@ -46,7 +46,7 @@ public class LeftQuickAccessPanel extends ScrollView {
     private static final int COLOR_REMOTE_PRESSED = 0xFF3C5874;
     private static final int COLOR_REMOTE_SELECTED = 0xFF36597A;
 
-    public LeftQuickAccessPanel(Context context, AssetBrowserPanel coordinator) {
+    public LeftQuickAccessPanel(Context context, AssetBrowserCoordinator coordinator) {
         super(context);
         mCoordinator = coordinator;
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
