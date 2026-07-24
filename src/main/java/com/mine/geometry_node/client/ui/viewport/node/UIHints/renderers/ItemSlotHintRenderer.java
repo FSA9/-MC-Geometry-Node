@@ -34,9 +34,11 @@ public class ItemSlotHintRenderer implements UIHintRenderer {
         float topOffset = hasLabel ? UIConstants.Node.ROW_HEIGHT : 0.0f;
         float hintAreaHeight = UIConstants.Node.ROW_HEIGHT * EXTRA_ROWS;
         float topGap = Math.max(0.0f, (hintAreaHeight - SLOT_SIZE_DP) / 2.0f);
+        float leftGap = Math.max(0.0f, (nodeWidth - SLOT_SIZE_DP) / 2.0f);
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(slotSizePx, slotSizePx);
-        lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
+        lp.gravity = Gravity.LEFT | Gravity.TOP;
+        lp.leftMargin = UIUtils.dp2pxInt(leftGap);
         lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + topGap);
 
         view.setLayoutParams(lp);
