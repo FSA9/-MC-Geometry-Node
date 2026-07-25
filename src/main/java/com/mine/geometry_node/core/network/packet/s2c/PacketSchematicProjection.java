@@ -35,11 +35,7 @@ public record PacketSchematicProjection(
             PacketSchematicProjection::new
     );
 
-    private static final int MAX_BLOCKS = 65536;
-    private static final int MAX_BLOCK_ENTITIES = 4096;
-    private static final int MAX_ENTITIES = 4096;
     private static final int MAX_NBT_BYTES = 32768;
-    private static final int MAX_STATES = 65536;
     private static final int MAX_STATE_LENGTH = 2048;
 
     public PacketSchematicProjection {
@@ -52,18 +48,6 @@ public record PacketSchematicProjection(
         blocks = blocks == null ? List.of() : List.copyOf(blocks);
         blockEntities = blockEntities == null ? List.of() : List.copyOf(blockEntities);
         entities = entities == null ? List.of() : List.copyOf(entities);
-        if (states.size() > MAX_STATES) {
-            throw new IllegalArgumentException("Too many schematic projection states: " + states.size());
-        }
-        if (blocks.size() > MAX_BLOCKS) {
-            throw new IllegalArgumentException("Too many schematic projection blocks: " + blocks.size());
-        }
-        if (blockEntities.size() > MAX_BLOCK_ENTITIES) {
-            throw new IllegalArgumentException("Too many schematic projection block entities: " + blockEntities.size());
-        }
-        if (entities.size() > MAX_ENTITIES) {
-            throw new IllegalArgumentException("Too many schematic projection entities: " + entities.size());
-        }
         for (Block block : blocks) {
             if (block.stateIndex() < 0 || block.stateIndex() >= states.size()) {
                 throw new IllegalArgumentException("Invalid schematic projection state index: " + block.stateIndex());
@@ -130,11 +114,8 @@ public record PacketSchematicProjection(
     }
 
     private static List<String> readStates(RegistryFriendlyByteBuf buf) {
-        int count = buf.readInt();
-        if (count < 0 || count > MAX_STATES) {
-            throw new IllegalArgumentException("Invalid schematic projection state count: " + count);
-        }
-        List<String> states = new ArrayList<>(count);
+        int count = readCount(buf, "state");
+        List<String> states = new ArrayList<>(initialCapacity(count));
         for (int i = 0; i < count; i++) {
             states.add(buf.readUtf(MAX_STATE_LENGTH));
         }
@@ -142,11 +123,8 @@ public record PacketSchematicProjection(
     }
 
     private static List<Block> readBlocks(RegistryFriendlyByteBuf buf) {
-        int count = buf.readInt();
-        if (count < 0 || count > MAX_BLOCKS) {
-            throw new IllegalArgumentException("Invalid schematic projection block count: " + count);
-        }
-        List<Block> blocks = new ArrayList<>(count);
+        int count = readCount(buf, "block");
+        List<Block> blocks = new ArrayList<>(initialCapacity(count));
         for (int i = 0; i < count; i++) {
             blocks.add(new Block(buf));
         }
@@ -154,11 +132,8 @@ public record PacketSchematicProjection(
     }
 
     private static List<BlockEntity> readBlockEntities(RegistryFriendlyByteBuf buf) {
-        int count = buf.readInt();
-        if (count < 0 || count > MAX_BLOCK_ENTITIES) {
-            throw new IllegalArgumentException("Invalid schematic projection block entity count: " + count);
-        }
-        List<BlockEntity> blockEntities = new ArrayList<>(count);
+        int count = readCount(buf, "block entity");
+        List<BlockEntity> blockEntities = new ArrayList<>(initialCapacity(count));
         for (int i = 0; i < count; i++) {
             blockEntities.add(new BlockEntity(buf));
         }
@@ -166,15 +141,24 @@ public record PacketSchematicProjection(
     }
 
     private static List<Entity> readEntities(RegistryFriendlyByteBuf buf) {
-        int count = buf.readInt();
-        if (count < 0 || count > MAX_ENTITIES) {
-            throw new IllegalArgumentException("Invalid schematic projection entity count: " + count);
-        }
-        List<Entity> entities = new ArrayList<>(count);
+        int count = readCount(buf, "entity");
+        List<Entity> entities = new ArrayList<>(initialCapacity(count));
         for (int i = 0; i < count; i++) {
             entities.add(new Entity(buf));
         }
         return entities;
+    }
+
+    private static int readCount(RegistryFriendlyByteBuf buf, String label) {
+        int count = buf.readInt();
+        if (count < 0) {
+            throw new IllegalArgumentException("Invalid schematic projection " + label + " count: " + count);
+        }
+        return count;
+    }
+
+    private static int initialCapacity(int count) {
+        return Math.min(count, 1024);
     }
 
     private static void validateNbtSize(CompoundTag tag, String label) {

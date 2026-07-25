@@ -562,8 +562,8 @@
   "geometry_node.node.delete_geometry_debug_mesh": "删除几何调试网格",
   "geometry_node.node.create_schematic_projection": "放置结构投影",
   "geometry_node.node.remove_schematic_projection": "删除结构投影",
-  "geometry_node.node.revert_schematic_placement": "还原结构放置",
-  "geometry_node.node.repair_schematic_placement": "修复结构放置",
+  "geometry_node.node.revert_schematic_placement": "移除结构放置",
+  "geometry_node.node.repair_schematic_placement": "复原结构放置",
 
 
   "geometry_node.node.get_input_data_type": "获取输入数据类型",

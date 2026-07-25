@@ -1,7 +1,5 @@
 package com.mine.geometry_node.core.node.nodes.actions.schematic;
 
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugBox;
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
@@ -91,34 +89,6 @@ final class _SchematicActionUtils {
         }
         NetworkHandler.sendToPlayers(targets, packet);
         return true;
-    }
-
-    static void syncDebugBounds(ServerLevel level, String key, SchematicPlacementRecord record, long currentTick) {
-        String sourceKey = boundsSourceKey(level, key);
-        if (level == null || sourceKey == null) {
-            return;
-        }
-        if (record == null) {
-            AreaDebugSessionManager.removeSourceBoxes(level, sourceKey);
-            return;
-        }
-
-        AreaDebugBox box = new AreaDebugBox(
-                sourceKey + ":bounds",
-                record.graphId(),
-                "box",
-                record.boundsCenter(),
-                record.boundsSize(),
-                Vec3.ZERO
-        );
-        AreaDebugSessionManager.replacePersistentSourceBoxes(level, sourceKey, List.of(box), currentTick);
-    }
-
-    private static String boundsSourceKey(ServerLevel level, String key) {
-        if (level == null || key == null || key.isBlank()) {
-            return null;
-        }
-        return AreaDebugSessionManager.schematicPlacementSourceKey(level, key);
     }
 
     record PlacementLookup(SchematicPlacementRecord record, String requestedKey, boolean resolvedByPosition) {

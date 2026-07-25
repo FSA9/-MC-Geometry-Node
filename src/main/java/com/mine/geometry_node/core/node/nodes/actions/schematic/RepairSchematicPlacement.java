@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.schematic.SchematicPlacementDebugSync;
 import com.mine.geometry_node.core.schematic.SchematicPlacementManager;
 import com.mine.geometry_node.core.schematic.SchematicPlacementManager.OperationResult;
 import com.mine.geometry_node.core.schematic.SchematicPlacementManager.SchematicPlacementRecord;
@@ -26,11 +27,11 @@ public class RepairSchematicPlacement extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         String comment = """
-                将指定 key 的结构放置修复成刚放置完成后的状态。
-                repair_air 开启时会恢复本次放置记录中的空气位置；关闭时跳过这些空气目标。
+                将指定 key 的结构放置复原成刚放置完成后的状态。
+                repair_air 开启时会复原本次放置记录中的空气位置；关闭时跳过这些空气目标。
                 affect_entities 开启时会补回该次放置生成但已经缺失的实体。
                 结构包围盒由放置记录自动维护；玩家可通过 /geometry_node debug schem on/off 控制是否可见。
-                block_stats 输出本次修复成的方块 ID 与数量。""";
+                block_stats 输出本次复原成的方块 ID 与数量。""";
 
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.repair_schematic_placement"))
                 .comment(comment)
@@ -66,7 +67,7 @@ public class RepairSchematicPlacement extends BaseNode {
                         getInput(context, StandardPorts.AFFECT_ENTITIES.getId(), Boolean.class), true);
                 result = SchematicPlacementManager.repair(level, safeKey, DIRECT_SET_FLAGS, repairAir, affectEntities);
                 SchematicPlacementRecord syncedRecord = SchematicPlacementManager.get(level, safeKey).orElse(currentRecord);
-                _SchematicActionUtils.syncDebugBounds(level, safeKey, syncedRecord, level.getGameTime());
+                SchematicPlacementDebugSync.syncRecord(level, safeKey, syncedRecord);
                 logResult(level, safeKey, currentRecord, result);
             }
         }

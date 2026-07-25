@@ -14,6 +14,7 @@ import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.schematic.SchematicPlacementDebugSync;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.registry.ReloadListenerRegistry;
 import net.minecraft.core.HolderLookup;
@@ -111,6 +112,7 @@ public class GeometryNode {
 
         // 初始化蓝图系统事件引擎！
         GraphEventHandler.init();
+        SchematicPlacementDebugSync.register();
 
         // 注册蓝图资源管理器 (监听 data/*/graphs/ 目录下的 JSON)
         ReloadListenerRegistry.register(

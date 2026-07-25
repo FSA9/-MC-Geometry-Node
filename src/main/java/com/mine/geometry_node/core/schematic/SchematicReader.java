@@ -14,25 +14,21 @@ import java.util.Map;
 
 public final class SchematicReader {
     private static final long MAX_NBT_BYTES = 256L * 1024L * 1024L;
-    private static final int MAX_DECODED_BLOCKS = 8_000_000;
 
     private SchematicReader() {
     }
 
-    public static SchematicData read(Path path, int maxBlocks) throws IOException {
-        return read(path, maxBlocks, false);
+    public static SchematicData read(Path path) throws IOException {
+        return read(path, false);
     }
 
-    public static SchematicData read(Path path, int maxBlocks, boolean includeAir) throws IOException {
-        if (maxBlocks <= 0) {
-            return new SchematicData(0, 0, 0, java.util.List.of(), java.util.List.of(), java.util.List.of(), true);
-        }
+    public static SchematicData read(Path path, boolean includeAir) throws IOException {
         CompoundTag root = readRoot(path);
         if (looksLikeSponge(root)) {
-            return readSponge(root, maxBlocks, includeAir);
+            return readSponge(root, includeAir);
         }
         if (looksLikeLegacy(root)) {
-            return readLegacy(root, maxBlocks, includeAir);
+            return readLegacy(root, includeAir);
         }
         throw new IOException("Unsupported schematic format: " + path.getFileName());
     }
@@ -69,7 +65,7 @@ public final class SchematicReader {
                 && root.contains("Length");
     }
 
-    private static SchematicData readSponge(CompoundTag root, int maxBlocks, boolean includeAir) throws IOException {
+    private static SchematicData readSponge(CompoundTag root, boolean includeAir) throws IOException {
         CompoundTag nestedBlocks = root.getCompoundOrEmpty("Blocks");
         CompoundTag blocksRoot = nestedBlocks.contains("Palette") || nestedBlocks.contains("BlockData") || nestedBlocks.contains("Data")
                 ? nestedBlocks
@@ -100,13 +96,12 @@ public final class SchematicReader {
         }
 
         int volume = safeVolume(width, height, length);
-        int decodeLimit = Math.min(volume, MAX_DECODED_BLOCKS);
-        ArrayList<SchematicData.Block> blocks = new ArrayList<>(Math.min(1024, maxBlocks));
-        boolean truncated = volume > decodeLimit;
+        ArrayList<SchematicData.Block> blocks = new ArrayList<>(Math.min(1024, volume));
+        boolean truncated = false;
         int index = 0;
         int offset = 0;
         int layer = width * length;
-        while (offset < blockData.length && index < decodeLimit) {
+        while (offset < blockData.length && index < volume) {
             VarIntResult result = readVarInt(blockData, offset);
             if (!result.valid()) {
                 truncated = true;
@@ -121,14 +116,10 @@ public final class SchematicReader {
                 int z = rem / width;
                 int x = rem - z * width;
                 blocks.add(new SchematicData.Block(x, y, z, state, color));
-                if (blocks.size() >= maxBlocks) {
-                    truncated = index + 1 < volume;
-                    break;
-                }
             }
             index++;
         }
-        if (index < volume && blocks.size() < maxBlocks) {
+        if (index < volume) {
             truncated = true;
         }
         return new SchematicData(
@@ -142,7 +133,7 @@ public final class SchematicReader {
         );
     }
 
-    private static SchematicData readLegacy(CompoundTag root, int maxBlocks, boolean includeAir) throws IOException {
+    private static SchematicData readLegacy(CompoundTag root, boolean includeAir) throws IOException {
         int width = positive(intOrZero(root, "Width"));
         int height = positive(intOrZero(root, "Height"));
         int length = positive(intOrZero(root, "Length"));
@@ -158,9 +149,9 @@ public final class SchematicReader {
         }
 
         int expectedVolume = safeVolume(width, height, length);
-        int volume = Math.min(expectedVolume, Math.min(rawBlocks.length, MAX_DECODED_BLOCKS));
+        int volume = Math.min(expectedVolume, rawBlocks.length);
         boolean truncated = expectedVolume > volume;
-        ArrayList<SchematicData.Block> blocks = new ArrayList<>(Math.min(1024, maxBlocks));
+        ArrayList<SchematicData.Block> blocks = new ArrayList<>(Math.min(1024, volume));
         int layer = width * length;
         for (int index = 0; index < volume; index++) {
             int id = rawBlocks[index] & 0xFF;
@@ -177,10 +168,6 @@ public final class SchematicReader {
             int z = rem / width;
             int x = rem - z * width;
             blocks.add(new SchematicData.Block(x, y, z, "legacy:" + id + ":" + meta, color));
-            if (blocks.size() >= maxBlocks) {
-                truncated = index + 1 < expectedVolume;
-                break;
-            }
         }
         return new SchematicData(
                 width,

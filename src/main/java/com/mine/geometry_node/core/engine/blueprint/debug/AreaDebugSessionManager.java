@@ -20,6 +20,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public final class AreaDebugSessionManager {
     public static final double DEFAULT_RADIUS = 256.0D;
@@ -37,6 +38,7 @@ public final class AreaDebugSessionManager {
 
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<ServerLevel, LevelCache> LEVEL_CACHES = new IdentityHashMap<>();
+    private static final List<Consumer<ServerPlayer>> SCHEMATIC_CHANNEL_HYDRATORS = new ArrayList<>();
     private static boolean registered;
     private static long dirtyVersion;
 
@@ -58,8 +60,8 @@ public final class AreaDebugSessionManager {
                 Session session = SESSIONS.get(player.getUUID());
                 if (session != null) {
                     session.forceRefresh();
-                    sendAreaSnapshot(player, session, new AreaSnapshot(List.of(), 1L));
-                    sendGeometrySnapshot(player, session, new GeometrySnapshot(List.of(), 1L));
+                    hydrateSchematicChannel(player, session);
+                    refreshPlayer(player, session);
                 }
             }
         });
@@ -84,7 +86,6 @@ public final class AreaDebugSessionManager {
         Session session = SESSIONS.computeIfAbsent(player.getUUID(), ignored -> new Session());
         session.radius = clampedRadius;
         session.areaBoxesEnabled = true;
-        session.geometryEnabled = true;
         session.forceRefresh();
         refreshPlayer(player, session);
         player.sendSystemMessage(Component.literal("Area debug enabled. radius=" + formatRadius(clampedRadius)
@@ -98,10 +99,9 @@ public final class AreaDebugSessionManager {
 
     public static int disableArea(ServerPlayer player, boolean notify) {
         Session session = SESSIONS.get(player.getUUID());
-        boolean changed = session != null && (session.areaBoxesEnabled || session.geometryEnabled);
+        boolean changed = session != null && session.areaBoxesEnabled;
         if (session != null) {
             session.areaBoxesEnabled = false;
-            session.geometryEnabled = false;
             finishDisableOrRefresh(player, session);
         } else {
             sendDisabledSnapshots(player);
@@ -118,6 +118,7 @@ public final class AreaDebugSessionManager {
         session.radius = clampedRadius;
         session.schematicBoxesEnabled = true;
         session.forceRefresh();
+        hydrateSchematicChannel(player, session);
         refreshPlayer(player, session);
         player.sendSystemMessage(Component.literal("Schematic debug enabled. radius=" + formatRadius(clampedRadius)
                 + ", max=" + DEFAULT_MAX_BOXES));
@@ -137,6 +138,39 @@ public final class AreaDebugSessionManager {
             player.sendSystemMessage(Component.literal(changed ? "Schematic debug disabled." : "Schematic debug is not enabled."));
         }
         return changed ? 1 : 0;
+    }
+
+    public static int enableGeometry(ServerPlayer player, double radius) {
+        double clampedRadius = clampRadius(radius);
+        Session session = SESSIONS.computeIfAbsent(player.getUUID(), ignored -> new Session());
+        session.radius = clampedRadius;
+        session.geometryEnabled = true;
+        session.forceRefresh();
+        refreshPlayer(player, session);
+        player.sendSystemMessage(Component.literal("Geometry debug enabled. radius=" + formatRadius(clampedRadius)
+                + ", max=" + DEFAULT_MAX_MESHES));
+        return 1;
+    }
+
+    public static int disableGeometry(ServerPlayer player, boolean notify) {
+        Session session = SESSIONS.get(player.getUUID());
+        boolean changed = session != null && session.geometryEnabled;
+        if (session != null) {
+            session.geometryEnabled = false;
+            finishDisableOrRefresh(player, session);
+        } else {
+            sendDisabledSnapshots(player);
+        }
+        if (notify) {
+            player.sendSystemMessage(Component.literal(changed ? "Geometry debug disabled." : "Geometry debug is not enabled."));
+        }
+        return changed ? 1 : 0;
+    }
+
+    public static void registerSchematicChannelHydrator(Consumer<ServerPlayer> hydrator) {
+        if (hydrator != null) {
+            SCHEMATIC_CHANNEL_HYDRATORS.add(hydrator);
+        }
     }
 
     public static void tickLevel(ServerLevel level) {
@@ -226,6 +260,15 @@ public final class AreaDebugSessionManager {
 
     public static void markDirty() {
         dirtyVersion++;
+    }
+
+    private static void hydrateSchematicChannel(ServerPlayer player, Session session) {
+        if (player == null || session == null || !session.schematicBoxesEnabled) {
+            return;
+        }
+        for (Consumer<ServerPlayer> hydrator : SCHEMATIC_CHANNEL_HYDRATORS) {
+            hydrator.accept(player);
+        }
     }
 
     public static boolean hasAreaBoxSessions() {

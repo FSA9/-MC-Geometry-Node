@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.schematic.SchematicPlacementDebugSync;
 import com.mine.geometry_node.core.schematic.SchematicPlacementManager;
 import com.mine.geometry_node.core.schematic.SchematicPlacementManager.OperationResult;
 import com.mine.geometry_node.core.schematic.SchematicPlacementManager.SchematicPlacementRecord;
@@ -26,12 +27,12 @@ public class RevertSchematicPlacement extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         String comment = """
-                将指定 key 的结构放置还原到放置之前的世界状态。
+                移除指定 key 的结构放置，将世界恢复到放置之前的状态。
                 会强制恢复本次放置记录中的所有 before 快照：原本是空气就清空，原本是草方块就恢复草方块。
-                即使投影方块已经被玩家手动破坏，也会按放置前快照恢复。
+                即使结构方块已经被玩家手动破坏，也会按放置前快照恢复。
                 affect_entities 开启时会删除该次放置生成的实体。
                 结构包围盒由放置记录自动维护；玩家可通过 /geometry_node debug schem on/off 控制是否可见。
-                block_stats 输出本次恢复成的方块 ID 与数量。""";
+                block_stats 输出本次移除后恢复成的方块 ID 与数量。""";
 
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.revert_schematic_placement"))
                 .comment(comment)
@@ -64,7 +65,7 @@ public class RevertSchematicPlacement extends BaseNode {
                         getInput(context, StandardPorts.AFFECT_ENTITIES.getId(), Boolean.class), true);
                 result = SchematicPlacementManager.revert(level, safeKey, DIRECT_SET_FLAGS, affectEntities);
                 SchematicPlacementRecord currentRecord = SchematicPlacementManager.get(level, safeKey).orElse(null);
-                _SchematicActionUtils.syncDebugBounds(level, safeKey, currentRecord, level.getGameTime());
+                SchematicPlacementDebugSync.syncRecord(level, safeKey, currentRecord);
                 if (result.found()) {
                     _SchematicActionUtils.sendProjectionRemoval(context, level, safeKey);
                 }

@@ -16,6 +16,7 @@ import com.mine.geometry_node.core.node.port.UIHint;
 import com.mine.geometry_node.core.schematic.SchematicData;
 import com.mine.geometry_node.core.schematic.LegacySchematicBlockStateMapper;
 import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
+import com.mine.geometry_node.core.schematic.SchematicPlacementDebugSync;
 import com.mine.geometry_node.core.schematic.SchematicPlacementManager;
 import com.mine.geometry_node.core.schematic.SchematicPaths;
 import com.mine.geometry_node.core.schematic.SchematicReader;
@@ -55,8 +56,6 @@ import java.util.concurrent.atomic.AtomicLong;
 public class CreateSchematicProjection extends BaseNode {
     public static final String TYPE_ID = "create_schematic_projection";
 
-    private static final int DEFAULT_MAX_BLOCKS = 8192;
-    private static final int HARD_MAX_BLOCKS = 65536;
     private static final float DEFAULT_ALPHA = 0.38f;
     private static final float DEFAULT_VIEW_RANGE = 128.0f;
     private static final int DEFAULT_DURATION_TICKS = 200;
@@ -82,7 +81,7 @@ public class CreateSchematicProjection extends BaseNode {
                 xyz 是结构最小角坐标，执行时会吸附到方块网格。
                 debug 模式支持普通方块、液体、可渲染方块实体和实体投影；key 相同会替换已有投影。
                 放置模式下 replace_air 控制是否用结构空气清空目标位置，replace_blocks 控制是否覆盖已有非空气方块。
-                放置模式会用 key 记录放置前后快照，供还原结构放置和修复结构放置使用。
+                放置模式会用 key 记录放置前后快照，供移除结构放置和复原结构放置使用。
                 unique_if_exists 开启时，如果 key 已存在，会自动追加 _1、_2 等后缀，并从 key 输出实际名称。
                 放置记录会自动维护结构包围盒；玩家可通过 /geometry_node debug schem on/off 控制是否可见。
                 rotation 使用 Y 轴角度，按 90 度步进取整；mirror 的 X/Z 为负数时分别沿 X/Z 镜像。""";
@@ -113,8 +112,6 @@ public class CreateSchematicProjection extends BaseNode {
                 Map.of(PortMetaKeys.NUMERIC_MIN, 1)));
         builder.addRow(new PortRow(StandardPorts.RADIUS.toInput(DEFAULT_VIEW_RANGE), null, UIHint.INPUT, null,
                 Map.of(PortMetaKeys.NUMERIC_MIN, 1.0f)));
-        builder.addRow(new PortRow(StandardPorts.MAX_BLOCKS.toInput(DEFAULT_MAX_BLOCKS), null, UIHint.INPUT, null,
-                Map.of(PortMetaKeys.NUMERIC_MIN, 1, PortMetaKeys.NUMERIC_MAX, HARD_MAX_BLOCKS)));
     }
 
     private static void addPlacementRows(NodeDef.Builder builder) {
@@ -123,8 +120,6 @@ public class CreateSchematicProjection extends BaseNode {
         builder.addRow(new PortRow(StandardPorts.REPLACE_BLOCKS.toInput(true), null, UIHint.CHECKBOX, null, null));
         builder.addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
         builder.addRow(new PortRow(StandardPorts.MIRROR.toInput(new Vec3(1.0D, 1.0D, 1.0D)), null, UIHint.VECTOR, null, null));
-        builder.addRow(new PortRow(StandardPorts.MAX_BLOCKS.toInput(DEFAULT_MAX_BLOCKS), null, UIHint.INPUT, null,
-                Map.of(PortMetaKeys.NUMERIC_MIN, 1, PortMetaKeys.NUMERIC_MAX, HARD_MAX_BLOCKS)));
     }
 
     @Override
@@ -141,20 +136,19 @@ public class CreateSchematicProjection extends BaseNode {
         }
 
         boolean debugMode = boolOrDefault(getInput(context, StandardPorts.DEBUG.getId(), Boolean.class), true);
-        int maxBlocks = clampInt(getInput(context, StandardPorts.MAX_BLOCKS.getId(), Integer.class), DEFAULT_MAX_BLOCKS, 1, HARD_MAX_BLOCKS);
         String key = resolveKey(context, level);
 
         try {
             Path path = SchematicPaths.resolveServerPath(level.getServer(), pathValue);
             String actualKey = key;
             if (debugMode) {
-                SchematicData data = SchematicReader.read(path, maxBlocks, false);
+                SchematicData data = SchematicReader.read(path, false);
                 createDebugProjection(context, level, data, originValue, key);
             } else {
                 boolean replaceAir = boolOrDefault(getInput(context, StandardPorts.REPLACE_AIR.getId(), Boolean.class), false);
                 boolean uniqueIfExists = boolOrDefault(getInput(context, StandardPorts.UNIQUE_IF_EXISTS.getId(), Boolean.class), true);
                 actualKey = SchematicPlacementManager.resolveKey(level, key, uniqueIfExists);
-                SchematicData data = SchematicReader.read(path, maxBlocks, replaceAir);
+                SchematicData data = SchematicReader.read(path, replaceAir);
                 actualKey = placeSchematic(context, level, data, originValue, actualKey, replaceAir);
             }
             context.setTempData(tempKey(context), actualKey);
@@ -281,7 +275,7 @@ public class CreateSchematicProjection extends BaseNode {
         SchematicPlacementManager.SchematicPlacementRecord record = recordPlacement(
                 context, level, data, origin, transform, key, placedBlocks, beforeSnapshots, spawnedEntities);
         if (record != null) {
-            _SchematicActionUtils.syncDebugBounds(level, record.key(), record, level.getGameTime());
+            SchematicPlacementDebugSync.syncRecord(level, record.key(), record);
             GeometryNode.LOGGER.info("[GeometryNode] Schematic placement '{}' recorded {} blocks and {} entities at {} in dimension '{}'.",
                     record.key(), record.changedBlocks().size(), record.spawnedEntities().size(),
                     formatPos(record.origin()), level.dimension().identifier());
@@ -572,11 +566,6 @@ public class CreateSchematicProjection extends BaseNode {
         tag.remove("UUIDMost");
         tag.remove("UUIDLeast");
         return tag;
-    }
-
-    private static int clampInt(Integer value, int fallback, int min, int max) {
-        int raw = value != null ? value : fallback;
-        return Math.max(min, Math.min(max, raw));
     }
 
     private static float clampFloat(Float value, float fallback, float min, float max) {
