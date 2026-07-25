@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.inventory;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -27,13 +28,21 @@ public class FindInventorySlots extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                查询目标实体或容器中满足条件的槽位。
-                tag 非空时优先按 tag 匹配，否则按 ItemStack 和匹配模式匹配；未提供过滤条件时匹配所有非空槽位。
-                输出 list 为所有匹配槽位，slot 为第一个匹配槽位，count 为匹配槽位数量。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.find_inventory_slots"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.LIST, "list")
+                        .output(StandardPorts.SLOT, "slot")
+                        .output(StandardPorts.COUNT, "count")
+                        .output(StandardPorts.BOOL, "bool")
+                        .input(StandardPorts.ENTITY, "entity")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .input(StandardPorts.TAG, "tag")
+                        .input(StandardPorts.SCOPE, "scope")
+                        .input(StandardPorts.MATCH_MODE, "match_mode")
+                        .input(StandardPorts.LIMIT, "limit")
+                        .input(INCLUDE_EMPTY, "include_empty")
+                        .build())
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.SLOT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))

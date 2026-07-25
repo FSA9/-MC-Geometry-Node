@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.item.attribution;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -15,13 +16,12 @@ public class IsItemDamageable extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                判断物品栈是否支持耐久损耗。
-                不可损坏物品和空物品栈输出 false。
-                适合在读取或设置耐久前做条件判断。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.is_item_damageable"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.BOOL, "bool")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .build())
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .build();
     }

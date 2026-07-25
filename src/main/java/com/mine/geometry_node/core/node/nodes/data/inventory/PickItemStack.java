@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.inventory;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -20,13 +21,12 @@ public class PickItemStack extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                通过选择界面创建一个物品栈常量。
-                输出 ItemStack 为选择时保存的物品数据副本。
-                适合连接到物品匹配、槽位写入或背包移除等节点。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.pick_item_stack"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.ITEM_STACK, "item_stack")
+                        .input(PORT_TARGET_ITEM, "target_item")
+                        .build())
                 .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
                         new PortDef(PORT_TARGET_ITEM, Component.literal("Item Storage"), PortType.STRING, "", true),

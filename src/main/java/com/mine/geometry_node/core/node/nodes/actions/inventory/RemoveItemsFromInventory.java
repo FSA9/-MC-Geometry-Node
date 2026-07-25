@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.inventory;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -23,13 +24,18 @@ public class RemoveItemsFromInventory extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                从目标主要物品存储中移除匹配条件的物品。
-                玩家会扫描背包，容器会扫描容器槽位，其他实体会尝试扫描 NeoForge 物品能力。
-                count 小于等于 0 时移除全部匹配物品；tag 非空时优先按 tag 匹配。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.remove_items_from_inventory"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(StandardPorts.REMOVED_COUNT, "removed_count")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.ENTITY, "entity")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .input(StandardPorts.COUNT, "count")
+                        .input(StandardPorts.TAG, "tag")
+                        .input(StandardPorts.MATCH_MODE, "match_mode")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.REMOVED_COUNT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))

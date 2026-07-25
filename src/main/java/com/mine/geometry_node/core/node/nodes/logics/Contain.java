@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.logics;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -24,13 +25,13 @@ public class Contain extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                判断一个值是否包含另一个值。
-                字符串执行子串匹配，列表和字典执行元素匹配。
-                当容器是物品、方块、实体类型等注册表对象且目标是 tag 字符串时，判断对象是否属于该 tag。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.LOGIC, Component.translatable("geometry_node.node.contain"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.BOOL, "bool")
+                        .input(CONTAINER, "container")
+                        .input(StandardPorts.ANY_VALUE, "any_value")
+                        .build())
                 .addRow(new PortRow(
                         new PortDef(CONTAINER, Component.translatable("geometry_node.port.container"), PortType.ANY, null, false),
                         StandardPorts.BOOL.toOutput(),

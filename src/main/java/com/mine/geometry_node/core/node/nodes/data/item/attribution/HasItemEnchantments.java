@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.item.attribution;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -16,13 +17,12 @@ public class HasItemEnchantments extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                判断物品栈是否带有附魔数据。
-                会检查普通附魔和附魔书的存储附魔组件。
-                空物品栈输出 false。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.has_item_enchantments"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.BOOL, "bool")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .build())
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .build();
     }

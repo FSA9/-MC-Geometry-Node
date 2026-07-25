@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAnchor;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -34,21 +35,6 @@ public class AreaTriggerEvent extends BaseEventNode {
     public static final String PHASE_STAY = "stay";
     public static final String PHASE_EXIT = "exit";
     public static final String[] PHASE_OPTIONS = {PHASE_ENTER, PHASE_STAY, PHASE_EXIT};
-    private static final String AREA_COMMENT = """
-            检测实体与区域体积的进入、停留或离开。
-            phase: enter 只在进入时触发；stay 在区域内持续触发；exit 在离开时触发。
-            target: all / living / player / projectile / item，用于在底层提前筛选候选实体。
-            anchor: world 使用世界坐标；owner 在实体绑定图中跟随绑定实体，center 作为偏移量；没有绑定实体时退化为世界坐标。
-            shape: box / sphere / cylinder，并动态切换对应尺寸端口。
-            interval / offset: 控制检测频率；投射物护盾等高速检测建议 interval 保持 1。
-            entity: 实体绑定图中是绑定该图的实体；全局图中没有绑定实体时等同于触发实体。
-            trigger_entity: 本次进入、停留或离开区域的实体。
-            target_entity: 当前与 trigger_entity 相同，用作通用目标实体输出。
-            xyz: trigger_entity 的当前位置。
-            hit_pos / normal / vector: 命中点、表面法线和实体速度；projectile 会使用上一 tick 到当前 tick 的 swept 检测，适合反弹或吸收护盾。
-            start_pos / end_pos: 本次检测的运动线段；projectile 为上一 tick 到当前 tick。
-            inside_count: 当前区域内实体数量。
-            同一图内相同区域配置的不同 phase 会共享一次底层查询。""";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -65,8 +51,47 @@ public class AreaTriggerEvent extends BaseEventNode {
     }
 
     private NodeDef buildDef(AreaShape shape) {
+        NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
+                .text("summary")
+                .output(StandardPorts.FLOW_OUT, "flow_out")
+                .output(StandardPorts.ENTITY, "entity")
+                .output(StandardPorts.TRIGGER_ENTITY, "trigger_entity")
+                .output(StandardPorts.XYZ, "xyz")
+                .output(StandardPorts.HIT_POS, "hit_pos")
+                .output(StandardPorts.NORMAL, "normal")
+                .output(StandardPorts.VECTOR, "vector")
+                .output(StandardPorts.START_POS, "start_pos")
+                .output(StandardPorts.END_POS, "end_pos")
+                .output(StandardPorts.TARGET_ENTITY, "target_entity")
+                .output(StandardPorts.TYPE, "type")
+                .output(StandardPorts.CENTER, "output_center")
+                .output(TRIGGER_ID_PORT, "trigger_id")
+                .output(INSIDE_COUNT_PORT, "inside_count")
+                .input(PHASE_PORT, "phase")
+                .input(ANCHOR_PORT, "anchor")
+                .input(SHAPE_PORT, "shape")
+                .input(TARGET_PORT, "target")
+                .input(StandardPorts.CENTER, "input_center")
+                .input(StandardPorts.INTERVAL, "interval")
+                .input(StandardPorts.OFFSET, "offset");
+
+        switch (shape) {
+            case SPHERE -> comment.output(StandardPorts.RADIUS, "output_radius")
+                    .input(StandardPorts.RADIUS, "input_radius");
+            case CYLINDER -> comment.output(StandardPorts.RADIUS, "output_radius")
+                    .output(HEIGHT_PORT, "output_height")
+                    .output(StandardPorts.ROTATION, "output_rotation")
+                    .input(StandardPorts.RADIUS, "input_radius")
+                    .input(HEIGHT_PORT, "input_height")
+                    .input(StandardPorts.ROTATION, "input_rotation");
+            case BOX -> comment.output(StandardPorts.SIZE_3, "output_size_3")
+                    .output(StandardPorts.ROTATION, "output_rotation")
+                    .input(StandardPorts.SIZE_3, "input_size_3")
+                    .input(StandardPorts.ROTATION, "input_rotation");
+        }
+
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node." + TYPE_ID))
-                .comment(AREA_COMMENT)
+                .comment(comment.build())
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.TRIGGER_ENTITY.toOutput(), UIHint.DEFAULT, null, null))

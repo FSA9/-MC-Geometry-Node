@@ -84,6 +84,12 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
                 && node.mOverlayController.isCommentButtonView(view);
     }
 
+    public static boolean isCommentView(View view) {
+        return view != null
+                && view.getParent() instanceof UINode node
+                && node.mOverlayController.isCommentView(view);
+    }
+
     @Override
     public void updateNodeLayout() {
         syncAndLayoutUI(getContext());

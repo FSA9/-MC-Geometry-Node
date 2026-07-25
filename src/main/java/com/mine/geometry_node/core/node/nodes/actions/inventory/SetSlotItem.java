@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.inventory;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -19,13 +20,16 @@ public class SetSlotItem extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                将物品栈写入目标实体的指定槽位。
-                槽位由 SlotRef 决定，当前行为是替换槽位原内容。
-                Bool 输出表示是否成功写入。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.set_slot_item"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(StandardPorts.BOOL, "bool")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.ENTITY, "entity")
+                        .input(StandardPorts.SLOT, "slot")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), null, UIHint.SLOT_REF, null, null))

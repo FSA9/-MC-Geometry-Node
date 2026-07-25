@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.item;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -17,13 +18,14 @@ public class ClearAllAttributeModifiers extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                清除物品栈上的所有属性修饰符。
-                只移除 ATTRIBUTE_MODIFIERS 组件，不改变物品类型、数量或附魔。
-                输出 ItemStack 为清理后的物品栈。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.clear_all_attribute_modifiers"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(StandardPorts.ITEM_STACK, "result_item_stack")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
                 .build();

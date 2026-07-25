@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.item.attribution;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -15,13 +16,12 @@ public class IsItemEmpty extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                判断物品栈是否为空。
-                缺失输入、空气或数量为 0 都视为空。
-                输出 bool 为判断结果。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.is_item_empty"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.BOOL, "bool")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .build())
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .build();
     }

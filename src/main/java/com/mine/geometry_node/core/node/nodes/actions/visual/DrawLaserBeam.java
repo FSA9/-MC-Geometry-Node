@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node.nodes.actions.visual;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.value.ColorValue;
 import com.mine.geometry_node.core.node.value.ExpressionData;
 import com.mine.geometry_node.core.node.nodes.*;
@@ -24,14 +25,19 @@ public class DrawLaserBeam extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                绘制一条临时激光束视觉效果。
-                可绑定 source_entity 和 target_entity，也可直接使用 start_pos/end_pos。
-                start_pos、end_pos、size_1 支持动态表达式输入。
-                tick 控制持续时间；只产生视觉效果。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.draw_laser_beam"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.SOURCE_ENTITY, "source_entity")
+                        .input(StandardPorts.TARGET_ENTITY, "target_entity")
+                        .input(StandardPorts.START_POS, "start_pos")
+                        .input(StandardPorts.END_POS, "end_pos")
+                        .input(StandardPorts.COLOR, "color")
+                        .input(StandardPorts.SIZE_1, "size_1")
+                        .input(StandardPorts.TICK, "tick")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 【修复3】：必须在节点定义里暴露出这两个实体输入端口，否则玩家无法连线
                 // 注意：如果你的 StandardPorts 里没有 SOURCE_ENTITY，请去那里注册一下，或者直接用自定义 PortDef

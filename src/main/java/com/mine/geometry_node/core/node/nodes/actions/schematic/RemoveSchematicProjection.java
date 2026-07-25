@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.schematic;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -16,13 +17,14 @@ public class RemoveSchematicProjection extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                删除指定 key 的结构投影视觉。
-                只影响客户端 debug 投影，不会修改世界方块，也不会删除放置记录。
-                删除包会发送给所有在线玩家，确保所有客户端缓存中的同 key 投影都被移除。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.remove_schematic_projection"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(StandardPorts.BOOL, "bool")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.KEY, "key")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.KEY.toInput(""), null, UIHint.INPUT, null, null))

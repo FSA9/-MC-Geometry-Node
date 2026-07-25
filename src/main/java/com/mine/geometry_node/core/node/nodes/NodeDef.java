@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes;
 
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.MetaKey;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -15,9 +16,17 @@ public record NodeDef(
         NodeType category,
         Component displayName,
         String comment,
+        NodeComment nodeComment,
         Map<MetaKey<?>, Object> meta,
         List<PortRow> rows
 ) {
+    public NodeDef {
+        comment = comment == null ? "" : comment;
+        nodeComment = nodeComment == null ? NodeComment.EMPTY : nodeComment;
+        meta = meta == null ? Map.of() : Map.copyOf(meta);
+        rows = rows == null ? List.of() : List.copyOf(rows);
+    }
+
     @SuppressWarnings("unchecked")
     public <T> Optional<T> getMeta(MetaKey<T> key) {
         Object value = meta.get(key);
@@ -38,6 +47,7 @@ public record NodeDef(
         private final Component displayName;
 
         private String comment = "";
+        private NodeComment nodeComment = NodeComment.EMPTY;
         private final Map<MetaKey<?>, Object> meta = new HashMap<>();
         private final List<PortRow> rows = new ArrayList<>();
 
@@ -49,6 +59,11 @@ public record NodeDef(
 
         public Builder comment(String comment) {
             this.comment = comment;
+            return this;
+        }
+
+        public Builder comment(NodeComment comment) {
+            this.nodeComment = comment == null ? NodeComment.EMPTY : comment;
             return this;
         }
 
@@ -71,7 +86,7 @@ public record NodeDef(
         }
 
         public NodeDef build() {
-            return new NodeDef(typeId, category, displayName, comment, Map.copyOf(meta), List.copyOf(rows));
+            return new NodeDef(typeId, category, displayName, comment, nodeComment, Map.copyOf(meta), List.copyOf(rows));
         }
     }
 }

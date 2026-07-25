@@ -272,6 +272,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override public boolean isReady() { return mController != null && mController.hasActiveSession(); }
     @Override public NodeVisualAdapter findNodeAt(float uiX, float uiY) { return mNodeLayer != null ? mNodeLayer.findNodeAt(uiX, uiY) : null; }
+    public NodeVisualAdapter findInteractiveNodeAt(float uiX, float uiY) { return mNodeLayer != null ? mNodeLayer.findInteractiveNodeAt(uiX, uiY) : null; }
     @Override public PortInfo findPortAt(float uiX, float uiY) { return mNodeLayer != null ? mNodeLayer.findPortAt(uiX, uiY) : null; }
     @Override public FrameVisualAdapter findFrameAt(float uiX, float uiY) { return mFrameLayer != null ? mFrameLayer.findFrameAt(uiX, uiY) : null; }
     @Override public FrameVisualAdapter getSmallestContainingFrame(float uiX, float uiY) { return mFrameLayer != null ? mFrameLayer.getSmallestContainingFrame(uiX, uiY) : null; }

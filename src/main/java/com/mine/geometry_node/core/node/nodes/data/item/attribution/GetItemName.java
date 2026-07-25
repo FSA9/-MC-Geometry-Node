@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.item.attribution;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -15,13 +16,12 @@ public class GetItemName extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                读取物品栈的显示名称。
-                有自定义名称时输出自定义名称，否则输出本地化后的默认名称。
-                空物品栈输出空字符串。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_item_name"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.NAME, "name")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .build())
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.NAME.toOutput(), UIHint.DEFAULT, null, null))
                 .build();
     }

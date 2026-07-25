@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.item.attribution;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -16,13 +17,12 @@ public class GetItemId extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                读取物品栈的注册 ID。
-                输出格式类似 minecraft:diamond_sword。
-                空物品栈输出 minecraft:air。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_item_id"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.ITEM_TYPE, "item_type")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .build())
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_TYPE.toOutput(), UIHint.DEFAULT, null, null))
                 .build();
     }

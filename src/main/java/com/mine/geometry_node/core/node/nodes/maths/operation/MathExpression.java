@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.value.DynamicData;
 import com.mine.geometry_node.core.node.value.ExpressionData;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
@@ -63,14 +64,16 @@ public class MathExpression extends BaseNode {
     }
 
     private NodeDef buildDef(int portCount) {
-        String comment = """
-                计算自定义数学表达式。
-                支持运算符: +, -, *, /, ^ (幂)
-                支持函数: sin, cos, tan, sqrt, abs
-                支持变量: A-Z (动态输入端口)""";
+        NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
+                .text("summary")
+                .output(StandardPorts.VALUE, "value")
+                .input(StandardPorts.EXPRESSION, "expression");
+        for (int i = 1; i <= portCount; i++) {
+            comment.input(PORT_IDS[i], "variable");
+        }
 
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.math_expression"))
-                .comment(comment)
+                .comment(comment.build())
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 26);
 
         builder.addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null));

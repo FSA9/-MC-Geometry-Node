@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.inventory;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -21,13 +22,15 @@ public class ClearSlots extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                按范围清空目标实体或容器的槽位。
-                inventory 清空主要物品存储；equipment 清空装备槽；all 同时清空两者。
-                输出 removed_count 为实际清除的物品总数量。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.clear_slots"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(StandardPorts.REMOVED_COUNT, "removed_count")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.ENTITY, "entity")
+                        .input(StandardPorts.SCOPE, "scope")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.REMOVED_COUNT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(

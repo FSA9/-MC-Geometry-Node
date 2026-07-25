@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.inventory;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -20,13 +21,17 @@ public class AddItemToInventory extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                将物品栈插入目标的主要物品存储。
-                玩家会插入背包，容器会插入容器槽位，其他实体会尝试插入 NeoForge 物品能力。
-                输出 ItemStack 为剩余未插入物品，count 为实际插入数量，bool 表示是否完全插入。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.add_item_to_inventory"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(StandardPorts.COUNT, "count")
+                        .output(StandardPorts.ITEM_STACK, "leftover_item_stack")
+                        .output(StandardPorts.BOOL, "bool")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.ENTITY, "entity")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))

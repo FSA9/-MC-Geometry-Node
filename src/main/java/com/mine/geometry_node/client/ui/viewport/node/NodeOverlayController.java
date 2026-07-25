@@ -7,6 +7,7 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveGroupVirtualPort;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.node.comment.NodeCommentTextBuilder;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.HintRendererFactory;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIHintRenderer;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
@@ -166,6 +167,9 @@ final class NodeOverlayController {
         View hit = findInteractiveChildAt(mCommentButton, localXpx, localYpx);
         if (hit != null) return hit;
 
+        hit = findInteractiveChildAt(mCommentTooltip, localXpx, localYpx);
+        if (hit != null) return hit;
+
         hit = findInteractiveChildAt(mAddButton, localXpx, localYpx);
         if (hit != null) return hit;
 
@@ -183,6 +187,10 @@ final class NodeOverlayController {
 
     boolean isCommentButtonView(View view) {
         return view == mCommentButton;
+    }
+
+    boolean isCommentView(View view) {
+        return view == mCommentButton || view == mCommentTooltip;
     }
 
     static boolean closeOpenCommentPopup() {
@@ -339,7 +347,7 @@ final class NodeOverlayController {
     }
 
     private void createCommentOverlayIfNeeded(Context context) {
-        String comment = mNodeDef.comment();
+        String comment = NodeCommentTextBuilder.build(mNodeDef);
         if (comment == null || comment.isBlank()) {
             return;
         }
@@ -363,8 +371,8 @@ final class NodeOverlayController {
         mCommentTooltip.setMinLines(1);
         mCommentTooltip.setPadding(UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5), UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5));
         mCommentTooltip.setBackground(createRectDrawable(0xF0222222, 4.0f, 1, 0xFF555555));
+        mCommentTooltip.setTextIsSelectable(true);
         mCommentTooltip.setVisibility(View.GONE);
-        mCommentTooltip.setEnabled(false);
 
         int tooltipWidth = UIUtils.dp2pxInt(COMMENT_POPUP_WIDTH_DP);
         FrameLayout.LayoutParams tooltipLp = new FrameLayout.LayoutParams(tooltipWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -395,7 +403,7 @@ final class NodeOverlayController {
     }
 
     private int estimateCommentPopupHeightDp() {
-        String comment = mNodeDef.comment();
+        String comment = NodeCommentTextBuilder.build(mNodeDef);
         if (comment == null || comment.isBlank()) {
             return mTotalHeight;
         }
@@ -468,8 +476,7 @@ final class NodeOverlayController {
     }
 
     private boolean hasCommentOverlay() {
-        String comment = mNodeDef.comment();
-        return comment != null && !comment.isBlank();
+        return NodeCommentTextBuilder.hasComment(mNodeDef);
     }
 
     private boolean isInputConnected(PortRow row) {

@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node.nodes.logics;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
@@ -48,14 +49,16 @@ public class Switch extends BaseNode {
     }
 
     private NodeDef buildDef(int branchCount) {
-        String comment = """
-                根据多个布尔 case 输入分发执行流。
-                每个为 true 的 case 都会触发对应输出分支。
-                如果没有任何 case 为 true，节点直接结束。
-                输出分支数量可动态增加，最多 10 个。""";
+        NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
+                .text("summary")
+                .input(StandardPorts.FLOW_IN, "flow_in");
+        for (int i = 1; i <= branchCount; i++) {
+            comment.output(StandardPorts.FLOW_OUT.getIdWithIndex(i), "flow_out")
+                    .input(StandardPorts.CASE.getIdWithIndex(i), "case");
+        }
 
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.switch"))
-                .comment(comment);
+                .comment(comment.build());
 
         builder.addMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT, MAX_BRANCH_COUNT);
         builder.addRow(new PortRow(

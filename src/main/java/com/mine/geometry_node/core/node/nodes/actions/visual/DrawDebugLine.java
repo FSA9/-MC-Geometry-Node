@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.visual;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -19,14 +20,17 @@ public class DrawDebugLine extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                绘制一条临时调试直线。
-                start_pos/end_pos 使用世界坐标。
-                color、size_1、tick 控制颜色、粗细和持续时间。
-                只产生视觉效果，不做碰撞、伤害或方块修改。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.draw_debug_line"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.START_POS, "start_pos")
+                        .input(StandardPorts.END_POS, "end_pos")
+                        .input(StandardPorts.COLOR, "color")
+                        .input(StandardPorts.SIZE_1, "size_1")
+                        .input(StandardPorts.TICK, "tick")
+                        .build())
                 // 执行流：输入与输出
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 核心数据端口：使用 PortDef.create 创建具有默认值的自定义语义端口

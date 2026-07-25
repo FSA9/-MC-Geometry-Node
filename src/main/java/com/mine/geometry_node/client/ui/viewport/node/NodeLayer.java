@@ -260,6 +260,18 @@ public class NodeLayer extends FrameLayout {
         return null;
     }
 
+    public NodeVisualAdapter findInteractiveNodeAt(float uiX, float uiY) {
+        for (int i = mNodeOrder.size() - 1; i >= 0; i--) {
+            NodeVisualAdapter node = mNodeOrder.get(i);
+            float localXpx = UIUtils.dp2px(uiX - node.getUiX());
+            float localYpx = UIUtils.dp2px(uiY - node.getUiY());
+            if (node.findInteractiveViewAt(localXpx, localYpx) != null) {
+                return node;
+            }
+        }
+        return null;
+    }
+
     public Viewport.PortInfo findPortAt(float uiX, float uiY) {
         float dynamicMargin = UIConstants.Node.PORT_HITBOX_RADIUS;
         for (int i = mNodeOrder.size() - 1; i >= 0; i--) {

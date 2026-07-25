@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.MetaKey;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
@@ -42,12 +43,17 @@ public class FormatDialogueText extends BaseNode {
     }
 
     private NodeDef buildDef(int variableCount) {
+        NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
+                .text("summary")
+                .output(StandardPorts.STRING, "string")
+                .input(StandardPorts.TEMPLATE, "template");
+        for (int i = 1; i <= variableCount; i++) {
+            comment.input(StandardPorts.VARIABLE_NAME.getIdWithIndex(i), "variable_name")
+                    .input(StandardPorts.VARIABLE_VALUE.getIdWithIndex(i), "variable_value");
+        }
+
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DIALOGUE, Component.translatable("geometry_node.node.format_dialogue_text"))
-                .comment("""
-                        使用严格匹配的占位符格式化文本。
-                        语法: {name} 匹配变量 name，区分大小写。
-                        转义: {{ 输出 {，}} 输出 }。
-                        未找到变量时保留原占位符。""")
+                .comment(comment.build())
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, MAX_VARIABLE_COUNT);
 
         builder.addRow(new PortRow(

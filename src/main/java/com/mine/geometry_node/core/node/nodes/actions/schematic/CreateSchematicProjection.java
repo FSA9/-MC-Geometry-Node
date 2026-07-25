@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -73,21 +74,32 @@ public class CreateSchematicProjection extends BaseNode {
     }
 
     private NodeDef buildDef(boolean debugMode) {
-        String comment = """
-                在指定坐标放置 .schem/.schematic。
-                debug 开启时只向客户端发送投影视觉，不修改世界；关闭时会实际写入世界方块。
-                path 是存档 geometry_nodes 目录下的相对结构文件路径，例如 demo/castle.schem。
-                禁止绝对路径、路径前缀、. 和 ..；结构文件只能从服务器资产目录读取。
-                xyz 是结构最小角坐标，执行时会吸附到方块网格。
-                debug 模式支持普通方块、液体、可渲染方块实体和实体投影；key 相同会替换已有投影。
-                放置模式下 replace_air 控制是否用结构空气清空目标位置，replace_blocks 控制是否覆盖已有非空气方块。
-                放置模式会用 key 记录放置前后快照，供移除结构放置和复原结构放置使用。
-                unique_if_exists 开启时，如果 key 已存在，会自动追加 _1、_2 等后缀，并从 key 输出实际名称。
-                放置记录会自动维护结构包围盒；玩家可通过 /geometry_node debug schem on/off 控制是否可见。
-                rotation 使用 Y 轴角度，按 90 度步进取整；mirror 的 X/Z 为负数时分别沿 X/Z 镜像。""";
+        NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
+                .text("summary")
+                .output(StandardPorts.FLOW_OUT, "flow_out")
+                .output(StandardPorts.PATH, "path_out")
+                .output(StandardPorts.KEY, "key_out")
+                .input(StandardPorts.FLOW_IN, "flow_in")
+                .input(StandardPorts.PATH, "path")
+                .input(StandardPorts.KEY, "key")
+                .input(StandardPorts.XYZ, "xyz")
+                .input(StandardPorts.DEBUG, "debug");
+
+        if (debugMode) {
+            comment.input(StandardPorts.ONLY_SELF_VISIBLE, "only_self_visible")
+                    .input(StandardPorts.ALPHA, "alpha")
+                    .input(StandardPorts.TICK, "tick")
+                    .input(StandardPorts.RADIUS, "radius");
+        } else {
+            comment.input(StandardPorts.UNIQUE_IF_EXISTS, "unique_if_exists")
+                    .input(StandardPorts.REPLACE_AIR, "replace_air")
+                    .input(StandardPorts.REPLACE_BLOCKS, "replace_blocks")
+                    .input(StandardPorts.ROTATION, "rotation")
+                    .input(StandardPorts.MIRROR, "mirror");
+        }
 
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.create_schematic_projection"))
-                .comment(comment);
+                .comment(comment.build());
 
         builder.addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
         builder.addRow(new PortRow(StandardPorts.PATH.toInput(""), StandardPorts.PATH.toOutput(), UIHint.PATH, null, null));

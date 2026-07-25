@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node.nodes.logics;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
@@ -46,13 +47,15 @@ public class CombineFlow extends BaseNode {
     }
 
     private NodeDef buildDef(int branchCount) {
-        String comment = """
-                将多个执行流入口合并到一个执行流出口。
-                任意 flow_in 输入触发时，都会继续执行同一个 flow_out。
-                输入分支数量可动态增加，最多 10 个。""";
+        NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
+                .text("summary")
+                .output(StandardPorts.FLOW_OUT, "flow_out");
+        for (int i = 1; i <= branchCount; i++) {
+            comment.input(StandardPorts.FLOW_IN.getIdWithIndex(i), "flow_in");
+        }
 
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.combine_flow"))
-                .comment(comment);
+                .comment(comment.build());
         builder.addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, MAX_BRANCH_COUNT);
         builder.addRow(new PortRow(
                 null,

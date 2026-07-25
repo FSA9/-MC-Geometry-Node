@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.inventory;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -34,13 +35,13 @@ public class SlotFromIndex extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                将数字下标转换为槽位引用。
-                玩家背包、快捷栏、主背包和装备栏会自动取模，适合接随机数。
-                容器和实体物品能力没有固定容量，会保留非负下标。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.slot_from_index"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.SLOT, "slot")
+                        .input(StandardPorts.INDEX, "index")
+                        .input(StandardPorts.SCOPE, "scope")
+                        .build())
                 .addRow(new PortRow(null, StandardPorts.SLOT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.INDEX.toInput(0), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(

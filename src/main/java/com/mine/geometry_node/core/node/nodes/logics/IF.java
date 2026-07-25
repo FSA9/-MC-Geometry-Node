@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.logics;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -14,13 +15,14 @@ public class IF extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                根据布尔输入选择执行分支。
-                bool 为 true 时执行 true 分支。
-                bool 为 false 或空值时执行 false 分支。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.if_branch"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_TRUE, "flow_true")
+                        .output(StandardPorts.FLOW_FALSE, "flow_false")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.BOOL, "bool")
+                        .build())
                 .addRow(new PortRow(
                         StandardPorts.FLOW_IN.toExec(),
                         StandardPorts.FLOW_TRUE.toExec(),

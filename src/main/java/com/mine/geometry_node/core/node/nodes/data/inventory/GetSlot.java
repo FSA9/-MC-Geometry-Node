@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.inventory;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -15,13 +16,12 @@ public class GetSlot extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                创建一个槽位引用。
-                槽位引用只描述位置，不包含物品内容。
-                运行时会根据目标实体和 space 解析玩家背包、装备栏、容器或实体物品能力。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_slot"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.SLOT, "slot_out")
+                        .input(StandardPorts.SLOT, "slot_in")
+                        .build())
                 .addRow(new PortRow(null, StandardPorts.SLOT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()).hiddenPin(),

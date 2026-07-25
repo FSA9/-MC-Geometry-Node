@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.logics;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -24,14 +25,15 @@ public class Equal extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                判断两个值是否相等。
-                支持类型、注册 ID、组件和严格比较四种模式。
-                物品栈默认比较物品类型和组件，忽略数量。
-                数量模式仅对物品栈生效。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.LOGIC, Component.translatable("geometry_node.node.equal"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.BOOL, "bool")
+                        .input(PORT_A, "a")
+                        .input(PORT_B, "b")
+                        .input(StandardPorts.TYPE, "type")
+                        .input(COUNT_MODE, "count_mode")
+                        .build())
                 .addRow(new PortRow(
                         new PortDef(PORT_A, Component.literal("A"), PortType.ANY, null, false),
                         StandardPorts.BOOL.toOutput(),

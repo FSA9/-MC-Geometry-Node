@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.inventory;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -18,13 +19,15 @@ public class GetSlotItem extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                读取目标实体指定槽位中的物品栈。
-                输入 SlotRef 表示位置，输出 ItemStack 表示槽位内容。
-                Bool 输出表示槽位中是否有物品。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_slot_item"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.ITEM_STACK, "item_stack")
+                        .output(StandardPorts.BOOL, "bool")
+                        .output(StandardPorts.COUNT, "count")
+                        .input(StandardPorts.ENTITY, "entity")
+                        .input(StandardPorts.SLOT, "slot")
+                        .build())
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), null, UIHint.SLOT_REF, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))

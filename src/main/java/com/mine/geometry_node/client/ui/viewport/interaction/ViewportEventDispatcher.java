@@ -79,7 +79,7 @@ public class ViewportEventDispatcher {
                 if (isMouseHoverMove) {
                     updateHoveredHint(ev, hitResult);
                 }
-                if (isActionDown && !isCommentButtonHit(hitResult)) {
+                if (isActionDown && !isCommentViewHit(hitResult)) {
                     if (UINode.closeOpenCommentPopup()) {
                         return true;
                     }
@@ -97,7 +97,7 @@ public class ViewportEventDispatcher {
                     boolean handled = isMouseHoverMove
                             ? dispatchHoverMoveEvent(ev, targetView, hitResult.isLogical(), !hitResult.isLogical())
                             : dispatchTransformedEvent(ev, targetView, hitResult.isLogical(), !hitResult.isLogical());
-                    if (handled) {
+                    if (handled || UINode.isCommentView(targetView)) {
                         if (isActionDown) {
                             mCapturedHintView = targetView;
                             mHintCaptureUsesLogical = hitResult.isLogical();
@@ -151,7 +151,7 @@ public class ViewportEventDispatcher {
         float uiX = camera.screenToUIX(ev.getX());
         float uiY = camera.screenToUIY(ev.getY());
 
-        NodeVisualAdapter topNode = mViewport.findNodeAt(uiX, uiY);
+        NodeVisualAdapter topNode = mViewport.findInteractiveNodeAt(uiX, uiY);
         if (topNode != null) {
             float localXpx = UIUtils.dp2px(uiX - topNode.getUiX());
             float localYpx = UIUtils.dp2px(uiY - topNode.getUiY());
@@ -240,8 +240,8 @@ public class ViewportEventDispatcher {
         return a.view() == b.view() && a.node() == b.node() && a.isLogical() == b.isLogical();
     }
 
-    private static boolean isCommentButtonHit(HintHitResult hitResult) {
-        return hitResult != null && UINode.isCommentButton(hitResult.view());
+    private static boolean isCommentViewHit(HintHitResult hitResult) {
+        return hitResult != null && UINode.isCommentView(hitResult.view());
     }
 
     private NodeVisualAdapter findNodeVisualForOverlay(View target) {

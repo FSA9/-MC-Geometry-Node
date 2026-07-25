@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.data.value;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
@@ -46,12 +47,16 @@ public class StringExpression extends BaseNode {
     }
 
     private NodeDef buildDef(int portCount) {
+        NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
+                .text("summary")
+                .output(StandardPorts.STRING, "string")
+                .input(StandardPorts.EXPRESSION, "expression");
+        for (int i = 1; i <= portCount; i++) {
+            comment.input(PORT_IDS[i], "variable");
+        }
+
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.string_expression"))
-                .comment("""
-                        拼接字符串表达式。
-                        使用 + 连接多个片段，例如 "HP: " + A + "/" + B。
-                        A-Z 对应动态输入端口，会被替换为端口传入的实际值。
-                        字面文本请使用单引号或双引号包裹。""")
+                .comment(comment.build())
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, MAX_PORT_COUNT);
 
         builder.addRow(new PortRow(StandardPorts.EXPRESSION.toInput(DEFAULT_EXPRESSION), StandardPorts.STRING.toOutput(), UIHint.INPUT, null, null));

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.maths.vector;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -16,13 +17,13 @@ public class ReflectVector extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                按法线反射输入向量。
-                常用于 projectile 命中区域后的反弹速度计算。
-                normal 会自动归一化；normal 为空或零向量时原样输出 vector。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.reflect_vector"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.VECTOR, "output_vector")
+                        .input(StandardPorts.VECTOR, "input_vector")
+                        .input(StandardPorts.NORMAL, "normal")
+                        .build())
                 .addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.VECTOR.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.NORMAL.toInput(), null, UIHint.VECTOR, null, null))

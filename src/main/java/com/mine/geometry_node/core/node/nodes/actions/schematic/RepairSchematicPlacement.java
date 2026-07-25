@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node.nodes.actions.schematic;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -26,15 +27,18 @@ public class RepairSchematicPlacement extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                将指定 key 的结构放置复原成刚放置完成后的状态。
-                repair_air 开启时会复原本次放置记录中的空气位置；关闭时跳过这些空气目标。
-                affect_entities 开启时会补回该次放置生成但已经缺失的实体。
-                结构包围盒由放置记录自动维护；玩家可通过 /geometry_node debug schem on/off 控制是否可见。
-                block_stats 输出本次复原成的方块 ID 与数量。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.repair_schematic_placement"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(StandardPorts.BOOL, "bool")
+                        .output(StandardPorts.COUNT, "count")
+                        .output(StandardPorts.BLOCK_STATS, "block_stats")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.KEY, "key")
+                        .input(StandardPorts.REPAIR_AIR, "repair_air")
+                        .input(StandardPorts.AFFECT_ENTITIES, "affect_entities")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))

@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.visual; // 建议移动�
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -23,14 +24,19 @@ public class Raycast extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        String comment = """
-                从 start_pos 沿 vector 方向执行一次射线检测。
-                distance 控制最大距离，radius 会扩大实体命中范围。
-                输出是否命中、命中位置，以及最近命中的实体。
-                同一次执行中多个输出会复用缓存结果。""";
-
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.raycast"))
-                .comment(comment)
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(StandardPorts.IS_HIT, "is_hit")
+                        .output(StandardPorts.XYZ, "xyz")
+                        .output(StandardPorts.ENTITY, "entity")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .input(StandardPorts.START_POS, "start_pos")
+                        .input(StandardPorts.VECTOR, "vector")
+                        .input(StandardPorts.DIST, "distance")
+                        .input(StandardPorts.RADIUS, "radius")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.IS_HIT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))
