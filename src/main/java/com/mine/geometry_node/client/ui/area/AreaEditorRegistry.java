@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.area;
 
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserPanel;
 import com.mine.geometry_node.client.ui.bottom_window.console.TerminalConsolePanel;
-import com.mine.geometry_node.client.ui.top_window.graph_editor.GraphEditorWindow;
+import com.mine.geometry_node.client.ui.editor.graph.GraphEditorWindow;
 import com.mine.geometry_node.client.ui.window.IToolWindow;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;

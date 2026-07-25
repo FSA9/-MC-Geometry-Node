@@ -20,6 +20,11 @@ final class AreaStyle {
     static final int COLOR_BUTTON_BG_SELECTED = 0xFF1F5D8F;
     static final int COLOR_BUTTON_BORDER = 0xFF526070;
     static final int COLOR_ACCENT = UIConstants.ViewPort.Selection.CLR_BORDER;
+    static final int COLOR_MENU_BG = 0xFF2B2B2B;
+    static final int COLOR_MENU_BORDER = 0xFF151515;
+    static final int COLOR_MENU_DIVIDER = 0xFF171717;
+    static final int COLOR_MENU_SECTION_TEXT = 0xFF777777;
+    static final int COLOR_MENU_SELECTED = 0xFF30343A;
     static final int COLOR_DIVIDER = 0xFF070707;
     static final int COLOR_DIVIDER_DRAG = UIConstants.ViewPort.Selection.CLR_BORDER;
     static final int COLOR_DIVIDER_DRAG_FILL = 0x3344AAFF;

@@ -13,18 +13,15 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
-import java.util.EnumMap;
-import java.util.Map;
-
 final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink {
     private final AreaLayoutRoot mRoot;
     private final AreaLeafNode mNode;
-    private final VectorIconView mCurrentIcon;
+    private final AreaIconButton mEditorSelector;
     private final TextView mTitle;
     private final FrameLayout mContentFrame;
-    private final Map<AreaEditorType, AreaIconButton> mEditorButtons = new EnumMap<>(AreaEditorType.class);
     private final float mHeaderTouchSlop;
     private AreaIconButton mHintButton;
+    private AreaEditorMenu mEditorMenu;
     private IToolWindow mCurrentWindow;
     private boolean mWindowShown;
     private boolean mHeaderDragging;
@@ -46,9 +43,9 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         setBackground(AreaStyle.rounded(AreaStyle.COLOR_PANE, AreaStyle.PANE_RADIUS_DP, 1, AreaStyle.COLOR_PANE_BORDER));
 
         LinearLayout header = createHeader(context);
-        mCurrentIcon = new VectorIconView(context, node.editorType().iconKind(), AreaStyle.COLOR_ICON_SELECTED);
-        mCurrentIcon.setOnTouchListener(this::handleHeaderTouch);
-        header.addView(mCurrentIcon, iconParams());
+        mEditorSelector = new AreaIconButton(context, node.editorType().iconKind(), "选择窗口类型", this);
+        mEditorSelector.setOnClickListener(v -> toggleEditorMenu());
+        header.addView(mEditorSelector, iconParams());
 
         mTitle = UIUtils.createLockedTextView(context, "", 10.0f, AreaStyle.COLOR_TEXT);
         mTitle.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
@@ -58,7 +55,6 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         titleParams.setMargins(UIUtils.dp2pxInt(5.0f), 0, UIUtils.dp2pxInt(4.0f), 0);
         header.addView(mTitle, titleParams);
 
-        addEditorButtons(header, context);
         addHeaderDivider(header, context);
         addActionButton(header, context, VectorIconView.Kind.SPLIT_HORIZONTAL, "左右分割区域",
                 () -> mRoot.splitLeaf(mNode, AreaSplitDirection.HORIZONTAL));
@@ -93,6 +89,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
 
     @Override
     protected void onDetachedFromWindow() {
+        closeEditorMenu();
         if (mCurrentWindow != null) {
             hideWindow(mCurrentWindow);
             mCurrentWindow = null;
@@ -123,6 +120,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
 
     void refreshChrome() {
         mHintButton = null;
+        closeEditorMenu();
         updateHeaderState();
     }
 
@@ -200,15 +198,6 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         return dx * dx + dy * dy >= mHeaderTouchSlop * mHeaderTouchSlop;
     }
 
-    private void addEditorButtons(LinearLayout header, Context context) {
-        for (AreaEditorType type : AreaEditorType.values()) {
-            AreaIconButton button = new AreaIconButton(context, type.iconKind(), "切换到 " + type.displayName(), this);
-            button.setOnClickListener(v -> switchEditor(type));
-            mEditorButtons.put(type, button);
-            header.addView(button, buttonParams());
-        }
-    }
-
     private void addActionButton(LinearLayout header, Context context, VectorIconView.Kind kind, String hint, Runnable action) {
         AreaIconButton button = new AreaIconButton(context, kind, hint, this);
         button.setOnClickListener(v -> {
@@ -236,6 +225,30 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         mNode.setEditorType(type);
         updateHeaderState();
         attachEditor();
+    }
+
+    private void toggleEditorMenu() {
+        if (mEditorMenu != null) {
+            closeEditorMenu();
+            return;
+        }
+        mHintButton = null;
+        updateTitle();
+        mEditorSelector.setSelectedState(true);
+        mEditorMenu = new AreaEditorMenu(getContext(), mNode.editorType(), this::switchEditor, () -> {
+            mEditorMenu = null;
+            mEditorSelector.setSelectedState(false);
+        });
+        mEditorMenu.showBelow(mEditorSelector, mRoot);
+    }
+
+    private void closeEditorMenu() {
+        if (mEditorMenu != null) {
+            AreaEditorMenu menu = mEditorMenu;
+            mEditorMenu = null;
+            menu.dismiss();
+        }
+        mEditorSelector.setSelectedState(false);
     }
 
     private void attachEditor() {
@@ -281,10 +294,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
 
     private void updateHeaderState() {
         AreaEditorType type = mNode.editorType();
-        mCurrentIcon.setKind(type.iconKind());
-        for (Map.Entry<AreaEditorType, AreaIconButton> entry : mEditorButtons.entrySet()) {
-            entry.getValue().setSelectedState(entry.getKey() == type);
-        }
+        mEditorSelector.setKind(type.iconKind());
         updateTitle();
     }
 

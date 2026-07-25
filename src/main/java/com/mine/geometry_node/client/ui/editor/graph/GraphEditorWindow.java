@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.top_window.graph_editor;
+package com.mine.geometry_node.client.ui.editor.graph;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.common.ResizableDivider;
