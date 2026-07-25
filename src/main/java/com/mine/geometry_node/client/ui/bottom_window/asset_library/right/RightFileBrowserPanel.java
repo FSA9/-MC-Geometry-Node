@@ -335,10 +335,24 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        activatePanel();
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
         mIoTasks.cancelAll();
-        mKeyManager.dispose();
+        deactivatePanel();
         super.onDetachedFromWindow();
+    }
+
+    public void activatePanel() {
+        mKeyManager.attach();
+    }
+
+    public void deactivatePanel() {
+        mKeyManager.dispose();
     }
 
     @Override

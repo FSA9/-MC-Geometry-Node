@@ -53,6 +53,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     private boolean mFirstLayout = true;
     private final float[] mTempPos = new float[2];
     private boolean mSnapToGridEnabled = false;
+    private boolean mLifecycleRegistered = true;
     private final ConfigChangeListener mConfigChangeListener = this::applyViewportConfig;
 
     private TextView mEmptyHint;
@@ -111,11 +112,39 @@ public class Viewport extends FrameLayout implements InteractionContext {
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        activateLifecycle();
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
-        ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
-        mKeyManager.dispose();
-        mController.saveCurrentSessionState();
+        deactivateLifecycle();
         super.onDetachedFromWindow();
+    }
+
+    public void activateLifecycle() {
+        if (!mLifecycleRegistered) {
+            ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
+            mKeyManager.attach();
+            if (mToolbar != null) {
+                mToolbar.activateLifecycle();
+            }
+            applyViewportConfig(ConfigManager.INSTANCE.getConfig());
+            mLifecycleRegistered = true;
+        }
+    }
+
+    public void deactivateLifecycle() {
+        if (mLifecycleRegistered) {
+            ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
+            mKeyManager.dispose();
+            if (mToolbar != null) {
+                mToolbar.deactivateLifecycle();
+            }
+            mLifecycleRegistered = false;
+        }
+        mController.saveCurrentSessionState();
     }
 
 

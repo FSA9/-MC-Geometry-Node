@@ -26,6 +26,7 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
     private final TextView mTooltip;
     private final ConfigChangeListener mConfigChangeListener = this::applyConfig;
     private View mTooltipAnchor;
+    private boolean mConfigListenerRegistered = true;
 
     public ViewportToolbar(Context context, ViewportActionSink actionSink) {
         super(context);
@@ -69,9 +70,31 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        activateLifecycle();
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
-        ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
+        deactivateLifecycle();
         super.onDetachedFromWindow();
+    }
+
+    public void activateLifecycle() {
+        if (!mConfigListenerRegistered) {
+            ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
+            applyConfig(ConfigManager.INSTANCE.getConfig());
+            mConfigListenerRegistered = true;
+        }
+    }
+
+    public void deactivateLifecycle() {
+        if (mConfigListenerRegistered) {
+            ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
+            mConfigListenerRegistered = false;
+        }
+        hideTooltip();
     }
 
     public void setSnapToGridEnabled(boolean enabled) {

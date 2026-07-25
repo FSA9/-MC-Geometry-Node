@@ -21,6 +21,7 @@ public class ScopedKeyManager<T, S> {
     private final ActionExecutor<T> mExecutor;
     private final ConfigChangeListener mConfigChangeListener = this::applyConfig;
     private AppConfig mConfig;
+    private boolean mAttached;
 
     public ScopedKeyManager(S state,
                             KeyScope scope,
@@ -30,12 +31,24 @@ public class ScopedKeyManager<T, S> {
         mScope = scope != null ? scope : KeyScope.GLOBAL;
         mActions = actions;
         mExecutor = executor;
+        attach();
+    }
+
+    public void attach() {
+        if (mAttached) {
+            return;
+        }
         applyConfig(ConfigManager.INSTANCE.getConfig());
         ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
+        mAttached = true;
     }
 
     public void dispose() {
+        if (!mAttached) {
+            return;
+        }
         ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
+        mAttached = false;
     }
 
     public boolean onKeyDown(KeyEvent event) {

@@ -1,8 +1,5 @@
 package com.mine.geometry_node.client.ui.UICommand;
 
-import com.mine.geometry_node.client.ui.session.DocumentManager;
-import com.mine.geometry_node.client.ui.session.GraphSession;
-
 import java.util.LinkedList;
 
 /**
@@ -15,6 +12,11 @@ public class CommandManager {
 
     private final LinkedList<ICommand> mUndoStack = new LinkedList<>();
     private final LinkedList<ICommand> mRedoStack = new LinkedList<>();
+    private Runnable mDirtyListener;
+
+    public void setDirtyListener(Runnable dirtyListener) {
+        mDirtyListener = dirtyListener;
+    }
 
     /**
      * 提交并执行一个新命令
@@ -56,10 +58,8 @@ public class CommandManager {
     }
 
     private void markAsDirty() {
-        GraphSession activeSession = DocumentManager.INSTANCE.getActiveSession();
-        if (activeSession != null && !activeSession.isDirty) {
-            activeSession.isDirty = true;
-            DocumentManager.INSTANCE.notifyTabChanged();
+        if (mDirtyListener != null) {
+            mDirtyListener.run();
         }
     }
 }

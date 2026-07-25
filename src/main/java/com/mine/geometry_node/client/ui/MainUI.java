@@ -1,8 +1,6 @@
 package com.mine.geometry_node.client.ui;
 
-import com.mine.geometry_node.client.ui.bottom_window.BottomToolWindowManager;
-import com.mine.geometry_node.client.ui.top_window.TopToolWindowManager;
-import com.mine.geometry_node.client.ui.utils.PanelSplitter;
+import com.mine.geometry_node.client.ui.area.AreaLayoutRoot;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import icyllis.modernui.ModernUI;
@@ -10,7 +8,6 @@ import icyllis.modernui.audio.AudioManager;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.fragment.Fragment;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
-import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.util.DataSet;
 import icyllis.modernui.view.LayoutInflater;
 import icyllis.modernui.view.View;
@@ -21,8 +18,6 @@ import icyllis.modernui.widget.RelativeLayout;
 import icyllis.modernui.widget.TextView;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
-
-import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 
 public class MainUI extends Fragment {
 
@@ -51,8 +46,7 @@ public class MainUI extends Fragment {
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
         setupHeader(context, rootLayout);
-        setupMiddleSection(context, rootLayout);
-        setupBottomSection(context, rootLayout);
+        setupAreaSection(context, rootLayout);
 
         return rootFrame;
     }
@@ -73,25 +67,13 @@ public class MainUI extends Fragment {
         root.addView(header, params);
     }
 
-    private void setupMiddleSection(Context context, LinearLayout root) {
-        LinearLayout.LayoutParams middleParams = new LinearLayout.LayoutParams(
+    private void setupAreaSection(Context context, LinearLayout root) {
+        LinearLayout.LayoutParams areaParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0);
-        middleParams.weight = 1.0f;
+        areaParams.weight = 1.0f;
 
-        TopToolWindowManager topPanel = new TopToolWindowManager(context);
-        root.addView(topPanel, middleParams);
-    }
-
-    private void setupBottomSection(Context context, LinearLayout root) {
-        BottomToolWindowManager bottomPanel = new BottomToolWindowManager(context);
-
-        LinearLayout.LayoutParams bottomParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0
-        );
-        bottomParams.weight = 0.3f;
-
-        root.addView(PanelSplitter.create(context, false));
-        root.addView(bottomPanel, bottomParams);
+        AreaLayoutRoot areaRoot = new AreaLayoutRoot(context);
+        root.addView(areaRoot, areaParams);
     }
 
     private RelativeLayout createPanel(Context context, String title, int colorHex) {
@@ -101,7 +83,7 @@ public class MainUI extends Fragment {
         // 【修改点】使用 COMPLEX_UNIT_PX 锁定字体大小
         TextView textView = new TextView(context);
         textView.setText(title);
-        textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(UIConstants.MainUI.TEXT_SIZE));
+        UIUtils.setLockedTextSize(textView, UIConstants.MainUI.TEXT_SIZE);
         textView.setTextColor(UIConstants.MainUI.TEXT_COLOR);
 
         RelativeLayout.LayoutParams textParams = new RelativeLayout.LayoutParams(

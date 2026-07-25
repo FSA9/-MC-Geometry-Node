@@ -7,8 +7,8 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetE
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.RightFileBrowserPanel;
+import com.mine.geometry_node.client.ui.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
-import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphCapabilitiesRequest;
@@ -28,7 +28,6 @@ import java.util.function.Consumer;
 public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoordinator {
     private static final float WINDOW_WIDTH = 920.0f;
     private static final float BROWSER_HEIGHT = 430.0f;
-    private static final float LEFT_WIDTH = 190.0f;
 
     private final LeftQuickAccessPanel mLeftPanel;
     private final RightFileBrowserPanel mBrowser;
@@ -72,11 +71,12 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
 
         mLeftPanel = new LeftQuickAccessPanel(context, this);
         browserArea.addView(mLeftPanel, new LinearLayout.LayoutParams(
-                UIUtils.dp2pxInt(LEFT_WIDTH),
-                ViewGroup.LayoutParams.MATCH_PARENT
+                0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0.22f
         ));
 
-        browserArea.addView(PanelSplitter.create(context, true));
+        browserArea.addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
 
         mBrowser = RightFileBrowserPanel.picker(context, this);
         mBrowser.setPickFileAction(this::chooseEntry);
@@ -84,7 +84,7 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
         browserArea.addView(mBrowser, new LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                1.0f
+                0.78f
         ));
 
         mPanel.addView(browserArea, new LinearLayout.LayoutParams(

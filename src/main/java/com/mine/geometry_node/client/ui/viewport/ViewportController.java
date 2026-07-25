@@ -31,6 +31,7 @@ public class ViewportController implements EditorContext.EditorListener,
         ViewportActionSink {
 
     private final Viewport mViewport;
+    private final Map<GraphSession, ViewportSessionState> mSessionStates = new IdentityHashMap<>();
     private EditorContext mEditorContext;
 
     private GraphSession mCurrentSession;
@@ -49,13 +50,14 @@ public class ViewportController implements EditorContext.EditorListener,
         this.mCurrentSession = session;
 
         if (session != null) {
+            ViewportSessionState state = sessionState(session);
             mViewport.prepareLayers();
 
             mApplyingSessionViewport = true;
             try {
-                if (session.hasViewportState) {
-                    mViewport.getCamera().setPosition(session.viewportX, session.viewportY);
-                    mViewport.getCamera().setScale(session.currentScale);
+                if (state.hasViewportState) {
+                    mViewport.getCamera().setPosition(state.viewportX, state.viewportY);
+                    mViewport.getCamera().setScale(state.currentScale);
                 } else {
                     mViewport.getCamera().setScale(1.0f);
                     if (mViewport.getWidth() > 0 && mViewport.getHeight() > 0) {
@@ -67,7 +69,7 @@ public class ViewportController implements EditorContext.EditorListener,
             } finally {
                 mApplyingSessionViewport = false;
             }
-            if (!session.hasViewportState && mViewport.getWidth() > 0 && mViewport.getHeight() > 0) {
+            if (!state.hasViewportState && mViewport.getWidth() > 0 && mViewport.getHeight() > 0) {
                 saveCurrentViewportTransform();
             }
 
@@ -76,7 +78,7 @@ public class ViewportController implements EditorContext.EditorListener,
             com.mine.geometry_node.core.node.NodeGraph graph = session.editorContext.getCurrentGraph();
             rebuildScopeVisuals(graph);
 
-            mViewport.updateSelectionState(session.selectedNodeIds, session.selectedFrameIds);
+            mViewport.updateSelectionState(state.selectedNodeIds, state.selectedFrameIds);
             mViewport.rebuildVisualConnections(graph);
 
             mViewport.updateTransform();
@@ -90,33 +92,31 @@ public class ViewportController implements EditorContext.EditorListener,
     }
 
     public void saveCurrentSessionState() {
-        if (mCurrentSession != null) {
+        ViewportSessionState state = currentSessionState();
+        if (state != null) {
             saveCurrentViewportTransform();
-
-            if (mEditorContext == null || !mEditorContext.isInsideGroupScope()) {
-                mViewport.syncSelectionToSession(mCurrentSession.selectedNodeIds, mCurrentSession.selectedFrameIds);
-            } else {
-                mCurrentSession.selectedNodeIds.clear();
-                mCurrentSession.selectedFrameIds.clear();
-            }
+            syncSelectionToCurrentState();
         }
     }
 
     public void saveCurrentViewportTransform() {
-        if (mCurrentSession == null || mApplyingSessionViewport) {
+        ViewportSessionState state = currentSessionState();
+        if (state == null || mApplyingSessionViewport) {
             return;
         }
-        if (!mCurrentSession.hasViewportState && (mViewport.getWidth() <= 0 || mViewport.getHeight() <= 0)) {
+        if (!state.hasViewportState && (mViewport.getWidth() <= 0 || mViewport.getHeight() <= 0)) {
             return;
         }
-        mCurrentSession.viewportX = mViewport.getCamera().getX();
-        mCurrentSession.viewportY = mViewport.getCamera().getY();
-        mCurrentSession.currentScale = mViewport.getCamera().getScale();
-        mCurrentSession.hasViewportState = true;
+        state.viewportX = mViewport.getCamera().getX();
+        state.viewportY = mViewport.getCamera().getY();
+        state.currentScale = mViewport.getCamera().getScale();
+        state.hasViewportState = true;
+        state.seedSessionDefaults(mCurrentSession);
     }
 
     public boolean currentSessionHasViewportState() {
-        return mCurrentSession != null && mCurrentSession.hasViewportState;
+        ViewportSessionState state = currentSessionState();
+        return state != null && state.hasViewportState;
     }
 
     public boolean hasActiveSession() {
@@ -125,6 +125,27 @@ public class ViewportController implements EditorContext.EditorListener,
 
     public GraphSession getCurrentSession() {
         return mCurrentSession;
+    }
+
+    private ViewportSessionState currentSessionState() {
+        return mCurrentSession != null ? sessionState(mCurrentSession) : null;
+    }
+
+    private ViewportSessionState sessionState(GraphSession session) {
+        return mSessionStates.computeIfAbsent(session, ViewportSessionState::fromSession);
+    }
+
+    private void syncSelectionToCurrentState() {
+        ViewportSessionState state = currentSessionState();
+        if (state == null) {
+            return;
+        }
+        if (mEditorContext == null || !mEditorContext.isInsideGroupScope()) {
+            mViewport.syncSelectionToSession(state.selectedNodeIds, state.selectedFrameIds);
+        } else {
+            state.selectedNodeIds.clear();
+            state.selectedFrameIds.clear();
+        }
     }
 
     public boolean isInsideGroupScope() {
@@ -311,7 +332,7 @@ public class ViewportController implements EditorContext.EditorListener,
             }
         }
         if (mCurrentSession != null) {
-            mViewport.syncSelectionToSession(mCurrentSession.selectedNodeIds, mCurrentSession.selectedFrameIds);
+            syncSelectionToCurrentState();
         }
     }
 
@@ -467,7 +488,10 @@ public class ViewportController implements EditorContext.EditorListener,
 
     private void save() {
         mViewport.requestViewportFocus();
-        DocumentManager.INSTANCE.saveSession(DocumentManager.INSTANCE.getActiveSession());
+        if (mCurrentSession != null) {
+            saveCurrentSessionState();
+            DocumentManager.INSTANCE.saveSession(mCurrentSession);
+        }
     }
 
     private void copySelection() {
@@ -609,7 +633,10 @@ public class ViewportController implements EditorContext.EditorListener,
     @Override public void onGraphConnectionsRebuildRequested() { rebuildVisualConnections(); }
     @Override public void onExecutionConnectionAdded(String outN, String outP, String inN, String inP) { rebuildVisualConnections(); }
     @Override public void onExecutionConnectionRemoved(String outN, String outP, String inN, String inP) { rebuildVisualConnections(); }
-    @Override public void onSelectionChanged(List<String> selectedNodeIds) { mViewport.updateSelectionState(selectedNodeIds); }
+    @Override public void onSelectionChanged(List<String> selectedNodeIds) {
+        mViewport.updateSelectionState(selectedNodeIds);
+        syncSelectionToCurrentState();
+    }
     @Override public void onNodeMoved(String nodeId, float x, float y) { mViewport.updateNodePosition(nodeId, x, y); mViewport.updateConnectionsForNode(nodeId); }
     @Override public void onConnectionAdded(String outN, String outP, String inN, String inP) { mViewport.notifyNodeLayoutUpdate(outN); mViewport.notifyNodeLayoutUpdate(inN); rebuildVisualConnections(); }
     @Override public void onConnectionRemoved(String outN, String outP, String inN, String inP) { mViewport.notifyNodeLayoutUpdate(outN); mViewport.notifyNodeLayoutUpdate(inN); rebuildVisualConnections(); }

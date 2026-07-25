@@ -10,8 +10,8 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.Remot
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.RightFileBrowserPanel;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.task.AssetTaskController;
+import com.mine.geometry_node.client.ui.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
-import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.window.IToolWindow;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
@@ -56,7 +56,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
         mLeftPanel = new LeftQuickAccessPanel(context, this);
         mMainLayout.addView(mLeftPanel, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.2f));
 
-        mMainLayout.addView(PanelSplitter.create(context, true));
+        mMainLayout.addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
 
         mRightPanel = new RightFileBrowserPanel(context, this);
         mMainLayout.addView(mRightPanel, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.8f));
@@ -137,6 +137,9 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
     @Override
     public void onShow() {
         if (mRightPanel != null) {
+            mRightPanel.activatePanel();
+        }
+        if (mRightPanel != null) {
             mRightPanel.refreshFileList();
         }
         if (mLeftPanel != null) {
@@ -146,6 +149,9 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
 
     @Override
     public void onHide() {
+        if (mRightPanel != null) {
+            mRightPanel.deactivatePanel();
+        }
     }
 
     @Override

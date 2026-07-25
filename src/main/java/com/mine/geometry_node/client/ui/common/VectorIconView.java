@@ -14,7 +14,10 @@ public class VectorIconView extends View {
         TERMINAL,
         CHART,
         CLOUD,
-        NODE_GRAPH
+        NODE_GRAPH,
+        SPLIT_HORIZONTAL,
+        SPLIT_VERTICAL,
+        CLOSE
     }
 
     private static final int DEFAULT_COLOR = 0xFFB8C0CC;
@@ -69,6 +72,9 @@ public class VectorIconView extends View {
             case CHART -> drawChart(canvas, cx, cy, half);
             case CLOUD -> drawCloud(canvas, cx, cy, half);
             case NODE_GRAPH -> drawNodeGraph(canvas, cx, cy, half);
+            case SPLIT_HORIZONTAL -> drawSplitHorizontal(canvas, cx, cy, half);
+            case SPLIT_VERTICAL -> drawSplitVertical(canvas, cx, cy, half);
+            case CLOSE -> drawClose(canvas, cx, cy, half);
         }
     }
 
@@ -200,5 +206,46 @@ public class VectorIconView extends View {
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
         mRect.set(rightX, bottomY, rightX + nodeW, bottomY + nodeH);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+    }
+
+    private void drawSplitHorizontal(Canvas canvas, float cx, float cy, float half) {
+        float left = cx - half * 0.92f;
+        float top = cy - half * 0.72f;
+        float right = cx + half * 0.92f;
+        float bottom = cy + half * 0.72f;
+        float radius = Math.max(2.0f, half * 0.12f);
+        float stroke = Math.max(1.0f, half * 0.09f);
+
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(stroke);
+        mPaint.setAlpha(210);
+        mRect.set(left, top, right, bottom);
+        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+        canvas.drawLine(cx, top + stroke, cx, bottom - stroke, mPaint);
+    }
+
+    private void drawSplitVertical(Canvas canvas, float cx, float cy, float half) {
+        float left = cx - half * 0.92f;
+        float top = cy - half * 0.72f;
+        float right = cx + half * 0.92f;
+        float bottom = cy + half * 0.72f;
+        float radius = Math.max(2.0f, half * 0.12f);
+        float stroke = Math.max(1.0f, half * 0.09f);
+
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(stroke);
+        mPaint.setAlpha(210);
+        mRect.set(left, top, right, bottom);
+        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
+        canvas.drawLine(left + stroke, cy, right - stroke, cy, mPaint);
+    }
+
+    private void drawClose(Canvas canvas, float cx, float cy, float half) {
+        float size = half * 0.62f;
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(Math.max(1.2f, half * 0.12f));
+        mPaint.setAlpha(220);
+        canvas.drawLine(cx - size, cy - size, cx + size, cy + size, mPaint);
+        canvas.drawLine(cx + size, cy - size, cx - size, cy + size, mPaint);
     }
 }

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.top_window.graph_editor;
 
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.utils.PanelSplitter;
+import com.mine.geometry_node.client.ui.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.ViewportPanel;
 import com.mine.geometry_node.client.ui.window.IToolWindow;
@@ -15,6 +15,8 @@ import icyllis.modernui.widget.RelativeLayout;
 import icyllis.modernui.widget.TextView;
 
 public class GraphEditorWindow extends LinearLayout implements IToolWindow {
+    private final ViewportPanel mViewportPanel;
+
     public GraphEditorWindow(Context context) {
         super(context);
         setOrientation(LinearLayout.HORIZONTAL);
@@ -23,12 +25,12 @@ public class GraphEditorWindow extends LinearLayout implements IToolWindow {
         View leftPanel = createPanel(context, "Outliner", UIConstants.MainUI.BG_OUTLINER);
         addView(leftPanel, createWeightParams(UIConstants.MainUI.WEIGHT_LEFT));
 
-        addView(PanelSplitter.create(context, true));
+        addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
 
-        ViewportPanel centerPanel = new ViewportPanel(context);
-        addView(centerPanel, createWeightParams(UIConstants.MainUI.WEIGHT_CENTER));
+        mViewportPanel = new ViewportPanel(context);
+        addView(mViewportPanel, createWeightParams(UIConstants.MainUI.WEIGHT_CENTER));
 
-        addView(PanelSplitter.create(context, true));
+        addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
 
         View rightPanel = createPanel(context, "Properties", UIConstants.MainUI.BG_PROPERTIES);
         addView(rightPanel, createWeightParams(UIConstants.MainUI.WEIGHT_RIGHT));
@@ -41,10 +43,12 @@ public class GraphEditorWindow extends LinearLayout implements IToolWindow {
 
     @Override
     public void onShow() {
+        mViewportPanel.activatePanel();
     }
 
     @Override
     public void onHide() {
+        mViewportPanel.deactivatePanel();
     }
 
     private RelativeLayout createPanel(Context context, String title, int colorHex) {

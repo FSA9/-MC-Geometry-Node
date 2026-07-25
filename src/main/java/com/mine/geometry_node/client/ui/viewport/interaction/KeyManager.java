@@ -31,6 +31,10 @@ public class KeyManager {
         mScopedKeyManager.dispose();
     }
 
+    public void attach() {
+        mScopedKeyManager.attach();
+    }
+
     public void setActionSink(ViewportActionSink actionSink) {
         mActionSink = actionSink;
     }

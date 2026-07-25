@@ -49,10 +49,18 @@ public class ViewportPanel extends LinearLayout {
 
     private static final float INDICATOR_WIDTH = 2.0f;
 
+    private static ViewportPanel sFocusedPanel;
+
     private final HorizontalScrollView mTabScrollView;
     private final TabBarLayout mTabBar;
     private final Viewport mViewport;
     private final float mTouchSlop;
+    private final Runnable mTabChangedListener = () -> post(this::refreshTabs);
+    private final AssetDragDropRegistry.DropTarget mDropTarget = this::acceptAssetDrop;
+    private GraphSession mSelectedSession;
+    private long mObservedOpenSessionSerial = -1L;
+    private boolean mManualSessionSelection;
+    private boolean mCallbacksRegistered;
 
     public ViewportPanel(Context context) {
         super(context);
@@ -82,31 +90,62 @@ public class ViewportPanel extends LinearLayout {
         mViewport = new Viewport(context);
         addView(mViewport, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        DocumentManager.INSTANCE.setOnTabChangedListener(() -> post(this::refreshTabs));
-        AssetDragDropRegistry.setDropTarget(this::acceptAssetDrop);
         refreshTabs();
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        activatePanel();
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
-        AssetDragDropRegistry.clearDropTarget();
+        deactivatePanel();
         super.onDetachedFromWindow();
+    }
+
+    public void activatePanel() {
+        if (sFocusedPanel == null) {
+            sFocusedPanel = this;
+        }
+        registerCallbacks();
+        mViewport.activateLifecycle();
+        refreshTabs();
+    }
+
+    public void deactivatePanel() {
+        if (sFocusedPanel == this) {
+            sFocusedPanel = null;
+        }
+        unregisterCallbacks();
+        mViewport.deactivateLifecycle();
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (event != null && event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            markFocused();
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     private boolean acceptAssetDrop(AssetDragState.Payload payload, float rawX, float rawY) {
         if (payload == null || !payload.isSingleJsonGraph()) return false;
-        if (DocumentManager.INSTANCE.getActiveSession() == null || !mViewport.getController().hasActiveSession()) return false;
+        GraphSession targetSession = mViewport.getController().getCurrentSession();
+        if (!isReadyForImport(targetSession)) return false;
         if (!isRawPointInside(mViewport, rawX, rawY)) return false;
 
         int[] viewportLoc = new int[2];
         mViewport.getLocationOnScreen(viewportLoc);
         float viewportX = rawX - viewportLoc[0];
         float viewportY = rawY - viewportLoc[1];
-        importDraggedGraph(payload.entry(), viewportX, viewportY);
+        importDraggedGraph(payload.entry(), viewportX, viewportY, targetSession);
         return true;
     }
 
-    private void importDraggedGraph(AssetEntry entry, float viewportX, float viewportY) {
+    private void importDraggedGraph(AssetEntry entry, float viewportX, float viewportY, GraphSession targetSession) {
+        if (!isReadyForImport(targetSession)) return;
         if (entry.sourceKind() == AssetSourceKind.LOCAL) {
             if (entry.localFile() == null || entry.localFile().isDirectory()) return;
             try {
@@ -125,10 +164,18 @@ public class ViewportPanel extends LinearLayout {
                     return;
                 }
                 if (response.files().isEmpty()) return;
+                if (!isReadyForImport(targetSession)) return;
                 mViewport.getController().executeImportGraphJson(response.files().get(0).jsonContent(), viewportX, viewportY);
             }));
             NetworkHandler.sendToServer(new PacketRemoteGraphDownloadRequest(requestId, List.of(entry.path())));
         }
+    }
+
+    private boolean isReadyForImport(GraphSession targetSession) {
+        return mCallbacksRegistered
+                && targetSession != null
+                && mViewport.getController().getCurrentSession() == targetSession
+                && mViewport.getController().hasActiveSession();
     }
 
     private boolean isRawPointInside(View view, float rawX, float rawY) {
@@ -141,7 +188,9 @@ public class ViewportPanel extends LinearLayout {
     private void refreshTabs() {
         mTabBar.removeAllViews();
         DocumentManager docMgr = DocumentManager.INSTANCE;
-        mViewport.getController().bindSession(docMgr.getActiveSession());
+        applyOpenedSession(docMgr);
+        GraphSession selectedSession = resolveSelectedSession(docMgr);
+        mViewport.getController().bindSession(selectedSession);
 
         LinearLayout.LayoutParams tabParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -160,7 +209,7 @@ public class ViewportPanel extends LinearLayout {
         tabLayout.setOrientation(LinearLayout.HORIZONTAL);
         tabLayout.setGravity(Gravity.CENTER_VERTICAL);
 
-        boolean isActive = (session == docMgr.getActiveSession());
+        boolean isActive = (session == mSelectedSession);
         tabLayout.setBackground(createColorDrawable(isActive ? 0xFF3C3C3C : 0xFF2A2A2A));
 
         TextView dragHandle = UIUtils.createLockedTextView(getContext(), " ⋮⋮ ", TEXT_SIZE_TAB, 0xFF666666);
@@ -187,7 +236,7 @@ public class ViewportPanel extends LinearLayout {
 
         tabLayout.addView(contentArea);
 
-        contentArea.setOnClickListener(v -> docMgr.switchSession(session));
+        contentArea.setOnClickListener(v -> selectSession(session));
 
         final float[] startX = {0};
         final boolean[] isDragging = {false};
@@ -239,6 +288,66 @@ public class ViewportPanel extends LinearLayout {
         });
 
         return tabLayout;
+    }
+
+    private void selectSession(GraphSession session) {
+        if (session == null) return;
+        markFocused();
+        mManualSessionSelection = true;
+        mSelectedSession = session;
+        DocumentManager.INSTANCE.switchSession(session);
+        refreshTabs();
+    }
+
+    private void markFocused() {
+        sFocusedPanel = this;
+    }
+
+    private void applyOpenedSession(DocumentManager docMgr) {
+        long openSerial = docMgr.getOpenSessionSerial();
+        if (mObservedOpenSessionSerial == openSerial) {
+            return;
+        }
+        mObservedOpenSessionSerial = openSerial;
+
+        GraphSession openedSession = docMgr.getLastOpenedSession();
+        if (openedSession == null || !docMgr.getSessions().contains(openedSession)) {
+            return;
+        }
+        if (sFocusedPanel == this || (sFocusedPanel == null && !mManualSessionSelection)) {
+            mSelectedSession = openedSession;
+        }
+    }
+
+    private GraphSession resolveSelectedSession(DocumentManager docMgr) {
+        if (mSelectedSession != null && docMgr.getSessions().contains(mSelectedSession)) {
+            return mSelectedSession;
+        }
+        GraphSession activeSession = docMgr.getActiveSession();
+        if (activeSession != null && docMgr.getSessions().contains(activeSession)) {
+            mSelectedSession = activeSession;
+            return mSelectedSession;
+        }
+        mSelectedSession = docMgr.getSessions().isEmpty() ? null : docMgr.getSessions().get(docMgr.getSessions().size() - 1);
+        return mSelectedSession;
+    }
+
+    private void registerCallbacks() {
+        if (mCallbacksRegistered) {
+            return;
+        }
+        DocumentManager.INSTANCE.addOnTabChangedListener(mTabChangedListener);
+        AssetDragDropRegistry.registerDropTarget(mDropTarget);
+        mCallbacksRegistered = true;
+    }
+
+    private void unregisterCallbacks() {
+        if (!mCallbacksRegistered) {
+            return;
+        }
+        DocumentManager.INSTANCE.removeOnTabChangedListener(mTabChangedListener);
+        AssetDragDropRegistry.unregisterDropTarget(mDropTarget);
+        mCallbacksRegistered = false;
     }
 
     private void calculateAndMoveTab(float rawX, int currentIndex) {

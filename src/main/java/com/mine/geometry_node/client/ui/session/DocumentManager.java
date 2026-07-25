@@ -12,13 +12,28 @@ public class DocumentManager {
 
     private final List<GraphSession> mSessions = new ArrayList<>();
     private GraphSession mActiveSession = null;
+    private GraphSession mLastOpenedSession = null;
+    private long mOpenSessionSerial = 0L;
 
-    private Runnable mOnTabChangedListener;
+    private final List<Runnable> mOnTabChangedListeners = new ArrayList<>();
 
     private DocumentManager() {}
 
     public void setOnTabChangedListener(Runnable listener) {
-        this.mOnTabChangedListener = listener;
+        mOnTabChangedListeners.clear();
+        if (listener != null) {
+            mOnTabChangedListeners.add(listener);
+        }
+    }
+
+    public void addOnTabChangedListener(Runnable listener) {
+        if (listener != null && !mOnTabChangedListeners.contains(listener)) {
+            mOnTabChangedListeners.add(listener);
+        }
+    }
+
+    public void removeOnTabChangedListener(Runnable listener) {
+        mOnTabChangedListeners.remove(listener);
     }
 
     public List<GraphSession> getSessions() {
@@ -29,24 +44,32 @@ public class DocumentManager {
         return mActiveSession;
     }
 
+    public GraphSession getLastOpenedSession() {
+        return mLastOpenedSession;
+    }
+
+    public long getOpenSessionSerial() {
+        return mOpenSessionSerial;
+    }
+
     // 打开或新建一个图纸
     public void openSession(GraphSession session) {
         for (GraphSession s : mSessions) {
             if (s.fileId.equals(session.fileId)) {
+                markSessionOpened(s);
                 switchSession(s);
                 return;
             }
         }
         mSessions.add(session);
+        markSessionOpened(session);
         switchSession(session);
     }
 
     public void switchSession(GraphSession session) {
         if (mSessions.contains(session)) {
             mActiveSession = session;
-            if (mOnTabChangedListener != null) {
-                mOnTabChangedListener.run();
-            }
+            notifyTabChanged();
         }
     }
 
@@ -55,9 +78,7 @@ public class DocumentManager {
         if (mActiveSession == session) {
             mActiveSession = mSessions.isEmpty() ? null : mSessions.get(mSessions.size() - 1);
         }
-        if (mOnTabChangedListener != null) {
-            mOnTabChangedListener.run();
-        }
+        notifyTabChanged();
     }
 
     public void moveSession(int fromIndex, int toIndex) {
@@ -66,9 +87,7 @@ public class DocumentManager {
             GraphSession session = mSessions.remove(fromIndex);
             mSessions.add(toIndex, session);
             // 触发 UI 刷新
-            if (mOnTabChangedListener != null) {
-                mOnTabChangedListener.run();
-            }
+            notifyTabChanged();
         }
     }
 
@@ -85,9 +104,7 @@ public class DocumentManager {
             session.isDirty = false;
 
             // 4. 触发 UI 刷新 (消除 Tab 上的星号)
-            if (mOnTabChangedListener != null) {
-                mOnTabChangedListener.run();
-            }
+            notifyTabChanged();
 
             System.out.println("[DocumentManager] Save Success: " + session.fileId);
         } catch (Exception e) {
@@ -97,8 +114,14 @@ public class DocumentManager {
     }
 
     public void notifyTabChanged() {
-        if (mOnTabChangedListener != null) {
-            mOnTabChangedListener.run();
+        List<Runnable> listeners = List.copyOf(mOnTabChangedListeners);
+        for (Runnable listener : listeners) {
+            listener.run();
         }
+    }
+
+    private void markSessionOpened(GraphSession session) {
+        mLastOpenedSession = session;
+        mOpenSessionSerial++;
     }
 }

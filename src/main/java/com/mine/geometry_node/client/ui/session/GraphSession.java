@@ -26,5 +26,11 @@ public class GraphSession {
         this.fileId = fileId;
         this.tabName = tabName;
         this.editorContext = new EditorContext(graph);
+        this.editorContext.getCommandManager().setDirtyListener(() -> {
+            if (!isDirty) {
+                isDirty = true;
+                DocumentManager.INSTANCE.notifyTabChanged();
+            }
+        });
     }
 }
