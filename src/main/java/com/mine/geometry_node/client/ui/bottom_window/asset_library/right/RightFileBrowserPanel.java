@@ -5,27 +5,23 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetPathUti
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.action.AssetLibraryActionId;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.action.AssetLibraryActionRegistry;
-import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.ConfirmDialog;
-import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.GraphTagDialog;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.drag.AssetDragState;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.drag.AssetDragDropRegistry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.menu.FileContextMenu;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.service.GraphAssetService;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.service.LocalAssetService;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.task.AssetTaskController;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.shortcut.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
-import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
-import com.mine.geometry_node.client.ui.session.DocumentManager;
-import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphFileOperationRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphListRequest;
-import com.mine.geometry_node.core.node.NodeGraph;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -40,9 +36,7 @@ import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 
 import java.io.File;
-import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -72,14 +66,16 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final List<AssetEntry> mVisibleEntries = new ArrayList<>();
     private final AssetEntryLoader mEntryLoader = new AssetEntryLoader();
     private final GraphFavoriteStore mFavoriteStore = new GraphFavoriteStore();
+    private final LocalAssetService mLocalAssetService = new LocalAssetService();
+    private final GraphAssetService mGraphAssetService = new GraphAssetService();
     private final ScopedKeyManager<AssetLibraryActionId, RightFileBrowserPanel> mKeyManager;
+    private final AssetTaskController mIoTasks;
+    private final AssetBrowserActionController mActionController;
 
     private File mCurrentDirectory;
     private String mRemoteDirectory = "";
     private AssetSourceKind mSourceKind = AssetSourceKind.LOCAL;
     private boolean mFavoritesMode = false;
-    private List<File> mClipboardFiles = new ArrayList<>();
-    private boolean mIsCutOperation = false;
     private AssetViewMode mViewMode;
     private String mSearchQuery = "";
     private String mTagSearchQuery = "";
@@ -102,8 +98,6 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private Consumer<AssetEntry> mPickFileAction;
     private Predicate<AssetEntry> mEntryFilter;
 
-    private static List<String> sRemoteClipboardPaths = new ArrayList<>();
-    private static boolean sRemoteCutOperation = false;
     private static final ExecutorService LOCAL_LOAD_EXECUTOR = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "GeometryNode-AssetBrowser-Loader");
         thread.setDaemon(true);
@@ -118,7 +112,6 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private static final float SEARCH_BUTTON_WIDTH = 34.0f;
     private static final float CLEAR_BUTTON_WIDTH = 34.0f;
     private static final float TEXT_SIZE_NAV = 14.0f;
-    private static final float TEXT_SIZE_LIST_ITEM = 14.0f;
     private static final float TEXT_SIZE_BTN_ADD = 14.0f;
 
     public RightFileBrowserPanel(Context context, AssetBrowserCoordinator coordinator) {
@@ -149,55 +142,121 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         mEnableRemoteTransferActions = enableRemoteTransferActions;
         mOpenLocalJsonOnDoubleClick = openLocalJsonOnDoubleClick;
         mShowPickerContextActions = showPickerContextActions;
+        mIoTasks = new AssetTaskController(this);
+        mActionController = createActionController();
         mViewMode = AssetViewMode.fromConfig(ConfigManager.INSTANCE.getConfig().assetBrowser.viewMode);
-        setOrientation(LinearLayout.VERTICAL);
-        setFocusable(true);
-        setFocusableInTouchMode(true);
-        mKeyManager = new ScopedKeyManager<>(
+        mKeyManager = createKeyManager();
+
+        configurePanelRoot();
+
+        LinearLayout navBar = createNavBar(context);
+        addNavBar(navBar);
+        addUpButton(navBar, context);
+
+        mPathInput = createPathInput(context);
+        navBar.addView(mPathInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+        addQuickAccessButton(navBar, context);
+
+        mSearchInput = createSearchInput(context, "搜索名称", value -> mPendingSearchQuery = value);
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(dp2pxInt(SEARCH_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
+        searchLp.setMargins(dp2pxInt(6), dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
+        navBar.addView(mSearchInput, searchLp);
+
+        mTagSearchInput = createSearchInput(context, "搜索标签", value -> mPendingTagSearchQuery = value);
+        LinearLayout.LayoutParams tagSearchLp = new LinearLayout.LayoutParams(dp2pxInt(TAG_SEARCH_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
+        tagSearchLp.setMargins(0, dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
+        navBar.addView(mTagSearchInput, tagSearchLp);
+
+        addSearchButton(navBar, context);
+        addClearSearchButton(navBar, context);
+        addOptionsButton(navBar, context);
+
+        mBodyFrame = new FrameLayout(context);
+        mScrollView = new ScrollView(context);
+        mFileContent = new FileContentLayout(context, this);
+        configureBody();
+    }
+
+    private AssetBrowserActionController createActionController() {
+        return new AssetBrowserActionController(
+                this,
+                mCoordinator,
+                mLocalAssetService,
+                mGraphAssetService,
+                mFavoriteStore,
+                mEntryLoader,
+                mIoTasks,
+                mEnableLocalFileActions,
+                mEnableRemoteTransferActions,
+                mOpenLocalJsonOnDoubleClick,
+                mShowPickerContextActions
+        );
+    }
+
+    private ScopedKeyManager<AssetLibraryActionId, RightFileBrowserPanel> createKeyManager() {
+        return new ScopedKeyManager<>(
                 this,
                 KeyScope.ASSET_LIBRARY,
                 AssetLibraryActionRegistry::all,
                 this::executeAction
         );
+    }
 
+    private void configurePanelRoot() {
+        setOrientation(LinearLayout.VERTICAL);
+        setFocusable(true);
+        setFocusableInTouchMode(true);
+    }
+
+    private LinearLayout createNavBar(Context context) {
         LinearLayout navBar = new LinearLayout(context);
         navBar.setOrientation(LinearLayout.HORIZONTAL);
         navBar.setGravity(Gravity.CENTER_VERTICAL);
         navBar.setBackground(createColorDrawable(0xFF2A2A2A));
+        return navBar;
+    }
+
+    private void addNavBar(LinearLayout navBar) {
         addView(navBar, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(NAV_BAR_HEIGHT)));
+    }
 
+    private void addUpButton(LinearLayout navBar, Context context) {
         TextView btnUp = createNavButton(context, "⬆ 向上");
         btnUp.setOnClickListener(v -> navigateUp());
         navBar.addView(btnUp, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
 
-        mPathInput = createNavInput(context);
-        mPathInput.setOnKeyListener((v, keyCode, event) -> {
+    private EditText createPathInput(Context context) {
+        EditText input = createNavInput(context);
+        input.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
                 if (mFavoritesMode) {
-                    mPathInput.setText("我的收藏");
-                    mPathInput.clearFocus();
+                    input.setText("我的收藏");
+                    input.clearFocus();
                     return true;
                 }
-                String path = mPathInput.getText().toString().trim();
-                if (mSourceKind == AssetSourceKind.REMOTE || path.startsWith("remote:/")) {
+                String path = input.getText().toString().trim();
+                if (mSourceKind == AssetSourceKind.REMOTE || AssetPathUtils.isRemotePathInput(path)) {
                     navigateToRemote(AssetPathUtils.remotePathFromInput(path));
                 } else if (mCurrentDirectory != null) {
                     File dir = new File(path);
                     if (dir.exists() && dir.isDirectory()) {
                         navigateTo(dir);
                     } else {
-                        mPathInput.setText(mCurrentDirectory.getAbsolutePath());
+                        input.setText(mCurrentDirectory.getAbsolutePath());
                     }
                 }
-                mPathInput.clearFocus();
+                input.clearFocus();
                 return true;
             }
             return false;
         });
-        navBar.addView(mPathInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+        return input;
+    }
 
+    private void addQuickAccessButton(LinearLayout navBar, Context context) {
         TextView btnAdd = createNavButton(context, "+");
         btnAdd.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(TEXT_SIZE_BTN_ADD));
         btnAdd.setBackground(createColorDrawable(0xFF3A3A3A));
@@ -215,71 +274,55 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         });
         navBar.addView(btnAdd, new LinearLayout.LayoutParams(dp2pxInt(BTN_ADD_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
         btnAdd.setVisibility(mEnableQuickAccessAdd ? View.VISIBLE : View.GONE);
+    }
 
-        mSearchInput = createSearchInput(context);
-        mSearchInput.setHint("搜索名称");
-        mSearchInput.setHintTextColor(0xFF666666);
-        mSearchInput.addTextChangedListener(new TextWatcher() {
+    private EditText createSearchInput(Context context, String hint, Consumer<String> pendingQuerySetter) {
+        EditText input = createSearchInput(context);
+        input.setHint(hint);
+        input.setHintTextColor(0xFF666666);
+        input.addTextChangedListener(new TextWatcher() {
             @Override public void afterTextChanged(Editable s) {
-                mPendingSearchQuery = s.toString().trim();
+                pendingQuerySetter.accept(s.toString().trim());
             }
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
         });
-        mSearchInput.setOnKeyListener((v, keyCode, event) -> {
+        input.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
                 applySearch();
                 return true;
             }
             return false;
         });
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(dp2pxInt(SEARCH_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
-        searchLp.setMargins(dp2pxInt(6), dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
-        navBar.addView(mSearchInput, searchLp);
+        return input;
+    }
 
-        mTagSearchInput = createSearchInput(context);
-        mTagSearchInput.setHint("搜索标签");
-        mTagSearchInput.setHintTextColor(0xFF666666);
-        mTagSearchInput.addTextChangedListener(new TextWatcher() {
-            @Override public void afterTextChanged(Editable s) {
-                mPendingTagSearchQuery = s.toString().trim();
-            }
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-        });
-        mTagSearchInput.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
-                applySearch();
-                return true;
-            }
-            return false;
-        });
-        LinearLayout.LayoutParams tagSearchLp = new LinearLayout.LayoutParams(dp2pxInt(TAG_SEARCH_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
-        tagSearchLp.setMargins(0, dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
-        navBar.addView(mTagSearchInput, tagSearchLp);
-
+    private void addSearchButton(LinearLayout navBar, Context context) {
         TextView btnSearch = createIconButton(context, "⌕");
         btnSearch.setOnClickListener(v -> applySearch());
         LinearLayout.LayoutParams searchButtonLp = new LinearLayout.LayoutParams(dp2pxInt(SEARCH_BUTTON_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
         searchButtonLp.setMargins(0, dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
         navBar.addView(btnSearch, searchButtonLp);
+    }
 
+    private void addClearSearchButton(LinearLayout navBar, Context context) {
         TextView btnClearSearch = createIconButton(context, "×");
         btnClearSearch.setOnClickListener(v -> clearSearch());
         LinearLayout.LayoutParams clearButtonLp = new LinearLayout.LayoutParams(dp2pxInt(CLEAR_BUTTON_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
         clearButtonLp.setMargins(0, dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
         navBar.addView(btnClearSearch, clearButtonLp);
+    }
 
+    private void addOptionsButton(LinearLayout navBar, Context context) {
         TextView btnOptions = createNavButton(context, "⋮");
         btnOptions.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(18));
         btnOptions.setPadding(0, 0, 0, 0);
         btnOptions.setBackground(createColorDrawable(0xFF3A3A3A));
         btnOptions.setOnClickListener(v -> showOptionsMenu(btnOptions));
         navBar.addView(btnOptions, new LinearLayout.LayoutParams(dp2pxInt(BTN_MENU_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+    }
 
-        mBodyFrame = new FrameLayout(context);
-        mScrollView = new ScrollView(context);
-        mFileContent = new FileContentLayout(context, this);
+    private void configureBody() {
         mFileContent.setViewMode(mViewMode);
         mScrollView.setOnScrollChangeListener((view, scrollX, scrollY, oldScrollX, oldScrollY) -> updateVirtualViewport());
         mScrollView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> updateVirtualViewport());
@@ -293,6 +336,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     @Override
     protected void onDetachedFromWindow() {
+        mIoTasks.cancelAll();
         mKeyManager.dispose();
         super.onDetachedFromWindow();
     }
@@ -310,8 +354,8 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private void executeAction(AssetLibraryActionId actionId) {
         if (actionId == null) return;
         switch (actionId) {
-            case COPY -> copySelectionToClipboard();
-            case PASTE -> pasteClipboard();
+            case COPY -> mActionController.copySelectionToClipboard();
+            case PASTE -> mActionController.pasteClipboard();
         }
     }
 
@@ -382,7 +426,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     public void createLocalFolderInCurrentDirectory() {
         if (!mFavoritesMode && mSourceKind == AssetSourceKind.LOCAL) {
-            triggerNewItem(true);
+            mActionController.triggerNewItem(true);
         }
     }
 
@@ -442,7 +486,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         refreshFileList(null);
     }
 
-    private void refreshFileList(Runnable afterRender) {
+    void refreshFileList(Runnable afterRender) {
         cancelLocalLoad();
         mFileContent.setEntries(List.of());
         mItemViews.clear();
@@ -490,9 +534,10 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void refreshRemoteFileList(boolean createIfMissing) {
         cancelLocalLoad();
+        renderEntries(AssetEntryLoader.Result.empty());
         int requestId = RemoteGraphClientState.nextRequestId();
         mActiveRemoteListRequestId = requestId;
-        String requestedDirectory = mRemoteDirectory;
+        String requestedDirectory = AssetPathUtils.normalizeRemoteDirectory(mRemoteDirectory);
         RemoteGraphClientState.onList(requestId, response -> {
             post(() -> {
                 if (mSourceKind != AssetSourceKind.REMOTE || requestId != mActiveRemoteListRequestId) return;
@@ -500,7 +545,9 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                     renderEntries(AssetEntryLoader.Result.empty());
                     return;
                 }
-                mRemoteDirectory = response.directory();
+                String responseDirectory = AssetPathUtils.normalizeRemoteDirectory(response.directory());
+                if (!responseDirectory.equals(requestedDirectory) || !responseDirectory.equals(mRemoteDirectory)) return;
+                mRemoteDirectory = responseDirectory;
                 mPathInput.setText(AssetPathUtils.formatRemotePath(mRemoteDirectory));
                 if (mRemoteDirectoryChangedListener != null) {
                     mRemoteDirectoryChangedListener.accept(mRemoteDirectory);
@@ -597,7 +644,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             if (!mSelectedPaths.contains(entry.key())) {
                 selectOnly(entry);
             }
-            showContextMenuAtRaw(event.getRawX(), event.getRawY(), entry);
+            mActionController.showContextMenuAtRaw(event.getRawX(), event.getRawY(), entry);
             return;
         }
 
@@ -638,7 +685,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         if (key.equals(mLastClickedPath) && now - mLastClickTime < 300) {
             mLastClickedPath = null;
             mLastClickTime = 0L;
-            handleDoubleClick(entry);
+            mActionController.handleDoubleClick(entry);
         } else {
             mLastClickedPath = key;
             mLastClickTime = now;
@@ -653,7 +700,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         syncSelectionViews();
     }
 
-    private void selectOnly(AssetEntry entry) {
+    void selectOnly(AssetEntry entry) {
         mSelectedPaths.clear();
         mSelectedPaths.add(entry.key());
         syncSelectionViews();
@@ -693,7 +740,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     @Override
     public void onContentRightClick(float rawX, float rawY) {
         requestFocus();
-        showContextMenuAtRaw(rawX, rawY, null);
+        mActionController.showContextMenuAtRaw(rawX, rawY, null);
     }
 
     @Override
@@ -727,7 +774,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         syncSelectionViews();
     }
 
-    private List<AssetEntry> getSelectedEntries() {
+    List<AssetEntry> getSelectedEntries() {
         List<AssetEntry> result = new ArrayList<>();
         for (AssetEntry entry : mVisibleEntries) {
             if (mSelectedPaths.contains(entry.key())) {
@@ -737,7 +784,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         return result;
     }
 
-    private List<File> getSelectedLocalFiles() {
+    List<File> getSelectedLocalFiles() {
         List<File> result = new ArrayList<>();
         for (AssetEntry entry : getSelectedEntries()) {
             if (entry.sourceKind() == AssetSourceKind.LOCAL && entry.localFile() != null) {
@@ -748,20 +795,11 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public boolean canCopySelection() {
-        List<AssetEntry> entries = getSelectedEntries();
-        if (entries.isEmpty()) return false;
-        if (mSourceKind == AssetSourceKind.LOCAL) {
-            return mEnableLocalFileActions && !getSelectedLocalFiles().isEmpty();
-        }
-        return mEnableRemoteTransferActions && RemoteGraphClientState.canManage()
-                && entries.stream().anyMatch(entry -> entry.sourceKind() == AssetSourceKind.REMOTE);
+        return mActionController.canCopySelection();
     }
 
     public boolean canPasteClipboard() {
-        if (mSourceKind == AssetSourceKind.LOCAL) {
-            return mEnableLocalFileActions && !mFavoritesMode && !mClipboardFiles.isEmpty();
-        }
-        return mEnableRemoteTransferActions && RemoteGraphClientState.canManage() && !sRemoteClipboardPaths.isEmpty();
+        return mActionController.canPasteClipboard();
     }
 
     @Override
@@ -789,10 +827,10 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         if (target == null) return false;
 
         if (target.sourceKind() == AssetSourceKind.LOCAL) {
-            return moveLocalEntries(payload.entries(), target);
+            return mActionController.moveLocalEntries(payload.entries(), target);
         }
         if (target.sourceKind() == AssetSourceKind.REMOTE) {
-            return moveRemoteEntries(payload.entries(), target);
+            return mActionController.moveRemoteEntries(payload.entries(), target);
         }
         return false;
     }
@@ -802,418 +840,11 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         return candidate != null && candidate.isDirectory() ? candidate : null;
     }
 
-    private boolean moveLocalEntries(List<AssetEntry> entries, AssetEntry targetDirectoryEntry) {
-        if (targetDirectoryEntry.sourceKind() != AssetSourceKind.LOCAL || targetDirectoryEntry.localFile() == null) return false;
-        File targetDirectory = targetDirectoryEntry.localFile();
-        if (!targetDirectory.isDirectory()) return false;
-
-        boolean movedAny = false;
-        try {
-            for (AssetEntry entry : entries) {
-                if (entry.sourceKind() != AssetSourceKind.LOCAL || entry.localFile() == null) continue;
-                File source = entry.localFile();
-                if (!source.exists() || source.equals(targetDirectory) || isDescendantOrSelf(targetDirectory, source)) continue;
-                if (source.getParentFile() != null && source.getParentFile().equals(targetDirectory)) continue;
-
-                File dest = AssetFileOperations.resolveAvailableDestination(targetDirectory, source.getName(), source.isDirectory());
-                AssetFileOperations.moveRecursively(source, dest);
-                mFavoriteStore.updatePath(source, dest);
-                movedAny = true;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        if (movedAny) {
-            clearSelection();
-            refreshFileList();
-        }
-        return movedAny;
-    }
-
-    private boolean moveRemoteEntries(List<AssetEntry> entries, AssetEntry targetDirectoryEntry) {
-        if (targetDirectoryEntry.sourceKind() != AssetSourceKind.REMOTE || !targetDirectoryEntry.isDirectory()) return false;
-        if (!mEnableRemoteTransferActions || !RemoteGraphClientState.canManage()) return false;
-
-        List<String> paths = new ArrayList<>();
-        for (AssetEntry entry : entries) {
-            if (entry.sourceKind() == AssetSourceKind.REMOTE && !entry.path().equals(targetDirectoryEntry.path())) {
-                paths.add(entry.path());
-            }
-        }
-        if (paths.isEmpty()) return false;
-
-        sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation.MOVE, paths, targetDirectoryEntry.path());
-        return true;
-    }
-
-    private void addLocalContextActions(FileContextMenu menu, List<File> filesSnapshot) {
-        if (filesSnapshot.isEmpty()) return;
-        String suffix = filesSnapshot.size() > 1 ? " (" + filesSnapshot.size() + ")" : "";
-        List<File> uploadableGraphs = getUploadableGraphFiles(filesSnapshot);
-        if (mEnableRemoteTransferActions && mCoordinator != null && RemoteGraphClientState.canUpload() && !uploadableGraphs.isEmpty()) {
-            String uploadSuffix = uploadableGraphs.size() > 1 ? " (" + uploadableGraphs.size() + ")" : "";
-            menu.addMenuItem("上传到服务器" + uploadSuffix, () -> mCoordinator.showUploadDialog(uploadableGraphs));
-            menu.addDivider();
-        }
-        if (!mEnableLocalFileActions) return;
-        if (filesSnapshot.size() == 1 && isLocalGraphFile(filesSnapshot.get(0))) {
-            menu.addMenuItem("编辑标签", () -> showGraphTagDialog(filesSnapshot.get(0)));
-            menu.addDivider();
-        }
-        menu.addMenuItem("复制" + suffix, shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
-        menu.addMenuItem("剪切" + suffix, () -> {
-            mClipboardFiles = new ArrayList<>(filesSnapshot);
-            mIsCutOperation = true;
-        });
-        menu.addMenuItem("删除" + suffix, () -> {
-            for (File file : filesSnapshot) {
-                try {
-                    mFavoriteStore.removePath(file);
-                    AssetFileOperations.deleteRecursively(file);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-            clearSelection();
-            refreshFileList();
-        });
-        if (filesSnapshot.size() == 1) {
-            menu.addDivider();
-            menu.addMenuItem("重命名", () -> startInlineEdit(filesSnapshot.get(0)));
-        }
-        menu.addDivider();
-    }
-
     private boolean isLocalGraphFile(File file) {
         return AssetEntryLoader.isLocalGraphFile(file);
     }
 
-    private List<File> getUploadableGraphFiles(List<File> files) {
-        List<File> result = new ArrayList<>();
-        for (File file : files) {
-            collectUploadableGraphFiles(file, result);
-        }
-        return result;
-    }
-
-    private void collectUploadableGraphFiles(File file, List<File> out) {
-        if (file == null || !file.exists()) return;
-        if (file.isFile()) {
-            if (isLocalGraphFile(file)) {
-                out.add(file);
-            }
-            return;
-        }
-        File[] children = file.listFiles();
-        if (children == null) return;
-        for (File child : children) {
-            collectUploadableGraphFiles(child, out);
-        }
-    }
-
-    private void showGraphTagDialog(File file) {
-        GraphTagDialog dialog = new GraphTagDialog(getContext(), file, tags -> {
-            syncOpenGraphTags(file, tags);
-            refreshFileList();
-        });
-        dialog.showIn(this);
-    }
-
-    private void syncOpenGraphTags(File file, List<String> tags) {
-        String targetKey = pathKey(file);
-        for (GraphSession session : DocumentManager.INSTANCE.getSessions()) {
-            if (session == null || session.editorContext == null || session.editorContext.getGraph() == null) continue;
-            File sessionFile = new File(session.fileId);
-            if (!targetKey.equals(pathKey(sessionFile))) continue;
-            session.editorContext.getGraph().tags = new ArrayList<>(tags);
-        }
-    }
-
-    private void addRemoteContextActions(FileContextMenu menu, List<AssetEntry> entriesSnapshot) {
-        if (entriesSnapshot.isEmpty() || !mEnableRemoteTransferActions) return;
-        String suffix = entriesSnapshot.size() > 1 ? " (" + entriesSnapshot.size() + ")" : "";
-        if (mCoordinator != null && RemoteGraphClientState.canDownload()) {
-            menu.addMenuItem("下载到本地" + suffix, () -> mCoordinator.showDownloadDialog(entriesSnapshot));
-            menu.addDivider();
-        }
-        if (RemoteGraphClientState.canManage()) {
-            menu.addMenuItem("复制" + suffix, shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
-            menu.addMenuItem("剪切" + suffix, () -> setRemoteClipboard(entriesSnapshot, true));
-            menu.addMenuItem("删除" + suffix, () -> deleteRemoteEntries(entriesSnapshot));
-            menu.addDivider();
-        }
-    }
-
-    private void showContextMenu(float localX, float localY, AssetEntry targetEntry) {
-        FileContextMenu menu = new FileContextMenu(getContext());
-
-        if (targetEntry != null && !mSelectedPaths.contains(targetEntry.key())) {
-            selectOnly(targetEntry);
-        }
-
-        List<AssetEntry> actionEntries = targetEntry == null ? Collections.emptyList() : getSelectedEntries();
-        if (!actionEntries.isEmpty()) {
-            if (mSourceKind == AssetSourceKind.LOCAL) {
-                addLocalContextActions(menu, getSelectedLocalFiles());
-            } else {
-                addRemoteContextActions(menu, new ArrayList<>(actionEntries));
-            }
-        }
-
-        if (mEnableLocalFileActions && !mFavoritesMode && mSourceKind == AssetSourceKind.LOCAL && !mClipboardFiles.isEmpty()) {
-            menu.addMenuItem("粘贴", shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
-            menu.addDivider();
-        }
-        if (mEnableRemoteTransferActions && mSourceKind == AssetSourceKind.REMOTE
-                && RemoteGraphClientState.canManage() && !sRemoteClipboardPaths.isEmpty()) {
-            menu.addMenuItem(sRemoteCutOperation ? "移动到此处" : "粘贴", shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
-            menu.addDivider();
-        }
-        if (mEnableLocalFileActions && !mFavoritesMode && mSourceKind == AssetSourceKind.LOCAL) {
-            menu.addMenuItem("新建文件夹", () -> triggerNewItem(true));
-            menu.addMenuItem("新建文件", () -> triggerNewItem(false));
-        }
-        if (mShowPickerContextActions && mPickFileAction != null && targetEntry != null && !targetEntry.isDirectory()) {
-            menu.addMenuItem("选择文件", () -> mPickFileAction.accept(targetEntry));
-        }
-        if (mShowPickerContextActions && mPickCurrentDirectoryAction != null) {
-            menu.addMenuItem("选择当前文件夹", () -> {
-                mPickCurrentDirectoryAction.run();
-            });
-        }
-        if (mShowPickerContextActions) {
-            menu.addMenuItem("刷新", this::refreshFileList);
-        }
-
-        if (menu.hasItems()) {
-            menu.showAt(localX, localY, mBodyFrame);
-        }
-    }
-
-    private void showContextMenuAtRaw(float rawX, float rawY, AssetEntry targetEntry) {
-        int[] loc = new int[2];
-        mBodyFrame.getLocationOnScreen(loc);
-        showContextMenu(rawX - loc[0], rawY - loc[1], targetEntry);
-    }
-
-    private void startInlineEdit(File targetFile) {
-        String key = pathKey(targetFile);
-        AssetFileItemView itemView = mItemViews.get(key);
-        if (itemView == null) {
-            int top = mFileContent.entryTop(key);
-            if (top < 0) return;
-            mScrollView.scrollTo(0, Math.max(0, top - dp2pxInt(8)));
-            updateVirtualViewport();
-            mFileContent.forceRefreshMountedItems();
-            itemView = mItemViews.get(key);
-        }
-        if (itemView == null) return;
-
-        TextView originalTextView = itemView.getNameView();
-        ViewGroup parent = (ViewGroup) originalTextView.getParent();
-        int index = parent.indexOfChild(originalTextView);
-        originalTextView.setVisibility(View.GONE);
-
-        EditText editInput = new EditText(getContext());
-        editInput.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(TEXT_SIZE_LIST_ITEM));
-        editInput.setTextColor(0xFFFFFFFF);
-        editInput.setBackground(createColorDrawable(0xFF444444));
-        editInput.setSingleLine(true);
-        editInput.setPadding(dp2pxInt(6), 0, dp2pxInt(6), 0);
-        editInput.setText(targetFile.getName());
-
-        parent.addView(editInput, index, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        editInput.requestFocus();
-        String name = editInput.getText().toString();
-        int dotIndex = name.lastIndexOf(".");
-        if (dotIndex > 0 && !targetFile.isDirectory()) {
-            editInput.setSelection(0, dotIndex);
-        } else {
-            editInput.setSelection(name.length());
-        }
-
-        Runnable commitAction = new Runnable() {
-            boolean isCommitted = false;
-
-            @Override
-            public void run() {
-                if (isCommitted) return;
-                isCommitted = true;
-
-                String newName = editInput.getText().toString().trim();
-                if (!newName.isEmpty() && !newName.equals(targetFile.getName())) {
-                    File dest = new File(targetFile.getParentFile(), newName);
-                    if (!dest.exists()) {
-                        if (targetFile.renameTo(dest)) {
-                            mFavoriteStore.updatePath(targetFile, dest);
-                        }
-                    }
-                }
-                refreshFileList();
-            }
-        };
-
-        editInput.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
-                commitAction.run();
-                return true;
-            }
-            return false;
-        });
-
-        editInput.setOnFocusChangeListener((v, hasFocus) -> {
-            if (!hasFocus) commitAction.run();
-        });
-    }
-
-    private void performPaste() {
-        if (mFavoritesMode || mClipboardFiles.isEmpty() || mCurrentDirectory == null) return;
-        try {
-            for (File source : new ArrayList<>(mClipboardFiles)) {
-                if (!source.exists()) continue;
-                File dest = AssetFileOperations.resolveAvailableDestination(mCurrentDirectory, source.getName(), source.isDirectory());
-                if (source.isDirectory() && isDescendantOrSelf(dest, source)) {
-                    System.err.println("[AssetBrowser] Skip copying directory into itself: " + source);
-                    continue;
-                }
-                if (mIsCutOperation) {
-                    AssetFileOperations.moveRecursively(source, dest);
-                    mFavoriteStore.updatePath(source, dest);
-                } else {
-                    AssetFileOperations.copyRecursively(source, dest);
-                }
-            }
-            if (mIsCutOperation) {
-                mClipboardFiles.clear();
-            }
-            clearSelection();
-            refreshFileList();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void copySelectionToClipboard() {
-        if (mSourceKind == AssetSourceKind.LOCAL) {
-            List<File> files = getSelectedLocalFiles();
-            if (files.isEmpty()) return;
-            mClipboardFiles = new ArrayList<>(files);
-            mIsCutOperation = false;
-            return;
-        }
-
-        if (!mEnableRemoteTransferActions || !RemoteGraphClientState.canManage()) return;
-        List<AssetEntry> entries = getSelectedEntries();
-        if (entries.isEmpty()) return;
-        setRemoteClipboard(entries, false);
-    }
-
-    private void pasteClipboard() {
-        if (mSourceKind == AssetSourceKind.LOCAL) {
-            performPaste();
-        } else {
-            pasteRemoteEntries();
-        }
-    }
-
-    private void setRemoteClipboard(List<AssetEntry> entries, boolean cutOperation) {
-        sRemoteClipboardPaths = new ArrayList<>();
-        for (AssetEntry entry : entries) {
-            if (entry.sourceKind() == AssetSourceKind.REMOTE) {
-                sRemoteClipboardPaths.add(entry.path());
-            }
-        }
-        sRemoteCutOperation = cutOperation;
-    }
-
-    private String shortcutText(AssetLibraryActionId actionId) {
-        return AssetLibraryActionRegistry.shortcutText(actionId, ConfigManager.INSTANCE.getConfig());
-    }
-
-    private void deleteRemoteEntries(List<AssetEntry> entries) {
-        List<String> paths = new ArrayList<>();
-        for (AssetEntry entry : entries) {
-            if (entry.sourceKind() == AssetSourceKind.REMOTE) {
-                paths.add(entry.path());
-            }
-        }
-        if (paths.isEmpty()) return;
-        String message = paths.size() == 1
-                ? "确定删除云端项目: " + entries.get(0).name()
-                : "确定删除选中的 " + paths.size() + " 个云端项目？";
-        ConfirmDialog dialog = new ConfirmDialog(
-                getContext(),
-                "删除云端文件",
-                message,
-                "删除",
-                () -> sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation.DELETE, paths, "")
-        );
-        dialog.showIn(this);
-    }
-
-    private void pasteRemoteEntries() {
-        if (sRemoteClipboardPaths.isEmpty()) return;
-        PacketRemoteGraphFileOperationRequest.Operation operation = sRemoteCutOperation
-                ? PacketRemoteGraphFileOperationRequest.Operation.MOVE
-                : PacketRemoteGraphFileOperationRequest.Operation.COPY;
-        sendRemoteFileOperation(operation, new ArrayList<>(sRemoteClipboardPaths), mRemoteDirectory);
-    }
-
-    private void sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation operation, List<String> paths, String targetDirectory) {
-        if (paths.isEmpty()) return;
-        int requestId = RemoteGraphClientState.nextRequestId();
-        String title = switch (operation) {
-            case DELETE -> "删除云端文件";
-            case COPY -> "复制云端文件";
-            case MOVE -> "移动云端文件";
-        };
-        com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.TransferProgressDialog progress =
-                new com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.TransferProgressDialog(getContext(), title);
-        progress.showIn(this);
-        RemoteGraphClientState.onFileOperation(requestId, response -> {
-            post(() -> {
-                if (!response.success()) {
-                    progress.fail(response.message());
-                    System.err.println("[AssetBrowser] Remote file operation failed: " + response.message());
-                    return;
-                }
-                progress.update(response.message(), 1, 1);
-                if (operation == PacketRemoteGraphFileOperationRequest.Operation.MOVE) {
-                    sRemoteClipboardPaths = new ArrayList<>();
-                    sRemoteCutOperation = false;
-                }
-                clearSelection();
-                refreshFileList();
-            });
-        });
-        NetworkHandler.sendToServer(new PacketRemoteGraphFileOperationRequest(requestId, operation, targetDirectory, paths));
-    }
-
-    private void triggerNewItem(boolean isFolder) {
-        if (mFavoritesMode) return;
-        clearSearch();
-        if (mCurrentDirectory == null) return;
-        try {
-            File newFile = AssetFileOperations.resolveAvailableDestination(mCurrentDirectory, isFolder ? "新建文件夹" : "新建文件.json", isFolder);
-            if (isFolder) {
-                newFile.mkdirs();
-            } else {
-                newFile.createNewFile();
-            }
-            AssetEntry newEntry = mEntryLoader.toLocalEntry(newFile, mCurrentDirectory, false);
-            refreshFileList(() -> {
-                selectOnly(newEntry);
-                startInlineEdit(newFile);
-            });
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void clearSearch() {
+    void clearSearch() {
         boolean hadSearch = !mSearchQuery.isEmpty()
                 || !mTagSearchQuery.isEmpty()
                 || !mPendingSearchQuery.isEmpty()
@@ -1229,38 +860,32 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         }
     }
 
-    private void handleDoubleClick(AssetEntry entry) {
-        if (mPickFileAction != null && !entry.isDirectory()) {
-            mPickFileAction.accept(entry);
-            return;
-        }
-
-        if (entry.sourceKind() == AssetSourceKind.REMOTE) {
-            if (entry.isDirectory()) {
-                navigateToRemote(entry.path());
-            }
-            return;
-        }
-
-        File file = entry.localFile();
-        if (file == null) return;
-        if (file.isDirectory()) {
-            navigateTo(file);
-        } else if (mOpenLocalJsonOnDoubleClick && file.getName().toLowerCase(Locale.ROOT).endsWith(".json")) {
-            openGraphFile(file);
-        }
+    boolean isFavoritesMode() {
+        return mFavoritesMode;
     }
 
-    private void openGraphFile(File file) {
-        try {
-            String content = Files.readString(file.toPath()).trim();
-            NodeGraph graph = (content.isEmpty() || content.equals("{}"))
-                    ? new NodeGraph()
-                    : GraphJsonIO.fromJson(content);
+    Consumer<AssetEntry> pickFileAction() {
+        return mPickFileAction;
+    }
 
-            GraphSession session = new GraphSession(file.getAbsolutePath(), file.getName(), graph);
-            DocumentManager.INSTANCE.openSession(session);
-        } catch (Exception e) { e.printStackTrace(); }
+    Runnable pickCurrentDirectoryAction() {
+        return mPickCurrentDirectoryAction;
+    }
+
+    FrameLayout bodyFrame() {
+        return mBodyFrame;
+    }
+
+    ScrollView scrollView() {
+        return mScrollView;
+    }
+
+    FileContentLayout fileContent() {
+        return mFileContent;
+    }
+
+    Map<String, AssetFileItemView> itemViews() {
+        return mItemViews;
     }
 
     private TextView createNavButton(Context context, String text) {
@@ -1327,7 +952,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         return text.substring(0, keepStart) + "…" + text.substring(text.length() - keepEnd);
     }
 
-    private void updateVirtualViewport() {
+    void updateVirtualViewport() {
         if (mFileContent == null || mScrollView == null) return;
         mFileContent.updateViewport(mScrollView.getScrollY(), mScrollView.getHeight());
     }
@@ -1337,17 +962,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                 || e.getActionButton() == MotionEvent.BUTTON_SECONDARY;
     }
 
-    private boolean isDescendantOrSelf(File candidate, File root) {
-        try {
-            String candidatePath = candidate.getCanonicalPath();
-            String rootPath = root.getCanonicalPath();
-            return candidatePath.equals(rootPath) || candidatePath.startsWith(rootPath + File.separator);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private String pathKey(File file) {
+    String pathKey(File file) {
         return mFavoriteStore.pathKey(file);
     }
 

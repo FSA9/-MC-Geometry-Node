@@ -8,6 +8,8 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.left.LeftQui
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.RightFileBrowserPanel;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.service.LocalAssetService;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.task.AssetTaskController;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.utils.PanelSplitter;
 import com.mine.geometry_node.client.ui.UIConstants;
@@ -26,13 +28,10 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -41,9 +40,12 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
     private final LinearLayout mMainLayout;
     private final LeftQuickAccessPanel mLeftPanel;
     private final RightFileBrowserPanel mRightPanel;
+    private final LocalAssetService mLocalAssetService = new LocalAssetService();
+    private final AssetTaskController mIoTasks;
 
     public AssetBrowserPanel(Context context) {
         super(context);
+        mIoTasks = new AssetTaskController(this);
 
         mMainLayout = new LinearLayout(context);
         mMainLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -146,6 +148,12 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
     public void onHide() {
     }
 
+    @Override
+    protected void onDetachedFromWindow() {
+        mIoTasks.cancelAll();
+        super.onDetachedFromWindow();
+    }
+
     private ShapeDrawable createColorDrawable(int color) {
         ShapeDrawable drawable = new ShapeDrawable();
         drawable.setColor(color);
@@ -165,9 +173,25 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
     }
 
     private void preflightUpload(List<File> selectedFiles, String targetDirectory) {
-        List<RemoteGraphUploadFile> files = collectUploadFiles(selectedFiles, targetDirectory);
-        if (files.isEmpty()) return;
+        List<File> selectedSnapshot = selectedFiles == null ? List.of() : List.copyOf(selectedFiles);
+        mIoTasks.run("准备上传",
+                context -> mLocalAssetService.collectUploadFiles(selectedSnapshot, targetDirectory, context),
+                (result, progress) -> {
+                    if (result.files().isEmpty()) {
+                        progress.fail(result.failedPaths().isEmpty()
+                                ? "没有可上传的 .json 图纸"
+                                : "文件读取失败: " + summarizePaths(result.failedPaths()));
+                        return;
+                    }
+                    if (!result.failedPaths().isEmpty()) {
+                        System.err.println("[AssetBrowser] Some upload files failed to read: " + result.failedPaths());
+                    }
+                    progress.update("准备完成", result.files().size(), result.files().size());
+                    requestUploadPreflight(result.files());
+                });
+    }
 
+    private void requestUploadPreflight(List<RemoteGraphUploadFile> files) {
         int requestId = RemoteGraphClientState.nextRequestId();
         RemoteGraphClientState.onUpload(requestId, response -> {
             post(() -> {
@@ -252,37 +276,6 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
         NetworkHandler.sendToServer(new PacketRemoteGraphDownloadRequest(requestId, paths));
     }
 
-    private List<RemoteGraphUploadFile> collectUploadFiles(List<File> selectedFiles, String targetDirectory) {
-        List<RemoteGraphUploadFile> files = new ArrayList<>();
-        String targetPrefix = AssetPathUtils.normalizeRemoteDirectory(targetDirectory);
-        for (File selected : selectedFiles) {
-            if (selected == null || !selected.exists()) continue;
-            Path base = selected.isDirectory() ? selected.toPath().getParent() : selected.toPath().getParent();
-            collectUploadFile(files, base, selected.toPath(), targetPrefix);
-        }
-        return files;
-    }
-
-    private void collectUploadFile(List<RemoteGraphUploadFile> out, Path base, Path path, String targetPrefix) {
-        try {
-            if (Files.isSymbolicLink(path)) return;
-            if (Files.isDirectory(path)) {
-                try (var stream = Files.list(path)) {
-                    stream.forEach(child -> collectUploadFile(out, base, child, targetPrefix));
-                }
-                return;
-            }
-            if (!Files.isRegularFile(path)) return;
-            if (!path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".json")) return;
-            String relative = base.relativize(path).toString().replace('\\', '/');
-            String targetPath = targetPrefix.isEmpty() ? relative : targetPrefix + "/" + relative;
-            targetPath = AssetPathUtils.normalizeRemoteFilePath(targetPath);
-            out.add(new RemoteGraphUploadFile(targetPath, Files.readString(path)));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     private void finishDownload(List<RemoteGraphUploadFile> files, File targetDirectory) {
         List<String> conflicts = findLocalDownloadConflicts(files, targetDirectory);
         if (conflicts.isEmpty()) {
@@ -313,31 +306,19 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
     }
 
     private void saveDownloadedFiles(List<RemoteGraphUploadFile> files, File targetDirectory) {
-        Path root = targetDirectory.toPath().toAbsolutePath().normalize();
-        List<String> failedPaths = new ArrayList<>();
-        for (RemoteGraphUploadFile file : files) {
-            try {
-                String relative = AssetPathUtils.normalizeRemoteFilePath(file.targetPath());
-                Path target = root.resolve(relative).normalize();
-                if (!target.startsWith(root)) {
-                    throw new IllegalArgumentException("invalid download path: " + file.targetPath());
-                }
-                Path parent = target.getParent();
-                if (parent != null) Files.createDirectories(parent);
-                Files.writeString(target, file.jsonContent());
-            } catch (Exception e) {
-                failedPaths.add(file.targetPath());
-                e.printStackTrace();
-            }
-        }
-        if (mRightPanel != null) {
-            mRightPanel.refreshFileList();
-        }
-        if (!failedPaths.isEmpty()) {
-            TransferProgressDialog progress = new TransferProgressDialog(getContext(), "下载图纸");
-            progress.showIn(this);
-            progress.fail("部分文件保存失败: " + String.join(", ", failedPaths));
-        }
+        List<RemoteGraphUploadFile> fileSnapshot = files == null ? List.of() : List.copyOf(files);
+        mIoTasks.run("保存下载",
+                context -> mLocalAssetService.saveDownloadedFiles(fileSnapshot, targetDirectory, context),
+                (result, progress) -> {
+                    if (mRightPanel != null) {
+                        mRightPanel.refreshFileList();
+                    }
+                    if (!result.failedPaths().isEmpty()) {
+                        progress.fail("部分文件保存失败: " + summarizePaths(result.failedPaths()));
+                        return;
+                    }
+                    progress.update("下载完成", result.successCount(), Math.max(1, fileSnapshot.size()));
+                });
     }
 
     private void showUploadFailureDialog(
@@ -355,6 +336,17 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
                 failedPaths,
                 () -> startUpload(failedFiles, overwrite, overwritePaths)
         ).showIn(this);
+    }
+
+    private String summarizePaths(List<String> paths) {
+        if (paths == null || paths.isEmpty()) return "";
+        int limit = Math.min(3, paths.size());
+        List<String> head = paths.subList(0, limit);
+        String summary = String.join(", ", head);
+        if (paths.size() > limit) {
+            summary += " 等 " + paths.size() + " 项";
+        }
+        return summary;
     }
 
     private List<String> findLocalDownloadConflicts(List<RemoteGraphUploadFile> files, File targetDirectory) {

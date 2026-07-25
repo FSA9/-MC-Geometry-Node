@@ -171,7 +171,7 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
 
     private String currentDirectoryPath() {
         if (mBrowser.getSourceKind() == AssetSourceKind.REMOTE) {
-            return mBrowser.getRemoteDirectory();
+            return AssetPathUtils.formatRemotePath(mBrowser.getRemoteDirectory());
         }
         File directory = mBrowser.getCurrentDirectory();
         return directory == null ? "" : absolutePath(directory);
@@ -180,7 +180,7 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
     private static String toNodePath(AssetEntry entry) {
         if (entry == null) return "";
         if (entry.sourceKind() == AssetSourceKind.REMOTE) {
-            return entry.path();
+            return AssetPathUtils.formatRemotePath(entry.path());
         }
         return absolutePath(entry.localFile());
     }
@@ -233,7 +233,7 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
     private static String initialRemoteDirectory(String currentPath) {
         String value = currentPath == null ? "" : currentPath.trim().replace('\\', '/');
         if (value.isEmpty()) return null;
-        if (value.startsWith("remote:/") || value.startsWith("remote://")) {
+        if (AssetPathUtils.isRemotePathInput(value)) {
             return remoteDirectoryFromPath(AssetPathUtils.remotePathFromInput(value));
         }
         if (value.startsWith("/") || value.matches("^[A-Za-z]:.*") || value.matches("^[A-Za-z][A-Za-z0-9+.-]*:/.*")) {

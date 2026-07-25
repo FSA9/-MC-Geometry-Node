@@ -36,14 +36,12 @@ public final class AssetPathUtils {
         return normalized;
     }
 
+    public static boolean isRemotePathInput(String path) {
+        return path != null && path.trim().toLowerCase(Locale.ROOT).startsWith("remote:");
+    }
+
     public static String remotePathFromInput(String path) {
-        String normalized = path == null ? "" : path.trim().replace('\\', '/');
-        if (normalized.startsWith("remote://")) {
-            normalized = normalized.substring("remote://".length());
-        } else if (normalized.startsWith("remote:/")) {
-            normalized = normalized.substring("remote:/".length());
-        }
-        return normalizeRemoteDirectory(normalized);
+        return normalizeRemoteDirectory(path);
     }
 
     public static String formatRemotePath(String directory) {
@@ -54,6 +52,14 @@ public final class AssetPathUtils {
     private static String trimRemoteRelativePath(String path) {
         if (path == null || path.isBlank() || "/".equals(path.trim())) return "";
         String normalized = path.replace('\\', '/').trim();
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("remote://")) {
+            normalized = normalized.substring("remote://".length());
+        } else if (lower.startsWith("remote:/")) {
+            normalized = normalized.substring("remote:/".length());
+        } else if (lower.startsWith("remote:")) {
+            normalized = normalized.substring("remote:".length());
+        }
         while (normalized.startsWith("/")) {
             normalized = normalized.substring(1);
         }
