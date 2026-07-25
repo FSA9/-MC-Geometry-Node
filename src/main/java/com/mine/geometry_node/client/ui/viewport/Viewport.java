@@ -93,7 +93,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
         mEmptyHint = new TextView(getContext());
         mEmptyHint.setText("当前没有打开的蓝图\n请在资产浏览器中双击 JSON 文件开始编辑");
-        mEmptyHint.setTextSize(18);
+        UIUtils.setLockedTextSize(mEmptyHint, 18.0f);
         mEmptyHint.setTextColor(0xFF888888);
         mEmptyHint.setGravity(Gravity.CENTER);
 

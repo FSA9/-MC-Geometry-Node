@@ -105,7 +105,7 @@ final class ColorRampView extends LinearLayout {
     private TextView button(Context context, String text, View.OnClickListener listener) {
         TextView button = new TextView(context);
         button.setText(text);
-        button.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
+        UIUtils.setLockedTextSize(button, UIConstants.Node.TEXT_SIZE_LABEL);
         button.setTextColor(COLOR_TEXT);
         button.setGravity(Gravity.CENTER);
         button.setBackground(rect(COLOR_FIELD, 2.0f, 1, COLOR_FIELD_BORDER));

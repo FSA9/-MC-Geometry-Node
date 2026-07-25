@@ -47,7 +47,7 @@ public class ButtonHintRenderer implements UIHintRenderer {
         TextView button = new TextView(context);
         button.setText(displayLabel(label));
         button.setGravity(Gravity.CENTER);
-        button.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
+        UIUtils.setLockedTextSize(button, UIConstants.Node.TEXT_SIZE_LABEL);
         button.setTextColor(textColor);
         button.setSingleLine(true);
         button.setPadding(UIUtils.dp2pxInt(6), 0, UIUtils.dp2pxInt(6), 0);

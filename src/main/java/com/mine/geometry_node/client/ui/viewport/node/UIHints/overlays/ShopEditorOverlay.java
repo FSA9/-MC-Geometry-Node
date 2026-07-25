@@ -686,7 +686,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         input.setSingleLine(true);
         input.setText(value == null ? "" : value);
         input.setTextColor(COLOR_TEXT);
-        input.setTextSize(12.0f);
+        UIUtils.setLockedTextSize(input, 12.0f);
         input.setGravity(gravity);
         input.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
         input.setBackground(rect(COLOR_FIELD, 3.0f, 1, 0xFF323A46));

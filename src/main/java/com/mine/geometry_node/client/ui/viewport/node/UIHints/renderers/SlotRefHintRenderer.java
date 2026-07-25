@@ -69,7 +69,7 @@ public class SlotRefHintRenderer implements UIHintRenderer {
             super(context);
             setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
             setTextColor(UIConstants.CLR_GRAY_LABEL);
-            setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
+            UIUtils.setLockedTextSize(this, UIConstants.Node.TEXT_SIZE_LABEL);
             setSingleLine(true);
             setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
             setClickable(true);

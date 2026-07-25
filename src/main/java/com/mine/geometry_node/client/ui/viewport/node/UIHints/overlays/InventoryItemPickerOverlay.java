@@ -282,7 +282,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
 
     public static final class ItemStackView extends FrameLayout {
         private static final float ITEM_SIZE_GUI = 16.0f;
-        private static final float ITEM_PADDING_GUI = 4.0f;
+        private static final float ITEM_PADDING_DP = 4.0f;
 
         private final Paint paint = new Paint();
         private final RectF rect = new RectF();
@@ -344,7 +344,8 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             float safeGuiScale = guiScale > 0.0 ? (float) guiScale : 1.0f;
             float slotGuiW = getWidth() / safeGuiScale;
             float slotGuiH = getHeight() / safeGuiScale;
-            float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - ITEM_PADDING_GUI * 2.0f);
+            float padding = UIUtils.dp2px(ITEM_PADDING_DP) / safeGuiScale;
+            float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - padding * 2.0f);
             float itemScale = contentSize / ITEM_SIZE_GUI;
             float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;
             float drawY = (slotGuiH - ITEM_SIZE_GUI * itemScale) / 2.0f;

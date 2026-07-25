@@ -381,7 +381,7 @@ public final class ColorPickerDialog extends FrameLayout {
         EditText input = new EditText(context);
         input.setSingleLine(true);
         input.setTextColor(COLOR_TEXT);
-        input.setTextSize(12.0f);
+        UIUtils.setLockedTextSize(input, 12.0f);
         input.setGravity(Gravity.CENTER);
         input.setPadding(dpPx(5), 0, dpPx(5), 0);
         input.setBackground(rect(COLOR_FIELD, 4.0f, 1, 0xFF303846));

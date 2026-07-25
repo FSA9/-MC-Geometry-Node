@@ -25,7 +25,7 @@ import javax.annotation.Nonnull;
 
 public class UIItemSlot extends FrameLayout {
     private static final float ITEM_SIZE_GUI = 16f;
-    private static final float ITEM_PADDING_GUI = 4f;
+    private static final float ITEM_PADDING_DP = 4f;
     private static final float ITEM_MAX_SCALE = 1.25f;
 
     private final NodeData mNodeData;
@@ -72,7 +72,7 @@ public class UIItemSlot extends FrameLayout {
                     float viewportScale = mViewportScale;
                     float slotGuiW = UIItemSlot.this.getWidth() * viewportScale / safeGuiScale;
                     float slotGuiH = UIItemSlot.this.getHeight() * viewportScale / safeGuiScale;
-                    float padding = ITEM_PADDING_GUI * viewportScale;
+                    float padding = UIUtils.dp2px(ITEM_PADDING_DP) * viewportScale / safeGuiScale;
                     float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - padding * 2.0f);
                     float itemScale = Math.min(ITEM_MAX_SCALE * viewportScale, contentSize / ITEM_SIZE_GUI);
                     float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;

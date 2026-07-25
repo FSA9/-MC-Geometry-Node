@@ -79,7 +79,7 @@ public class PathHintRenderer implements UIHintRenderer {
         button.setText("...");
         button.setGravity(Gravity.CENTER);
         button.setTextColor(0xFFBFC7D5);
-        button.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
+        UIUtils.setLockedTextSize(button, UIConstants.Node.TEXT_SIZE_LABEL);
 
         ShapeDrawable bg = new ShapeDrawable();
         bg.setColor(0xFF30343B);

@@ -37,12 +37,12 @@ public class MainUI extends Fragment {
         if ("true".equals(System.getProperty("gn.standalone"))) {
             physicalHeight = 1080.0f;
         } else {
-//            physicalHeight = net.minecraft.client.Minecraft.getInstance().getWindow().getHeight();
+            physicalHeight = net.minecraft.client.Minecraft.getInstance().getWindow().getHeight();
         }
 
-//        UIConstants.mDensity = physicalHeight / BASE_HEIGHT;
+        UIConstants.mDensity = physicalHeight / BASE_HEIGHT;
 
-        UIConstants.mDensity = context.getResources().getDisplayMetrics().density;
+//        UIConstants.mDensity = context.getResources().getDisplayMetrics().density;
 
         FrameLayout rootFrame = new FrameLayout(context);
         LinearLayout rootLayout = createRootLayout(context);

@@ -104,7 +104,7 @@ abstract class AssetDialogBase extends FrameLayout {
     protected TextView label(Context context, String text, float size, int color) {
         TextView tv = new TextView(context);
         tv.setText(text);
-        tv.setTextSize(size);
+        UIUtils.setLockedTextSize(tv, size);
         tv.setTextColor(color);
         tv.setGravity(Gravity.CENTER_VERTICAL);
         return tv;

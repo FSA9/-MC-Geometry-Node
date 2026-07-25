@@ -38,10 +38,15 @@ public class UIUtils {
     public static TextView createLockedTextView(Context context, String text, float dpSize, int colorHex) {
         TextView tv = new TextView(context);
         tv.setText(text);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(dpSize));
+        setLockedTextSize(tv, dpSize);
         if (colorHex != 0) {
             tv.setTextColor(colorHex);
         }
         return tv;
+    }
+
+    public static void setLockedTextSize(TextView view, float dpSize) {
+        if (view == null) return;
+        view.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(dpSize));
     }
 }

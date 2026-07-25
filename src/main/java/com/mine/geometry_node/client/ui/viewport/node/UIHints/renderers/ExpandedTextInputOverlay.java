@@ -78,7 +78,7 @@ final class ExpandedTextInputOverlay extends FrameLayout {
             editor.setText(value == null ? "" : value.toString());
         }
         editor.setTextColor(UIConstants.CLR_GRAY_LABEL);
-        editor.setTextSize(14.0f);
+        UIUtils.setLockedTextSize(editor, 14.0f);
         editor.setGravity(Gravity.LEFT | Gravity.TOP);
         editor.setSingleLine(false);
         editor.setMinLines(12);
@@ -216,7 +216,7 @@ final class ExpandedTextInputOverlay extends FrameLayout {
 
     private TextView toolButton(Context context, String text, View.OnClickListener listener) {
         TextView view = button(context, text, 0xFF2D3440, listener);
-        view.setTextSize(12.0f);
+        UIUtils.setLockedTextSize(view, 12.0f);
         return view;
     }
 

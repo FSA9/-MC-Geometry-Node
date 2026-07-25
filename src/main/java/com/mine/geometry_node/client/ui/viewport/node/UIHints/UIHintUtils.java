@@ -22,7 +22,7 @@ public class UIHintUtils {
 
     public static void applyStandardInputStyle(EditText et, PortType expectedType) {
         et.setTextColor(UIConstants.CLR_GRAY_LABEL);
-        et.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
+        UIUtils.setLockedTextSize(et, UIConstants.Node.TEXT_SIZE_LABEL);
         et.setGravity(icyllis.modernui.view.Gravity.RIGHT | icyllis.modernui.view.Gravity.CENTER_VERTICAL);
         et.setSingleLine(true);
 

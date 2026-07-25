@@ -275,7 +275,7 @@ final class NodeOverlayController {
         TextView button = new TextView(context);
         button.setText(text);
         button.setGravity(Gravity.CENTER);
-        button.setTextSize(UIConstants.Node.TEXT_SIZE_LABEL);
+        UIUtils.setLockedTextSize(button, UIConstants.Node.TEXT_SIZE_LABEL);
         button.setTextColor(UIConstants.Node.CLR_DYNAMIC_BTN_FG);
 
         ShapeDrawable bgDrawable = new ShapeDrawable();
