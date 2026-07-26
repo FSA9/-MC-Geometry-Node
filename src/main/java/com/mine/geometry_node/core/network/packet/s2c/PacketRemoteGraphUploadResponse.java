@@ -13,6 +13,7 @@ public record PacketRemoteGraphUploadResponse(
         int requestId,
         boolean preflight,
         boolean success,
+        boolean terminal,
         int processed,
         int total,
         String message,
@@ -27,13 +28,15 @@ public record PacketRemoteGraphUploadResponse(
     );
 
     public PacketRemoteGraphUploadResponse(RegistryFriendlyByteBuf buf) {
-        this(buf.readInt(), buf.readBoolean(), buf.readBoolean(), buf.readInt(), buf.readInt(), buf.readUtf(32767), readConflicts(buf));
+        this(buf.readInt(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(),
+                buf.readInt(), buf.readInt(), buf.readUtf(32767), readConflicts(buf));
     }
 
     public void write(RegistryFriendlyByteBuf buf) {
         buf.writeInt(requestId);
         buf.writeBoolean(preflight);
         buf.writeBoolean(success);
+        buf.writeBoolean(terminal);
         buf.writeInt(processed);
         buf.writeInt(total);
         buf.writeUtf(message, 32767);

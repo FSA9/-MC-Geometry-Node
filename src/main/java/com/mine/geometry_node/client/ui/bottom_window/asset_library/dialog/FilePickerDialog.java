@@ -34,6 +34,7 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
     private final Consumer<String> mOnPick;
     private final TextView mStatus;
     private String mPendingRemoteInitialDirectory;
+    private int mCapabilityRequestId;
 
     public static FilePickerDialog path(Context context, String title, String initialPath, Consumer<String> onPick) {
         return new FilePickerDialog(context, title, initialPath, onPick);
@@ -207,7 +208,10 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
 
     private void requestRemoteCapabilities() {
         int requestId = RemoteGraphClientState.nextRequestId();
+        mCapabilityRequestId = requestId;
         RemoteGraphClientState.onCapabilities(requestId, response -> post(() -> {
+            if (mCapabilityRequestId != requestId) return;
+            mCapabilityRequestId = 0;
             mLeftPanel.buildSidebar();
             if (response.canBrowse() && mPendingRemoteInitialDirectory != null) {
                 String target = mPendingRemoteInitialDirectory;
@@ -216,6 +220,15 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
             }
         }));
         NetworkHandler.sendToServer(new PacketRemoteGraphCapabilitiesRequest(requestId));
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        if (mCapabilityRequestId != 0) {
+            RemoteGraphClientState.cancel(mCapabilityRequestId);
+            mCapabilityRequestId = 0;
+        }
+        super.onDetachedFromWindow();
     }
 
     private static File initialLocalDirectory(String currentPath) {

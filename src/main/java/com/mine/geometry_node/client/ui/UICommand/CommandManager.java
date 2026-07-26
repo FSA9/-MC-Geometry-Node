@@ -21,7 +21,10 @@ public class CommandManager {
     /**
      * 提交并执行一个新命令
      */
-    public void execute(ICommand command) {
+    public boolean execute(ICommand command) {
+        if (command == null || !command.canExecute()) {
+            return false;
+        }
         command.execute();
 
         mUndoStack.push(command);
@@ -32,6 +35,7 @@ public class CommandManager {
 
         mRedoStack.clear();
         markAsDirty();
+        return true;
     }
 
     public void undo() {
@@ -45,7 +49,11 @@ public class CommandManager {
 
     public void redo() {
         if (!mRedoStack.isEmpty()) {
-            ICommand cmd = mRedoStack.pop();
+            ICommand cmd = mRedoStack.peek();
+            if (!cmd.canExecute()) {
+                return;
+            }
+            mRedoStack.pop();
             cmd.execute();
             mUndoStack.push(cmd);
             markAsDirty();

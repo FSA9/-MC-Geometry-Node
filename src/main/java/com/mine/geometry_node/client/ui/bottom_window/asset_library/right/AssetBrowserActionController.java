@@ -29,8 +29,10 @@ import icyllis.modernui.widget.TextView;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
@@ -54,8 +56,7 @@ final class AssetBrowserActionController {
     private List<File> mClipboardFiles = new ArrayList<>();
     private boolean mIsCutOperation = false;
 
-    private static List<String> sRemoteClipboardPaths = new ArrayList<>();
-    private static boolean sRemoteCutOperation = false;
+    private final Set<Integer> mRemoteRequestIds = new HashSet<>();
 
     AssetBrowserActionController(
             RightFileBrowserPanel panel,
@@ -97,7 +98,8 @@ final class AssetBrowserActionController {
         if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
             return mEnableLocalFileActions && !mPanel.isFavoritesMode() && !mClipboardFiles.isEmpty();
         }
-        return mEnableRemoteTransferActions && RemoteGraphClientState.canManage() && !sRemoteClipboardPaths.isEmpty();
+        return mEnableRemoteTransferActions && RemoteGraphClientState.canManage()
+                && !RemoteGraphClientState.clipboardPaths().isEmpty();
     }
 
     void copySelectionToClipboard() {
@@ -235,7 +237,7 @@ final class AssetBrowserActionController {
             mClipboardFiles = new ArrayList<>(filesSnapshot);
             mIsCutOperation = true;
         });
-        menu.addMenuItem("删除" + suffix, () -> deleteLocalFiles(filesSnapshot));
+        menu.addMenuItem("删除" + suffix, () -> confirmDeleteLocalFiles(filesSnapshot));
         if (filesSnapshot.size() == 1) {
             menu.addDivider();
             menu.addMenuItem("重命名", () -> startInlineEdit(filesSnapshot.get(0)));
@@ -243,9 +245,23 @@ final class AssetBrowserActionController {
         menu.addDivider();
     }
 
-    private void deleteLocalFiles(List<File> filesSnapshot) {
+    private void confirmDeleteLocalFiles(List<File> filesSnapshot) {
         if (filesSnapshot == null || filesSnapshot.isEmpty()) return;
         List<File> files = new ArrayList<>(filesSnapshot);
+        String message = files.size() == 1
+                ? "确定永久删除本地项目: " + files.get(0).getName()
+                : "确定永久删除选中的 " + files.size() + " 个本地项目？";
+        ConfirmDialog dialog = new ConfirmDialog(
+                mPanel.getContext(),
+                "删除本地文件",
+                message,
+                "删除",
+                () -> deleteLocalFiles(files)
+        );
+        dialog.showIn(mPanel);
+    }
+
+    private void deleteLocalFiles(List<File> files) {
         mIoTasks.run("删除文件",
                 context -> mLocalAssetService.deleteFiles(files, context),
                 (result, progress) -> {
@@ -330,8 +346,9 @@ final class AssetBrowserActionController {
             menu.addDivider();
         }
         if (mEnableRemoteTransferActions && mPanel.getSourceKind() == AssetSourceKind.REMOTE
-                && RemoteGraphClientState.canManage() && !sRemoteClipboardPaths.isEmpty()) {
-            menu.addMenuItem(sRemoteCutOperation ? "移动到此处" : "粘贴", shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
+                && RemoteGraphClientState.canManage() && !RemoteGraphClientState.clipboardPaths().isEmpty()) {
+            menu.addMenuItem(RemoteGraphClientState.isCutOperation() ? "移动到此处" : "粘贴",
+                    shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
             menu.addDivider();
         }
         if (mEnableLocalFileActions && !mPanel.isFavoritesMode() && mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
@@ -463,13 +480,13 @@ final class AssetBrowserActionController {
     }
 
     private void setRemoteClipboard(List<AssetEntry> entries, boolean cutOperation) {
-        sRemoteClipboardPaths = new ArrayList<>();
+        List<String> paths = new ArrayList<>();
         for (AssetEntry entry : entries) {
             if (entry.sourceKind() == AssetSourceKind.REMOTE) {
-                sRemoteClipboardPaths.add(entry.path());
+                paths.add(entry.path());
             }
         }
-        sRemoteCutOperation = cutOperation;
+        RemoteGraphClientState.setClipboard(paths, cutOperation);
     }
 
     private String shortcutText(AssetLibraryActionId actionId) {
@@ -498,16 +515,18 @@ final class AssetBrowserActionController {
     }
 
     private void pasteRemoteEntries() {
-        if (sRemoteClipboardPaths.isEmpty()) return;
-        PacketRemoteGraphFileOperationRequest.Operation operation = sRemoteCutOperation
+        List<String> clipboardPaths = RemoteGraphClientState.clipboardPaths();
+        if (clipboardPaths.isEmpty()) return;
+        PacketRemoteGraphFileOperationRequest.Operation operation = RemoteGraphClientState.isCutOperation()
                 ? PacketRemoteGraphFileOperationRequest.Operation.MOVE
                 : PacketRemoteGraphFileOperationRequest.Operation.COPY;
-        sendRemoteFileOperation(operation, new ArrayList<>(sRemoteClipboardPaths), mPanel.getRemoteDirectory());
+        sendRemoteFileOperation(operation, clipboardPaths, mPanel.getRemoteDirectory());
     }
 
     private void sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation operation, List<String> paths, String targetDirectory) {
         if (paths.isEmpty()) return;
         int requestId = RemoteGraphClientState.nextRequestId();
+        mRemoteRequestIds.add(requestId);
         String title = switch (operation) {
             case DELETE -> "删除云端文件";
             case COPY -> "复制云端文件";
@@ -516,6 +535,7 @@ final class AssetBrowserActionController {
         TransferProgressDialog progress = new TransferProgressDialog(mPanel.getContext(), title);
         progress.showIn(mPanel);
         RemoteGraphClientState.onFileOperation(requestId, response -> {
+            mRemoteRequestIds.remove(requestId);
             mPanel.post(() -> {
                 if (!response.success()) {
                     progress.fail(response.message());
@@ -524,14 +544,20 @@ final class AssetBrowserActionController {
                 }
                 progress.update(response.message(), 1, 1);
                 if (operation == PacketRemoteGraphFileOperationRequest.Operation.MOVE) {
-                    sRemoteClipboardPaths = new ArrayList<>();
-                    sRemoteCutOperation = false;
+                    RemoteGraphClientState.clearClipboard();
                 }
                 mPanel.clearSelection();
                 mPanel.refreshFileList();
             });
         });
         NetworkHandler.sendToServer(new PacketRemoteGraphFileOperationRequest(requestId, operation, targetDirectory, paths));
+    }
+
+    void cancelRemoteRequests() {
+        for (int requestId : mRemoteRequestIds) {
+            RemoteGraphClientState.cancel(requestId);
+        }
+        mRemoteRequestIds.clear();
     }
 
     private void finishFileOperation(

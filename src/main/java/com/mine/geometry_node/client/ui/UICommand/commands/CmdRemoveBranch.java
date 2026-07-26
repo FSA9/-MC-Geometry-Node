@@ -30,7 +30,12 @@ public class CmdRemoveBranch implements ICommand {
     private final Map<String, NodeData.PortConfig> mBackupPortConfigOutputs = new HashMap<>();
     private final List<InboundConnectionBackup> mBackupInbounds = new ArrayList<>();
 
-    private record InboundConnectionBackup(String sourceNodeId, String sourcePortId, String targetPortId) {}
+    private record InboundConnectionBackup(
+            String sourceNodeId,
+            String sourcePortId,
+            String targetPortId,
+            boolean execution
+    ) {}
 
     public CmdRemoveBranch(GraphController controller, NodeGraph graph, String nodeId, String propertyKey, int currentCount, int removeIndex) {
         this.mController = controller;
@@ -71,8 +76,16 @@ public class CmdRemoveBranch implements ICommand {
                 String outPortId = entry.getKey();
                 for (Connection link : entry.getValue()) {
                     if (link.targetNodeId().equals(mNodeId)) {
-                        mBackupInbounds.add(new InboundConnectionBackup(otherNode.id, outPortId, link.targetPortName()));
+                        mBackupInbounds.add(new InboundConnectionBackup(
+                                otherNode.id, outPortId, link.targetPortName(), false));
                     }
+                }
+            }
+            for (Map.Entry<String, Connection> entry : otherNode.execOutputs.entrySet()) {
+                Connection link = entry.getValue();
+                if (link.targetNodeId().equals(mNodeId)) {
+                    mBackupInbounds.add(new InboundConnectionBackup(
+                            otherNode.id, entry.getKey(), link.targetPortName(), true));
                 }
             }
         }
@@ -95,6 +108,12 @@ public class CmdRemoveBranch implements ICommand {
                     if (link.targetNodeId().equals(mNodeId)) {
                         mController.removeConnection(otherNode.id, outPort, mNodeId, link.targetPortName());
                     }
+                }
+            }
+            for (String execPort : new ArrayList<>(otherNode.execOutputs.keySet())) {
+                Connection link = otherNode.execOutputs.get(execPort);
+                if (link != null && link.targetNodeId().equals(mNodeId)) {
+                    mController.removeExecutionConnection(otherNode.id, execPort);
                 }
             }
         }
@@ -128,7 +147,13 @@ public class CmdRemoveBranch implements ICommand {
         }
 
         for (InboundConnectionBackup inbound : mBackupInbounds) {
-            mController.addConnection(inbound.sourceNodeId, inbound.sourcePortId, mNodeId, inbound.targetPortId);
+            if (inbound.execution) {
+                mController.addExecutionConnection(
+                        inbound.sourceNodeId, inbound.sourcePortId, mNodeId, inbound.targetPortId);
+            } else {
+                mController.addConnection(
+                        inbound.sourceNodeId, inbound.sourcePortId, mNodeId, inbound.targetPortId);
+            }
         }
 
         mController.setNodeInputValue(mNodeId, mPropertyKey, mOldCount);

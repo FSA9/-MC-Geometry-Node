@@ -42,6 +42,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
     private final RightFileBrowserPanel mRightPanel;
     private final LocalAssetService mLocalAssetService = new LocalAssetService();
     private final AssetTaskController mIoTasks;
+    private final Set<Integer> mRemoteRequestIds = new HashSet<>();
 
     public AssetBrowserPanel(Context context) {
         super(context);
@@ -157,6 +158,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
     @Override
     protected void onDetachedFromWindow() {
         mIoTasks.cancelAll();
+        cancelRemoteRequests();
         super.onDetachedFromWindow();
     }
 
@@ -167,8 +169,9 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
     }
 
     private void requestRemoteCapabilities() {
-        int requestId = RemoteGraphClientState.nextRequestId();
+        int requestId = beginRemoteRequest();
         RemoteGraphClientState.onCapabilities(requestId, response -> {
+            finishRemoteRequest(requestId);
             post(() -> {
                 if (mLeftPanel != null) {
                     mLeftPanel.buildSidebar();
@@ -198,8 +201,9 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
     }
 
     private void requestUploadPreflight(List<RemoteGraphUploadFile> files) {
-        int requestId = RemoteGraphClientState.nextRequestId();
+        int requestId = beginRemoteRequest();
         RemoteGraphClientState.onUpload(requestId, response -> {
+            if (response.terminal()) finishRemoteRequest(requestId);
             post(() -> {
                 if (!response.preflight()) return;
                 if (!response.success() && response.conflicts().isEmpty()) {
@@ -261,9 +265,10 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
             paths.add(entry.path());
         }
 
-        int requestId = RemoteGraphClientState.nextRequestId();
+        int requestId = beginRemoteRequest();
         List<RemoteGraphUploadFile> downloaded = new ArrayList<>();
         RemoteGraphClientState.onDownload(requestId, response -> {
+            if (response.terminal()) finishRemoteRequest(requestId);
             post(() -> {
                 if (!response.success()) {
                     TransferProgressDialog progress = new TransferProgressDialog(getContext(), "下载图纸");
@@ -274,7 +279,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
                 if (!response.files().isEmpty()) {
                     downloaded.addAll(response.files());
                 }
-                if ("下载完成".equals(response.message())) {
+                if (response.terminal()) {
                     finishDownload(downloaded, targetDirectory);
                 }
             });
@@ -458,8 +463,9 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
             }
 
             RemoteGraphUploadFile file = mFiles.get(mIndex);
-            int requestId = RemoteGraphClientState.nextRequestId();
+            int requestId = beginRemoteRequest();
             RemoteGraphClientState.onUpload(requestId, response -> {
+                if (response.terminal()) finishRemoteRequest(requestId);
                 post(() -> {
                     if (!response.success()) {
                         mFailedFiles.add(file);
@@ -467,7 +473,7 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
                         sendNext();
                         return;
                     }
-                    if ("上传完成".equals(response.message())) {
+                    if (response.terminal()) {
                         mIndex++;
                         sendNext();
                     }
@@ -482,5 +488,22 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
                     List.of(file)
             ));
         }
+    }
+
+    private int beginRemoteRequest() {
+        int requestId = RemoteGraphClientState.nextRequestId();
+        mRemoteRequestIds.add(requestId);
+        return requestId;
+    }
+
+    private void finishRemoteRequest(int requestId) {
+        mRemoteRequestIds.remove(requestId);
+    }
+
+    private void cancelRemoteRequests() {
+        for (int requestId : mRemoteRequestIds) {
+            RemoteGraphClientState.cancel(requestId);
+        }
+        mRemoteRequestIds.clear();
     }
 }

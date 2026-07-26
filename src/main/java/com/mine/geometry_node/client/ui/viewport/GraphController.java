@@ -213,6 +213,13 @@ public class GraphController {
                     }
                 }
             }
+            for (String otherExecPort : new ArrayList<>(otherNode.execOutputs.keySet())) {
+                Connection link = otherNode.execOutputs.get(otherExecPort);
+                if (link != null && link.targetNodeId().equals(nodeId)
+                        && !validInputs.contains(link.targetPortName())) {
+                    removeExecutionConnection(otherNode.id, otherExecPort);
+                }
+            }
         }
 
         // 8. 通知 viewport 重新构建该节点的 UI
@@ -419,6 +426,20 @@ public class GraphController {
                             }
                         });
                     }
+                }
+            }
+            for (Map.Entry<String, Connection> entry : otherNode.execOutputs.entrySet()) {
+                String outPort = entry.getKey();
+                Connection link = entry.getValue();
+                if (link.targetNodeId().equals(targetNodeId) && link.targetPortName().endsWith(oldSuffix)) {
+                    connectionUpdates.add(() -> {
+                        removeExecutionConnection(otherNode.id, outPort);
+                        if (newSuffix != null) {
+                            String newPortName = link.targetPortName().substring(
+                                    0, link.targetPortName().length() - oldSuffix.length()) + newSuffix;
+                            addExecutionConnection(otherNode.id, outPort, targetNodeId, newPortName);
+                        }
+                    });
                 }
             }
         }

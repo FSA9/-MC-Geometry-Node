@@ -385,7 +385,7 @@ public class NetworkHandler {
     private static void handleRemoteGraphUpload(PacketRemoteGraphUploadRequest payload, ServerPlayer player) {
         if (!RemoteGraphPermissions.canUploadGraphs(player)) {
             sendToPlayer(player, new PacketRemoteGraphUploadResponse(
-                    payload.requestId(), payload.preflightOnly(), false, 0, payload.files().size(),
+                    payload.requestId(), payload.preflightOnly(), false, true, 0, payload.files().size(),
                     "没有上传服务器图纸的权限。", Collections.emptyList()));
             return;
         }
@@ -398,7 +398,8 @@ public class NetworkHandler {
             List<RemoteGraphConflict> conflicts = RemoteGraphFileService.findUploadConflicts(player.level().getServer(), targetPaths);
             if (payload.preflightOnly()) {
                 sendToPlayer(player, new PacketRemoteGraphUploadResponse(
-                        payload.requestId(), true, conflicts.isEmpty(), 0, payload.files().size(), "", conflicts));
+                        payload.requestId(), true, conflicts.isEmpty(), true,
+                        0, payload.files().size(), "", conflicts));
                 return;
             }
             Set<String> allowedOverwritePaths = new HashSet<>(payload.overwritePaths());
@@ -411,7 +412,8 @@ public class NetworkHandler {
                 }
                 if (!blockingConflicts.isEmpty()) {
                     sendToPlayer(player, new PacketRemoteGraphUploadResponse(
-                            payload.requestId(), false, false, 0, payload.files().size(), "目标存在冲突。", blockingConflicts));
+                            payload.requestId(), false, false, true,
+                            0, payload.files().size(), "目标存在冲突。", blockingConflicts));
                     return;
                 }
             }
@@ -426,20 +428,24 @@ public class NetworkHandler {
                 );
                 processed++;
                 sendToPlayer(player, new PacketRemoteGraphUploadResponse(
-                        payload.requestId(), false, true, processed, total, "上传中", Collections.emptyList()));
+                        payload.requestId(), false, true, false,
+                        processed, total, "上传中", Collections.emptyList()));
             }
             sendToPlayer(player, new PacketRemoteGraphUploadResponse(
-                    payload.requestId(), false, true, processed, total, "上传完成", Collections.emptyList()));
+                    payload.requestId(), false, true, true,
+                    processed, total, "上传完成", Collections.emptyList()));
         } catch (Exception e) {
             sendToPlayer(player, new PacketRemoteGraphUploadResponse(
-                    payload.requestId(), false, false, 0, payload.files().size(), "上传失败: " + e.getMessage(), Collections.emptyList()));
+                    payload.requestId(), false, false, true,
+                    0, payload.files().size(), "上传失败: " + e.getMessage(), Collections.emptyList()));
         }
     }
 
     private static void handleRemoteGraphDownload(PacketRemoteGraphDownloadRequest payload, ServerPlayer player) {
         if (!RemoteGraphPermissions.canDownloadGraphs(player)) {
             sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
-                    payload.requestId(), false, 0, payload.paths().size(), "没有下载服务器图纸的权限。", Collections.emptyList()));
+                    payload.requestId(), false, true,
+                    0, payload.paths().size(), "没有下载服务器图纸的权限。", Collections.emptyList()));
             return;
         }
 
@@ -454,13 +460,14 @@ public class NetworkHandler {
                 );
                 processed++;
                 sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
-                        payload.requestId(), true, processed, total, "下载中", List.of(downloaded)));
+                        payload.requestId(), true, false, processed, total, "下载中", List.of(downloaded)));
             }
             sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
-                    payload.requestId(), true, processed, total, "下载完成", Collections.emptyList()));
+                    payload.requestId(), true, true, processed, total, "下载完成", Collections.emptyList()));
         } catch (Exception e) {
             sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
-                    payload.requestId(), false, 0, payload.paths().size(), "下载失败: " + e.getMessage(), Collections.emptyList()));
+                    payload.requestId(), false, true,
+                    0, payload.paths().size(), "下载失败: " + e.getMessage(), Collections.emptyList()));
         }
     }
 

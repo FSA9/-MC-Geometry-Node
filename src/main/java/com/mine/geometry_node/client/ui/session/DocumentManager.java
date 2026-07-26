@@ -91,8 +91,8 @@ public class DocumentManager {
         }
     }
 
-    public void saveSession(GraphSession session) {
-        if (session == null) return;
+    public boolean saveSession(GraphSession session) {
+        if (session == null) return false;
         try {
             // 1. 序列化当前图纸
             String json = GraphJsonIO.toJson(session.editorContext.getGraph());
@@ -107,9 +107,11 @@ public class DocumentManager {
             notifyTabChanged();
 
             System.out.println("[DocumentManager] Save Success: " + session.fileId);
+            return true;
         } catch (Exception e) {
             System.err.println("[DocumentManager] Save Failed: " + e.getMessage());
             e.printStackTrace();
+            return false;
         }
     }
 

@@ -24,7 +24,9 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
 import java.nio.file.Files;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
@@ -57,6 +59,7 @@ public class ViewportPanel extends LinearLayout {
     private final float mTouchSlop;
     private final Runnable mTabChangedListener = () -> post(this::refreshTabs);
     private final AssetDragDropRegistry.DropTarget mDropTarget = this::acceptAssetDrop;
+    private final Set<Integer> mRemoteRequestIds = new HashSet<>();
     private GraphSession mSelectedSession;
     private long mObservedOpenSessionSerial = -1L;
     private boolean mManualSessionSelection;
@@ -158,15 +161,20 @@ public class ViewportPanel extends LinearLayout {
 
         if (entry.sourceKind() == AssetSourceKind.REMOTE && RemoteGraphClientState.canDownload()) {
             int requestId = RemoteGraphClientState.nextRequestId();
-            RemoteGraphClientState.onDownload(requestId, response -> post(() -> {
-                if (!response.success()) {
-                    System.err.println("[ViewportPanel] Remote graph import failed: " + response.message());
-                    return;
-                }
-                if (response.files().isEmpty()) return;
-                if (!isReadyForImport(targetSession)) return;
-                mViewport.getController().executeImportGraphJson(response.files().get(0).jsonContent(), viewportX, viewportY);
-            }));
+            mRemoteRequestIds.add(requestId);
+            RemoteGraphClientState.onDownload(requestId, response -> {
+                if (response.terminal()) mRemoteRequestIds.remove(requestId);
+                post(() -> {
+                    if (!response.success()) {
+                        System.err.println("[ViewportPanel] Remote graph import failed: " + response.message());
+                        return;
+                    }
+                    if (response.files().isEmpty()) return;
+                    if (!isReadyForImport(targetSession)) return;
+                    mViewport.getController().executeImportGraphJson(
+                            response.files().get(0).jsonContent(), viewportX, viewportY);
+                });
+            });
             NetworkHandler.sendToServer(new PacketRemoteGraphDownloadRequest(requestId, List.of(entry.path())));
         }
     }
@@ -229,8 +237,9 @@ public class ViewportPanel extends LinearLayout {
         int padClose = dp2pxInt(PADDING_CLOSE);
         closeBtn.setPadding(padClose, 0, padClose, 0);
         closeBtn.setOnClickListener(v -> {
-            DocumentManager.INSTANCE.saveSession(session);
-            v.post(() -> docMgr.closeSession(session));
+            if (DocumentManager.INSTANCE.saveSession(session)) {
+                v.post(() -> docMgr.closeSession(session));
+            }
         });
         contentArea.addView(closeBtn);
 
@@ -347,6 +356,10 @@ public class ViewportPanel extends LinearLayout {
         }
         DocumentManager.INSTANCE.removeOnTabChangedListener(mTabChangedListener);
         AssetDragDropRegistry.unregisterDropTarget(mDropTarget);
+        for (int requestId : mRemoteRequestIds) {
+            RemoteGraphClientState.cancel(requestId);
+        }
+        mRemoteRequestIds.clear();
         mCallbacksRegistered = false;
     }
 

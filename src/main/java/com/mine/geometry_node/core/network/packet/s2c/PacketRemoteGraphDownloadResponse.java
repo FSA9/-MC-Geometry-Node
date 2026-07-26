@@ -12,6 +12,7 @@ import java.util.List;
 public record PacketRemoteGraphDownloadResponse(
         int requestId,
         boolean success,
+        boolean terminal,
         int processed,
         int total,
         String message,
@@ -26,12 +27,14 @@ public record PacketRemoteGraphDownloadResponse(
     );
 
     public PacketRemoteGraphDownloadResponse(RegistryFriendlyByteBuf buf) {
-        this(buf.readInt(), buf.readBoolean(), buf.readInt(), buf.readInt(), buf.readUtf(32767), readFiles(buf));
+        this(buf.readInt(), buf.readBoolean(), buf.readBoolean(),
+                buf.readInt(), buf.readInt(), buf.readUtf(32767), readFiles(buf));
     }
 
     public void write(RegistryFriendlyByteBuf buf) {
         buf.writeInt(requestId);
         buf.writeBoolean(success);
+        buf.writeBoolean(terminal);
         buf.writeInt(processed);
         buf.writeInt(total);
         buf.writeUtf(message, 32767);

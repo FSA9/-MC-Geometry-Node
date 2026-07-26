@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaSlotRefPicker;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaInventoryPicker;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.value.SlotRef;
@@ -30,7 +30,7 @@ public class SlotRefHintRenderer implements UIHintRenderer {
         Object value = UIHintValueBinder.getValue(nodeData, row.leftPort());
         SlotRef slotRef = SlotRef.from(value);
         SlotButton button = new SlotButton(context, slotRef != null ? slotRef : SlotRef.DEFAULT);
-        button.setOnClickListener(v -> VanillaSlotRefPicker.open(selected -> {
+        button.setOnClickListener(v -> VanillaInventoryPicker.openSlotRef(selected -> {
             button.setSlotRef(selected);
             UIHintValueBinder.commit(editorContext, nodeData, portId, selected.serialize());
         }, button::requestFocus));

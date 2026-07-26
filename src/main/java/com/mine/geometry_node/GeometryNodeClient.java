@@ -7,6 +7,7 @@ import com.mine.geometry_node.client.render.debug.AreaDebugRenderer;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
 import com.mine.geometry_node.core.command.registry.ModClientCommands;
 import icyllis.modernui.mc.ModernUIMod;
 import net.minecraft.client.Minecraft;
@@ -17,6 +18,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -37,6 +39,7 @@ public class GeometryNodeClient {
         // 监听世界渲染
         NeoForge.EVENT_BUS.addListener(this::onRenderLevelStage);
         NeoForge.EVENT_BUS.addListener(this::onSubmitCustomGeometry);
+        NeoForge.EVENT_BUS.addListener(this::onClientLoggingOut);
 
         // 渲染注册
         ClientVisualManager.init();
@@ -70,6 +73,10 @@ public class GeometryNodeClient {
     private void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
         ClientVisualManager.renderWorld(event.getPoseStack(), event.getSubmitNodeCollector());
         SchematicProjectionRenderer.submitFeatures(event.getPoseStack(), event.getSubmitNodeCollector(), event.getLevelRenderState());
+    }
+
+    private void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        RemoteGraphClientState.reset();
     }
 
     @SubscribeEvent

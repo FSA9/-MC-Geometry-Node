@@ -261,14 +261,19 @@ public final class LocalAssetService {
             return new RenameResult(source, source, false);
         }
 
-        File destination = new File(parent, newName);
-        if (destination.exists()) {
+        Path parentPath = parent.toPath().toAbsolutePath().normalize();
+        Path destinationPath = parentPath.resolve(newName).normalize();
+        if (!parentPath.equals(destinationPath.getParent())) {
+            throw new IllegalArgumentException("newName must stay within the source directory");
+        }
+        File destination = destinationPath.toFile();
+        if (Files.exists(destinationPath)) {
             return new RenameResult(source, source, false);
         }
 
         context.progress("重命名 " + displayName(source), 0, 1);
         context.checkCancelled();
-        Files.move(source.toPath(), destination.toPath());
+        Files.move(source.toPath(), destinationPath);
         context.progress("重命名中", 1, 1);
         return new RenameResult(source, destination, true);
     }
@@ -441,8 +446,12 @@ public final class LocalAssetService {
     }
 
     private static void validateSourceName(String sourceName) {
-        if (sourceName == null || sourceName.isEmpty()) {
-            throw new IllegalArgumentException("sourceName must not be empty");
+        if (sourceName == null || sourceName.isBlank()) {
+            throw new IllegalArgumentException("sourceName must not be blank");
+        }
+        if (sourceName.equals(".") || sourceName.equals("..")
+                || sourceName.indexOf('/') >= 0 || sourceName.indexOf('\\') >= 0) {
+            throw new IllegalArgumentException("sourceName must be a single file name");
         }
     }
 

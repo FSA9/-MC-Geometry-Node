@@ -124,8 +124,12 @@ public class ConsoleCommandRegistry {
 
         CmdConnect cmd = new CmdConnect(session.editorContext.getGraphController(),
                 session.editorContext.getCurrentGraph(), outId, outPort, inId, inPort);
-        session.editorContext.getCommandManager().execute(cmd);
-
-        logger.onLog(String.format("[Success] 连线成功 | %s[%s] -> %s[%s]", outId, outPort, inId, inPort), 0xFF00AAFF);
+        if (session.editorContext.getCommandManager().execute(cmd)) {
+            logger.onLog(String.format("[Success] 连线成功 | %s[%s] -> %s[%s]",
+                    outId, outPort, inId, inPort), 0xFF00AAFF);
+        } else {
+            logger.onLog(String.format("[Error] 连线失败: 端口不存在或类型不兼容 | %s[%s] -> %s[%s]",
+                    outId, outPort, inId, inPort), 0xFFFF4444);
+        }
     }
 }

@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.utils.ItemTooltipProxy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ItemStackTooltipOverlay;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaInventoryItemPicker;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaInventoryPicker;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
@@ -255,7 +255,7 @@ public class UIItemSlot extends FrameLayout {
         ItemTooltipProxy.clearTooltipTask();
         ItemStackTooltipOverlay.hide();
 
-        VanillaInventoryItemPicker.open(pickedStack -> {
+        VanillaInventoryPicker.openItem(pickedStack -> {
             if (mEditorContext == null || mc.level == null) {
                 return;
             }

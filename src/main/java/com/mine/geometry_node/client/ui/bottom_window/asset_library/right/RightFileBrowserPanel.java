@@ -353,6 +353,8 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     public void deactivatePanel() {
         mKeyManager.dispose();
+        cancelRemoteListRequest();
+        mActionController.cancelRemoteRequests();
     }
 
     @Override
@@ -548,6 +550,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void refreshRemoteFileList(boolean createIfMissing) {
         cancelLocalLoad();
+        cancelRemoteListRequest();
         renderEntries(AssetEntryLoader.Result.empty());
         int requestId = RemoteGraphClientState.nextRequestId();
         mActiveRemoteListRequestId = requestId;
@@ -555,6 +558,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         RemoteGraphClientState.onList(requestId, response -> {
             post(() -> {
                 if (mSourceKind != AssetSourceKind.REMOTE || requestId != mActiveRemoteListRequestId) return;
+                mActiveRemoteListRequestId = 0;
                 if (!response.success()) {
                     renderEntries(AssetEntryLoader.Result.empty());
                     return;
@@ -580,6 +584,12 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             });
         });
         NetworkHandler.sendToServer(new PacketRemoteGraphListRequest(requestId, requestedDirectory, createIfMissing));
+    }
+
+    private void cancelRemoteListRequest() {
+        if (mActiveRemoteListRequestId == 0) return;
+        RemoteGraphClientState.cancel(mActiveRemoteListRequestId);
+        mActiveRemoteListRequestId = 0;
     }
 
     private void cancelLocalLoad() {
