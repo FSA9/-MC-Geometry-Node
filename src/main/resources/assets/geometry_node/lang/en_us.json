@@ -161,6 +161,7 @@
   "geometry_node.node.resolve_dialogue_text": "Resolve Dialogue Text",
   "geometry_node.node.format_dialogue_text": "Format Dialogue Text",
   "geometry_node.node.string_expression": "String Expression",
+  "geometry_node.node.path_selection": "Path Selection",
   "geometry_node.node.contain": "Contain",
   "geometry_node.node.equal": "Equal",
   "geometry_node.node.has_tag": "Has Tag",

@@ -77,6 +77,14 @@ public class GeometryNodeClient {
 
     private void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         RemoteGraphClientState.reset();
+        clearClientRenderState();
+    }
+
+    private static void clearClientRenderState() {
+        ClientVisualManager.clear();
+        AreaDebugRenderer.clear();
+        GeometryDebugRenderer.clear();
+        SchematicProjectionRenderer.clear();
     }
 
     @SubscribeEvent

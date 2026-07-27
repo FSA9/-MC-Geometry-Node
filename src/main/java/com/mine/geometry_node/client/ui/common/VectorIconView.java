@@ -11,10 +11,7 @@ public class VectorIconView extends View {
     public enum Kind {
         FOLDER,
         FILE,
-        TERMINAL,
-        CHART,
         CLOUD,
-        NODE_GRAPH,
         SPLIT_HORIZONTAL,
         SPLIT_VERTICAL,
         CLOSE
@@ -68,10 +65,7 @@ public class VectorIconView extends View {
         switch (mKind) {
             case FOLDER -> drawFolder(canvas, cx, cy, half);
             case FILE -> drawFile(canvas, cx, cy, half);
-            case TERMINAL -> drawTerminal(canvas, cx, cy, half);
-            case CHART -> drawChart(canvas, cx, cy, half);
             case CLOUD -> drawCloud(canvas, cx, cy, half);
-            case NODE_GRAPH -> drawNodeGraph(canvas, cx, cy, half);
             case SPLIT_HORIZONTAL -> drawSplitHorizontal(canvas, cx, cy, half);
             case SPLIT_VERTICAL -> drawSplitVertical(canvas, cx, cy, half);
             case CLOSE -> drawClose(canvas, cx, cy, half);
@@ -126,52 +120,6 @@ public class VectorIconView extends View {
         canvas.drawLine(lineLeft, cy + half * 0.22f, lineRight * 0.9f + lineLeft * 0.1f, cy + half * 0.22f, mPaint);
     }
 
-    private void drawTerminal(Canvas canvas, float cx, float cy, float half) {
-        float left = cx - half;
-        float top = cy - half * 0.68f;
-        float right = cx + half;
-        float bottom = cy + half * 0.68f;
-        float radius = Math.max(2.0f, half * 0.14f);
-
-        mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(Math.max(1.5f, half * 0.11f));
-        mRect.set(left, top, right, bottom);
-        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
-
-        float promptLeft = left + half * 0.28f;
-        float promptY = cy;
-        canvas.drawLine(promptLeft, promptY - half * 0.28f, promptLeft + half * 0.28f, promptY, mPaint);
-        canvas.drawLine(promptLeft, promptY + half * 0.28f, promptLeft + half * 0.28f, promptY, mPaint);
-        canvas.drawLine(cx + half * 0.04f, cy + half * 0.28f, right - half * 0.22f, cy + half * 0.28f, mPaint);
-    }
-
-    private void drawChart(Canvas canvas, float cx, float cy, float half) {
-        float left = cx - half * 0.85f;
-        float bottom = cy + half * 0.72f;
-        float right = cx + half * 0.88f;
-        float top = cy - half * 0.78f;
-
-        mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(Math.max(1.2f, half * 0.09f));
-        mPaint.setAlpha(170);
-        canvas.drawLine(left, top, left, bottom, mPaint);
-        canvas.drawLine(left, bottom, right, bottom, mPaint);
-
-        mPaint.setAlpha(255);
-        mPaint.setStrokeWidth(Math.max(1.8f, half * 0.13f));
-        float x1 = left + half * 0.2f;
-        float y1 = bottom - half * 0.22f;
-        float x2 = left + half * 0.62f;
-        float y2 = bottom - half * 0.58f;
-        float x3 = left + half * 1.0f;
-        float y3 = bottom - half * 0.38f;
-        float x4 = right - half * 0.12f;
-        float y4 = top + half * 0.18f;
-        canvas.drawLine(x1, y1, x2, y2, mPaint);
-        canvas.drawLine(x2, y2, x3, y3, mPaint);
-        canvas.drawLine(x3, y3, x4, y4, mPaint);
-    }
-
     private void drawCloud(Canvas canvas, float cx, float cy, float half) {
         mPaint.setStyle(Paint.Style.FILL);
         canvas.drawCircle(cx - half * 0.42f, cy + half * 0.12f, half * 0.34f, mPaint);
@@ -179,33 +127,6 @@ public class VectorIconView extends View {
         canvas.drawCircle(cx + half * 0.38f, cy + half * 0.12f, half * 0.34f, mPaint);
         mRect.set(cx - half * 0.65f, cy + half * 0.04f, cx + half * 0.68f, cy + half * 0.44f);
         canvas.drawRoundRect(mRect, half * 0.18f, half * 0.18f, half * 0.18f, half * 0.18f, mPaint);
-    }
-
-    private void drawNodeGraph(Canvas canvas, float cx, float cy, float half) {
-        float nodeW = half * 0.58f;
-        float nodeH = half * 0.42f;
-        float radius = Math.max(2.0f, half * 0.12f);
-        float stroke = Math.max(1.2f, half * 0.09f);
-
-        float leftX = cx - half * 0.72f;
-        float rightX = cx + half * 0.48f;
-        float topY = cy - half * 0.42f;
-        float bottomY = cy + half * 0.34f;
-
-        mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(stroke);
-        mPaint.setAlpha(180);
-        canvas.drawLine(leftX + nodeW * 0.5f, topY + nodeH, cx + half * 0.08f, cy, mPaint);
-        canvas.drawLine(cx + half * 0.08f, cy, rightX, bottomY + nodeH * 0.5f, mPaint);
-
-        mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setAlpha(255);
-        mRect.set(leftX - nodeW * 0.5f, topY, leftX + nodeW * 0.5f, topY + nodeH);
-        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
-        mRect.set(cx - nodeW * 0.35f, cy - nodeH * 0.5f, cx + nodeW * 0.35f, cy + nodeH * 0.5f);
-        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
-        mRect.set(rightX, bottomY, rightX + nodeW, bottomY + nodeH);
-        canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
     }
 
     private void drawSplitHorizontal(Canvas canvas, float cx, float cy, float half) {

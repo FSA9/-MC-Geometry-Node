@@ -60,6 +60,11 @@ public class ClientVisualManager {
         }
     }
 
+    public static void clear() {
+        PENDING_ADDITIONS.clear();
+        ACTIVE_EFFECTS.clear();
+    }
+
     public static void renderWorld(PoseStack poseStack, SubmitNodeCollector submitNodeCollector) {
         if (ACTIVE_EFFECTS.isEmpty()) return;
 

@@ -43,7 +43,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         setBackground(AreaStyle.rounded(AreaStyle.COLOR_PANE, AreaStyle.PANE_RADIUS_DP, 1, AreaStyle.COLOR_PANE_BORDER));
 
         LinearLayout header = createHeader(context);
-        mEditorSelector = new AreaIconButton(context, node.editorType().iconKind(), "选择窗口类型", this);
+        mEditorSelector = new AreaIconButton(context, node.editorType().icon(), "选择窗口类型", this);
         mEditorSelector.setOnClickListener(v -> toggleEditorMenu());
         header.addView(mEditorSelector, iconParams());
 
@@ -294,7 +294,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
 
     private void updateHeaderState() {
         AreaEditorType type = mNode.editorType();
-        mEditorSelector.setKind(type.iconKind());
+        mEditorSelector.setIcon(type.icon());
         updateTitle();
     }
 

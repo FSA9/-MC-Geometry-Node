@@ -1,9 +1,7 @@
 package com.mine.geometry_node.client.render.effects;
 
-import com.mine.geometry_node.client.render.RenderUtils;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -17,7 +15,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -153,34 +150,16 @@ public class RayBeamEffect extends AbstractVisualEffect {
 
         Vec3 endPos = startPos.add(dir.scale(this.currentHitDistance));
 
-        // 4. 纯几何渲染 (相对相机坐标)
         Vec3 startRel = startPos.subtract(camPos);
         Vec3 endRel = endPos.subtract(camPos);
-        Vec3 d = endRel.subtract(startRel);
 
-        if (d.lengthSqr() < 1e-5) return;
-        Vec3 normalizedDir = d.normalize();
-
-        Vec3 up = Math.abs(normalizedDir.y) > 0.99 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
-        Vec3 right = normalizedDir.cross(up).normalize().scale(radius);
-        Vec3 realUp = right.cross(normalizedDir).normalize().scale(radius);
-
-        Vec3 p1 = startRel.add(right).add(realUp);
-        Vec3 p2 = startRel.subtract(right).add(realUp);
-        Vec3 p3 = startRel.subtract(right).subtract(realUp);
-        Vec3 p4 = startRel.add(right).subtract(realUp);
-
-        Vec3 p5 = p1.add(d), p6 = p2.add(d), p7 = p3.add(d), p8 = p4.add(d);
-
-        VertexConsumer buffer = bufferSource.getBuffer(RenderTypes.lightning());
-        Matrix4f matrix = poseStack.last().pose();
-        float[] c = RenderUtils.unpackColor(color);
-
-        RenderUtils.drawQuad(buffer, matrix, p1, p5, p6, p2, (int)(c[0]*255), (int)(c[1]*255), (int)(c[2]*255), (int)(c[3]*255));
-        RenderUtils.drawQuad(buffer, matrix, p4, p3, p7, p8, (int)(c[0]*255), (int)(c[1]*255), (int)(c[2]*255), (int)(c[3]*255));
-        RenderUtils.drawQuad(buffer, matrix, p1, p4, p8, p5, (int)(c[0]*255), (int)(c[1]*255), (int)(c[2]*255), (int)(c[3]*255));
-        RenderUtils.drawQuad(buffer, matrix, p2, p6, p7, p3, (int)(c[0]*255), (int)(c[1]*255), (int)(c[2]*255), (int)(c[3]*255));
-        RenderUtils.drawQuad(buffer, matrix, p1, p2, p3, p4, (int)(c[0]*255), (int)(c[1]*255), (int)(c[2]*255), (int)(c[3]*255));
-        RenderUtils.drawQuad(buffer, matrix, p5, p8, p7, p6, (int)(c[0]*255), (int)(c[1]*255), (int)(c[2]*255), (int)(c[3]*255));
+        BeamGeometry.drawPrism(
+                bufferSource.getBuffer(RenderTypes.lightning()),
+                poseStack.last().pose(),
+                startRel,
+                endRel,
+                radius,
+                color
+        );
     }
 }

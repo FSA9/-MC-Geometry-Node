@@ -578,6 +578,7 @@
 
   "geometry_node.node.string_value": "字符串",
   "geometry_node.node.string_expression": "字符串表达式",
+  "geometry_node.node.path_selection": "路径选择",
   "geometry_node.node.int_value": "整数",
   "geometry_node.node.float_value": "浮点数",
   "geometry_node.node.bool_value": "布尔值",

@@ -313,6 +313,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // Data/Value
         registry.register("data/value", new StringValue());
         registry.register("data/value", new StringExpression());
+        registry.register("data/value", new PathSelection());
         registry.register("data/value", new IntValue());
         registry.register("data/value", new FloatValue());
         registry.register("data/value", new BoolValue());

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.area;
 
-import com.mine.geometry_node.client.ui.common.VectorIconView;
+import com.mine.geometry_node.client.ui.common.SvgIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
@@ -114,7 +114,7 @@ final class AreaEditorMenu extends FrameLayout {
                 ? AreaStyle.rounded(AreaStyle.COLOR_MENU_SELECTED, ROW_RADIUS_DP, 0, 0)
                 : null);
 
-        VectorIconView icon = new VectorIconView(context, type.iconKind(),
+        SvgIconView icon = new SvgIconView(context, type.icon(),
                 type == mCurrentType ? AreaStyle.COLOR_ICON_SELECTED : AreaStyle.COLOR_ICON);
         row.addView(icon, new LinearLayout.LayoutParams(
                 UIUtils.dp2pxInt(ICON_SIZE_DP),

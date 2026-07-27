@@ -137,10 +137,5 @@ public class ItemVisualEffect extends AbstractVisualEffect {
         );
 
         poseStack.popPose();
-
-        // 强制刷新缓冲区
-        if (bufferSource instanceof MultiBufferSource.BufferSource mainBuffer) {
-            mainBuffer.endBatch();
-        }
     }
 }

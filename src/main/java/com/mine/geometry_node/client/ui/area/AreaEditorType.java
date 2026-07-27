@@ -1,26 +1,26 @@
 package com.mine.geometry_node.client.ui.area;
 
-import com.mine.geometry_node.client.ui.common.VectorIconView;
+import com.mine.geometry_node.client.ui.common.SvgIconView;
 
 public enum AreaEditorType {
-    GRAPH_EDITOR("图编辑器", VectorIconView.Kind.NODE_GRAPH),
-    ASSET_BROWSER("资产浏览器", VectorIconView.Kind.FOLDER),
-    TERMINAL("终端", VectorIconView.Kind.TERMINAL),
-    PERFORMANCE("性能监视器", VectorIconView.Kind.CHART);
+    GRAPH_EDITOR("图编辑器", SvgIconView.Icon.GRAPH_EDITOR),
+    ASSET_BROWSER("资产浏览器", SvgIconView.Icon.ASSET_LIBRARY),
+    TERMINAL("终端", SvgIconView.Icon.TERMINAL),
+    PERFORMANCE("性能监视器", SvgIconView.Icon.PERFORMANCE);
 
     private final String mDisplayName;
-    private final VectorIconView.Kind mIconKind;
+    private final SvgIconView.Icon mIcon;
 
-    AreaEditorType(String displayName, VectorIconView.Kind iconKind) {
+    AreaEditorType(String displayName, SvgIconView.Icon icon) {
         mDisplayName = displayName;
-        mIconKind = iconKind;
+        mIcon = icon;
     }
 
     public String displayName() {
         return mDisplayName;
     }
 
-    public VectorIconView.Kind iconKind() {
-        return mIconKind;
+    public SvgIconView.Icon icon() {
+        return mIcon;
     }
 }
