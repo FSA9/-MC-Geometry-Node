@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.InlineActionButton;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.NumericInputSpec;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
@@ -12,16 +13,13 @@ import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.TextView;
 
 public class InputHintRenderer implements UIHintRenderer {
-    private static final float EXPAND_BUTTON_WIDTH = 16.0f;
     private static final float COLOR_SWATCH_WIDTH = 34.0f;
 
     @Override
@@ -86,7 +84,7 @@ public class InputHintRenderer implements UIHintRenderer {
 
         wrapper.addView(et, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f));
         wrapper.addView(createExpandButton(context, et, nodeData, portId, expectedType, editorContext, val),
-                new LinearLayout.LayoutParams(UIUtils.dp2pxInt(EXPAND_BUTTON_WIDTH), LinearLayout.LayoutParams.MATCH_PARENT));
+                new LinearLayout.LayoutParams(InlineActionButton.widthPx(), InlineActionButton.heightPx()));
         return wrapper;
     }
 
@@ -126,17 +124,7 @@ public class InputHintRenderer implements UIHintRenderer {
 
     private View createExpandButton(Context context, EditText input, NodeData nodeData, String portId, PortType expectedType,
                                     EditorContext editorContext, Object currentValue) {
-        TextView button = new TextView(context);
-        button.setText("...");
-        button.setGravity(Gravity.CENTER);
-        button.setTextColor(0xFFBFC7D5);
-        UIUtils.setLockedTextSize(button, UIConstants.Node.TEXT_SIZE_LABEL);
-
-        ShapeDrawable bg = new ShapeDrawable();
-        bg.setColor(0xFF30343B);
-        bg.setCornerRadius(UIUtils.dp2px(2.0f));
-        bg.setStroke(UIUtils.dp2pxInt(1), 0xFF424956);
-        button.setBackground(bg);
+        InlineActionButton button = new InlineActionButton(context, "...");
 
         button.setOnClickListener(v -> ExpandedTextInputOverlay.show(
                 context,

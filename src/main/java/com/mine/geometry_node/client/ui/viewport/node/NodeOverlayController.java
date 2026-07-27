@@ -7,6 +7,7 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveGroupVirtualPort;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.InlineActionButton;
 import com.mine.geometry_node.client.ui.viewport.node.comment.NodeCommentTextBuilder;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.HintRendererFactory;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIHintRenderer;
@@ -245,17 +246,13 @@ final class NodeOverlayController {
         View button = createDynamicButton(context, "-", false, portId, removeIndex);
         mRemoveButtons.put(portId, button);
 
-        float buttonWidth = 16.0f;
-        float buttonHeight = UIHintUtils.getStandardInputHeight();
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(buttonWidth), UIUtils.dp2pxInt(buttonHeight));
+        float buttonHeight = InlineActionButton.heightDp();
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(InlineActionButton.widthPx(), InlineActionButton.heightPx());
         lp.gravity = Gravity.TOP | Gravity.LEFT;
         lp.topMargin = UIUtils.dp2pxInt(currentY + (UIConstants.Node.ROW_HEIGHT - buttonHeight) / 2.0f);
-
-        if (row.leftPort() != null) {
-            lp.leftMargin = UIUtils.dp2pxInt(mNodeWidth - UIConstants.Node.LABEL_MARGIN_PORT - buttonWidth);
-        } else {
-            lp.leftMargin = UIUtils.dp2pxInt(UIConstants.Node.LABEL_MARGIN_PORT);
-        }
+        lp.leftMargin = row.leftPort() != null
+                ? InlineActionButton.rightColumnLeftPx(mNodeWidth)
+                : InlineActionButton.leftColumnLeftPx();
         mHost.addView(button, lp);
     }
 
@@ -280,17 +277,7 @@ final class NodeOverlayController {
     }
 
     private View createDynamicButton(Context context, String text, boolean isAdd, String refPortId, Integer removeIndex) {
-        TextView button = new TextView(context);
-        button.setText(text);
-        button.setGravity(Gravity.CENTER);
-        UIUtils.setLockedTextSize(button, UIConstants.Node.TEXT_SIZE_LABEL);
-        button.setTextColor(UIConstants.Node.CLR_DYNAMIC_BTN_FG);
-
-        ShapeDrawable bgDrawable = new ShapeDrawable();
-        bgDrawable.setColor(UIConstants.Node.CLR_DYNAMIC_BTN_BG);
-        bgDrawable.setCornerRadius(UIUtils.dp2px(2.0f));
-        bgDrawable.setStroke(UIUtils.dp2pxInt(1), UIConstants.Node.CLR_DYNAMIC_BTN_STROKE);
-        button.setBackground(bgDrawable);
+        InlineActionButton button = new InlineActionButton(context, text);
 
         button.setOnClickListener(v -> handleDynamicButtonClick(isAdd, refPortId, removeIndex));
         return button;
