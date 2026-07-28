@@ -25,19 +25,7 @@ public class MainUI extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container, DataSet savedInstanceState) {
         Context context = getContext();
 
-        // 密度初始化
-        float BASE_HEIGHT = 1080.0f;
-        float physicalHeight;
-
-        if ("true".equals(System.getProperty("gn.standalone"))) {
-            physicalHeight = 1080.0f;
-        } else {
-            physicalHeight = net.minecraft.client.Minecraft.getInstance().getWindow().getHeight();
-        }
-
-        UIConstants.mDensity = physicalHeight / BASE_HEIGHT;
-
-//        UIConstants.mDensity = context.getResources().getDisplayMetrics().density;
+        UIUtils.syncFixedDensity();
 
         FrameLayout rootFrame = new FrameLayout(context);
         LinearLayout rootLayout = createRootLayout(context);

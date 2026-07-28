@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays;
 
+import com.mine.geometry_node.client.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -39,23 +40,26 @@ import java.util.Map;
 import java.util.Set;
 
 public final class ShopEditorOverlay extends FrameLayout {
-    private static final int COLOR_DIM = 0x99000000;
-    private static final int COLOR_WINDOW = 0xFF20242C;
-    private static final int COLOR_PANEL = 0xFF272C35;
-    private static final int COLOR_PANEL_ALT = 0xFF1B1F26;
-    private static final int COLOR_FIELD = 0xFF12151B;
-    private static final int COLOR_BORDER = 0xFF3D4654;
-    private static final int COLOR_TEXT = 0xFFE8EDF6;
-    private static final int COLOR_MUTED = 0xFF9AA5B5;
-    private static final int COLOR_BUTTON = 0xFF384150;
-    private static final int COLOR_PRIMARY = 0xFF3D6EA8;
-    private static final int COLOR_DANGER = 0xFF7C3F46;
-    private static final int COLOR_ACCENT = 0xFFE0A84E;
+    private static final int COLOR_DIM = DialogueHudTheme.OVERLAY_DIM;
+    private static final int COLOR_WINDOW = DialogueHudTheme.PANEL;
+    private static final int COLOR_PANEL = DialogueHudTheme.SURFACE;
+    private static final int COLOR_PANEL_ALT = DialogueHudTheme.BUTTON_PRESSED;
+    private static final int COLOR_FIELD = DialogueHudTheme.withAlpha(DialogueHudTheme.PANEL, 0xFF);
+    private static final int COLOR_BORDER = DialogueHudTheme.DIVIDER;
+    private static final int COLOR_TEXT = DialogueHudTheme.TEXT_PRIMARY;
+    private static final int COLOR_MUTED = DialogueHudTheme.TEXT_MUTED;
+    private static final int COLOR_BUTTON = DialogueHudTheme.BUTTON;
+    private static final int COLOR_PRIMARY = DialogueHudTheme.ACCENT;
+    private static final int COLOR_DANGER = DialogueHudTheme.withAlpha(DialogueHudTheme.ERROR, 0xB8);
+    private static final int COLOR_ACCENT = DialogueHudTheme.ACCENT;
+    private static final int COLOR_FIELD_BORDER = DialogueHudTheme.withAlpha(DialogueHudTheme.TEXT_MUTED, 0x44);
+    private static final int COLOR_SELECTED = DialogueHudTheme.withAlpha(DialogueHudTheme.ACCENT, 0x30);
+    private static final int COLOR_DROP_HIGHLIGHT = DialogueHudTheme.withAlpha(DialogueHudTheme.ACCENT, 0x22);
 
     private static final int WINDOW_MARGIN_DP = 34;
     private static final int OFFER_MIN_HEIGHT_DP = 178;
     private static final int SLOT_SIZE_DP = 38;
-    private static final int MAX_SLOTS_PER_ROW = 6;
+    private static final int MAX_SLOTS_PER_ROW = 5;
     private static final int MENU_WIDTH_DP = 168;
 
     private static ShopEditorOverlay sOpenOverlay;
@@ -87,12 +91,13 @@ public final class ShopEditorOverlay extends FrameLayout {
 
         LinearLayout window = new LinearLayout(context);
         window.setOrientation(LinearLayout.VERTICAL);
-        window.setPadding(UIUtils.dp2pxInt(14), UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(14), UIUtils.dp2pxInt(14));
-        window.setBackground(rect(COLOR_WINDOW, 6.0f, 1, COLOR_BORDER));
+        window.setPadding(UIUtils.dp2pxInt(18), UIUtils.dp2pxInt(14), UIUtils.dp2pxInt(18), UIUtils.dp2pxInt(14));
+        window.setBackground(rect(COLOR_WINDOW, 3.0f, 1, COLOR_BORDER));
         window.setOnClickListener(v -> {
         });
 
-        window.addView(createHeader(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(38)));
+        window.addView(createHeader(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(44)));
+        window.addView(createDivider(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1)));
 
         ScrollView scrollView = new ScrollView(context);
         mOfferList = new LinearLayout(context);
@@ -100,7 +105,8 @@ public final class ShopEditorOverlay extends FrameLayout {
         scrollView.addView(mOfferList, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         window.addView(scrollView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
 
-        window.addView(createActions(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(40)));
+        window.addView(createDivider(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1)));
+        window.addView(createActions(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(42)));
 
         FrameLayout.LayoutParams windowLp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -188,6 +194,15 @@ public final class ShopEditorOverlay extends FrameLayout {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
+        View marker = new View(context);
+        marker.setBackground(rect(COLOR_ACCENT, 1.0f, 0, 0));
+        LinearLayout.LayoutParams markerLp = new LinearLayout.LayoutParams(
+                UIUtils.dp2pxInt(3),
+                UIUtils.dp2pxInt(26)
+        );
+        markerLp.rightMargin = UIUtils.dp2pxInt(11);
+        header.addView(marker, markerLp);
+
         TextView title = label(context, tr("geometry_node.shop.editor.title"), 15.0f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
@@ -200,13 +215,19 @@ public final class ShopEditorOverlay extends FrameLayout {
         LinearLayout actions = new LinearLayout(context);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        actions.setPadding(0, UIUtils.dp2pxInt(10), 0, 0);
+        actions.setPadding(0, UIUtils.dp2pxInt(8), 0, 0);
 
-        actions.addView(button(context, tr("geometry_node.common.cancel"), COLOR_BUTTON, v -> dismiss()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(82), UIUtils.dp2pxInt(30)));
+        actions.addView(button(context, tr("geometry_node.common.cancel"), COLOR_BUTTON, v -> dismiss()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(82), UIUtils.dp2pxInt(32)));
         TextView spacer = label(context, "", 1.0f, 0, Gravity.CENTER);
         actions.addView(spacer, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(10), 1));
-        actions.addView(button(context, tr("geometry_node.common.save"), COLOR_PRIMARY, v -> commit()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(90), UIUtils.dp2pxInt(30)));
+        actions.addView(button(context, tr("geometry_node.common.save"), COLOR_PRIMARY, v -> commit()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(90), UIUtils.dp2pxInt(32)));
         return actions;
+    }
+
+    private static View createDivider(Context context) {
+        View divider = new View(context);
+        divider.setBackground(rect(COLOR_BORDER, 0.0f, 0, 0));
+        return divider;
     }
 
     private void loadExistingData() {
@@ -689,7 +710,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         UIUtils.setLockedTextSize(input, 12.0f);
         input.setGravity(gravity);
         input.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
-        input.setBackground(rect(COLOR_FIELD, 3.0f, 1, 0xFF323A46));
+        input.setBackground(rect(COLOR_FIELD, 2.0f, 1, COLOR_FIELD_BORDER));
         return input;
     }
 
@@ -701,8 +722,19 @@ public final class ShopEditorOverlay extends FrameLayout {
 
     private static TextView button(Context context, String text, int color, View.OnClickListener listener) {
         TextView view = label(context, text, 12.5f, 0xFFFFFFFF, Gravity.CENTER);
-        view.setBackground(rect(color, 4.0f, 1, 0x553C4658));
+        view.setBackground(rect(color, 2.0f, 0, 0));
         view.setOnClickListener(listener);
+        int hoverColor = color == COLOR_PRIMARY
+                ? DialogueHudTheme.ACCENT_HOVER
+                : color == COLOR_DANGER ? DialogueHudTheme.ERROR : DialogueHudTheme.BUTTON_HOVER;
+        view.setOnHoverListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                v.setBackground(rect(hoverColor, 2.0f, 0, 0));
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                v.setBackground(rect(color, 2.0f, 0, 0));
+            }
+            return false;
+        });
         return view;
     }
 
@@ -793,7 +825,7 @@ public final class ShopEditorOverlay extends FrameLayout {
             root.setOrientation(LinearLayout.VERTICAL);
             root.setPadding(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(10), UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(12));
             root.setMinimumHeight(UIUtils.dp2pxInt(OFFER_MIN_HEIGHT_DP));
-            root.setBackground(rect(COLOR_PANEL, 5.0f, 1, COLOR_BORDER));
+            root.setBackground(rect(COLOR_PANEL, 2.0f, 1, COLOR_BORDER));
 
             LinearLayout headerRow = new LinearLayout(context);
             headerRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -953,7 +985,7 @@ public final class ShopEditorOverlay extends FrameLayout {
             this.label = label;
             this.onChanged = onChanged;
             this.conditionId = conditionId == null ? "" : conditionId;
-            this.view.setBackground(rect(COLOR_FIELD, 4.0f, 1, 0xFF303846));
+            this.view.setBackground(rect(COLOR_FIELD, 2.0f, 1, COLOR_FIELD_BORDER));
             this.view.setOnClickListener(v -> showConditionMenu(this));
             refreshLabel();
         }
@@ -983,10 +1015,10 @@ public final class ShopEditorOverlay extends FrameLayout {
     }
 
     private final class ConditionDropdownMenu extends FrameLayout {
-        private static final int COLOR_MENU_BG = 0xFF2B2B2B;
-        private static final int COLOR_MENU_BORDER = 0xFF151515;
-        private static final int COLOR_MENU_HOVER = 0xFF3A4652;
-        private static final int COLOR_MENU_TEXT = 0xFFCCCCCC;
+        private static final int COLOR_MENU_BG = DialogueHudTheme.PANEL;
+        private static final int COLOR_MENU_BORDER = DialogueHudTheme.DIVIDER;
+        private static final int COLOR_MENU_HOVER = DialogueHudTheme.BUTTON_HOVER;
+        private static final int COLOR_MENU_TEXT = DialogueHudTheme.TEXT_PRIMARY;
 
         private final LinearLayout panel;
 
@@ -997,7 +1029,7 @@ public final class ShopEditorOverlay extends FrameLayout {
             panel = new LinearLayout(context);
             panel.setOrientation(LinearLayout.VERTICAL);
             panel.setPadding(UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(6));
-            panel.setBackground(rect(COLOR_MENU_BG, 5.0f, 1, COLOR_MENU_BORDER));
+            panel.setBackground(rect(COLOR_MENU_BG, 3.0f, 1, COLOR_MENU_BORDER));
             panel.setOnClickListener(v -> {
             });
             addView(panel);
@@ -1034,17 +1066,17 @@ public final class ShopEditorOverlay extends FrameLayout {
         private void addOption(String labelText, String value, ConditionSelector selector) {
             TextView row = label(getContext(), labelText, 12.0f, COLOR_MENU_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
             row.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
-            row.setBackground(rect(value.equals(selector.conditionId()) ? 0xFF34485F : 0x00000000, 4.0f, 0, 0));
+            row.setBackground(rect(value.equals(selector.conditionId()) ? COLOR_SELECTED : 0x00000000, 2.0f, 0, 0));
             row.setOnClickListener(v -> {
                 selector.setConditionId(value);
                 closeConditionMenu();
             });
             row.setOnHoverListener((v, event) -> {
                 if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                    row.setBackground(rect(COLOR_MENU_HOVER, 4.0f, 0, 0));
+                    row.setBackground(rect(COLOR_MENU_HOVER, 2.0f, 0, 0));
                     row.setTextColor(0xFFFFFFFF);
                 } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                    row.setBackground(rect(value.equals(selector.conditionId()) ? 0xFF34485F : 0x00000000, 4.0f, 0, 0));
+                    row.setBackground(rect(value.equals(selector.conditionId()) ? COLOR_SELECTED : 0x00000000, 2.0f, 0, 0));
                     row.setTextColor(COLOR_MENU_TEXT);
                 }
                 return false;
@@ -1106,7 +1138,12 @@ public final class ShopEditorOverlay extends FrameLayout {
             this.checked = checked;
             view.setText(label);
             view.setTextColor(checked ? COLOR_TEXT : COLOR_MUTED);
-            view.setBackground(rect(checked ? COLOR_PRIMARY : COLOR_FIELD, 4.0f, 1, checked ? 0x665D95D6 : 0xFF303846));
+            view.setBackground(rect(
+                    checked ? DialogueHudTheme.ACCENT_PRESSED : COLOR_FIELD,
+                    2.0f,
+                    1,
+                    checked ? COLOR_ACCENT : COLOR_FIELD_BORDER
+            ));
         }
     }
 
@@ -1121,7 +1158,7 @@ public final class ShopEditorOverlay extends FrameLayout {
             root = new LinearLayout(context);
             root.setOrientation(LinearLayout.VERTICAL);
             root.setPadding(UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(8));
-            root.setBackground(rect(COLOR_PANEL_ALT, 4.0f, 1, 0xFF303846));
+            root.setBackground(rect(COLOR_PANEL_ALT, 2.0f, 1, COLOR_FIELD_BORDER));
 
             LinearLayout header = new LinearLayout(context);
             header.setOrientation(LinearLayout.HORIZONTAL);
@@ -1250,7 +1287,12 @@ public final class ShopEditorOverlay extends FrameLayout {
         }
 
         private void setDropHighlighted(boolean highlighted) {
-            root.setBackground(rect(highlighted ? 0xFF24384A : COLOR_PANEL_ALT, 4.0f, 1, highlighted ? COLOR_ACCENT : 0xFF303846));
+            root.setBackground(rect(
+                    highlighted ? COLOR_DROP_HIGHLIGHT : COLOR_PANEL_ALT,
+                    2.0f,
+                    1,
+                    highlighted ? COLOR_ACCENT : COLOR_FIELD_BORDER
+            ));
         }
 
         private int clampIndex(int index, int size) {
@@ -1331,17 +1373,18 @@ public final class ShopEditorOverlay extends FrameLayout {
             float w = getWidth();
             float h = getHeight();
             float stroke = UIUtils.dp2px(1.0f);
+            float radius = UIUtils.dp2px(2.0f);
             paint.setAntiAlias(true);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(COLOR_FIELD);
             rect.set(0, 0, w, h);
-            canvas.drawRoundRect(rect, UIUtils.dp2px(4.0f), UIUtils.dp2px(4.0f), UIUtils.dp2px(4.0f), UIUtils.dp2px(4.0f), paint);
+            canvas.drawRoundRect(rect, radius, radius, radius, radius, paint);
 
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(stroke);
             paint.setColor(stack.isEmpty() ? 0xFF4E5664 : COLOR_ACCENT);
             rect.set(stroke / 2.0f, stroke / 2.0f, w - stroke / 2.0f, h - stroke / 2.0f);
-            canvas.drawRoundRect(rect, UIUtils.dp2px(4.0f), UIUtils.dp2px(4.0f), UIUtils.dp2px(4.0f), UIUtils.dp2px(4.0f), paint);
+            canvas.drawRoundRect(rect, radius, radius, radius, radius, paint);
         }
 
         @Override
@@ -1405,11 +1448,11 @@ public final class ShopEditorOverlay extends FrameLayout {
     }
 
     private final class StackSlotMenu extends FrameLayout {
-        private static final int COLOR_MENU_BG = 0xFF2B2B2B;
-        private static final int COLOR_MENU_BORDER = 0xFF151515;
-        private static final int COLOR_MENU_HOVER = 0xFF3A4652;
-        private static final int COLOR_MENU_TEXT = 0xFFCCCCCC;
-        private static final int COLOR_SHORTCUT = 0xFF8B949E;
+        private static final int COLOR_MENU_BG = DialogueHudTheme.PANEL;
+        private static final int COLOR_MENU_BORDER = DialogueHudTheme.DIVIDER;
+        private static final int COLOR_MENU_HOVER = DialogueHudTheme.BUTTON_HOVER;
+        private static final int COLOR_MENU_TEXT = DialogueHudTheme.TEXT_PRIMARY;
+        private static final int COLOR_SHORTCUT = DialogueHudTheme.TEXT_MUTED;
 
         private final StackEntryView entry;
         private final LinearLayout panel;
@@ -1422,7 +1465,7 @@ public final class ShopEditorOverlay extends FrameLayout {
             panel = new LinearLayout(context);
             panel.setOrientation(LinearLayout.VERTICAL);
             panel.setPadding(UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(8));
-            panel.setBackground(rect(COLOR_MENU_BG, 5.0f, 1, COLOR_MENU_BORDER));
+            panel.setBackground(rect(COLOR_MENU_BG, 3.0f, 1, COLOR_MENU_BORDER));
             panel.setOnClickListener(v -> {
             });
             addView(panel);
@@ -1463,7 +1506,7 @@ public final class ShopEditorOverlay extends FrameLayout {
 
             row.setOnHoverListener((v, event) -> {
                 if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                    row.setBackground(rect(COLOR_MENU_HOVER, 4.0f, 0, 0));
+                    row.setBackground(rect(COLOR_MENU_HOVER, 2.0f, 0, 0));
                     label.setTextColor(0xFFFFFFFF);
                     shortcutView.setTextColor(0xFFFFFFFF);
                 } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
@@ -1512,7 +1555,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         private QuantityDialog(Context context, StackEntryView entry) {
             super(context);
             this.entry = entry;
-            setBackground(rect(0x66000000, 0.0f, 0, 0));
+            setBackground(rect(DialogueHudTheme.OVERLAY_DIM, 0.0f, 0, 0));
             setFocusable(true);
             setFocusableInTouchMode(true);
             setOnClickListener(v -> closeQuantityDialog());
@@ -1531,7 +1574,7 @@ public final class ShopEditorOverlay extends FrameLayout {
             LinearLayout panel = new LinearLayout(context);
             panel.setOrientation(LinearLayout.VERTICAL);
             panel.setPadding(UIUtils.dp2pxInt(14), UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(14), UIUtils.dp2pxInt(14));
-            panel.setBackground(rect(COLOR_WINDOW, 6.0f, 1, COLOR_BORDER));
+            panel.setBackground(rect(COLOR_WINDOW, 3.0f, 1, COLOR_BORDER));
             panel.setOnClickListener(v -> {
             });
 

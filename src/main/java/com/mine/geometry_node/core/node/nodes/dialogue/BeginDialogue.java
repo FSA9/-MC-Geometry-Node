@@ -13,7 +13,6 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
-import com.mine.geometry_node.core.node.value.RichTextValue;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -27,15 +26,11 @@ public class BeginDialogue extends BaseNode {
     public static final String PLAYER = StandardPorts.PLAYER.getId();
     public static final String SPEAKER_ENTITY = StandardPorts.SPEAKER_ENTITY.getId();
     public static final String TARGET_ENTITY = StandardPorts.TARGET_ENTITY.getId();
-    public static final String SPEAKER = StandardPorts.SPEAKER.getId();
     public static final String STYLE_ID = StandardPorts.STYLE_ID.getId();
     public static final String GRAPH_ID = StandardPorts.GRAPH_ID.getId();
     public static final String ENTRY_ID = StandardPorts.ENTRY_ID.getId();
-    public static final String MAX_DISTANCE = "max_distance";
     public static final String ALLOW_MULTI_PLAYER = "allow_multi_player";
     public static final String TIMEOUT_SECONDS = "timeout_seconds";
-    public static final String BUSY_TEXT = "busy_text";
-    private static final String DEFAULT_BUSY_TEXT = "This dialogue is currently busy.";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -44,7 +39,6 @@ public class BeginDialogue extends BaseNode {
                 .addRow(new PortRow(StandardPorts.PLAYER.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.SPEAKER_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.TARGET_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.SPEAKER.toInput(""), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.STYLE_ID.toInput("default"),
                         null,
@@ -54,10 +48,8 @@ public class BeginDialogue extends BaseNode {
                 ))
                 .addRow(new PortRow(StandardPorts.GRAPH_ID.toInput(""), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTRY_ID.toInput("root"), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(PortDef.create(MAX_DISTANCE, "geometry_node.port.max_distance", PortType.FLOAT, 0.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(PortDef.create(ALLOW_MULTI_PLAYER, "geometry_node.port.allow_multi_player", PortType.BOOLEAN, true), null, UIHint.CHECKBOX, null, null))
                 .addRow(new PortRow(PortDef.create(TIMEOUT_SECONDS, "geometry_node.port.timeout_seconds", PortType.INTEGER, 0), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(PortDef.create(BUSY_TEXT, "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.plain(DEFAULT_BUSY_TEXT)), null, UIHint.INPUT, null, null))
                 .build();
     }
 
@@ -66,22 +58,18 @@ public class BeginDialogue extends BaseNode {
         ServerPlayer player = resolvePlayer(context);
         Entity speakerEntity = resolveSpeakerEntity(context);
         Entity targetEntity = resolveTargetEntity(context, speakerEntity);
-        String speaker = resolveSpeaker(context, speakerEntity);
         String styleId = stringOrDefault(getInput(context, STYLE_ID, String.class), "default");
         String graphId = stringOrDefault(getInput(context, GRAPH_ID, String.class), context.getGraphId());
         String entryId = stringOrDefault(getInput(context, ENTRY_ID, String.class), "root");
         DialogueSessionPolicy policy = new DialogueSessionPolicy(
-                floatOrDefault(getInput(context, MAX_DISTANCE, Float.class), 0.0f),
                 boolOrDefault(getInput(context, ALLOW_MULTI_PLAYER, Boolean.class), true),
-                intOrDefault(getInput(context, TIMEOUT_SECONDS, Integer.class), 0),
-                richTextOrDefault(context, BUSY_TEXT, DEFAULT_BUSY_TEXT)
+                intOrDefault(getInput(context, TIMEOUT_SECONDS, Integer.class), 0)
         );
 
         context.setTempData(DialogueContext.TEMP_KEY, new DialogueContext(
                 player,
                 speakerEntity,
                 targetEntity,
-                speaker,
                 styleId,
                 graphId,
                 entryId,
@@ -141,34 +129,11 @@ public class BeginDialogue extends BaseNode {
         return context.getEntity();
     }
 
-    private String resolveSpeaker(ExecutionContext context, Entity speakerEntity) {
-        String explicit = getInput(context, SPEAKER, String.class);
-        if (explicit != null && !explicit.isBlank()) {
-            return explicit;
-        }
-        if (speakerEntity != null) {
-            return speakerEntity.getDisplayName().getString();
-        }
-        return "";
-    }
-
     private static String stringOrDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    private String richTextOrDefault(ExecutionContext context, String portName, String fallback) {
-        RichTextValue value = getInput(context, portName, RichTextValue.class);
-        if (value == null || value.plain().isBlank()) {
-            return RichTextValue.plain(fallback).toJsonString();
-        }
-        return value.toJsonString();
-    }
-
     private static boolean boolOrDefault(Boolean value, boolean fallback) {
-        return value == null ? fallback : value;
-    }
-
-    private static float floatOrDefault(Float value, float fallback) {
         return value == null ? fallback : value;
     }
 

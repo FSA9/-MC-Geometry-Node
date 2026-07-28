@@ -288,14 +288,24 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
         private final RectF rect = new RectF();
         private final Consumer<ItemStack> onPicked;
         private final boolean pickOnClick;
+        private final float visualScale;
         private MinecraftSurfaceView surfaceView;
         private ItemStack stack;
 
         public ItemStackView(Context context, ItemStack stack, Consumer<ItemStack> onPicked, boolean pickOnClick) {
+            this(context, stack, onPicked, pickOnClick, 1.0f);
+        }
+
+        public ItemStackView(Context context,
+                             ItemStack stack,
+                             Consumer<ItemStack> onPicked,
+                             boolean pickOnClick,
+                             float visualScale) {
             super(context);
             this.stack = stack == null ? ItemStack.EMPTY : stack;
             this.onPicked = onPicked;
             this.pickOnClick = pickOnClick;
+            this.visualScale = Math.max(0.1f, visualScale);
             setWillNotDraw(false);
             setClipChildren(false);
             setFocusable(false);
@@ -344,7 +354,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             float safeGuiScale = guiScale > 0.0 ? (float) guiScale : 1.0f;
             float slotGuiW = getWidth() / safeGuiScale;
             float slotGuiH = getHeight() / safeGuiScale;
-            float padding = UIUtils.dp2px(ITEM_PADDING_DP) / safeGuiScale;
+            float padding = UIUtils.dp2px(ITEM_PADDING_DP * visualScale) / safeGuiScale;
             float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - padding * 2.0f);
             float itemScale = contentSize / ITEM_SIZE_GUI;
             float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;
@@ -361,18 +371,19 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             super.onDraw(canvas);
             float w = getWidth();
             float h = getHeight();
-            float stroke = UIUtils.dp2px(1.0f);
+            float stroke = UIUtils.dp2px(visualScale);
+            float radius = UIUtils.dp2px(3.0f * visualScale);
             paint.setAntiAlias(true);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(COLOR_FIELD);
             rect.set(0, 0, w, h);
-            canvas.drawRoundRect(rect, UIUtils.dp2px(3.0f), UIUtils.dp2px(3.0f), UIUtils.dp2px(3.0f), UIUtils.dp2px(3.0f), paint);
+            canvas.drawRoundRect(rect, radius, radius, radius, radius, paint);
 
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(stroke);
             paint.setColor(stack.isEmpty() ? 0xFF4E5664 : COLOR_ACCENT);
             rect.set(stroke / 2.0f, stroke / 2.0f, w - stroke / 2.0f, h - stroke / 2.0f);
-            canvas.drawRoundRect(rect, UIUtils.dp2px(3.0f), UIUtils.dp2px(3.0f), UIUtils.dp2px(3.0f), UIUtils.dp2px(3.0f), paint);
+            canvas.drawRoundRect(rect, radius, radius, radius, radius, paint);
         }
 
         @Override

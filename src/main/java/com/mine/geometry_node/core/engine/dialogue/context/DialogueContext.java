@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.dialogue.context;
 
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionPolicy;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -20,30 +21,23 @@ public final class DialogueContext {
     private final UUID speakerEntityId;
     @Nullable
     private final UUID targetEntityId;
-    private final String speaker;
     private final String styleId;
     private final String graphId;
     private final String entryId;
     private final DialogueSessionPolicy policy;
 
-    public DialogueContext(@Nullable ServerPlayer player, @Nullable String speaker, String styleId) {
-        this(player, (UUID) null, null, speaker, styleId, "", "", DialogueSessionPolicy.DEFAULT);
-    }
-
     public DialogueContext(@Nullable ServerPlayer player,
                            @Nullable Entity speakerEntity,
                            @Nullable Entity targetEntity,
-                           @Nullable String speaker,
                            String styleId,
                            @Nullable String graphId,
                            @Nullable String entryId) {
-        this(player, speakerEntity, targetEntity, speaker, styleId, graphId, entryId, DialogueSessionPolicy.DEFAULT);
+        this(player, speakerEntity, targetEntity, styleId, graphId, entryId, DialogueSessionPolicy.DEFAULT);
     }
 
     public DialogueContext(@Nullable ServerPlayer player,
                            @Nullable Entity speakerEntity,
                            @Nullable Entity targetEntity,
-                           @Nullable String speaker,
                            String styleId,
                            @Nullable String graphId,
                            @Nullable String entryId,
@@ -51,7 +45,6 @@ public final class DialogueContext {
         this(player,
                 speakerEntity == null ? null : speakerEntity.getUUID(),
                 targetEntity == null ? null : targetEntity.getUUID(),
-                speaker,
                 styleId,
                 graphId,
                 entryId,
@@ -61,7 +54,6 @@ public final class DialogueContext {
     public DialogueContext(@Nullable ServerPlayer player,
                            @Nullable UUID speakerEntityId,
                            @Nullable UUID targetEntityId,
-                           @Nullable String speaker,
                            String styleId,
                            @Nullable String graphId,
                            @Nullable String entryId,
@@ -69,7 +61,6 @@ public final class DialogueContext {
         this.player = player;
         this.speakerEntityId = speakerEntityId;
         this.targetEntityId = targetEntityId;
-        this.speaker = speaker == null ? "" : speaker;
         this.styleId = styleId == null || styleId.isBlank() ? "default" : styleId;
         this.graphId = graphId == null ? "" : graphId;
         this.entryId = entryId == null || entryId.isBlank() ? "root" : entryId;
@@ -91,10 +82,6 @@ public final class DialogueContext {
         return targetEntityId;
     }
 
-    public String speaker() {
-        return speaker;
-    }
-
     public String styleId() {
         return styleId;
     }
@@ -114,6 +101,14 @@ public final class DialogueContext {
     @Nullable
     public Entity resolveSpeakerEntity(@Nullable ServerLevel level) {
         return resolveEntity(level, speakerEntityId);
+    }
+
+    public Component resolveSpeakerDisplayName() {
+        if (player == null) {
+            return Component.empty();
+        }
+        Entity speakerEntity = resolveSpeakerEntity(player.level());
+        return speakerEntity == null ? Component.empty() : speakerEntity.getDisplayName().copy();
     }
 
     @Nullable

@@ -3,17 +3,40 @@ package com.mine.geometry_node.core.engine.dialogue.payload;
 import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
- * Request emitted by a blueprint node when execution waits for a dialogue choice.
+ * Request emitted while graph execution waits for a dialogue page sequence.
+ * Only a choice on the final page resumes graph execution.
  */
 public record DialogueWaitRequest(
         DialogueContext context,
-        DialoguePagePayload page
+        List<DialoguePagePayload> pages
 ) implements ExternalWaitRequest {
+    private static final String CONTINUE_PAGE_PREFIX = "__continue_page_";
+
     public DialogueWaitRequest {
         Objects.requireNonNull(context, "context");
-        Objects.requireNonNull(page, "page");
+        pages = List.copyOf(Objects.requireNonNull(pages, "pages"));
+        if (pages.isEmpty()) {
+            throw new IllegalArgumentException("Dialogue wait request requires at least one page");
+        }
+    }
+
+    public DialogueWaitRequest(DialogueContext context, DialoguePagePayload page) {
+        this(context, List.of(Objects.requireNonNull(page, "page")));
+    }
+
+    public DialoguePagePayload page() {
+        return pages.get(0);
+    }
+
+    public static String continuePageChoiceId(int pageIndex) {
+        return CONTINUE_PAGE_PREFIX + Math.max(0, pageIndex);
+    }
+
+    public static boolean isContinuePageChoice(String choiceId) {
+        return choiceId != null && choiceId.startsWith(CONTINUE_PAGE_PREFIX);
     }
 }

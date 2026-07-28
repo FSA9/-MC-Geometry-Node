@@ -2,7 +2,6 @@ package com.mine.geometry_node.client.dialogue.ui;
 
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.dialogue.ModernDialogueText;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRichText;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
@@ -22,23 +21,24 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 
 /**
  * In-game RPG dialogue overlay rendered with ModernUI.
  */
 public class RpgDialogueFragment extends Fragment {
-    private static final int TEXT_MAIN = 0xFFF0EEE7;
-    private static final int TEXT_MUTED = 0xFF8F97A5;
-    private static final int TEXT_ACCENT = 0xFFD5B46A;
-    private static final int DIVIDER = 0x66D5B46A;
-    private static final int CHOICE_BG = 0x4011131A;
-    private static final int CHOICE_BG_DEFAULT = 0x4A20242D;
-    private static final int CHOICE_BG_HOVER = 0x66303845;
-    private static final int CHOICE_BG_PRESSED = 0x88424A58;
-    private static final int CHOICE_BG_DISABLED = 0x2511131A;
-    private static final int CHOICE_STROKE = 0x44D5B46A;
-    private static final int CHOICE_STROKE_HOVER = 0x88D5B46A;
-    private static final int CHOICE_STROKE_DISABLED = 0x288F97A5;
+    private static final int TEXT_MAIN = DialogueHudTheme.TEXT_PRIMARY;
+    private static final int TEXT_MUTED = DialogueHudTheme.TEXT_MUTED;
+    private static final int DIVIDER = DialogueHudTheme.DIVIDER;
+    private static final int CHOICE_BG = DialogueHudTheme.withAlpha(DialogueHudTheme.PANEL, 0x40);
+    private static final int CHOICE_BG_DEFAULT = DialogueHudTheme.withAlpha(DialogueHudTheme.BUTTON, 0x4A);
+    private static final int CHOICE_BG_HOVER = DialogueHudTheme.withAlpha(DialogueHudTheme.BUTTON_HOVER, 0x66);
+    private static final int CHOICE_BG_PRESSED = DialogueHudTheme.withAlpha(DialogueHudTheme.ACCENT_PRESSED, 0x88);
+    private static final int CHOICE_BG_DISABLED = DialogueHudTheme.withAlpha(DialogueHudTheme.PANEL, 0x25);
+    private static final int CHOICE_STROKE = DialogueHudTheme.withAlpha(DialogueHudTheme.ACCENT, 0x44);
+    private static final int CHOICE_STROKE_HOVER = DialogueHudTheme.withAlpha(DialogueHudTheme.ACCENT, 0x88);
+    private static final int CHOICE_STROKE_DISABLED = DialogueHudTheme.withAlpha(DialogueHudTheme.TEXT_MUTED, 0x28);
     private static final int PANEL_MIN_HEIGHT_DP = 142;
 
     private FrameLayout root;
@@ -49,7 +49,7 @@ public class RpgDialogueFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, DataSet savedInstanceState) {
         Context context = getContext();
-        UIConstants.mDensity = context.getResources().getDisplayMetrics().density;
+        UIUtils.syncFixedDensity();
 
         root = new FrameLayout(context);
         root.setOnClickListener(v -> {
@@ -128,10 +128,10 @@ public class RpgDialogueFragment extends Fragment {
         column.setGravity(Gravity.BOTTOM);
         column.setPadding(0, 0, dp(40), 0);
 
-        String speaker = packet.speaker() == null || packet.speaker().isBlank()
-                ? "Dialogue"
-                : ModernDialogueText.plain(packet.speaker());
-        TextView speakerView = label(speaker, 22.0f, TEXT_ACCENT, Gravity.LEFT);
+        Component speaker = packet.speaker().getString().isBlank()
+                ? Component.literal("Dialogue").withStyle(ChatFormatting.GOLD)
+                : packet.speaker();
+        VanillaComponentView speakerView = new VanillaComponentView(context, speaker, 22.0f);
         speakerView.setPadding(0, 0, 0, dp(4));
         column.addView(speakerView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,

@@ -113,6 +113,7 @@ abstract class AssetDialogBase extends FrameLayout {
     protected Button button(Context context, String text, int color) {
         Button button = new Button(context);
         button.setText(text);
+        UIUtils.setLockedTextSize(button, 12.0f);
         button.setTextColor(0xFFFFFFFF);
         button.setBackground(rect(color, 4));
         return button;

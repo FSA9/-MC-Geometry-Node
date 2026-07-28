@@ -119,7 +119,7 @@ public class OpenShop extends BaseNode {
             return next(StandardPorts.FLOW_OUT.getId());
         }
 
-        DialogueContext dialogueContext = createShopDialogueContext(context, player, safeTitle);
+        DialogueContext dialogueContext = createShopDialogueContext(context, player);
         Map<String, Boolean> conditionValues = evaluateConditionInputs(context);
         Map<String, Object> displayShopData = resolveDisplayShopData(
                 context,
@@ -133,7 +133,6 @@ public class OpenShop extends BaseNode {
 
         DialoguePagePayload page = new DialoguePagePayload(
                 "shop:" + context.getCurrentNodeId(),
-                safeTitle,
                 "",
                 STYLE_SHOP,
                 List.of(new DialogueChoicePayload(
@@ -205,28 +204,25 @@ public class OpenShop extends BaseNode {
         return display;
     }
 
-    private DialogueContext createShopDialogueContext(ExecutionContext context, ServerPlayer player, String title) {
+    private DialogueContext createShopDialogueContext(ExecutionContext context, ServerPlayer player) {
         DialogueContext current = getDialogueContext(context);
-        String speaker = !title.isBlank()
-                ? title
-                : current != null ? current.speaker() : "";
         if (current != null) {
             return new DialogueContext(
                     player,
                     current.speakerEntityId(),
                     current.targetEntityId(),
-                    speaker,
                     STYLE_SHOP,
                     current.graphId(),
                     current.entryId(),
                     current.policy()
             );
         }
+        Entity owner = context.getEntity();
+        Entity speakerEntity = owner instanceof ServerPlayer ? null : owner;
         return new DialogueContext(
                 player,
-                null,
-                context.getEntity(),
-                speaker,
+                speakerEntity,
+                owner,
                 STYLE_SHOP,
                 context.getGraphId(),
                 "root"

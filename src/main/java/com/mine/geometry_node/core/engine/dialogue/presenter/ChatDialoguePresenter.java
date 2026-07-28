@@ -36,9 +36,11 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
         }
 
         MutableComponent body = Component.empty();
-        String speaker = page.getSpeaker();
-        if (speaker != null && !speaker.isBlank()) {
-            body.append(DialogueTextParser.parse(speaker, player.registryAccess()).component().copy().withStyle(ChatFormatting.GOLD));
+        Component speaker = session.getDialogueContext() == null
+                ? Component.empty()
+                : session.getDialogueContext().resolveSpeakerDisplayName();
+        if (!speaker.getString().isBlank()) {
+            body.append(speaker);
             body.append(Component.literal(": ").withStyle(ChatFormatting.GRAY));
         }
         body.append(DialogueTextParser.parse(page.getText(), player.registryAccess()).component().copy().withStyle(ChatFormatting.WHITE));

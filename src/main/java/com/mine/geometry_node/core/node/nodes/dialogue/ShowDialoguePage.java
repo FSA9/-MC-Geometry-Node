@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialogueWaitRequest;
+import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRoundParser;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.MetaKey;
@@ -32,7 +33,6 @@ import java.util.Map;
 public class ShowDialoguePage extends BaseNode {
     public static final String TYPE_ID = "show_dialogue_page";
 
-    public static final String SPEAKER = StandardPorts.SPEAKER.getId();
     public static final String TEXT = "text";
     public static final String CLOSED = StandardPorts.CLOSED.getId();
     public static final int DEFAULT_CHOICE_COUNT = 0;
@@ -58,11 +58,6 @@ public class ShowDialoguePage extends BaseNode {
                         StandardPorts.FLOW_IN.toExec(),
                         choiceCount == 0 ? StandardPorts.FLOW_OUT.toExec() : null,
                         UIHint.DEFAULT, null, null
-                ))
-                .addRow(new PortRow(
-                        StandardPorts.SPEAKER.toInput(""),
-                        null,
-                        UIHint.INPUT, null, null
                 ))
                 .addRow(new PortRow(
                         PortDef.create(TEXT, "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.EMPTY),
@@ -111,16 +106,14 @@ public class ShowDialoguePage extends BaseNode {
         }
 
         DialogueContext dialogueContext = getDialogueContext(context);
-        String speaker = stringOrDefault(getInput(context, SPEAKER, String.class),
-                dialogueContext != null ? dialogueContext.speaker() : "");
         if (dialogueContext == null) {
-            dialogueContext = createFallbackDialogueContext(context, player, speaker);
+            dialogueContext = createFallbackDialogueContext(context, player);
             context.setTempData(DialogueContext.TEMP_KEY, dialogueContext);
         } else if (dialogueContext.player() == null) {
             dialogueContext = withPlayer(dialogueContext, player);
             context.setTempData(DialogueContext.TEMP_KEY, dialogueContext);
         }
-        String text = richTextJson(context, TEXT);
+        RichTextValue bodyText = richText(context, TEXT);
         String styleId = dialogueContext != null ? dialogueContext.styleId() : "default";
 
         List<DialogueChoicePayload> choices = new ArrayList<>();
@@ -155,15 +148,35 @@ public class ShowDialoguePage extends BaseNode {
             choices.add(new DialogueChoicePayload(CLOSED, RichTextValue.plain("Close").toJsonString(), null, true, null, Map.of()));
         }
 
-        DialoguePagePayload page = new DialoguePagePayload(
-                "node:" + context.getCurrentNodeId(),
-                speaker,
-                text,
-                styleId,
-                choices,
+        List<RichTextValue> rounds = DialogueRoundParser.split(bodyText);
+        List<DialoguePagePayload> pages = new ArrayList<>(rounds.size());
+        String basePageId = "node:" + context.getCurrentNodeId();
+        for (int i = 0; i < rounds.size(); i++) {
+            boolean finalRound = i == rounds.size() - 1;
+            String pageId = rounds.size() == 1 ? basePageId : basePageId + ":round:" + (i + 1);
+            List<DialogueChoicePayload> pageChoices = finalRound
+                    ? choices
+                    : List.of(continuePageChoice(i));
+            pages.add(new DialoguePagePayload(
+                    pageId,
+                    rounds.get(i).toJsonString(),
+                    styleId,
+                    pageChoices,
+                    Map.of()
+            ));
+        }
+        return ExecutionResult.externalWait(GraphKind.DIALOGUE, new DialogueWaitRequest(dialogueContext, pages));
+    }
+
+    private static DialogueChoicePayload continuePageChoice(int pageIndex) {
+        return new DialogueChoicePayload(
+                DialogueWaitRequest.continuePageChoiceId(pageIndex),
+                RichTextValue.plain("Continue").toJsonString(),
+                null,
+                true,
+                null,
                 Map.of()
         );
-        return ExecutionResult.externalWait(GraphKind.DIALOGUE, new DialogueWaitRequest(dialogueContext, page));
     }
 
     private ServerPlayer resolvePlayer(ExecutionContext context) {
@@ -191,9 +204,10 @@ public class ShowDialoguePage extends BaseNode {
         return value instanceof DialogueContext dialogueContext ? dialogueContext : null;
     }
 
-    private DialogueContext createFallbackDialogueContext(ExecutionContext context, ServerPlayer player, String speaker) {
-        Entity targetEntity = context.getEntity();
-        return new DialogueContext(player, null, targetEntity, speaker, "default", context.getGraphId(), "root");
+    private DialogueContext createFallbackDialogueContext(ExecutionContext context, ServerPlayer player) {
+        Entity owner = context.getEntity();
+        Entity speakerEntity = owner instanceof ServerPlayer ? null : owner;
+        return new DialogueContext(player, speakerEntity, owner, "default", context.getGraphId(), "root");
     }
 
     private DialogueContext withPlayer(DialogueContext dialogueContext, ServerPlayer player) {
@@ -201,7 +215,6 @@ public class ShowDialoguePage extends BaseNode {
                 player,
                 dialogueContext.speakerEntityId(),
                 dialogueContext.targetEntityId(),
-                dialogueContext.speaker(),
                 dialogueContext.styleId(),
                 dialogueContext.graphId(),
                 dialogueContext.entryId(),

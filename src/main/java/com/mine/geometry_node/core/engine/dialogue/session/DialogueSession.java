@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -30,6 +31,8 @@ public class DialogueSession {
     private String closeReason;
     @Nullable
     private DialoguePagePayload currentPage;
+    private List<DialoguePagePayload> pages = List.of();
+    private int currentPageIndex = -1;
     @Nullable
     private DialogueContext dialogueContext;
     @Nullable
@@ -88,6 +91,27 @@ public class DialogueSession {
 
     public void setCurrentPage(@Nullable DialoguePagePayload currentPage) {
         this.currentPage = currentPage;
+        this.pages = currentPage == null ? List.of() : List.of(currentPage);
+        this.currentPageIndex = currentPage == null ? -1 : 0;
+    }
+
+    public void setPages(List<DialoguePagePayload> pages) {
+        this.pages = pages == null ? List.of() : List.copyOf(pages);
+        this.currentPageIndex = this.pages.isEmpty() ? -1 : 0;
+        this.currentPage = this.currentPageIndex < 0 ? null : this.pages.get(this.currentPageIndex);
+    }
+
+    public boolean hasNextPage() {
+        return currentPageIndex >= 0 && currentPageIndex + 1 < pages.size();
+    }
+
+    public boolean advancePage() {
+        if (!hasNextPage()) {
+            return false;
+        }
+        currentPageIndex++;
+        currentPage = pages.get(currentPageIndex);
+        return true;
     }
 
     @Nullable

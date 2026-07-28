@@ -121,7 +121,6 @@ public enum StandardPorts {
     PREDICATE("predicate", PortType.STRING),
     KEY("key", PortType.STRING),
     BILLBOARD("billboard", PortType.STRING),
-    SPEAKER("speaker", PortType.STRING),
     ENTRY_ID("entry_id", PortType.STRING),
     SHOP_ID("shop_id", PortType.STRING),
     OFFER_ID("offer_id", PortType.STRING),

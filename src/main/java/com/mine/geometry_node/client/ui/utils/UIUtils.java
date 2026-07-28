@@ -4,11 +4,24 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.widget.TextView;
+import net.minecraft.client.Minecraft;
 
 /**
  * 坐标与单位转换工具类
  */
 public class UIUtils {
+    private static final float REFERENCE_HEIGHT_PX = 1080.0f;
+
+    /**
+     * Keeps project UI sizing independent from Minecraft's GUI scale.
+     */
+    public static void syncFixedDensity() {
+        float physicalHeight = REFERENCE_HEIGHT_PX;
+        if (!Boolean.getBoolean("gn.standalone")) {
+            physicalHeight = Minecraft.getInstance().getWindow().getHeight();
+        }
+        UIConstants.mDensity = Math.max(0.01f, physicalHeight / REFERENCE_HEIGHT_PX);
+    }
 
     /**
      * 将逻辑坐标 (dp) 转换为物理像素 (px)

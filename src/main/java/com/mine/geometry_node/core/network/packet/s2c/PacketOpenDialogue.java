@@ -6,6 +6,8 @@ import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
@@ -19,7 +21,7 @@ import java.util.UUID;
 public record PacketOpenDialogue(
         UUID sessionId,
         String pageId,
-        String speaker,
+        Component speaker,
         String bodyText,
         String styleId,
         String defaultChoiceId,
@@ -31,7 +33,7 @@ public record PacketOpenDialogue(
 
     public PacketOpenDialogue {
         pageId = pageId == null ? "" : pageId;
-        speaker = speaker == null ? "" : speaker;
+        speaker = speaker == null ? Component.empty() : speaker;
         bodyText = bodyText == null ? "" : bodyText;
         styleId = styleId == null || styleId.isBlank() ? "default" : styleId;
         defaultChoiceId = defaultChoiceId == null ? "" : defaultChoiceId;
@@ -48,13 +50,13 @@ public record PacketOpenDialogue(
     );
 
     public PacketOpenDialogue(RegistryFriendlyByteBuf buf) {
-        this(buf.readUUID(), buf.readUtf(32767), buf.readUtf(32767), buf.readUtf(32767), buf.readUtf(32767), buf.readUtf(32767), readChoices(buf), readMetadata(buf));
+        this(buf.readUUID(), buf.readUtf(32767), ComponentSerialization.STREAM_CODEC.decode(buf), buf.readUtf(32767), buf.readUtf(32767), buf.readUtf(32767), readChoices(buf), readMetadata(buf));
     }
 
     public static PacketOpenDialogue from(DialogueSession session) {
         var page = session.getCurrentPage();
         if (page == null) {
-            return new PacketOpenDialogue(session.getSessionId(), "", "", "", "default", "", List.of(), Map.of());
+            return new PacketOpenDialogue(session.getSessionId(), "", Component.empty(), "", "default", "", List.of(), Map.of());
         }
 
         List<Choice> choices = new ArrayList<>();
@@ -73,7 +75,9 @@ public record PacketOpenDialogue(
         return new PacketOpenDialogue(
                 session.getSessionId(),
                 page.getId(),
-                page.getSpeaker() == null ? "" : page.getSpeaker(),
+                session.getDialogueContext() == null
+                        ? Component.empty()
+                        : session.getDialogueContext().resolveSpeakerDisplayName(),
                 page.getText(),
                 page.getStyleId(),
                 defaultChoiceId,
@@ -85,7 +89,7 @@ public record PacketOpenDialogue(
     public void write(RegistryFriendlyByteBuf buf) {
         buf.writeUUID(sessionId);
         buf.writeUtf(pageId, 32767);
-        buf.writeUtf(speaker, 32767);
+        ComponentSerialization.STREAM_CODEC.encode(buf, speaker);
         buf.writeUtf(bodyText, 32767);
         buf.writeUtf(styleId, 32767);
         buf.writeUtf(defaultChoiceId, 32767);

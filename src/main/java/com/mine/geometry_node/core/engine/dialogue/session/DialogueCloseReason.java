@@ -12,10 +12,8 @@ public final class DialogueCloseReason {
     public static final String PLAYER_DEAD = "player_dead";
     public static final String ACTOR_DEAD = "actor_dead";
     public static final String ACTOR_REMOVED = "actor_removed";
-    public static final String TOO_FAR = "too_far";
     public static final String DIMENSION_CHANGED = "dimension_changed";
     public static final String TIMEOUT = "timeout";
-    public static final String OCCUPIED = "occupied";
     public static final String FORCED = "forced";
     public static final String SERVER_SHUTDOWN = "server_shutdown";
     public static final String CLOSED = "closed";

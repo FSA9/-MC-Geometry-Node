@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.dialogue.ui;
 
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.dialogue.ModernDialogueText;
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.InventoryItemPickerOverlay;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ItemStackTooltipOverlay;
@@ -14,6 +14,7 @@ import icyllis.modernui.fragment.Fragment;
 import icyllis.modernui.fragment.OnBackPressedCallback;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.mc.UIManager;
+import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.util.DataSet;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
@@ -37,22 +38,32 @@ import java.util.Map;
  * Client-side shop menu opened by the OpenShop dialogue node.
  */
 public class ShopMenuFragment extends Fragment {
-    private static final int COLOR_DIM = 0xA0000000;
-    private static final int COLOR_WINDOW = 0xFF181C22;
-    private static final int COLOR_ROW = 0xFF222832;
-    private static final int COLOR_ROW_HOVER = 0xFF293240;
-    private static final int COLOR_FIELD = 0xFF11151A;
-    private static final int COLOR_BORDER = 0xFF384253;
-    private static final int COLOR_TEXT = 0xFFE9EEF6;
-    private static final int COLOR_MUTED = 0xFF97A2B2;
-    private static final int COLOR_PRIMARY = 0xFF2F6FAE;
-    private static final int COLOR_BUTTON = 0xFF303846;
-    private static final int COLOR_DISABLED = 0xFF1D222A;
-    private static final int COLOR_SUCCESS = 0xFF73C68A;
-    private static final int COLOR_ERROR = 0xFFE07B7B;
-    private static final int COLOR_ACCENT = 0xFFE0A84E;
-    private static final int SLOT_SIZE_DP = 32;
-    private static final int MAX_STACKS_INLINE = 5;
+    private static final int COLOR_DIM = DialogueHudTheme.OVERLAY_DIM;
+    private static final int COLOR_WINDOW = DialogueHudTheme.PANEL;
+    private static final int COLOR_ROW = DialogueHudTheme.SURFACE;
+    private static final int COLOR_ROW_HOVER = DialogueHudTheme.SURFACE_HOVER;
+    private static final int COLOR_DIVIDER = DialogueHudTheme.DIVIDER;
+    private static final int COLOR_TEXT = DialogueHudTheme.TEXT_PRIMARY;
+    private static final int COLOR_MUTED = DialogueHudTheme.TEXT_MUTED;
+    private static final int COLOR_ACCENT = DialogueHudTheme.ACCENT;
+    private static final int COLOR_ACCENT_HOVER = DialogueHudTheme.ACCENT_HOVER;
+    private static final int COLOR_ACCENT_PRESSED = DialogueHudTheme.ACCENT_PRESSED;
+    private static final int COLOR_BUTTON = DialogueHudTheme.BUTTON;
+    private static final int COLOR_BUTTON_HOVER = DialogueHudTheme.BUTTON_HOVER;
+    private static final int COLOR_BUTTON_PRESSED = DialogueHudTheme.BUTTON_PRESSED;
+    private static final int COLOR_DISABLED = DialogueHudTheme.DISABLED;
+    private static final int COLOR_SUCCESS = DialogueHudTheme.SUCCESS;
+    private static final int COLOR_ERROR = DialogueHudTheme.ERROR;
+    private static final int COLOR_LIMIT = DialogueHudTheme.WARNING;
+    private static final float DISPLAY_SCALE = 2.0f;
+    private static final int WINDOW_WIDTH_DP = 696;
+    private static final int TITLE_COLUMN_WIDTH_DP = 120;
+    private static final int MIN_OFFER_ROW_HEIGHT_DP = 68;
+    private static final int OFFER_ROW_VERTICAL_PADDING_DP = 14;
+    private static final int SLOT_SIZE_DP = 34;
+    private static final int SLOT_MARGIN_DP = 3;
+    private static final int SLOT_ROW_HEIGHT_DP = SLOT_SIZE_DP + SLOT_MARGIN_DP;
+    private static final int STACKS_PER_ROW = 5;
 
     private FrameLayout root;
     private LinearLayout window;
@@ -62,7 +73,7 @@ public class ShopMenuFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, DataSet savedInstanceState) {
         Context context = getContext();
-        UIConstants.mDensity = context.getResources().getDisplayMetrics().density;
+        UIUtils.syncFixedDensity();
 
         root = new FrameLayout(context);
         root.setClipChildren(false);
@@ -81,12 +92,15 @@ public class ShopMenuFragment extends Fragment {
         window = new LinearLayout(context);
         window.setClipChildren(false);
         window.setOrientation(LinearLayout.VERTICAL);
-        window.setPadding(dp(14), dp(12), dp(14), dp(12));
-        window.setBackground(rect(COLOR_WINDOW, 6.0f, 1, COLOR_BORDER));
+        window.setPadding(dp(18), dp(14), dp(18), dp(14));
+        window.setBackground(rect(COLOR_WINDOW, 3.0f, 1, COLOR_DIVIDER));
         window.setOnClickListener(v -> {
         });
 
-        FrameLayout.LayoutParams windowParams = new FrameLayout.LayoutParams(dp(720), ViewGroup.LayoutParams.WRAP_CONTENT);
+        FrameLayout.LayoutParams windowParams = new FrameLayout.LayoutParams(
+                dp(WINDOW_WIDTH_DP),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
         windowParams.gravity = Gravity.CENTER;
         root.addView(window, windowParams);
 
@@ -116,28 +130,35 @@ public class ShopMenuFragment extends Fragment {
         window.setAlpha(1.0f);
         window.removeAllViews();
         ShopState state = ShopState.from(packet);
-        window.addView(createHeader(state), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+        window.addView(createHeader(state), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+        window.addView(createDivider(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
 
         ScrollView scrollView = new ScrollView(getContext());
         scrollView.setClipChildren(false);
         LinearLayout offerList = new LinearLayout(getContext());
         offerList.setClipChildren(false);
         offerList.setOrientation(LinearLayout.VERTICAL);
+        offerList.setPadding(0, dp(8), 0, dp(4));
         scrollView.addView(offerList, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        window.addView(scrollView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(300)));
+        window.addView(scrollView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(292)));
 
         if (state.offers().isEmpty()) {
             TextView empty = label(tr("geometry_node.shop.empty"), 13.0f, COLOR_MUTED, Gravity.CENTER);
             offerList.addView(empty, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(92)));
         } else {
             for (int i = 0; i < state.offers().size(); i++) {
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(62));
-                lp.bottomMargin = dp(7);
-                offerList.addView(createOfferRow(state.offers().get(i), i + 1), lp);
+                ShopOffer offer = state.offers().get(i);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        dp(offerRowHeightDp(offer))
+                );
+                lp.bottomMargin = dp(4);
+                offerList.addView(createOfferRow(offer, i + 1), lp);
             }
         }
 
-        window.addView(createFooter(packet, state), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+        window.addView(createDivider(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
+        window.addView(createFooter(packet, state), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
     }
 
     private View createHeader(ShopState state) {
@@ -145,16 +166,31 @@ public class ShopMenuFragment extends Fragment {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
-        LinearLayout titles = new LinearLayout(getContext());
-        titles.setOrientation(LinearLayout.VERTICAL);
-        TextView title = label(state.title().isBlank() ? tr("geometry_node.shop.title.default") : state.title(), 17.0f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        title.setSingleLine(true);
-        titles.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
+        View marker = new View(getContext());
+        marker.setBackground(rect(COLOR_ACCENT, 1.0f, 0, 0));
+        LinearLayout.LayoutParams markerLp = new LinearLayout.LayoutParams(dp(3), dp(26));
+        markerLp.rightMargin = dp(11);
+        header.addView(marker, markerLp);
 
-        TextView subtitle = label(tr("geometry_node.shop.offer_count", state.offers().size()), 11.0f, COLOR_MUTED, Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        subtitle.setSingleLine(true);
-        titles.addView(subtitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(16)));
-        header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+        String titleText = state.title().isBlank() ? tr("geometry_node.shop.title.default") : state.title();
+        TextView title = label(titleText, 17.0f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        title.setSingleLine(true);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+
+        TextView count = label(
+                tr("geometry_node.shop.offer_count", state.offers().size()),
+                11.0f,
+                COLOR_MUTED,
+                Gravity.RIGHT | Gravity.CENTER_VERTICAL
+        );
+        count.setSingleLine(true);
+        header.addView(count, new LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.MATCH_PARENT));
+
+        View close = closeButton();
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(dp(30), dp(30));
+        closeLp.leftMargin = dp(10);
+        header.addView(close, closeLp);
         return header;
     }
 
@@ -163,98 +199,145 @@ public class ShopMenuFragment extends Fragment {
         row.setClipChildren(false);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(10), dp(7), dp(9), dp(7));
-        row.setBackground(rect(COLOR_ROW, 5.0f, 1, COLOR_BORDER));
+        row.setPadding(dp(12), dp(7), dp(10), dp(7));
+        row.setBackground(rect(COLOR_ROW, 2.0f, 0, 0));
         bindHoverBackground(row);
 
         LinearLayout titleColumn = new LinearLayout(getContext());
         titleColumn.setOrientation(LinearLayout.VERTICAL);
         titleColumn.setGravity(Gravity.CENTER_VERTICAL);
         String title = offer.title().isBlank() ? tr("geometry_node.shop.offer_index", index) : offer.title();
-        TextView titleView = label(title, 12.5f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        TextView titleView = label(title, 13.5f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
         titleView.setSingleLine(true);
-        titleColumn.addView(titleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(22)));
-        TextView meta = label(offer.statusText(), 10.5f, offer.unavailable() ? COLOR_ERROR : COLOR_MUTED, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        titleView.setEllipsize(TextUtils.TruncateAt.END);
+        titleColumn.addView(titleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
+        TextView meta = label(
+                offer.remainingText(),
+                11.0f,
+                offer.soldOut() ? COLOR_ERROR : COLOR_LIMIT,
+                Gravity.LEFT | Gravity.CENTER_VERTICAL
+        );
         meta.setSingleLine(true);
-        titleColumn.addView(meta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)));
-        row.addView(titleColumn, new LinearLayout.LayoutParams(dp(128), ViewGroup.LayoutParams.MATCH_PARENT));
+        titleColumn.addView(meta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
+        row.addView(titleColumn, new LinearLayout.LayoutParams(dp(TITLE_COLUMN_WIDTH_DP), ViewGroup.LayoutParams.MATCH_PARENT));
 
-        row.addView(createStackStrip(offer.costs()), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-        TextView arrow = label(">", 15.0f, COLOR_ACCENT, Gravity.CENTER);
-        row.addView(arrow, new LinearLayout.LayoutParams(dp(24), ViewGroup.LayoutParams.MATCH_PARENT));
-        row.addView(createStackStrip(offer.rewards()), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+        row.addView(createStackGrid(offer.costs()), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+        TextView arrow = label("\u2192", 16.0f, COLOR_MUTED, Gravity.CENTER);
+        row.addView(arrow, new LinearLayout.LayoutParams(dp(28), ViewGroup.LayoutParams.MATCH_PARENT));
+        row.addView(createStackGrid(offer.rewards()), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
-        TextView tradeButton = button(offer.buttonText(), offer.unavailable() ? COLOR_DISABLED : COLOR_PRIMARY, v -> tradeOffer(offer));
-        tradeButton.setEnabled(!offer.soldOut());
+        TextView tradeButton = button(
+                offer.buttonText(),
+                COLOR_ACCENT,
+                COLOR_ACCENT_HOVER,
+                COLOR_ACCENT_PRESSED,
+                v -> tradeOffer(offer)
+        );
+        tradeButton.setEnabled(!offer.unavailable());
         tradeButton.setTextColor(offer.unavailable() ? COLOR_MUTED : 0xFFFFFFFF);
-        LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(dp(76), dp(30));
-        buttonLp.leftMargin = dp(10);
+        if (offer.unavailable()) {
+            tradeButton.setBackground(rect(COLOR_DISABLED, 2.0f, 0, 0));
+        }
+        LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(dp(82), dp(32));
+        buttonLp.leftMargin = dp(12);
         row.addView(tradeButton, buttonLp);
         return row;
     }
 
-    private View createStackStrip(List<ItemStack> stacks) {
-        LinearLayout strip = new LinearLayout(getContext());
-        strip.setClipChildren(false);
-        strip.setOrientation(LinearLayout.HORIZONTAL);
-        strip.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        strip.setPadding(dp(6), 0, dp(4), 0);
-        strip.setBackground(rect(COLOR_FIELD, 4.0f, 1, 0xFF2C3440));
+    private View createStackGrid(List<ItemStack> stacks) {
+        LinearLayout grid = new LinearLayout(getContext());
+        grid.setClipChildren(false);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        grid.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        grid.setPadding(dp(4), 0, dp(2), 0);
 
         if (stacks == null || stacks.isEmpty()) {
             TextView empty = label(tr("geometry_node.common.none"), 11.0f, COLOR_MUTED, Gravity.LEFT | Gravity.CENTER_VERTICAL);
-            strip.addView(empty, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            return strip;
+            grid.addView(empty, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            return grid;
         }
 
-        int shown = Math.min(stacks.size(), MAX_STACKS_INLINE);
-        for (int i = 0; i < shown; i++) {
-            InventoryItemPickerOverlay.ItemStackView slot = new InventoryItemPickerOverlay.ItemStackView(getContext(), stacks.get(i), null, false);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(SLOT_SIZE_DP), dp(SLOT_SIZE_DP));
-            lp.rightMargin = dp(4);
-            strip.addView(slot, lp);
+        for (int rowStart = 0; rowStart < stacks.size(); rowStart += STACKS_PER_ROW) {
+            LinearLayout slotRow = new LinearLayout(getContext());
+            slotRow.setOrientation(LinearLayout.HORIZONTAL);
+            slotRow.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            grid.addView(slotRow, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(SLOT_ROW_HEIGHT_DP)
+            ));
+
+            int rowEnd = Math.min(stacks.size(), rowStart + STACKS_PER_ROW);
+            for (int i = rowStart; i < rowEnd; i++) {
+                InventoryItemPickerOverlay.ItemStackView slot = new InventoryItemPickerOverlay.ItemStackView(
+                        getContext(),
+                        stacks.get(i),
+                        null,
+                        false,
+                        DISPLAY_SCALE
+                );
+                LinearLayout.LayoutParams slotLp = new LinearLayout.LayoutParams(dp(SLOT_SIZE_DP), dp(SLOT_SIZE_DP));
+                if (i + 1 < rowEnd) {
+                    slotLp.rightMargin = dp(SLOT_MARGIN_DP);
+                }
+                slotRow.addView(slot, slotLp);
+            }
         }
-        if (stacks.size() > shown) {
-            TextView more = label("+" + (stacks.size() - shown), 11.0f, COLOR_MUTED, Gravity.CENTER);
-            strip.addView(more, new LinearLayout.LayoutParams(dp(30), dp(SLOT_SIZE_DP)));
-        }
-        return strip;
+        return grid;
+    }
+
+    private static int offerRowHeightDp(ShopOffer offer) {
+        int stackRows = Math.max(stackRowCount(offer.costs()), stackRowCount(offer.rewards()));
+        int contentHeightDp = stackRows * SLOT_ROW_HEIGHT_DP;
+        return Math.max(MIN_OFFER_ROW_HEIGHT_DP, OFFER_ROW_VERTICAL_PADDING_DP + contentHeightDp);
+    }
+
+    private static int stackRowCount(List<ItemStack> stacks) {
+        int stackCount = stacks == null ? 0 : stacks.size();
+        return Math.max(1, (stackCount + STACKS_PER_ROW - 1) / STACKS_PER_ROW);
     }
 
     private View createFooter(PacketOpenDialogue packet, ShopState state) {
         LinearLayout footer = new LinearLayout(getContext());
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER_VERTICAL);
-        footer.setPadding(0, dp(12), 0, 0);
+        footer.setPadding(0, dp(8), 0, 0);
 
         String message = state.message();
         int messageColor = state.messageSuccess() ? COLOR_SUCCESS : COLOR_ERROR;
-        TextView status = label(message, 11.5f, message.isBlank() ? COLOR_MUTED : messageColor, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        TextView status = label(
+                message,
+                11.5f,
+                message.isBlank() ? COLOR_MUTED : messageColor,
+                Gravity.LEFT | Gravity.CENTER_VERTICAL
+        );
         status.setSingleLine(true);
-        footer.addView(status, new LinearLayout.LayoutParams(0, dp(30), 1.0f));
-
-        TextView cancel = button(tr("geometry_node.common.cancel"), COLOR_BUTTON, v -> ClientDialogueState.close());
-        footer.addView(cancel, new LinearLayout.LayoutParams(dp(78), dp(30)));
-
-        TextView spacer = label("", 1.0f, 0, Gravity.CENTER);
-        footer.addView(spacer, new LinearLayout.LayoutParams(dp(8), 1));
+        status.setEllipsize(TextUtils.TruncateAt.END);
+        footer.addView(status, new LinearLayout.LayoutParams(0, dp(32), 1.0f));
 
         PacketOpenDialogue.Choice choice = continueChoice(packet);
         String text = choice != null && choice.text() != null && !choice.text().isBlank()
                 ? ModernDialogueText.plain(choice.text())
                 : Component.translatable("geometry_node.dialogue.continue").getString();
-        TextView continueButton = button(text, COLOR_PRIMARY, v -> chooseContinue(choice));
+        TextView continueButton = button(
+                text,
+                COLOR_BUTTON,
+                COLOR_BUTTON_HOVER,
+                COLOR_BUTTON_PRESSED,
+                v -> chooseContinue(choice)
+        );
         continueButton.setEnabled(choice != null && choice.enabled());
         if (choice == null || !choice.enabled()) {
             continueButton.setTextColor(COLOR_MUTED);
-            continueButton.setBackground(rect(COLOR_DISABLED, 4.0f, 1, 0xFF303846));
+            continueButton.setBackground(rect(COLOR_DISABLED, 2.0f, 0, 0));
         }
-        footer.addView(continueButton, new LinearLayout.LayoutParams(dp(92), dp(30)));
+        LinearLayout.LayoutParams continueLp = new LinearLayout.LayoutParams(dp(96), dp(32));
+        continueLp.leftMargin = dp(12);
+        footer.addView(continueButton, continueLp);
         return footer;
     }
 
     private void tradeOffer(ShopOffer offer) {
-        if (waitingForServer || offer == null || offer.soldOut()) {
+        if (waitingForServer || offer == null || offer.unavailable()) {
             return;
         }
         waitingForServer = ClientDialogueState.trade(offer.id());
@@ -298,9 +381,9 @@ public class ShopMenuFragment extends Fragment {
     private void bindHoverBackground(View view) {
         view.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                v.setBackground(rect(COLOR_ROW_HOVER, 5.0f, 1, 0xFF536175));
+                v.setBackground(rect(COLOR_ROW_HOVER, 2.0f, 0, 0));
             } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                v.setBackground(rect(COLOR_ROW, 5.0f, 1, COLOR_BORDER));
+                v.setBackground(rect(COLOR_ROW, 2.0f, 0, 0));
             }
             return false;
         });
@@ -319,16 +402,83 @@ public class ShopMenuFragment extends Fragment {
         UIManager.getInstance().getOnBackPressedDispatcher().addCallback(backPressedCallback);
     }
 
-    private TextView button(String text, int color, View.OnClickListener listener) {
+    private TextView button(String text,
+                            int color,
+                            int hoverColor,
+                            int pressedColor,
+                            View.OnClickListener listener) {
         TextView view = label(text, 12.0f, 0xFFFFFFFF, Gravity.CENTER);
         view.setSingleLine(true);
-        view.setBackground(rect(color, 4.0f, 1, 0x553C4658));
+        view.setEllipsize(TextUtils.TruncateAt.END);
+        view.setBackground(rect(color, 2.0f, 0, 0));
         view.setOnClickListener(listener);
+        bindButtonFeedback(view, color, hoverColor, pressedColor);
         return view;
     }
 
+    private void bindButtonFeedback(View view, int color, int hoverColor, int pressedColor) {
+        final boolean[] hovered = {false};
+        final boolean[] pressed = {false};
+        Runnable update = () -> {
+            if (!view.isEnabled()) {
+                return;
+            }
+            int resolved = pressed[0] ? pressedColor : hovered[0] ? hoverColor : color;
+            view.setBackground(rect(resolved, 2.0f, 0, 0));
+        };
+
+        view.setOnHoverListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                hovered[0] = true;
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                hovered[0] = false;
+                pressed[0] = false;
+            }
+            update.run();
+            return false;
+        });
+        view.setOnTouchListener((v, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                pressed[0] = true;
+            } else if (event.getActionMasked() == MotionEvent.ACTION_UP
+                    || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                pressed[0] = false;
+            }
+            update.run();
+            return false;
+        });
+    }
+
+    private View closeButton() {
+        FrameLayout button = new FrameLayout(getContext());
+        button.setBackground(rect(0x00000000, 2.0f, 0, 0));
+        button.setContentDescription(tr("geometry_node.common.cancel"));
+        button.setTooltipText(tr("geometry_node.common.cancel"));
+        button.setOnClickListener(v -> ClientDialogueState.close());
+        button.setOnHoverListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                v.setBackground(rect(COLOR_BUTTON_HOVER, 2.0f, 0, 0));
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                v.setBackground(rect(0x00000000, 2.0f, 0, 0));
+            }
+            return false;
+        });
+
+        VectorIconView icon = new VectorIconView(getContext(), VectorIconView.Kind.CLOSE, COLOR_MUTED);
+        FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(dp(18), dp(18));
+        iconLp.gravity = Gravity.CENTER;
+        button.addView(icon, iconLp);
+        return button;
+    }
+
+    private View createDivider() {
+        View divider = new View(getContext());
+        divider.setBackground(rect(COLOR_DIVIDER, 0.0f, 0, 0));
+        return divider;
+    }
+
     private TextView label(CharSequence text, float sizeDp, int color, int gravity) {
-        TextView view = UIUtils.createLockedTextView(getContext(), "", sizeDp, color);
+        TextView view = UIUtils.createLockedTextView(getContext(), "", sizeDp * DISPLAY_SCALE, color);
         view.setText(text == null ? "" : text);
         view.setGravity(gravity);
         return view;
@@ -337,7 +487,7 @@ public class ShopMenuFragment extends Fragment {
     private ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
         ShapeDrawable drawable = new ShapeDrawable();
         drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
+        drawable.setCornerRadius(UIUtils.dp2px(radiusDp * DISPLAY_SCALE));
         if (strokeWidthDp > 0) {
             drawable.setStroke(dp(strokeWidthDp), strokeColor);
         }
@@ -345,7 +495,7 @@ public class ShopMenuFragment extends Fragment {
     }
 
     private int dp(float value) {
-        return UIUtils.dp2pxInt(value);
+        return UIUtils.dp2pxInt(value * DISPLAY_SCALE);
     }
 
     private record ShopState(String title, String message, boolean messageSuccess, List<ShopOffer> offers) {
@@ -354,7 +504,7 @@ public class ShopMenuFragment extends Fragment {
                 return new ShopState("", "", true, List.of());
             }
             Map<String, Object> metadata = packet.metadata() == null ? Map.of() : packet.metadata();
-            String title = stringValue(metadata.get("title"), packet.speaker());
+            String title = stringValue(metadata.get("title"), "");
             String messageKey = stringValue(metadata.get("last_trade_message_key"), "");
             String message = messageKey.isBlank()
                     ? stringValue(metadata.get("last_trade_message"), "")
@@ -373,10 +523,7 @@ public class ShopMenuFragment extends Fragment {
             String title,
             int maxUses,
             int uses,
-            boolean consumeSellerItems,
-            boolean sellerReceivesPayment,
             boolean enabled,
-            String disabledReason,
             List<ItemStack> costs,
             List<ItemStack> rewards
     ) {
@@ -395,21 +542,10 @@ public class ShopMenuFragment extends Fragment {
             return enabled ? tr("geometry_node.shop.trade") : tr("geometry_node.shop.unavailable");
         }
 
-        private String statusText() {
-            if (!enabled) {
-                return disabledReason == null || disabledReason.isBlank() ? tr("geometry_node.shop.condition_not_met") : disabledReason;
-            }
-            List<String> parts = new ArrayList<>();
-            parts.add(maxUses > 0
+        private String remainingText() {
+            return maxUses > 0
                     ? tr("geometry_node.shop.remaining_count", Math.max(0, maxUses - uses), maxUses)
-                    : tr("geometry_node.shop.remaining_infinite"));
-            if (consumeSellerItems) {
-                parts.add(tr("geometry_node.shop.seller_inventory"));
-            }
-            if (sellerReceivesPayment) {
-                parts.add(tr("geometry_node.shop.payment_to_seller"));
-            }
-            return String.join(" · ", parts);
+                    : tr("geometry_node.shop.remaining_infinite");
         }
     }
 
@@ -433,19 +569,13 @@ public class ShopMenuFragment extends Fragment {
             String title = stringValue(offerMap.get("title"), "");
             int maxUses = intValue(offerMap.get("max_uses"), 0);
             int uses = Math.max(0, intValue(offerMap.get("uses"), 0));
-            boolean consumeSellerItems = boolValue(offerMap.get("consume_seller_items"), false);
-            boolean sellerReceivesPayment = boolValue(offerMap.get("seller_receives_payment"), false);
             boolean enabled = boolValue(offerMap.get("enabled"), true);
-            String disabledReason = stringValue(offerMap.get("disabled_reason"), "");
             result.add(new ShopOffer(
                     id,
                     title,
                     maxUses,
                     uses,
-                    consumeSellerItems,
-                    sellerReceivesPayment,
                     enabled,
-                    disabledReason,
                     parseStacks(offerMap.get("costs")),
                     parseStacks(offerMap.get("rewards"))
             ));

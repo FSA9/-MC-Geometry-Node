@@ -1,8 +1,8 @@
-package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
+package com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays;
 
+import com.mine.geometry_node.client.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.common.ColorPickerDialog;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
@@ -27,13 +27,29 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-final class ExpandedTextInputOverlay extends FrameLayout {
+public final class ExpandedTextInputOverlay extends FrameLayout {
+    private static final int COLOR_DIM = DialogueHudTheme.OVERLAY_DIM;
+    private static final int COLOR_WINDOW = DialogueHudTheme.PANEL;
+    private static final int COLOR_SURFACE = DialogueHudTheme.SURFACE;
+    private static final int COLOR_FIELD = DialogueHudTheme.withAlpha(DialogueHudTheme.PANEL, 0xFF);
+    private static final int COLOR_BORDER = DialogueHudTheme.DIVIDER;
+    private static final int COLOR_FIELD_BORDER = DialogueHudTheme.withAlpha(DialogueHudTheme.TEXT_MUTED, 0x44);
+    private static final int COLOR_TEXT = DialogueHudTheme.TEXT_PRIMARY;
+    private static final int COLOR_BUTTON = DialogueHudTheme.BUTTON;
+    private static final int COLOR_BUTTON_HOVER = DialogueHudTheme.BUTTON_HOVER;
+    private static final int COLOR_BUTTON_PRESSED = DialogueHudTheme.BUTTON_PRESSED;
+    private static final int COLOR_PRIMARY = DialogueHudTheme.ACCENT;
+    private static final int COLOR_PRIMARY_HOVER = DialogueHudTheme.ACCENT_HOVER;
+    private static final int COLOR_PRIMARY_PRESSED = DialogueHudTheme.ACCENT_PRESSED;
+    private static final int WINDOW_MARGIN_DP = 34;
+
     private static ExpandedTextInputOverlay sOpenOverlay;
 
     private final EditorContext editorContext;
@@ -51,8 +67,9 @@ final class ExpandedTextInputOverlay extends FrameLayout {
         this.portId = portId;
         this.expectedType = expectedType;
         this.richTextMode = expectedType == PortType.RICH_TEXT;
+        UIUtils.syncFixedDensity();
 
-        setBackground(rect(0xAA050608, 0.0f, 0, 0));
+        setBackground(rect(COLOR_DIM, 0.0f, 0, 0));
         setOnClickListener(v -> dismiss());
         setFocusable(true);
         setFocusableInTouchMode(true);
@@ -60,16 +77,12 @@ final class ExpandedTextInputOverlay extends FrameLayout {
         LinearLayout window = new LinearLayout(context);
         window.setOrientation(LinearLayout.VERTICAL);
         window.setPadding(dp(18), dp(14), dp(18), dp(14));
-        window.setBackground(rect(0xF01D2028, 6.0f, 1, 0xFF3C4658));
+        window.setBackground(rect(COLOR_WINDOW, 3.0f, 1, COLOR_BORDER));
         window.setOnClickListener(v -> {
         });
 
-        TextView title = label(context, "文本预览 / 编辑", 14.0f, 0xFFE8EDF6, Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        window.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)));
-
-        if (richTextMode) {
-            window.addView(createRichTextToolbar(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36)));
-        }
+        window.addView(createHeader(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+        window.addView(divider(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
 
         editor = new EditText(context);
         if (richTextMode) {
@@ -77,13 +90,13 @@ final class ExpandedTextInputOverlay extends FrameLayout {
         } else {
             editor.setText(value == null ? "" : value.toString());
         }
-        editor.setTextColor(UIConstants.CLR_GRAY_LABEL);
+        editor.setTextColor(COLOR_TEXT);
         UIUtils.setLockedTextSize(editor, 14.0f);
         editor.setGravity(Gravity.LEFT | Gravity.TOP);
         editor.setSingleLine(false);
         editor.setMinLines(12);
-        editor.setPadding(dp(12), dp(10), dp(12), dp(10));
-        editor.setBackground(rect(0xFF111318, 4.0f, 1, 0xFF303846));
+        editor.setPadding(dp(14), dp(12), dp(14), dp(12));
+        editor.setBackground(rect(COLOR_FIELD, 2.0f, 1, COLOR_FIELD_BORDER));
         editor.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ESCAPE) {
                 dismiss();
@@ -91,31 +104,70 @@ final class ExpandedTextInputOverlay extends FrameLayout {
             }
             return false;
         });
-        window.addView(editor, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
+        LinearLayout workspace = new LinearLayout(context);
+        workspace.setOrientation(LinearLayout.HORIZONTAL);
+        workspace.addView(editor, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+        if (richTextMode) {
+            LinearLayout.LayoutParams toolbarParams = new LinearLayout.LayoutParams(dp(40), ViewGroup.LayoutParams.MATCH_PARENT);
+            toolbarParams.leftMargin = dp(10);
+            workspace.addView(createRichTextToolbar(context), toolbarParams);
+        }
 
-        LinearLayout actions = new LinearLayout(context);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        actions.setPadding(0, dp(12), 0, 0);
-        actions.addView(button(context, "取消", 0xFF3A3F4A, v -> dismiss()), new LinearLayout.LayoutParams(dp(80), dp(30)));
-        TextView spacer = label(context, "", 1.0f, 0, Gravity.CENTER);
-        actions.addView(spacer, new LinearLayout.LayoutParams(dp(10), 1));
-        actions.addView(button(context, "确认", 0xFF3D638D, v -> commit()), new LinearLayout.LayoutParams(dp(86), dp(30)));
-        window.addView(actions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+        LinearLayout.LayoutParams workspaceParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f);
+        workspaceParams.topMargin = dp(12);
+        workspaceParams.bottomMargin = dp(12);
+        window.addView(workspace, workspaceParams);
+
+        window.addView(divider(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
+        window.addView(createActions(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
 
         FrameLayout.LayoutParams windowParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         );
-        windowParams.leftMargin = dp(36);
-        windowParams.rightMargin = dp(36);
-        windowParams.topMargin = dp(36);
-        windowParams.bottomMargin = dp(36);
+        windowParams.leftMargin = dp(WINDOW_MARGIN_DP);
+        windowParams.rightMargin = dp(WINDOW_MARGIN_DP);
+        windowParams.topMargin = dp(WINDOW_MARGIN_DP);
+        windowParams.bottomMargin = dp(WINDOW_MARGIN_DP);
         addView(window, windowParams);
     }
 
-    static void show(Context context, View anchor, EditorContext editorContext, NodeData nodeData, String portId,
-                     PortType expectedType, Object value) {
+    private View createHeader(Context context) {
+        LinearLayout header = new LinearLayout(context);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        View marker = new View(context);
+        marker.setBackground(rect(COLOR_PRIMARY, 1.0f, 0, 0));
+        LinearLayout.LayoutParams markerParams = new LinearLayout.LayoutParams(dp(3), dp(26));
+        markerParams.rightMargin = dp(11);
+        header.addView(marker, markerParams);
+
+        String titleKey = richTextMode
+                ? "geometry_node.rich_text_editor.title"
+                : "geometry_node.text_editor.title";
+        TextView title = label(context, tr(titleKey), 15.0f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+        return header;
+    }
+
+    private View createActions(Context context) {
+        LinearLayout actions = new LinearLayout(context);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        actions.setPadding(0, dp(8), 0, 0);
+
+        actions.addView(actionButton(context, tr("geometry_node.common.cancel"), false, v -> dismiss()),
+                new LinearLayout.LayoutParams(dp(82), dp(32)));
+        TextView spacer = label(context, "", 1.0f, 0, Gravity.CENTER);
+        actions.addView(spacer, new LinearLayout.LayoutParams(dp(10), 1));
+        actions.addView(actionButton(context, tr("geometry_node.common.save"), true, v -> commit()),
+                new LinearLayout.LayoutParams(dp(90), dp(32)));
+        return actions;
+    }
+
+    public static void show(Context context, View anchor, EditorContext editorContext, NodeData nodeData, String portId,
+                            PortType expectedType, Object value) {
         if (editorContext == null || nodeData == null || anchor == null) {
             return;
         }
@@ -200,23 +252,42 @@ final class ExpandedTextInputOverlay extends FrameLayout {
 
     private LinearLayout createRichTextToolbar(Context context) {
         LinearLayout toolbar = new LinearLayout(context);
-        toolbar.setOrientation(LinearLayout.HORIZONTAL);
-        toolbar.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        toolbar.setPadding(0, dp(4), 0, dp(6));
+        toolbar.setOrientation(LinearLayout.VERTICAL);
+        toolbar.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        toolbar.setPadding(dp(5), dp(6), dp(5), dp(6));
+        toolbar.setBackground(rect(COLOR_SURFACE, 2.0f, 1, COLOR_FIELD_BORDER));
 
-        toolbar.addView(toolButton(context, "B", v -> applyStyle("bold", true)), new LinearLayout.LayoutParams(dp(30), dp(26)));
-        toolbar.addView(toolButton(context, "I", v -> applyStyle("italic", true)), new LinearLayout.LayoutParams(dp(30), dp(26)));
-        toolbar.addView(toolButton(context, "U", v -> applyStyle("underlined", true)), new LinearLayout.LayoutParams(dp(30), dp(26)));
-        toolbar.addView(toolButton(context, "S", v -> applyStyle("strikethrough", true)), new LinearLayout.LayoutParams(dp(30), dp(26)));
-        toolbar.addView(toolButton(context, "Color", v -> showColorPicker()), new LinearLayout.LayoutParams(dp(58), dp(26)));
-        toolbar.addView(toolButton(context, "Latex", v -> applyLatex()), new LinearLayout.LayoutParams(dp(58), dp(26)));
-        toolbar.addView(toolButton(context, "Clear", v -> clearSelectionStyles()), new LinearLayout.LayoutParams(dp(58), dp(26)));
+        addToolButton(toolbar, toolButton(context, "B", "geometry_node.rich_text_editor.bold", v -> applyStyle("bold", true)));
+        addToolButton(toolbar, toolButton(context, "I", "geometry_node.rich_text_editor.italic", v -> applyStyle("italic", true)));
+        addToolButton(toolbar, toolButton(context, "U", "geometry_node.rich_text_editor.underline", v -> applyStyle("underlined", true)));
+        addToolButton(toolbar, toolButton(context, "S", "geometry_node.rich_text_editor.strikethrough", v -> applyStyle("strikethrough", true)));
+
+        View separator = divider(context);
+        LinearLayout.LayoutParams separatorParams = new LinearLayout.LayoutParams(dp(20), dp(1));
+        separatorParams.gravity = Gravity.CENTER_HORIZONTAL;
+        separatorParams.topMargin = dp(3);
+        separatorParams.bottomMargin = dp(8);
+        toolbar.addView(separator, separatorParams);
+
+        TextView color = toolButton(context, "A", "geometry_node.rich_text_editor.color", v -> showColorPicker());
+        color.setTextColor(COLOR_PRIMARY);
+        addToolButton(toolbar, color);
+        addToolButton(toolbar, toolButton(context, "fx", "geometry_node.rich_text_editor.latex", v -> applyLatex()));
+        addToolButton(toolbar, toolButton(context, "Tx", "geometry_node.rich_text_editor.clear_formatting", v -> clearSelectionStyles()));
         return toolbar;
     }
 
-    private TextView toolButton(Context context, String text, View.OnClickListener listener) {
-        TextView view = button(context, text, 0xFF2D3440, listener);
-        UIUtils.setLockedTextSize(view, 12.0f);
+    private void addToolButton(LinearLayout toolbar, TextView button) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(28), dp(28));
+        params.gravity = Gravity.CENTER_HORIZONTAL;
+        params.bottomMargin = dp(5);
+        toolbar.addView(button, params);
+    }
+
+    private TextView toolButton(Context context, String text, String tooltipKey, View.OnClickListener listener) {
+        TextView view = interactiveButton(context, text, 11.5f, COLOR_TEXT,
+                COLOR_BUTTON, COLOR_BUTTON_HOVER, COLOR_BUTTON_PRESSED, listener);
+        view.setTooltipText(tr(tooltipKey));
         return view;
     }
 
@@ -268,7 +339,7 @@ final class ExpandedTextInputOverlay extends FrameLayout {
         Editable editable = editor.getText();
         clearSpans(editable, start, end);
         editable.setSpan(new LatexSpan(editable.subSequence(start, end).toString(), "inline"), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        editable.setSpan(new ForegroundColorSpan(0xFF88D7FF), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        editable.setSpan(new ForegroundColorSpan(COLOR_PRIMARY), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         editable.setSpan(new StyleSpan(Typeface.ITALIC), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         editor.setSelection(start, end);
     }
@@ -306,7 +377,7 @@ final class ExpandedTextInputOverlay extends FrameLayout {
             if (RichTextValue.KIND_LATEX.equals(segment.kind())) {
                 builder.append(segment.source());
                 builder.setSpan(new LatexSpan(segment.source(), segment.display()), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                builder.setSpan(new ForegroundColorSpan(0xFF88D7FF), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                builder.setSpan(new ForegroundColorSpan(COLOR_PRIMARY), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 builder.setSpan(new StyleSpan(Typeface.ITALIC), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             } else {
                 builder.append(segment.text());
@@ -450,10 +521,40 @@ final class ExpandedTextInputOverlay extends FrameLayout {
         }
     }
 
-    private static TextView button(Context context, String text, int color, View.OnClickListener listener) {
-        TextView view = label(context, text, 13.0f, 0xFFFFFFFF, Gravity.CENTER);
-        view.setBackground(rect(color, 4.0f, 1, 0x553C4658));
+    private static TextView actionButton(Context context, String text, boolean primary, View.OnClickListener listener) {
+        int textColor = primary ? 0xFF17191B : COLOR_TEXT;
+        int normal = primary ? COLOR_PRIMARY : COLOR_BUTTON;
+        int hover = primary ? COLOR_PRIMARY_HOVER : COLOR_BUTTON_HOVER;
+        int pressed = primary ? COLOR_PRIMARY_PRESSED : COLOR_BUTTON_PRESSED;
+        return interactiveButton(context, text, 12.5f, textColor, normal, hover, pressed, listener);
+    }
+
+    private static TextView interactiveButton(Context context, String text, float textSize, int textColor,
+                                              int normalColor, int hoverColor, int pressedColor,
+                                              View.OnClickListener listener) {
+        TextView view = label(context, text, textSize, textColor, Gravity.CENTER);
+        view.setBackground(rect(normalColor, 2.0f, 0, 0));
         view.setOnClickListener(listener);
+        boolean[] hovered = {false};
+        view.setOnHoverListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                hovered[0] = true;
+                v.setBackground(rect(hoverColor, 2.0f, 0, 0));
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                hovered[0] = false;
+                v.setBackground(rect(normalColor, 2.0f, 0, 0));
+            }
+            return false;
+        });
+        view.setOnTouchListener((v, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                v.setBackground(rect(pressedColor, 2.0f, 0, 0));
+            } else if (event.getActionMasked() == MotionEvent.ACTION_UP
+                    || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                v.setBackground(rect(hovered[0] ? hoverColor : normalColor, 2.0f, 0, 0));
+            }
+            return false;
+        });
         return view;
     }
 
@@ -464,6 +565,16 @@ final class ExpandedTextInputOverlay extends FrameLayout {
         TextView view = UIUtils.createLockedTextView(context, text, sizeDp, color);
         view.setGravity(gravity);
         return view;
+    }
+
+    private static View divider(Context context) {
+        View divider = new View(context);
+        divider.setBackground(rect(COLOR_BORDER, 0.0f, 0, 0));
+        return divider;
+    }
+
+    private static String tr(String key, Object... args) {
+        return Component.translatable(key, args).getString();
     }
 
     private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {

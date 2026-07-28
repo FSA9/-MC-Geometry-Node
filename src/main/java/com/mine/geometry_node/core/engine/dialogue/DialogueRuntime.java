@@ -7,7 +7,6 @@ import com.mine.geometry_node.core.engine.dialogue.payload.DialogueWaitRequest;
 import com.mine.geometry_node.core.engine.dialogue.presenter.ChatDialoguePresenter;
 import com.mine.geometry_node.core.engine.dialogue.presenter.DialoguePresenter;
 import com.mine.geometry_node.core.engine.dialogue.presenter.PacketDialoguePresenter;
-import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueTextParser;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueCloseReason;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionManager;
@@ -21,7 +20,6 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.node.nodes.events.dialogue.OnShopTradeSuccess;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -103,14 +101,13 @@ public class DialogueRuntime implements GraphRuntime {
         if (lockEntityId != null) {
             boolean includeSharedSessions = !policy.allowMultiPlayer();
             if (sessionManager.findEntityOccupant(lockEntityId, player.getUUID(), includeSharedSessions) != null) {
-                sendBusyMessage(player, policy);
                 handle.resume("closed");
                 return true;
             }
         }
 
         DialogueSession session = sessionManager.createSession(player.getUUID(), handleGraphId(handle));
-        session.setCurrentPage(dialogueRequest.page());
+        session.setPages(dialogueRequest.pages());
         session.setExecutionHandle(handle);
         session.setDialogueContext(dialogueContext);
         session.setPolicy(policy);
@@ -151,6 +148,14 @@ public class DialogueRuntime implements GraphRuntime {
 
         for (DialogueChoicePayload choice : session.getCurrentPage().getChoices()) {
             if (choice.getId().equals(choiceId) && choice.isEnabled()) {
+                if (DialogueWaitRequest.isContinuePageChoice(choice.getId())) {
+                    if (!session.advancePage()) {
+                        return null;
+                    }
+                    session.touch(player.level().getGameTime());
+                    openForPlayer(player, session);
+                    return session;
+                }
                 closeSessionInternal(session, DialogueCloseReason.CHOSEN, choice.getId(), true, true);
                 return session;
             }
@@ -433,13 +438,6 @@ public class DialogueRuntime implements GraphRuntime {
             if (isDead(speakerEntity) || isDead(targetEntity)) {
                 return DialogueCloseReason.ACTOR_DEAD;
             }
-            Entity distanceTarget = speakerEntity != null ? speakerEntity : targetEntity;
-            if (distanceTarget != null && session.getPolicy().hasDistanceLimit()) {
-                double maxDistance = session.getPolicy().maxDistance();
-                if (player.distanceToSqr(distanceTarget) > maxDistance * maxDistance) {
-                    return DialogueCloseReason.TOO_FAR;
-                }
-            }
         }
 
         if (session.getPolicy().hasTimeout()) {
@@ -459,14 +457,6 @@ public class DialogueRuntime implements GraphRuntime {
             return null;
         }
         return context.speakerEntityId() != null ? context.speakerEntityId() : context.targetEntityId();
-    }
-
-    private void sendBusyMessage(ServerPlayer player, DialogueSessionPolicy policy) {
-        String text = policy.busyText();
-        if (text == null || text.isBlank()) {
-            text = "This dialogue is currently busy.";
-        }
-        player.sendSystemMessage(DialogueTextParser.parse(text, player.registryAccess()).component());
     }
 
     private void refreshShopSession(ServerPlayer player, DialogueSession session, String message, boolean success) {

@@ -13,8 +13,6 @@ import java.util.Map;
 public class DialoguePagePayload {
 
     private final String id;
-    @Nullable
-    private final String speaker;
     private final String text;
     private final String styleId;
     private final List<DialogueChoicePayload> choices;
@@ -22,17 +20,16 @@ public class DialoguePagePayload {
     private final String defaultChoiceId;
     private final Map<String, Object> metadata;
 
-    public DialoguePagePayload(String id, @Nullable String speaker, String text) {
-        this(id, speaker, text, "default", List.of(), Map.of());
+    public DialoguePagePayload(String id, String text) {
+        this(id, text, "default", List.of(), Map.of());
     }
 
-    public DialoguePagePayload(String id, @Nullable String speaker, String text, List<DialogueChoicePayload> choices, Map<String, Object> metadata) {
-        this(id, speaker, text, "default", choices, metadata);
+    public DialoguePagePayload(String id, String text, List<DialogueChoicePayload> choices, Map<String, Object> metadata) {
+        this(id, text, "default", choices, metadata);
     }
 
-    public DialoguePagePayload(String id, @Nullable String speaker, String text, String styleId, List<DialogueChoicePayload> choices, Map<String, Object> metadata) {
+    public DialoguePagePayload(String id, String text, String styleId, List<DialogueChoicePayload> choices, Map<String, Object> metadata) {
         this.id = id;
-        this.speaker = speaker;
         this.text = text;
         this.styleId = styleId == null || styleId.isBlank() ? "default" : styleId;
         this.choices = new ArrayList<>(choices);
@@ -42,11 +39,6 @@ public class DialoguePagePayload {
 
     public String getId() {
         return id;
-    }
-
-    @Nullable
-    public String getSpeaker() {
-        return speaker;
     }
 
     public String getText() {
