@@ -25,6 +25,7 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
+import net.minecraft.network.chat.Component;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -102,6 +103,20 @@ final class AssetBrowserActionController {
                 && !RemoteGraphClientState.clipboardPaths().isEmpty();
     }
 
+    boolean canCutSelection() {
+        return canCopySelection();
+    }
+
+    boolean canDeleteSelection() {
+        return canCopySelection();
+    }
+
+    boolean canRenameSelection() {
+        return mPanel.getSourceKind() == AssetSourceKind.LOCAL
+                && mEnableLocalFileActions
+                && mPanel.getSelectedLocalFiles().size() == 1;
+    }
+
     void copySelectionToClipboard() {
         if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
             List<File> files = mPanel.getSelectedLocalFiles();
@@ -122,6 +137,36 @@ final class AssetBrowserActionController {
             performPaste();
         } else {
             pasteRemoteEntries();
+        }
+    }
+
+    void cutSelectionToClipboard() {
+        if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
+            List<File> files = mPanel.getSelectedLocalFiles();
+            if (files.isEmpty()) return;
+            mClipboardFiles = new ArrayList<>(files);
+            mIsCutOperation = true;
+            return;
+        }
+
+        if (!mEnableRemoteTransferActions || !RemoteGraphClientState.canManage()) return;
+        List<AssetEntry> entries = mPanel.getSelectedEntries();
+        if (entries.isEmpty()) return;
+        setRemoteClipboard(entries, true);
+    }
+
+    void deleteSelection() {
+        if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
+            confirmDeleteLocalFiles(mPanel.getSelectedLocalFiles());
+        } else {
+            deleteRemoteEntries(mPanel.getSelectedEntries());
+        }
+    }
+
+    void renameSelection() {
+        List<File> files = mPanel.getSelectedLocalFiles();
+        if (mPanel.getSourceKind() == AssetSourceKind.LOCAL && files.size() == 1) {
+            startInlineEdit(files.get(0));
         }
     }
 
@@ -232,15 +277,19 @@ final class AssetBrowserActionController {
             menu.addMenuItem("编辑标签", () -> showGraphTagDialog(filesSnapshot.get(0)));
             menu.addDivider();
         }
-        menu.addMenuItem("复制" + suffix, shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
-        menu.addMenuItem("剪切" + suffix, () -> {
+        menu.addMenuItem(actionLabel(AssetLibraryActionId.COPY) + suffix,
+                shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
+        menu.addMenuItem(actionLabel(AssetLibraryActionId.CUT) + suffix,
+                shortcutText(AssetLibraryActionId.CUT), () -> {
             mClipboardFiles = new ArrayList<>(filesSnapshot);
             mIsCutOperation = true;
         });
-        menu.addMenuItem("删除" + suffix, () -> confirmDeleteLocalFiles(filesSnapshot));
+        menu.addMenuItem(actionLabel(AssetLibraryActionId.DELETE) + suffix,
+                shortcutText(AssetLibraryActionId.DELETE), () -> confirmDeleteLocalFiles(filesSnapshot));
         if (filesSnapshot.size() == 1) {
             menu.addDivider();
-            menu.addMenuItem("重命名", () -> startInlineEdit(filesSnapshot.get(0)));
+            menu.addMenuItem(actionLabel(AssetLibraryActionId.RENAME),
+                    shortcutText(AssetLibraryActionId.RENAME), () -> startInlineEdit(filesSnapshot.get(0)));
         }
         menu.addDivider();
     }
@@ -255,7 +304,7 @@ final class AssetBrowserActionController {
                 mPanel.getContext(),
                 "删除本地文件",
                 message,
-                "删除",
+                actionLabel(AssetLibraryActionId.DELETE),
                 () -> deleteLocalFiles(files)
         );
         dialog.showIn(mPanel);
@@ -317,9 +366,12 @@ final class AssetBrowserActionController {
             menu.addDivider();
         }
         if (RemoteGraphClientState.canManage()) {
-            menu.addMenuItem("复制" + suffix, shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
-            menu.addMenuItem("剪切" + suffix, () -> setRemoteClipboard(entriesSnapshot, true));
-            menu.addMenuItem("删除" + suffix, () -> deleteRemoteEntries(entriesSnapshot));
+            menu.addMenuItem(actionLabel(AssetLibraryActionId.COPY) + suffix,
+                    shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
+            menu.addMenuItem(actionLabel(AssetLibraryActionId.CUT) + suffix,
+                    shortcutText(AssetLibraryActionId.CUT), () -> setRemoteClipboard(entriesSnapshot, true));
+            menu.addMenuItem(actionLabel(AssetLibraryActionId.DELETE) + suffix,
+                    shortcutText(AssetLibraryActionId.DELETE), () -> deleteRemoteEntries(entriesSnapshot));
             menu.addDivider();
         }
     }
@@ -342,12 +394,15 @@ final class AssetBrowserActionController {
 
         if (mEnableLocalFileActions && !mPanel.isFavoritesMode()
                 && mPanel.getSourceKind() == AssetSourceKind.LOCAL && !mClipboardFiles.isEmpty()) {
-            menu.addMenuItem("粘贴", shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
+            menu.addMenuItem(actionLabel(AssetLibraryActionId.PASTE),
+                    shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
             menu.addDivider();
         }
         if (mEnableRemoteTransferActions && mPanel.getSourceKind() == AssetSourceKind.REMOTE
                 && RemoteGraphClientState.canManage() && !RemoteGraphClientState.clipboardPaths().isEmpty()) {
-            menu.addMenuItem(RemoteGraphClientState.isCutOperation() ? "移动到此处" : "粘贴",
+            menu.addMenuItem(RemoteGraphClientState.isCutOperation()
+                            ? translated("geometry_node.asset_library.action.move_here")
+                            : actionLabel(AssetLibraryActionId.PASTE),
                     shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
             menu.addDivider();
         }
@@ -493,6 +548,14 @@ final class AssetBrowserActionController {
         return AssetLibraryActionRegistry.shortcutText(actionId, ConfigManager.INSTANCE.getConfig());
     }
 
+    private String actionLabel(AssetLibraryActionId actionId) {
+        return AssetLibraryActionRegistry.label(actionId);
+    }
+
+    private static String translated(String translationKey) {
+        return Component.translatable(translationKey).getString();
+    }
+
     private void deleteRemoteEntries(List<AssetEntry> entries) {
         List<String> paths = new ArrayList<>();
         for (AssetEntry entry : entries) {
@@ -508,7 +571,7 @@ final class AssetBrowserActionController {
                 mPanel.getContext(),
                 "删除云端文件",
                 message,
-                "删除",
+                actionLabel(AssetLibraryActionId.DELETE),
                 () -> sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation.DELETE, paths, "")
         );
         dialog.showIn(mPanel);

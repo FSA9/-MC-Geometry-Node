@@ -209,8 +209,7 @@ public class OpenShop extends BaseNode {
         if (current != null) {
             return new DialogueContext(
                     player,
-                    current.speakerEntityId(),
-                    current.targetEntityId(),
+                    current.dialogueEntityId(),
                     STYLE_SHOP,
                     current.graphId(),
                     current.entryId(),
@@ -218,11 +217,10 @@ public class OpenShop extends BaseNode {
             );
         }
         Entity owner = context.getEntity();
-        Entity speakerEntity = owner instanceof ServerPlayer ? null : owner;
+        Entity dialogueEntity = owner instanceof ServerPlayer ? null : owner;
         return new DialogueContext(
                 player,
-                speakerEntity,
-                owner,
+                dialogueEntity,
                 STYLE_SHOP,
                 context.getGraphId(),
                 "root"

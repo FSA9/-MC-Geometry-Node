@@ -111,9 +111,6 @@ public class DialogueRuntime implements GraphRuntime {
         session.setExecutionHandle(handle);
         session.setDialogueContext(dialogueContext);
         session.setPolicy(policy);
-        long gameTime = player.level().getGameTime();
-        session.setCreatedGameTime(gameTime);
-        session.touch(gameTime);
         openForPlayer(player, session);
         return true;
     }
@@ -152,7 +149,6 @@ public class DialogueRuntime implements GraphRuntime {
                     if (!session.advancePage()) {
                         return null;
                     }
-                    session.touch(player.level().getGameTime());
                     openForPlayer(player, session);
                     return session;
                 }
@@ -387,7 +383,7 @@ public class DialogueRuntime implements GraphRuntime {
             if (context == null) {
                 continue;
             }
-            if (entityId.equals(context.speakerEntityId()) || entityId.equals(context.targetEntityId())) {
+            if (entityId.equals(context.dialogueEntityId())) {
                 closeSessionInternal(session, reason, "closed", true, true);
             }
         }
@@ -427,27 +423,15 @@ public class DialogueRuntime implements GraphRuntime {
 
         DialogueContext context = session.getDialogueContext();
         if (context != null) {
-            Entity speakerEntity = context.resolveSpeakerEntity(level);
-            Entity targetEntity = context.resolveTargetEntity(level);
-            if (context.speakerEntityId() != null && speakerEntity == null) {
+            Entity dialogueEntity = context.resolveDialogueEntity(level);
+            if (context.dialogueEntityId() != null && dialogueEntity == null) {
                 return DialogueCloseReason.ACTOR_REMOVED;
             }
-            if (context.targetEntityId() != null && targetEntity == null) {
-                return DialogueCloseReason.ACTOR_REMOVED;
-            }
-            if (isDead(speakerEntity) || isDead(targetEntity)) {
+            if (isDead(dialogueEntity)) {
                 return DialogueCloseReason.ACTOR_DEAD;
             }
         }
 
-        if (session.getPolicy().hasTimeout()) {
-            long lastInteraction = session.getLastInteractionGameTime() >= 0
-                    ? session.getLastInteractionGameTime()
-                    : session.getCreatedGameTime();
-            if (lastInteraction >= 0 && level.getGameTime() - lastInteraction > session.getPolicy().timeoutSeconds() * 20L) {
-                return DialogueCloseReason.TIMEOUT;
-            }
-        }
         return null;
     }
 
@@ -456,7 +440,7 @@ public class DialogueRuntime implements GraphRuntime {
         if (context == null) {
             return null;
         }
-        return context.speakerEntityId() != null ? context.speakerEntityId() : context.targetEntityId();
+        return context.dialogueEntityId();
     }
 
     private void refreshShopSession(ServerPlayer player, DialogueSession session, String message, boolean success) {
@@ -466,7 +450,6 @@ public class DialogueRuntime implements GraphRuntime {
             page.getMetadata().remove("last_trade_message_key");
             page.getMetadata().put("last_trade_success", success);
         }
-        session.touch(player.level().getGameTime());
         getPresenter(session).open(player, session);
     }
 
@@ -477,7 +460,6 @@ public class DialogueRuntime implements GraphRuntime {
             page.getMetadata().put("last_trade_message_key", messageKey == null ? "" : messageKey);
             page.getMetadata().put("last_trade_success", success);
         }
-        session.touch(player.level().getGameTime());
         getPresenter(session).open(player, session);
     }
 
@@ -595,11 +577,7 @@ public class DialogueRuntime implements GraphRuntime {
         if (context == null) {
             return null;
         }
-        Entity speaker = context.resolveSpeakerEntity(level);
-        if (speaker != null) {
-            return speaker;
-        }
-        return context.resolveTargetEntity(level);
+        return context.resolveDialogueEntity(level);
     }
 
     @Nullable

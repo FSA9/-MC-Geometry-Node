@@ -228,6 +228,20 @@ final class ConfigSanitizer {
         config.keyBindings.global.paste = paste.value;
         changed |= paste.changed;
 
+        ReadKeyBinding cut = readKeyBindingWithLegacy(global, legacy, "cut", defaults.keyBindings.global.cut);
+        config.keyBindings.global.cut = cut.value;
+        changed |= cut.changed;
+
+        ReadKeyBinding globalDelete = global == null
+                ? ReadKeyBinding.defaulted(defaults.keyBindings.global.delete)
+                : readKeyBinding(global, "delete", defaults.keyBindings.global.delete);
+        config.keyBindings.global.delete = globalDelete.value;
+        changed |= globalDelete.changed;
+
+        ReadKeyBinding rename = readKeyBindingWithLegacy(global, legacy, "rename", defaults.keyBindings.global.rename);
+        config.keyBindings.global.rename = rename.value;
+        changed |= rename.changed;
+
         ReadKeyBinding delete = readKeyBindingWithLegacy(viewport, legacy, "delete", defaults.keyBindings.viewport.delete);
         config.keyBindings.viewport.delete = delete.value;
         changed |= delete.changed;
@@ -271,6 +285,9 @@ final class ConfigSanitizer {
             changed |= sanitizeKeyBinding(keyBindings.global.save, defaults.global.save, value -> keyBindings.global.save = value);
             changed |= sanitizeKeyBinding(keyBindings.global.copy, defaults.global.copy, value -> keyBindings.global.copy = value);
             changed |= sanitizeKeyBinding(keyBindings.global.paste, defaults.global.paste, value -> keyBindings.global.paste = value);
+            changed |= sanitizeKeyBinding(keyBindings.global.cut, defaults.global.cut, value -> keyBindings.global.cut = value);
+            changed |= sanitizeKeyBinding(keyBindings.global.delete, defaults.global.delete, value -> keyBindings.global.delete = value);
+            changed |= sanitizeKeyBinding(keyBindings.global.rename, defaults.global.rename, value -> keyBindings.global.rename = value);
         }
 
         if (keyBindings.viewport == null) {

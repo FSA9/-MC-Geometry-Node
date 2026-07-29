@@ -24,10 +24,7 @@ public final class ClientDialogueState {
     }
 
     public static void handleClose(PacketCloseDialogue packet) {
-        if (current != null && current.sessionId().equals(packet.sessionId())) {
-            current = null;
-        }
-        DialogueStyleRenderer.close(packet.sessionId());
+        clearSession(packet.sessionId());
     }
 
     @Nullable
@@ -58,8 +55,19 @@ public final class ClientDialogueState {
         }
         UUID sessionId = current.sessionId();
         NetworkHandler.sendToServer(new PacketDialogueChoice(sessionId, PacketDialogueChoice.ACTION_CLOSE, ""));
-        current = null;
-        DialogueStyleRenderer.close(sessionId);
+        clearSession(sessionId);
         return true;
+    }
+
+    public static void reset() {
+        current = null;
+        DialogueStyleRenderer.clear();
+    }
+
+    private static void clearSession(UUID sessionId) {
+        if (current != null && current.sessionId().equals(sessionId)) {
+            current = null;
+        }
+        DialogueStyleRenderer.close(sessionId);
     }
 }

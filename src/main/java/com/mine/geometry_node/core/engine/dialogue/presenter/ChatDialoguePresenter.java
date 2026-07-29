@@ -38,7 +38,7 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
         MutableComponent body = Component.empty();
         Component speaker = session.getDialogueContext() == null
                 ? Component.empty()
-                : session.getDialogueContext().resolveSpeakerDisplayName();
+                : session.getDialogueContext().resolveDialogueEntityDisplayName();
         if (!speaker.getString().isBlank()) {
             body.append(speaker);
             body.append(Component.literal(": ").withStyle(ChatFormatting.GRAY));

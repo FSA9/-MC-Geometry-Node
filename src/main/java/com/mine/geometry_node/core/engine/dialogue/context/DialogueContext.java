@@ -18,33 +18,28 @@ public final class DialogueContext {
     @Nullable
     private final ServerPlayer player;
     @Nullable
-    private final UUID speakerEntityId;
-    @Nullable
-    private final UUID targetEntityId;
+    private final UUID dialogueEntityId;
     private final String styleId;
     private final String graphId;
     private final String entryId;
     private final DialogueSessionPolicy policy;
 
     public DialogueContext(@Nullable ServerPlayer player,
-                           @Nullable Entity speakerEntity,
-                           @Nullable Entity targetEntity,
+                           @Nullable Entity dialogueEntity,
                            String styleId,
                            @Nullable String graphId,
                            @Nullable String entryId) {
-        this(player, speakerEntity, targetEntity, styleId, graphId, entryId, DialogueSessionPolicy.DEFAULT);
+        this(player, dialogueEntity, styleId, graphId, entryId, DialogueSessionPolicy.DEFAULT);
     }
 
     public DialogueContext(@Nullable ServerPlayer player,
-                           @Nullable Entity speakerEntity,
-                           @Nullable Entity targetEntity,
+                           @Nullable Entity dialogueEntity,
                            String styleId,
                            @Nullable String graphId,
                            @Nullable String entryId,
                            DialogueSessionPolicy policy) {
         this(player,
-                speakerEntity == null ? null : speakerEntity.getUUID(),
-                targetEntity == null ? null : targetEntity.getUUID(),
+                dialogueEntity == null ? null : dialogueEntity.getUUID(),
                 styleId,
                 graphId,
                 entryId,
@@ -52,15 +47,13 @@ public final class DialogueContext {
     }
 
     public DialogueContext(@Nullable ServerPlayer player,
-                           @Nullable UUID speakerEntityId,
-                           @Nullable UUID targetEntityId,
+                           @Nullable UUID dialogueEntityId,
                            String styleId,
                            @Nullable String graphId,
                            @Nullable String entryId,
                            DialogueSessionPolicy policy) {
         this.player = player;
-        this.speakerEntityId = speakerEntityId;
-        this.targetEntityId = targetEntityId;
+        this.dialogueEntityId = dialogueEntityId;
         this.styleId = styleId == null || styleId.isBlank() ? "default" : styleId;
         this.graphId = graphId == null ? "" : graphId;
         this.entryId = entryId == null || entryId.isBlank() ? "root" : entryId;
@@ -73,13 +66,8 @@ public final class DialogueContext {
     }
 
     @Nullable
-    public UUID speakerEntityId() {
-        return speakerEntityId;
-    }
-
-    @Nullable
-    public UUID targetEntityId() {
-        return targetEntityId;
+    public UUID dialogueEntityId() {
+        return dialogueEntityId;
     }
 
     public String styleId() {
@@ -99,21 +87,16 @@ public final class DialogueContext {
     }
 
     @Nullable
-    public Entity resolveSpeakerEntity(@Nullable ServerLevel level) {
-        return resolveEntity(level, speakerEntityId);
+    public Entity resolveDialogueEntity(@Nullable ServerLevel level) {
+        return resolveEntity(level, dialogueEntityId);
     }
 
-    public Component resolveSpeakerDisplayName() {
+    public Component resolveDialogueEntityDisplayName() {
         if (player == null) {
             return Component.empty();
         }
-        Entity speakerEntity = resolveSpeakerEntity(player.level());
-        return speakerEntity == null ? Component.empty() : speakerEntity.getDisplayName().copy();
-    }
-
-    @Nullable
-    public Entity resolveTargetEntity(@Nullable ServerLevel level) {
-        return resolveEntity(level, targetEntityId);
+        Entity dialogueEntity = resolveDialogueEntity(player.level());
+        return dialogueEntity == null ? Component.empty() : dialogueEntity.getDisplayName().copy();
     }
 
     @Nullable

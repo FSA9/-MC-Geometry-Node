@@ -41,6 +41,9 @@ public class AppConfig {
         public String save = "CTRL+S";
         public String copy = "CTRL+C";
         public String paste = "CTRL+V";
+        public String cut = "CTRL+X";
+        public String delete = "DELETE";
+        public String rename = "F2";
     }
 
     public static class ViewportKeyBindingsConfig {

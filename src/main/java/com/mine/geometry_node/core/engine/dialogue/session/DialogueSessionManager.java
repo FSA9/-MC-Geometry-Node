@@ -105,9 +105,8 @@ public class DialogueSessionManager {
             if (!includeSharedSessions && session.getPolicy().allowMultiPlayer()) {
                 continue;
             }
-            UUID speakerId = session.getDialogueContext().speakerEntityId();
-            UUID targetId = session.getDialogueContext().targetEntityId();
-            if (entityId.equals(speakerId) || entityId.equals(targetId)) {
+            UUID dialogueEntityId = session.getDialogueContext().dialogueEntityId();
+            if (entityId.equals(dialogueEntityId)) {
                 return session;
             }
         }

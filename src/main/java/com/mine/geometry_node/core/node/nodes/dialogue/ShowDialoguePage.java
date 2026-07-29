@@ -206,15 +206,14 @@ public class ShowDialoguePage extends BaseNode {
 
     private DialogueContext createFallbackDialogueContext(ExecutionContext context, ServerPlayer player) {
         Entity owner = context.getEntity();
-        Entity speakerEntity = owner instanceof ServerPlayer ? null : owner;
-        return new DialogueContext(player, speakerEntity, owner, "default", context.getGraphId(), "root");
+        Entity dialogueEntity = owner instanceof ServerPlayer ? null : owner;
+        return new DialogueContext(player, dialogueEntity, "default", context.getGraphId(), "root");
     }
 
     private DialogueContext withPlayer(DialogueContext dialogueContext, ServerPlayer player) {
         return new DialogueContext(
                 player,
-                dialogueContext.speakerEntityId(),
-                dialogueContext.targetEntityId(),
+                dialogueContext.dialogueEntityId(),
                 dialogueContext.styleId(),
                 dialogueContext.graphId(),
                 dialogueContext.entryId(),

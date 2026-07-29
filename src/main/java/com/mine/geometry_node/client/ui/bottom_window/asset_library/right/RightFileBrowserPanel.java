@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.bottom_window.asset_library.right;
 
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetPathUtils;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.action.AssetLibraryActionId;
@@ -34,6 +33,7 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
+import net.minecraft.network.chat.Component;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -59,6 +59,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final EditText mSearchInput;
     private final EditText mTagSearchInput;
     private final FrameLayout mBodyFrame;
+    private final TextView mToolbarTooltip;
     private final ScrollView mScrollView;
     private final FileContentLayout mFileContent;
     private final Map<String, AssetFileItemView> mItemViews = new HashMap<>();
@@ -104,15 +105,19 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         return thread;
     });
 
-    private static final float NAV_BAR_HEIGHT = 40.0f;
-    private static final float BTN_ADD_WIDTH = 40.0f;
-    private static final float BTN_MENU_WIDTH = 34.0f;
-    private static final float SEARCH_WIDTH = 170.0f;
-    private static final float TAG_SEARCH_WIDTH = 150.0f;
-    private static final float SEARCH_BUTTON_WIDTH = 34.0f;
-    private static final float CLEAR_BUTTON_WIDTH = 34.0f;
+    private static final float NAV_BAR_HEIGHT = 76.0f;
+    private static final float NAV_ROW_HEIGHT = 32.0f;
+    private static final float NAV_BUTTON_SIZE = 30.0f;
     private static final float TEXT_SIZE_NAV = 14.0f;
-    private static final float TEXT_SIZE_BTN_ADD = 14.0f;
+    private static final int COLOR_TOOLBAR_BG = 0xFF303030;
+    private static final int COLOR_CONTROL_BG = 0xFF202020;
+    private static final int COLOR_CONTROL_BORDER = 0xFF484848;
+    private static final int COLOR_BUTTON_BG = 0xFF3A3A3A;
+    private static final int COLOR_BUTTON_HOVER = 0xFF4A4A4A;
+    private static final int COLOR_BUTTON_TEXT = 0xFFD0D0D0;
+    private static final int COLOR_ACCENT = 0xFFF28C28;
+    private static final int COLOR_TOOLTIP_BG = 0xFF252525;
+    private static final int COLOR_TOOLTIP_BORDER = 0xFF555555;
 
     public RightFileBrowserPanel(Context context, AssetBrowserCoordinator coordinator) {
         this(context, coordinator, true, true, true, true, false);
@@ -151,29 +156,43 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
         LinearLayout navBar = createNavBar(context);
         addNavBar(navBar);
-        addUpButton(navBar, context);
+
+        LinearLayout pathRow = createNavRow(context);
+        navBar.addView(pathRow, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(NAV_ROW_HEIGHT)));
+        addUpButton(pathRow, context);
 
         mPathInput = createPathInput(context);
-        navBar.addView(mPathInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-        addQuickAccessButton(navBar, context);
+        LinearLayout.LayoutParams pathLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
+        pathLp.setMargins(dp2pxInt(4), 0, dp2pxInt(4), 0);
+        pathRow.addView(mPathInput, pathLp);
+        addQuickAccessButton(pathRow, context);
+        addOptionsButton(pathRow, context);
 
-        mSearchInput = createSearchInput(context, "搜索名称", value -> mPendingSearchQuery = value);
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(dp2pxInt(SEARCH_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
-        searchLp.setMargins(dp2pxInt(6), dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
-        navBar.addView(mSearchInput, searchLp);
+        LinearLayout searchRow = createNavRow(context);
+        LinearLayout.LayoutParams searchRowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(NAV_ROW_HEIGHT));
+        searchRowLp.setMargins(0, dp2pxInt(4), 0, 0);
+        navBar.addView(searchRow, searchRowLp);
 
-        mTagSearchInput = createSearchInput(context, "搜索标签", value -> mPendingTagSearchQuery = value);
-        LinearLayout.LayoutParams tagSearchLp = new LinearLayout.LayoutParams(dp2pxInt(TAG_SEARCH_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
-        tagSearchLp.setMargins(0, dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
-        navBar.addView(mTagSearchInput, tagSearchLp);
+        mSearchInput = createSearchInput(context, tr("geometry_node.asset_library.toolbar.search_name"),
+                value -> mPendingSearchQuery = value);
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.15f);
+        searchRow.addView(mSearchInput, searchLp);
 
-        addSearchButton(navBar, context);
-        addClearSearchButton(navBar, context);
-        addOptionsButton(navBar, context);
+        mTagSearchInput = createSearchInput(context, tr("geometry_node.asset_library.toolbar.search_tag"),
+                value -> mPendingTagSearchQuery = value);
+        LinearLayout.LayoutParams tagSearchLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.85f);
+        tagSearchLp.setMargins(dp2pxInt(4), 0, dp2pxInt(4), 0);
+        searchRow.addView(mTagSearchInput, tagSearchLp);
+
+        addSearchButton(searchRow, context);
+        addClearSearchButton(searchRow, context);
 
         mBodyFrame = new FrameLayout(context);
         mScrollView = new ScrollView(context);
         mFileContent = new FileContentLayout(context, this);
+        mToolbarTooltip = createToolbarTooltip(context);
         configureBody();
     }
 
@@ -210,10 +229,17 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private LinearLayout createNavBar(Context context) {
         LinearLayout navBar = new LinearLayout(context);
-        navBar.setOrientation(LinearLayout.HORIZONTAL);
-        navBar.setGravity(Gravity.CENTER_VERTICAL);
-        navBar.setBackground(createColorDrawable(0xFF2A2A2A));
+        navBar.setOrientation(LinearLayout.VERTICAL);
+        navBar.setPadding(dp2pxInt(6), dp2pxInt(4), dp2pxInt(6), dp2pxInt(4));
+        navBar.setBackground(createColorDrawable(COLOR_TOOLBAR_BG));
         return navBar;
+    }
+
+    private LinearLayout createNavRow(Context context) {
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        return row;
     }
 
     private void addNavBar(LinearLayout navBar) {
@@ -222,18 +248,20 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void addUpButton(LinearLayout navBar, Context context) {
-        TextView btnUp = createNavButton(context, "⬆ 向上");
+        TextView btnUp = createIconButton(context, "↑", tr("geometry_node.asset_library.toolbar.up"));
         btnUp.setOnClickListener(v -> navigateUp());
         navBar.addView(btnUp, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
     private EditText createPathInput(Context context) {
         EditText input = createNavInput(context);
+        input.setHint(tr("geometry_node.asset_library.toolbar.path"));
+        input.setHintTextColor(0xFF737B86);
         input.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
                 if (mFavoritesMode) {
-                    input.setText("我的收藏");
+                    input.setText(tr("geometry_node.asset_library.toolbar.favorites"));
                     input.clearFocus();
                     return true;
                 }
@@ -257,9 +285,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void addQuickAccessButton(LinearLayout navBar, Context context) {
-        TextView btnAdd = createNavButton(context, "+");
-        btnAdd.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(TEXT_SIZE_BTN_ADD));
-        btnAdd.setBackground(createColorDrawable(0xFF3A3A3A));
+        TextView btnAdd = createIconButton(context, "+", tr("geometry_node.asset_library.toolbar.add_quick_access"));
         btnAdd.setOnClickListener(v -> {
             if (!mEnableQuickAccessAdd || mCoordinator == null) return;
             String path = mPathInput.getText().toString().trim();
@@ -272,14 +298,14 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                 }
             }
         });
-        navBar.addView(btnAdd, new LinearLayout.LayoutParams(dp2pxInt(BTN_ADD_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+        navBar.addView(btnAdd, new LinearLayout.LayoutParams(dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT));
         btnAdd.setVisibility(mEnableQuickAccessAdd ? View.VISIBLE : View.GONE);
     }
 
     private EditText createSearchInput(Context context, String hint, Consumer<String> pendingQuerySetter) {
         EditText input = createSearchInput(context);
         input.setHint(hint);
-        input.setHintTextColor(0xFF666666);
+        input.setHintTextColor(0xFF737B86);
         input.addTextChangedListener(new TextWatcher() {
             @Override public void afterTextChanged(Editable s) {
                 pendingQuerySetter.accept(s.toString().trim());
@@ -298,28 +324,27 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void addSearchButton(LinearLayout navBar, Context context) {
-        TextView btnSearch = createIconButton(context, "⌕");
+        TextView btnSearch = createIconButton(context, "⌕", tr("geometry_node.asset_library.toolbar.search"));
         btnSearch.setOnClickListener(v -> applySearch());
-        LinearLayout.LayoutParams searchButtonLp = new LinearLayout.LayoutParams(dp2pxInt(SEARCH_BUTTON_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
-        searchButtonLp.setMargins(0, dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
+        LinearLayout.LayoutParams searchButtonLp = new LinearLayout.LayoutParams(dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT);
         navBar.addView(btnSearch, searchButtonLp);
     }
 
     private void addClearSearchButton(LinearLayout navBar, Context context) {
-        TextView btnClearSearch = createIconButton(context, "×");
+        TextView btnClearSearch = createIconButton(context, "×", tr("geometry_node.asset_library.toolbar.clear_search"));
         btnClearSearch.setOnClickListener(v -> clearSearch());
-        LinearLayout.LayoutParams clearButtonLp = new LinearLayout.LayoutParams(dp2pxInt(CLEAR_BUTTON_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT);
-        clearButtonLp.setMargins(0, dp2pxInt(5), dp2pxInt(6), dp2pxInt(5));
+        LinearLayout.LayoutParams clearButtonLp = new LinearLayout.LayoutParams(dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT);
+        clearButtonLp.setMargins(dp2pxInt(4), 0, 0, 0);
         navBar.addView(btnClearSearch, clearButtonLp);
     }
 
     private void addOptionsButton(LinearLayout navBar, Context context) {
-        TextView btnOptions = createNavButton(context, "⋮");
+        TextView btnOptions = createIconButton(context, "⋮", tr("geometry_node.asset_library.toolbar.more_options"));
         btnOptions.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(18));
-        btnOptions.setPadding(0, 0, 0, 0);
-        btnOptions.setBackground(createColorDrawable(0xFF3A3A3A));
         btnOptions.setOnClickListener(v -> showOptionsMenu(btnOptions));
-        navBar.addView(btnOptions, new LinearLayout.LayoutParams(dp2pxInt(BTN_MENU_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout.LayoutParams optionsLp = new LinearLayout.LayoutParams(dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT);
+        optionsLp.setMargins(dp2pxInt(4), 0, 0, 0);
+        navBar.addView(btnOptions, optionsLp);
     }
 
     private void configureBody() {
@@ -330,8 +355,9 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         mBodyFrame.addView(mScrollView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mBodyFrame.addView(mToolbarTooltip);
         addView(mBodyFrame, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
     }
 
     @Override
@@ -352,6 +378,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public void deactivatePanel() {
+        hideToolbarTooltip();
         mKeyManager.dispose();
         cancelRemoteListRequest();
         mActionController.cancelRemoteRequests();
@@ -372,6 +399,9 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         switch (actionId) {
             case COPY -> mActionController.copySelectionToClipboard();
             case PASTE -> mActionController.pasteClipboard();
+            case CUT -> mActionController.cutSelectionToClipboard();
+            case DELETE -> mActionController.deleteSelection();
+            case RENAME -> mActionController.renameSelection();
         }
     }
 
@@ -826,6 +856,18 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         return mActionController.canPasteClipboard();
     }
 
+    public boolean canCutSelection() {
+        return mActionController.canCutSelection();
+    }
+
+    public boolean canDeleteSelection() {
+        return mActionController.canDeleteSelection();
+    }
+
+    public boolean canRenameSelection() {
+        return mActionController.canRenameSelection();
+    }
+
     @Override
     public void onFavoriteToggled(AssetEntry entry) {
         if (entry == null || entry.sourceKind() != AssetSourceKind.LOCAL || entry.localFile() == null || !isLocalGraphFile(entry.localFile())) {
@@ -912,40 +954,73 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         return mItemViews;
     }
 
-    private TextView createNavButton(Context context, String text) {
-        TextView btn = UIUtils.createLockedTextView(context, text, TEXT_SIZE_NAV, 0xFFDDDDDD);
-        btn.setPadding(dp2pxInt(16), 0, dp2pxInt(16), 0);
-        btn.setGravity(Gravity.CENTER);
-        btn.setBackground(createColorDrawable(0xFF444444));
-        return btn;
-    }
-
-    private TextView createIconButton(Context context, String text) {
-        TextView btn = UIUtils.createLockedTextView(context, text, 16.0f, 0xFFE6E6E6);
+    private TextView createIconButton(Context context, String text, String description) {
+        TextView btn = UIUtils.createLockedTextView(context, text, 16.0f, COLOR_BUTTON_TEXT);
         btn.setSingleLine(true);
         btn.setPadding(0, 0, 0, 0);
         btn.setGravity(Gravity.CENTER);
-        btn.setBackground(createRectDrawable(0xFF343A42, 4));
+        btn.setContentDescription(description);
+        btn.setBackground(createRectDrawable(COLOR_BUTTON_BG, 3));
         btn.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                btn.setBackground(createRectDrawable(0xFF46515E, 4));
-                btn.setTextColor(0xFFFFFFFF);
+                btn.setBackground(createRectDrawable(COLOR_BUTTON_HOVER, 3));
+                btn.setTextColor(COLOR_ACCENT);
+                showToolbarTooltip(btn, description);
             } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                btn.setBackground(createRectDrawable(0xFF343A42, 4));
-                btn.setTextColor(0xFFE6E6E6);
+                btn.setBackground(createRectDrawable(COLOR_BUTTON_BG, 3));
+                btn.setTextColor(COLOR_BUTTON_TEXT);
+                hideToolbarTooltip();
             }
             return false;
         });
         return btn;
     }
 
+    private TextView createToolbarTooltip(Context context) {
+        TextView tooltip = UIUtils.createLockedTextView(context, "", 11.0f, 0xFFD8D8D8);
+        tooltip.setSingleLine(true);
+        tooltip.setGravity(Gravity.CENTER);
+        tooltip.setPadding(dp2pxInt(8), 0, dp2pxInt(8), 0);
+        tooltip.setBackground(createRectDrawable(COLOR_TOOLTIP_BG, 3, 1, COLOR_TOOLTIP_BORDER));
+        tooltip.setVisibility(View.GONE);
+        return tooltip;
+    }
+
+    private void showToolbarTooltip(View anchor, String text) {
+        if (text == null || text.isBlank() || mBodyFrame.getWidth() <= 0) return;
+
+        int desiredWidth = dp2pxInt(Math.max(56, Math.min(150, text.codePointCount(0, text.length()) * 12 + 16)));
+        int width = Math.min(desiredWidth, mBodyFrame.getWidth());
+        int[] bodyLocation = new int[2];
+        int[] anchorLocation = new int[2];
+        mBodyFrame.getLocationOnScreen(bodyLocation);
+        anchor.getLocationOnScreen(anchorLocation);
+        int anchorCenter = anchorLocation[0] - bodyLocation[0] + anchor.getWidth() / 2;
+        int left = Math.max(0, Math.min(mBodyFrame.getWidth() - width, anchorCenter - width / 2));
+
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, dp2pxInt(24));
+        params.leftMargin = left;
+        params.topMargin = dp2pxInt(4);
+        mToolbarTooltip.setText(text);
+        mToolbarTooltip.setLayoutParams(params);
+        mToolbarTooltip.setVisibility(View.VISIBLE);
+    }
+
+    private void hideToolbarTooltip() {
+        mToolbarTooltip.setVisibility(View.GONE);
+    }
+
+    private static String tr(String translationKey) {
+        return Component.translatable(translationKey).getString();
+    }
+
     private EditText createNavInput(Context context) {
         EditText input = new EditText(context);
         input.setTextColor(0xFFCCCCCC);
         input.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(TEXT_SIZE_NAV));
-        input.setPadding(dp2pxInt(12), 0, dp2pxInt(12), 0);
+        input.setPadding(dp2pxInt(10), 0, dp2pxInt(10), 0);
         input.setGravity(Gravity.CENTER_VERTICAL);
-        input.setBackground(createColorDrawable(UIConstants.ViewPort.NodeMenu.SEARCH_BG_COLOR));
+        input.setBackground(createRectDrawable(COLOR_CONTROL_BG, 3, 1, COLOR_CONTROL_BORDER));
         input.setSingleLine(true);
         return input;
     }
@@ -953,8 +1028,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private EditText createSearchInput(Context context) {
         EditText input = createNavInput(context);
         input.setTextColor(0xFFE6E6E6);
-        input.setPadding(dp2pxInt(12), 0, dp2pxInt(12), 0);
-        input.setBackground(createRectDrawable(0xFF242424, 4));
+        input.setHintTextColor(0xFF737B86);
         return input;
     }
 
@@ -997,8 +1071,15 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     static ShapeDrawable createRectDrawable(int color, float radiusDp) {
+        return createRectDrawable(color, radiusDp, 0, 0);
+    }
+
+    static ShapeDrawable createRectDrawable(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
         ShapeDrawable drawable = createColorDrawable(color);
         drawable.setCornerRadius(dp2px(radiusDp));
+        if (strokeWidthDp > 0) {
+            drawable.setStroke(dp2pxInt(strokeWidthDp), strokeColor);
+        }
         return drawable;
     }
 }

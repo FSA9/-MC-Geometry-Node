@@ -24,13 +24,11 @@ public class BeginDialogue extends BaseNode {
     private static final String[] STYLE_OPTIONS = {"default", "rpg"};
 
     public static final String PLAYER = StandardPorts.PLAYER.getId();
-    public static final String SPEAKER_ENTITY = StandardPorts.SPEAKER_ENTITY.getId();
-    public static final String TARGET_ENTITY = StandardPorts.TARGET_ENTITY.getId();
+    public static final String DIALOGUE_ENTITY = StandardPorts.SPEAKER_ENTITY.getId();
     public static final String STYLE_ID = StandardPorts.STYLE_ID.getId();
     public static final String GRAPH_ID = StandardPorts.GRAPH_ID.getId();
     public static final String ENTRY_ID = StandardPorts.ENTRY_ID.getId();
     public static final String ALLOW_MULTI_PLAYER = "allow_multi_player";
-    public static final String TIMEOUT_SECONDS = "timeout_seconds";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -38,7 +36,6 @@ public class BeginDialogue extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.PLAYER.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.SPEAKER_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TARGET_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.STYLE_ID.toInput("default"),
                         null,
@@ -49,27 +46,23 @@ public class BeginDialogue extends BaseNode {
                 .addRow(new PortRow(StandardPorts.GRAPH_ID.toInput(""), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTRY_ID.toInput("root"), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(PortDef.create(ALLOW_MULTI_PLAYER, "geometry_node.port.allow_multi_player", PortType.BOOLEAN, true), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(PortDef.create(TIMEOUT_SECONDS, "geometry_node.port.timeout_seconds", PortType.INTEGER, 0), null, UIHint.INPUT, null, null))
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         ServerPlayer player = resolvePlayer(context);
-        Entity speakerEntity = resolveSpeakerEntity(context);
-        Entity targetEntity = resolveTargetEntity(context, speakerEntity);
+        Entity dialogueEntity = resolveDialogueEntity(context);
         String styleId = stringOrDefault(getInput(context, STYLE_ID, String.class), "default");
         String graphId = stringOrDefault(getInput(context, GRAPH_ID, String.class), context.getGraphId());
         String entryId = stringOrDefault(getInput(context, ENTRY_ID, String.class), "root");
         DialogueSessionPolicy policy = new DialogueSessionPolicy(
-                boolOrDefault(getInput(context, ALLOW_MULTI_PLAYER, Boolean.class), true),
-                intOrDefault(getInput(context, TIMEOUT_SECONDS, Integer.class), 0)
+                boolOrDefault(getInput(context, ALLOW_MULTI_PLAYER, Boolean.class), true)
         );
 
         context.setTempData(DialogueContext.TEMP_KEY, new DialogueContext(
                 player,
-                speakerEntity,
-                targetEntity,
+                dialogueEntity,
                 styleId,
                 graphId,
                 entryId,
@@ -98,10 +91,10 @@ public class BeginDialogue extends BaseNode {
         return null;
     }
 
-    private Entity resolveSpeakerEntity(ExecutionContext context) {
-        Entity explicitSpeakerEntity = getInput(context, SPEAKER_ENTITY, Entity.class);
-        if (explicitSpeakerEntity != null) {
-            return explicitSpeakerEntity;
+    private Entity resolveDialogueEntity(ExecutionContext context) {
+        Entity explicitDialogueEntity = getInput(context, DIALOGUE_ENTITY, Entity.class);
+        if (explicitDialogueEntity != null) {
+            return explicitDialogueEntity;
         }
         Entity owner = context.getEntity();
         if (owner != null && !(owner instanceof ServerPlayer)) {
@@ -114,21 +107,6 @@ public class BeginDialogue extends BaseNode {
         return null;
     }
 
-    private Entity resolveTargetEntity(ExecutionContext context, Entity speakerEntity) {
-        Entity explicitTarget = getInput(context, TARGET_ENTITY, Entity.class);
-        if (explicitTarget != null) {
-            return explicitTarget;
-        }
-        if (speakerEntity != null) {
-            return speakerEntity;
-        }
-        Object eventEntity = context.getEventData(StandardPorts.ENTITY.getId());
-        if (eventEntity instanceof Entity entity) {
-            return entity;
-        }
-        return context.getEntity();
-    }
-
     private static String stringOrDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
     }
@@ -137,7 +115,4 @@ public class BeginDialogue extends BaseNode {
         return value == null ? fallback : value;
     }
 
-    private static int intOrDefault(Integer value, int fallback) {
-        return value == null ? fallback : value;
-    }
 }

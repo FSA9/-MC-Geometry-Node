@@ -107,6 +107,22 @@ public final class DialogueStyleRenderer {
         restoreGameInputIfNeeded();
     }
 
+    public static void clear() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!minecraft.isSameThread()) {
+            minecraft.execute(DialogueStyleRenderer::clear);
+            return;
+        }
+
+        if (minecraft.screen == activeScreen) {
+            Screen previousScreen = activeScreen instanceof MuiScreen muiScreen ? muiScreen.getPreviousScreen() : null;
+            minecraft.setScreen(previousScreen);
+        }
+        activeScreen = null;
+        activeSessionId = null;
+        restoreGameInputIfNeeded();
+    }
+
     private static void restoreGameInputIfNeeded() {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == null) {

@@ -77,7 +77,7 @@ public record PacketOpenDialogue(
                 page.getId(),
                 session.getDialogueContext() == null
                         ? Component.empty()
-                        : session.getDialogueContext().resolveSpeakerDisplayName(),
+                        : session.getDialogueContext().resolveDialogueEntityDisplayName(),
                 page.getText(),
                 page.getStyleId(),
                 defaultChoiceId,

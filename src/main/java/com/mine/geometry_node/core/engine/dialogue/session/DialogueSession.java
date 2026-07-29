@@ -25,8 +25,6 @@ public class DialogueSession {
     private final Instant createdAt;
     private State state = State.ACTIVE;
     private DialogueSessionPolicy policy = DialogueSessionPolicy.DEFAULT;
-    private long createdGameTime = -1L;
-    private long lastInteractionGameTime = -1L;
     @Nullable
     private String closeReason;
     @Nullable
@@ -147,26 +145,6 @@ public class DialogueSession {
 
     public void setPolicy(@Nullable DialogueSessionPolicy policy) {
         this.policy = policy == null ? DialogueSessionPolicy.DEFAULT : policy;
-    }
-
-    public long getCreatedGameTime() {
-        return createdGameTime;
-    }
-
-    public void setCreatedGameTime(long createdGameTime) {
-        this.createdGameTime = createdGameTime;
-    }
-
-    public long getLastInteractionGameTime() {
-        return lastInteractionGameTime;
-    }
-
-    public void setLastInteractionGameTime(long lastInteractionGameTime) {
-        this.lastInteractionGameTime = lastInteractionGameTime;
-    }
-
-    public void touch(long gameTime) {
-        this.lastInteractionGameTime = gameTime;
     }
 
     @Nullable
