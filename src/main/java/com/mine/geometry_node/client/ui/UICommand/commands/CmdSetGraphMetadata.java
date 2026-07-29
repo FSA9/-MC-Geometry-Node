@@ -1,0 +1,62 @@
+package com.mine.geometry_node.client.ui.UICommand.commands;
+
+import com.mine.geometry_node.client.ui.UICommand.ICommand;
+import com.mine.geometry_node.client.ui.viewport.GraphController;
+import com.mine.geometry_node.core.node.NodeGraph;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * 修改整张图的本地描述和标签，并将修改纳入编辑器撤销栈。
+ */
+public final class CmdSetGraphMetadata implements ICommand {
+    private final GraphController mController;
+    private final String mOldComment;
+    private final List<String> mOldTags;
+    private final String mNewComment;
+    private final List<String> mNewTags;
+
+    public CmdSetGraphMetadata(GraphController controller, String newComment, List<String> newTags) {
+        mController = controller;
+        NodeGraph graph = controller != null ? controller.getContext().getGraph() : null;
+        mOldComment = normalizeComment(graph != null ? graph.comment : null);
+        mOldTags = normalizeTags(graph != null ? graph.tags : null);
+        mNewComment = normalizeComment(newComment);
+        mNewTags = normalizeTags(newTags);
+    }
+
+    @Override
+    public boolean canExecute() {
+        return mController != null
+                && (!Objects.equals(mOldComment, mNewComment) || !Objects.equals(mOldTags, mNewTags));
+    }
+
+    @Override
+    public void execute() {
+        mController.setGraphMetadata(mNewComment, mNewTags);
+    }
+
+    @Override
+    public void undo() {
+        mController.setGraphMetadata(mOldComment, mOldTags);
+    }
+
+    private static String normalizeComment(String comment) {
+        return comment != null ? comment.trim() : "";
+    }
+
+    private static List<String> normalizeTags(List<String> tags) {
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        if (tags != null) {
+            for (String tag : tags) {
+                if (tag == null) continue;
+                String value = tag.trim();
+                if (!value.isEmpty()) normalized.add(value);
+            }
+        }
+        return new ArrayList<>(normalized);
+    }
+}

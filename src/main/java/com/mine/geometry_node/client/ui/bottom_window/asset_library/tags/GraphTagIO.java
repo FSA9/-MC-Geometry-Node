@@ -22,6 +22,8 @@ public final class GraphTagIO {
 
     private GraphTagIO() {}
 
+    public record GraphMetadata(GraphKind kind, String comment, List<String> tags) {}
+
     public static JsonObject readGraphRoot(File file) throws Exception {
         String content = Files.exists(file.toPath()) ? Files.readString(file.toPath()).trim() : "";
         if (content.isEmpty() || content.equals("{}")) {
@@ -37,6 +39,14 @@ public final class GraphTagIO {
 
     public static List<String> readTags(File file) throws Exception {
         return readTags(readGraphRoot(file));
+    }
+
+    public static GraphMetadata readMetadata(File file) throws Exception {
+        JsonObject root = readGraphRoot(file);
+        String comment = root.has("comment") && root.get("comment").isJsonPrimitive()
+                ? root.get("comment").getAsString()
+                : "";
+        return new GraphMetadata(resolveGraphKind(root), comment, readTags(root));
     }
 
     public static List<String> readTags(JsonObject root) {
@@ -68,9 +78,19 @@ public final class GraphTagIO {
 
     public static void writeTags(File file, List<String> tags) throws Exception {
         JsonObject root = readGraphRoot(file);
+        writeMetadataRoot(file, root, null, tags);
+    }
+
+    public static void writeMetadata(File file, String comment, List<String> tags) throws Exception {
+        JsonObject root = readGraphRoot(file);
+        writeMetadataRoot(file, root, comment != null ? comment.trim() : "", tags);
+    }
+
+    private static void writeMetadataRoot(File file, JsonObject root, String comment, List<String> tags) throws Exception {
         String graphKind = resolveGraphKind(root).id();
         root.remove("graph_name");
         root.addProperty("graph_kind", graphKind);
+        if (comment != null) root.addProperty("comment", comment);
         root.add("tags", GSON.toJsonTree(tags != null ? tags : List.of()));
         if (!root.has("version")) root.addProperty("version", "1.0");
         if (!root.has("nodes") || !root.get("nodes").isJsonObject()) root.add("nodes", new JsonObject());

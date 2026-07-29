@@ -17,12 +17,16 @@ public class AppConfig {
         public List<String> quickAccessPaths = new ArrayList<>();
         public List<String> favoriteGraphPaths = new ArrayList<>();
         public String viewMode = "LIST";
+        public boolean rightSidebarVisible = true;
+        public float rightSidebarWeight = 0.2f;
     }
 
     public static class ViewportConfig {
         public int gridSize = 15;
         public boolean snapToGrid = false;
         public boolean showGridAndAxis = true;
+        public boolean rightSidebarVisible = true;
+        public float rightSidebarWeight = 0.2f;
     }
 
     public static class NodeConfig {
@@ -53,6 +57,7 @@ public class AppConfig {
         public String groupIntoFrame = "CTRL+J";
         public String groupIntoNodeGroup = "CTRL+G";
         public String moveSelection = "G";
+        public String toggleRightSidebar = "N";
     }
 
     public static class ShopEditorKeyBindingsConfig {

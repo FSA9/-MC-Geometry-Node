@@ -19,6 +19,9 @@ public class NodeGraph {
     @SerializedName("tags")
     public List<String> tags = new ArrayList<>();
 
+    @SerializedName("comment")
+    public String comment = "";
+
     @SerializedName("version")
     public String version;          // 版本
 

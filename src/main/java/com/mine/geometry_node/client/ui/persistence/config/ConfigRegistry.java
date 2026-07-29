@@ -19,6 +19,7 @@ public final class ConfigRegistry {
             ConfigDefinition.keyBinding("keyBindings.viewport.delete", "删除", "删除 viewport 当前选中的节点或图框。"),
             ConfigDefinition.keyBinding("keyBindings.viewport.toggleSnapToGrid", "切换吸附", "开启或关闭 viewport 网格吸附。"),
             ConfigDefinition.keyBinding("keyBindings.viewport.toggleGridAndAxis", "切换栅格与坐标轴", "显示或隐藏 viewport 背景栅格和坐标轴。"),
+            ConfigDefinition.keyBinding("keyBindings.viewport.toggleRightSidebar", "切换右侧栏", "显示或隐藏图属性侧栏。"),
             ConfigDefinition.keyBinding("keyBindings.viewport.moveSelection", "移动", "让 viewport 当前选中节点跟随鼠标移动。"),
             ConfigDefinition.keyBinding("keyBindings.viewport.groupIntoFrame", "并入图框", "把 viewport 当前选中的节点并入新图框。"),
             ConfigDefinition.keyBinding("keyBindings.viewport.groupIntoNodeGroup", "合并为图组", "把 viewport 当前选中的节点合并为新图组。"),

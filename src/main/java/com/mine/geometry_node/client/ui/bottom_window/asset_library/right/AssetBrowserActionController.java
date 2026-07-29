@@ -343,6 +343,7 @@ final class AssetBrowserActionController {
     private void showGraphTagDialog(File file) {
         GraphTagDialog dialog = new GraphTagDialog(mPanel.getContext(), file, tags -> {
             syncOpenGraphTags(file, tags);
+            mPanel.notifySelectionChanged();
             mPanel.refreshFileList();
         });
         dialog.showIn(mPanel);
@@ -355,6 +356,7 @@ final class AssetBrowserActionController {
             File sessionFile = new File(session.fileId);
             if (!targetKey.equals(mPanel.pathKey(sessionFile))) continue;
             session.editorContext.getGraph().tags = new ArrayList<>(tags);
+            session.editorContext.notifyGraphMetadataChanged();
         }
     }
 

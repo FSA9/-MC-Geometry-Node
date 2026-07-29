@@ -95,6 +95,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final boolean mShowPickerContextActions;
     private Consumer<File> mLocalDirectoryChangedListener;
     private Consumer<String> mRemoteDirectoryChangedListener;
+    private Consumer<List<AssetEntry>> mSelectionChangedListener;
     private Runnable mPickCurrentDirectoryAction;
     private Consumer<AssetEntry> mPickFileAction;
     private Predicate<AssetEntry> mEntryFilter;
@@ -500,6 +501,11 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         return new ArrayList<>(getSelectedEntries());
     }
 
+    public void setSelectionChangedListener(Consumer<List<AssetEntry>> listener) {
+        mSelectionChangedListener = listener;
+        notifySelectionChanged();
+    }
+
     public void setPickCurrentDirectoryAction(Runnable action) {
         mPickCurrentDirectoryAction = action;
     }
@@ -646,13 +652,14 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             visibleKeys.add(key);
         }
 
-        mSelectedPaths.retainAll(visibleKeys);
+        boolean selectionChanged = mSelectedPaths.retainAll(visibleKeys);
         mFileContent.setViewMode(mViewMode);
         mScrollView.scrollTo(0, 0);
         mFileContent.setEntries(mVisibleEntries);
         updateVirtualViewport();
         mFileContent.requestLayout();
         mFileContent.invalidate();
+        if (selectionChanged || !mSelectedPaths.isEmpty()) notifySelectionChanged();
     }
 
     private void setViewMode(AssetViewMode mode) {
@@ -752,18 +759,26 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
             mSelectedPaths.add(key);
         }
         syncSelectionViews();
+        notifySelectionChanged();
     }
 
     void selectOnly(AssetEntry entry) {
+        if (mSelectedPaths.size() == 1 && mSelectedPaths.contains(entry.key())) {
+            syncSelectionViews();
+            return;
+        }
         mSelectedPaths.clear();
         mSelectedPaths.add(entry.key());
         syncSelectionViews();
+        notifySelectionChanged();
     }
 
     @Override
     public void clearSelection() {
+        if (mSelectedPaths.isEmpty()) return;
         mSelectedPaths.clear();
         syncSelectionViews();
+        notifySelectionChanged();
     }
 
     @Override
@@ -778,8 +793,15 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
         mFileContent.invalidate();
     }
 
+    void notifySelectionChanged() {
+        if (mSelectionChangedListener != null) {
+            mSelectionChangedListener.accept(getSelectedEntriesSnapshot());
+        }
+    }
+
     @Override
     public void onBoxSelection(RectF selectionRect, boolean additive, Set<String> baseSelection) {
+        Set<String> previousSelection = new LinkedHashSet<>(mSelectedPaths);
         if (!additive) {
             mSelectedPaths.clear();
         } else {
@@ -789,6 +811,7 @@ public class RightFileBrowserPanel extends LinearLayout implements AssetFileItem
 
         mFileContent.collectEntriesIntersecting(selectionRect, mSelectedPaths);
         syncSelectionViews();
+        if (!previousSelection.equals(mSelectedPaths)) notifySelectionChanged();
     }
 
     @Override

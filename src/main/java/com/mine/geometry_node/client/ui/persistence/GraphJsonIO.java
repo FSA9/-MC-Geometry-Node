@@ -23,6 +23,7 @@ public final class GraphJsonIO {
         GraphKind kind = g.getKind();
         root.addProperty("graph_kind", kind != GraphKind.UNKNOWN ? kind.id() : GraphKind.BLUEPRINT.id());
         root.add("tags", GSON.toJsonTree(g.tags != null ? g.tags : List.of()));
+        root.addProperty("comment", g.comment != null ? g.comment : "");
         root.addProperty("version", g.version != null ? g.version : "1.0");
 
         // 序列化 Nodes
@@ -54,6 +55,9 @@ public final class GraphJsonIO {
         g.graphKind = root.has("graph_kind") ? root.get("graph_kind").getAsString() : GraphKind.BLUEPRINT.id();
         g.version = root.has("version") ? root.get("version").getAsString() : "1.0";
         g.tags = readUserTags(root, g);
+        g.comment = root.has("comment") && root.get("comment").isJsonPrimitive()
+                ? root.get("comment").getAsString()
+                : "";
 
         JsonObject nodesObj = root.getAsJsonObject("nodes");
         for (String id : nodesObj.keySet()) {

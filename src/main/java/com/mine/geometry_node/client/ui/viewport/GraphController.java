@@ -43,6 +43,13 @@ public class GraphController {
         return mContext.getCurrentGraph();
     }
 
+    public void setGraphMetadata(String comment, List<String> tags) {
+        NodeGraph graph = mContext.getGraph();
+        graph.comment = comment != null ? comment : "";
+        graph.tags = tags != null ? new ArrayList<>(tags) : new ArrayList<>();
+        mContext.notifyGraphMetadataChanged();
+    }
+
     public void addNode(NodeData node) {
         if (mContext.isInsideGroupScope() && mContext.getCurrentGroupNode() != null) {
             mContext.getCurrentGroupNode().attachSubNode(node.id, node);

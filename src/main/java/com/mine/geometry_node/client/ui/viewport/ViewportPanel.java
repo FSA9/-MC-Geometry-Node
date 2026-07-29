@@ -8,6 +8,8 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.Remot
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
+import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphDownloadRequest;
 import icyllis.modernui.core.Context;
@@ -27,6 +29,7 @@ import java.nio.file.Files;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
@@ -64,6 +67,9 @@ public class ViewportPanel extends LinearLayout {
     private long mObservedOpenSessionSerial = -1L;
     private boolean mManualSessionSelection;
     private boolean mCallbacksRegistered;
+    private Consumer<GraphSession> mSessionChangedListener;
+    private Consumer<GraphSession> mBeforeSessionSaveListener;
+    private GraphSession mLastNotifiedSession;
 
     public ViewportPanel(Context context) {
         super(context);
@@ -123,6 +129,24 @@ public class ViewportPanel extends LinearLayout {
         }
         unregisterCallbacks();
         mViewport.deactivateLifecycle();
+    }
+
+    public void setSessionChangedListener(Consumer<GraphSession> listener) {
+        mSessionChangedListener = listener;
+        if (mSessionChangedListener != null) {
+            mLastNotifiedSession = mViewport.getController().getCurrentSession();
+            mSessionChangedListener.accept(mLastNotifiedSession);
+        } else {
+            mLastNotifiedSession = null;
+        }
+    }
+
+    public void setBeforeSessionSaveListener(Consumer<GraphSession> listener) {
+        mBeforeSessionSaveListener = listener;
+    }
+
+    public void saveCurrentSession() {
+        mViewport.getController().performAction(ViewportActionId.SAVE, ViewportActionRequest.EMPTY);
     }
 
     @Override
@@ -199,6 +223,10 @@ public class ViewportPanel extends LinearLayout {
         applyOpenedSession(docMgr);
         GraphSession selectedSession = resolveSelectedSession(docMgr);
         mViewport.getController().bindSession(selectedSession);
+        if (mSessionChangedListener != null && selectedSession != mLastNotifiedSession) {
+            mLastNotifiedSession = selectedSession;
+            mSessionChangedListener.accept(selectedSession);
+        }
 
         LinearLayout.LayoutParams tabParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -237,6 +265,9 @@ public class ViewportPanel extends LinearLayout {
         int padClose = dp2pxInt(PADDING_CLOSE);
         closeBtn.setPadding(padClose, 0, padClose, 0);
         closeBtn.setOnClickListener(v -> {
+            if (mBeforeSessionSaveListener != null) {
+                mBeforeSessionSaveListener.accept(session);
+            }
             if (DocumentManager.INSTANCE.saveSession(session)) {
                 v.post(() -> docMgr.closeSession(session));
             }

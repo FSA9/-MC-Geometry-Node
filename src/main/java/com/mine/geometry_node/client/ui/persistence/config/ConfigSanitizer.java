@@ -16,6 +16,8 @@ final class ConfigSanitizer {
     private static final int GRID_SIZE_MAX = 500;
     private static final float CORNER_RADIUS_MIN = 0.0f;
     private static final float CORNER_RADIUS_MAX = 24.0f;
+    private static final float RIGHT_SIDEBAR_WEIGHT_MIN = 0.08f;
+    private static final float RIGHT_SIDEBAR_WEIGHT_MAX = 0.75f;
 
     private ConfigSanitizer() {
     }
@@ -62,6 +64,26 @@ final class ConfigSanitizer {
                 config.assetBrowser.viewMode = defaults.assetBrowser.viewMode;
                 changed = true;
             }
+
+            ReadBoolean rightSidebarVisible = readBoolean(assetBrowser, "rightSidebarVisible");
+            if (rightSidebarVisible.valid) {
+                config.assetBrowser.rightSidebarVisible = rightSidebarVisible.value;
+                changed |= rightSidebarVisible.changed;
+            } else {
+                config.assetBrowser.rightSidebarVisible = defaults.assetBrowser.rightSidebarVisible;
+                changed = true;
+            }
+
+            ReadFloat rightSidebarWeight = readFloat(assetBrowser, "rightSidebarWeight");
+            if (rightSidebarWeight.valid && Float.isFinite(rightSidebarWeight.value)
+                    && rightSidebarWeight.value >= RIGHT_SIDEBAR_WEIGHT_MIN
+                    && rightSidebarWeight.value <= RIGHT_SIDEBAR_WEIGHT_MAX) {
+                config.assetBrowser.rightSidebarWeight = rightSidebarWeight.value;
+                changed |= rightSidebarWeight.changed;
+            } else {
+                config.assetBrowser.rightSidebarWeight = defaults.assetBrowser.rightSidebarWeight;
+                changed = true;
+            }
         }
 
         JsonObject viewport = readObject(root, "viewport");
@@ -93,6 +115,26 @@ final class ConfigSanitizer {
                 changed |= showGridAndAxis.changed;
             } else {
                 config.viewport.showGridAndAxis = defaults.viewport.showGridAndAxis;
+                changed = true;
+            }
+
+            ReadBoolean rightSidebarVisible = readBoolean(viewport, "rightSidebarVisible");
+            if (rightSidebarVisible.valid) {
+                config.viewport.rightSidebarVisible = rightSidebarVisible.value;
+                changed |= rightSidebarVisible.changed;
+            } else {
+                config.viewport.rightSidebarVisible = defaults.viewport.rightSidebarVisible;
+                changed = true;
+            }
+
+            ReadFloat rightSidebarWeight = readFloat(viewport, "rightSidebarWeight");
+            if (rightSidebarWeight.valid && Float.isFinite(rightSidebarWeight.value)
+                    && rightSidebarWeight.value >= RIGHT_SIDEBAR_WEIGHT_MIN
+                    && rightSidebarWeight.value <= RIGHT_SIDEBAR_WEIGHT_MAX) {
+                config.viewport.rightSidebarWeight = rightSidebarWeight.value;
+                changed |= rightSidebarWeight.changed;
+            } else {
+                config.viewport.rightSidebarWeight = defaults.viewport.rightSidebarWeight;
                 changed = true;
             }
         }
@@ -155,6 +197,12 @@ final class ConfigSanitizer {
                 config.assetBrowser.viewMode = defaults.assetBrowser.viewMode;
                 changed = true;
             }
+            if (!Float.isFinite(config.assetBrowser.rightSidebarWeight)
+                    || config.assetBrowser.rightSidebarWeight < RIGHT_SIDEBAR_WEIGHT_MIN
+                    || config.assetBrowser.rightSidebarWeight > RIGHT_SIDEBAR_WEIGHT_MAX) {
+                config.assetBrowser.rightSidebarWeight = defaults.assetBrowser.rightSidebarWeight;
+                changed = true;
+            }
         }
 
         if (config.viewport == null) {
@@ -163,6 +211,12 @@ final class ConfigSanitizer {
         } else {
             if (config.viewport.gridSize < GRID_SIZE_MIN || config.viewport.gridSize > GRID_SIZE_MAX) {
                 config.viewport.gridSize = defaults.viewport.gridSize;
+                changed = true;
+            }
+            if (!Float.isFinite(config.viewport.rightSidebarWeight)
+                    || config.viewport.rightSidebarWeight < RIGHT_SIDEBAR_WEIGHT_MIN
+                    || config.viewport.rightSidebarWeight > RIGHT_SIDEBAR_WEIGHT_MAX) {
+                config.viewport.rightSidebarWeight = defaults.viewport.rightSidebarWeight;
                 changed = true;
             }
         }
@@ -205,7 +259,7 @@ final class ConfigSanitizer {
         changed |= global == null || viewport == null || shopEditor == null;
         changed |= hasAny(keyBindings,
                 "undo", "redo", "save", "copy", "paste", "delete",
-                "toggleSnapToGrid", "toggleGridAndAxis", "groupIntoFrame",
+                "toggleSnapToGrid", "toggleGridAndAxis", "toggleRightSidebar", "groupIntoFrame",
                 "groupIntoNodeGroup", "moveSelection", "shopEditorClearSlot");
 
         ReadKeyBinding undo = readKeyBindingWithLegacy(global, legacy, "undo", defaults.keyBindings.global.undo);
@@ -266,6 +320,10 @@ final class ConfigSanitizer {
         config.keyBindings.viewport.moveSelection = moveSelection.value;
         changed |= moveSelection.changed;
 
+        ReadKeyBinding toggleRightSidebar = readKeyBindingWithLegacy(viewport, legacy, "toggleRightSidebar", defaults.keyBindings.viewport.toggleRightSidebar);
+        config.keyBindings.viewport.toggleRightSidebar = toggleRightSidebar.value;
+        changed |= toggleRightSidebar.changed;
+
         ReadString clearSlot = readShortcutTextWithLegacy(shopEditor, legacy, "clearSlot", "shopEditorClearSlot", defaults.keyBindings.shopEditor.clearSlot);
         config.keyBindings.shopEditor.clearSlot = clearSlot.value;
         changed |= clearSlot.changed;
@@ -300,6 +358,7 @@ final class ConfigSanitizer {
             changed |= sanitizeKeyBinding(keyBindings.viewport.groupIntoFrame, defaults.viewport.groupIntoFrame, value -> keyBindings.viewport.groupIntoFrame = value);
             changed |= sanitizeKeyBinding(keyBindings.viewport.groupIntoNodeGroup, defaults.viewport.groupIntoNodeGroup, value -> keyBindings.viewport.groupIntoNodeGroup = value);
             changed |= sanitizeKeyBinding(keyBindings.viewport.moveSelection, defaults.viewport.moveSelection, value -> keyBindings.viewport.moveSelection = value);
+            changed |= sanitizeKeyBinding(keyBindings.viewport.toggleRightSidebar, defaults.viewport.toggleRightSidebar, value -> keyBindings.viewport.toggleRightSidebar = value);
         }
 
         if (keyBindings.shopEditor == null) {

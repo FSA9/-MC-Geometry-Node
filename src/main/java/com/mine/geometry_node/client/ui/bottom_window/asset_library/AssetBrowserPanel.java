@@ -7,11 +7,16 @@ import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.Uploa
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.left.LeftQuickAccessPanel;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.model.AssetEntry;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.AssetGraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.right.RightFileBrowserPanel;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.bottom_window.asset_library.task.AssetTaskController;
 import com.mine.geometry_node.client.ui.common.ResizableDivider;
+import com.mine.geometry_node.client.ui.common.CollapsibleSidebar;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.window.IToolWindow;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
@@ -24,8 +29,11 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
+import icyllis.modernui.view.KeyEvent;
+import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
+import net.minecraft.network.chat.Component;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -40,9 +48,13 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
     private final LinearLayout mMainLayout;
     private final LeftQuickAccessPanel mLeftPanel;
     private final RightFileBrowserPanel mRightPanel;
+    private final AssetGraphPropertiesPanel mPropertiesPanel;
+    private final View mPropertiesDivider;
+    private final CollapsibleSidebar mPropertiesSidebar;
     private final LocalAssetService mLocalAssetService = new LocalAssetService();
     private final AssetTaskController mIoTasks;
     private final Set<Integer> mRemoteRequestIds = new HashSet<>();
+    private float mLastPropertiesSidebarWeight;
 
     public AssetBrowserPanel(Context context) {
         super(context);
@@ -59,8 +71,30 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
 
         mMainLayout.addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
 
+        AppConfig.AssetBrowserConfig browserConfig = ConfigManager.INSTANCE.getConfig().assetBrowser;
+        mLastPropertiesSidebarWeight = browserConfig.rightSidebarWeight;
+
         mRightPanel = new RightFileBrowserPanel(context, this);
-        mMainLayout.addView(mRightPanel, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.8f));
+        mMainLayout.addView(mRightPanel, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0.8f - mLastPropertiesSidebarWeight));
+
+        mPropertiesDivider = ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL);
+        mMainLayout.addView(mPropertiesDivider);
+
+        mPropertiesPanel = new AssetGraphPropertiesPanel(context, mRightPanel::refreshFileList);
+        mPropertiesSidebar = new CollapsibleSidebar(
+                context,
+                tr("geometry_node.graph_properties.title"),
+                () -> setPropertiesSidebarVisible(false, true));
+        mPropertiesSidebar.setContent(mPropertiesPanel);
+        mMainLayout.addView(mPropertiesSidebar, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                mLastPropertiesSidebarWeight));
+        mRightPanel.setSelectionChangedListener(mPropertiesPanel::bindSelection);
+        setPropertiesSidebarVisible(browserConfig.rightSidebarVisible, false);
 
         dispatchNavigateTo(AssetBrowserPathPolicy.getLocalDraftsDir());
         requestRemoteCapabilities();
@@ -150,6 +184,8 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
 
     @Override
     public void onHide() {
+        mPropertiesPanel.commitPendingEdits();
+        persistPropertiesSidebarState();
         if (mRightPanel != null) {
             mRightPanel.deactivatePanel();
         }
@@ -157,15 +193,85 @@ public class AssetBrowserPanel extends FrameLayout implements IToolWindow, Asset
 
     @Override
     protected void onDetachedFromWindow() {
+        mPropertiesPanel.commitPendingEdits();
         mIoTasks.cancelAll();
         cancelRemoteRequests();
         super.onDetachedFromWindow();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            KeyBinding saveBinding = KeyBinding.parse(
+                    ConfigManager.INSTANCE.getConfig().keyBindings.global.save);
+            if (saveBinding != null && saveBinding.matches(event)) {
+                mPropertiesPanel.commitPendingEdits();
+                return true;
+            }
+
+            if (findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
+            KeyBinding sidebarBinding = KeyBinding.parse(
+                    ConfigManager.INSTANCE.getConfig().keyBindings.viewport.toggleRightSidebar);
+            if (sidebarBinding != null && sidebarBinding.matches(event)) {
+                setPropertiesSidebarVisible(mPropertiesSidebar.getVisibility() != View.VISIBLE, true);
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    private void setPropertiesSidebarVisible(boolean visible, boolean persist) {
+        boolean currentlyVisible = mPropertiesSidebar.getVisibility() == View.VISIBLE;
+        if (currentlyVisible == visible) {
+            if (persist) persistPropertiesSidebarState();
+            return;
+        }
+
+        if (!visible) {
+            mPropertiesPanel.commitPendingEdits();
+            rememberPropertiesSidebarWeight();
+            transferPropertiesWeightToBrowser(mLastPropertiesSidebarWeight);
+        } else {
+            transferPropertiesWeightToBrowser(-mLastPropertiesSidebarWeight);
+        }
+        mPropertiesDivider.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+        mPropertiesSidebar.setVisibility(visible ? View.VISIBLE : View.GONE);
+        mMainLayout.requestLayout();
+        if (persist) persistPropertiesSidebarState();
+    }
+
+    private void transferPropertiesWeightToBrowser(float sidebarWeightDelta) {
+        if (!(mRightPanel.getLayoutParams() instanceof LinearLayout.LayoutParams browserParams)) return;
+        browserParams.weight = Math.max(
+                UIConstants.MainUI.WEIGHT_MIN,
+                browserParams.weight + sidebarWeightDelta);
+        mRightPanel.setLayoutParams(browserParams);
+    }
+
+    private void rememberPropertiesSidebarWeight() {
+        if (mPropertiesSidebar.getLayoutParams() instanceof LinearLayout.LayoutParams params && params.weight > 0.0f) {
+            mLastPropertiesSidebarWeight = params.weight;
+        }
+    }
+
+    private void persistPropertiesSidebarState() {
+        rememberPropertiesSidebarWeight();
+        boolean visible = mPropertiesSidebar.getVisibility() == View.VISIBLE;
+        float weight = mLastPropertiesSidebarWeight;
+        ConfigManager.INSTANCE.update(config -> {
+            config.assetBrowser.rightSidebarVisible = visible;
+            config.assetBrowser.rightSidebarWeight = weight;
+        });
     }
 
     private ShapeDrawable createColorDrawable(int color) {
         ShapeDrawable drawable = new ShapeDrawable();
         drawable.setColor(color);
         return drawable;
+    }
+
+    private static String tr(String key) {
+        return Component.translatable(key).getString();
     }
 
     private void requestRemoteCapabilities() {

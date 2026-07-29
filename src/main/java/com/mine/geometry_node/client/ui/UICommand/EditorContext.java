@@ -74,6 +74,7 @@ public class EditorContext {
         NodeGraph graph = new NodeGraph();
         graph.graphKind = mGraph.graphKind;
         graph.tags = mGraph.tags;
+        graph.comment = mGraph.comment;
         graph.version = mGraph.version;
         graph.nodes = groupNode.ensureSubNodes();
         graph.frames = new LinkedHashMap<String, FrameData>();
@@ -99,6 +100,7 @@ public class EditorContext {
         default void onConnectionAdded(String outNode, String outPort, String inNode, String inPort) {}
         default void onConnectionRemoved(String outNode, String outPort, String inNode, String inPort) {}
         default void onNodeStructureChanged(NodeData nodeData) {}
+        default void onGraphMetadataChanged() {}
         default void onGraphConnectionsRebuildRequested() {}
         default void onFrameAdded(com.mine.geometry_node.core.node.FrameData frame) {}
         default void onFrameRemoved(String frameId) {}
@@ -142,6 +144,10 @@ public class EditorContext {
 
     public void notifyNodeStructureChanged(NodeData node) {
         for (EditorListener l : mListeners) l.onNodeStructureChanged(node);
+    }
+
+    public void notifyGraphMetadataChanged() {
+        for (EditorListener l : mListeners) l.onGraphMetadataChanged();
     }
 
     public void notifyGraphConnectionsRebuildRequested() {

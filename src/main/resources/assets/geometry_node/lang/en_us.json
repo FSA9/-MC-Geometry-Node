@@ -463,5 +463,22 @@
   "geometry_node.node.repair_schematic_placement.comment.summary": "Restores a schematic placement by key to the state it had immediately after placement.",
   "geometry_node.node.create_schematic_projection.comment.summary": "Projects or places a .schem/.schematic at a position and maintains the projection or placement record by key.",
   "geometry_node.node.area_trigger_event.comment.summary": "Detects entities entering, staying in, or leaving an area volume; matching area configs in the same graph share the underlying query.",
-  "geometry_node.node.on_container_open.comment.summary": "Triggers when a player opens a container screen."
+  "geometry_node.node.on_container_open.comment.summary": "Triggers when a player opens a container screen.",
+  "geometry_node.graph_properties.title": "Graph Properties",
+  "geometry_node.graph_properties.file": "File",
+  "geometry_node.graph_properties.type": "Type",
+  "geometry_node.graph_properties.comment": "Description",
+  "geometry_node.graph_properties.comment_placeholder": "Describe this graph",
+  "geometry_node.graph_properties.tags": "Tags",
+  "geometry_node.graph_properties.tag_placeholder": "Enter a tag",
+  "geometry_node.graph_properties.no_graph": "No graph open",
+  "geometry_node.graph_properties.no_tags": "No tags",
+  "geometry_node.graph_properties.select_local_graph": "Select one local graph",
+  "geometry_node.graph_properties.loading": "Loading graph information",
+  "geometry_node.graph_properties.load_failed": "Failed to load graph information",
+  "geometry_node.graph_properties.save_failed": "Failed to save graph information",
+  "geometry_node.graph_properties.kind.blueprint": "Blueprint",
+  "geometry_node.graph_properties.kind.dialogue": "Dialogue",
+  "geometry_node.graph_properties.kind.behavior_tree": "Behavior Tree",
+  "geometry_node.graph_properties.kind.unknown": "Unknown"
 }
