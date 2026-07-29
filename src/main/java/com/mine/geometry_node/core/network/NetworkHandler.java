@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.render.debug.AreaDebugRenderer;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
-import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;

@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.bottom_window.asset_library.dialog.FilePickerDialog;
+import com.mine.geometry_node.client.ui.editor.asset.dialog.FilePickerDialog;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.InlineActionButton;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;

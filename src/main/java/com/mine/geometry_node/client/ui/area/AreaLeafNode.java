@@ -1,13 +1,12 @@
 package com.mine.geometry_node.client.ui.area;
 
-import com.mine.geometry_node.client.ui.window.IToolWindow;
 import icyllis.modernui.core.Context;
 
 import java.util.EnumMap;
 import java.util.Map;
 
 final class AreaLeafNode extends AreaNode {
-    private final Map<AreaEditorType, IToolWindow> mWindows = new EnumMap<>(AreaEditorType.class);
+    private final Map<AreaEditorType, AreaEditorWindow> mWindows = new EnumMap<>(AreaEditorType.class);
     private AreaEditorType mEditorType;
 
     AreaLeafNode(AreaEditorType editorType) {
@@ -24,7 +23,7 @@ final class AreaLeafNode extends AreaNode {
         }
     }
 
-    IToolWindow window(Context context, AreaEditorRegistry registry) {
+    AreaEditorWindow window(Context context, AreaEditorRegistry registry) {
         return mWindows.computeIfAbsent(mEditorType, type -> registry.create(context, type));
     }
 
@@ -37,7 +36,7 @@ final class AreaLeafNode extends AreaNode {
         mEditorType = other.mEditorType;
         other.mEditorType = editorType;
 
-        Map<AreaEditorType, IToolWindow> windows = new EnumMap<>(mWindows);
+        Map<AreaEditorType, AreaEditorWindow> windows = new EnumMap<>(mWindows);
         mWindows.clear();
         mWindows.putAll(other.mWindows);
         other.mWindows.clear();
@@ -46,7 +45,7 @@ final class AreaLeafNode extends AreaNode {
 
     @Override
     void dispose() {
-        for (IToolWindow window : mWindows.values()) {
+        for (AreaEditorWindow window : mWindows.values()) {
             if (window != null) {
                 window.onHide();
             }

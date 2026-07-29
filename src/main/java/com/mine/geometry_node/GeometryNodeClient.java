@@ -8,7 +8,7 @@ import com.mine.geometry_node.client.render.debug.AreaDebugRenderer;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
-import com.mine.geometry_node.client.ui.bottom_window.asset_library.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.core.command.registry.ModClientCommands;
 import icyllis.modernui.mc.ModernUIMod;
 import net.minecraft.client.Minecraft;

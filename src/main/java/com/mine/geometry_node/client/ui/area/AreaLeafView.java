@@ -2,7 +2,6 @@ package com.mine.geometry_node.client.ui.area;
 
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.window.IToolWindow;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
@@ -22,7 +21,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
     private final float mHeaderTouchSlop;
     private AreaIconButton mHintButton;
     private AreaEditorMenu mEditorMenu;
-    private IToolWindow mCurrentWindow;
+    private AreaEditorWindow mCurrentWindow;
     private boolean mWindowShown;
     private boolean mHeaderDragging;
     private float mHeaderDownRawX;
@@ -256,7 +255,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
     }
 
     private void attachEditor(boolean notifyShow) {
-        IToolWindow window = mNode.window(getContext(), mRoot.editorRegistry());
+        AreaEditorWindow window = mNode.window(getContext(), mRoot.editorRegistry());
         if (window == null) {
             if (mCurrentWindow != null) {
                 hideWindow(mCurrentWindow);
@@ -324,7 +323,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         }
     }
 
-    private void hideWindow(IToolWindow window) {
+    private void hideWindow(AreaEditorWindow window) {
         View view = window.getView();
         if (view != null) {
             view.setVisibility(View.GONE);

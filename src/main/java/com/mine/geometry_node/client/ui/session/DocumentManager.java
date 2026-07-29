@@ -97,7 +97,7 @@ public class DocumentManager {
             // 1. 序列化当前图纸
             String json = GraphJsonIO.toJson(session.editorContext.getGraph());
 
-            // 2. 写入文件 (继承你之前在 ViewportPanel 中的逻辑)
+            // 2. 写入文件 (继承你之前在 GraphViewportPanel 中的逻辑)
             Files.writeString(Path.of(session.fileId), json);
 
             // 3. 清除脏标记

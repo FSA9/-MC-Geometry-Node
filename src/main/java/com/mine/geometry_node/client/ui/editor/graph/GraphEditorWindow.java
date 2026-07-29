@@ -7,8 +7,8 @@ import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.ViewportPanel;
-import com.mine.geometry_node.client.ui.window.IToolWindow;
+import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesPanel;
+import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.resources.TypedValue;
@@ -21,8 +21,8 @@ import icyllis.modernui.widget.RelativeLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 
-public class GraphEditorWindow extends LinearLayout implements IToolWindow {
-    private final ViewportPanel mViewportPanel;
+public class GraphEditorWindow extends LinearLayout implements AreaEditorWindow {
+    private final GraphViewportPanel mGraphViewportPanel;
     private final GraphPropertiesPanel mPropertiesPanel;
     private final View mRightDivider;
     private final CollapsibleSidebar mRightSidebar;
@@ -41,8 +41,8 @@ public class GraphEditorWindow extends LinearLayout implements IToolWindow {
         AppConfig.ViewportConfig viewportConfig = ConfigManager.INSTANCE.getConfig().viewport;
         mLastRightSidebarWeight = viewportConfig.rightSidebarWeight;
 
-        mViewportPanel = new ViewportPanel(context);
-        addView(mViewportPanel, createWeightParams(
+        mGraphViewportPanel = new GraphViewportPanel(context);
+        addView(mGraphViewportPanel, createWeightParams(
                 UIConstants.MainUI.WEIGHT_CENTER + UIConstants.MainUI.WEIGHT_RIGHT - mLastRightSidebarWeight));
 
         mRightDivider = ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL);
@@ -55,8 +55,8 @@ public class GraphEditorWindow extends LinearLayout implements IToolWindow {
                 () -> setRightSidebarVisible(false, true));
         mRightSidebar.setContent(mPropertiesPanel);
         addView(mRightSidebar, createWeightParams(mLastRightSidebarWeight));
-        mViewportPanel.setSessionChangedListener(mPropertiesPanel::bindSession);
-        mViewportPanel.setBeforeSessionSaveListener(mPropertiesPanel::commitPendingEdits);
+        mGraphViewportPanel.setSessionChangedListener(mPropertiesPanel::bindSession);
+        mGraphViewportPanel.setBeforeSessionSaveListener(mPropertiesPanel::commitPendingEdits);
         setRightSidebarVisible(viewportConfig.rightSidebarVisible, false);
     }
 
@@ -67,14 +67,14 @@ public class GraphEditorWindow extends LinearLayout implements IToolWindow {
 
     @Override
     public void onShow() {
-        mViewportPanel.activatePanel();
+        mGraphViewportPanel.activatePanel();
     }
 
     @Override
     public void onHide() {
         mPropertiesPanel.commitPendingEdits();
         persistSidebarState();
-        mViewportPanel.deactivatePanel();
+        mGraphViewportPanel.deactivatePanel();
     }
 
     @Override
@@ -84,7 +84,7 @@ public class GraphEditorWindow extends LinearLayout implements IToolWindow {
                     ConfigManager.INSTANCE.getConfig().keyBindings.global.save);
             if (saveBinding != null && saveBinding.matches(event)) {
                 mPropertiesPanel.commitPendingEdits();
-                mViewportPanel.saveCurrentSession();
+                mGraphViewportPanel.saveCurrentSession();
                 return true;
             }
 
@@ -120,11 +120,11 @@ public class GraphEditorWindow extends LinearLayout implements IToolWindow {
     }
 
     private void transferSidebarWeightToViewport(float sidebarWeightDelta) {
-        if (!(mViewportPanel.getLayoutParams() instanceof LinearLayout.LayoutParams viewportParams)) return;
+        if (!(mGraphViewportPanel.getLayoutParams() instanceof LinearLayout.LayoutParams viewportParams)) return;
         viewportParams.weight = Math.max(
                 UIConstants.MainUI.WEIGHT_MIN,
                 viewportParams.weight + sidebarWeightDelta);
-        mViewportPanel.setLayoutParams(viewportParams);
+        mGraphViewportPanel.setLayoutParams(viewportParams);
     }
 
     private void rememberRightSidebarWeight() {
