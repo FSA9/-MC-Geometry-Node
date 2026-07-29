@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.InlineActionButton;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.NodeData;
@@ -117,7 +118,10 @@ public class SelectHintRenderer implements UIHintRenderer {
         float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
-        int widthPx = UIUtils.dp2pxInt(endX - startX);
+        int leftMarginPx = UIUtils.dp2pxInt(startX);
+        int widthPx = hasDynamicRemoveButton(row)
+                ? InlineActionButton.rightColumnLeftPx(nodeWidth) - leftMarginPx
+                : UIUtils.dp2pxInt(endX - startX);
         int heightPx = UIUtils.dp2pxInt(inputBoxHeight);
 
         if (lp == null) {
@@ -128,10 +132,17 @@ public class SelectHintRenderer implements UIHintRenderer {
         }
 
         lp.gravity = Gravity.LEFT | Gravity.TOP;
-        lp.leftMargin = UIUtils.dp2pxInt(startX);
+        lp.leftMargin = leftMarginPx;
         lp.topMargin = UIUtils.dp2pxInt(currentY + verticalMargin);
 
         view.setLayoutParams(lp);
+    }
+
+    private static boolean hasDynamicRemoveButton(PortRow row) {
+        return row != null
+                && row.hintParams() != null
+                && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC))
+                && row.hintParams().get(PortMetaKeys.DYNAMIC_INDEX) instanceof Integer;
     }
 
     private static String selectTitle(NodeData nodeData, PortRow row) {

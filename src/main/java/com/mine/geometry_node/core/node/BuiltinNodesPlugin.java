@@ -429,6 +429,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("logics", new GetTags());
         registry.register("logics", new ForEachLoop());
         registry.register("logics", new ForLoop());
+        registry.register("logics", new WhileLoop());
         registry.register("logics", new IF());
         registry.register("logics", new Switch());
         registry.register("logics", new CombineFlow());

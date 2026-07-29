@@ -21,6 +21,7 @@ public enum StandardPorts {
     MAX_INT("max_int", PortType.INTEGER),
     LIMIT("limit", PortType.INTEGER),
     INDEX("index", PortType.INTEGER),
+    ITERATION("iteration", PortType.INTEGER),
     TICK("tick", PortType.INTEGER),
     COUNT("count", PortType.INTEGER),
     REMOVED_COUNT("removed_count", PortType.INTEGER),
@@ -48,6 +49,7 @@ public enum StandardPorts {
 
     // Bool
     BOOL("bool", PortType.BOOLEAN),
+    CONDITION("condition", PortType.BOOLEAN),
     DEBUG("debug", PortType.BOOLEAN),
     CASE("case", PortType.BOOLEAN),
     IS_HIT("is_hit", PortType.BOOLEAN),
