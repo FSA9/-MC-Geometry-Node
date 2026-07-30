@@ -24,6 +24,7 @@ import com.mine.geometry_node.core.node.nodes.data.world.*;
 import com.mine.geometry_node.core.node.nodes.events.area.*;
 import com.mine.geometry_node.core.node.nodes.events.block.*;
 import com.mine.geometry_node.core.node.nodes.dialogue.*;
+import com.mine.geometry_node.core.node.nodes.events.display_entity.*;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.dialogue.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
@@ -227,12 +228,12 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // Client/Visual
 
         // --- DATA ---
-        registry.register("data", new TargetSelector());
+        registry.register("data/entity", new TargetSelector());
         registry.register("data", new GetEntityAttribute());
         registry.register("data", new GetScopeAttribute());
         registry.register("data", new SetEntityAttribute());
         registry.register("data", new SetScopeAttribute());
-        registry.register("data", new IsKeyPressed());
+        registry.register("data/player", new IsKeyPressed());
 
         // Data/World
         registry.register("data/world", new GetGameTime());
@@ -341,6 +342,9 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // Events/Dialogue
         registry.register("events/dialogue", new OnShopTradeSuccess());
 
+        // Events/Display Entity
+        registry.register("events/display_entity", new OnInteraction());
+
         // Events/Block
         registry.register("events/block", new OnBlockBreak());
 //        registry.register("events/block", new OnBlockIgnite());
@@ -362,7 +366,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/entity", new OnEntityHurt());
         registry.register("events/entity", new OnEntityJump());
         registry.register("events/entity", new OnEntityMount());
-        registry.register("events/entity", new OnPlayerPickupItemPre());
         registry.register("events/entity", new OnEntityPotionEffectApply());
         registry.register("events/entity", new OnEntityPotionEffectExpire());
         registry.register("events/entity", new OnEntityPotionEffectRemove());
@@ -398,6 +401,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/player", new OnPlayerJoin());
         registry.register("events/player", new OnPlayerLeftClickBlock());
         registry.register("events/player", new OnPlayerLevelChange());
+        registry.register("events/player", new OnPlayerPickupItemPre());
         registry.register("events/player", new OnPlayerPickupXp());
         registry.register("events/player", new OnPlayerQuit());
         registry.register("events/player", new OnPlayerRespawn());

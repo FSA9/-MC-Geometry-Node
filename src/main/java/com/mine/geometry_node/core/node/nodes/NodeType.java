@@ -8,20 +8,20 @@ public enum NodeType {
     
     // --- 核心流程 ---
     EVENT("事件", 0xFFD32F2F),        // 红色
-    FLOW_CONTROL("控制流", 0xFF607D8B), // 灰色
+    FLOW_CONTROL("控制流", 0xFF616161), // 中性灰
 
     // --- 行为与副作用 ---
     ACTION("动作", 0xFF1976D2),       // 蓝色
     DIALOGUE("对话", 0xFFC2185B),     // 洋红色
 
     // --- 数据计算 ---
-    MATH("数学", 0xFF388E3C),         // 绿色
+    MATH("数学", 0xFF2E7D32),         // 深绿色
     LOGIC("逻辑运算", 0xFF455A64),     // 深灰/蓝灰
-    DATA("数据/属性", 0xFF0097A7),     // 青色
+    DATA("数据/属性", 0xFF00796B),     // 深青色
     
     // --- 变量与杂项 ---
     VARIABLE("变量", 0xFF7B1FA2),     // 紫色
-    CUSTOM("自定义", 0xFFE65100);     // 橙色
+    CUSTOM("自定义", 0xFFBF360C);     // 深橙色
 
     private final String displayName;
     private final int color;
