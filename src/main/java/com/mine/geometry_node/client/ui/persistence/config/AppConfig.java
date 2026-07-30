@@ -19,6 +19,7 @@ public class AppConfig {
         public String viewMode = "LIST";
         public boolean rightSidebarVisible = true;
         public float rightSidebarWeight = 0.2f;
+        public String rightSidebarTab = "properties";
     }
 
     public static class ViewportConfig {
@@ -27,6 +28,7 @@ public class AppConfig {
         public boolean showGridAndAxis = true;
         public boolean rightSidebarVisible = true;
         public float rightSidebarWeight = 0.2f;
+        public String rightSidebarTab = "properties";
     }
 
     public static class NodeConfig {

@@ -84,6 +84,15 @@ final class ConfigSanitizer {
                 config.assetBrowser.rightSidebarWeight = defaults.assetBrowser.rightSidebarWeight;
                 changed = true;
             }
+
+            ReadString rightSidebarTab = readString(assetBrowser, "rightSidebarTab");
+            if (rightSidebarTab.valid && isSidebarTabId(rightSidebarTab.value)) {
+                config.assetBrowser.rightSidebarTab = rightSidebarTab.value;
+                changed |= rightSidebarTab.changed;
+            } else {
+                config.assetBrowser.rightSidebarTab = defaults.assetBrowser.rightSidebarTab;
+                changed = true;
+            }
         }
 
         JsonObject viewport = readObject(root, "viewport");
@@ -135,6 +144,15 @@ final class ConfigSanitizer {
                 changed |= rightSidebarWeight.changed;
             } else {
                 config.viewport.rightSidebarWeight = defaults.viewport.rightSidebarWeight;
+                changed = true;
+            }
+
+            ReadString rightSidebarTab = readString(viewport, "rightSidebarTab");
+            if (rightSidebarTab.valid && isSidebarTabId(rightSidebarTab.value)) {
+                config.viewport.rightSidebarTab = rightSidebarTab.value;
+                changed |= rightSidebarTab.changed;
+            } else {
+                config.viewport.rightSidebarTab = defaults.viewport.rightSidebarTab;
                 changed = true;
             }
         }
@@ -203,6 +221,10 @@ final class ConfigSanitizer {
                 config.assetBrowser.rightSidebarWeight = defaults.assetBrowser.rightSidebarWeight;
                 changed = true;
             }
+            if (!isSidebarTabId(config.assetBrowser.rightSidebarTab)) {
+                config.assetBrowser.rightSidebarTab = defaults.assetBrowser.rightSidebarTab;
+                changed = true;
+            }
         }
 
         if (config.viewport == null) {
@@ -217,6 +239,10 @@ final class ConfigSanitizer {
                     || config.viewport.rightSidebarWeight < RIGHT_SIDEBAR_WEIGHT_MIN
                     || config.viewport.rightSidebarWeight > RIGHT_SIDEBAR_WEIGHT_MAX) {
                 config.viewport.rightSidebarWeight = defaults.viewport.rightSidebarWeight;
+                changed = true;
+            }
+            if (!isSidebarTabId(config.viewport.rightSidebarTab)) {
+                config.viewport.rightSidebarTab = defaults.viewport.rightSidebarTab;
                 changed = true;
             }
         }
@@ -425,6 +451,15 @@ final class ConfigSanitizer {
         if (start == value.length()) return false;
         for (int i = start; i < value.length(); i++) {
             if (!Character.isDigit(value.charAt(i))) return false;
+        }
+        return true;
+    }
+
+    private static boolean isSidebarTabId(String value) {
+        if (value == null || value.isBlank() || value.length() > 64) return false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!Character.isLetterOrDigit(c) && c != '_' && c != '-' && c != '.') return false;
         }
         return true;
     }

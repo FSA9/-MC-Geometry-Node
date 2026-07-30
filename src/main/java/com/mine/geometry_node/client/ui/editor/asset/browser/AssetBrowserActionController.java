@@ -4,7 +4,6 @@ import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionId;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.ConfirmDialog;
-import com.mine.geometry_node.client.ui.editor.asset.dialog.GraphTagDialog;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.TransferProgressDialog;
 import com.mine.geometry_node.client.ui.editor.asset.menu.FileContextMenu;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
@@ -15,7 +14,6 @@ import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
-import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphFileOperationRequest;
 import icyllis.modernui.resources.TypedValue;
@@ -273,10 +271,6 @@ final class AssetBrowserActionController {
             menu.addDivider();
         }
         if (!mEnableLocalFileActions) return;
-        if (filesSnapshot.size() == 1 && isLocalGraphFile(filesSnapshot.get(0))) {
-            menu.addMenuItem("编辑标签", () -> showGraphTagDialog(filesSnapshot.get(0)));
-            menu.addDivider();
-        }
         menu.addMenuItem(actionLabel(AssetLibraryActionId.COPY) + suffix,
                 shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
         menu.addMenuItem(actionLabel(AssetLibraryActionId.CUT) + suffix,
@@ -338,26 +332,6 @@ final class AssetBrowserActionController {
             }
         }
         return result;
-    }
-
-    private void showGraphTagDialog(File file) {
-        GraphTagDialog dialog = new GraphTagDialog(mPanel.getContext(), file, tags -> {
-            syncOpenGraphTags(file, tags);
-            mPanel.notifySelectionChanged();
-            mPanel.refreshFileList();
-        });
-        dialog.showIn(mPanel);
-    }
-
-    private void syncOpenGraphTags(File file, List<String> tags) {
-        String targetKey = mPanel.pathKey(file);
-        for (GraphSession session : DocumentManager.INSTANCE.getSessions()) {
-            if (session == null || session.editorContext == null || session.editorContext.getGraph() == null) continue;
-            File sessionFile = new File(session.fileId);
-            if (!targetKey.equals(mPanel.pathKey(sessionFile))) continue;
-            session.editorContext.getGraph().tags = new ArrayList<>(tags);
-            session.editorContext.notifyGraphMetadataChanged();
-        }
     }
 
     private void addRemoteContextActions(FileContextMenu menu, List<AssetEntry> entriesSnapshot) {

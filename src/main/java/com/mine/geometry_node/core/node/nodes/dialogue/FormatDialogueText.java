@@ -46,11 +46,9 @@ public class FormatDialogueText extends BaseNode {
         NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
                 .text("summary")
                 .output(StandardPorts.STRING, "string")
-                .input(StandardPorts.TEMPLATE, "template");
-        for (int i = 1; i <= variableCount; i++) {
-            comment.input(StandardPorts.VARIABLE_NAME.getIdWithIndex(i), "variable_name")
-                    .input(StandardPorts.VARIABLE_VALUE.getIdWithIndex(i), "variable_value");
-        }
+                .input(StandardPorts.TEMPLATE, "template")
+                .input(StandardPorts.VARIABLE_NAME.getIdWithIndex(1), "variable_name")
+                .input(StandardPorts.VARIABLE_VALUE.getIdWithIndex(1), "variable_value");
 
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DIALOGUE, Component.translatable("geometry_node.node.format_dialogue_text"))
                 .comment(comment.build())

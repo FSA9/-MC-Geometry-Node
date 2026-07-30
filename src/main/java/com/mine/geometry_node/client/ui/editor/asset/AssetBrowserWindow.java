@@ -7,12 +7,14 @@ import com.mine.geometry_node.client.ui.editor.asset.dialog.UploadFailureRetryDi
 import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationPanel;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
-import com.mine.geometry_node.client.ui.editor.asset.properties.AssetGraphPropertiesPanel;
+import com.mine.geometry_node.client.ui.editor.asset.properties.AssetFilePropertiesTarget;
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
 import com.mine.geometry_node.client.ui.common.ResizableDivider;
-import com.mine.geometry_node.client.ui.common.CollapsibleSidebar;
+import com.mine.geometry_node.client.ui.editor.sidebar.EditorSidebar;
+import com.mine.geometry_node.client.ui.editor.sidebar.SidebarLayoutController;
+import com.mine.geometry_node.client.ui.editor.properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
@@ -44,17 +46,17 @@ import java.util.Set;
 import java.util.function.Function;
 
 public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow, AssetBrowserCoordinator {
+    private static final String SIDEBAR_PROPERTIES = "properties";
 
     private final LinearLayout mMainLayout;
     private final AssetNavigationPanel mNavigationPanel;
     private final AssetFileBrowserPanel mBrowserPanel;
-    private final AssetGraphPropertiesPanel mPropertiesPanel;
-    private final View mPropertiesDivider;
-    private final CollapsibleSidebar mPropertiesSidebar;
+    private final GraphPropertiesPanel mPropertiesPanel;
+    private final EditorSidebar mPropertiesSidebar;
+    private final SidebarLayoutController mSidebarLayout;
     private final LocalAssetService mLocalAssetService = new LocalAssetService();
     private final AssetTaskController mIoTasks;
     private final Set<Integer> mRemoteRequestIds = new HashSet<>();
-    private float mLastPropertiesSidebarWeight;
 
     public AssetBrowserWindow(Context context) {
         super(context);
@@ -72,29 +74,63 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         mMainLayout.addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
 
         AppConfig.AssetBrowserConfig browserConfig = ConfigManager.INSTANCE.getConfig().assetBrowser;
-        mLastPropertiesSidebarWeight = browserConfig.rightSidebarWeight;
+        float sidebarWeight = browserConfig.rightSidebarWeight;
+
+        LinearLayout browserWorkspace = new LinearLayout(context);
+        browserWorkspace.setOrientation(LinearLayout.HORIZONTAL);
+        mMainLayout.addView(browserWorkspace, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0.8f));
 
         mBrowserPanel = new AssetFileBrowserPanel(context, this);
-        mMainLayout.addView(mBrowserPanel, new LinearLayout.LayoutParams(
+        browserWorkspace.addView(mBrowserPanel, new LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                0.8f - mLastPropertiesSidebarWeight));
+                0.8f - sidebarWeight));
 
-        mPropertiesDivider = ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL);
-        mMainLayout.addView(mPropertiesDivider);
+        View propertiesDivider = ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL);
+        browserWorkspace.addView(propertiesDivider);
 
-        mPropertiesPanel = new AssetGraphPropertiesPanel(context, mBrowserPanel::refreshFileList);
-        mPropertiesSidebar = new CollapsibleSidebar(
-                context,
+        mPropertiesPanel = new GraphPropertiesPanel(context);
+        mPropertiesSidebar = new EditorSidebar(context);
+        mPropertiesSidebar.registerPanel(
+                SIDEBAR_PROPERTIES,
                 tr("geometry_node.graph_properties.title"),
-                () -> setPropertiesSidebarVisible(false, true));
-        mPropertiesSidebar.setContent(mPropertiesPanel);
-        mMainLayout.addView(mPropertiesSidebar, new LinearLayout.LayoutParams(
+                new EditorSidebar.Panel() {
+                    @Override
+                    public View getView() {
+                        return mPropertiesPanel;
+                    }
+
+                    @Override
+                    public void onDeselected() {
+                        mPropertiesPanel.commitPendingEdits();
+                    }
+        });
+        mPropertiesSidebar.restoreSelectedPanel(browserConfig.rightSidebarTab);
+        browserWorkspace.addView(mPropertiesSidebar, new LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                mLastPropertiesSidebarWeight));
-        mBrowserPanel.setSelectionChangedListener(mPropertiesPanel::bindSelection);
-        setPropertiesSidebarVisible(browserConfig.rightSidebarVisible, false);
+                sidebarWeight));
+
+        mSidebarLayout = new SidebarLayoutController(
+                browserWorkspace,
+                mBrowserPanel,
+                propertiesDivider,
+                mPropertiesSidebar,
+                sidebarWeight,
+                (visible, weight) -> ConfigManager.INSTANCE.update(config -> {
+                    config.assetBrowser.rightSidebarVisible = visible;
+                    config.assetBrowser.rightSidebarWeight = weight;
+                    config.assetBrowser.rightSidebarTab = mPropertiesSidebar.getSelectedPanelId();
+                }));
+        mPropertiesSidebar.setOnCollapseRequested(() -> mSidebarLayout.setVisible(false, true));
+        mPropertiesSidebar.setOnSelectedPanelChanged(id -> ConfigManager.INSTANCE.update(
+                config -> config.assetBrowser.rightSidebarTab = id));
+        mBrowserPanel.setSelectionChangedListener(entries -> mPropertiesPanel.bind(
+                AssetFilePropertiesTarget.fromSelection(entries, mBrowserPanel::refreshFileList)));
+        mSidebarLayout.initialize(browserConfig.rightSidebarVisible);
 
         dispatchNavigateTo(AssetBrowserPathPolicy.getLocalDraftsDir());
         requestRemoteCapabilities();
@@ -171,6 +207,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     public void onShow() {
+        mSidebarLayout.onOwnerShown();
         if (mBrowserPanel != null) {
             mBrowserPanel.activatePanel();
         }
@@ -184,8 +221,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     public void onHide() {
-        mPropertiesPanel.commitPendingEdits();
-        persistPropertiesSidebarState();
+        mSidebarLayout.onOwnerHidden();
+        mSidebarLayout.persistState();
         if (mBrowserPanel != null) {
             mBrowserPanel.deactivatePanel();
         }
@@ -213,55 +250,11 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
             KeyBinding sidebarBinding = KeyBinding.parse(
                     ConfigManager.INSTANCE.getConfig().keyBindings.viewport.toggleRightSidebar);
             if (sidebarBinding != null && sidebarBinding.matches(event)) {
-                setPropertiesSidebarVisible(mPropertiesSidebar.getVisibility() != View.VISIBLE, true);
+                mSidebarLayout.toggle();
                 return true;
             }
         }
         return super.dispatchKeyEvent(event);
-    }
-
-    private void setPropertiesSidebarVisible(boolean visible, boolean persist) {
-        boolean currentlyVisible = mPropertiesSidebar.getVisibility() == View.VISIBLE;
-        if (currentlyVisible == visible) {
-            if (persist) persistPropertiesSidebarState();
-            return;
-        }
-
-        if (!visible) {
-            mPropertiesPanel.commitPendingEdits();
-            rememberPropertiesSidebarWeight();
-            transferPropertiesWeightToBrowser(mLastPropertiesSidebarWeight);
-        } else {
-            transferPropertiesWeightToBrowser(-mLastPropertiesSidebarWeight);
-        }
-        mPropertiesDivider.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
-        mPropertiesSidebar.setVisibility(visible ? View.VISIBLE : View.GONE);
-        mMainLayout.requestLayout();
-        if (persist) persistPropertiesSidebarState();
-    }
-
-    private void transferPropertiesWeightToBrowser(float sidebarWeightDelta) {
-        if (!(mBrowserPanel.getLayoutParams() instanceof LinearLayout.LayoutParams browserParams)) return;
-        browserParams.weight = Math.max(
-                UIConstants.MainUI.WEIGHT_MIN,
-                browserParams.weight + sidebarWeightDelta);
-        mBrowserPanel.setLayoutParams(browserParams);
-    }
-
-    private void rememberPropertiesSidebarWeight() {
-        if (mPropertiesSidebar.getLayoutParams() instanceof LinearLayout.LayoutParams params && params.weight > 0.0f) {
-            mLastPropertiesSidebarWeight = params.weight;
-        }
-    }
-
-    private void persistPropertiesSidebarState() {
-        rememberPropertiesSidebarWeight();
-        boolean visible = mPropertiesSidebar.getVisibility() == View.VISIBLE;
-        float weight = mLastPropertiesSidebarWeight;
-        ConfigManager.INSTANCE.update(config -> {
-            config.assetBrowser.rightSidebarVisible = visible;
-            config.assetBrowser.rightSidebarWeight = weight;
-        });
     }
 
     private ShapeDrawable createColorDrawable(int color) {

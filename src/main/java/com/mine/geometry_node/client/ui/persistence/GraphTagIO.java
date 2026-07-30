@@ -76,11 +76,6 @@ public final class GraphTagIO {
         return tags;
     }
 
-    public static void writeTags(File file, List<String> tags) throws Exception {
-        JsonObject root = readGraphRoot(file);
-        writeMetadataRoot(file, root, null, tags);
-    }
-
     public static void writeMetadata(File file, String comment, List<String> tags) throws Exception {
         JsonObject root = readGraphRoot(file);
         writeMetadataRoot(file, root, comment != null ? comment.trim() : "", tags);
