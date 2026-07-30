@@ -20,6 +20,7 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
+import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -39,10 +40,14 @@ public class RpgDialogueFragment extends Fragment {
     private static final int CHOICE_STROKE = DialogueHudTheme.withAlpha(DialogueHudTheme.ACCENT, 0x44);
     private static final int CHOICE_STROKE_HOVER = DialogueHudTheme.withAlpha(DialogueHudTheme.ACCENT, 0x88);
     private static final int CHOICE_STROKE_DISABLED = DialogueHudTheme.withAlpha(DialogueHudTheme.TEXT_MUTED, 0x28);
+    private static final float LAYOUT_SCALE = 2.0f;
     private static final int PANEL_MIN_HEIGHT_DP = 142;
+    private static final int PANEL_MAX_HEIGHT_DP = 360;
+    private static final int BODY_LINE_HEIGHT_DP = 24;
 
     private FrameLayout root;
     private LinearLayout panel;
+    private TextView bodyView;
     private OnBackPressedCallback backPressedCallback;
     private boolean waitingForServer;
 
@@ -102,26 +107,32 @@ public class RpgDialogueFragment extends Fragment {
 
         panel.setAlpha(1.0f);
         panel.removeAllViews();
+        bodyView = null;
         if (packet == null) {
             panel.addView(label("Dialogue is unavailable.", 16.0f, TEXT_MUTED, Gravity.CENTER_VERTICAL),
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)));
             return;
         }
 
-        panel.addView(createTextColumn(packet), new LinearLayout.LayoutParams(
+        DialogueRichText bodyText = ModernDialogueText.parse(packet.bodyText());
+        int panelHeight = panelHeightDp(bodyText.plainText(), packet.choices().size());
+        panel.addView(createTextColumn(packet, bodyText), new LinearLayout.LayoutParams(
                 0,
-                dp(PANEL_MIN_HEIGHT_DP),
+                dp(panelHeight),
                 7.0f
         ));
 
         panel.addView(createActionColumn(packet), new LinearLayout.LayoutParams(
                 0,
-                dp(PANEL_MIN_HEIGHT_DP),
+                dp(panelHeight),
                 3.0f
         ));
+
+        TextView currentBody = bodyView;
+        panel.post(() -> adjustPanelHeight(currentBody, packet.choices().size()));
     }
 
-    private View createTextColumn(PacketOpenDialogue packet) {
+    private View createTextColumn(PacketOpenDialogue packet, DialogueRichText bodyText) {
         Context context = getContext();
         LinearLayout column = new LinearLayout(context);
         column.setOrientation(LinearLayout.VERTICAL);
@@ -131,7 +142,7 @@ public class RpgDialogueFragment extends Fragment {
         Component speaker = packet.speaker().getString().isBlank()
                 ? Component.literal("Dialogue").withStyle(ChatFormatting.GOLD)
                 : packet.speaker();
-        VanillaComponentView speakerView = new VanillaComponentView(context, speaker, 22.0f);
+        VanillaComponentView speakerView = new VanillaComponentView(context, speaker, 22.0f * LAYOUT_SCALE);
         speakerView.setPadding(0, 0, 0, dp(4));
         column.addView(speakerView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -148,16 +159,63 @@ public class RpgDialogueFragment extends Fragment {
         dividerParams.bottomMargin = dp(12);
         column.addView(divider, dividerParams);
 
-        TextView body = label(ModernDialogueText.display(ModernDialogueText.parse(packet.bodyText())), 18.0f, TEXT_MAIN, Gravity.LEFT | Gravity.BOTTOM);
+        TextView body = label(ModernDialogueText.display(bodyText), 18.0f, TEXT_MAIN, Gravity.LEFT | Gravity.TOP);
         body.setMinLines(3);
-        body.setLineSpacing(UIUtils.dp2px(3.0f), 1.06f);
-        column.addView(body, new LinearLayout.LayoutParams(
+        body.setLineSpacing(UIUtils.dp2px(3.0f * LAYOUT_SCALE), 1.06f);
+        bodyView = body;
+        body.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) ->
+                adjustPanelHeight(body, packet.choices().size()));
+        ScrollView bodyScroll = new ScrollView(context);
+        bodyScroll.setFillViewport(true);
+        bodyScroll.addView(body, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        column.addView(bodyScroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0,
                 1.0f
         ));
 
         return column;
+    }
+
+    private int panelHeightDp(String bodyText, int choiceCount) {
+        return panelHeightDp(visualLineCount(bodyText), choiceCount);
+    }
+
+    private int panelHeightDp(int lineCount, int choiceCount) {
+        int bodyLines = Math.max(3, lineCount);
+        int bodyHeight = 45 + bodyLines * BODY_LINE_HEIGHT_DP;
+        int choiceHeight = Math.max(1, choiceCount) * 38;
+        return Math.max(PANEL_MIN_HEIGHT_DP, Math.min(PANEL_MAX_HEIGHT_DP, Math.max(bodyHeight, choiceHeight)));
+    }
+
+    private void adjustPanelHeight(TextView expectedBody, int choiceCount) {
+        if (panel == null || expectedBody == null || expectedBody != bodyView || panel.getChildCount() != 2) {
+            return;
+        }
+        int height = dp(panelHeightDp(expectedBody.getLineCount(), choiceCount));
+        for (int i = 0; i < panel.getChildCount(); i++) {
+            ViewGroup.LayoutParams params = panel.getChildAt(i).getLayoutParams();
+            if (params.height != height) {
+                params.height = height;
+                panel.getChildAt(i).setLayoutParams(params);
+            }
+        }
+    }
+
+    private static int visualLineCount(String text) {
+        if (text == null || text.isEmpty()) {
+            return 1;
+        }
+        int lines = 1;
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == '\n') {
+                lines++;
+            }
+        }
+        return lines;
     }
 
     private void registerBackPressedCallback() {
@@ -181,9 +239,16 @@ public class RpgDialogueFragment extends Fragment {
         column.setPadding(dp(18), 0, 0, 0);
 
         if (!packet.choices().isEmpty()) {
-            column.addView(createChoices(packet), new LinearLayout.LayoutParams(
+            ScrollView choiceScroll = new ScrollView(context);
+            choiceScroll.setFillViewport(true);
+            choiceScroll.addView(createChoices(packet), new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+            column.addView(choiceScroll, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    0,
+                    1.0f
             ));
         }
 
@@ -297,7 +362,7 @@ public class RpgDialogueFragment extends Fragment {
     }
 
     private TextView label(CharSequence text, float sizeDp, int color, int gravity) {
-        TextView view = UIUtils.createLockedTextView(getContext(), "", sizeDp, color);
+        TextView view = UIUtils.createLockedTextView(getContext(), "", sizeDp * LAYOUT_SCALE, color);
         view.setText(text == null ? "" : text);
         view.setGravity(gravity);
         return view;
@@ -306,12 +371,12 @@ public class RpgDialogueFragment extends Fragment {
     private ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
         ShapeDrawable drawable = new ShapeDrawable();
         drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
+        drawable.setCornerRadius(UIUtils.dp2px(radiusDp * LAYOUT_SCALE));
         drawable.setStroke(dp(strokeWidthDp), strokeColor);
         return drawable;
     }
 
     private int dp(float value) {
-        return UIUtils.dp2pxInt(value);
+        return UIUtils.dp2pxInt(value * LAYOUT_SCALE);
     }
 }
