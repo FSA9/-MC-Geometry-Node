@@ -44,4 +44,8 @@ public final class InlineActionButton extends TextView {
         int contentWidthPx = UIUtils.dp2pxInt(nodeWidthDp - 2.0f * UIConstants.Node.LABEL_MARGIN_PORT);
         return leftColumnLeftPx() + contentWidthPx - widthPx();
     }
+
+    public static int centerColumnLeftPx(int nodeWidthDp) {
+        return (UIUtils.dp2pxInt(nodeWidthDp) - widthPx()) / 2;
+    }
 }

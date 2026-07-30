@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.port;
 
 import com.mine.geometry_node.core.node.value.ColorValue;
+import com.mine.geometry_node.core.node.value.DialogueChoiceValue;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
@@ -31,6 +32,7 @@ public enum PortType {
     XYZ("XYZ", 0xFF00BCD4, List.of(0.0f, 0.0f, 0.0f)),
     COLOR("颜色", 0xFFFFD54F, ColorValue.WHITE),
     LIST("列表", 0xFFFF9800, List.of()),
+    DIALOGUE_CHOICE("对话选项", 0xFF26A69A, null),
     DICT("字典", 0xFFE67E22, java.util.Map.of()),
     SHOP("商店", 0xFFFFB74D, java.util.Map.of("offers", List.of())),
     ANY("任意", 0xFF95A5A6, null);
@@ -158,6 +160,7 @@ public enum PortType {
         if (value instanceof SlotRef) return SLOT;
         if (value instanceof net.minecraft.world.entity.Entity) return ENTITY;
         if (value instanceof net.minecraft.world.item.ItemStack) return ITEM_STACK;
+        if (value instanceof DialogueChoiceValue) return DIALOGUE_CHOICE;
         if (value instanceof java.util.List) return LIST;
         if (value instanceof java.util.Map) return DICT;
         if (value instanceof net.minecraft.world.phys.Vec3) return XYZ;

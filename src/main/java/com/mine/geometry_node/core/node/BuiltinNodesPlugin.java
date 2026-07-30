@@ -325,7 +325,9 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // --- DIALOGUE ---
         registry.register("dialogue", new BeginDialogue());
+        registry.register("dialogue", new CreateDialogueChoice());
         registry.register("dialogue", new ShowDialoguePage());
+        registry.register("dialogue", new ShowDialogueChoices());
         registry.register("dialogue", new OpenShop());
         registry.register("dialogue", new AdjustShopTradeUses());
         registry.register("dialogue", new CloseDialogue());

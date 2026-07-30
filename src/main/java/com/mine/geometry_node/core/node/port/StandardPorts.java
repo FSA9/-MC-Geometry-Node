@@ -12,7 +12,7 @@ public enum StandardPorts {
     COMPLETED("completed", PortType.EXECUTION),
     FLOW_TRUE("flow_true", PortType.EXECUTION),
     FLOW_FALSE("flow_false", PortType.EXECUTION),
-    CHOICE("choice", PortType.EXECUTION),
+    SELECTED("selected", PortType.EXECUTION),
     CLOSED("closed", PortType.EXECUTION),
 
     // Int
@@ -165,6 +165,9 @@ public enum StandardPorts {
     LIST_XYZ("list_xyz", PortType.LIST),
     COSTS("costs", PortType.LIST),
     REWARDS("rewards", PortType.LIST),
+
+    // Dialogue
+    DIALOGUE_CHOICE("dialogue_choice", PortType.DIALOGUE_CHOICE),
 
     // DICT
     DICT("dict", PortType.DICT),

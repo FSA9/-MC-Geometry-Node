@@ -250,9 +250,13 @@ final class NodeOverlayController {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(InlineActionButton.widthPx(), InlineActionButton.heightPx());
         lp.gravity = Gravity.TOP | Gravity.LEFT;
         lp.topMargin = UIUtils.dp2pxInt(currentY + (UIConstants.Node.ROW_HEIGHT - buttonHeight) / 2.0f);
-        lp.leftMargin = row.leftPort() != null
-                ? InlineActionButton.rightColumnLeftPx(mNodeWidth)
-                : InlineActionButton.leftColumnLeftPx();
+        if (row.leftPort() != null && row.rightPort() != null) {
+            lp.leftMargin = InlineActionButton.centerColumnLeftPx(mNodeWidth);
+        } else {
+            lp.leftMargin = row.leftPort() != null
+                    ? InlineActionButton.rightColumnLeftPx(mNodeWidth)
+                    : InlineActionButton.leftColumnLeftPx();
+        }
         mHost.addView(button, lp);
     }
 
