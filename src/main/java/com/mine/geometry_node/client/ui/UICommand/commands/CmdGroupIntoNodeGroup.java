@@ -257,7 +257,7 @@ public class CmdGroupIntoNodeGroup implements ICommand {
     }
 
     private PortType dataPortType(PortDef port) {
-        if (port == null || port.type() == null || port.type() == PortType.EXECUTION) {
+        if (port == null || port.type() == null || port.type().isFlow()) {
             return PortType.ANY;
         }
         return port.type();

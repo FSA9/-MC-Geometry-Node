@@ -246,7 +246,7 @@ public class NodeRegistry {
         List<PortDef> outputs = new ArrayList<>();
         for (PortRow row : def.rows()) {
             PortDef rightPort = row.rightPort();
-            if (rightPort != null && rightPort.type() != PortType.EXECUTION) {
+            if (rightPort != null && !rightPort.type().isFlow()) {
                 outputs.add(rightPort);
             }
         }

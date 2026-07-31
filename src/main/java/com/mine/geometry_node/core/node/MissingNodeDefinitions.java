@@ -111,7 +111,7 @@ final class MissingNodeDefinitions {
                     PortType type = forcedType != null
                             ? forcedType
                             : config != null && config.type != null ? config.type : PortType.ANY;
-                    Object defaultValue = type != PortType.EXECUTION ? type.getDefaultValue() : null;
+                    Object defaultValue = !type.isFlow() ? type.getDefaultValue() : null;
                     return port(entry.getKey(), displayName(entry.getKey(), config), type, defaultValue);
                 })
                 .toList();
@@ -123,7 +123,7 @@ final class MissingNodeDefinitions {
 
     private static PortType inferType(Object value) {
         PortType type = PortType.getTypeOf(value);
-        return type != null && type != PortType.EXECUTION ? type : PortType.ANY;
+        return type != null && !type.isFlow() ? type : PortType.ANY;
     }
 
     private static Component displayName(String id, NodeData.PortConfig config) {

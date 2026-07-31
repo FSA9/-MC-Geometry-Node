@@ -26,10 +26,11 @@ public class CmdDisconnect implements ICommand {
         backupExternalConnections();
     }
 
-    private boolean isExecutionFlow() {
+    private boolean isFlowConnection() {
         if (outPortId.startsWith("flow_") || inPortId.startsWith("flow_")) return true;
-        return mController.getResolvedPortType(outNodeId, outPortId, false) == PortType.EXECUTION
-                || mController.getResolvedPortType(inNodeId, inPortId, true) == PortType.EXECUTION;
+        PortType outType = mController.getResolvedPortType(outNodeId, outPortId, false);
+        PortType inType = mController.getResolvedPortType(inNodeId, inPortId, true);
+        return (outType != null && outType.isFlow()) || (inType != null && inType.isFlow());
     }
 
     private void backupExternalConnections() {
@@ -45,7 +46,7 @@ public class CmdDisconnect implements ICommand {
 
     @Override
     public void execute() {
-        if (isExecutionFlow()) {
+        if (isFlowConnection()) {
             mController.removeExecutionConnection(outNodeId, outPortId);
         } else {
             mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
@@ -55,7 +56,7 @@ public class CmdDisconnect implements ICommand {
     @Override
     public void undo() {
         // 撤销时：恢复连线
-        if (isExecutionFlow()) {
+        if (isFlowConnection()) {
             mController.addExecutionConnection(outNodeId, outPortId, inNodeId, inPortId);
         } else {
             mController.addConnection(outNodeId, outPortId, inNodeId, inPortId);

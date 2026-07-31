@@ -284,11 +284,11 @@ public final class GroupNodeFactory {
     }
 
     public static String categoryFor(boolean inputSide, PortType type) {
-        boolean exec = type == PortType.EXECUTION;
+        boolean flow = type.isFlow();
         if (inputSide) {
-            return exec ? GroupNodeTypes.CATEGORY_EXEC_INPUTS : GroupNodeTypes.CATEGORY_INPUTS;
+            return flow ? GroupNodeTypes.CATEGORY_EXEC_INPUTS : GroupNodeTypes.CATEGORY_INPUTS;
         }
-        return exec ? GroupNodeTypes.CATEGORY_EXEC_OUTPUTS : GroupNodeTypes.CATEGORY_OUTPUTS;
+        return flow ? GroupNodeTypes.CATEGORY_EXEC_OUTPUTS : GroupNodeTypes.CATEGORY_OUTPUTS;
     }
 
     private static void validateGroupNode(NodeData groupNode) {
@@ -309,11 +309,11 @@ public final class GroupNodeFactory {
     private static void validateCategoryType(String category, PortType type) {
         boolean execCategory = GroupNodeTypes.CATEGORY_EXEC_INPUTS.equals(category)
                 || GroupNodeTypes.CATEGORY_EXEC_OUTPUTS.equals(category);
-        if (execCategory && type != PortType.EXECUTION) {
-            throw new IllegalArgumentException("Execution group ports must use EXECUTION type");
+        if (execCategory && !type.isFlow()) {
+            throw new IllegalArgumentException("Execution group ports must use a flow type");
         }
-        if (!execCategory && type == PortType.EXECUTION) {
-            throw new IllegalArgumentException("Data group ports cannot use EXECUTION type");
+        if (!execCategory && type.isFlow()) {
+            throw new IllegalArgumentException("Data group ports cannot use a flow type");
         }
     }
 

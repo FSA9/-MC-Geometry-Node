@@ -51,13 +51,13 @@ public class PortMenu {
 
         for (PortRow row : node.getNodeDef().rows()) {
             if (row.leftPort() != null && row.leftPort().id().equals(portId)) {
-                category = row.leftPort().type() == PortType.EXECUTION ? "exec_inputs" : "inputs";
+                category = row.leftPort().type().isFlow() ? "exec_inputs" : "inputs";
                 defaultName = row.leftPort().displayName().getString();
                 found = true;
                 break;
             }
             if (row.rightPort() != null && row.rightPort().id().equals(portId)) {
-                category = row.rightPort().type() == PortType.EXECUTION ? "exec_outputs" : "outputs";
+                category = row.rightPort().type().isFlow() ? "exec_outputs" : "outputs";
                 defaultName = row.rightPort().displayName().getString();
                 found = true;
                 break;

@@ -40,13 +40,13 @@ public class CmdConnect implements ICommand {
                 && mController.canConnectPorts(outNodeId, outPortId, inNodeId, inPortId);
     }
 
-    private boolean isExecutionFlow() {
+    private boolean isFlowConnection() {
         if (outPortId.startsWith("flow_") || inPortId.startsWith("flow_")) return true;
         PortType outType = getPortType(outNodeId, outPortId, false);
         PortType inType = getPortType(inNodeId, inPortId, true);
-        if (outType == PortType.EXECUTION || inType == PortType.EXECUTION) return true;
-        return isBoundaryVirtualPort(outNodeId) && inType == PortType.EXECUTION
-                || isBoundaryVirtualPort(inNodeId) && outType == PortType.EXECUTION;
+        if ((outType != null && outType.isFlow()) || (inType != null && inType.isFlow())) return true;
+        return (isBoundaryVirtualPort(outNodeId) && inType != null && inType.isFlow())
+                || (isBoundaryVirtualPort(inNodeId) && outType != null && outType.isFlow());
     }
 
     private PortType getPortType(String nodeId, String portId, boolean inputSide) {
@@ -64,7 +64,7 @@ public class CmdConnect implements ICommand {
      */
     private void snapshotDisplacedConnections() {
         if (mGraph == null) return;
-        boolean executionFlow = isExecutionFlow();
+        boolean executionFlow = isFlowConnection();
         if (executionFlow) {
             NodeData outNode = mGraph.getNode(outNodeId);
             Connection existingOutput = outNode != null ? outNode.execOutputs.get(outPortId) : null;
@@ -117,7 +117,7 @@ public class CmdConnect implements ICommand {
         }
         // 1. 如果有旧连线，先断开它 (打断旧关系)
         if (mDisplacedInboundNodeId != null && mDisplacedInboundPortId != null) {
-            if (isExecutionFlow()) {
+            if (isFlowConnection()) {
                 mController.removeExecutionConnection(mDisplacedInboundNodeId, mDisplacedInboundPortId);
             } else {
                 mController.removeConnection(
@@ -126,7 +126,7 @@ public class CmdConnect implements ICommand {
         }
 
         // 2. 连接新连线 [核心修改] 增加 inPortId 参数
-        if (isExecutionFlow()) {
+        if (isFlowConnection()) {
             mController.addExecutionConnection(outNodeId, outPortId, inNodeId, inPortId);
         } else {
             mController.addConnection(outNodeId, outPortId, inNodeId, inPortId);
@@ -136,7 +136,7 @@ public class CmdConnect implements ICommand {
     @Override
     public void undo() {
         // 1. 撤销新连线
-        if (isExecutionFlow()) {
+        if (isFlowConnection()) {
             mController.removeExecutionConnection(outNodeId, outPortId);
         } else {
             mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
@@ -154,7 +154,7 @@ public class CmdConnect implements ICommand {
 
         // 3. 恢复目标输入原先的来源。
         if (mDisplacedInboundNodeId != null && mDisplacedInboundPortId != null) {
-            if (isExecutionFlow()) {
+            if (isFlowConnection()) {
                 mController.addExecutionConnection(
                         mDisplacedInboundNodeId, mDisplacedInboundPortId, inNodeId, inPortId);
             } else {

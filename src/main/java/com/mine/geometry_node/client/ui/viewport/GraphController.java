@@ -346,8 +346,8 @@ public class GraphController {
 
         PortType outType = getResolvedPortType(outNode, outPortId, false);
         PortType inType = getResolvedPortType(inNode, inPortId, true);
-        if (isExecutionToVirtualAny(outNode, outType, inNode, inType)) return true;
-        if (isExecutionToUntypedReroute(outNode, outType, inNode, inType)) return true;
+        if (isFlowToVirtualAny(outNode, outType, inNode, inType)) return true;
+        if (isFlowToUntypedReroute(outNode, outType, inNode, inType)) return true;
         return PortType.isCompatible(outType, inType);
     }
 
@@ -471,11 +471,11 @@ public class GraphController {
         if (def == null) return "";
         for (PortRow row : def.rows()) {
             if (inputSide && row.leftPort() != null && row.leftPort().id().equals(portId)) {
-                String category = row.leftPort().type() == PortType.EXECUTION ? "exec_inputs" : "inputs";
+                String category = row.leftPort().type().isFlow() ? "exec_inputs" : "inputs";
                 return node.getEffectivePortName(category, portId, row.leftPort().displayName().getString());
             }
             if (!inputSide && row.rightPort() != null && row.rightPort().id().equals(portId)) {
-                String category = row.rightPort().type() == PortType.EXECUTION ? "exec_outputs" : "outputs";
+                String category = row.rightPort().type().isFlow() ? "exec_outputs" : "outputs";
                 return node.getEffectivePortName(category, portId, row.rightPort().displayName().getString());
             }
         }
@@ -583,14 +583,14 @@ public class GraphController {
         }
     }
 
-    private boolean isExecutionToVirtualAny(NodeData outNode, PortType outType, NodeData inNode, PortType inType) {
-        return (outType == PortType.EXECUTION && inType == PortType.ANY && isInsideBoundaryNode(inNode))
-                || (inType == PortType.EXECUTION && outType == PortType.ANY && isInsideBoundaryNode(outNode));
+    private boolean isFlowToVirtualAny(NodeData outNode, PortType outType, NodeData inNode, PortType inType) {
+        return (outType != null && outType.isFlow() && inType == PortType.ANY && isInsideBoundaryNode(inNode))
+                || (inType != null && inType.isFlow() && outType == PortType.ANY && isInsideBoundaryNode(outNode));
     }
 
-    private boolean isExecutionToUntypedReroute(NodeData outNode, PortType outType, NodeData inNode, PortType inType) {
-        return outType == PortType.EXECUTION && inType == PortType.ANY && RerouteNodeSupport.isReroute(inNode)
-                || inType == PortType.EXECUTION && outType == PortType.ANY && RerouteNodeSupport.isReroute(outNode);
+    private boolean isFlowToUntypedReroute(NodeData outNode, PortType outType, NodeData inNode, PortType inType) {
+        return outType != null && outType.isFlow() && inType == PortType.ANY && RerouteNodeSupport.isReroute(inNode)
+                || inType != null && inType.isFlow() && outType == PortType.ANY && RerouteNodeSupport.isReroute(outNode);
     }
 
     private void refreshRerouteTypes(String outNodeId, String inNodeId) {
@@ -746,7 +746,7 @@ public class GraphController {
         PortType outType = getResolvedPortType(outNode, snapshot.outPortId(), false);
         PortType inType = getResolvedPortType(inNode, snapshot.inPortId(), true);
         if (snapshot.execution()) {
-            return outType == PortType.EXECUTION && inType == PortType.EXECUTION;
+            return outType != null && outType.isFlow() && outType == inType;
         }
         return PortType.isCompatible(outType, inType);
     }

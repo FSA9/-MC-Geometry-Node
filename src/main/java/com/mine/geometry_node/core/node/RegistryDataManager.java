@@ -109,8 +109,8 @@ public class RegistryDataManager {
 
     public static List<String> getPortTypes() {
         return java.util.Arrays.stream(PortType.values())
-                // 过滤 EXECUTION和 ANY
-                .filter(t -> t != PortType.EXECUTION && t != PortType.ANY)
+                // 过滤控制流和 ANY
+                .filter(t -> !t.isFlow() && t != PortType.ANY)
                 .map(Enum::name) // 输出大写名字，如 "FLOAT", "DICT"
                 .toList();
     }

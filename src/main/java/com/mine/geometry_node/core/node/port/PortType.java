@@ -14,7 +14,7 @@ import java.util.List;
  * 定义节点端口可以传递的数据类型。
  */
 public enum PortType {
-    EXECUTION("执行", 0xFFFFFFFF, null),
+    EXECUTION("执行", 0xFFFFFFFF, null, true),
 
     INTEGER("整数", 0xFF4A90E2, 0),
     LONG("长整数", 0xFF3F7DC2, 0L),
@@ -40,11 +40,17 @@ public enum PortType {
     private final String displayName;
     private final int color;
     private final Object defaultValue;
+    private final boolean flow;
 
     PortType(String displayName, int color, Object defaultValue) {
+        this(displayName, color, defaultValue, false);
+    }
+
+    PortType(String displayName, int color, Object defaultValue, boolean flow) {
         this.displayName = displayName;
         this.color = color;
         this.defaultValue = defaultValue;
+        this.flow = flow;
     }
 
     public String getDisplayName() {
@@ -59,6 +65,14 @@ public enum PortType {
         return defaultValue;
     }
 
+    public boolean isFlow() {
+        return flow;
+    }
+
+    /**
+     * Tests specifically for the ordinary execution channel.
+     * Use {@link #isFlow()} when classifying control-flow versus data ports.
+     */
     public boolean isExecution() {
         return this == EXECUTION;
     }
@@ -75,8 +89,8 @@ public enum PortType {
         // null 检查
         if (outputport == null || inputport == null) return false;
 
-        // 执行流独立
-        if (outputport == EXECUTION || inputport == EXECUTION) {
+        // 控制流先于 ANY 和数据隐式转换处理，且只允许相同通道连接。
+        if (outputport.isFlow() || inputport.isFlow()) {
             return outputport == inputport;
         }
 

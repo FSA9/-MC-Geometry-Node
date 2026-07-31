@@ -140,11 +140,11 @@ public class NodeLayoutEngine {
     }
 
     private String getPortCategory(PortDef port, boolean isLeft) {
-        boolean isExec = port.type() == PortType.EXECUTION;
+        boolean isFlow = port.type().isFlow();
         if (isLeft) {
-            return isExec ? "exec_inputs" : "inputs";
+            return isFlow ? "exec_inputs" : "inputs";
         }
-        return isExec ? "exec_outputs" : "outputs";
+        return isFlow ? "exec_outputs" : "outputs";
     }
 
     private ShapedText shape(String text, TextPaint paint) {
