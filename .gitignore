@@ -32,4 +32,4 @@ docs/tmp
 *.md
 
 !README.md
-!README_EN.md
+!docs/README_CN.md

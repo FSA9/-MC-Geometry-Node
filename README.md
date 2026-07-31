@@ -1,6 +1,6 @@
 # GeometryNode
 
-[中文](README.md) | [English](README_EN.md)
+[中文](docs/README_CN.md) | [English](README.md)
 
 GeometryNode is a visual node programming mod for Minecraft, designed to provide a creative experience inspired by Unreal Engine Blueprints and Blender Geometry Nodes.
 
