@@ -2,10 +2,11 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
-import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
-import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
-import com.mine.geometry_node.core.engine.dialogue.payload.DialogueWaitRequest;
+import com.mine.geometry_node.core.engine.dialogue.DialogueContext;
+import com.mine.geometry_node.core.engine.dialogue.model.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.model.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
+import com.mine.geometry_node.core.engine.dialogue.DialogueWaitRequest;
 import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRoundParser;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -69,27 +70,28 @@ public class ShowDialoguePage extends BaseNode {
             String pageId = rounds.size() == 1 ? basePageId : basePageId + ":round:" + (i + 1);
             String choiceId = i == rounds.size() - 1
                     ? StandardPorts.FLOW_OUT.getId()
-                    : DialogueWaitRequest.continuePageChoiceId(i);
-            pages.add(new DialoguePagePayload(
+                    : DialogueChoicePayload.continuePageChoiceId(i);
+            DialogueChoicePayload.Action action = i == rounds.size() - 1
+                    ? new DialogueChoicePayload.ResumePort(StandardPorts.FLOW_OUT.getId())
+                    : new DialogueChoicePayload.AdvancePage(i);
+            pages.add(DialoguePagePayload.text(
                     pageId,
-                    rounds.get(i).toJsonString(),
+                    DialogueText.rich(rounds.get(i)),
                     styleId,
-                    List.of(continueChoice(choiceId)),
-                    Map.of()
+                    List.of(continueChoice(choiceId, action))
             ));
         }
 
         return ExecutionResult.externalWait(GraphKind.DIALOGUE, new DialogueWaitRequest(dialogueContext, pages));
     }
 
-    private static DialogueChoicePayload continueChoice(String choiceId) {
+    private static DialogueChoicePayload continueChoice(String choiceId, DialogueChoicePayload.Action action) {
         return new DialogueChoicePayload(
                 choiceId,
-                RichTextValue.plain("继续").toJsonString(),
-                null,
+                DialogueText.rich(RichTextValue.plain("继续")),
+                action,
                 true,
-                null,
-                Map.of()
+                DialogueText.EMPTY
         );
     }
 
@@ -133,7 +135,7 @@ public class ShowDialoguePage extends BaseNode {
     private DialogueContext createFallbackDialogueContext(ExecutionContext context, ServerPlayer player) {
         Entity owner = context.getEntity();
         Entity dialogueEntity = owner instanceof ServerPlayer ? null : owner;
-        return new DialogueContext(player, dialogueEntity, "default", context.getGraphId(), "root");
+        return new DialogueContext(player, dialogueEntity, "default");
     }
 
     private DialogueContext withPlayer(DialogueContext dialogueContext, ServerPlayer player) {
@@ -141,8 +143,6 @@ public class ShowDialoguePage extends BaseNode {
                 player,
                 dialogueContext.dialogueEntityId(),
                 dialogueContext.styleId(),
-                dialogueContext.graphId(),
-                dialogueContext.entryId(),
                 dialogueContext.policy()
         );
     }

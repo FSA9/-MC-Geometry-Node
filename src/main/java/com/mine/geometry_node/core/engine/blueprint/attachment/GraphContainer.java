@@ -104,6 +104,7 @@ public class GraphContainer {
         GraphProcess previous = this.processes.put(process.getGraphId(), process);
         if (previous != null && previous != process) {
             previous.setTickScheduleCallback(null);
+            previous.shutdown("graph_replaced");
             if (this.activeTickSchedules.remove(previous.getGraphId()) != null) {
                 notifyScheduleChanged();
             }
@@ -119,6 +120,7 @@ public class GraphContainer {
         GraphProcess removed = this.processes.remove(graphId);
         if (removed != null) {
             removed.setTickScheduleCallback(null);
+            removed.shutdown("graph_unloaded");
             if (this.activeTickSchedules.remove(graphId) != null) {
                 notifyScheduleChanged();
             }
@@ -142,6 +144,7 @@ public class GraphContainer {
     public void clear() {
         for (GraphProcess process : this.processes.values()) {
             process.setTickScheduleCallback(null);
+            process.shutdown("graph_unloaded");
         }
         this.processes.clear();
         this.attributes.clear();
@@ -154,6 +157,7 @@ public class GraphContainer {
     public void clearProcessesForSerialization() {
         for (GraphProcess process : this.processes.values()) {
             process.setTickScheduleCallback(null);
+            process.shutdown("graph_reloaded");
         }
         this.processes.clear();
         if (clearTickSchedule()) {
@@ -165,6 +169,7 @@ public class GraphContainer {
         GraphProcess previous = this.processes.put(process.getGraphId(), process);
         if (previous != null && previous != process) {
             previous.setTickScheduleCallback(null);
+            previous.shutdown("graph_reloaded");
             if (this.activeTickSchedules.remove(previous.getGraphId()) != null) {
                 notifyScheduleChanged();
             }

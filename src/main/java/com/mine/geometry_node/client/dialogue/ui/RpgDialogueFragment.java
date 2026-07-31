@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.dialogue.ui;
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.dialogue.ModernDialogueText;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRichText;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import icyllis.modernui.core.Context;
@@ -351,12 +352,13 @@ public class RpgDialogueFragment extends Fragment {
         view.setBackground(rect(background, 3.0f, 1, stroke));
     }
 
-    private CharSequence disabledChoiceText(DialogueRichText choiceText, String disabledReason) {
+    private CharSequence disabledChoiceText(DialogueRichText choiceText, DialogueText disabledReason) {
         SpannableStringBuilder text = new SpannableStringBuilder();
         text.append(ModernDialogueText.display(choiceText));
-        if (disabledReason != null && !disabledReason.isBlank()) {
+        DialogueRichText parsedReason = ModernDialogueText.parse(disabledReason);
+        if (!parsedReason.plainText().isBlank()) {
             text.append(" - ");
-            text.append(ModernDialogueText.display(ModernDialogueText.parse(disabledReason)));
+            text.append(ModernDialogueText.display(parsedReason));
         }
         return text;
     }

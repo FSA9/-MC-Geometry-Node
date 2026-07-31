@@ -54,9 +54,11 @@ public class GraphProcess {
 
     // --- 执行流管理 ---
     final PriorityQueue<ExecutionThread> sleepingThreads = new PriorityQueue<>(Comparator.comparingLong(t -> t.wakeUpTick));  // 挂起的协程线程
+    private final Set<ExecutionThread> externalWaitingThreads = Collections.newSetFromMap(new IdentityHashMap<>());
     boolean needsTimeRebase = false;  // 读档标记
     private final Map<String, BranchJoin> branchJoins = new HashMap<>();
     private Runnable tickScheduleCallback = () -> {};
+    private boolean shutDown;
 
     private static final int MAX_POOLED_THREADS = 128;
     private final ArrayDeque<ExecutionThread> THREAD_POOL = new ArrayDeque<>();
@@ -127,7 +129,7 @@ public class GraphProcess {
 
     @Nullable
     public Object evaluateDataOutput(int nodeId, String portName) {
-        if (this.level == null || portName == null || portName.isBlank()
+        if (this.shutDown || this.level == null || portName == null || portName.isBlank()
                 || nodeId < 0 || nodeId >= index.getNodeCount()) {
             return null;
         }
@@ -220,7 +222,7 @@ public class GraphProcess {
      * 为蓝图入口分配一个独立的执行线程。支持多事件并发执行。
      */
     public void executeEvent(int startNodeId, @Nullable Map<String, Object> eventData) {
-        if (this.level == null) return;
+        if (this.shutDown || this.level == null) return;
 
         // 调用修改后的 borrowThread，传入默认端口 "flow_in" 作为执行起点的占位
         ExecutionThread thread = borrowThread(startNodeId, "flow_in");
@@ -235,7 +237,7 @@ public class GraphProcess {
      * 负责处理读档重基准以及唤醒到期的休眠线程。
      */
     public void tick(long currentWorldTick) {
-        if (level == null) return;
+        if (this.shutDown || level == null) return;
 
         // 1. 读档后的相对时间修正
         if (this.needsTimeRebase) {
@@ -263,6 +265,28 @@ public class GraphProcess {
                 thread.run();
             }
         }
+    }
+
+    /**
+     * Terminates all suspended work before this process is replaced or unloaded.
+     */
+    public void shutdown(String reason) {
+        if (this.shutDown) {
+            return;
+        }
+        this.shutDown = true;
+        String closeReason = reason == null || reason.isBlank() ? "graph_unloaded" : reason;
+        branchJoins.clear();
+        for (ExecutionThread thread : new ArrayList<>(externalWaitingThreads)) {
+            thread.abort(closeReason);
+        }
+        for (ExecutionThread thread : new ArrayList<>(sleepingThreads)) {
+            thread.abort(closeReason);
+        }
+        externalWaitingThreads.clear();
+        sleepingThreads.clear();
+        THREAD_POOL.clear();
+        notifyTickScheduleChanged();
     }
 
     private void onThreadFinished(ExecutionThread thread) {
@@ -578,12 +602,17 @@ public class GraphProcess {
                     this.externalWaitRuntime = runtime;
                     this.currentFlowId = -1;
                     this.state = State.EXTERNAL_WAITING;
+                    GraphProcess.this.externalWaitingThreads.add(this);
 
-                    if (!runtime.beginExternalWait(this, externalWait.request())) {
-                        this.externalWaitNodeId = -1;
-                        this.externalWaitRuntime = null;
-                        this.state = State.ERROR;
-                        this.executionStack.clear();
+                    boolean beganWaiting;
+                    try {
+                        beganWaiting = runtime.beginExternalWait(this, externalWait.request());
+                    } catch (RuntimeException | Error exception) {
+                        failExternalWait();
+                        throw exception;
+                    }
+                    if (!beganWaiting) {
+                        failExternalWait();
                     }
                 }
                 case ExecutionResult.Finish ignored -> this.currentFlowId = -1;
@@ -600,6 +629,7 @@ public class GraphProcess {
                 return false;
             }
 
+            GraphProcess.this.externalWaitingThreads.remove(this);
             GraphRuntime runtime = this.externalWaitRuntime;
             RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(this.externalWaitNodeId, outputPortName);
             if (runtime != null) {
@@ -645,16 +675,20 @@ public class GraphProcess {
 
         @Override
         public boolean isActive() {
-            return this.state == State.RUNNING || this.state == State.WAITING || this.state == State.EXTERNAL_WAITING;
+            return !GraphProcess.this.shutDown
+                    && (this.state == State.RUNNING || this.state == State.WAITING || this.state == State.EXTERNAL_WAITING);
         }
 
         @Override
         public void close() {
-            if (this.state == State.EXTERNAL_WAITING && this.externalWaitRuntime != null) {
-                GraphRuntime runtime = this.externalWaitRuntime;
-                this.externalWaitRuntime = null;
-                runtime.endExternalWait(this, "closed");
-            }
+            abort("closed");
+        }
+
+        @Override
+        public void abort(String reason) {
+            GraphRuntime runtime = this.state == State.EXTERNAL_WAITING ? this.externalWaitRuntime : null;
+            this.externalWaitRuntime = null;
+            GraphProcess.this.externalWaitingThreads.remove(this);
             this.externalWaitNodeId = -1;
             this.currentFlowId = -1;
             this.executionStack.clear();
@@ -662,8 +696,19 @@ public class GraphProcess {
             if (GraphProcess.this.sleepingThreads.remove(this)) {
                 GraphProcess.this.notifyTickScheduleChanged();
             }
+            if (runtime != null) {
+                runtime.endExternalWait(this, reason);
+            }
             GraphProcess.this.onThreadFinished(this);
             recycleIfNeeded();
+        }
+
+        private void failExternalWait() {
+            GraphProcess.this.externalWaitingThreads.remove(this);
+            this.externalWaitNodeId = -1;
+            this.externalWaitRuntime = null;
+            this.state = State.ERROR;
+            this.executionStack.clear();
         }
 
         @Override

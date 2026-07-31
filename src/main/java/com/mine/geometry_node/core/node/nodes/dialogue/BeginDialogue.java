@@ -2,8 +2,9 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
-import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionPolicy;
+import com.mine.geometry_node.core.engine.dialogue.DialogueContext;
+import com.mine.geometry_node.core.engine.dialogue.DialogueSession;
+import com.mine.geometry_node.core.engine.dialogue.DialogueStyleRegistry;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -21,13 +22,11 @@ import java.util.Map;
 
 public class BeginDialogue extends BaseNode {
     public static final String TYPE_ID = "begin_dialogue";
-    private static final String[] STYLE_OPTIONS = {"default", "rpg"};
+    private static final String[] STYLE_OPTIONS = {DialogueStyleRegistry.DEFAULT, DialogueStyleRegistry.RPG};
 
     public static final String PLAYER = StandardPorts.PLAYER.getId();
     public static final String DIALOGUE_ENTITY = StandardPorts.SPEAKER_ENTITY.getId();
     public static final String STYLE_ID = StandardPorts.STYLE_ID.getId();
-    public static final String GRAPH_ID = StandardPorts.GRAPH_ID.getId();
-    public static final String ENTRY_ID = StandardPorts.ENTRY_ID.getId();
     public static final String ALLOW_MULTI_PLAYER = "allow_multi_player";
 
     @Override
@@ -37,14 +36,12 @@ public class BeginDialogue extends BaseNode {
                 .addRow(new PortRow(StandardPorts.PLAYER.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.SPEAKER_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        StandardPorts.STYLE_ID.toInput("default"),
+                        StandardPorts.STYLE_ID.toInput(DialogueStyleRegistry.DEFAULT),
                         null,
                         UIHint.SELECT,
                         null,
                         Map.of(PortMetaKeys.OPTIONS, STYLE_OPTIONS)
                 ))
-                .addRow(new PortRow(StandardPorts.GRAPH_ID.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTRY_ID.toInput("root"), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(PortDef.create(ALLOW_MULTI_PLAYER, "geometry_node.port.allow_multi_player", PortType.BOOLEAN, true), null, UIHint.CHECKBOX, null, null))
                 .build();
     }
@@ -53,10 +50,8 @@ public class BeginDialogue extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         ServerPlayer player = resolvePlayer(context);
         Entity dialogueEntity = resolveDialogueEntity(context);
-        String styleId = stringOrDefault(getInput(context, STYLE_ID, String.class), "default");
-        String graphId = stringOrDefault(getInput(context, GRAPH_ID, String.class), context.getGraphId());
-        String entryId = stringOrDefault(getInput(context, ENTRY_ID, String.class), "root");
-        DialogueSessionPolicy policy = new DialogueSessionPolicy(
+        String styleId = stringOrDefault(getInput(context, STYLE_ID, String.class), DialogueStyleRegistry.DEFAULT);
+        DialogueSession.Policy policy = new DialogueSession.Policy(
                 boolOrDefault(getInput(context, ALLOW_MULTI_PLAYER, Boolean.class), true)
         );
 
@@ -64,8 +59,6 @@ public class BeginDialogue extends BaseNode {
                 player,
                 dialogueEntity,
                 styleId,
-                graphId,
-                entryId,
                 policy
         ));
         return next(StandardPorts.FLOW_OUT.getId());

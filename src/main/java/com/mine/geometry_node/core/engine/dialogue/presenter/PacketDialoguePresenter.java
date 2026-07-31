@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.dialogue.presenter;
 
-import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
+import com.mine.geometry_node.core.engine.dialogue.DialogueSession;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;

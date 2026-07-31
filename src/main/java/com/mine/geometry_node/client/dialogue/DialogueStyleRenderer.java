@@ -1,7 +1,5 @@
 package com.mine.geometry_node.client.dialogue;
 
-import com.mine.geometry_node.client.dialogue.ui.RpgDialogueFragment;
-import com.mine.geometry_node.client.dialogue.ui.ShopMenuFragment;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.mc.MuiScreen;
@@ -18,22 +16,18 @@ import java.util.UUID;
  * Client-side dispatcher for non-vanilla dialogue styles.
  */
 public final class DialogueStyleRenderer {
-    public static final String STYLE_RPG = "rpg";
-    public static final String STYLE_SHOP = "shop";
-    public static final String STYLE_MENU = "menu";
-
     @Nullable
     private static Screen activeScreen;
     @Nullable
     private static UUID activeSessionId;
+    @Nullable
+    private static String activeStyleId;
 
     private DialogueStyleRenderer() {
     }
 
     public static boolean supports(String styleId) {
-        return STYLE_RPG.equals(styleId)
-                || STYLE_SHOP.equals(styleId)
-                || STYLE_MENU.equals(styleId);
+        return ClientDialogueStyleRegistry.supports(styleId);
     }
 
     public static void open(PacketOpenDialogue packet) {
@@ -47,9 +41,14 @@ public final class DialogueStyleRenderer {
             return;
         }
 
-        if (isActive(packet) && activeScreen instanceof MuiScreen muiScreen) {
+        ClientDialogueStyleRegistry.Renderer renderer = ClientDialogueStyleRegistry.find(packet.styleId());
+        if (renderer == null) {
+            return;
+        }
+
+        if (isActive(packet) && packet.styleId().equals(activeStyleId) && activeScreen instanceof MuiScreen muiScreen) {
             Fragment fragment = muiScreen.getFragment();
-            refreshOnUiThread(fragment, packet);
+            refreshOnUiThread(renderer, fragment, packet);
             return;
         }
 
@@ -58,34 +57,23 @@ public final class DialogueStyleRenderer {
             previousScreen = muiScreen.getPreviousScreen();
         }
 
-        Fragment fragment = createFragment(packet.styleId());
-        String title = STYLE_SHOP.equals(packet.styleId()) || STYLE_MENU.equals(packet.styleId()) ? "Shop" : "Dialogue";
-        Screen screen = MuiModApi.get().createScreen(fragment, new DialogueScreenCallback(), previousScreen, title);
+        Fragment fragment = renderer.create();
+        Screen screen = MuiModApi.get().createScreen(
+                fragment,
+                new DialogueScreenCallback(),
+                previousScreen,
+                renderer.title(packet)
+        );
         activeScreen = screen;
         activeSessionId = packet.sessionId();
+        activeStyleId = packet.styleId();
         minecraft.setScreen(screen);
     }
 
-    private static Fragment createFragment(String styleId) {
-        if (STYLE_SHOP.equals(styleId) || STYLE_MENU.equals(styleId)) {
-            return new ShopMenuFragment();
-        }
-        return new RpgDialogueFragment();
-    }
-
-    private static void refreshOnUiThread(Fragment fragment, PacketOpenDialogue packet) {
-        MuiModApi.postToUiThread(() -> refresh(fragment, packet));
-    }
-
-    private static void refresh(Fragment fragment, PacketOpenDialogue packet) {
-        if (fragment instanceof RpgDialogueFragment rpgDialogueFragment && STYLE_RPG.equals(packet.styleId())) {
-            rpgDialogueFragment.refresh(packet);
-            return;
-        }
-        if (fragment instanceof ShopMenuFragment shopMenuFragment
-                && (STYLE_SHOP.equals(packet.styleId()) || STYLE_MENU.equals(packet.styleId()))) {
-            shopMenuFragment.refresh(packet);
-        }
+    private static void refreshOnUiThread(ClientDialogueStyleRegistry.Renderer renderer,
+                                          Fragment fragment,
+                                          PacketOpenDialogue packet) {
+        MuiModApi.postToUiThread(() -> renderer.refresh(fragment, packet));
     }
 
     public static void close(UUID sessionId) {
@@ -104,6 +92,7 @@ public final class DialogueStyleRenderer {
         }
         activeScreen = null;
         activeSessionId = null;
+        activeStyleId = null;
         restoreGameInputIfNeeded();
     }
 
@@ -120,6 +109,7 @@ public final class DialogueStyleRenderer {
         }
         activeScreen = null;
         activeSessionId = null;
+        activeStyleId = null;
         restoreGameInputIfNeeded();
     }
 

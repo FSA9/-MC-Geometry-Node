@@ -1,6 +1,6 @@
-package com.mine.geometry_node.core.engine.dialogue.payload;
+package com.mine.geometry_node.core.engine.dialogue;
 
-import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
+import com.mine.geometry_node.core.engine.dialogue.model.DialoguePagePayload;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 
 import java.util.List;
@@ -14,8 +14,6 @@ public record DialogueWaitRequest(
         DialogueContext context,
         List<DialoguePagePayload> pages
 ) implements ExternalWaitRequest {
-    private static final String CONTINUE_PAGE_PREFIX = "__continue_page_";
-
     public DialogueWaitRequest {
         Objects.requireNonNull(context, "context");
         pages = List.copyOf(Objects.requireNonNull(pages, "pages"));
@@ -30,13 +28,5 @@ public record DialogueWaitRequest(
 
     public DialoguePagePayload page() {
         return pages.get(0);
-    }
-
-    public static String continuePageChoiceId(int pageIndex) {
-        return CONTINUE_PAGE_PREFIX + Math.max(0, pageIndex);
-    }
-
-    public static boolean isContinuePageChoice(String choiceId) {
-        return choiceId != null && choiceId.startsWith(CONTINUE_PAGE_PREFIX);
     }
 }

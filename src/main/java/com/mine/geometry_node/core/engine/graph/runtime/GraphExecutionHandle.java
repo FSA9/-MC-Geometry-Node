@@ -25,6 +25,10 @@ public interface GraphExecutionHandle {
     default void close() {
     }
 
+    default void abort(String reason) {
+        close();
+    }
+
     @Nullable
     default Object unwrap() {
         return null;

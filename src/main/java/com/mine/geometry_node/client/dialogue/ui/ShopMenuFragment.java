@@ -6,8 +6,8 @@ import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.InventoryItemPickerOverlay;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ItemStackTooltipOverlay;
+import com.mine.geometry_node.core.engine.dialogue.model.shop.ShopPagePayload;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
-import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.fragment.Fragment;
@@ -32,7 +32,6 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Client-side shop menu opened by the OpenShop dialogue node.
@@ -315,9 +314,10 @@ public class ShopMenuFragment extends Fragment {
         footer.addView(status, new LinearLayout.LayoutParams(0, dp(32), 1.0f));
 
         PacketOpenDialogue.Choice choice = continueChoice(packet);
-        String text = choice != null && choice.text() != null && !choice.text().isBlank()
-                ? ModernDialogueText.plain(choice.text())
-                : Component.translatable("geometry_node.dialogue.continue").getString();
+        String choiceText = choice == null ? "" : ModernDialogueText.plain(choice.text());
+        String text = choiceText.isBlank()
+                ? Component.translatable("geometry_node.dialogue.continue").getString()
+                : choiceText;
         TextView continueButton = button(
                 text,
                 COLOR_BUTTON,
@@ -359,16 +359,6 @@ public class ShopMenuFragment extends Fragment {
     private PacketOpenDialogue.Choice continueChoice(PacketOpenDialogue packet) {
         if (packet == null || packet.choices() == null || packet.choices().isEmpty()) {
             return null;
-        }
-        for (PacketOpenDialogue.Choice choice : packet.choices()) {
-            if (choice != null && choice.metadata() != null && "continue".equals(String.valueOf(choice.metadata().get("role")))) {
-                return choice;
-            }
-        }
-        for (PacketOpenDialogue.Choice choice : packet.choices()) {
-            if (choice != null && StandardPorts.FLOW_OUT.getId().equals(choice.choiceId())) {
-                return choice;
-            }
         }
         for (PacketOpenDialogue.Choice choice : packet.choices()) {
             if (choice != null && choice.defaultChoice()) {
@@ -500,21 +490,15 @@ public class ShopMenuFragment extends Fragment {
 
     private record ShopState(String title, String message, boolean messageSuccess, List<ShopOffer> offers) {
         private static ShopState from(PacketOpenDialogue packet) {
-            if (packet == null) {
+            ShopPagePayload shop = packet == null ? null : packet.shop();
+            if (shop == null) {
                 return new ShopState("", "", true, List.of());
             }
-            Map<String, Object> metadata = packet.metadata() == null ? Map.of() : packet.metadata();
-            String title = stringValue(metadata.get("title"), "");
-            String messageKey = stringValue(metadata.get("last_trade_message_key"), "");
+            String messageKey = shop.feedback().messageKey();
             String message = messageKey.isBlank()
-                    ? stringValue(metadata.get("last_trade_message"), "")
+                    ? shop.feedback().message()
                     : tr(messageKey);
-            boolean success = boolValue(metadata.get("last_trade_success"), true);
-            Map<?, ?> shopData = asMap(metadata.get("shop_data"));
-            if (shopData == null) {
-                shopData = metadata;
-            }
-            return new ShopState(title, message, success, parseOffers(shopData));
+            return new ShopState(shop.title(), message, shop.feedback().success(), parseOffers(shop.offers()));
         }
     }
 
@@ -549,59 +533,31 @@ public class ShopMenuFragment extends Fragment {
         }
     }
 
-    private static List<ShopOffer> parseOffers(Map<?, ?> shopData) {
-        if (shopData == null) {
-            return List.of();
-        }
-        Object offersObj = shopData.get("offers");
-        if (!(offersObj instanceof List<?> offers)) {
-            return List.of();
-        }
-
+    private static List<ShopOffer> parseOffers(List<ShopPagePayload.Offer> offers) {
         List<ShopOffer> result = new ArrayList<>();
-        int index = 1;
-        for (Object offerObj : offers) {
-            Map<?, ?> offerMap = asMap(offerObj);
-            if (offerMap == null) {
-                continue;
-            }
-            String id = stringValue(offerMap.get("id"), "trade_" + index);
-            String title = stringValue(offerMap.get("title"), "");
-            int maxUses = intValue(offerMap.get("max_uses"), 0);
-            int uses = Math.max(0, intValue(offerMap.get("uses"), 0));
-            boolean enabled = boolValue(offerMap.get("enabled"), true);
+        for (ShopPagePayload.Offer offer : offers) {
             result.add(new ShopOffer(
-                    id,
-                    title,
-                    maxUses,
-                    uses,
-                    enabled,
-                    parseStacks(offerMap.get("costs")),
-                    parseStacks(offerMap.get("rewards"))
+                    offer.id(),
+                    offer.title(),
+                    offer.maxUses(),
+                    offer.uses(),
+                    offer.enabled(),
+                    parseStacks(offer.costs()),
+                    parseStacks(offer.rewards())
             ));
-            index++;
         }
-        return result;
+        return List.copyOf(result);
     }
 
-    private static List<ItemStack> parseStacks(Object raw) {
-        if (!(raw instanceof List<?> list)) {
-            return List.of();
-        }
+    private static List<ItemStack> parseStacks(List<ShopPagePayload.Item> items) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) {
             return List.of();
         }
 
         List<ItemStack> stacks = new ArrayList<>();
-        for (Object item : list) {
-            String stackJson = "";
-            Map<?, ?> map = asMap(item);
-            if (map != null) {
-                stackJson = stringValue(map.get("stack"), "");
-            } else if (item instanceof String string) {
-                stackJson = string;
-            }
+        for (ShopPagePayload.Item item : items) {
+            String stackJson = item.stackJson();
             if (stackJson.isBlank()) {
                 continue;
             }
@@ -610,49 +566,11 @@ public class ShopMenuFragment extends Fragment {
                 stacks.add(stack);
             }
         }
-        return stacks;
-    }
-
-    private static Map<?, ?> asMap(Object value) {
-        return value instanceof Map<?, ?> map ? map : null;
-    }
-
-    private static String stringValue(Object value, String fallback) {
-        if (value instanceof String string) {
-            return string;
-        }
-        return fallback == null ? "" : fallback;
+        return List.copyOf(stacks);
     }
 
     private static String tr(String key, Object... args) {
         return Component.translatable(key, args).getString();
     }
 
-    private static int intValue(Object value, int fallback) {
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        if (value instanceof String string) {
-            try {
-                return Integer.parseInt(string.trim());
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        return fallback;
-    }
-
-    private static boolean boolValue(Object value, boolean fallback) {
-        if (value instanceof Boolean bool) {
-            return bool;
-        }
-        if (value instanceof String string) {
-            if ("true".equalsIgnoreCase(string) || "1".equals(string)) {
-                return true;
-            }
-            if ("false".equalsIgnoreCase(string) || "0".equals(string)) {
-                return false;
-            }
-        }
-        return fallback;
-    }
 }

@@ -8,23 +8,24 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Splits dialogue body text on one empty line (two line endings) without
- * discarding rich-text spans. A single line break remains in the same round.
+ * Splits dialogue body text on two empty lines (three line endings) without
+ * discarding rich-text spans. Single line breaks and one empty line remain in
+ * the same round.
  */
 public final class DialogueRoundParser {
-    private static final Pattern ROUND_BREAK = Pattern.compile("(?:\\r?\\n[ \\t]*){2,}");
+    private static final Pattern ROUND_BREAK = Pattern.compile("(?:\\r?\\n[ \\t]*){2,}\\r?\\n");
 
     private DialogueRoundParser() {
     }
 
     public static List<RichTextValue> split(RichTextValue value) {
         RichTextValue safe = value == null ? RichTextValue.EMPTY : value;
-        boolean segmentsMatchPlain = segmentsMatchPlain(safe);
         Matcher matcher = ROUND_BREAK.matcher(safe.plain());
         if (!matcher.find()) {
-            return List.of(slice(safe, 0, safe.plain().length(), segmentsMatchPlain));
+            return List.of(safe);
         }
 
+        boolean segmentsMatchPlain = segmentsMatchPlain(safe);
         List<RichTextValue> rounds = new ArrayList<>();
         int start = 0;
         do {
@@ -42,16 +43,7 @@ public final class DialogueRoundParser {
     }
 
     private static RichTextValue slice(RichTextValue value, int start, int end, boolean segmentsMatchPlain) {
-        int contentStart = start;
-        int contentEnd = end;
-        while (contentStart < contentEnd && isBoundaryWhitespace(value.plain().charAt(contentStart))) {
-            contentStart++;
-        }
-        while (contentEnd > contentStart && isBoundaryWhitespace(value.plain().charAt(contentEnd - 1))) {
-            contentEnd--;
-        }
-
-        String plain = value.plain().substring(contentStart, contentEnd);
+        String plain = value.plain().substring(start, end);
         if (plain.isEmpty()) {
             return RichTextValue.EMPTY;
         }
@@ -64,8 +56,8 @@ public final class DialogueRoundParser {
         for (RichTextValue.Segment segment : value.segments()) {
             String segmentPlain = segment.plainText();
             int segmentEnd = segmentStart + segmentPlain.length();
-            int overlapStart = Math.max(contentStart, segmentStart);
-            int overlapEnd = Math.min(contentEnd, segmentEnd);
+            int overlapStart = Math.max(start, segmentStart);
+            int overlapEnd = Math.min(end, segmentEnd);
             if (overlapStart < overlapEnd) {
                 int localStart = overlapStart - segmentStart;
                 int localEnd = overlapEnd - segmentStart;
@@ -80,10 +72,6 @@ public final class DialogueRoundParser {
             segmentStart = segmentEnd;
         }
         return segments.isEmpty() ? RichTextValue.plain(plain) : new RichTextValue(plain, segments);
-    }
-
-    private static boolean isBoundaryWhitespace(char value) {
-        return value == '\r' || value == '\n' || value == ' ' || value == '\t';
     }
 
     private static boolean segmentsMatchPlain(RichTextValue value) {

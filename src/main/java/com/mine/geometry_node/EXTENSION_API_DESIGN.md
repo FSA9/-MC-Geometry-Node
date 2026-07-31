@@ -386,9 +386,9 @@ EventPayload.builder()
 
 1. 服务端会话：
 
-- `DialogueRuntime` 作为对话运行时门面。
-- `DialogueSessionManager` 管理当前活动 session。
-- `DialogueSession` 保存 `session_id`、`player_id`、`graph_id`、当前页、临时变量和中性 `GraphExecutionHandle`。
+- `DialogueRuntime` 单点拥有 session 创建、替换、关闭、恢复和 abort 等生命周期写操作。
+- 包内 `DialogueSessionStore` 只维护当前活动 session 索引，不暴露生命周期命令。
+- `DialogueSession` 对外只读，保存 `session_id`、`player_id`、由执行句柄确定的 `graph_id`、不可变页面快照和中性 `GraphExecutionHandle`。
 - session 关闭时释放执行句柄。
 
 2. 蓝图等待能力：
@@ -405,7 +405,7 @@ EventPayload.builder()
   - Dialogue 节点。
   - 端口使用 `StandardPorts` 定义。
   - 输入：speaker、text_key。
-  - player、style_id、graph_id、entry_id 等会话信息从 `BeginDialogue` 建立的 `DialogueContext` 读取。
+  - player、speaker_entity、style_id 和多人策略从 `BeginDialogue` 建立的 `DialogueContext` 读取；graph_id 由等待句柄确定，不提供无消费者的 entry_id。
   - 动态 choice 输入组：choice_text_key、choice_visible、choice_enabled、choice_disabled_reason_key。
   - choice 默认 0 组，上限 10 组；0 组时自动提供继续输出。
   - 动态输出：choice_1、choice_2、...，以及固定 closed。
@@ -454,6 +454,13 @@ EventPayload.builder()
 - 服务端通过 `PacketOpenDialogue` 下发 page，客户端由样式分发器打开 RPG 对话 Fragment。
 - 面板点击选项通过 `PacketDialogueChoice` 回传，不依赖命令。
 - 服务端发送 `PacketCloseDialogue` 关闭旧 session 对应的客户端面板。
+
+样式扩展契约：
+
+- Addon 在 common 侧通过 `DialogueStyleRegistry.register(styleId, presentation)` 声明样式使用聊天还是 GUI 包。
+- GUI 包样式还必须在 client 侧通过 `ClientDialogueStyleRegistry.register(styleId, renderer)` 注册 Fragment renderer。
+- 服务端遇到未注册样式时回退 `default`，不创建无界面的等待 session。
+- 客户端缺少对应 renderer 时主动关闭该 session，处理服务端与客户端扩展注册不一致的情况。
 
 7. 文本格式：
 

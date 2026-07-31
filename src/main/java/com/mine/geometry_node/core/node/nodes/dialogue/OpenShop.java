@@ -3,10 +3,13 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.dialogue.ShopTradeUseStore;
-import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
-import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
-import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
-import com.mine.geometry_node.core.engine.dialogue.payload.DialogueWaitRequest;
+import com.mine.geometry_node.core.engine.dialogue.DialogueContext;
+import com.mine.geometry_node.core.engine.dialogue.DialogueStyleRegistry;
+import com.mine.geometry_node.core.engine.dialogue.model.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.model.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
+import com.mine.geometry_node.core.engine.dialogue.DialogueWaitRequest;
+import com.mine.geometry_node.core.engine.dialogue.model.shop.ShopPagePayload;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
@@ -37,7 +40,6 @@ public class OpenShop extends BaseNode {
     public static final String SHOP_DATA = StandardPorts.SHOP_DATA.getId();
     public static final String TEMP_SHOP_DATA = "open_shop_data";
 
-    private static final String STYLE_SHOP = "shop";
     private static final String ACTION_OPEN_SHOP_EDITOR = "open_shop_editor";
     private static final Map<String, Object> DEFAULT_SHOP_DATA = Map.of("offers", List.of());
     private static final String OFFERS = "offers";
@@ -121,29 +123,24 @@ public class OpenShop extends BaseNode {
 
         DialogueContext dialogueContext = createShopDialogueContext(context, player);
         Map<String, Boolean> conditionValues = evaluateConditionInputs(context);
-        Map<String, Object> displayShopData = resolveDisplayShopData(
+        ShopPagePayload shop = resolveShopPage(
                 context,
                 shopData,
                 conditionValues,
-                shopId
+                shopId,
+                safeTitle
         );
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("title", safeTitle);
-        metadata.put("shop_data", displayShopData);
 
-        DialoguePagePayload page = new DialoguePagePayload(
+        DialoguePagePayload page = DialoguePagePayload.shop(
                 "shop:" + context.getCurrentNodeId(),
-                "",
-                STYLE_SHOP,
+                shop,
                 List.of(new DialogueChoicePayload(
                         StandardPorts.FLOW_OUT.getId(),
-                        "",
-                        null,
+                        DialogueText.EMPTY,
+                        new DialogueChoicePayload.ResumePort(StandardPorts.FLOW_OUT.getId()),
                         true,
-                        null,
-                        Map.of("role", "continue")
-                )),
-                metadata
+                        DialogueText.EMPTY
+                ))
         );
         return ExecutionResult.externalWait(GraphKind.DIALOGUE, new DialogueWaitRequest(dialogueContext, page));
     }
@@ -159,19 +156,17 @@ public class OpenShop extends BaseNode {
         return result;
     }
 
-    private static Map<String, Object> resolveDisplayShopData(ExecutionContext context,
-                                                              Map<String, Object> shopData,
-                                                              Map<String, Boolean> conditionValues,
-                                                              String shopId) {
-        Map<String, Object> display = normalizePlainMap(shopData);
-        ShopTradeUseStore.attachShopId(display, shopId);
+    private static ShopPagePayload resolveShopPage(ExecutionContext context,
+                                                   Map<String, Object> shopData,
+                                                   Map<String, Boolean> conditionValues,
+                                                   String shopId,
+                                                   String title) {
         Object offersObj = shopData.get(OFFERS);
         if (!(offersObj instanceof List<?> offers)) {
-            display.put(OFFERS, List.of());
-            return display;
+            return new ShopPagePayload(shopId, title, ShopPagePayload.Feedback.EMPTY, List.of());
         }
 
-        List<Object> displayOffers = new ArrayList<>();
+        List<ShopPagePayload.Offer> displayOffers = new ArrayList<>();
         for (Object offerObj : offers) {
             if (!(offerObj instanceof Map<?, ?> rawOffer)) {
                 continue;
@@ -184,24 +179,48 @@ public class OpenShop extends BaseNode {
 
             String enabledCondition = stringValue(offer.get(ENABLED_CONDITION), "");
             boolean enabled = enabledCondition.isBlank() || Boolean.TRUE.equals(conditionValues.get(enabledCondition));
-            offer.put("enabled", enabled);
             String offerId = stringValue(offer.get("id"), "");
-            if (!offerId.isBlank()) {
-                offer.put(USES, ShopTradeUseStore.getUses(
-                        context.getLevel(),
-                        context.getEntity(),
-                        context.getGraphId(),
-                        shopId,
-                        offerId
-                ));
+            if (offerId.isBlank()) {
+                continue;
             }
-            if (!enabled) {
-                offer.put(DISABLED_REASON, stringValue(offer.get(DISABLED_REASON), ""));
-            }
-            displayOffers.add(offer);
+            int uses = ShopTradeUseStore.getUses(
+                    context.getLevel(),
+                    context.getEntity(),
+                    context.getGraphId(),
+                    shopId,
+                    offerId
+            );
+            displayOffers.add(new ShopPagePayload.Offer(
+                    offerId,
+                    stringValue(offer.get("title"), ""),
+                    intValue(offer.get(MAX_USES), 0),
+                    uses,
+                    enabled,
+                    enabled ? "" : stringValue(offer.get(DISABLED_REASON), ""),
+                    boolValue(offer.get(CONSUME_SELLER_ITEMS), false),
+                    boolValue(offer.get(SELLER_RECEIVES_PAYMENT), false),
+                    itemPayloads(offer.get("costs")),
+                    itemPayloads(offer.get("rewards"))
+            ));
         }
-        display.put(OFFERS, displayOffers);
-        return display;
+        return new ShopPagePayload(shopId, title, ShopPagePayload.Feedback.EMPTY, displayOffers);
+    }
+
+    private static List<ShopPagePayload.Item> itemPayloads(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of(new ShopPagePayload.Item(""));
+        }
+        List<ShopPagePayload.Item> result = new ArrayList<>(list.size());
+        for (Object item : list) {
+            String stackJson = "";
+            if (item instanceof Map<?, ?> map && map.get("stack") instanceof String stack) {
+                stackJson = stack;
+            } else if (item instanceof String stack) {
+                stackJson = stack;
+            }
+            result.add(new ShopPagePayload.Item(stackJson));
+        }
+        return result;
     }
 
     private DialogueContext createShopDialogueContext(ExecutionContext context, ServerPlayer player) {
@@ -210,9 +229,7 @@ public class OpenShop extends BaseNode {
             return new DialogueContext(
                     player,
                     current.dialogueEntityId(),
-                    STYLE_SHOP,
-                    current.graphId(),
-                    current.entryId(),
+                    DialogueStyleRegistry.SHOP,
                     current.policy()
             );
         }
@@ -221,9 +238,7 @@ public class OpenShop extends BaseNode {
         return new DialogueContext(
                 player,
                 dialogueEntity,
-                STYLE_SHOP,
-                context.getGraphId(),
-                "root"
+                DialogueStyleRegistry.SHOP
         );
     }
 

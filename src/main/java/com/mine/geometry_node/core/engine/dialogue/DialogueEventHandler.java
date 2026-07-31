@@ -6,6 +6,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 
 /**
@@ -41,6 +42,7 @@ public final class DialogueEventHandler {
                 DialogueRuntime.INSTANCE.onEntityChangeDimension(event.getEntity());
             }
         });
+        bus.addListener((ServerStartingEvent event) -> DialogueRuntime.INSTANCE.onServerStarting());
         bus.addListener((ServerStoppingEvent event) -> DialogueRuntime.INSTANCE.onServerStopping());
     }
 }

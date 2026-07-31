@@ -1,6 +1,4 @@
-package com.mine.geometry_node.core.engine.dialogue.context;
-
-import com.mine.geometry_node.core.engine.dialogue.session.DialogueSessionPolicy;
+package com.mine.geometry_node.core.engine.dialogue;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -20,44 +18,32 @@ public final class DialogueContext {
     @Nullable
     private final UUID dialogueEntityId;
     private final String styleId;
-    private final String graphId;
-    private final String entryId;
-    private final DialogueSessionPolicy policy;
+    private final DialogueSession.Policy policy;
 
     public DialogueContext(@Nullable ServerPlayer player,
                            @Nullable Entity dialogueEntity,
-                           String styleId,
-                           @Nullable String graphId,
-                           @Nullable String entryId) {
-        this(player, dialogueEntity, styleId, graphId, entryId, DialogueSessionPolicy.DEFAULT);
+                           String styleId) {
+        this(player, dialogueEntity, styleId, DialogueSession.Policy.DEFAULT);
     }
 
     public DialogueContext(@Nullable ServerPlayer player,
                            @Nullable Entity dialogueEntity,
                            String styleId,
-                           @Nullable String graphId,
-                           @Nullable String entryId,
-                           DialogueSessionPolicy policy) {
+                           DialogueSession.Policy policy) {
         this(player,
                 dialogueEntity == null ? null : dialogueEntity.getUUID(),
                 styleId,
-                graphId,
-                entryId,
                 policy);
     }
 
     public DialogueContext(@Nullable ServerPlayer player,
                            @Nullable UUID dialogueEntityId,
                            String styleId,
-                           @Nullable String graphId,
-                           @Nullable String entryId,
-                           DialogueSessionPolicy policy) {
+                           DialogueSession.Policy policy) {
         this.player = player;
         this.dialogueEntityId = dialogueEntityId;
-        this.styleId = styleId == null || styleId.isBlank() ? "default" : styleId;
-        this.graphId = graphId == null ? "" : graphId;
-        this.entryId = entryId == null || entryId.isBlank() ? "root" : entryId;
-        this.policy = policy == null ? DialogueSessionPolicy.DEFAULT : policy;
+        this.styleId = styleId == null || styleId.isBlank() ? DialogueStyleRegistry.DEFAULT : styleId;
+        this.policy = policy == null ? DialogueSession.Policy.DEFAULT : policy;
     }
 
     @Nullable
@@ -74,15 +60,7 @@ public final class DialogueContext {
         return styleId;
     }
 
-    public String graphId() {
-        return graphId;
-    }
-
-    public String entryId() {
-        return entryId;
-    }
-
-    public DialogueSessionPolicy policy() {
+    public DialogueSession.Policy policy() {
         return policy;
     }
 

@@ -492,6 +492,9 @@ public class GraphEngine {
             if (newIndex != null) {
                 graphSubscriptions.registerGlobalGraph(graphId, newIndex);
             }
+            for (ServerLevel level : server.getAllLevels()) {
+                LevelGraphAttachment.get(level).removeProcess(graphId);
+            }
         }
 
         for (ServerLevel level : server.getAllLevels()) {
@@ -499,6 +502,7 @@ public class GraphEngine {
                 EntityGraphAttachment attachment = getAttachment(entity);
                 if (attachment == null || !attachment.getBoundGraphs().contains(graphId)) continue;
 
+                attachment.removeProcess(graphId);
                 unregisterEntityForGraph(entity, graphId, oldIndex);
                 if (newIndex != null) {
                     graphSubscriptions.registerEntityGraph(entity, graphId, newIndex);

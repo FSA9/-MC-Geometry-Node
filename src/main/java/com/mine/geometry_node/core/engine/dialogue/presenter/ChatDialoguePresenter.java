@@ -1,10 +1,11 @@
 package com.mine.geometry_node.core.engine.dialogue.presenter;
 
-import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
-import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.dialogue.DialogueSession;
+import com.mine.geometry_node.core.engine.dialogue.model.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.model.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRichText;
 import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueTextParser;
-import com.mine.geometry_node.core.engine.dialogue.session.DialogueSession;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
@@ -43,15 +44,15 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
             body.append(speaker);
             body.append(Component.literal(": ").withStyle(ChatFormatting.GRAY));
         }
-        body.append(DialogueTextParser.parse(page.getText(), player.registryAccess()).component().copy().withStyle(ChatFormatting.WHITE));
+        body.append(DialogueTextParser.parse(page.bodyText()).component().copy().withStyle(ChatFormatting.WHITE));
         player.sendSystemMessage(body);
 
         boolean hasClosedChoice = false;
         int index = 1;
-        for (DialogueChoicePayload choice : page.getChoices()) {
-            if ("closed".equals(choice.getId())) {
+        for (DialogueChoicePayload choice : page.choices()) {
+            if ("closed".equals(choice.id())) {
                 hasClosedChoice = true;
-                player.sendSystemMessage(closeLine(player, session, choice.getText(), choice.isEnabled(), choice.getDisabledReason()));
+                player.sendSystemMessage(closeLine(player, session, choice.text(), choice.enabled(), choice.disabledReason()));
                 continue;
             }
             player.sendSystemMessage(choiceLine(player, session, index, choice));
@@ -64,14 +65,15 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
     }
 
     private static MutableComponent choiceLine(ServerPlayer player, DialogueSession session, int index, DialogueChoicePayload choice) {
-        DialogueRichText text = DialogueTextParser.parse(choice.getText(), player.registryAccess());
+        DialogueRichText text = DialogueTextParser.parse(choice.text());
         MutableComponent line = Component.literal("[" + index + "] ").append(text.component());
-        if (!choice.isEnabled() && choice.getDisabledReason() != null && !choice.getDisabledReason().isBlank()) {
+        DialogueRichText disabledReason = DialogueTextParser.parse(choice.disabledReason());
+        if (!choice.enabled() && !disabledReason.plainText().isBlank()) {
             line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
-            line.append(DialogueTextParser.parse(choice.getDisabledReason(), player.registryAccess()).component().copy().withStyle(ChatFormatting.DARK_GRAY));
+            line.append(disabledReason.component().copy().withStyle(ChatFormatting.DARK_GRAY));
         }
-        boolean clickable = choice.isEnabled() && isCommandSafeIdentifier(choice.getId());
-        line.withStyle(style -> choiceStyle(style, clickable, command("choose " + session.getSessionId() + " " + choice.getId())));
+        boolean clickable = choice.enabled() && isCommandSafeIdentifier(choice.id());
+        line.withStyle(style -> choiceStyle(style, clickable, command("choose " + session.getSessionId() + " " + choice.id())));
         return line;
     }
 
@@ -81,16 +83,22 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
         return line;
     }
 
-    private static MutableComponent closeLine(ServerPlayer player, DialogueSession session, String text, boolean enabled, String disabledReason) {
+    private static MutableComponent closeLine(ServerPlayer player,
+                                              DialogueSession session,
+                                              DialogueText text,
+                                              boolean enabled,
+                                              DialogueText disabledReason) {
         MutableComponent line = Component.empty();
-        if (text == null || text.isBlank() || "Close".equals(text)) {
+        DialogueRichText parsedText = DialogueTextParser.parse(text);
+        if (parsedText.plainText().isBlank() || "Close".equals(parsedText.plainText())) {
             line.append(Component.translatable("geometry_node.dialogue.close"));
         } else {
-            line.append(DialogueTextParser.parse(text, player.registryAccess()).component());
+            line.append(parsedText.component());
         }
-        if (!enabled && disabledReason != null && !disabledReason.isBlank()) {
+        DialogueRichText parsedReason = DialogueTextParser.parse(disabledReason);
+        if (!enabled && !parsedReason.plainText().isBlank()) {
             line.append(Component.literal(" - ").withStyle(ChatFormatting.DARK_GRAY));
-            line.append(DialogueTextParser.parse(disabledReason, player.registryAccess()).component().copy().withStyle(ChatFormatting.DARK_GRAY));
+            line.append(parsedReason.component().copy().withStyle(ChatFormatting.DARK_GRAY));
         }
         line.withStyle(style -> choiceStyle(style, enabled, enabled ? command("choose " + session.getSessionId() + " closed") : ""));
         return line;
@@ -100,7 +108,7 @@ public final class ChatDialoguePresenter implements DialoguePresenter {
         Style result = style.withColor(clickable ? ChatFormatting.AQUA : ChatFormatting.DARK_GRAY);
         if (clickable) {
             result = result.withUnderlined(true)
-                    .withClickEvent(new ClickEvent.SuggestCommand(command));
+                    .withClickEvent(new ClickEvent.RunCommand(command));
         }
         return result;
     }

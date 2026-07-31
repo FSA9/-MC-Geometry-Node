@@ -701,6 +701,7 @@
   "geometry_node.shop.message.offer_missing": "交易不存在",
   "geometry_node.shop.message.condition_not_met": "当前条件不满足",
   "geometry_node.shop.message.empty_offer": "这个交易没有配置物品",
+  "geometry_node.shop.message.invalid_offer": "这个交易包含无效物品配置",
   "geometry_node.shop.message.sold_out": "交易次数已用完",
   "geometry_node.shop.message.player_items_missing": "你的物品不足",
   "geometry_node.shop.message.seller_inventory_unavailable": "卖方没有可用库存",

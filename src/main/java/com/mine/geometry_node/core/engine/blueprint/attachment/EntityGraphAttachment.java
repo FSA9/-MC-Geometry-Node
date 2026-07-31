@@ -69,6 +69,7 @@ public class EntityGraphAttachment {
     // --- API 委托层 ---
 
     public void addProcess(GraphProcess process) { container.addProcess(process); }
+    public void removeProcess(String graphId) { container.removeProcess(graphId); }
     public Collection<GraphProcess> getProcesses() { return container.getProcesses(); }
     public long getNextScheduledTick() { return container.getNextScheduledTick(); }
     public GraphProcess getProcess(String graphId) { return container.getProcess(graphId); }

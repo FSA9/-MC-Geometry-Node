@@ -2,10 +2,11 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.engine.dialogue.context.DialogueContext;
-import com.mine.geometry_node.core.engine.dialogue.payload.DialogueChoicePayload;
-import com.mine.geometry_node.core.engine.dialogue.payload.DialoguePagePayload;
-import com.mine.geometry_node.core.engine.dialogue.payload.DialogueWaitRequest;
+import com.mine.geometry_node.core.engine.dialogue.DialogueContext;
+import com.mine.geometry_node.core.engine.dialogue.model.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.model.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
+import com.mine.geometry_node.core.engine.dialogue.DialogueWaitRequest;
 import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRoundParser;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.node.NodeData;
@@ -97,11 +98,10 @@ public class ShowDialogueChoices extends BaseNode {
         if (choices.isEmpty()) {
             choices = List.of(new DialogueChoicePayload(
                     StandardPorts.CLOSED.getId(),
-                    RichTextValue.plain("关闭").toJsonString(),
-                    null,
+                    DialogueText.rich(RichTextValue.plain("关闭")),
+                    new DialogueChoicePayload.ResumePort(StandardPorts.CLOSED.getId()),
                     true,
-                    null,
-                    Map.of()
+                    DialogueText.EMPTY
             ));
         }
 
@@ -112,12 +112,11 @@ public class ShowDialogueChoices extends BaseNode {
         for (int i = 0; i < rounds.size(); i++) {
             boolean finalRound = i == rounds.size() - 1;
             String pageId = rounds.size() == 1 ? basePageId : basePageId + ":round:" + (i + 1);
-            pages.add(new DialoguePagePayload(
+            pages.add(DialoguePagePayload.text(
                     pageId,
-                    rounds.get(i).toJsonString(),
+                    DialogueText.rich(rounds.get(i)),
                     dialogueContext.styleId(),
-                    finalRound ? choices : List.of(continuePageChoice(i)),
-                    Map.of()
+                    finalRound ? choices : List.of(continuePageChoice(i))
             ));
         }
 
@@ -134,11 +133,10 @@ public class ShowDialogueChoices extends BaseNode {
             }
             choices.add(new DialogueChoicePayload(
                     selectedOutputPort(i),
-                    choice.text().toJsonString(),
-                    null,
+                    DialogueText.rich(choice.text()),
+                    new DialogueChoicePayload.ResumePort(selectedOutputPort(i)),
                     choice.enabled(),
-                    choice.enabled() ? "" : choice.disabledReason().toJsonString(),
-                    Map.of()
+                    choice.enabled() ? DialogueText.EMPTY : DialogueText.rich(choice.disabledReason())
             ));
         }
         return choices;
@@ -146,12 +144,11 @@ public class ShowDialogueChoices extends BaseNode {
 
     private static DialogueChoicePayload continuePageChoice(int pageIndex) {
         return new DialogueChoicePayload(
-                DialogueWaitRequest.continuePageChoiceId(pageIndex),
-                RichTextValue.plain("继续").toJsonString(),
-                null,
+                DialogueChoicePayload.continuePageChoiceId(pageIndex),
+                DialogueText.rich(RichTextValue.plain("继续")),
+                new DialogueChoicePayload.AdvancePage(pageIndex),
                 true,
-                null,
-                Map.of()
+                DialogueText.EMPTY
         );
     }
 
@@ -216,7 +213,7 @@ public class ShowDialogueChoices extends BaseNode {
     private DialogueContext createFallbackDialogueContext(ExecutionContext context, ServerPlayer player) {
         Entity owner = context.getEntity();
         Entity dialogueEntity = owner instanceof ServerPlayer ? null : owner;
-        return new DialogueContext(player, dialogueEntity, "default", context.getGraphId(), "root");
+        return new DialogueContext(player, dialogueEntity, "default");
     }
 
     private DialogueContext withPlayer(DialogueContext dialogueContext, ServerPlayer player) {
@@ -224,8 +221,6 @@ public class ShowDialogueChoices extends BaseNode {
                 player,
                 dialogueContext.dialogueEntityId(),
                 dialogueContext.styleId(),
-                dialogueContext.graphId(),
-                dialogueContext.entryId(),
                 dialogueContext.policy()
         );
     }

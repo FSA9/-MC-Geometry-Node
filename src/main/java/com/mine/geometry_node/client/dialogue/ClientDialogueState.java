@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.dialogue;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketDialogueChoice;
 import com.mine.geometry_node.core.network.packet.c2s.PacketShopTradeRequest;
@@ -17,10 +18,22 @@ public final class ClientDialogueState {
     }
 
     public static void handleOpen(PacketOpenDialogue packet) {
-        current = packet;
-        if (DialogueStyleRenderer.supports(packet.styleId())) {
-            DialogueStyleRenderer.open(packet);
+        if (!DialogueStyleRenderer.supports(packet.styleId())) {
+            GeometryNode.LOGGER.warn(
+                    "[ClientDialogueState] No renderer is registered for dialogue style '{}'; closing session {}.",
+                    packet.styleId(),
+                    packet.sessionId()
+            );
+            clearSession(packet.sessionId());
+            NetworkHandler.sendToServer(new PacketDialogueChoice(
+                    packet.sessionId(),
+                    PacketDialogueChoice.ACTION_CLOSE,
+                    ""
+            ));
+            return;
         }
+        current = packet;
+        DialogueStyleRenderer.open(packet);
     }
 
     public static void handleClose(PacketCloseDialogue packet) {

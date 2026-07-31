@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.dialogue;
 
 import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRichText;
 import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueTextParser;
+import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.text.SpannableStringBuilder;
 import icyllis.modernui.text.Spanned;
@@ -10,7 +11,6 @@ import icyllis.modernui.text.style.ForegroundColorSpan;
 import icyllis.modernui.text.style.StyleSpan;
 import icyllis.modernui.text.style.StrikethroughSpan;
 import icyllis.modernui.text.style.UnderlineSpan;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
@@ -25,8 +25,8 @@ public final class ModernDialogueText {
     private ModernDialogueText() {
     }
 
-    public static DialogueRichText parse(String value) {
-        return DialogueTextParser.parse(value, Minecraft.getInstance().level.registryAccess());
+    public static DialogueRichText parse(DialogueText value) {
+        return DialogueTextParser.parse(value);
     }
 
     public static CharSequence display(DialogueRichText text) {
@@ -56,7 +56,7 @@ public final class ModernDialogueText {
         return builder.length() == 0 ? safe.plain() : builder;
     }
 
-    public static String plain(String value) {
+    public static String plain(DialogueText value) {
         return parse(value).plainText();
     }
 
