@@ -1,6 +1,7 @@
 package com.mine.geometry_node;
 
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
+import com.mine.geometry_node.client.dialogue.DialogueStyleRenderer;
 import com.mine.geometry_node.client.key.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.key.KeyBindings;
 import com.mine.geometry_node.client.render.ClientVisualManager;
@@ -61,6 +62,7 @@ public class GeometryNodeClient {
         }
 
         ClientVisualManager.tick();
+        DialogueStyleRenderer.tick();
 
         ClientBlueprintInputManager.tick();
     }

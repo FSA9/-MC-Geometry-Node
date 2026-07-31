@@ -16,12 +16,17 @@ import java.util.UUID;
  * Client-side dispatcher for non-vanilla dialogue styles.
  */
 public final class DialogueStyleRenderer {
+    private static final int CLOSE_GRACE_TICKS = 2;
+
     @Nullable
     private static Screen activeScreen;
     @Nullable
     private static UUID activeSessionId;
     @Nullable
     private static String activeStyleId;
+    @Nullable
+    private static UUID pendingCloseSessionId;
+    private static int pendingCloseTicks;
 
     private DialogueStyleRenderer() {
     }
@@ -46,7 +51,10 @@ public final class DialogueStyleRenderer {
             return;
         }
 
-        if (isActive(packet) && packet.styleId().equals(activeStyleId) && activeScreen instanceof MuiScreen muiScreen) {
+        cancelPendingClose();
+        if (canRefreshActiveScreen(packet.styleId()) && activeScreen instanceof MuiScreen muiScreen) {
+            activeSessionId = packet.sessionId();
+            activeStyleId = packet.styleId();
             Fragment fragment = muiScreen.getFragment();
             refreshOnUiThread(renderer, fragment, packet);
             return;
@@ -86,6 +94,38 @@ public final class DialogueStyleRenderer {
             return;
         }
 
+        pendingCloseSessionId = sessionId;
+        pendingCloseTicks = CLOSE_GRACE_TICKS;
+    }
+
+    public static void tick() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!minecraft.isSameThread()) {
+            minecraft.execute(DialogueStyleRenderer::tick);
+            return;
+        }
+
+        UUID sessionId = pendingCloseSessionId;
+        if (sessionId == null) {
+            return;
+        }
+        if (!sessionId.equals(activeSessionId)) {
+            cancelPendingClose();
+            return;
+        }
+        if (--pendingCloseTicks > 0) {
+            return;
+        }
+
+        closeNow(sessionId);
+    }
+
+    private static void closeNow(UUID sessionId) {
+        if (activeSessionId == null || !activeSessionId.equals(sessionId)) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen == activeScreen) {
             Screen previousScreen = activeScreen instanceof MuiScreen muiScreen ? muiScreen.getPreviousScreen() : null;
             minecraft.setScreen(previousScreen);
@@ -93,6 +133,7 @@ public final class DialogueStyleRenderer {
         activeScreen = null;
         activeSessionId = null;
         activeStyleId = null;
+        cancelPendingClose();
         restoreGameInputIfNeeded();
     }
 
@@ -110,7 +151,19 @@ public final class DialogueStyleRenderer {
         activeScreen = null;
         activeSessionId = null;
         activeStyleId = null;
+        cancelPendingClose();
         restoreGameInputIfNeeded();
+    }
+
+    private static boolean canRefreshActiveScreen(String styleId) {
+        return activeScreen != null
+                && Minecraft.getInstance().screen == activeScreen
+                && styleId.equals(activeStyleId);
+    }
+
+    private static void cancelPendingClose() {
+        pendingCloseSessionId = null;
+        pendingCloseTicks = 0;
     }
 
     private static void restoreGameInputIfNeeded() {
