@@ -27,4 +27,9 @@ repo
 
 logs
 
+docs/tmp
+
 *.md
+
+!README.md
+!README_EN.md
