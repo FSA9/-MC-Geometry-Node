@@ -8,7 +8,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Interaction;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -167,6 +169,33 @@ public final class AreaDebugSessionManager {
         return changed ? 1 : 0;
     }
 
+    public static int enableInteraction(ServerPlayer player, double radius) {
+        double clampedRadius = clampRadius(radius);
+        Session session = SESSIONS.computeIfAbsent(player.getUUID(), ignored -> new Session());
+        session.radius = clampedRadius;
+        session.interactionBoxesEnabled = true;
+        session.forceRefresh();
+        refreshPlayer(player, session);
+        player.sendSystemMessage(Component.literal("Interaction debug enabled. radius=" + formatRadius(clampedRadius)
+                + ", max=" + DEFAULT_MAX_BOXES));
+        return 1;
+    }
+
+    public static int disableInteraction(ServerPlayer player, boolean notify) {
+        Session session = SESSIONS.get(player.getUUID());
+        boolean changed = session != null && session.interactionBoxesEnabled;
+        if (session != null) {
+            session.interactionBoxesEnabled = false;
+            finishDisableOrRefresh(player, session);
+        } else {
+            sendDisabledSnapshots(player);
+        }
+        if (notify) {
+            player.sendSystemMessage(Component.literal(changed ? "Interaction debug disabled." : "Interaction debug is not enabled."));
+        }
+        return changed ? 1 : 0;
+    }
+
     public static void registerSchematicChannelHydrator(Consumer<ServerPlayer> hydrator) {
         if (hydrator != null) {
             SCHEMATIC_CHANNEL_HYDRATORS.add(hydrator);
@@ -190,25 +219,23 @@ public final class AreaDebugSessionManager {
             boolean moved = session.lastPosition == null
                     || session.lastPosition.distanceToSqr(player.position()) >= MOVE_REFRESH_DISTANCE_SQR;
             boolean dirty = session.lastDirtyVersion != dirtyVersion;
+            boolean regularRefresh = cadence || dimensionChanged || moved || dirty;
 
-            if (!cadence && !dimensionChanged && !moved && !dirty) {
+            if (!session.interactionBoxesEnabled && !regularRefresh) {
                 continue;
             }
 
             AreaSnapshot areaSnapshot = collectAreaSnapshot(player, session);
-            GeometrySnapshot geometrySnapshot = collectGeometrySnapshot(player, session);
-            boolean sent = false;
             if (areaSnapshot.signature != session.lastAreaSignature) {
                 sendAreaSnapshot(player, session, areaSnapshot);
-                sent = true;
             }
+            if (!regularRefresh) continue;
+
+            GeometrySnapshot geometrySnapshot = collectGeometrySnapshot(player, session);
             if (geometrySnapshot.signature != session.lastGeometrySignature) {
                 sendGeometrySnapshot(player, session, geometrySnapshot);
-                sent = true;
             }
-            if (sent || dimensionChanged || moved || dirty) {
-                updateBaseline(player, session, areaSnapshot, geometrySnapshot);
-            }
+            updateBaseline(player, session, areaSnapshot, geometrySnapshot);
         }
     }
 
@@ -299,7 +326,7 @@ public final class AreaDebugSessionManager {
     private static AreaSnapshot collectAreaSnapshot(ServerPlayer player, Session session) {
         ServerLevel level = player.level();
         LevelCache cache = LEVEL_CACHES.get(level);
-        if (!session.hasBoxChannels() || cache == null || cache.sources.isEmpty()) {
+        if (!session.hasBoxChannels()) {
             return new AreaSnapshot(List.of(), 1L);
         }
 
@@ -308,24 +335,29 @@ public final class AreaDebugSessionManager {
         Vec3 origin = player.position();
         List<Candidate> candidates = new ArrayList<>();
         boolean removedStaleSource = false;
-        var iterator = cache.sources.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<String, SourceCache> entry = iterator.next();
-            SourceCache source = entry.getValue();
-            if (source.isExpired(currentTick)) {
-                iterator.remove();
-                removedStaleSource = true;
-                continue;
+        if (cache != null && !cache.sources.isEmpty()) {
+            var iterator = cache.sources.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<String, SourceCache> entry = iterator.next();
+                SourceCache source = entry.getValue();
+                if (source.isExpired(currentTick)) {
+                    iterator.remove();
+                    removedStaleSource = true;
+                    continue;
+                }
+                if (!session.isBoxSourceVisible(entry.getKey())) {
+                    continue;
+                }
+                for (AreaDebugBox box : source.boxes) {
+                    if (!isCenterChunkLoaded(level, box.center())) continue;
+                    double distanceSqr = box.center().distanceToSqr(origin);
+                    if (distanceSqr > radiusSqr) continue;
+                    candidates.add(new Candidate(box, distanceSqr));
+                }
             }
-            if (!session.isBoxSourceVisible(entry.getKey())) {
-                continue;
-            }
-            for (AreaDebugBox box : source.boxes) {
-                if (!isCenterChunkLoaded(level, box.center())) continue;
-                double distanceSqr = box.center().distanceToSqr(origin);
-                if (distanceSqr > radiusSqr) continue;
-                candidates.add(new Candidate(box, distanceSqr));
-            }
+        }
+        if (session.interactionBoxesEnabled) {
+            collectInteractionCandidates(level, origin, session.radius, radiusSqr, candidates);
         }
         if (removedStaleSource) {
             dirtyVersion++;
@@ -350,6 +382,29 @@ public final class AreaDebugSessionManager {
         signature = signature * 31L + count;
         signature = signature * 31L + Double.doubleToLongBits(session.radius);
         return new AreaSnapshot(boxes, signature);
+    }
+
+    private static void collectInteractionCandidates(ServerLevel level,
+                                                     Vec3 origin,
+                                                     double radius,
+                                                     double radiusSqr,
+                                                     List<Candidate> candidates) {
+        AABB queryBounds = AABB.ofSize(origin, radius * 2.0D, radius * 2.0D, radius * 2.0D);
+        for (Interaction interaction : level.getEntitiesOfClass(Interaction.class, queryBounds)) {
+            if (interaction.isRemoved()) continue;
+            AABB bounds = interaction.getBoundingBox();
+            Vec3 center = bounds.getCenter();
+            double distanceSqr = center.distanceToSqr(origin);
+            if (distanceSqr > radiusSqr) continue;
+            candidates.add(new Candidate(new AreaDebugBox(
+                    interaction.getStringUUID(),
+                    "interaction",
+                    "box",
+                    center,
+                    new Vec3(bounds.getXsize(), bounds.getYsize(), bounds.getZsize()),
+                    Vec3.ZERO
+            ), distanceSqr));
+        }
     }
 
     private static GeometrySnapshot collectGeometrySnapshot(ServerPlayer player, Session session) {
@@ -599,6 +654,7 @@ public final class AreaDebugSessionManager {
         private boolean areaBoxesEnabled;
         private boolean schematicBoxesEnabled;
         private boolean geometryEnabled;
+        private boolean interactionBoxesEnabled;
         private Vec3 lastPosition;
         private ResourceKey<Level> lastDimension;
         private long lastDirtyVersion = Long.MIN_VALUE;
@@ -606,7 +662,7 @@ public final class AreaDebugSessionManager {
         private long lastGeometrySignature = Long.MIN_VALUE;
 
         private boolean hasBoxChannels() {
-            return areaBoxesEnabled || schematicBoxesEnabled;
+            return areaBoxesEnabled || schematicBoxesEnabled || interactionBoxesEnabled;
         }
 
         private boolean hasAnyChannel() {

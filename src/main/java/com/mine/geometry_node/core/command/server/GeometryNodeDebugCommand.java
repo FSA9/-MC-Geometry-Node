@@ -50,6 +50,17 @@ public final class GeometryNodeDebugCommand {
                                                 .executes(GeometryNodeDebugCommand::disableSchematic)
                                         )
                                 )
+                                .then(Commands.literal("interaction")
+                                        .then(Commands.literal("on")
+                                                .executes(context -> enableInteraction(context, AreaDebugSessionManager.DEFAULT_RADIUS))
+                                                .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
+                                                        .executes(context -> enableInteraction(context, DoubleArgumentType.getDouble(context, "radius")))
+                                                )
+                                        )
+                                        .then(Commands.literal("off")
+                                                .executes(GeometryNodeDebugCommand::disableInteraction)
+                                        )
+                                )
                         )
         );
     }
@@ -88,5 +99,17 @@ public final class GeometryNodeDebugCommand {
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         return AreaDebugSessionManager.disableGeometry(player, true);
+    }
+
+    private static int enableInteraction(CommandContext<CommandSourceStack> context, double radius)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        return AreaDebugSessionManager.enableInteraction(player, radius);
+    }
+
+    private static int disableInteraction(CommandContext<CommandSourceStack> context)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        return AreaDebugSessionManager.disableInteraction(player, true);
     }
 }

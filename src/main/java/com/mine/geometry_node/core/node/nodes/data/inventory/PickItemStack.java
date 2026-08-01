@@ -29,7 +29,7 @@ public class PickItemStack extends BaseNode {
                         .build())
                 .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        new PortDef(PORT_TARGET_ITEM, Component.literal("Item Storage"), PortType.STRING, "", true),
+                        new PortDef(PORT_TARGET_ITEM, Component.translatable("geometry_node.port.item_storage"), PortType.STRING, "", true),
                         null,
                         UIHint.ITEM_SLOT,
                         null,
