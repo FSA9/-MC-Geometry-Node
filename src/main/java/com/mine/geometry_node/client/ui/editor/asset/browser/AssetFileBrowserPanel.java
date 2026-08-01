@@ -387,12 +387,15 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            View focusedView = findFocus();
-            if (focusedView instanceof EditText) return super.dispatchKeyEvent(event);
-            if (mKeyManager.onKeyDown(event)) return true;
-        }
+        if (handleShortcut(event)) return true;
         return super.dispatchKeyEvent(event);
+    }
+
+    public boolean handleShortcut(KeyEvent event) {
+        if (event == null || event.getAction() != KeyEvent.ACTION_DOWN) return false;
+        View focusedView = findFocus();
+        if (focusedView instanceof EditText) return false;
+        return mKeyManager.onKeyDown(event);
     }
 
     private void executeAction(AssetLibraryActionId actionId) {

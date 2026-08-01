@@ -248,13 +248,12 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/entity/attribution", new GetEntityEyePosition());
         registry.register("data/entity/attribution", new GetEntityFallDistance());
         registry.register("data/entity/attribution", new GetEntityHealth());
-        registry.register("data/entity/attribution", new GetEntityPitch());
+        registry.register("data/entity/attribution", new GetEntityRotation());
         registry.register("data/entity/attribution", new GetEntityPosition());
         registry.register("data/entity/attribution", new GetEntityTags());
         registry.register("data/entity/attribution", new GetEntityUUID());
         registry.register("data/entity/attribution", new GetEntityVelocity());
         registry.register("data/entity/attribution", new GetEntityVisibleName());
-        registry.register("data/entity/attribution", new GetEntityYaw());
         registry.register("data/entity/attribution", new GetExperienceLevel());
         registry.register("data/entity/attribution", new GetFoodLevel());
         registry.register("data/entity/attribution", new GetGameMode());

@@ -247,6 +247,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
             }
 
             if (findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
+            if (mBrowserPanel != null && mBrowserPanel.handleShortcut(event)) return true;
             KeyBinding sidebarBinding = KeyBinding.parse(
                     ConfigManager.INSTANCE.getConfig().keyBindings.viewport.toggleRightSidebar);
             if (sidebarBinding != null && sidebarBinding.matches(event)) {

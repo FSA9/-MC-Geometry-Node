@@ -33,6 +33,9 @@ public class ClientPropertyFetcher {
             case "pos_x" -> entity.getPosition(partialTick).x;
             case "pos_y" -> entity.getPosition(partialTick).y;
             case "pos_z" -> entity.getPosition(partialTick).z;
+            case "rotation_x" -> entity.getXRot();
+            case "rotation_y" -> entity.getYRot();
+            case "rotation_z" -> 0.0;
             case "pitch" -> entity.getXRot();
             case "yaw" -> entity.getYRot();
             case "yaw_head" -> entity.getYHeadRot();
