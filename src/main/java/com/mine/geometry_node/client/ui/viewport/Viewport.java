@@ -17,10 +17,12 @@ import com.mine.geometry_node.client.ui.viewport.toolbar.ViewportToolbar;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeGraph;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
+import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 
@@ -192,6 +194,45 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     public ViewportController getController() {
         return mController;
+    }
+
+    public void exportImage(GraphSession session) {
+        ViewportImageExporter.export(this, session);
+    }
+
+    boolean collectExportBounds(RectF outBounds) {
+        if (outBounds == null) return false;
+        boolean hasBounds = false;
+        RectF itemBounds = new RectF();
+
+        if (mFrameLayer != null) {
+            for (FrameVisualAdapter frame : mFrameLayer.getFrameVisuals().values()) {
+                frame.getLogicalBounds(itemBounds);
+                if (!itemBounds.isEmpty()) {
+                    if (!hasBounds) outBounds.set(itemBounds);
+                    else outBounds.union(itemBounds);
+                    hasBounds = true;
+                }
+            }
+        }
+        if (mNodeLayer != null) {
+            for (NodeVisualAdapter node : mNodeLayer.getNodeVisuals().values()) {
+                node.getLogicalBounds(itemBounds);
+                if (!itemBounds.isEmpty()) {
+                    if (!hasBounds) outBounds.set(itemBounds);
+                    else outBounds.union(itemBounds);
+                    hasBounds = true;
+                }
+            }
+        }
+        return hasBounds;
+    }
+
+    void drawForExport(Canvas canvas, ViewportCamera camera, int width, int height) {
+        mBackgroundLayer.draw(canvas, camera, width, height);
+        if (mFrameLayer != null) mFrameLayer.drawFramesForExport(canvas, camera);
+        mConnectionLayer.drawForExport(canvas, camera);
+        if (mNodeLayer != null) mNodeLayer.drawForExport(canvas, camera);
     }
 
     private void applyViewportConfig(AppConfig config) {

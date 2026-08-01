@@ -12,6 +12,7 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
+import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.*;
 
@@ -141,6 +142,44 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         canvas.scale(camera.getScale(), camera.getScale());
         drawNodeLocal(canvas);
         canvas.restore();
+    }
+
+    public void drawNodeForExport(Canvas canvas, ViewportCamera camera) {
+        boolean overlayWasMounted = mOverlayController.isMounted();
+        if (!mOverlayController.ensureMounted(getContext())) {
+            drawNode(canvas, camera);
+            return;
+        }
+
+        boolean selected = mIsSelected;
+        int commentVisibility = -1;
+        boolean canvasSaved = false;
+        try {
+            int widthPx = UIUtils.dp2pxInt(mWidth);
+            int heightPx = UIUtils.dp2pxInt(mTotalHeight);
+            int left = getLeft();
+            int top = getTop();
+            measure(
+                    MeasureSpec.makeMeasureSpec(widthPx, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(heightPx, MeasureSpec.EXACTLY)
+            );
+            layout(left, top, left + widthPx, top + heightPx);
+
+            commentVisibility = mOverlayController.hideCommentPopupForExport();
+            mIsSelected = false;
+            canvas.save();
+            canvasSaved = true;
+            canvas.translate(camera.uiToScreenX(mLogicX), camera.uiToScreenY(mLogicY));
+            canvas.scale(camera.getScale(), camera.getScale());
+            draw(canvas);
+        } finally {
+            if (canvasSaved) canvas.restore();
+            mIsSelected = selected;
+            mOverlayController.restoreCommentPopupAfterExport(commentVisibility);
+            if (!overlayWasMounted) {
+                mOverlayController.release();
+            }
+        }
     }
 
     @Override

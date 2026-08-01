@@ -118,6 +118,19 @@ final class NodeOverlayController {
                 && mCommentTooltip.getVisibility() == View.VISIBLE;
     }
 
+    int hideCommentPopupForExport() {
+        if (mCommentTooltip == null) return -1;
+        int visibility = mCommentTooltip.getVisibility();
+        mCommentTooltip.setVisibility(View.GONE);
+        return visibility;
+    }
+
+    void restoreCommentPopupAfterExport(int visibility) {
+        if (mCommentTooltip != null && visibility >= 0) {
+            mCommentTooltip.setVisibility(visibility);
+        }
+    }
+
     boolean hasOverlayViews() {
         return mHasOverlayViews;
     }

@@ -4,6 +4,7 @@ public enum ViewportActionId {
     UNDO,
     REDO,
     SAVE,
+    EXPORT_IMAGE,
     COPY,
     PASTE,
     DELETE,

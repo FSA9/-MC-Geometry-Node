@@ -177,6 +177,10 @@ public class ViewportMenu extends FrameLayout {
                 performAction(ViewportActionId.SAVE, ViewportActionRequest.EMPTY);
                 post(this::dismiss);
             });
+            addActionItem(ViewportActionId.EXPORT_IMAGE, v -> {
+                performAction(ViewportActionId.EXPORT_IMAGE, ViewportActionRequest.EMPTY);
+                post(this::dismiss);
+            });
 
             if (mContext != null && mContext.isInsideGroupScope()) {
                 addActionItem(ViewportActionId.EXIT_GROUP, v -> {

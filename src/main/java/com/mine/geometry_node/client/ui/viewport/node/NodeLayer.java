@@ -9,6 +9,7 @@ import icyllis.modernui.graphics.RectF;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
+import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -222,6 +223,23 @@ public class NodeLayer extends FrameLayout {
                 if (overlayHost == null || overlayHost.getParent() != this) {
                     node.drawNode(canvas, mViewport.getCamera());
                 }
+            }
+        }
+    }
+
+    public void drawForExport(Canvas canvas, ViewportCamera camera) {
+        for (NodeVisualAdapter node : mNodeOrder) {
+            if (node instanceof UINode uiNode) {
+                uiNode.drawNodeForExport(canvas, camera);
+                continue;
+            }
+
+            boolean selected = node.isSelected();
+            node.setSelected(false);
+            try {
+                node.drawNode(canvas, camera);
+            } finally {
+                node.setSelected(selected);
             }
         }
     }

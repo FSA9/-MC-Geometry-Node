@@ -14,6 +14,7 @@ public final class ViewportActionRegistry {
         register(KeyScope.GLOBAL, ViewportActionId.UNDO, "撤销", config -> config.keyBindings.global.undo, ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.REDO, "重做", config -> config.keyBindings.global.redo, ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.SAVE, "保存", config -> config.keyBindings.global.save, state -> true);
+        register(KeyScope.VIEWPORT, ViewportActionId.EXPORT_IMAGE, "导出为图片", null, ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.COPY, "复制", config -> config.keyBindings.global.copy, ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.PASTE, "粘贴", config -> config.keyBindings.global.paste, ViewportActionState::isReady);
         register(KeyScope.VIEWPORT, ViewportActionId.DELETE, "删除", config -> config.keyBindings.viewport.delete, ViewportActionState::isReady);

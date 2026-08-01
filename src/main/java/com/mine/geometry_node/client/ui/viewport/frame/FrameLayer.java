@@ -6,6 +6,7 @@ import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.widget.FrameLayout;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
+import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
 
 import java.util.ArrayList;
@@ -183,6 +184,19 @@ public class FrameLayer extends FrameLayout {
             frame.getLogicalBounds(mTmpFrameBounds);
             if (!canCull || mTmpFrameBounds.intersects(mTmpVisibleBounds.left, mTmpVisibleBounds.top, mTmpVisibleBounds.right, mTmpVisibleBounds.bottom)) {
                 frame.drawFrame(canvas, mViewport.getCamera());
+            }
+        }
+    }
+
+    public void drawFramesForExport(Canvas canvas, ViewportCamera camera) {
+        ensureFrameHierarchyOrder();
+        for (FrameVisualAdapter frame : mFrameOrder) {
+            boolean selected = frame.isSelected();
+            frame.setSelected(false);
+            try {
+                frame.drawFrame(canvas, camera);
+            } finally {
+                frame.setSelected(selected);
             }
         }
     }

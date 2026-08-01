@@ -69,6 +69,21 @@ public class ConnectionLayer {
         }
     }
 
+    public void drawForExport(Canvas canvas, ViewportCamera camera) {
+        if (!mViewport.isReady()) return;
+
+        mConnectionPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_CONNECTION * camera.getScale());
+        for (int i = 0; i < mVisualConnections.size(); i++) {
+            VisualConnection vc = mVisualConnections.get(i);
+            mConnectionPaint.setColor(vc.color);
+            canvas.drawLine(
+                    camera.uiToScreenX(vc.startUiX), camera.uiToScreenY(vc.startUiY),
+                    camera.uiToScreenX(vc.endUiX), camera.uiToScreenY(vc.endUiY),
+                    mConnectionPaint
+            );
+        }
+    }
+
     public void rebuildVisualConnections(NodeGraph graph, Map<String, ? extends ConnectionNodeVisual> nodeVisuals) {
         mVisualConnections.clear();
         mConnectionsByNodeId.clear();

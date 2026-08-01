@@ -434,6 +434,7 @@ public class ViewportController implements EditorContext.EditorListener,
             case UNDO -> undo();
             case REDO -> redo();
             case SAVE -> save();
+            case EXPORT_IMAGE -> mViewport.exportImage(mCurrentSession);
             case COPY -> copySelection();
             case PASTE -> paste(actionRequest.uiXOr(mViewport.getLastMouseUiX()), actionRequest.uiYOr(mViewport.getLastMouseUiY()));
             case DELETE -> deleteSelection();
