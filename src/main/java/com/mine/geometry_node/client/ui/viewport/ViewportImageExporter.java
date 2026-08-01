@@ -17,7 +17,6 @@ import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.graphics.pipeline.ArcCanvas;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.widget.Toast;
-import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.opengl.GL33C;
 
@@ -25,6 +24,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 final class ViewportImageExporter {
     private static final float PIXELS_PER_DP = 2.0f;
@@ -32,6 +33,11 @@ final class ViewportImageExporter {
     private static final int MAX_SIDE_PX = 8192;
     private static final long MAX_PIXEL_COUNT = 64L * 1024L * 1024L;
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS");
+    private static final ExecutorService IO_EXECUTOR = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "GeometryNode-ViewportImageExporter");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private ViewportImageExporter() {}
 
@@ -158,8 +164,8 @@ final class ViewportImageExporter {
             readTexture(texture, bitmap);
 
             Bitmap captured = bitmap;
+            IO_EXECUTOR.execute(() -> saveBitmap(viewport, captured, output));
             bitmap = null;
-            Util.ioPool().execute(() -> saveBitmap(viewport, captured, output));
         } catch (Throwable error) {
             if (bitmap != null) bitmap.close();
             postToast(viewport, "导出图片失败：" + messageOf(error), Toast.LENGTH_LONG);
