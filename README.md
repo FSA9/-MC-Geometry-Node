@@ -11,3 +11,7 @@ The project aims to let creators organize logic and data through in-game node gr
 - Edit, save, load, and execute node graphs so they can directly drive interactions and visuals in the Minecraft world.
 
 The project is still under development. Node APIs, graph data formats, and runtime architecture may continue to change.
+
+## Interface Preview
+
+![GeometryNode interface preview](docs/img.png)

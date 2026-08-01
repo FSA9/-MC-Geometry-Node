@@ -34,8 +34,6 @@ public class PlayerInputStateManager {
         } else if ("RELEASE".equals(action)) {
             keys.remove(keyId);
         }
-        // 注意：DOUBLE_CLICK 是瞬间动作，不改变按压状态字典
-
         // 2. 唤醒并派发蓝图事件
         GeometryNodeEvents.dispatch(
                 (net.minecraft.server.level.ServerLevel) player.level(),
@@ -45,8 +43,8 @@ public class PlayerInputStateManager {
                         .put(StandardPorts.ENTITY.getId(), player)
                         .put(GraphEventFields.KEY_ID, keyId)
                         .put(GraphEventFields.ACTION, action)
-                        .put(GraphEventFields.DURATION, payload.durationMs() / 1000.0f)
-                        .put(StandardPorts.TIME.getId(), payload.durationMs() / 1000.0f)
+                        .put(GraphEventFields.DURATION, payload.durationTicks())
+                        .put(StandardPorts.TIME.getId(), payload.durationTicks())
                         .build()
         );
     }

@@ -1,37 +1,38 @@
 package com.mine.geometry_node.client.key;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketPlayerInput;
 import net.minecraft.client.Minecraft;
+import org.lwjgl.glfw.GLFW;
 
 public class ClientBlueprintInputManager {
 
-    private static final long DOUBLE_CLICK_THRESHOLD = 300;
+    private static final String[] DIRECT_KEY_IDS = {"space", "tab", "enter"};
+    private static final int[] DIRECT_KEY_CODES = {GLFW.GLFW_KEY_SPACE, GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_ENTER};
 
-    // 状态记录器：10个技能键 + 3个修饰键 (Ctrl, Shift, Alt)
-    private static final int TOTAL_TRACKED = KeyBindings.SKILL_COUNT + 3;
+    // 状态记录器：3个直接按键 + 3个修饰键 (Ctrl, Shift, Alt) + 10个技能键
+    private static final int TOTAL_TRACKED = DIRECT_KEY_IDS.length + KeyBindings.SKILL_COUNT + 3;
     private static final boolean[] lastStates = new boolean[TOTAL_TRACKED];
-    private static final long[] pressTimes = new long[TOTAL_TRACKED];
-    private static final long[] lastReleaseTimes = new long[TOTAL_TRACKED];
+    private static final long[] pressTicks = new long[TOTAL_TRACKED];
+    private static long tickCounter;
 
     public static void tick() {
+        long currentTick = ++tickCounter;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.screen != null) return;
-
-        long currentTime = System.currentTimeMillis();
 
         for (int i = 0; i < TOTAL_TRACKED; i++) {
             boolean isCurrentlyDown;
             String keyId;
 
-            // 前 10 个是蓝图技能键
-            if (i < KeyBindings.SKILL_COUNT) {
-                isCurrentlyDown = KeyBindings.BLUEPRINT_KEYS[i].isDown();
-                keyId = "skill_" + (i + 1);
+            if (i < DIRECT_KEY_IDS.length) {
+                isCurrentlyDown = InputConstants.isKeyDown(mc.getWindow(), DIRECT_KEY_CODES[i]);
+                keyId = DIRECT_KEY_IDS[i];
             }
-            // 后 3 个是硬编码的修饰键状态同步
-            else {
-                int modIndex = i - KeyBindings.SKILL_COUNT;
+            // 接下来 3 个是硬编码的修饰键状态同步
+            else if (i < DIRECT_KEY_IDS.length + 3) {
+                int modIndex = i - DIRECT_KEY_IDS.length;
                 isCurrentlyDown = switch (modIndex) {
                     case 0 -> mc.hasControlDown();
                     case 1 -> mc.hasShiftDown();
@@ -45,32 +46,32 @@ public class ClientBlueprintInputManager {
                     default -> "unknown";
                 };
             }
+            // 后 10 个是蓝图技能键
+            else {
+                int skillIndex = i - DIRECT_KEY_IDS.length - 3;
+                isCurrentlyDown = KeyBindings.BLUEPRINT_KEYS[skillIndex].isDown();
+                keyId = "skill_" + (skillIndex + 1);
+            }
 
             boolean wasDown = lastStates[i];
 
             // 1. 触发按下
             if (isCurrentlyDown && !wasDown) {
-                pressTimes[i] = currentTime;
-                if (currentTime - lastReleaseTimes[i] <= DOUBLE_CLICK_THRESHOLD) {
-                    sendInputPacket(keyId, "DOUBLE_CLICK", 0);
-                    lastReleaseTimes[i] = 0;
-                } else {
-                    sendInputPacket(keyId, "PRESS", 0);
-                }
+                pressTicks[i] = currentTick;
+                sendInputPacket(keyId, "PRESS", 0);
             }
 
             // 2. 触发抬起
             if (!isCurrentlyDown && wasDown) {
-                long durationMs = currentTime - pressTimes[i];
-                lastReleaseTimes[i] = currentTime;
-                sendInputPacket(keyId, "RELEASE", durationMs);
+                int durationTicks = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentTick - pressTicks[i]));
+                sendInputPacket(keyId, "RELEASE", durationTicks);
             }
 
             lastStates[i] = isCurrentlyDown;
         }
     }
 
-    private static void sendInputPacket(String keyId, String action, long durationMs) {
-        NetworkHandler.sendToServer(new PacketPlayerInput(keyId, action, durationMs));
+    private static void sendInputPacket(String keyId, String action, int durationTicks) {
+        NetworkHandler.sendToServer(new PacketPlayerInput(keyId, action, durationTicks));
     }
 }

@@ -106,8 +106,7 @@ public class NodeLayoutEngine {
         if (row == null || row.leftPort() == null || nodeData.isInputConnected(row.leftPort().id())) {
             return false;
         }
-        return row.uiHint() == UIHint.SELECT
-                || (row.uiHint() == UIHint.INPUT && NumericInputSpec.supports(row.leftPort().type()));
+        return row.uiHint() == UIHint.INPUT && NumericInputSpec.supports(row.leftPort().type());
     }
 
     private void addLabel(NodeLayout layout, NodeData nodeData, PortDef port, boolean isLeft, UIHint hint, float currentY, int nodeWidth) {

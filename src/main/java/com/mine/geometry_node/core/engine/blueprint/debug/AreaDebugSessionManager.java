@@ -28,6 +28,7 @@ public final class AreaDebugSessionManager {
     public static final double DEFAULT_RADIUS = 256.0D;
     public static final int DEFAULT_MAX_BOXES = 100;
     public static final int DEFAULT_MAX_MESHES = 100;
+    public static final int TRANSIENT_QUERY_DURATION_TICKS = 60;
 
     private static final String AREA_SOURCE_PREFIX = "area:";
     private static final String GEOMETRY_SOURCE_PREFIX = "geometry:";
@@ -209,6 +210,9 @@ public final class AreaDebugSessionManager {
 
         long tick = level.getGameTime();
         boolean cadence = Math.floorMod(tick, IDLE_CHECK_INTERVAL_TICKS) == 0;
+        LevelCache levelCache = LEVEL_CACHES.get(level);
+        boolean hasExpiredSources = levelCache != null
+                && levelCache.sources.values().stream().anyMatch(source -> source.isTransientExpired(tick));
 
         for (ServerPlayer player : level.players()) {
             Session session = SESSIONS.get(player.getUUID());
@@ -219,7 +223,7 @@ public final class AreaDebugSessionManager {
             boolean moved = session.lastPosition == null
                     || session.lastPosition.distanceToSqr(player.position()) >= MOVE_REFRESH_DISTANCE_SQR;
             boolean dirty = session.lastDirtyVersion != dirtyVersion;
-            boolean regularRefresh = cadence || dimensionChanged || moved || dirty;
+            boolean regularRefresh = cadence || dimensionChanged || moved || dirty || hasExpiredSources;
 
             if (!session.interactionBoxesEnabled && !regularRefresh) {
                 continue;
@@ -245,6 +249,29 @@ public final class AreaDebugSessionManager {
 
     public static void replacePersistentSourceBoxes(ServerLevel level, String sourceKey, List<AreaDebugBox> boxes, long seenTick) {
         replaceSourceBoxes(level, sourceKey, boxes, seenTick, Long.MAX_VALUE);
+    }
+
+    public static void showTransientQueryArea(ServerLevel level,
+                                              String graphId,
+                                              String nodeId,
+                                              String shape,
+                                              Vec3 center,
+                                              Vec3 size,
+                                              Vec3 rotation) {
+        if (level == null || center == null || size == null || !hasAreaBoxSessions()) {
+            return;
+        }
+        String safeGraphId = graphId == null || graphId.isBlank() ? "unknown" : graphId;
+        String safeNodeId = nodeId == null || nodeId.isBlank() ? "unknown" : nodeId;
+        String safeShape = shape == null || shape.isBlank() ? "box" : shape;
+        Vec3 safeRotation = rotation != null ? rotation : Vec3.ZERO;
+        int queryHash = java.util.Objects.hash(safeShape, center, size, safeRotation);
+        String sourceKey = AREA_SOURCE_PREFIX + "query:" + level.dimension().identifier() + ":"
+                + safeGraphId + ":" + safeNodeId + ":" + Integer.toUnsignedString(queryHash, 16);
+        long currentTick = level.getGameTime();
+        AreaDebugBox box = new AreaDebugBox(sourceKey, safeGraphId, safeShape, center, size, safeRotation);
+        replaceSourceBoxes(level, sourceKey, List.of(box), currentTick,
+                currentTick + TRANSIENT_QUERY_DURATION_TICKS);
     }
 
     private static void replaceSourceBoxes(ServerLevel level, String sourceKey, List<AreaDebugBox> boxes, long seenTick, long expiresAt) {
@@ -643,9 +670,13 @@ public final class AreaDebugSessionManager {
                 return false;
             }
             if (expiresAt > 0L) {
-                return currentTick > expiresAt;
+                return currentTick >= expiresAt;
             }
             return currentTick - lastSeenTick > IDLE_CHECK_INTERVAL_TICKS;
+        }
+
+        private boolean isTransientExpired(long currentTick) {
+            return expiresAt > 0L && expiresAt != Long.MAX_VALUE && currentTick >= expiresAt;
         }
     }
 

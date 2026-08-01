@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.entity;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaEntityQuery;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
@@ -12,6 +13,7 @@ import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -57,14 +59,20 @@ public class GetEntitiesByRadius extends BaseNode {
 
         double safeRadius = Math.max(0.001D, Math.abs(radius));
         double diameter = safeRadius * 2.0D;
-        return AreaEntityQuery.find(
+        Vec3 size = new Vec3(diameter, diameter, diameter);
+        List<Entity> result = AreaEntityQuery.find(
                 context.getLevel(),
                 AreaShape.SPHERE,
                 center,
-                new Vec3(diameter, diameter, diameter),
+                size,
                 Vec3.ZERO,
                 AreaTargetType.fromId(targetId),
                 e -> !e.isSpectator()
         );
+        AreaDebugSessionManager.showTransientQueryArea(
+                context.getLevel(), context.getGraphId(), context.getCurrentNodeStableId(),
+                AreaShape.SPHERE.id(), center, size, Vec3.ZERO
+        );
+        return result;
     }
 }

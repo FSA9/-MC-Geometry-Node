@@ -19,6 +19,7 @@ import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.UIHint;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -260,9 +261,12 @@ final class NodeOverlayController {
         mRemoveButtons.put(portId, button);
 
         float buttonHeight = InlineActionButton.heightDp();
+        float controlRowOffset = row.uiHint() == UIHint.SELECT && !isInputConnected(row)
+                ? UIConstants.Node.ROW_HEIGHT
+                : 0.0f;
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(InlineActionButton.widthPx(), InlineActionButton.heightPx());
         lp.gravity = Gravity.TOP | Gravity.LEFT;
-        lp.topMargin = UIUtils.dp2pxInt(currentY + (UIConstants.Node.ROW_HEIGHT - buttonHeight) / 2.0f);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + controlRowOffset + (UIConstants.Node.ROW_HEIGHT - buttonHeight) / 2.0f);
         if (row.leftPort() != null && row.rightPort() != null) {
             lp.leftMargin = InlineActionButton.centerColumnLeftPx(mNodeWidth);
         } else {

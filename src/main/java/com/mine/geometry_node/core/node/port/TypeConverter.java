@@ -64,6 +64,10 @@ public class TypeConverter {
             return type.cast(val);
         }
 
+        if (type == Entity.class && val instanceof UUID uuid) {
+            return type.cast(resolveEntity(uuid, ctx));
+        }
+
         // 2. 数值体系的隐式互转
         if (val instanceof Number n) {
             if (type == Integer.class) return type.cast(n.intValue());
@@ -71,6 +75,10 @@ public class TypeConverter {
             if (type == Float.class) return type.cast(n.floatValue());
             if (type == Double.class) return type.cast(n.doubleValue());
             if (type == Boolean.class) return type.cast(n.floatValue() > 0);
+            if (type == Vec3.class) {
+                double component = n.doubleValue();
+                return type.cast(new Vec3(component, component, component));
+            }
         }
 
         if (val instanceof ColorValue color) {
@@ -141,9 +149,7 @@ public class TypeConverter {
             if (type == Entity.class) {
                 try {
                     UUID uuid = UUID.fromString(s);
-                    if (ctx != null && ctx.getLevel() != null) {
-                        return type.cast(ctx.getLevel().getEntity(uuid));
-                    }
+                    return type.cast(resolveEntity(uuid, ctx));
                 } catch (Exception ignored) {}
             }
 
@@ -193,5 +199,11 @@ public class TypeConverter {
 
         System.err.println("[TypeConverter] Failed to convert " + val.getClass().getSimpleName() + " to " + type.getSimpleName());
         return null;
+    }
+
+    @Nullable
+    private static Entity resolveEntity(UUID uuid, @Nullable ExecutionContext ctx) {
+        if (ctx == null || ctx.getLevel() == null) return null;
+        return ctx.getLevel().getEntity(uuid);
     }
 }

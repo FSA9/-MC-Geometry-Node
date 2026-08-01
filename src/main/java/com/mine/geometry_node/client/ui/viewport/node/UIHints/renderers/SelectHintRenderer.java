@@ -58,7 +58,7 @@ public class SelectHintRenderer implements UIHintRenderer {
 
     @Override
     public float getRequiredExtraRows(PortRow row) {
-        return 0.0f;
+        return 1.0f;
     }
 
     @Override
@@ -133,7 +133,7 @@ public class SelectHintRenderer implements UIHintRenderer {
 
         lp.gravity = Gravity.LEFT | Gravity.TOP;
         lp.leftMargin = leftMarginPx;
-        lp.topMargin = UIUtils.dp2pxInt(currentY + verticalMargin);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + UIConstants.Node.ROW_HEIGHT + verticalMargin);
 
         view.setLayoutParams(lp);
     }

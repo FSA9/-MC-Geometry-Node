@@ -114,6 +114,11 @@ public enum PortType {
         boolean isInMath  = (inputport == INTEGER || inputport == LONG || inputport == FLOAT || inputport == BOOLEAN);
         if (isOutMath && isInMath) return true;
 
+        // Scalar-to-vector broadcasting: v -> [v, v, v].
+        if ((outputport == INTEGER || outputport == FLOAT) && inputport == XYZ) {
+            return true;
+        }
+
         // 2. 万物皆可转STRING
         if (inputport == STRING) {
             if (outputport == INTEGER || outputport == LONG || outputport == FLOAT || outputport == BOOLEAN ||

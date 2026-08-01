@@ -10,8 +10,8 @@ import net.minecraft.resources.Identifier;
  */
 public record PacketPlayerInput(
         String keyId,      // 按键标识符，如 "skill_1", "ctrl"
-        String action,     // 动作类型: "PRESS", "RELEASE", "DOUBLE_CLICK"
-        long durationMs    // 按住时长 (仅在 RELEASE 时有意义)
+        String action,     // 动作类型: "PRESS", "RELEASE"
+        int durationTicks  // 按住 tick 数 (仅在 RELEASE 时有意义)
 ) implements CustomPacketPayload {
 
     public static final Type<PacketPlayerInput> TYPE = new Type<>(
@@ -22,9 +22,9 @@ public record PacketPlayerInput(
             (buf, packet) -> {
                 buf.writeUtf(packet.keyId);
                 buf.writeUtf(packet.action);
-                buf.writeLong(packet.durationMs);
+                buf.writeVarInt(packet.durationTicks);
             },
-            buf -> new PacketPlayerInput(buf.readUtf(), buf.readUtf(), buf.readLong())
+            buf -> new PacketPlayerInput(buf.readUtf(), buf.readUtf(), buf.readVarInt())
     );
 
     @Override
