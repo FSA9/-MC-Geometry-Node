@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.network.packet.c2s.PacketPlayerInput;
 import com.mine.geometry_node.core.node.nodes.events.player.OnPlayerKeyEvent;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.Map;
 import java.util.Set;
@@ -27,6 +28,9 @@ public class PlayerInputStateManager {
 
         String action = payload.action();
         String keyId = payload.keyId();
+        Vec3 clientVelocity = payload.clientVelocity().isFinite()
+                ? payload.clientVelocity()
+                : player.getKnownMovement();
 
         // 1. 维护状态字典
         if ("PRESS".equals(action)) {
@@ -44,6 +48,8 @@ public class PlayerInputStateManager {
                         .put(GraphEventFields.KEY_ID, keyId)
                         .put(GraphEventFields.ACTION, action)
                         .put(GraphEventFields.DURATION, payload.durationTicks())
+                        .put(GraphEventFields.CLIENT_VELOCITY, clientVelocity)
+                        .put(GraphEventFields.CLIENT_VELOCITY_GAME_TIME, player.level().getGameTime())
                         .put(StandardPorts.TIME.getId(), payload.durationTicks())
                         .build()
         );

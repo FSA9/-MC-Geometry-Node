@@ -1,10 +1,13 @@
 package com.mine.geometry_node.core.node.nodes.data.entity.attribution;
 
+import com.mine.geometry_node.core.engine.blueprint.event.GraphEventFields;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
@@ -31,6 +34,25 @@ public class GetEntityVelocity extends BaseNode {
         if (entities.isEmpty()) return null;
 
         Entity target = entities.getFirst();
-        return bindDynamicVector(target.getKnownMovement(), target, "velocity");
+        // ServerPlayer#getKnownMovement is pre-friction displacement, not post-physics velocity.
+        Vec3 velocity = getEventClientVelocity(context, target);
+        return bindDynamicVector(velocity != null ? velocity : target.getKnownMovement(), target, "velocity");
+    }
+
+    private static Vec3 getEventClientVelocity(ExecutionContext context, Entity target) {
+        if (!(target instanceof ServerPlayer)) return null;
+
+        Object eventEntity = context.getEventData(StandardPorts.ENTITY.getId());
+        Object eventVelocity = context.getEventData(GraphEventFields.CLIENT_VELOCITY);
+        Object eventGameTime = context.getEventData(GraphEventFields.CLIENT_VELOCITY_GAME_TIME);
+        if (eventEntity instanceof Entity source
+                && source.getUUID().equals(target.getUUID())
+                && eventVelocity instanceof Vec3 velocity
+                && eventGameTime instanceof Number gameTime
+                && gameTime.longValue() == context.getLevel().getGameTime()
+                && velocity.isFinite()) {
+            return velocity;
+        }
+        return null;
     }
 }

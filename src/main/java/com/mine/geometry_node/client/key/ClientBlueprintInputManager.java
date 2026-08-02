@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketPlayerInput;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 public class ClientBlueprintInputManager {
@@ -58,20 +59,20 @@ public class ClientBlueprintInputManager {
             // 1. 触发按下
             if (isCurrentlyDown && !wasDown) {
                 pressTicks[i] = currentTick;
-                sendInputPacket(keyId, "PRESS", 0);
+                sendInputPacket(keyId, "PRESS", 0, mc.player.getDeltaMovement());
             }
 
             // 2. 触发抬起
             if (!isCurrentlyDown && wasDown) {
                 int durationTicks = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentTick - pressTicks[i]));
-                sendInputPacket(keyId, "RELEASE", durationTicks);
+                sendInputPacket(keyId, "RELEASE", durationTicks, mc.player.getDeltaMovement());
             }
 
             lastStates[i] = isCurrentlyDown;
         }
     }
 
-    private static void sendInputPacket(String keyId, String action, int durationTicks) {
-        NetworkHandler.sendToServer(new PacketPlayerInput(keyId, action, durationTicks));
+    private static void sendInputPacket(String keyId, String action, int durationTicks, Vec3 clientVelocity) {
+        NetworkHandler.sendToServer(new PacketPlayerInput(keyId, action, durationTicks, clientVelocity));
     }
 }
