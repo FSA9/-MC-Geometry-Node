@@ -18,6 +18,7 @@ import icyllis.modernui.graphics.pipeline.ArcCanvas;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.widget.Toast;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import org.lwjgl.opengl.GL33C;
 
 import java.nio.file.Files;
@@ -46,19 +47,19 @@ final class ViewportImageExporter {
 
         RectF bounds = new RectF();
         if (!viewport.collectExportBounds(bounds)) {
-            showToast(viewport, "当前图中没有可导出的内容", Toast.LENGTH_SHORT);
+            showToast(viewport, "geometry_node.viewport.export.empty", Toast.LENGTH_SHORT);
             return;
         }
         bounds.inset(-PADDING_DP, -PADDING_DP);
         if (!bounds.isFinite() || bounds.isEmpty()) {
-            showToast(viewport, "图内容范围无效，无法导出", Toast.LENGTH_LONG);
+            showToast(viewport, "geometry_node.viewport.export.invalid_bounds", Toast.LENGTH_LONG);
             return;
         }
 
         int width = Math.max(1, (int) Math.ceil(bounds.width() * PIXELS_PER_DP));
         int height = Math.max(1, (int) Math.ceil(bounds.height() * PIXELS_PER_DP));
         if (width > MAX_SIDE_PX || height > MAX_SIDE_PX || (long) width * height > MAX_PIXEL_COUNT) {
-            showToast(viewport, "导出范围过大，图片不能超过 8192px 或 64M 像素", Toast.LENGTH_LONG);
+            showToast(viewport, "geometry_node.viewport.export.too_large", Toast.LENGTH_LONG);
             return;
         }
 
@@ -72,19 +73,19 @@ final class ViewportImageExporter {
                     "GeometryNodeScreenshot"
             );
         } catch (Throwable error) {
-            showToast(viewport, "无法创建图片渲染目标：" + messageOf(error), Toast.LENGTH_LONG);
+            showToast(viewport, "geometry_node.viewport.export.render_target_failed", Toast.LENGTH_LONG, messageOf(error));
             error.printStackTrace();
             return;
         }
         if (surface == null) {
-            showToast(viewport, "无法创建图片渲染目标", Toast.LENGTH_LONG);
+            showToast(viewport, "geometry_node.viewport.export.render_target_unavailable", Toast.LENGTH_LONG);
             return;
         }
 
         float uiDensity = UIUtils.dp2px(1.0f);
         if (!(uiDensity > 0.0f)) {
             surface.unref();
-            showToast(viewport, "无法确定界面缩放密度", Toast.LENGTH_LONG);
+            showToast(viewport, "geometry_node.viewport.export.density_unavailable", Toast.LENGTH_LONG);
             return;
         }
 
@@ -102,7 +103,7 @@ final class ViewportImageExporter {
             canvas.restoreToCount(1);
         } catch (Throwable error) {
             surface.unref();
-            showToast(viewport, "绘制导出图片失败：" + messageOf(error), Toast.LENGTH_LONG);
+            showToast(viewport, "geometry_node.viewport.export.draw_failed", Toast.LENGTH_LONG, messageOf(error));
             error.printStackTrace();
             return;
         }
@@ -112,13 +113,13 @@ final class ViewportImageExporter {
             recording = Core.requireUiRecordingContext().snap();
         } catch (Throwable error) {
             surface.unref();
-            showToast(viewport, "无法生成图片绘制任务：" + messageOf(error), Toast.LENGTH_LONG);
+            showToast(viewport, "geometry_node.viewport.export.recording_failed", Toast.LENGTH_LONG, messageOf(error));
             error.printStackTrace();
             return;
         }
         if (recording == null) {
             surface.unref();
-            showToast(viewport, "无法生成图片绘制任务", Toast.LENGTH_LONG);
+            showToast(viewport, "geometry_node.viewport.export.recording_unavailable", Toast.LENGTH_LONG);
             return;
         }
 
@@ -128,7 +129,7 @@ final class ViewportImageExporter {
         } catch (Throwable error) {
             recording.close();
             surface.unref();
-            showToast(viewport, "无法提交图片导出任务：" + messageOf(error), Toast.LENGTH_LONG);
+            showToast(viewport, "geometry_node.viewport.export.submit_failed", Toast.LENGTH_LONG, messageOf(error));
             error.printStackTrace();
         }
     }
@@ -153,10 +154,10 @@ final class ViewportImageExporter {
                 recordingClosed = true;
             }
             if (!added || !context.submit()) {
-                throw new IllegalStateException("GPU 未接受图片绘制任务");
+                throw new IllegalStateException(translate("geometry_node.viewport.export.error.gpu_rejected"));
             }
             if (!(surface.getBackingTarget().getImage() instanceof GLTexture texture)) {
-                throw new IllegalStateException("图片渲染目标不是 OpenGL 纹理");
+                throw new IllegalStateException(translate("geometry_node.viewport.export.error.not_gl_texture"));
             }
 
             bitmap = Bitmap.createBitmap(width, height, Bitmap.Format.RGBA_8888);
@@ -168,7 +169,7 @@ final class ViewportImageExporter {
             bitmap = null;
         } catch (Throwable error) {
             if (bitmap != null) bitmap.close();
-            postToast(viewport, "导出图片失败：" + messageOf(error), Toast.LENGTH_LONG);
+            postToast(viewport, "geometry_node.viewport.export.failed", Toast.LENGTH_LONG, messageOf(error));
             error.printStackTrace();
         } finally {
             if (!recordingClosed) recording.close();
@@ -215,10 +216,10 @@ final class ViewportImageExporter {
             converted.setPixels(bitmap, 0, 0, 0, 0, bitmap.getWidth(), bitmap.getHeight());
             Files.createDirectories(output.getParent());
             converted.saveToPath(Bitmap.SaveFormat.PNG, 0, output);
-            postToast(viewport, "图片已导出到 " + output, Toast.LENGTH_LONG);
+            postToast(viewport, "geometry_node.viewport.export.success", Toast.LENGTH_LONG, output);
             System.out.println("[ViewportImageExporter] Exported: " + output);
         } catch (Throwable error) {
-            postToast(viewport, "保存图片失败：" + messageOf(error), Toast.LENGTH_LONG);
+            postToast(viewport, "geometry_node.viewport.export.save_failed", Toast.LENGTH_LONG, messageOf(error));
             error.printStackTrace();
         } finally {
             bitmap.close();
@@ -246,16 +247,22 @@ final class ViewportImageExporter {
         return sanitized;
     }
 
-    private static void showToast(Viewport viewport, String message, int duration) {
-        Toast.makeText(viewport.getContext(), message, duration).show();
+    private static void showToast(Viewport viewport, String translationKey, int duration, Object... args) {
+        Toast.makeText(viewport.getContext(), translate(translationKey, args), duration).show();
     }
 
-    private static void postToast(Viewport viewport, String message, int duration) {
-        MuiModApi.postToUiThread(() -> showToast(viewport, message, duration));
+    private static void postToast(Viewport viewport, String translationKey, int duration, Object... args) {
+        MuiModApi.postToUiThread(() -> showToast(viewport, translationKey, duration, args));
+    }
+
+    private static String translate(String translationKey, Object... args) {
+        return Component.translatable(translationKey, args).getString();
     }
 
     private static String messageOf(Throwable error) {
         String message = error != null ? error.getMessage() : null;
-        return message == null || message.isBlank() ? "未知错误" : message;
+        return message == null || message.isBlank()
+                ? translate("geometry_node.viewport.export.error.unknown")
+                : message;
     }
 }

@@ -61,6 +61,7 @@ public class InteractionManager {
     private float mAppliedDragUiDx, mAppliedDragUiDy;
     private float mDragSnapDivisions = DEFAULT_SNAP_DIVISIONS;
     private float mSelectionStartUiX, mSelectionStartUiY;
+    private boolean mBoxSelectionIncludesFrames;
     private final RectF mSelectionRectUi = new RectF();
 
     private final Paint mSelectionFillPaint = new Paint();
@@ -161,9 +162,9 @@ public class InteractionManager {
         float uiX = camera.screenToUIX(screenX);
         float uiY = camera.screenToUIY(screenY);
 
-        if ((event.isCtrlPressed() || event.isShiftPressed()) && !isRightMouse(event) && !isMiddleMouse(event)) {
+        if (event.isShiftPressed() && isLeftMouse(event)) {
             mCurrentMode = MODE_CUTTING;
-            mConnectionInteraction.beginCut(uiX, uiY, event.isShiftPressed());
+            mConnectionInteraction.beginCut(uiX, uiY, true);
             return;
         }
 
@@ -185,12 +186,22 @@ public class InteractionManager {
             float localXpx = UIUtils.dp2px(uiX - target.getUiX());
             float localYpx = UIUtils.dp2px(uiY - target.getUiY());
             if (target.findInteractiveViewAt(localXpx, localYpx) != null) return;
+            if (event.isCtrlPressed() && isLeftMouse(event)) {
+                resetDoubleClickTracking();
+                mContext.toggleSelection(target);
+                return;
+            }
             enterDraggingMode(target, uiX, uiY);
             return;
         }
 
         FrameVisualAdapter targetFrame = mContext.findFrameAt(uiX, uiY);
         if (targetFrame != null) {
+            if (event.isCtrlPressed() && isLeftMouse(event)) {
+                resetDoubleClickTracking();
+                mContext.toggleSelection(targetFrame);
+                return;
+            }
             mCurrentMode = MODE_DRAGGING_FRAME;
             mDragStartUiX = uiX; mDragStartUiY = uiY;
             mDragAnchorStartUiX = targetFrame.getUiX();
@@ -200,6 +211,12 @@ public class InteractionManager {
             mDraggedFrame = targetFrame;
             mContext.clearSelection();
             mContext.addToSelection(targetFrame);
+            return;
+        }
+        if (event.isCtrlPressed() && isLeftMouse(event)) {
+            resetDoubleClickTracking();
+            mCurrentMode = MODE_CUTTING;
+            mConnectionInteraction.beginCut(uiX, uiY, false);
             return;
         }
         enterSelectingMode(uiX, uiY);
@@ -326,6 +343,7 @@ public class InteractionManager {
     private void enterSelectingMode(float uiX, float uiY) {
         mCurrentMode = MODE_SELECTING;
         mContext.clearSelection();
+        mBoxSelectionIncludesFrames = mContext.getSmallestContainingFrame(uiX, uiY) == null;
         mSelectionStartUiX = uiX; mSelectionStartUiY = uiY;
         mSelectionRectUi.set(uiX, uiY, uiX, uiY);
     }
@@ -336,7 +354,7 @@ public class InteractionManager {
         float w = Math.abs(currentUiX - mSelectionStartUiX);
         float h = Math.abs(currentUiY - mSelectionStartUiY);
         mSelectionRectUi.set(x, y, x + w, y + h);
-        mContext.updateBoxSelection(x, y, w, h);
+        mContext.updateBoxSelection(x, y, w, h, mBoxSelectionIncludesFrames);
         mContext.invalidate();
     }
 
@@ -683,4 +701,5 @@ public class InteractionManager {
 
     private boolean isRightMouse(MotionEvent e) { return (e.getButtonState() & MotionEvent.BUTTON_SECONDARY) != 0 || e.getActionButton() == MotionEvent.BUTTON_SECONDARY; }
     private boolean isMiddleMouse(MotionEvent e) { return (e.getButtonState() & MotionEvent.BUTTON_TERTIARY) != 0 || e.getActionButton() == MotionEvent.BUTTON_TERTIARY; }
+    private boolean isLeftMouse(MotionEvent e) { return (e.getButtonState() & MotionEvent.BUTTON_PRIMARY) != 0 || e.getActionButton() == MotionEvent.BUTTON_PRIMARY; }
 }

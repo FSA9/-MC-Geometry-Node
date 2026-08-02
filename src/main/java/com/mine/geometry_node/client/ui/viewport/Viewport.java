@@ -350,9 +350,11 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override public Iterable<FrameVisualAdapter> getAllFrameVisuals() { return mFrameLayer != null ? mFrameLayer.getFrameVisuals().values() : new ArrayList<>(); }
 
     @Override
-    public void updateBoxSelection(float uiX, float uiY, float uiW, float uiH) {
+    public void updateBoxSelection(float uiX, float uiY, float uiW, float uiH, boolean includeFrames) {
         mSelection.setNodes(mNodeLayer != null ? mNodeLayer.findNodeIdsInRect(uiX, uiY, uiW, uiH) : new ArrayList<>());
-        mSelection.setFrames(mFrameLayer != null ? mFrameLayer.findFrameIdsInRect(uiX, uiY, uiW, uiH) : new ArrayList<>());
+        mSelection.setFrames(includeFrames && mFrameLayer != null
+                ? mFrameLayer.findFrameIdsInRect(uiX, uiY, uiW, uiH)
+                : new ArrayList<>());
         applySelectionToLayers();
     }
 
@@ -427,6 +429,26 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override
     public void addToSelection(FrameVisualAdapter frame) {
         mSelection.selectFrame(frame);
+        applySelectionToLayers();
+    }
+    @Override
+    public void toggleSelection(NodeVisualAdapter node) {
+        if (node == null) return;
+        if (mSelection.containsNode(node.getNodeId())) {
+            mSelection.removeNode(node.getNodeId());
+        } else {
+            mSelection.selectNode(node);
+        }
+        applySelectionToLayers();
+    }
+    @Override
+    public void toggleSelection(FrameVisualAdapter frame) {
+        if (frame == null) return;
+        if (mSelection.containsFrame(frame.getFrameId())) {
+            mSelection.removeFrame(frame.getFrameId());
+        } else {
+            mSelection.selectFrame(frame);
+        }
         applySelectionToLayers();
     }
     @Override

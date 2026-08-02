@@ -28,13 +28,15 @@ public interface InteractionContext extends ViewportActionState {
     void resetSelectedElementsPreview();
     boolean isSnapToGridEnabled();
     float getSnapGridSize();
-    void updateBoxSelection(float uiX, float uiY, float uiW, float uiH);
+    void updateBoxSelection(float uiX, float uiY, float uiW, float uiH, boolean includeFrames);
 
     List<NodeVisualAdapter> getSelectedNodeVisuals();
     boolean isNodeSelected(String nodeId);
     void clearSelection();
     void addToSelection(NodeVisualAdapter node);
     void addToSelection(FrameVisualAdapter frame);
+    void toggleSelection(NodeVisualAdapter node);
+    void toggleSelection(FrameVisualAdapter frame);
     List<FrameVisualAdapter> getSelectedFrameVisuals();
     boolean hasConnection(NodeVisualAdapter outNode, String outPortId, NodeVisualAdapter inNode, String inPortId);
     boolean canConnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId);
