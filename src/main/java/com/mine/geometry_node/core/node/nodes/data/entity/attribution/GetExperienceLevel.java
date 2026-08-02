@@ -2,8 +2,10 @@ package com.mine.geometry_node.core.node.nodes.data.entity.attribution;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
@@ -19,7 +21,7 @@ public class GetExperienceLevel extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_experience_level"))
                 .addRow(new PortRow(
                         StandardPorts.ENTITY.toInput(),
-                        StandardPorts.VALUE.toOutput(),
+                        PortDef.create(StandardPorts.VALUE.getId(), StandardPorts.VALUE.getTranslationKey(), PortType.INTEGER),
                         UIHint.DEFAULT, null, null
                 ))
                 .build();
@@ -33,7 +35,7 @@ public class GetExperienceLevel extends BaseNode {
         if (entities.isEmpty()) return null;
 
         if (entities.getFirst() instanceof net.minecraft.world.entity.player.Player player) {
-            return (float) player.experienceLevel;
+            return player.experienceLevel;
         }
 
         return null;

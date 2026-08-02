@@ -31,6 +31,6 @@ public class GetEntityVelocity extends BaseNode {
         if (entities.isEmpty()) return null;
 
         Entity target = entities.getFirst();
-        return bindDynamicVector(target.getDeltaMovement(), target, "velocity");
+        return bindDynamicVector(target.getKnownMovement(), target, "velocity");
     }
 }

@@ -914,6 +914,8 @@
   "geometry_node.node.on_player_key_event.comment.time": "本次按住的客户端 tick 数；仅 RELEASE 时有效，PRESS 时固定为 0。",
   "geometry_node.node.on_player_key_event.comment.name": "要监听的按键标识。",
   "geometry_node.node.on_player_key_event.comment.type": "要监听的动作：PRESS 表示按下，RELEASE 表示释放。",
+  "geometry_node.node.get_input_data_type.comment.summary": "支持识别 INTEGER、LONG、FLOAT、BOOLEAN、STRING、RICH_TEXT、COLOR、GEOMETRY、SLOT、ENTITY、ITEM_STACK、DIALOGUE_CHOICE、LIST、DICT 和 XYZ。",
+  "geometry_node.node.get_input_data_type.comment.unsupported": "不支持直接识别 DynamicData、Item、Block、BlockState、UUID、原生数组及其他未列出的对象；这些值和 null 均返回 ANY。",
   "geometry_node.viewport.export.empty": "当前图中没有可导出的内容",
   "geometry_node.viewport.export.invalid_bounds": "图内容范围无效，无法导出",
   "geometry_node.viewport.export.too_large": "导出范围过大，图片不能超过 8192px 或 64M 像素",
