@@ -52,7 +52,12 @@ public final class ResizableDivider extends FrameLayout {
     }
 
     public static ResizableDivider weighted(Context context, Orientation orientation) {
-        ResizableDivider divider = new ResizableDivider(context, orientation, null, true);
+        return weighted(context, orientation, null);
+    }
+
+    public static ResizableDivider weighted(
+            Context context, Orientation orientation, DragListener listener) {
+        ResizableDivider divider = new ResizableDivider(context, orientation, listener, true);
         divider.setLayoutParams(layoutParams(orientation));
         return divider;
     }

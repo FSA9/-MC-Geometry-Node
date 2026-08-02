@@ -224,6 +224,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         mNode.setEditorType(type);
         updateHeaderState();
         attachEditor();
+        mRoot.requestSessionSave();
     }
 
     private void toggleEditorMenu() {
@@ -255,7 +256,8 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
     }
 
     private void attachEditor(boolean notifyShow) {
-        AreaEditorWindow window = mNode.window(getContext(), mRoot.editorRegistry());
+        AreaEditorWindow window = mNode.window(
+                getContext(), mRoot.editorRegistry(), mRoot::requestSessionSave);
         if (window == null) {
             if (mCurrentWindow != null) {
                 hideWindow(mCurrentWindow);

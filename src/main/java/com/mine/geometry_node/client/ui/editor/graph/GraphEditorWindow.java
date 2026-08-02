@@ -9,6 +9,7 @@ import com.mine.geometry_node.client.ui.editor.graph.properties.GraphSessionProp
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import icyllis.modernui.core.Context;
@@ -30,24 +31,37 @@ public class GraphEditorWindow extends LinearLayout implements AreaEditorWindow 
     private final GraphPropertiesPanel mPropertiesPanel;
     private final EditorSidebar mRightSidebar;
     private final SidebarLayoutController mSidebarLayout;
+    private final EditorSessionState.GraphEditorState mSessionState;
+    private final Runnable mSessionChanged;
+    private final View mLeftPanel;
 
     public GraphEditorWindow(Context context) {
+        this(context, new EditorSessionState.GraphEditorState(), null);
+    }
+
+    public GraphEditorWindow(
+            Context context,
+            EditorSessionState.GraphEditorState sessionState,
+            Runnable sessionChanged) {
         super(context);
+        mSessionState = sessionState == null ? new EditorSessionState.GraphEditorState() : sessionState;
+        mSessionChanged = sessionChanged;
         setOrientation(LinearLayout.HORIZONTAL);
         setBackground(createColorDrawable(UIConstants.MainUI.BG_ROOT));
 
-        View leftPanel = createPanel(context, "Outliner", UIConstants.MainUI.BG_OUTLINER);
-        addView(leftPanel, createWeightParams(UIConstants.MainUI.WEIGHT_LEFT));
+        float outlinerWeight = sanitizeOutlinerWeight(mSessionState.outlinerWeight);
+        mLeftPanel = createPanel(context, "Outliner", UIConstants.MainUI.BG_OUTLINER);
+        addView(mLeftPanel, createWeightParams(outlinerWeight));
 
-        addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
+        addView(ResizableDivider.weighted(
+                context, ResizableDivider.Orientation.HORIZONTAL, delta -> captureOutlinerWeight()));
 
         AppConfig.ViewportConfig viewportConfig = ConfigManager.INSTANCE.getConfig().viewport;
         float sidebarWeight = viewportConfig.rightSidebarWeight;
 
         LinearLayout workspace = new LinearLayout(context);
         workspace.setOrientation(LinearLayout.HORIZONTAL);
-        addView(workspace, createWeightParams(
-                UIConstants.MainUI.WEIGHT_CENTER + UIConstants.MainUI.WEIGHT_RIGHT));
+        addView(workspace, createWeightParams(1.0f - outlinerWeight));
 
         mGraphViewportPanel = new GraphViewportPanel(context);
         workspace.addView(mGraphViewportPanel, createWeightParams(
@@ -158,6 +172,19 @@ public class GraphEditorWindow extends LinearLayout implements AreaEditorWindow 
                 ViewGroup.LayoutParams.MATCH_PARENT);
         params.weight = weight;
         return params;
+    }
+
+    private void captureOutlinerWeight() {
+        if (mLeftPanel.getLayoutParams() instanceof LinearLayout.LayoutParams params) {
+            mSessionState.outlinerWeight = sanitizeOutlinerWeight(params.weight);
+            if (mSessionChanged != null) {
+                mSessionChanged.run();
+            }
+        }
+    }
+
+    private static float sanitizeOutlinerWeight(float weight) {
+        return Float.isFinite(weight) ? Math.max(0.05f, Math.min(0.45f, weight)) : 0.2f;
     }
 
     private ShapeDrawable createColorDrawable(int color) {

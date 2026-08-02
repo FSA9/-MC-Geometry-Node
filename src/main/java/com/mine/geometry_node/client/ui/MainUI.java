@@ -20,6 +20,7 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
 
 public class MainUI extends Fragment {
+    private AreaLayoutRoot mAreaRoot;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, DataSet savedInstanceState) {
@@ -37,6 +38,15 @@ public class MainUI extends Fragment {
         setupAreaSection(context, rootLayout);
 
         return rootFrame;
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (mAreaRoot != null) {
+            mAreaRoot.persistNow();
+            mAreaRoot = null;
+        }
+        super.onDestroyView();
     }
 
     private LinearLayout createRootLayout(Context context) {
@@ -60,8 +70,8 @@ public class MainUI extends Fragment {
                 ViewGroup.LayoutParams.MATCH_PARENT, 0);
         areaParams.weight = 1.0f;
 
-        AreaLayoutRoot areaRoot = new AreaLayoutRoot(context);
-        root.addView(areaRoot, areaParams);
+        mAreaRoot = new AreaLayoutRoot(context);
+        root.addView(mAreaRoot, areaParams);
     }
 
     private RelativeLayout createPanel(Context context, String title, int colorHex) {

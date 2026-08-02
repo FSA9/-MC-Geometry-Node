@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.editor.asset.dialog.TransferProgressDial
 import com.mine.geometry_node.client.ui.editor.asset.dialog.UploadFailureRetryDialog;
 import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationPanel;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.editor.asset.properties.AssetFilePropertiesTarget;
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
@@ -19,6 +20,7 @@ import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
@@ -57,9 +59,24 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     private final LocalAssetService mLocalAssetService = new LocalAssetService();
     private final AssetTaskController mIoTasks;
     private final Set<Integer> mRemoteRequestIds = new HashSet<>();
+    private final EditorSessionState.AssetBrowserState mSessionState;
+    private final Runnable mSessionChanged;
+    private boolean mRestoringLocation;
+    private String mPendingRemoteRestore;
 
     public AssetBrowserWindow(Context context) {
+        this(context, new EditorSessionState.AssetBrowserState(), null);
+    }
+
+    public AssetBrowserWindow(
+            Context context,
+            EditorSessionState.AssetBrowserState sessionState,
+            Runnable sessionChanged) {
         super(context);
+        mSessionState = sessionState == null
+                ? new EditorSessionState.AssetBrowserState()
+                : sessionState;
+        mSessionChanged = sessionChanged;
         mIoTasks = new AssetTaskController(this);
 
         mMainLayout = new LinearLayout(context);
@@ -69,9 +86,12 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         mNavigationPanel = new AssetNavigationPanel(context, this);
-        mMainLayout.addView(mNavigationPanel, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.2f));
+        float navigationWeight = sanitizeNavigationWeight(mSessionState.navigationWeight);
+        mMainLayout.addView(mNavigationPanel, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.MATCH_PARENT, navigationWeight));
 
-        mMainLayout.addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
+        mMainLayout.addView(ResizableDivider.weighted(
+                context, ResizableDivider.Orientation.HORIZONTAL, delta -> captureNavigationWeight()));
 
         AppConfig.AssetBrowserConfig browserConfig = ConfigManager.INSTANCE.getConfig().assetBrowser;
         float sidebarWeight = browserConfig.rightSidebarWeight;
@@ -81,7 +101,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         mMainLayout.addView(browserWorkspace, new LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                0.8f));
+                1.0f - navigationWeight));
 
         mBrowserPanel = new AssetFileBrowserPanel(context, this);
         browserWorkspace.addView(mBrowserPanel, new LinearLayout.LayoutParams(
@@ -130,9 +150,10 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 config -> config.assetBrowser.rightSidebarTab = id));
         mBrowserPanel.setSelectionChangedListener(entries -> mPropertiesPanel.bind(
                 AssetFilePropertiesTarget.fromSelection(entries, mBrowserPanel::refreshFileList)));
+        mBrowserPanel.setLocationChangedListener(this::captureLocationState);
         mSidebarLayout.initialize(browserConfig.rightSidebarVisible);
 
-        dispatchNavigateTo(AssetBrowserPathPolicy.getLocalDraftsDir());
+        restoreInitialLocation();
         requestRemoteCapabilities();
     }
 
@@ -276,9 +297,78 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 if (mNavigationPanel != null) {
                     mNavigationPanel.buildSidebar();
                 }
+                restorePendingRemoteLocation();
             });
         });
         NetworkHandler.sendToServer(new PacketRemoteGraphCapabilitiesRequest(requestId));
+    }
+
+    private void restoreInitialLocation() {
+        mRestoringLocation = true;
+        String location = mSessionState.location == null ? "LOCAL" : mSessionState.location;
+        if ("FAVORITES".equals(location)) {
+            dispatchNavigateToFavorites();
+            mRestoringLocation = false;
+            return;
+        }
+        if ("REMOTE".equals(location)) {
+            mPendingRemoteRestore = mSessionState.remotePath == null ? "" : mSessionState.remotePath;
+            dispatchNavigateTo(AssetBrowserPathPolicy.getLocalDraftsDir());
+            return;
+        }
+
+        File restored = AssetBrowserPathPolicy.resolveConfigPath(mSessionState.localPath);
+        dispatchNavigateTo(restored != null && restored.isDirectory()
+                ? restored
+                : AssetBrowserPathPolicy.getLocalDraftsDir());
+        mRestoringLocation = false;
+        captureLocationState();
+    }
+
+    private void restorePendingRemoteLocation() {
+        if (mPendingRemoteRestore == null) {
+            return;
+        }
+        String remotePath = mPendingRemoteRestore;
+        mPendingRemoteRestore = null;
+        if (RemoteGraphClientState.canBrowse()) {
+            mBrowserPanel.navigateToRemote(remotePath);
+            mRestoringLocation = false;
+            return;
+        }
+        mRestoringLocation = false;
+        captureLocationState();
+    }
+
+    private void captureLocationState() {
+        if (mRestoringLocation || mBrowserPanel == null) {
+            return;
+        }
+        if (mBrowserPanel.isFavoritesMode()) {
+            mSessionState.location = "FAVORITES";
+        } else if (mBrowserPanel.getSourceKind() == AssetSourceKind.REMOTE) {
+            mSessionState.location = "REMOTE";
+            mSessionState.remotePath = mBrowserPanel.getRemoteDirectory();
+        } else {
+            mSessionState.location = "LOCAL";
+            mSessionState.localPath = AssetBrowserPathPolicy.toConfigPath(mBrowserPanel.getCurrentDirectory());
+        }
+        if (mSessionChanged != null) {
+            mSessionChanged.run();
+        }
+    }
+
+    private void captureNavigationWeight() {
+        if (mNavigationPanel.getLayoutParams() instanceof LinearLayout.LayoutParams params) {
+            mSessionState.navigationWeight = sanitizeNavigationWeight(params.weight);
+            if (mSessionChanged != null) {
+                mSessionChanged.run();
+            }
+        }
+    }
+
+    private static float sanitizeNavigationWeight(float weight) {
+        return Float.isFinite(weight) ? Math.max(0.05f, Math.min(0.45f, weight)) : 0.2f;
     }
 
     private void preflightUpload(List<File> selectedFiles, String targetDirectory) {

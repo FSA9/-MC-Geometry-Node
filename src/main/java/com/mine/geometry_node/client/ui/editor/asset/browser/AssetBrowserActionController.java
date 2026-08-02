@@ -305,9 +305,24 @@ final class AssetBrowserActionController {
     }
 
     private void deleteLocalFiles(List<File> files) {
+        List<File> deletionTargets = files == null ? new ArrayList<>() : new ArrayList<>(files);
+        deletionTargets.removeIf(file -> file == null);
+        if (deletionTargets.isEmpty()) return;
+
+        DocumentManager.INSTANCE.closeSessionsForDeletion(deletionTargets);
+        mPanel.post(() -> {
+            // Capture graph loads that completed while the confirmation dialog was closing,
+            // then allow viewport tab refreshes to unbind before file I/O begins.
+            DocumentManager.INSTANCE.closeSessionsForDeletion(deletionTargets);
+            mPanel.post(() -> runLocalDeleteTask(deletionTargets));
+        });
+    }
+
+    private void runLocalDeleteTask(List<File> files) {
         mIoTasks.run("删除文件",
                 context -> mLocalAssetService.deleteFiles(files, context),
                 (result, progress) -> {
+                    DocumentManager.INSTANCE.closeSessionsForDeletion(result.successfulFiles());
                     for (File file : result.successfulFiles()) {
                         mFavoriteStore.removePath(file);
                     }

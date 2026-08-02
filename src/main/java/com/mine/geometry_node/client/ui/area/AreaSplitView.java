@@ -12,9 +12,11 @@ final class AreaSplitView extends LinearLayout {
     private final LinearLayout.LayoutParams mSecondParams;
     private final View mFirstView;
     private final View mSecondView;
+    private final AreaLayoutRoot mRoot;
 
     AreaSplitView(Context context, AreaLayoutRoot root, AreaSplitNode node) {
         super(context);
+        mRoot = root;
         mNode = node;
         setOrientation(node.direction() == AreaSplitDirection.HORIZONTAL ? HORIZONTAL : VERTICAL);
         setBackground(AreaStyle.rect(AreaStyle.COLOR_PLATE));
@@ -40,6 +42,7 @@ final class AreaSplitView extends LinearLayout {
         }
         mNode.setRatio(mNode.ratio() + delta / totalSize);
         applyWeights();
+        mRoot.requestSessionSave();
     }
 
     private void applyWeights() {

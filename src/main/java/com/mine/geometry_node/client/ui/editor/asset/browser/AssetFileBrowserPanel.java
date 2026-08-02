@@ -95,6 +95,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final boolean mShowPickerContextActions;
     private Consumer<File> mLocalDirectoryChangedListener;
     private Consumer<String> mRemoteDirectoryChangedListener;
+    private Runnable mLocationChangedListener;
     private Consumer<List<AssetEntry>> mSelectionChangedListener;
     private Runnable mPickCurrentDirectoryAction;
     private Consumer<AssetEntry> mPickFileAction;
@@ -437,6 +438,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         if (mLocalDirectoryChangedListener != null) {
             mLocalDirectoryChangedListener.accept(directory);
         }
+        notifyLocationChanged();
     }
 
     public void navigateToRemoteRoot() {
@@ -454,6 +456,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         mPathInput.setText(AssetPathUtils.formatRemotePath(mRemoteDirectory));
         clearSelection();
         refreshRemoteFileList(createIfMissing);
+        notifyLocationChanged();
     }
 
     public void navigateToFavorites() {
@@ -462,6 +465,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         mPathInput.setText("我的收藏");
         clearSelection();
         refreshFileList();
+        notifyLocationChanged();
     }
 
     public void createRemoteDirectoryFromInput() {
@@ -488,6 +492,10 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         mRemoteDirectoryChangedListener = listener;
     }
 
+    public void setLocationChangedListener(Runnable listener) {
+        mLocationChangedListener = listener;
+    }
+
     public File getCurrentDirectory() {
         return mCurrentDirectory;
     }
@@ -498,6 +506,16 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     public String getRemoteDirectory() {
         return mRemoteDirectory;
+    }
+
+    public boolean isFavoritesMode() {
+        return mFavoritesMode;
+    }
+
+    private void notifyLocationChanged() {
+        if (mLocationChangedListener != null) {
+            mLocationChangedListener.run();
+        }
     }
 
     public List<AssetEntry> getSelectedEntriesSnapshot() {
@@ -950,10 +968,6 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         if (hadSearch) {
             refreshFileList();
         }
-    }
-
-    boolean isFavoritesMode() {
-        return mFavoritesMode;
     }
 
     Consumer<AssetEntry> pickFileAction() {

@@ -34,6 +34,10 @@ public class PathUtils {
         return new File(getConfigDir(), "geometry_node_config.json");
     }
 
+    public static File getEditorSessionFile() {
+        return new File(getConfigDir(), "geometry_node_editor_session.json");
+    }
+
     public static File resolveWorkspacePath(String path) {
         return new File(getWorkspaceRoot(), path.replace('/', File.separatorChar));
     }

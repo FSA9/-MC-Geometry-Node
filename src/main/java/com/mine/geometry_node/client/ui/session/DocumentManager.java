@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.session;
 
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -81,6 +82,34 @@ public class DocumentManager {
         notifyTabChanged();
     }
 
+    public int closeSessionsForDeletion(List<File> deletionTargets) {
+        List<Path> targetPaths = normalizePaths(deletionTargets);
+        if (targetPaths.isEmpty()) {
+            return 0;
+        }
+
+        List<GraphSession> closingSessions = new ArrayList<>();
+        for (GraphSession session : mSessions) {
+            Path sessionPath = normalizePath(session.fileId);
+            if (sessionPath != null && isWithinAnyTarget(sessionPath, targetPaths)) {
+                closingSessions.add(session);
+            }
+        }
+        if (closingSessions.isEmpty()) {
+            return 0;
+        }
+
+        mSessions.removeAll(closingSessions);
+        if (closingSessions.contains(mActiveSession)) {
+            mActiveSession = mSessions.isEmpty() ? null : mSessions.get(mSessions.size() - 1);
+        }
+        if (closingSessions.contains(mLastOpenedSession)) {
+            mLastOpenedSession = null;
+        }
+        notifyTabChanged();
+        return closingSessions.size();
+    }
+
     public void moveSession(int fromIndex, int toIndex) {
         if (fromIndex >= 0 && fromIndex < mSessions.size() && toIndex >= 0 && toIndex < mSessions.size()) {
             // 交换位置
@@ -125,5 +154,42 @@ public class DocumentManager {
     private void markSessionOpened(GraphSession session) {
         mLastOpenedSession = session;
         mOpenSessionSerial++;
+    }
+
+    private static List<Path> normalizePaths(List<File> files) {
+        List<Path> paths = new ArrayList<>();
+        if (files == null) {
+            return paths;
+        }
+        for (File file : files) {
+            if (file == null) {
+                continue;
+            }
+            Path path = normalizePath(file.getPath());
+            if (path != null && !paths.contains(path)) {
+                paths.add(path);
+            }
+        }
+        return paths;
+    }
+
+    private static Path normalizePath(String path) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        try {
+            return Path.of(path).toAbsolutePath().normalize();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private static boolean isWithinAnyTarget(Path sessionPath, List<Path> targetPaths) {
+        for (Path targetPath : targetPaths) {
+            if (sessionPath.equals(targetPath) || sessionPath.startsWith(targetPath)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

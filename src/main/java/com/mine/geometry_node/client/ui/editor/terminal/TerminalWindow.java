@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.editor.terminal;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
+import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -11,14 +12,28 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TerminalWindow extends LinearLayout implements AreaEditorWindow, TerminalTabBar.TabListener {
+    private static final int MAX_SESSION_TABS = 32;
 
     private final TerminalTabBar mTabBar;
     private final FrameLayout mContainer;
     private final List<ConsoleView> mConsoleViews = new ArrayList<>();
     private int mCurrentIndex = -1;
+    private final EditorSessionState.TerminalState mSessionState;
+    private final Runnable mSessionChanged;
+    private boolean mInitializing;
 
     public TerminalWindow(Context context) {
+        this(context, new EditorSessionState.TerminalState(), null);
+    }
+
+    public TerminalWindow(
+            Context context,
+            EditorSessionState.TerminalState sessionState,
+            Runnable sessionChanged) {
         super(context);
+        mSessionState = sessionState == null ? new EditorSessionState.TerminalState() : sessionState;
+        mSessionChanged = sessionChanged;
+        mInitializing = true;
         setOrientation(VERTICAL);
 
         mTabBar = new TerminalTabBar(context);
@@ -28,8 +43,12 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mContainer = new FrameLayout(context);
         addView(mContainer, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 默认开一个终端
-        onTabCreated();
+        int tabCount = Math.max(1, Math.min(MAX_SESSION_TABS, mSessionState.tabCount));
+        for (int i = 0; i < tabCount; i++) {
+            mConsoleViews.add(new ConsoleView(getContext()));
+        }
+        switchToTab(Math.max(0, Math.min(tabCount - 1, mSessionState.activeTab)));
+        mInitializing = false;
     }
 
     private void switchToTab(int index) {
@@ -47,6 +66,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mTabBar.rebuildTabs(titles, mCurrentIndex);
 
         activeView.requestInputFocus();
+        captureSessionState();
     }
 
     @Override public void onTabSelected(int index) { switchToTab(index); }
@@ -84,6 +104,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
 
     @Override
     public void onTabCreated() {
+        if (mConsoleViews.size() >= MAX_SESSION_TABS) return;
         ConsoleView newView = new ConsoleView(getContext());
         mConsoleViews.add(newView);
         switchToTab(mConsoleViews.size() - 1);
@@ -91,5 +112,14 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
 
     @Override public View getView() { return this; }
     @Override public void onShow() { if (mCurrentIndex >= 0) mConsoleViews.get(mCurrentIndex).requestInputFocus(); }
-    @Override public void onHide() {}
+    @Override public void onHide() { captureSessionState(); }
+
+    private void captureSessionState() {
+        if (mInitializing) return;
+        mSessionState.tabCount = Math.max(1, mConsoleViews.size());
+        mSessionState.activeTab = Math.max(0, mCurrentIndex);
+        if (mSessionChanged != null) {
+            mSessionChanged.run();
+        }
+    }
 }

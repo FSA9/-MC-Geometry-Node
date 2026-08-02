@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.area;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
+import com.mine.geometry_node.client.ui.persistence.session.EditorSessionStore;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -10,18 +12,26 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 public final class AreaLayoutRoot extends FrameLayout {
+    private static final long SAVE_DELAY_MS = 300L;
+    private static final int MAX_LEAVES = 32;
+
     private final AreaEditorRegistry mEditorRegistry = new AreaEditorRegistry();
     private final Map<AreaNode, View> mNodeViews = new IdentityHashMap<>();
     private AreaNode mRootNode;
     private AreaLeafNode mDragSourceNode;
     private AreaLeafView mDragTargetView;
+    private final Runnable mSaveRunnable = this::persistNow;
 
     public AreaLayoutRoot(Context context) {
         super(context);
         setBackground(AreaStyle.rect(AreaStyle.COLOR_ROOT));
         int padding = UIUtils.dp2pxInt(AreaStyle.ROOT_PADDING_DP);
         setPadding(padding, padding, padding, padding);
-        mRootNode = createDefaultLayout();
+        EditorSessionState restored = EditorSessionStore.INSTANCE.load();
+        mRootNode = restoreNode(restored.layout);
+        if (mRootNode == null) {
+            mRootNode = createDefaultLayout();
+        }
         installRootView(createNodeView(mRootNode));
     }
 
@@ -48,7 +58,7 @@ public final class AreaLayoutRoot extends FrameLayout {
     }
 
     void splitLeaf(AreaLeafNode leaf, AreaSplitDirection direction) {
-        if (leaf == null || direction == null) {
+        if (leaf == null || direction == null || countLeaves(mRootNode) >= MAX_LEAVES) {
             return;
         }
 
@@ -63,6 +73,7 @@ public final class AreaLayoutRoot extends FrameLayout {
         }
         replaceNodeView(leaf, split);
         refreshLeafChrome(mRootNode);
+        requestSessionSave();
     }
 
     void closeLeaf(AreaLeafNode leaf) {
@@ -96,6 +107,7 @@ public final class AreaLayoutRoot extends FrameLayout {
         removeNodeView(parent);
         removeNodeView(leaf);
         refreshLeafChrome(mRootNode);
+        requestSessionSave();
     }
 
     boolean canCloseLeaf() {
@@ -141,7 +153,20 @@ public final class AreaLayoutRoot extends FrameLayout {
                 sourceView.refreshFromNode();
             }
             targetView.refreshFromNode();
+            requestSessionSave();
         }
+    }
+
+    void requestSessionSave() {
+        removeCallbacks(mSaveRunnable);
+        postDelayed(mSaveRunnable, SAVE_DELAY_MS);
+    }
+
+    public void persistNow() {
+        removeCallbacks(mSaveRunnable);
+        EditorSessionState state = new EditorSessionState();
+        state.layout = snapshotNode(mRootNode);
+        EditorSessionStore.INSTANCE.save(state);
     }
 
     void cancelLeafDrag() {
@@ -273,6 +298,46 @@ public final class AreaLayoutRoot extends FrameLayout {
         AreaLeafNode console = new AreaLeafNode(AreaEditorType.TERMINAL);
         AreaSplitNode bottom = new AreaSplitNode(AreaSplitDirection.HORIZONTAL, 0.58f, assets, console);
         return new AreaSplitNode(AreaSplitDirection.VERTICAL, 0.72f, graph, bottom);
+    }
+
+    private static AreaNode restoreNode(EditorSessionState.AreaState state) {
+        if (state == null) {
+            return null;
+        }
+        if ("leaf".equals(state.kind)) {
+            return new AreaLeafNode(state);
+        }
+        if (!"split".equals(state.kind)) {
+            return null;
+        }
+        AreaNode first = restoreNode(state.first);
+        AreaNode second = restoreNode(state.second);
+        if (first == null || second == null) {
+            return null;
+        }
+        AreaSplitDirection direction = "VERTICAL".equals(state.direction)
+                ? AreaSplitDirection.VERTICAL
+                : AreaSplitDirection.HORIZONTAL;
+        return new AreaSplitNode(direction, state.ratio, first, second);
+    }
+
+    private static EditorSessionState.AreaState snapshotNode(AreaNode node) {
+        if (node instanceof AreaLeafNode leaf) {
+            return leaf.sessionState();
+        }
+        if (node instanceof AreaSplitNode split) {
+            EditorSessionState.AreaState state = new EditorSessionState.AreaState();
+            state.kind = "split";
+            state.direction = split.direction().name();
+            state.ratio = split.ratio();
+            state.first = snapshotNode(split.first());
+            state.second = snapshotNode(split.second());
+            state.graphEditor = null;
+            state.assetBrowser = null;
+            state.terminal = null;
+            return state;
+        }
+        return null;
     }
 
     private static int countLeaves(AreaNode node) {
