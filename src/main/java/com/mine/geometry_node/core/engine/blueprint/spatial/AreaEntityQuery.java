@@ -21,11 +21,7 @@ public final class AreaEntityQuery {
 
     public record Hit(Entity entity,
                       Vec3 hitPos,
-                      Vec3 normal,
-                      Vec3 startPos,
-                      Vec3 endPos,
-                      Vec3 velocity,
-                      boolean swept) {
+                      Vec3 velocity) {
     }
 
     public static List<Entity> find(ServerLevel level,
@@ -158,12 +154,11 @@ public final class AreaEntityQuery {
 
         if (entity instanceof Projectile) {
             if (intersectsNow && containsPoint(start, center, inverseRotation, shape, halfX, halfY, halfZ)) {
-                Vec3 normal = approximateNormal(end, center, areaRotation, inverseRotation, shape, halfX, halfY, halfZ);
-                return new Hit(entity, end, normal, start, end, velocity, false);
+                return new Hit(entity, end, velocity);
             }
             SegmentHit sweptHit = segmentHit(start, end, center, areaRotation, inverseRotation, shape, halfX, halfY, halfZ);
             if (sweptHit != null) {
-                return new Hit(entity, sweptHit.position(), sweptHit.normal(), start, end, velocity, true);
+                return new Hit(entity, sweptHit.position(), velocity);
             }
         }
 
@@ -171,8 +166,7 @@ public final class AreaEntityQuery {
             return null;
         }
 
-        Vec3 normal = approximateNormal(end, center, areaRotation, inverseRotation, shape, halfX, halfY, halfZ);
-        return new Hit(entity, end, normal, start, end, velocity, false);
+        return new Hit(entity, end, velocity);
     }
 
     private static Vec3 previousPosition(Entity entity, Vec3 fallback) {
@@ -511,36 +505,6 @@ public final class AreaEntityQuery {
 
     private static Vec3 cylinderSideNormal(Vec3 point, float halfX, float halfZ) {
         return safeNormal(new Vec3(point.x / square(halfX), 0.0D, point.z / square(halfZ)), new Vec3(0, 1, 0));
-    }
-
-    private static Vec3 approximateNormal(Vec3 point,
-                                          Vec3 center,
-                                          Quaternionf areaRotation,
-                                          Quaternionf inverseRotation,
-                                          AreaShape shape,
-                                          float halfX,
-                                          float halfY,
-                                          float halfZ) {
-        if (shape == AreaShape.SPHERE) {
-            return safeNormal(point.subtract(center), new Vec3(0, 1, 0));
-        }
-
-        Vec3 local = toLocal(point, center, inverseRotation);
-        Vec3 localNormal = switch (shape) {
-            case BOX -> boxNormal(local, halfX, halfY, halfZ);
-            case CYLINDER -> cylinderNormal(local, halfX, halfY, halfZ);
-            case SPHERE -> safeNormal(local, new Vec3(0, 1, 0));
-        };
-        return safeNormal(toWorldDirection(localNormal, areaRotation), point.subtract(center));
-    }
-
-    private static Vec3 boxNormal(Vec3 point, float halfX, float halfY, float halfZ) {
-        double dx = Math.abs(Math.abs(point.x) - halfX);
-        double dy = Math.abs(Math.abs(point.y) - halfY);
-        double dz = Math.abs(Math.abs(point.z) - halfZ);
-        if (dx <= dy && dx <= dz) return new Vec3(point.x >= 0.0D ? 1 : -1, 0, 0);
-        if (dy <= dz) return new Vec3(0, point.y >= 0.0D ? 1 : -1, 0);
-        return new Vec3(0, 0, point.z >= 0.0D ? 1 : -1);
     }
 
     private static Vec3 toLocal(Vec3 point, Vec3 center, Quaternionf inverseRotation) {

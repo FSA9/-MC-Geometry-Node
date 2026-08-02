@@ -251,13 +251,8 @@ public final class AreaTriggerDispatcher {
             Map<String, Object> baseData = GraphEventData.of(
                     StandardPorts.ENTITY.getId(), ownerEntity,
                     StandardPorts.TRIGGER_ENTITY.getId(), triggerEntity,
-                    StandardPorts.TARGET_ENTITY.getId(), triggerEntity,
-                    StandardPorts.XYZ.getId(), triggerEntity.position(),
                     StandardPorts.HIT_POS.getId(), hit != null ? hit.hitPos() : triggerEntity.position(),
-                    StandardPorts.NORMAL.getId(), hit != null ? hit.normal() : Vec3.ZERO,
                     StandardPorts.VECTOR.getId(), hit != null ? hit.velocity() : triggerEntity.getDeltaMovement(),
-                    StandardPorts.START_POS.getId(), hit != null ? hit.startPos() : triggerEntity.position(),
-                    StandardPorts.END_POS.getId(), hit != null ? hit.endPos() : triggerEntity.position(),
                     StandardPorts.CENTER.getId(), result.area.center,
                     StandardPorts.SIZE_3.getId(), group.config.size,
                     StandardPorts.RADIUS.getId(), (float) group.config.radius(),
