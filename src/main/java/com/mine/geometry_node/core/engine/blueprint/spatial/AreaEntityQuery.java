@@ -154,15 +154,20 @@ public final class AreaEntityQuery {
         Vec3 end = entity.position();
         Vec3 start = previousPosition(entity, end);
         Vec3 velocity = entity.getDeltaMovement();
+        boolean intersectsNow = intersects(entity.getBoundingBox(), center, inverseRotation, shape, halfX, halfY, halfZ);
 
         if (entity instanceof Projectile) {
+            if (intersectsNow && containsPoint(start, center, inverseRotation, shape, halfX, halfY, halfZ)) {
+                Vec3 normal = approximateNormal(end, center, areaRotation, inverseRotation, shape, halfX, halfY, halfZ);
+                return new Hit(entity, end, normal, start, end, velocity, false);
+            }
             SegmentHit sweptHit = segmentHit(start, end, center, areaRotation, inverseRotation, shape, halfX, halfY, halfZ);
             if (sweptHit != null) {
                 return new Hit(entity, sweptHit.position(), sweptHit.normal(), start, end, velocity, true);
             }
         }
 
-        if (!intersects(entity.getBoundingBox(), center, inverseRotation, shape, halfX, halfY, halfZ)) {
+        if (!intersectsNow) {
             return null;
         }
 
@@ -171,12 +176,38 @@ public final class AreaEntityQuery {
     }
 
     private static Vec3 previousPosition(Entity entity, Vec3 fallback) {
+        Vec3 velocity = entity.getDeltaMovement();
+        // A newly spawned projectile can still carry constructor-time xOld coordinates.
+        if (entity instanceof Projectile && entity.tickCount <= 1 && isFinite(velocity)) {
+            return fallback.subtract(velocity);
+        }
         Vec3 oldPos = new Vec3(entity.xOld, entity.yOld, entity.zOld);
         if (isFinite(oldPos)) {
             return oldPos;
         }
-        Vec3 velocity = entity.getDeltaMovement();
         return velocity != null ? fallback.subtract(velocity) : fallback;
+    }
+
+    private static boolean containsPoint(Vec3 point,
+                                         Vec3 center,
+                                         Quaternionf inverseRotation,
+                                         AreaShape shape,
+                                         float halfX,
+                                         float halfY,
+                                         float halfZ) {
+        if (shape == AreaShape.SPHERE) {
+            double radius = Math.max(halfX, Math.max(halfY, halfZ));
+            return point.distanceToSqr(center) <= square(radius);
+        }
+
+        Vec3 local = toLocal(point, center, inverseRotation);
+        return switch (shape) {
+            case BOX -> Math.abs(local.x) <= halfX
+                    && Math.abs(local.y) <= halfY
+                    && Math.abs(local.z) <= halfZ;
+            case CYLINDER -> insideCylinder(local, halfX, halfY, halfZ);
+            case SPHERE -> false;
+        };
     }
 
     private static boolean intersects(AABB aabb,
