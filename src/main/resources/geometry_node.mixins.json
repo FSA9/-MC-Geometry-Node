@@ -5,6 +5,9 @@
   "mixins": [
     "ProjectileHitMixin"
   ],
+  "client": [
+    "KeyboardHandlerMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   },
