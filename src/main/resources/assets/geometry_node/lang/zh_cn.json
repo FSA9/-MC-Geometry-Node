@@ -75,6 +75,7 @@
   "geometry_node.port.max_float": "最大值(F)",
   "geometry_node.port.distance": "距离",
   "geometry_node.port.radius": "半径",
+  "geometry_node.port.speed": "速度",
   "geometry_node.port.size_1": "尺寸",
   "geometry_node.port.time": "时间",
   "geometry_node.port.volume": "音量",
@@ -92,6 +93,7 @@
   "geometry_node.port.string": "String",
   "geometry_node.port.path": "路径",
   "geometry_node.port.type": "类型",
+  "geometry_node.port.particle": "粒子类型",
   "geometry_node.port.scope": "作用域",
   "geometry_node.port.expression": "表达式",
   "geometry_node.port.message": "消息",
@@ -158,6 +160,7 @@
   "geometry_node.port.shop_id": "商店 ID",
 
   "geometry_node.port.xyz": "坐标",
+  "geometry_node.port.spread": "扩散范围",
   "geometry_node.port.start_pos": "起点",
   "geometry_node.port.end_pos": "终点",
   "geometry_node.port.center": "中心点",
@@ -359,6 +362,7 @@
   "--- ACTIONS/WORLD ---": "--- 世界动作 ---",
   "geometry_node.node.create_explosion": "创建爆炸",
   "geometry_node.node.play_sound": "播放环境声音",
+  "geometry_node.node.spawn_particle": "生成粒子",
   "geometry_node.node.strike_lightning": "召唤闪电",
 
   "--- CLIENT ---": "--- 客户端节点 ---",
