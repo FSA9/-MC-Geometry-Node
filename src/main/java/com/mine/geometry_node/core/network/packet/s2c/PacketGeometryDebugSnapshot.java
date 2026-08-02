@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
+import com.mine.geometry_node.core.engine.blueprint.debug.GeometryDebugType;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -68,14 +69,24 @@ public record PacketGeometryDebugSnapshot(
     public record Mesh(
             String id,
             String graphId,
+            GeometryDebugType geometryType,
+            int color,
+            boolean showPoints,
             double centerX,
             double centerY,
             double centerZ,
+            double sizeX,
+            double sizeY,
+            double sizeZ,
+            double rotationX,
+            double rotationY,
+            double rotationZ,
             float[] vertices,
             int[] edges,
             int[] faces
     ) {
         public Mesh {
+            geometryType = geometryType != null ? geometryType : GeometryDebugType.MESH;
             vertices = vertices != null ? vertices : new float[0];
             edges = edges != null ? edges : new int[0];
             faces = faces != null ? faces : new int[0];
@@ -85,6 +96,15 @@ public record PacketGeometryDebugSnapshot(
             this(
                     buf.readUtf(32767),
                     buf.readUtf(32767),
+                    GeometryDebugType.fromNetworkId(buf.readUnsignedByte()),
+                    buf.readInt(),
+                    buf.readBoolean(),
+                    buf.readDouble(),
+                    buf.readDouble(),
+                    buf.readDouble(),
+                    buf.readDouble(),
+                    buf.readDouble(),
+                    buf.readDouble(),
                     buf.readDouble(),
                     buf.readDouble(),
                     buf.readDouble(),
@@ -97,9 +117,18 @@ public record PacketGeometryDebugSnapshot(
         private void write(RegistryFriendlyByteBuf buf) {
             buf.writeUtf(id, 32767);
             buf.writeUtf(graphId, 32767);
+            buf.writeByte(geometryType.networkId());
+            buf.writeInt(color);
+            buf.writeBoolean(showPoints);
             buf.writeDouble(centerX);
             buf.writeDouble(centerY);
             buf.writeDouble(centerZ);
+            buf.writeDouble(sizeX);
+            buf.writeDouble(sizeY);
+            buf.writeDouble(sizeZ);
+            buf.writeDouble(rotationX);
+            buf.writeDouble(rotationY);
+            buf.writeDouble(rotationZ);
             writeFloatArray(buf, vertices, 3);
             writeIntArray(buf, edges, 2);
             writeIntArray(buf, faces, 4);

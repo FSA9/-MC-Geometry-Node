@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.attachment.*;
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.attachment.GlobalGraphStorage;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.EventSubscription;
@@ -357,7 +357,7 @@ public class GraphEngine {
 
             registerEntityForGraph(entity, graphId);
             GraphEventHandler.markActive(entity);
-            AreaDebugSessionManager.markDirty();
+            DebugRendererSessionManager.markDirty();
         }
     }
 
@@ -373,7 +373,7 @@ public class GraphEngine {
                 attachment.addProcess(new GraphProcess(graphId, index));
             }
         }
-        AreaDebugSessionManager.markDirty();
+        DebugRendererSessionManager.markDirty();
     }
 
     public static void unbindGraph(Entity entity, String graphId) {
@@ -382,9 +382,9 @@ public class GraphEngine {
             attachment.unbindGraph(graphId);
             unregisterEntityForGraph(entity, graphId);
             if (entity.level() instanceof ServerLevel level) {
-                AreaDebugSessionManager.removeSourceBoxes(level, AreaDebugSessionManager.entitySourceKey(level, entity, graphId));
+                DebugRendererSessionManager.removeSourceShapes(level, DebugRendererSessionManager.entitySourceKey(level, entity, graphId));
             }
-            AreaDebugSessionManager.markDirty();
+            DebugRendererSessionManager.markDirty();
         }
     }
 
@@ -394,9 +394,9 @@ public class GraphEngine {
         storage.removeGraph(graphId);
         for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
             LevelGraphAttachment.get(loadedLevel).removeProcess(graphId);
-            AreaDebugSessionManager.removeSourceBoxes(loadedLevel, AreaDebugSessionManager.levelSourceKey(loadedLevel, graphId));
+            DebugRendererSessionManager.removeSourceShapes(loadedLevel, DebugRendererSessionManager.levelSourceKey(loadedLevel, graphId));
         }
-        AreaDebugSessionManager.markDirty();
+        DebugRendererSessionManager.markDirty();
     }
 
     public static void unbindAllGraphs(Entity entity) {
@@ -404,12 +404,12 @@ public class GraphEngine {
         if (attachment != null) {
             for (String graphId : attachment.getBoundGraphs()) {
                 if (entity.level() instanceof ServerLevel level) {
-                    AreaDebugSessionManager.removeSourceBoxes(level, AreaDebugSessionManager.entitySourceKey(level, entity, graphId));
+                    DebugRendererSessionManager.removeSourceShapes(level, DebugRendererSessionManager.entitySourceKey(level, entity, graphId));
                 }
                 unregisterEntityForGraph(entity, graphId);
             }
             attachment.clearGraphs();
-            AreaDebugSessionManager.markDirty();
+            DebugRendererSessionManager.markDirty();
         }
     }
 
@@ -429,10 +429,10 @@ public class GraphEngine {
             LevelGraphAttachment attachment = LevelGraphAttachment.get(loadedLevel);
             for (String graphId : graphIds) {
                 attachment.removeProcess(graphId);
-                AreaDebugSessionManager.removeSourceBoxes(loadedLevel, AreaDebugSessionManager.levelSourceKey(loadedLevel, graphId));
+                DebugRendererSessionManager.removeSourceShapes(loadedLevel, DebugRendererSessionManager.levelSourceKey(loadedLevel, graphId));
             }
         }
-        AreaDebugSessionManager.markDirty();
+        DebugRendererSessionManager.markDirty();
     }
 
     public static Set<String> getBoundGraphs(Entity entity) {
@@ -512,7 +512,7 @@ public class GraphEngine {
                 }
             }
         }
-        AreaDebugSessionManager.markDirty();
+        DebugRendererSessionManager.markDirty();
     }
 
     @Nullable

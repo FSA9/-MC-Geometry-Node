@@ -2,8 +2,9 @@ package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugBox;
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRenderShape;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRenderChannel;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
@@ -55,7 +56,7 @@ public final class AreaTriggerDispatcher {
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
 
         for (String graphId : GraphEngine.getGlobalGraphsForEvent(level, AreaTriggerEvent.TYPE_ID)) {
-            String sourceKey = AreaDebugSessionManager.levelSourceKey(level, graphId);
+            String sourceKey = DebugRendererSessionManager.levelSourceKey(level, graphId);
             tickGraph(level, null, graphId, GraphEngine.getGraphIndex(graphId),
                     attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates, queryCache);
         }
@@ -72,7 +73,7 @@ public final class AreaTriggerDispatcher {
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
 
         for (String graphId : GraphEngine.getEntityGraphsForEvent(owner, AreaTriggerEvent.TYPE_ID)) {
-            String sourceKey = AreaDebugSessionManager.entitySourceKey(level, owner, graphId);
+            String sourceKey = DebugRendererSessionManager.entitySourceKey(level, owner, graphId);
             tickGraph(level, owner, graphId, GraphEngine.getGraphIndex(graphId),
                     attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates, queryCache);
         }
@@ -92,21 +93,21 @@ public final class AreaTriggerDispatcher {
                                   Set<StateKey> seenStates,
                                   Map<QueryCacheKey, AreaQueryResult> queryCache) {
         if (index == null) {
-            AreaDebugSessionManager.removeSourceBoxes(level, sourceKey);
+            DebugRendererSessionManager.removeSourceShapes(level, sourceKey);
             return;
         }
 
         Map<AreaConfigKey, AreaGroup> groups = new LinkedHashMap<>();
         collectNodes(index, currentTick, groups);
-        List<AreaDebugBox> debugBoxes = AreaDebugSessionManager.hasAreaBoxSessions()
+        List<DebugRenderShape> debugShapes = DebugRendererSessionManager.hasAreaSessions()
                 ? new ArrayList<>(groups.size())
                 : null;
 
         for (AreaGroup group : groups.values()) {
             ResolvedArea resolved = null;
-            if (debugBoxes != null) {
+            if (debugShapes != null) {
                 resolved = group.config.resolve(target);
-                debugBoxes.add(toDebugBox(sourceKey, graphId, group, resolved));
+                debugShapes.add(toDebugShape(sourceKey, graphId, group, resolved));
             }
             StateKey stateKey = new StateKey(scope, graphId, group.configKey);
             seenStates.add(stateKey);
@@ -131,8 +132,8 @@ public final class AreaTriggerDispatcher {
 
             state.inside = new LinkedHashSet<>(current);
         }
-        if (debugBoxes != null) {
-            AreaDebugSessionManager.replaceSourceBoxes(level, sourceKey, debugBoxes, currentTick);
+        if (debugShapes != null) {
+            DebugRendererSessionManager.replaceSourceShapes(level, sourceKey, debugShapes, currentTick);
         }
     }
 
@@ -180,11 +181,12 @@ public final class AreaTriggerDispatcher {
         return AreaPhase.fromPayloadName(rawPhase);
     }
 
-    private static AreaDebugBox toDebugBox(String sourceKey, String graphId, AreaGroup group, ResolvedArea resolved) {
+    private static DebugRenderShape toDebugShape(String sourceKey, String graphId, AreaGroup group, ResolvedArea resolved) {
         String localId = group.debugNodeId != null ? group.debugNodeId : group.configKey.toString();
-        return new AreaDebugBox(sourceKey + ":" + localId, graphId,
+        return new DebugRenderShape(sourceKey + ":" + localId, graphId,
                 group.config.shape.id(),
-                resolved.center, group.config.size, group.config.rotation);
+                resolved.center, group.config.size, group.config.rotation,
+                DebugRenderChannel.AREA.color());
     }
 
     private static AreaConfig readConfig(RuntimeGraphIndex index, int nodeId) {

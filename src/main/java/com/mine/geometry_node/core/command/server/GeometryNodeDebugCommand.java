@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.command.server;
 
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -19,7 +19,7 @@ public final class GeometryNodeDebugCommand {
                         .then(Commands.literal("debug")
                                 .then(Commands.literal("area")
                                         .then(Commands.literal("on")
-                                                .executes(context -> enableArea(context, AreaDebugSessionManager.DEFAULT_RADIUS))
+                                                .executes(context -> enableArea(context, DebugRendererSessionManager.DEFAULT_RADIUS))
                                                 .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
                                                         .executes(context -> enableArea(context, DoubleArgumentType.getDouble(context, "radius")))
                                                 )
@@ -30,7 +30,7 @@ public final class GeometryNodeDebugCommand {
                                 )
                                 .then(Commands.literal("geometry")
                                         .then(Commands.literal("on")
-                                                .executes(context -> enableGeometry(context, AreaDebugSessionManager.DEFAULT_RADIUS))
+                                                .executes(context -> enableGeometry(context, DebugRendererSessionManager.DEFAULT_RADIUS))
                                                 .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
                                                         .executes(context -> enableGeometry(context, DoubleArgumentType.getDouble(context, "radius")))
                                                 )
@@ -41,7 +41,7 @@ public final class GeometryNodeDebugCommand {
                                 )
                                 .then(Commands.literal("schem")
                                         .then(Commands.literal("on")
-                                                .executes(context -> enableSchematic(context, AreaDebugSessionManager.DEFAULT_RADIUS))
+                                                .executes(context -> enableSchematic(context, DebugRendererSessionManager.DEFAULT_RADIUS))
                                                 .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
                                                         .executes(context -> enableSchematic(context, DoubleArgumentType.getDouble(context, "radius")))
                                                 )
@@ -52,7 +52,7 @@ public final class GeometryNodeDebugCommand {
                                 )
                                 .then(Commands.literal("interaction")
                                         .then(Commands.literal("on")
-                                                .executes(context -> enableInteraction(context, AreaDebugSessionManager.DEFAULT_RADIUS))
+                                                .executes(context -> enableInteraction(context, DebugRendererSessionManager.DEFAULT_RADIUS))
                                                 .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
                                                         .executes(context -> enableInteraction(context, DoubleArgumentType.getDouble(context, "radius")))
                                                 )
@@ -68,48 +68,48 @@ public final class GeometryNodeDebugCommand {
     private static int enableArea(CommandContext<CommandSourceStack> context, double radius)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return AreaDebugSessionManager.enableArea(player, radius);
+        return DebugRendererSessionManager.enableArea(player, radius);
     }
 
     private static int disableArea(CommandContext<CommandSourceStack> context)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return AreaDebugSessionManager.disableArea(player, true);
+        return DebugRendererSessionManager.disableArea(player, true);
     }
 
     private static int enableSchematic(CommandContext<CommandSourceStack> context, double radius)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return AreaDebugSessionManager.enableSchematic(player, radius);
+        return DebugRendererSessionManager.enableSchematic(player, radius);
     }
 
     private static int disableSchematic(CommandContext<CommandSourceStack> context)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return AreaDebugSessionManager.disableSchematic(player, true);
+        return DebugRendererSessionManager.disableSchematic(player, true);
     }
 
     private static int enableGeometry(CommandContext<CommandSourceStack> context, double radius)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return AreaDebugSessionManager.enableGeometry(player, radius);
+        return DebugRendererSessionManager.enableGeometry(player, radius);
     }
 
     private static int disableGeometry(CommandContext<CommandSourceStack> context)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return AreaDebugSessionManager.disableGeometry(player, true);
+        return DebugRendererSessionManager.disableGeometry(player, true);
     }
 
     private static int enableInteraction(CommandContext<CommandSourceStack> context, double radius)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return AreaDebugSessionManager.enableInteraction(player, radius);
+        return DebugRendererSessionManager.enableInteraction(player, radius);
     }
 
     private static int disableInteraction(CommandContext<CommandSourceStack> context)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return AreaDebugSessionManager.disableInteraction(player, true);
+        return DebugRendererSessionManager.disableInteraction(player, true);
     }
 }

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.geometry;
 
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
-import com.mine.geometry_node.core.engine.blueprint.debug.GeometryDebugMesh;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.blueprint.debug.GeometryDebugElement;
 import com.mine.geometry_node.core.engine.blueprint.debug.GeometryDebugMeshFactory;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
@@ -48,9 +48,9 @@ public class CreateGeometryDebugMesh extends BaseNode {
 
         Vec3 translation = getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class);
         String key = resolveKey(context, level);
-        String sourceKey = AreaDebugSessionManager.geometryMeshSourceKey(level, key);
+        String sourceKey = DebugRendererSessionManager.geometryMeshSourceKey(level, key);
 
-        List<GeometryDebugMesh> meshes = GeometryDebugMeshFactory.buildMeshes(
+        List<GeometryDebugElement> meshes = GeometryDebugMeshFactory.buildMeshes(
                 sourceKey,
                 context.getGraphId(),
                 "created",
@@ -59,7 +59,7 @@ public class CreateGeometryDebugMesh extends BaseNode {
                 translation
         );
         if (!meshes.isEmpty()) {
-            AreaDebugSessionManager.replaceSourceGeometry(level, sourceKey, meshes);
+            DebugRendererSessionManager.replaceSourceGeometry(level, sourceKey, meshes);
             context.setTempData(tempKey(context), key);
         }
         return next(StandardPorts.FLOW_OUT.getId());

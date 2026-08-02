@@ -1,7 +1,8 @@
 package com.mine.geometry_node.core.schematic;
 
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugBox;
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRenderShape;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRenderChannel;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.schematic.SchematicPlacementManager.SchematicPlacementRecord;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -20,7 +21,7 @@ public final class SchematicPlacementDebugSync {
             return;
         }
         registered = true;
-        AreaDebugSessionManager.registerSchematicChannelHydrator(SchematicPlacementDebugSync::syncPlayer);
+        DebugRendererSessionManager.registerSchematicChannelHydrator(SchematicPlacementDebugSync::syncPlayer);
     }
 
     public static int syncPlayer(ServerPlayer player) {
@@ -54,26 +55,27 @@ public final class SchematicPlacementDebugSync {
             return;
         }
         if (record == null) {
-            AreaDebugSessionManager.removeSourceBoxes(level, sourceKey);
+            DebugRendererSessionManager.removeSourceShapes(level, sourceKey);
             return;
         }
 
-        AreaDebugSessionManager.replacePersistentSourceBoxes(
+        DebugRendererSessionManager.replacePersistentSourceShapes(
                 level,
                 sourceKey,
-                List.of(toDebugBox(sourceKey, record)),
+                List.of(toDebugShape(sourceKey, record)),
                 currentTick
         );
     }
 
-    private static AreaDebugBox toDebugBox(String sourceKey, SchematicPlacementRecord record) {
-        return new AreaDebugBox(
+    private static DebugRenderShape toDebugShape(String sourceKey, SchematicPlacementRecord record) {
+        return new DebugRenderShape(
                 sourceKey + ":bounds",
                 record.graphId(),
                 "box",
                 record.boundsCenter(),
                 record.boundsSize(),
-                Vec3.ZERO
+                Vec3.ZERO,
+                DebugRenderChannel.SCHEMATIC.color()
         );
     }
 
@@ -81,6 +83,6 @@ public final class SchematicPlacementDebugSync {
         if (level == null || key == null || key.isBlank()) {
             return null;
         }
-        return AreaDebugSessionManager.schematicPlacementSourceKey(level, key);
+        return DebugRendererSessionManager.schematicPlacementSourceKey(level, key);
     }
 }

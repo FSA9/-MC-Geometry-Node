@@ -9,22 +9,7 @@ import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 
-final class AreaDebugRenderTypes {
-    static final RenderType AREA_FACE = RenderType.create(
-            "geometry_node_area_debug_face",
-            RenderSetup.builder(RenderPipelines.DEBUG_QUADS)
-                    .bufferSize(1536)
-                    .sortOnUpload()
-                    .createRenderSetup()
-    );
-
-    static final RenderType AREA_LINE = RenderType.create(
-            "geometry_node_area_debug_line",
-            RenderSetup.builder(RenderPipelines.LINES_TRANSLUCENT)
-                    .bufferSize(1536)
-                    .createRenderSetup()
-    );
-
+final class GeometryDebugRenderTypes {
     static final RenderType GEOMETRY_FACE = RenderType.create(
             "geometry_node_geometry_debug_face",
             RenderSetup.builder(RenderPipelines.DEBUG_QUADS)
@@ -80,6 +65,6 @@ final class AreaDebugRenderTypes {
                     .createRenderSetup()
     );
 
-    private AreaDebugRenderTypes() {
+    private GeometryDebugRenderTypes() {
     }
 }

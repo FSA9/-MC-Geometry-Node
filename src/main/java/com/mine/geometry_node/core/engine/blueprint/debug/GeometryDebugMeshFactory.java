@@ -6,6 +6,8 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +23,7 @@ public final class GeometryDebugMeshFactory {
     private GeometryDebugMeshFactory() {
     }
 
-    public static List<GeometryDebugMesh> buildMeshes(String sourceKey,
+    public static List<GeometryDebugElement> buildMeshes(String sourceKey,
                                                       String graphId,
                                                       String localId,
                                                       GeometryValue geometry,
@@ -32,7 +34,7 @@ public final class GeometryDebugMeshFactory {
         }
 
         GeometryValue.Primitive[] primitives = geometry.primitives();
-        List<GeometryDebugMesh> meshes = new ArrayList<>(Math.min(limit, primitives.length));
+        List<GeometryDebugElement> meshes = new ArrayList<>(Math.min(limit, primitives.length));
         Vec3 safeTranslation = translation != null ? translation : Vec3.ZERO;
         String safeLocalId = localId != null && !localId.isBlank() ? localId : "geometry";
         for (int i = 0; i < primitives.length && meshes.size() < limit; i++) {
@@ -42,7 +44,7 @@ public final class GeometryDebugMeshFactory {
         return meshes;
     }
 
-    public static GeometryDebugMesh buildPrimitiveMesh(String id,
+    public static GeometryDebugElement buildPrimitiveMesh(String id,
                                                        String graphId,
                                                        GeometryValue.Primitive primitive,
                                                        Vec3 translation) {
@@ -57,7 +59,8 @@ public final class GeometryDebugMeshFactory {
                     size,
                     clampInt(primitive.verticesX(), 2, MAX_CUBE_AXIS_VERTICES),
                     clampInt(primitive.verticesY(), 2, MAX_CUBE_AXIS_VERTICES),
-                    clampInt(primitive.verticesZ(), 2, MAX_CUBE_AXIS_VERTICES)
+                    clampInt(primitive.verticesZ(), 2, MAX_CUBE_AXIS_VERTICES),
+                    DebugRenderChannel.GEOMETRY.color()
             );
             case CYLINDER -> buildCylinderMesh(
                     id,
@@ -68,7 +71,8 @@ public final class GeometryDebugMeshFactory {
                     clampInt(primitive.fillSegments(), 1, MAX_CYLINDER_FILL_SEGMENTS),
                     (float) Math.max(0.001D, size.x * 0.5D),
                     (float) Math.max(0.001D, size.y),
-                    primitive.fillType()
+                    primitive.fillType(),
+                    DebugRenderChannel.GEOMETRY.color()
             );
             case UV_SPHERE -> buildUvSphereMesh(
                     id,
@@ -76,19 +80,52 @@ public final class GeometryDebugMeshFactory {
                     center,
                     clampInt(primitive.sphereSegments(), 3, MAX_UV_SPHERE_SEGMENTS),
                     clampInt(primitive.sphereRings(), 2, MAX_UV_SPHERE_RINGS),
-                    (float) Math.max(0.001D, size.x * 0.5D)
+                    (float) Math.max(0.001D, size.x * 0.5D),
+                    DebugRenderChannel.GEOMETRY.color()
             );
         };
     }
 
-    private static GeometryDebugMesh buildCubeMesh(String id,
+    public static GeometryDebugElement buildShapeMesh(DebugRenderShape shape) {
+        Vec3 center = shape.center() != null ? shape.center() : Vec3.ZERO;
+        Vec3 size = sanitizeSize(shape.size() != null ? shape.size() : new Vec3(1.0D, 1.0D, 1.0D));
+        String shapeType = shape.shape() != null ? shape.shape() : "box";
+        GeometryDebugElement mesh = switch (shapeType) {
+            case "sphere" -> buildPerfectShape(
+                    shape, GeometryDebugType.PERFECT_SPHERE, center, size
+            );
+            case "cylinder" -> buildPerfectShape(
+                    shape, GeometryDebugType.PERFECT_CYLINDER, center, size
+            );
+            default -> buildCubeMesh(
+                    shape.id(), shape.graphId(), center, size,
+                    2, 2, 2,
+                    shape.color()
+            );
+        };
+        return mesh.type() == GeometryDebugType.MESH ? rotateVertices(mesh, shape.rotation()) : mesh;
+    }
+
+    private static GeometryDebugElement buildPerfectShape(DebugRenderShape shape,
+                                                          GeometryDebugType type,
+                                                          Vec3 center,
+                                                          Vec3 size) {
+        return new GeometryDebugElement(
+                shape.id(), shape.graphId(), type, shape.color(), false,
+                center, size, shape.rotation(),
+                new float[0], new int[0], new int[0]
+        );
+    }
+
+    private static GeometryDebugElement buildCubeMesh(String id,
                                                    String graphId,
                                                    Vec3 center,
                                                    Vec3 size,
                                                    int verticesX,
                                                    int verticesY,
-                                                   int verticesZ) {
-        MeshBuilder builder = new MeshBuilder();
+                                                   int verticesZ,
+                                                   int color) {
+        MeshBuilder builder = new MeshBuilder(color);
 
         for (int z : new int[]{0, verticesZ - 1}) {
             for (int x = 0; x < verticesX - 1; x++) {
@@ -145,7 +182,7 @@ public final class GeometryDebugMeshFactory {
         );
     }
 
-    private static GeometryDebugMesh buildCylinderMesh(String id,
+    private static GeometryDebugElement buildCylinderMesh(String id,
                                                        String graphId,
                                                        Vec3 center,
                                                        int radialVertices,
@@ -153,8 +190,9 @@ public final class GeometryDebugMeshFactory {
                                                        int fillSegments,
                                                        float radius,
                                                        float depth,
-                                                       GeometryValue.CylinderFillType fillType) {
-        MeshBuilder builder = new MeshBuilder();
+                                                       GeometryValue.CylinderFillType fillType,
+                                                       int color) {
+        MeshBuilder builder = new MeshBuilder(color);
 
         for (int y = 0; y < sideSegments; y++) {
             for (int radial = 0; radial < radialVertices; radial++) {
@@ -255,13 +293,14 @@ public final class GeometryDebugMeshFactory {
         );
     }
 
-    private static GeometryDebugMesh buildUvSphereMesh(String id,
+    private static GeometryDebugElement buildUvSphereMesh(String id,
                                                        String graphId,
                                                        Vec3 center,
                                                        int segments,
                                                        int rings,
-                                                       float radius) {
-        MeshBuilder builder = new MeshBuilder();
+                                                       float radius,
+                                                       int color) {
+        MeshBuilder builder = new MeshBuilder(color);
 
         for (int ring = 0; ring < rings; ring++) {
             for (int segment = 0; segment < segments; segment++) {
@@ -320,6 +359,31 @@ public final class GeometryDebugMeshFactory {
         return center - size * 0.5f + size * index / (count - 1);
     }
 
+    private static GeometryDebugElement rotateVertices(GeometryDebugElement mesh, Vec3 rotation) {
+        if (rotation == null || rotation.equals(Vec3.ZERO)) {
+            return mesh;
+        }
+        Quaternionf quaternion = new Quaternionf().rotationYXZ(
+                (float) Math.toRadians(rotation.y),
+                (float) Math.toRadians(rotation.x),
+                (float) Math.toRadians(rotation.z)
+        );
+        float[] rotated = mesh.vertices().clone();
+        Vector3f vertex = new Vector3f();
+        for (int i = 0; i + 2 < rotated.length; i += 3) {
+            vertex.set(rotated[i], rotated[i + 1], rotated[i + 2]);
+            quaternion.transform(vertex);
+            rotated[i] = vertex.x;
+            rotated[i + 1] = vertex.y;
+            rotated[i + 2] = vertex.z;
+        }
+        return new GeometryDebugElement(
+                mesh.id(), mesh.graphId(), mesh.type(), mesh.color(), mesh.showPoints(),
+                mesh.center(), mesh.size(), mesh.rotation(),
+                rotated, mesh.edges(), mesh.faces()
+        );
+    }
+
     private static Vec3 sanitizeSize(Vec3 size) {
         return new Vec3(
                 sanitizePositive(size.x, 1.0D),
@@ -347,13 +411,15 @@ public final class GeometryDebugMeshFactory {
     }
 
     private static final class MeshBuilder {
+        private final int color;
         private final FloatArrayList vertices = new FloatArrayList();
         private final IntArrayList edges = new IntArrayList();
         private final IntArrayList faces = new IntArrayList();
         private final Long2IntOpenHashMap vertexByKey = new Long2IntOpenHashMap();
         private final LongOpenHashSet edgeKeys = new LongOpenHashSet();
 
-        private MeshBuilder() {
+        private MeshBuilder(int color) {
+            this.color = color;
             vertexByKey.defaultReturnValue(-1);
         }
 
@@ -399,8 +465,12 @@ public final class GeometryDebugMeshFactory {
             addEdge(d, a);
         }
 
-        private GeometryDebugMesh build(String id, String graphId, Vec3 center) {
-            return new GeometryDebugMesh(id, graphId, center, vertices.toFloatArray(), edges.toIntArray(), faces.toIntArray());
+        private GeometryDebugElement build(String id, String graphId, Vec3 center) {
+            return new GeometryDebugElement(
+                    id, graphId, GeometryDebugType.MESH, color, true,
+                    center, Vec3.ZERO, Vec3.ZERO,
+                    vertices.toFloatArray(), edges.toIntArray(), faces.toIntArray()
+            );
         }
     }
 }

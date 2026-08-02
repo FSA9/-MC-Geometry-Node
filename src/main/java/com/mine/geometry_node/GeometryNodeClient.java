@@ -5,7 +5,6 @@ import com.mine.geometry_node.client.dialogue.DialogueStyleRenderer;
 import com.mine.geometry_node.client.key.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.key.KeyBindings;
 import com.mine.geometry_node.client.render.ClientVisualManager;
-import com.mine.geometry_node.client.render.debug.AreaDebugRenderer;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
@@ -68,7 +67,6 @@ public class GeometryNodeClient {
     }
 
     private void onRenderLevelStage(RenderLevelStageEvent.AfterTranslucentParticles event) {
-        AreaDebugRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
         GeometryDebugRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
         SchematicProjectionRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
     }
@@ -86,7 +84,6 @@ public class GeometryNodeClient {
 
     private static void clearClientRenderState() {
         ClientVisualManager.clear();
-        AreaDebugRenderer.clear();
         GeometryDebugRenderer.clear();
         SchematicProjectionRenderer.clear();
     }

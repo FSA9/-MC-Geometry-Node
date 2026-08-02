@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.blueprint.event;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.BlockDispatcher;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.AreaTriggerDispatcher;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityDispatcher;
@@ -41,7 +41,7 @@ public class GraphEventHandler {
         BlockDispatcher.register();
         PlayerDispatcher.register();
         WorldDispatcher.register();
-        AreaDebugSessionManager.register();
+        DebugRendererSessionManager.register();
     }
 
     /**
@@ -61,7 +61,7 @@ public class GraphEventHandler {
         // 1. 驱动全局蓝图
         LevelGraphAttachment.get(level).tick(level);
         AreaTriggerDispatcher.tickLevel(level);
-        AreaDebugSessionManager.tickLevel(level);
+        DebugRendererSessionManager.tickLevel(level);
 
         // 2. 驱动到期实体的局部蓝图
         tickScheduledEntities(level);

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.geometry;
 
-import com.mine.geometry_node.core.engine.blueprint.debug.AreaDebugSessionManager;
+import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -34,7 +34,7 @@ public class DeleteGeometryDebugMesh extends BaseNode {
             return next(StandardPorts.FLOW_OUT.getId());
         }
 
-        AreaDebugSessionManager.removeSourceGeometry(level, AreaDebugSessionManager.geometryMeshSourceKey(level, key));
+        DebugRendererSessionManager.removeSourceGeometry(level, DebugRendererSessionManager.geometryMeshSourceKey(level, key));
         return next(StandardPorts.FLOW_OUT.getId());
     }
 }

@@ -159,39 +159,39 @@ public final class SchematicProjectionRenderer {
 
         poseStack.pushPose();
         Matrix4f matrix = poseStack.last().pose();
-        VertexConsumer fallbackFaces = bufferSource.getBuffer(AreaDebugRenderTypes.SCHEMATIC_PROJECTION_FACE);
+        VertexConsumer fallbackFaces = bufferSource.getBuffer(GeometryDebugRenderTypes.SCHEMATIC_PROJECTION_FACE);
         for (Projection projection : PROJECTIONS.values()) {
             if (shouldRenderProjection(projection, dimension, camPos, maxRenderDistanceSqr, frustum)) {
                 drawFallbackFaces(projection, fallbackFaces, matrix, camPos);
             }
         }
-        bufferSource.endBatch(AreaDebugRenderTypes.SCHEMATIC_PROJECTION_FACE);
+        bufferSource.endBatch(GeometryDebugRenderTypes.SCHEMATIC_PROJECTION_FACE);
 
-        VertexConsumer boundsFaces = bufferSource.getBuffer(AreaDebugRenderTypes.AREA_FACE);
+        VertexConsumer boundsFaces = bufferSource.getBuffer(GeometryDebugRenderTypes.GEOMETRY_FACE);
         for (Projection projection : PROJECTIONS.values()) {
             if (shouldRenderProjection(projection, dimension, camPos, maxRenderDistanceSqr, frustum)) {
                 drawProjectionBoundsFaces(projection, boundsFaces, matrix, camPos);
             }
         }
-        bufferSource.endBatch(AreaDebugRenderTypes.AREA_FACE);
+        bufferSource.endBatch(GeometryDebugRenderTypes.GEOMETRY_FACE);
 
         PoseStack.Pose pose = poseStack.last();
-        VertexConsumer fallbackLines = bufferSource.getBuffer(AreaDebugRenderTypes.SCHEMATIC_PROJECTION_LINE);
+        VertexConsumer fallbackLines = bufferSource.getBuffer(GeometryDebugRenderTypes.SCHEMATIC_PROJECTION_LINE);
         for (Projection projection : PROJECTIONS.values()) {
             if (shouldRenderProjection(projection, dimension, camPos, maxRenderDistanceSqr, frustum)) {
                 drawFallbackEdges(projection, fallbackLines, pose, matrix, camPos);
             }
         }
-        bufferSource.endBatch(AreaDebugRenderTypes.SCHEMATIC_PROJECTION_LINE);
+        bufferSource.endBatch(GeometryDebugRenderTypes.SCHEMATIC_PROJECTION_LINE);
 
-        VertexConsumer boundsLines = bufferSource.getBuffer(AreaDebugRenderTypes.AREA_LINE);
+        VertexConsumer boundsLines = bufferSource.getBuffer(GeometryDebugRenderTypes.GEOMETRY_LINE);
         for (Projection projection : PROJECTIONS.values()) {
             if (shouldRenderProjection(projection, dimension, camPos, maxRenderDistanceSqr, frustum)) {
                 drawProjectionBoundsLines(projection, boundsLines, pose, matrix, camPos);
             }
         }
         poseStack.popPose();
-        bufferSource.endBatch(AreaDebugRenderTypes.AREA_LINE);
+        bufferSource.endBatch(GeometryDebugRenderTypes.GEOMETRY_LINE);
     }
 
     public static void submitFeatures(PoseStack poseStack, SubmitNodeCollector submitNodeCollector, LevelRenderState levelRenderState) {
@@ -378,7 +378,7 @@ public final class SchematicProjectionRenderer {
         if (renderType == RenderTypes.cutoutMovingBlock()) {
             return 1;
         }
-        if (renderType == AreaDebugRenderTypes.SCHEMATIC_PROJECTION_TRANSLUCENT_BLOCK) {
+        if (renderType == GeometryDebugRenderTypes.SCHEMATIC_PROJECTION_TRANSLUCENT_BLOCK) {
             return 2;
         }
         return 3;
@@ -1082,7 +1082,7 @@ public final class SchematicProjectionRenderer {
                     alpha,
                     RenderTypes.solidMovingBlock(),
                     RenderTypes.cutoutMovingBlock(),
-                    AreaDebugRenderTypes.SCHEMATIC_PROJECTION_TRANSLUCENT_BLOCK
+                    GeometryDebugRenderTypes.SCHEMATIC_PROJECTION_TRANSLUCENT_BLOCK
             );
             return new AlphaVertexConsumer(layerBuilder(builders, renderType).consumer(), alpha);
         }
@@ -1102,7 +1102,7 @@ public final class SchematicProjectionRenderer {
                     alpha,
                     RenderTypes.solidMovingBlock(),
                     RenderTypes.cutoutMovingBlock(),
-                    AreaDebugRenderTypes.SCHEMATIC_PROJECTION_TRANSLUCENT_BLOCK
+                    GeometryDebugRenderTypes.SCHEMATIC_PROJECTION_TRANSLUCENT_BLOCK
             );
             return new AlphaVertexConsumer(layerBuilder(builders, renderType).consumer(), alpha, offsetX, offsetY, offsetZ);
         }
