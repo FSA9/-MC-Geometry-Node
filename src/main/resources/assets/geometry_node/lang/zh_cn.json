@@ -532,7 +532,7 @@
   "geometry_node.node.get_tags": "获取标签列表",
   "geometry_node.node.for_each_loop": "For Each Loop",
   "geometry_node.node.for_loop": "For Loop",
-  "geometry_node.node.while_loop": "While 循环",
+  "geometry_node.node.while_loop": "While",
   "geometry_node.node.if_branch": "If",
   "geometry_node.node.switch": "Switch",
 

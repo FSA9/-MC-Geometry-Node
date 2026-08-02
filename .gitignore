@@ -31,5 +31,7 @@ docs/tmp
 
 *.md
 
+.config/
+
 !README.md
 !docs/README_CN.md
