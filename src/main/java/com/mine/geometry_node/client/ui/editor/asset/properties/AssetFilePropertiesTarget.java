@@ -48,7 +48,7 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
                 GraphTagIO.GraphMetadata metadata = GraphTagIO.readMetadata(mFile);
                 return new GraphPropertiesSnapshot(
                         mFile.getName(),
-                        metadata.kind(),
+                        metadata.graphTypeId(),
                         normalizeComment(metadata.comment()),
                         metadata.tags());
             } catch (Exception e) {
@@ -58,10 +58,10 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
     }
 
     @Override
-    public CompletionStage<Void> save(String comment, List<String> tags) {
+    public CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags) {
         return CompletableFuture.runAsync(() -> {
             try {
-                GraphTagIO.writeMetadata(mFile, comment, tags);
+                GraphTagIO.writeMetadata(mFile, graphTypeId, comment, tags);
             } catch (Exception e) {
                 throw new CompletionException(e);
             }
@@ -75,7 +75,7 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
 
     @Override
     public void onSaveSucceeded(GraphPropertiesSnapshot snapshot) {
-        syncOpenSession(mFile, snapshot.comment(), snapshot.tags());
+        syncOpenSession(mFile, snapshot.graphTypeId(), snapshot.comment(), snapshot.tags());
         if (mOnSaved != null) mOnSaved.run();
     }
 
@@ -89,13 +89,14 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
         return entry.localFile();
     }
 
-    private static void syncOpenSession(File file, String comment, List<String> tags) {
+    private static void syncOpenSession(File file, String graphTypeId, String comment, List<String> tags) {
         for (GraphSession session : DocumentManager.INSTANCE.getSessions()) {
             if (session == null || session.fileId == null
                     || session.editorContext == null || session.editorContext.getGraph() == null) {
                 continue;
             }
             if (!sameFile(file, new File(session.fileId))) continue;
+            session.editorContext.getGraph().graphKind = graphTypeId;
             session.editorContext.getGraph().comment = comment;
             session.editorContext.getGraph().tags = new ArrayList<>(tags);
             session.editorContext.notifyGraphMetadataChanged();

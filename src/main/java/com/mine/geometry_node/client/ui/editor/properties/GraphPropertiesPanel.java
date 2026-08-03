@@ -1,9 +1,11 @@
 package com.mine.geometry_node.client.ui.editor.properties;
 
 import com.mine.geometry_node.client.ui.common.TagFlowLayout;
+import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.GraphType;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -46,7 +48,9 @@ public final class GraphPropertiesPanel extends FrameLayout {
     private final LinearLayout mContent;
     private final TextView mLoadError;
     private final TextView mFileValue;
+    private final FrameLayout mTypeSelect;
     private final TextView mTypeValue;
+    private final FrameLayout mTypeMenuButton;
     private final EditText mCommentInput;
     private final TagFlowLayout mTagList;
     private final EditText mTagInput;
@@ -55,6 +59,8 @@ public final class GraphPropertiesPanel extends FrameLayout {
 
     private GraphPropertiesTarget mTarget;
     private GraphPropertiesSnapshot mLoaded;
+    private FrameLayout mTypeDropdown;
+    private String mSelectedGraphTypeId = "";
     private int mGeneration;
     private boolean mUpdating;
 
@@ -79,8 +85,35 @@ public final class GraphPropertiesPanel extends FrameLayout {
 
         mFileValue = valueField(context);
         addPropertyRow(tr("geometry_node.graph_properties.file"), mFileValue);
-        mTypeValue = valueField(context);
-        addPropertyRow(tr("geometry_node.graph_properties.type"), mTypeValue);
+        mTypeSelect = new FrameLayout(context);
+        mTypeSelect.setBackground(rect(COLOR_INPUT, 3.0f, 1, COLOR_INPUT_BORDER));
+        mTypeValue = label(context, "", 11.0f, COLOR_TEXT);
+        mTypeValue.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(32), 0);
+        mTypeSelect.addView(mTypeValue, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        mTypeMenuButton = new FrameLayout(context);
+        mTypeMenuButton.setBackground(rect(COLOR_BUTTON, 2.0f, 0, 0));
+        mTypeMenuButton.setOnClickListener(v -> toggleGraphTypeMenu());
+        mTypeMenuButton.setOnHoverListener((v, event) -> {
+            boolean hovered = event.getAction() == MotionEvent.ACTION_HOVER_ENTER
+                    || event.getAction() == MotionEvent.ACTION_HOVER_MOVE;
+            mTypeMenuButton.setBackground(rect(hovered ? COLOR_BUTTON_HOVER : COLOR_BUTTON, 2.0f, 0, 0));
+            return true;
+        });
+        VectorIconView typeMenuIcon = new VectorIconView(context,
+                VectorIconView.Kind.CHEVRON_DOWN, COLOR_MUTED);
+        typeMenuIcon.setClickable(false);
+        mTypeMenuButton.addView(typeMenuIcon, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        FrameLayout.LayoutParams typeButtonParams = new FrameLayout.LayoutParams(
+                UIUtils.dp2pxInt(28),
+                ViewGroup.LayoutParams.MATCH_PARENT);
+        typeButtonParams.gravity = Gravity.RIGHT | Gravity.CENTER_VERTICAL;
+        typeButtonParams.setMargins(0, UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(2));
+        mTypeSelect.addView(mTypeMenuButton, typeButtonParams);
+        addPropertyRow(tr("geometry_node.graph_properties.type"), mTypeSelect);
 
         addSectionTitle(tr("geometry_node.graph_properties.comment"), 10);
         mCommentInput = new EditText(context);
@@ -180,6 +213,7 @@ public final class GraphPropertiesPanel extends FrameLayout {
         }
 
         commitPendingEdits();
+        clearTransientUi();
         detachTargetListener();
         mGeneration++;
         mTarget = target;
@@ -198,13 +232,15 @@ public final class GraphPropertiesPanel extends FrameLayout {
 
         String comment = target.normalizeComment(mCommentInput.getText().toString());
         List<String> tags = List.copyOf(mTags);
-        if (comment.equals(previous.comment()) && tags.equals(previous.tags())) return;
+        String graphTypeId = mSelectedGraphTypeId;
+        if (graphTypeId.equals(previous.graphTypeId())
+                && comment.equals(previous.comment()) && tags.equals(previous.tags())) return;
 
-        GraphPropertiesSnapshot pending = previous.withMetadata(comment, tags);
+        GraphPropertiesSnapshot pending = previous.withMetadata(graphTypeId, comment, tags);
         int generation = mGeneration;
         mLoaded = pending;
         hideSaveError();
-        target.save(comment, tags).whenComplete((ignored, error) -> post(() -> {
+        target.save(graphTypeId, comment, tags).whenComplete((ignored, error) -> post(() -> {
             if (error == null) target.onSaveSucceeded(pending);
             if (target != mTarget || generation != mGeneration) return;
             if (error == null) {
@@ -224,6 +260,7 @@ public final class GraphPropertiesPanel extends FrameLayout {
 
     @Override
     protected void onDetachedFromWindow() {
+        clearTransientUi();
         commitPendingEdits();
         detachTargetListener();
         super.onDetachedFromWindow();
@@ -260,6 +297,7 @@ public final class GraphPropertiesPanel extends FrameLayout {
             if (target != mTarget || generation != mGeneration) return;
             if (error != null) {
                 mLoaded = null;
+                clearTransientUi();
                 showLoadError();
             } else if (snapshot == null) {
                 mLoaded = null;
@@ -277,7 +315,8 @@ public final class GraphPropertiesPanel extends FrameLayout {
                 : null;
         mLoaded = snapshot;
         mFileValue.setText(snapshot.fileName());
-        mTypeValue.setText(graphKindLabel(snapshot.kind()));
+        mSelectedGraphTypeId = snapshot.graphTypeId();
+        mTypeValue.setText(graphTypeLabel(mSelectedGraphTypeId));
         mCommentInput.setText(pendingComment != null ? pendingComment : snapshot.comment());
         mTags.clear();
         mTags.addAll(snapshot.tags());
@@ -289,8 +328,10 @@ public final class GraphPropertiesPanel extends FrameLayout {
     }
 
     private void hideContent() {
+        clearTransientUi();
         mUpdating = true;
         mTags.clear();
+        mSelectedGraphTypeId = "";
         rebuildTags();
         mUpdating = false;
         mScroll.setVisibility(View.GONE);
@@ -393,7 +434,7 @@ public final class GraphPropertiesPanel extends FrameLayout {
         return chip;
     }
 
-    private void addPropertyRow(String name, TextView value) {
+    private void addPropertyRow(String name, View value) {
         TextView rowLabel = label(getContext(), name, 10.5f, COLOR_LABEL);
         mContent.addView(rowLabel, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -422,14 +463,109 @@ public final class GraphPropertiesPanel extends FrameLayout {
         return view;
     }
 
-    private static String graphKindLabel(GraphKind kind) {
-        String suffix = switch (kind != null ? kind : GraphKind.UNKNOWN) {
-            case BLUEPRINT -> "blueprint";
-            case DIALOGUE -> "dialogue";
-            case BEHAVIOR_TREE -> "behavior_tree";
-            case UNKNOWN -> "unknown";
-        };
-        return tr("geometry_node.graph_properties.kind." + suffix);
+    private void toggleGraphTypeMenu() {
+        if (mTypeDropdown != null) {
+            dismissGraphTypeMenu();
+        } else {
+            showGraphTypeMenu();
+        }
+    }
+
+    private void showGraphTypeMenu() {
+        FrameLayout host = findMenuHost();
+        if (host == null || mTypeSelect.getWidth() <= 0) return;
+
+        FrameLayout overlay = new FrameLayout(getContext());
+        overlay.setClickable(true);
+        overlay.setBackground(rect(0x00000000, 0.0f, 0, 0));
+        overlay.setOnHoverListener((v, event) -> true);
+        overlay.setOnGenericMotionListener((v, event) -> true);
+        overlay.setOnClickListener(v -> dismissGraphTypeMenu());
+        host.addView(overlay, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout menu = new LinearLayout(getContext());
+        menu.setOrientation(LinearLayout.VERTICAL);
+        menu.setPadding(UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(2));
+        menu.setBackground(rect(COLOR_INPUT, 3.0f, 1, COLOR_INPUT_BORDER));
+        menu.setClickable(true);
+        menu.setOnClickListener(v -> { });
+        for (GraphType type : GraphTypeRegistry.INSTANCE.all()) {
+            menu.addView(createGraphTypeOption(type), new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    UIUtils.dp2pxInt(28)));
+        }
+        int[] rootLocation = new int[2];
+        int[] anchorLocation = new int[2];
+        host.getLocationOnScreen(rootLocation);
+        mTypeSelect.getLocationOnScreen(anchorLocation);
+        FrameLayout.LayoutParams menuParams = new FrameLayout.LayoutParams(
+                mTypeSelect.getWidth(),
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        menuParams.gravity = Gravity.TOP | Gravity.LEFT;
+        menuParams.setMargins(anchorLocation[0] - rootLocation[0],
+                anchorLocation[1] - rootLocation[1] + mTypeSelect.getHeight(), 0, 0);
+        overlay.addView(menu, menuParams);
+        mTypeDropdown = overlay;
+    }
+
+    private TextView createGraphTypeOption(GraphType type) {
+        TextView option = label(getContext(), graphTypeLabel(type.id()), 11.0f, COLOR_TEXT);
+        option.setPadding(UIUtils.dp2pxInt(7), 0, UIUtils.dp2pxInt(7), 0);
+        option.setBackground(rect(
+                type.id().equals(mSelectedGraphTypeId) ? COLOR_TAG : COLOR_INPUT,
+                2.0f, 0, 0));
+        option.setClickable(true);
+        option.setOnHoverListener((v, event) -> {
+            boolean hovered = event.getAction() == MotionEvent.ACTION_HOVER_ENTER
+                    || event.getAction() == MotionEvent.ACTION_HOVER_MOVE;
+            option.setBackground(rect(hovered ? COLOR_BUTTON_HOVER
+                    : type.id().equals(mSelectedGraphTypeId) ? COLOR_TAG : COLOR_INPUT,
+                    2.0f, 0, 0));
+            return true;
+        });
+        option.setOnClickListener(v -> selectGraphType(type.id()));
+        return option;
+    }
+
+    private void dismissGraphTypeMenu() {
+        if (mTypeDropdown == null) return;
+        if (mTypeDropdown.getParent() instanceof ViewGroup parent) {
+            parent.removeView(mTypeDropdown);
+        }
+        mTypeDropdown = null;
+    }
+
+    private void clearTransientUi() {
+        dismissGraphTypeMenu();
+    }
+
+    private FrameLayout findMenuHost() {
+        View current = this;
+        while (current != null) {
+            if (current instanceof FrameLayout frameLayout) return frameLayout;
+            if (!(current.getParent() instanceof View parent)) return null;
+            current = parent;
+        }
+        return null;
+    }
+
+    private void selectGraphType(String graphTypeId) {
+        if (graphTypeId == null || graphTypeId.equals(mSelectedGraphTypeId)) return;
+        mSelectedGraphTypeId = graphTypeId;
+        mTypeValue.setText(graphTypeLabel(graphTypeId));
+        dismissGraphTypeMenu();
+        commitPendingEdits();
+    }
+
+    private static String graphTypeLabel(String graphTypeId) {
+        GraphType type = GraphTypeRegistry.INSTANCE.get(graphTypeId);
+        if (type != null) return tr(type.translationKey());
+        String rawId = GraphType.normalizeId(graphTypeId);
+        return rawId.isEmpty()
+                ? tr("geometry_node.graph_properties.kind.unknown")
+                : tr("geometry_node.graph_properties.kind.unknown") + ": " + rawId;
     }
 
     private static TextView label(Context context, String text, float sizeDp, int color) {

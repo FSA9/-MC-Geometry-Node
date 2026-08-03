@@ -5,6 +5,8 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.core.engine.graph.GraphType;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.view.Gravity;
@@ -44,6 +46,7 @@ final class AssetFileItemView extends LinearLayout {
 
     private final AssetEntry mEntry;
     private final List<String> mTags;
+    private final String mGraphTypeId;
     private final boolean mFavorite;
     private final VectorIconView mIconView;
     private final SchematicThumbnailView mSchematicThumbnailView;
@@ -57,10 +60,12 @@ final class AssetFileItemView extends LinearLayout {
     private boolean mDragging;
     private final float mTouchSlop;
 
-    AssetFileItemView(Context context, AssetEntry entry, AssetViewMode mode, String displayName, String parentLabel, List<String> tags, boolean favorite, Listener listener) {
+    AssetFileItemView(Context context, AssetEntry entry, AssetViewMode mode, String displayName, String parentLabel,
+                      List<String> tags, String graphTypeId, boolean favorite, Listener listener) {
         super(context);
         mEntry = entry;
         mTags = tags != null ? tags : List.of();
+        mGraphTypeId = graphTypeId != null ? graphTypeId : "";
         mFavorite = favorite;
         mListener = listener;
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
@@ -201,6 +206,10 @@ final class AssetFileItemView extends LinearLayout {
     private int iconColor() {
         if (mEntry.isDirectory()) return COLOR_FOLDER;
         if (mEntry.isSchematicFile()) return COLOR_SCHEMATIC;
+        if (mEntry.isJsonFile()) {
+            GraphType graphType = GraphTypeRegistry.INSTANCE.get(mGraphTypeId);
+            if (graphType != null) return graphType.assetIconColor();
+        }
         return COLOR_FILE;
     }
 

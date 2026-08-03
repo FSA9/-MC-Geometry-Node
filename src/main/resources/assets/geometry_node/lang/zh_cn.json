@@ -948,7 +948,6 @@
   "geometry_node.graph_properties.load_failed": "图信息读取失败",
   "geometry_node.graph_properties.save_failed": "图信息保存失败",
   "geometry_node.graph_properties.kind.blueprint": "蓝图",
-  "geometry_node.graph_properties.kind.dialogue": "对话图",
-  "geometry_node.graph_properties.kind.behavior_tree": "行为树",
+  "geometry_node.graph_properties.kind.quest": "任务",
   "geometry_node.graph_properties.kind.unknown": "未知"
 }

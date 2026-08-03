@@ -48,14 +48,16 @@ final class AssetEntryLoader {
     }
 
     static final class Result {
-        private static final Result EMPTY = new Result(List.of(), Map.of());
+        private static final Result EMPTY = new Result(List.of(), Map.of(), Map.of());
 
         private final List<AssetEntry> mEntries;
         private final Map<String, List<String>> mTagsByKey;
+        private final Map<String, String> mGraphTypeIdsByKey;
 
-        Result(List<AssetEntry> entries, Map<String, List<String>> tagsByKey) {
+        Result(List<AssetEntry> entries, Map<String, List<String>> tagsByKey, Map<String, String> graphTypeIdsByKey) {
             mEntries = entries == null ? List.of() : entries;
             mTagsByKey = tagsByKey == null ? Map.of() : tagsByKey;
+            mGraphTypeIdsByKey = graphTypeIdsByKey == null ? Map.of() : graphTypeIdsByKey;
         }
 
         static Result empty() {
@@ -63,7 +65,7 @@ final class AssetEntryLoader {
         }
 
         static Result entriesOnly(List<AssetEntry> entries) {
-            return new Result(entries, Map.of());
+            return new Result(entries, Map.of(), Map.of());
         }
 
         List<AssetEntry> entries() {
@@ -73,6 +75,11 @@ final class AssetEntryLoader {
         List<String> tagsFor(AssetEntry entry) {
             if (entry == null) return List.of();
             return mTagsByKey.getOrDefault(entry.key(), List.of());
+        }
+
+        String graphTypeIdFor(AssetEntry entry) {
+            if (entry == null) return "";
+            return mGraphTypeIdsByKey.getOrDefault(entry.key(), "");
         }
     }
 
@@ -193,14 +200,18 @@ final class AssetEntryLoader {
     private Result toResult(List<File> files, File baseDirectory, boolean favoritesMode, boolean includeTags, Map<String, List<String>> tagCache) {
         List<AssetEntry> entries = new ArrayList<>(files.size());
         Map<String, List<String>> tagsByKey = includeTags ? new HashMap<>() : Collections.emptyMap();
+        Map<String, String> graphTypeIdsByKey = new HashMap<>();
         for (File file : files) {
             AssetEntry entry = toLocalEntry(file, baseDirectory, favoritesMode);
             entries.add(entry);
             if (includeTags && entry.sourceKind() == AssetSourceKind.LOCAL && isLocalGraphFile(file)) {
                 tagsByKey.put(entry.key(), readTags(file, tagCache));
             }
+            if (entry.sourceKind() == AssetSourceKind.LOCAL && isLocalGraphFile(file)) {
+                graphTypeIdsByKey.put(entry.key(), readGraphTypeId(file));
+            }
         }
-        return new Result(entries, tagsByKey);
+        return new Result(entries, tagsByKey, graphTypeIdsByKey);
     }
 
     private List<String> readTags(File file, Map<String, List<String>> tagCache) {
@@ -217,6 +228,14 @@ final class AssetEntryLoader {
         }
         tagCache.put(key, tags);
         return tags;
+    }
+
+    private String readGraphTypeId(File file) {
+        try {
+            return GraphTagIO.readMetadata(file).graphTypeId();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private boolean isDisplayable(File file) {

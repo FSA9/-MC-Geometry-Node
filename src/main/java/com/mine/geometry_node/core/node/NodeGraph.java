@@ -1,7 +1,8 @@
 package com.mine.geometry_node.core.node;
 
 import com.google.gson.annotations.SerializedName;
-import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.GraphType;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,7 +15,7 @@ import java.util.Map;
  */
 public class NodeGraph {
     @SerializedName("graph_kind")
-    public String graphKind = GraphKind.BLUEPRINT.id();
+    public String graphKind = GraphTypeRegistry.BLUEPRINT.id();
 
     @SerializedName("tags")
     public List<String> tags = new ArrayList<>();
@@ -35,22 +36,22 @@ public class NodeGraph {
 
     public NodeGraph() {}
 
-    public GraphKind getKind() {
-        GraphKind explicitKind = GraphKind.fromId(graphKind);
-        if (explicitKind != GraphKind.UNKNOWN) {
-            return explicitKind;
+    public String getGraphTypeId() {
+        String explicitId = GraphType.normalizeId(graphKind);
+        if (!explicitId.isEmpty()) {
+            return explicitId;
         }
 
         // Backward compatibility for older graph files that stored graph kind in tags.
         if (tags != null) {
             for (String tag : tags) {
-                GraphKind kind = GraphKind.fromId(tag);
-                if (kind != GraphKind.UNKNOWN) {
-                    return kind;
+                String legacyId = GraphType.normalizeId(tag);
+                if (GraphTypeRegistry.INSTANCE.get(legacyId) != null) {
+                    return legacyId;
                 }
             }
         }
-        return GraphKind.BLUEPRINT;
+        return GraphTypeRegistry.BLUEPRINT.id();
     }
 
     /**

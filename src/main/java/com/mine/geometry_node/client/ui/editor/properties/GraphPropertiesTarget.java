@@ -9,7 +9,7 @@ import java.util.concurrent.CompletionStage;
 public interface GraphPropertiesTarget {
     CompletionStage<GraphPropertiesSnapshot> load();
 
-    CompletionStage<Void> save(String comment, List<String> tags);
+    CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags);
 
     default String normalizeComment(String comment) {
         return comment != null ? comment : "";

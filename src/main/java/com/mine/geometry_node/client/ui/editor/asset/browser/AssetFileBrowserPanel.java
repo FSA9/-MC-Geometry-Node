@@ -855,7 +855,9 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     public AssetFileItemView createItemView(AssetEntry entry) {
         String parentLabel = (mFavoritesMode || !mSearchQuery.isEmpty() || !mTagSearchQuery.isEmpty()) ? parentLabel(entry) : "";
         List<String> tags = mViewMode == AssetViewMode.LIST ? mCurrentEntryResult.tagsFor(entry) : List.of();
-        AssetFileItemView item = new AssetFileItemView(getContext(), entry, mViewMode, displayName(entry), parentLabel, tags, isFavorite(entry), this);
+        String graphTypeId = mCurrentEntryResult.graphTypeIdFor(entry);
+        AssetFileItemView item = new AssetFileItemView(getContext(), entry, mViewMode, displayName(entry), parentLabel,
+                tags, graphTypeId, isFavorite(entry), this);
         item.setSelected(mSelectedPaths.contains(entry.key()));
         return item;
     }

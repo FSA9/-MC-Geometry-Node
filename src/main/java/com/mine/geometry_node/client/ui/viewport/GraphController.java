@@ -43,8 +43,9 @@ public class GraphController {
         return mContext.getCurrentGraph();
     }
 
-    public void setGraphMetadata(String comment, List<String> tags) {
+    public void setGraphMetadata(String graphTypeId, String comment, List<String> tags) {
         NodeGraph graph = mContext.getGraph();
+        graph.graphKind = graphTypeId;
         graph.comment = comment != null ? comment : "";
         graph.tags = tags != null ? new ArrayList<>(tags) : new ArrayList<>();
         mContext.notifyGraphMetadataChanged();

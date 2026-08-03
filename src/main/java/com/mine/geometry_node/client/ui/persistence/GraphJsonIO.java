@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.persistence;
 
 import com.google.gson.*;
-import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.GraphType;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.node.Connection;
 import com.mine.geometry_node.core.node.FrameData;
 import com.mine.geometry_node.core.node.NodeData;
@@ -20,8 +21,7 @@ public final class GraphJsonIO {
 
     public static String toJson(NodeGraph g) {
         JsonObject root = new JsonObject();
-        GraphKind kind = g.getKind();
-        root.addProperty("graph_kind", kind != GraphKind.UNKNOWN ? kind.id() : GraphKind.BLUEPRINT.id());
+        root.addProperty("graph_kind", g.getGraphTypeId());
         root.add("tags", GSON.toJsonTree(g.tags != null ? g.tags : List.of()));
         root.addProperty("comment", g.comment != null ? g.comment : "");
         root.addProperty("version", g.version != null ? g.version : "1.0");
@@ -52,7 +52,7 @@ public final class GraphJsonIO {
     public static NodeGraph fromJson(String json) {
         JsonObject root = JsonParser.parseString(json).getAsJsonObject();
         NodeGraph g = new NodeGraph();
-        g.graphKind = root.has("graph_kind") ? root.get("graph_kind").getAsString() : GraphKind.BLUEPRINT.id();
+        g.graphKind = root.has("graph_kind") ? root.get("graph_kind").getAsString() : GraphTypeRegistry.BLUEPRINT.id();
         g.version = root.has("version") ? root.get("version").getAsString() : "1.0";
         g.tags = readUserTags(root, g);
         g.comment = root.has("comment") && root.get("comment").isJsonPrimitive()
@@ -139,13 +139,13 @@ public final class GraphJsonIO {
         }
 
         boolean needsLegacyKindMigration = !root.has("graph_kind")
-                || GraphKind.fromId(graph.graphKind) == GraphKind.UNKNOWN;
+                || GraphType.normalizeId(graph.graphKind).isEmpty();
         for (JsonElement element : root.getAsJsonArray("tags")) {
             if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) continue;
 
             String tag = element.getAsString();
-            GraphKind kind = GraphKind.fromId(tag);
-            if (needsLegacyKindMigration && kind != GraphKind.UNKNOWN) {
+            GraphType kind = GraphTypeRegistry.INSTANCE.get(tag);
+            if (needsLegacyKindMigration && kind != null) {
                 graph.graphKind = kind.id();
                 needsLegacyKindMigration = false;
                 continue;

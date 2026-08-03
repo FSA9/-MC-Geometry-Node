@@ -10,38 +10,43 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 修改整张图的本地描述和标签，并将修改纳入编辑器撤销栈。
+ * 修改整张图的类型、描述和标签，并将修改纳入编辑器撤销栈。
  */
 public final class CmdSetGraphMetadata implements ICommand {
     private final GraphController mController;
+    private final String mOldGraphTypeId;
     private final String mOldComment;
     private final List<String> mOldTags;
     private final String mNewComment;
+    private final String mNewGraphTypeId;
     private final List<String> mNewTags;
 
-    public CmdSetGraphMetadata(GraphController controller, String newComment, List<String> newTags) {
+    public CmdSetGraphMetadata(GraphController controller, String newGraphTypeId, String newComment, List<String> newTags) {
         mController = controller;
         NodeGraph graph = controller != null ? controller.getContext().getGraph() : null;
         mOldComment = normalizeComment(graph != null ? graph.comment : null);
+        mOldGraphTypeId = graph != null ? graph.getGraphTypeId() : "";
         mOldTags = normalizeTags(graph != null ? graph.tags : null);
         mNewComment = normalizeComment(newComment);
+        mNewGraphTypeId = newGraphTypeId != null ? newGraphTypeId.trim() : "";
         mNewTags = normalizeTags(newTags);
     }
 
     @Override
     public boolean canExecute() {
         return mController != null
-                && (!Objects.equals(mOldComment, mNewComment) || !Objects.equals(mOldTags, mNewTags));
+                && (!Objects.equals(mOldGraphTypeId, mNewGraphTypeId)
+                || !Objects.equals(mOldComment, mNewComment) || !Objects.equals(mOldTags, mNewTags));
     }
 
     @Override
     public void execute() {
-        mController.setGraphMetadata(mNewComment, mNewTags);
+        mController.setGraphMetadata(mNewGraphTypeId, mNewComment, mNewTags);
     }
 
     @Override
     public void undo() {
-        mController.setGraphMetadata(mOldComment, mOldTags);
+        mController.setGraphMetadata(mOldGraphTypeId, mOldComment, mOldTags);
     }
 
     private static String normalizeComment(String comment) {

@@ -31,18 +31,19 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
         if (graph == null) return CompletableFuture.completedFuture(null);
         return CompletableFuture.completedFuture(new GraphPropertiesSnapshot(
                 mSession.tabName,
-                graph.getKind(),
+                graph.getGraphTypeId(),
                 graph.comment,
                 graph.tags));
     }
 
     @Override
-    public CompletionStage<Void> save(String comment, List<String> tags) {
+    public CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags) {
         if (mSession == null || mSession.editorContext == null || mSession.editorContext.getGraph() == null) {
             return CompletableFuture.completedFuture(null);
         }
         mSession.editorContext.getCommandManager().execute(new CmdSetGraphMetadata(
                 mSession.editorContext.getGraphController(),
+                graphTypeId,
                 comment,
                 List.copyOf(tags)));
         return CompletableFuture.completedFuture(null);

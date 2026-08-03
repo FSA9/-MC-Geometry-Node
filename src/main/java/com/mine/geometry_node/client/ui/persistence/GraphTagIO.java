@@ -6,7 +6,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.GraphType;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -22,7 +23,7 @@ public final class GraphTagIO {
 
     private GraphTagIO() {}
 
-    public record GraphMetadata(GraphKind kind, String comment, List<String> tags) {}
+    public record GraphMetadata(String graphTypeId, String comment, List<String> tags) {}
 
     public static JsonObject readGraphRoot(File file) throws Exception {
         String content = Files.exists(file.toPath()) ? Files.readString(file.toPath()).trim() : "";
@@ -46,7 +47,7 @@ public final class GraphTagIO {
         String comment = root.has("comment") && root.get("comment").isJsonPrimitive()
                 ? root.get("comment").getAsString()
                 : "";
-        return new GraphMetadata(resolveGraphKind(root), comment, readTags(root));
+        return new GraphMetadata(resolveGraphTypeId(root), comment, readTags(root));
     }
 
     public static List<String> readTags(JsonObject root) {
@@ -56,14 +57,14 @@ public final class GraphTagIO {
         }
 
         boolean needsLegacyKindMigration = !root.has("graph_kind")
-                || GraphKind.fromId(root.get("graph_kind").getAsString()) == GraphKind.UNKNOWN;
+                || GraphType.normalizeId(root.get("graph_kind").getAsString()).isEmpty();
         Set<String> seen = new LinkedHashSet<>();
         for (JsonElement element : root.getAsJsonArray("tags")) {
             if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) continue;
 
             String tag = element.getAsString();
-            GraphKind kind = GraphKind.fromId(tag);
-            if (needsLegacyKindMigration && kind != GraphKind.UNKNOWN) {
+            GraphType kind = GraphTypeRegistry.INSTANCE.get(tag);
+            if (needsLegacyKindMigration && kind != null) {
                 needsLegacyKindMigration = false;
                 continue;
             }
@@ -76,15 +77,18 @@ public final class GraphTagIO {
         return tags;
     }
 
-    public static void writeMetadata(File file, String comment, List<String> tags) throws Exception {
+    public static void writeMetadata(File file, String graphTypeId, String comment, List<String> tags) throws Exception {
         JsonObject root = readGraphRoot(file);
-        writeMetadataRoot(file, root, comment != null ? comment.trim() : "", tags);
+        writeMetadataRoot(file, root, graphTypeId, comment != null ? comment.trim() : "", tags);
     }
 
-    private static void writeMetadataRoot(File file, JsonObject root, String comment, List<String> tags) throws Exception {
-        String graphKind = resolveGraphKind(root).id();
+    private static void writeMetadataRoot(File file, JsonObject root, String graphTypeId, String comment, List<String> tags) throws Exception {
+        String normalizedTypeId = GraphType.normalizeId(graphTypeId);
+        if (normalizedTypeId.isEmpty()) {
+            throw new IllegalArgumentException("Graph type cannot be empty");
+        }
         root.remove("graph_name");
-        root.addProperty("graph_kind", graphKind);
+        root.addProperty("graph_kind", normalizedTypeId);
         if (comment != null) root.addProperty("comment", comment);
         root.add("tags", GSON.toJsonTree(tags != null ? tags : List.of()));
         if (!root.has("version")) root.addProperty("version", "1.0");
@@ -93,11 +97,11 @@ public final class GraphTagIO {
         Files.writeString(file.toPath(), GSON.toJson(root), StandardCharsets.UTF_8);
     }
 
-    public static GraphKind resolveGraphKind(JsonObject root) {
+    public static String resolveGraphTypeId(JsonObject root) {
         if (root.has("graph_kind")) {
-            GraphKind kind = GraphKind.fromId(root.get("graph_kind").getAsString());
-            if (kind != GraphKind.UNKNOWN) {
-                return kind;
+            String explicitId = GraphType.normalizeId(root.get("graph_kind").getAsString());
+            if (!explicitId.isEmpty()) {
+                return explicitId;
             }
         }
 
@@ -105,14 +109,14 @@ public final class GraphTagIO {
             JsonArray tags = root.getAsJsonArray("tags");
             for (JsonElement element : tags) {
                 if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) continue;
-                GraphKind kind = GraphKind.fromId(element.getAsString());
-                if (kind != GraphKind.UNKNOWN) {
-                    return kind;
+                GraphType kind = GraphTypeRegistry.INSTANCE.get(element.getAsString());
+                if (kind != null) {
+                    return kind.id();
                 }
             }
         }
 
-        return GraphKind.BLUEPRINT;
+        return GraphTypeRegistry.BLUEPRINT.id();
     }
 
     public static String normalizeTag(String raw) {
