@@ -63,7 +63,7 @@ public final class AreaLayoutRoot extends FrameLayout {
         }
 
         AreaSplitNode oldParent = leaf.parent();
-        AreaLeafNode newLeaf = new AreaLeafNode(nextEditorType(leaf.editorType()));
+        AreaLeafNode newLeaf = new AreaLeafNode(leaf.editorType());
         AreaSplitNode split = new AreaSplitNode(direction, 0.5f, leaf, newLeaf);
         if (oldParent == null) {
             mRootNode = split;
@@ -350,13 +350,4 @@ public final class AreaLayoutRoot extends FrameLayout {
         return 0;
     }
 
-    private static AreaEditorType nextEditorType(AreaEditorType current) {
-        if (current == AreaEditorType.GRAPH_EDITOR) {
-            return AreaEditorType.ASSET_BROWSER;
-        }
-        if (current == AreaEditorType.ASSET_BROWSER) {
-            return AreaEditorType.TERMINAL;
-        }
-        return AreaEditorType.GRAPH_EDITOR;
-    }
 }
