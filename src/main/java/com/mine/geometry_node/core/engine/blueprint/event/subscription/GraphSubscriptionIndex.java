@@ -145,7 +145,9 @@ public final class GraphSubscriptionIndex {
 
         List<EventSubscription> subscriptions = new ArrayList<>(nodeIds.size());
         for (int nodeId : nodeIds) {
-            subscriptions.add(new EventSubscription(graphId, index, nodeId, eventType, EventPrecheckRegistry.build(index, nodeId, eventType)));
+            subscriptions.add(new EventSubscription(
+                    graphId, index, nodeId, eventType,
+                    EventPrecheckRegistry.build(graphId, index, nodeId, eventType)));
         }
         return subscriptions;
     }

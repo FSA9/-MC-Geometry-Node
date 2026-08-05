@@ -7,6 +7,7 @@ import com.mine.geometry_node.client.ui.editor.properties.GraphPropertiesTarget;
 import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -50,7 +51,9 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
                         mFile.getName(),
                         metadata.graphTypeId(),
                         normalizeComment(metadata.comment()),
-                        metadata.tags());
+                        metadata.tags(),
+                        metadata.questDefinition(),
+                        metadata.conditionOverview());
             } catch (Exception e) {
                 throw new CompletionException(e);
             }
@@ -58,10 +61,11 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
     }
 
     @Override
-    public CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags) {
+    public CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags,
+                                      QuestDefinition questDefinition) {
         return CompletableFuture.runAsync(() -> {
             try {
-                GraphTagIO.writeMetadata(mFile, graphTypeId, comment, tags);
+                GraphTagIO.writeMetadata(mFile, graphTypeId, comment, tags, questDefinition);
             } catch (Exception e) {
                 throw new CompletionException(e);
             }
@@ -75,7 +79,7 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
 
     @Override
     public void onSaveSucceeded(GraphPropertiesSnapshot snapshot) {
-        syncOpenSession(mFile, snapshot.graphTypeId(), snapshot.comment(), snapshot.tags());
+        syncOpenSession(mFile, snapshot.graphTypeId(), snapshot.comment(), snapshot.tags(), snapshot.questDefinition());
         if (mOnSaved != null) mOnSaved.run();
     }
 
@@ -89,7 +93,8 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
         return entry.localFile();
     }
 
-    private static void syncOpenSession(File file, String graphTypeId, String comment, List<String> tags) {
+    private static void syncOpenSession(File file, String graphTypeId, String comment, List<String> tags,
+                                        QuestDefinition questDefinition) {
         for (GraphSession session : DocumentManager.INSTANCE.getSessions()) {
             if (session == null || session.fileId == null
                     || session.editorContext == null || session.editorContext.getGraph() == null) {
@@ -99,6 +104,7 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
             session.editorContext.getGraph().graphKind = graphTypeId;
             session.editorContext.getGraph().comment = comment;
             session.editorContext.getGraph().tags = new ArrayList<>(tags);
+            session.editorContext.getGraph().quest = questDefinition;
             session.editorContext.notifyGraphMetadataChanged();
         }
     }

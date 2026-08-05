@@ -12,6 +12,7 @@ import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
+import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -43,11 +44,13 @@ public class GraphController {
         return mContext.getCurrentGraph();
     }
 
-    public void setGraphMetadata(String graphTypeId, String comment, List<String> tags) {
+    public void setGraphMetadata(String graphTypeId, String comment, List<String> tags,
+                                 QuestDefinition questDefinition) {
         NodeGraph graph = mContext.getGraph();
         graph.graphKind = graphTypeId;
         graph.comment = comment != null ? comment : "";
         graph.tags = tags != null ? new ArrayList<>(tags) : new ArrayList<>();
+        graph.quest = questDefinition != null ? questDefinition : QuestDefinition.EMPTY;
         mContext.notifyGraphMetadataChanged();
     }
 

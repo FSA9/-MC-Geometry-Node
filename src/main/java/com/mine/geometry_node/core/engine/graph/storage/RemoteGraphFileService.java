@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.storage;
 
+import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.IOException;
@@ -322,11 +323,14 @@ public final class RemoteGraphFileService {
                 size = 0L;
             }
         }
+        String graphId = GraphPathMapper.pathToId(root, path);
+        RuntimeGraphIndex graphIndex = directory ? null : DynamicGraphManager.getIndex(graphId);
         return new RemoteGraphEntry(
-                GraphPathMapper.pathToId(root, path),
+                graphId,
                 path.getFileName().toString(),
                 directory,
-                size
+                size,
+                graphIndex != null ? graphIndex.getGraphTypeId() : ""
         );
     }
 

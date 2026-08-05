@@ -1,0 +1,11 @@
+package com.mine.geometry_node.core.node.nodes.quest;
+
+import com.mine.geometry_node.core.engine.quest.model.QuestConditionKind;
+
+public final class QuestCompletionConditions extends BaseQuestConditionsNode {
+    public static final String TYPE_ID = QuestConditionKind.COMPLETION.nodeTypeId();
+
+    public QuestCompletionConditions() {
+        super(QuestConditionKind.COMPLETION, "geometry_node.node.quest_completion_conditions");
+    }
+}

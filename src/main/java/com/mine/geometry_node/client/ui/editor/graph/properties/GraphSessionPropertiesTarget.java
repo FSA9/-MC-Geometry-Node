@@ -5,7 +5,12 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdSetGraphMetadata;
 import com.mine.geometry_node.client.ui.editor.properties.GraphPropertiesSnapshot;
 import com.mine.geometry_node.client.ui.editor.properties.GraphPropertiesTarget;
 import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.quest.model.QuestConditionKind;
+import com.mine.geometry_node.core.engine.quest.model.QuestConditionOverview;
+import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.nodes.quest.CreateQuestCondition;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -33,11 +38,14 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
                 mSession.tabName,
                 graph.getGraphTypeId(),
                 graph.comment,
-                graph.tags));
+                graph.tags,
+                graph.quest,
+                QuestConditionOverview.fromGraph(graph)));
     }
 
     @Override
-    public CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags) {
+    public CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags,
+                                      QuestDefinition questDefinition) {
         if (mSession == null || mSession.editorContext == null || mSession.editorContext.getGraph() == null) {
             return CompletableFuture.completedFuture(null);
         }
@@ -45,7 +53,8 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
                 mSession.editorContext.getGraphController(),
                 graphTypeId,
                 comment,
-                List.copyOf(tags)));
+                List.copyOf(tags),
+                questDefinition));
         return CompletableFuture.completedFuture(null);
     }
 
@@ -64,6 +73,49 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
 
     @Override
     public void onGraphMetadataChanged() {
+        notifyChanged();
+    }
+
+    @Override
+    public void onNodeAdded(NodeData nodeData) {
+        notifyChanged();
+    }
+
+    @Override
+    public void onNodeRemoved(String nodeId) {
+        notifyChanged();
+    }
+
+    @Override
+    public void onNodeStructureChanged(NodeData nodeData) {
+        if (isQuestConditionNode(nodeData)) notifyChanged();
+    }
+
+    @Override
+    public void onConnectionAdded(String outNode, String outPort, String inNode, String inPort) {
+        notifyChanged();
+    }
+
+    @Override
+    public void onConnectionRemoved(String outNode, String outPort, String inNode, String inPort) {
+        notifyChanged();
+    }
+
+    @Override
+    public void onGraphConnectionsRebuildRequested() {
+        notifyChanged();
+    }
+
+    private static boolean isQuestConditionNode(NodeData nodeData) {
+        if (nodeData == null || nodeData.type == null) return false;
+        if (CreateQuestCondition.TYPE_ID.equals(nodeData.type)) return true;
+        for (QuestConditionKind kind : QuestConditionKind.all()) {
+            if (kind.nodeTypeId().equals(nodeData.type)) return true;
+        }
+        return false;
+    }
+
+    private void notifyChanged() {
         if (mChangeListener != null) mChangeListener.run();
     }
 }

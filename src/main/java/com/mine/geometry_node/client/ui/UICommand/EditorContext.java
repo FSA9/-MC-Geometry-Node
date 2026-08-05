@@ -75,6 +75,7 @@ public class EditorContext {
         graph.graphKind = mGraph.graphKind;
         graph.tags = mGraph.tags;
         graph.comment = mGraph.comment;
+        graph.quest = mGraph.quest;
         graph.version = mGraph.version;
         graph.nodes = groupNode.ensureSubNodes();
         graph.frames = new LinkedHashMap<String, FrameData>();

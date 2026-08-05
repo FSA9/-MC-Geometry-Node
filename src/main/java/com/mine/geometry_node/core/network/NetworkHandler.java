@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
+import com.mine.geometry_node.client.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
@@ -14,6 +15,7 @@ import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphFileService;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphPermissions;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
+import com.mine.geometry_node.core.engine.quest.QuestScreenService;
 import com.mine.geometry_node.core.network.packet.c2s.*;
 import com.mine.geometry_node.core.network.packet.s2c.*;
 import dev.architectury.networking.NetworkManager;
@@ -274,6 +276,13 @@ public class NetworkHandler {
                 }
         );
 
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketQuestScreenSnapshot.TYPE,
+                PacketQuestScreenSnapshot.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> ClientQuestScreenState.handleSnapshot(payload))
+        );
+
         // ==========================================
         // 7. 注册 C2S: 客户端按键输入 -> 服务端处理
         // ==========================================
@@ -319,6 +328,17 @@ public class NetworkHandler {
                         }
                     });
                 }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketQuestScreenAction.TYPE,
+                PacketQuestScreenAction.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> {
+                    if (context.getPlayer() instanceof ServerPlayer player) {
+                        QuestScreenService.INSTANCE.handleAction(player, payload);
+                    }
+                })
         );
     }
 

@@ -4,12 +4,15 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.attachment.*;
 import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
+import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityInventoryGainTracker;
 import com.mine.geometry_node.core.engine.blueprint.attachment.GlobalGraphStorage;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.EventSubscription;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.GraphSubscriptionIndex;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityGainItem;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -78,8 +81,10 @@ public class GraphEngine {
         // 处理全局图
         refreshGlobalSubscriptions(level);
         LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
+        GlobalGraphStorage globalStorage = GlobalGraphStorage.get(level.getServer().overworld());
 
         for (EventSubscription subscription : graphSubscriptions.globalSubscriptionsFor(eventNodeId)) {
+            if (!globalStorage.getGraphs().contains(subscription.graphId())) continue;
             triggerSubscriptionOnProcess(level, target, subscription, eventPayload,
                     id -> levelAttachment.getProcess(id),
                     levelAttachment::addProcess);
@@ -90,6 +95,7 @@ public class GraphEngine {
             EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
                 for (EventSubscription subscription : getEntitySubscriptionsForEvent(target, eventNodeId)) {
+                    if (!entityAttachment.getBoundGraphs().contains(subscription.graphId())) continue;
                     triggerSubscriptionOnProcess(level, target, subscription, eventPayload,
                             id -> entityAttachment.getProcess(id),
                             process -> {
@@ -113,6 +119,7 @@ public class GraphEngine {
         for (ServerLevel level : currentLevel.getServer().getAllLevels()) {
             LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
             for (String graphId : globalGraphIds) {
+                if (!GlobalGraphStorage.get(level.getServer().overworld()).getGraphs().contains(graphId)) continue;
                 triggerCustomOnProcess(level, null, graphId, frequency, eventPayload,
                         id -> levelAttachment.getProcess(id),
                         levelAttachment::addProcess);
@@ -130,7 +137,7 @@ public class GraphEngine {
                     if (entityAttachment != null) {
                         Set<String> graphIds = entities.get(target);
                         if (graphIds == null || graphIds.isEmpty()) continue;
-                        for (String graphId : entityAttachment.getBoundGraphs()) {
+                        for (String graphId : new ArrayList<>(entityAttachment.getBoundGraphs())) {
                             if (!graphIds.contains(normalizeSubscriptionGraphId(graphId))) continue;
                             triggerCustomOnProcess(targetLevel, target, graphId, frequency, eventPayload,
                                     id -> entityAttachment.getProcess(id),
@@ -171,6 +178,7 @@ public class GraphEngine {
 
         LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
         for (String graphId : getGlobalGraphsForEvent(level, MULTIBLOCK_BUILT_EVENT_TYPE)) {
+            if (!GlobalGraphStorage.get(level.getServer().overworld()).getGraphs().contains(graphId)) continue;
             triggerMultiblockOnProcess(level, target, graphId, structureId, eventPayload,
                     id -> levelAttachment.getProcess(id),
                     levelAttachment::addProcess);
@@ -180,6 +188,7 @@ public class GraphEngine {
             EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
                 for (String graphId : getEntityGraphsForEvent(target, MULTIBLOCK_BUILT_EVENT_TYPE)) {
+                    if (!entityAttachment.getBoundGraphs().contains(graphId)) continue;
                     triggerMultiblockOnProcess(level, target, graphId, structureId, eventPayload,
                             id -> entityAttachment.getProcess(id),
                             entityAttachment::addProcess);
@@ -225,14 +234,14 @@ public class GraphEngine {
         if (index == null) return;
 
         List<Integer> startNodeIds = index.findReceiveBlueprintNodes(targetFrequency);
-        for (int nodeId : startNodeIds) {
-            GraphProcess process = processFinder.apply(graphId);
-            if (process == null) {
-                process = new GraphProcess(graphId, index);
-                mountAction.accept(process);
-            }
+        GraphProcess process = processFinder.apply(graphId);
+        if (process == null || process.getIndex() != index) {
+            process = new GraphProcess(graphId, index);
+            mountAction.accept(process);
+        }
 
-            process.setEnvironment(level, target);
+        process.setEnvironment(level, target);
+        for (int nodeId : startNodeIds) {
             process.executeEvent(nodeId, eventData);
         }
     }
@@ -317,11 +326,40 @@ public class GraphEngine {
         if (entityAttachment == null) return;
 
         for (EventSubscription subscription : getEntitySubscriptionsForEvent(target, eventNodeId)) {
+            if (!entityAttachment.getBoundGraphs().contains(subscription.graphId())) continue;
             triggerSubscriptionOnProcess(level, target, subscription, eventPayload,
                     entityAttachment::getProcess,
                     entityAttachment::addProcess);
         }
         GraphEventHandler.markActive(target);
+    }
+
+    /**
+     * Dispatches an event only to one graph bound to the target entity.
+     * This is used by graph-owned domains such as quests where broadcasting the
+     * same lifecycle event to every bound graph would violate instance ownership.
+     */
+    public static void dispatchBoundGraphEvent(@NotNull ServerLevel level,
+                                               @NotNull Entity target,
+                                               String graphId,
+                                               String eventNodeId,
+                                               @Nullable Map<String, Object> eventData) {
+        String resolvedGraphId = resolveGraphId(graphId);
+        if (resolvedGraphId.isEmpty() || eventNodeId == null || eventNodeId.isBlank()) return;
+
+        EntityGraphAttachment attachment = getAttachment(target);
+        if (attachment == null || !attachment.getBoundGraphs().contains(resolvedGraphId)) return;
+
+        RuntimeGraphIndex index = getGraphIndex(resolvedGraphId);
+        if (index == null) return;
+
+        Map<String, Object> eventPayload = snapshotEventData(eventData);
+        for (int nodeId : index.findNodesByType(eventNodeId)) {
+            if (!attachment.getBoundGraphs().contains(resolvedGraphId)) break;
+            executeEventNode(level, target, resolvedGraphId, index, nodeId, eventPayload,
+                    attachment::getProcess,
+                    attachment::addProcess);
+        }
     }
 
     private static List<EventSubscription> getEntitySubscriptionsForEvent(@NotNull Entity entity, String eventType) {
@@ -349,13 +387,18 @@ public class GraphEngine {
 
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
+            attachment.attachOwner(entity);
             attachment.bindGraph(graphId);
 
-            if (attachment.getProcess(graphId) == null) {
+            GraphProcess process = attachment.getProcess(graphId);
+            if (process == null || process.isDraining()) {
                 attachment.addProcess(new GraphProcess(graphId, index));
             }
 
             registerEntityForGraph(entity, graphId);
+            if (!index.findNodesByType(OnEntityGainItem.TYPE_ID).isEmpty()) {
+                EntityInventoryGainTracker.beginTracking(entity);
+            }
             GraphEventHandler.markActive(entity);
             DebugRendererSessionManager.markDirty();
         }
@@ -369,7 +412,8 @@ public class GraphEngine {
         if (index != null) {
             graphSubscriptions.registerGlobalGraph(graphId, index);
             LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
-            if (attachment.getProcess(graphId) == null) {
+            GraphProcess process = attachment.getProcess(graphId);
+            if (process == null || process.isDraining()) {
                 attachment.addProcess(new GraphProcess(graphId, index));
             }
         }
@@ -377,10 +421,17 @@ public class GraphEngine {
     }
 
     public static void unbindGraph(Entity entity, String graphId) {
+        unbindGraph(entity, graphId, GraphCloseMode.IMMEDIATE);
+    }
+
+    public static void unbindGraph(Entity entity, String graphId, GraphCloseMode closeMode) {
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
-            attachment.unbindGraph(graphId);
+            attachment.unbindGraph(graphId, closeMode);
             unregisterEntityForGraph(entity, graphId);
+            if (getEntityGraphsForEvent(entity, OnEntityGainItem.TYPE_ID).isEmpty()) {
+                EntityInventoryGainTracker.clear(entity);
+            }
             if (entity.level() instanceof ServerLevel level) {
                 DebugRendererSessionManager.removeSourceShapes(level, DebugRendererSessionManager.entitySourceKey(level, entity, graphId));
             }
@@ -389,11 +440,15 @@ public class GraphEngine {
     }
 
     public static void unbindGlobalGraph(ServerLevel level, String graphId) {
+        unbindGlobalGraph(level, graphId, GraphCloseMode.IMMEDIATE);
+    }
+
+    public static void unbindGlobalGraph(ServerLevel level, String graphId, GraphCloseMode closeMode) {
         graphSubscriptions.unregisterGlobalGraph(graphId, getGraphIndex(graphId));
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         storage.removeGraph(graphId);
         for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
-            LevelGraphAttachment.get(loadedLevel).removeProcess(graphId);
+            LevelGraphAttachment.get(loadedLevel).removeProcess(graphId, closeMode);
             DebugRendererSessionManager.removeSourceShapes(loadedLevel, DebugRendererSessionManager.levelSourceKey(loadedLevel, graphId));
         }
         DebugRendererSessionManager.markDirty();
@@ -409,6 +464,7 @@ public class GraphEngine {
                 unregisterEntityForGraph(entity, graphId);
             }
             attachment.clearGraphs();
+            EntityInventoryGainTracker.clear(entity);
             DebugRendererSessionManager.markDirty();
         }
     }
@@ -452,6 +508,7 @@ public class GraphEngine {
     public static void registerEntityListeners(Entity entity) {
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment == null || attachment.getBoundGraphs().isEmpty()) return;
+        attachment.attachOwner(entity);
 
         for (String graphId : attachment.getBoundGraphs()) {
             registerEntityForGraph(entity, graphId);
@@ -523,6 +580,13 @@ public class GraphEngine {
         return GraphResourceManager.getInstance().getIndex(graphId);
     }
 
+    public static String resolveGraphId(@Nullable String graphId) {
+        if (graphId == null || graphId.isBlank()) return "";
+        String trimmedId = graphId.trim();
+        String dynamicId = GraphPathMapper.normalizeId(trimmedId);
+        return DynamicGraphManager.getIndex(dynamicId) != null ? dynamicId : trimmedId;
+    }
+
     private static EntityGraphAttachment getAttachment(Entity entity) {
         EntityGraphAttachment attachment = entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
         if (attachment != null) {
@@ -532,7 +596,6 @@ public class GraphEngine {
     }
 
     private static String normalizeSubscriptionGraphId(String graphId) {
-        RuntimeGraphIndex dynamicIndex = DynamicGraphManager.getIndex(GraphPathMapper.normalizeId(graphId));
-        return dynamicIndex != null ? GraphPathMapper.normalizeId(graphId) : graphId;
+        return resolveGraphId(graphId);
     }
 }

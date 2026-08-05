@@ -10,6 +10,12 @@ public final class GraphEventFields {
     public static final String DURATION = "duration";
     public static final String CLIENT_VELOCITY = "client_velocity";
     public static final String CLIENT_VELOCITY_GAME_TIME = "client_velocity_game_time";
+    public static final String TASK_KEY = "task_key";
+    public static final String INSTANCE_ID = "instance_id";
+    public static final String OLD_STATUS = "old_status";
+    public static final String NEW_STATUS = "new_status";
+    public static final String REASON = "reason";
+    public static final String REQUEST_SOURCE = "request_source";
 
     private GraphEventFields() {
     }

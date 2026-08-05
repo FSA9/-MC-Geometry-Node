@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.persistence;
 import com.google.gson.*;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.node.Connection;
 import com.mine.geometry_node.core.node.FrameData;
 import com.mine.geometry_node.core.node.NodeData;
@@ -24,6 +25,10 @@ public final class GraphJsonIO {
         root.addProperty("graph_kind", g.getGraphTypeId());
         root.add("tags", GSON.toJsonTree(g.tags != null ? g.tags : List.of()));
         root.addProperty("comment", g.comment != null ? g.comment : "");
+        QuestDefinition quest = g.quest != null ? g.quest : QuestDefinition.EMPTY;
+        if (GraphTypeRegistry.QUEST.id().equals(g.getGraphTypeId()) || !quest.isEmpty()) {
+            root.add("quest", quest.toJson());
+        }
         root.addProperty("version", g.version != null ? g.version : "1.0");
 
         // 序列化 Nodes
@@ -58,6 +63,7 @@ public final class GraphJsonIO {
         g.comment = root.has("comment") && root.get("comment").isJsonPrimitive()
                 ? root.get("comment").getAsString()
                 : "";
+        g.quest = QuestDefinition.fromJson(root.get("quest"));
 
         JsonObject nodesObj = root.getAsJsonObject("nodes");
         for (String id : nodesObj.keySet()) {

@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
+import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.Reader;
@@ -29,6 +30,8 @@ public class RuntimeGraphIndex {
 
     private final Map<String, Integer> keyDictionary;
     private final List<String> dictionaryReverse;
+    private final String graphTypeId;
+    private final QuestDefinition questDefinition;
 
     // ====================================================
     // 2. 核心索引结构
@@ -55,7 +58,9 @@ public class RuntimeGraphIndex {
     // 3. 构造与工厂方法 (Constructors & Factory)
     // ====================================================
 
-    private RuntimeGraphIndex(String[] idToString,
+    private RuntimeGraphIndex(String graphTypeId,
+                              QuestDefinition questDefinition,
+                              String[] idToString,
                               Map<String, Integer> stringToId,
                               JsonObject[] nodeDataArray,
                               String[] typeArray,
@@ -68,6 +73,8 @@ public class RuntimeGraphIndex {
                               Map<String, Object>[] staticInputArray,
                               Map<String, Integer> keyDictionary,
                               List<String> dictionaryReverse) {
+        this.graphTypeId = graphTypeId;
+        this.questDefinition = questDefinition != null ? questDefinition : QuestDefinition.EMPTY;
         this.idToString = idToString.clone();
         this.stringToId = Map.copyOf(stringToId);
         this.nodeDataArray = nodeDataArray.clone();
@@ -120,7 +127,9 @@ public class RuntimeGraphIndex {
      * Compiler-facing factory. Runtime code should use the query API on the
      * returned immutable index rather than constructing indexes directly.
      */
-    public static RuntimeGraphIndex createCompiled(String[] idToString,
+    public static RuntimeGraphIndex createCompiled(String graphTypeId,
+                                                   QuestDefinition questDefinition,
+                                                   String[] idToString,
                                                    Map<String, Integer> stringToId,
                                                    JsonObject[] nodeDataArray,
                                                    String[] typeArray,
@@ -134,6 +143,8 @@ public class RuntimeGraphIndex {
                                                    Map<String, Integer> keyDictionary,
                                                    List<String> dictionaryReverse) {
         return new RuntimeGraphIndex(
+                graphTypeId,
+                questDefinition,
                 idToString,
                 stringToId,
                 nodeDataArray,
@@ -165,6 +176,14 @@ public class RuntimeGraphIndex {
     /** 通过 String ID 获取运行时的 Int 索引 (常用于读档恢复) */
     public int getStringToId(String strId) {
         return stringToId.getOrDefault(strId, -1);
+    }
+
+    public String getGraphTypeId() {
+        return graphTypeId;
+    }
+
+    public QuestDefinition getQuestDefinition() {
+        return questDefinition;
     }
 
     /** 通过 Int 索引还原原始的 String ID (常用于报错日志与存档持久化) */

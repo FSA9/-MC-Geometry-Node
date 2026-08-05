@@ -628,6 +628,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
                     mRemoteDirectoryChangedListener.accept(mRemoteDirectory);
                 }
                 List<AssetEntry> entries = new ArrayList<>();
+                Map<String, String> graphTypeIdsByKey = new HashMap<>();
                 for (RemoteGraphEntry entry : response.entries()) {
                     if (!mTagSearchQuery.isEmpty()) {
                         continue;
@@ -635,9 +636,13 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
                     if (!mSearchQuery.isEmpty() && !entry.name().toLowerCase(Locale.ROOT).contains(mSearchQuery.toLowerCase(Locale.ROOT))) {
                         continue;
                     }
-                    entries.add(AssetEntry.remote(entry.path(), entry.name(), entry.directory(), entry.size()));
+                    AssetEntry assetEntry = AssetEntry.remote(entry.path(), entry.name(), entry.directory(), entry.size());
+                    entries.add(assetEntry);
+                    if (!entry.graphTypeId().isBlank()) {
+                        graphTypeIdsByKey.put(assetEntry.key(), entry.graphTypeId());
+                    }
                 }
-                renderEntries(AssetEntryLoader.Result.entriesOnly(entries));
+                renderEntries(new AssetEntryLoader.Result(entries, Map.of(), graphTypeIdsByKey));
             });
         });
         NetworkHandler.sendToServer(new PacketRemoteGraphListRequest(requestId, requestedDirectory, createIfMissing));

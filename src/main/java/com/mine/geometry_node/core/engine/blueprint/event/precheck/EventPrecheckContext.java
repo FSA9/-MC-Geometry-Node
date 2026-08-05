@@ -6,8 +6,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public record EventPrecheckContext(RuntimeGraphIndex index, int nodeId, String eventType) {
+public record EventPrecheckContext(String graphId, RuntimeGraphIndex index, int nodeId, String eventType) {
     public EventPrecheckContext {
+        graphId = graphId == null ? "" : graphId;
         Objects.requireNonNull(index, "index");
         Objects.requireNonNull(eventType, "eventType");
     }

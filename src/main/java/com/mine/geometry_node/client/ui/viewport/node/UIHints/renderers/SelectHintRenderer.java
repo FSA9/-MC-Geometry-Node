@@ -28,7 +28,9 @@ import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 public class SelectHintRenderer implements UIHintRenderer {
@@ -65,10 +67,22 @@ public class SelectHintRenderer implements UIHintRenderer {
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
         // 1. 获取选项列表
         List<String> resolvedOptions = new ArrayList<>();
+        Map<String, String> optionLabels = new HashMap<>();
         if (row.hintParams() != null) {
             String[] staticOptions = (String[]) row.hintParams().get(PortMetaKeys.OPTIONS);
             if (staticOptions != null && staticOptions.length > 0) {
                 resolvedOptions.addAll(List.of(staticOptions));
+                String[] labelKeys = (String[]) row.hintParams().get(PortMetaKeys.OPTION_LABELS);
+                if (labelKeys != null) {
+                    int count = Math.min(staticOptions.length, labelKeys.length);
+                    for (int i = 0; i < count; i++) {
+                        String labelKey = labelKeys[i];
+                        if (labelKey != null && !labelKey.isBlank()) {
+                            optionLabels.put(staticOptions[i], net.minecraft.network.chat.Component
+                                    .translatable(labelKey).getString());
+                        }
+                    }
+                }
             } else {
                 String dynamicRegistryId = (String) row.hintParams().get(PortMetaKeys.DYNAMIC_REGISTRY_ID);
                 if (dynamicRegistryId != null) {
@@ -85,7 +99,8 @@ public class SelectHintRenderer implements UIHintRenderer {
             val = UIHintValueBinder.getValue(nodeData, row.leftPort());
         }
 
-        String displayVal = val != null ? val.toString() : (resolvedOptions.isEmpty() ? "" : resolvedOptions.get(0));
+        String selectedValue = val != null ? val.toString() : (resolvedOptions.isEmpty() ? "" : resolvedOptions.get(0));
+        String displayVal = optionLabels.getOrDefault(selectedValue, selectedValue);
         String title = selectTitle(nodeData, row);
 
         SelectButtonView dropdownBtn = new SelectButtonView(context, displayVal);
@@ -98,8 +113,8 @@ public class SelectHintRenderer implements UIHintRenderer {
             }
 
             if (parent instanceof InteractionContext interactionContext && !portId.isEmpty()) {
-                DropdownSearchMenu menu = new DropdownSearchMenu(context, title, resolvedOptions, selectedVal -> {
-                    dropdownBtn.setValue(selectedVal);
+                DropdownSearchMenu menu = new DropdownSearchMenu(context, title, resolvedOptions, optionLabels, selectedVal -> {
+                    dropdownBtn.setValue(optionLabels.getOrDefault(selectedVal, selectedVal));
                     UIHintValueBinder.commit(editorContext, nodeData, portId, selectedVal);
                 });
 
@@ -298,6 +313,7 @@ public class SelectHintRenderer implements UIHintRenderer {
         private final String mTitle;
         private final List<String> mOptions;
         private final List<String> mFilteredOptions;
+        private final Map<String, String> mOptionLabels;
         private final Consumer<String> mOnSelect;
 
         private View mAnchor;
@@ -305,11 +321,13 @@ public class SelectHintRenderer implements UIHintRenderer {
         private InteractionContext mContext;
         private boolean mIsTracking = false;
 
-        public DropdownSearchMenu(Context context, String title, List<String> options, Consumer<String> onSelect) {
+        public DropdownSearchMenu(Context context, String title, List<String> options,
+                                  Map<String, String> optionLabels, Consumer<String> onSelect) {
             super(context);
             this.mTitle = title;
             this.mOptions = options;
             this.mFilteredOptions = new ArrayList<>(options);
+            this.mOptionLabels = optionLabels != null ? Map.copyOf(optionLabels) : Map.of();
             this.mOnSelect = onSelect;
             initUI(context);
         }
@@ -389,7 +407,7 @@ public class SelectHintRenderer implements UIHintRenderer {
 
             for (String item : mFilteredOptions) {
                 TextView tv = new TextView(getContext());
-                tv.setText(item);
+                tv.setText(mOptionLabels.getOrDefault(item, item));
 
                 tv.setTextSize(0, UIUtils.dp2px(12));
                 tv.setTextColor(COLOR_NODE_TEXT);
@@ -454,7 +472,12 @@ public class SelectHintRenderer implements UIHintRenderer {
             if (q.isEmpty()) {
                 mFilteredOptions.addAll(mOptions);
             } else {
-                for (String opt : mOptions) if (opt.toLowerCase().contains(q)) mFilteredOptions.add(opt);
+                for (String opt : mOptions) {
+                    String label = mOptionLabels.getOrDefault(opt, opt);
+                    if (opt.toLowerCase().contains(q) || label.toLowerCase().contains(q)) {
+                        mFilteredOptions.add(opt);
+                    }
+                }
             }
             renderList();
         }

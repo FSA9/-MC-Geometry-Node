@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcessSerializ
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -117,15 +118,20 @@ public class GraphContainer {
      * [卸载进程]
      */
     public void removeProcess(String graphId) {
-        GraphProcess removed = this.processes.remove(graphId);
-        if (removed != null) {
-            removed.setTickScheduleCallback(null);
-            removed.shutdown("graph_unloaded");
-            if (this.activeTickSchedules.remove(graphId) != null) {
-                notifyScheduleChanged();
-            }
+        removeProcess(graphId, GraphCloseMode.IMMEDIATE);
+    }
+
+    public void removeProcess(String graphId, GraphCloseMode closeMode) {
+        GraphProcess process = this.processes.get(graphId);
+        if (process == null) return;
+
+        GraphCloseMode mode = closeMode != null ? closeMode : GraphCloseMode.IMMEDIATE;
+        if (mode == GraphCloseMode.DRAIN) {
             this.dirtyMarker.run();
+            process.requestDrain(() -> completeDrainingProcess(graphId, process));
+            return;
         }
+        removeProcessNow(graphId, process, "graph_unloaded");
     }
 
     public Collection<GraphProcess> getProcesses() {
@@ -218,6 +224,23 @@ public class GraphContainer {
     private void attachProcess(GraphProcess process) {
         process.setTickScheduleCallback(() -> scheduleProcessTick(process));
         scheduleProcessTick(process);
+        if (process.isDraining()) {
+            process.requestDrain(() -> completeDrainingProcess(process.getGraphId(), process));
+        }
+    }
+
+    private void completeDrainingProcess(String graphId, GraphProcess process) {
+        removeProcessNow(graphId, process, "graph_drain_finished");
+    }
+
+    private void removeProcessNow(String graphId, GraphProcess process, String reason) {
+        if (!this.processes.remove(graphId, process)) return;
+        process.setTickScheduleCallback(null);
+        process.shutdown(reason);
+        if (this.activeTickSchedules.remove(graphId) != null) {
+            notifyScheduleChanged();
+        }
+        this.dirtyMarker.run();
     }
 
     private void scheduleProcessTick(GraphProcess process) {

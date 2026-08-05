@@ -40,6 +40,7 @@ public class GraphProcess {
     // --- 环境上下文 ---
     private ServerLevel level;
     private Entity entity;
+    private UUID graphOwnerEntityUuid;
 
     public static class VariableScope {
         public final Object[] statics;
@@ -55,10 +56,14 @@ public class GraphProcess {
     // --- 执行流管理 ---
     final PriorityQueue<ExecutionThread> sleepingThreads = new PriorityQueue<>(Comparator.comparingLong(t -> t.wakeUpTick));  // 挂起的协程线程
     private final Set<ExecutionThread> externalWaitingThreads = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<ExecutionThread> liveThreads = Collections.newSetFromMap(new IdentityHashMap<>());
     boolean needsTimeRebase = false;  // 读档标记
     private final Map<String, BranchJoin> branchJoins = new HashMap<>();
     private Runnable tickScheduleCallback = () -> {};
     private boolean shutDown;
+    private boolean draining;
+    @Nullable
+    private Runnable drainCompletion;
 
     private static final int MAX_POOLED_THREADS = 128;
     private final ArrayDeque<ExecutionThread> THREAD_POOL = new ArrayDeque<>();
@@ -95,12 +100,21 @@ public class GraphProcess {
         } else {
             thread.reset(startNodeId, startPortName);
         }
+        activateThread(thread);
         return thread;
     }
 
     private void recycleThread(ExecutionThread thread) {
-        if (THREAD_POOL.size() < MAX_POOLED_THREADS) {
+        liveThreads.remove(thread);
+        if (!shutDown && THREAD_POOL.size() < MAX_POOLED_THREADS) {
             THREAD_POOL.offer(thread);
+        }
+        checkDrainCompletion();
+    }
+
+    private void activateThread(ExecutionThread thread) {
+        if (thread != null) {
+            liveThreads.add(thread);
         }
     }
 
@@ -120,6 +134,10 @@ public class GraphProcess {
         this.entity = entity;
     }
 
+    public void setGraphOwner(@Nullable Entity owner) {
+        this.graphOwnerEntityUuid = owner != null ? owner.getUUID() : null;
+    }
+
     public String getGraphId() { return graphId; }
     public RuntimeGraphIndex getIndex() { return index; }
     @Nullable
@@ -129,7 +147,7 @@ public class GraphProcess {
 
     @Nullable
     public Object evaluateDataOutput(int nodeId, String portName) {
-        if (this.shutDown || this.level == null || portName == null || portName.isBlank()
+        if (this.shutDown || this.draining || this.level == null || portName == null || portName.isBlank()
                 || nodeId < 0 || nodeId >= index.getNodeCount()) {
             return null;
         }
@@ -188,8 +206,36 @@ public class GraphProcess {
     }
 
     public void addSleepingThreadForSerialization(ExecutionThread thread) {
+        activateThread(thread);
         sleepingThreads.add(thread);
         notifyTickScheduleChanged();
+    }
+
+    public boolean isDraining() {
+        return draining && !shutDown;
+    }
+
+    public void requestDrain(Runnable completion) {
+        if (shutDown) {
+            if (completion != null) completion.run();
+            return;
+        }
+        draining = true;
+        drainCompletion = completion;
+        checkDrainCompletion();
+    }
+
+    public void restoreDrainingForSerialization(boolean draining) {
+        this.draining = draining;
+    }
+
+    private void checkDrainCompletion() {
+        if (!draining || shutDown || !liveThreads.isEmpty() || drainCompletion == null) {
+            return;
+        }
+        Runnable completion = drainCompletion;
+        drainCompletion = null;
+        completion.run();
     }
 
     public Collection<BranchJoin> getBranchJoinsForSerialization() {
@@ -222,7 +268,7 @@ public class GraphProcess {
      * 为蓝图入口分配一个独立的执行线程。支持多事件并发执行。
      */
     public void executeEvent(int startNodeId, @Nullable Map<String, Object> eventData) {
-        if (this.shutDown || this.level == null) return;
+        if (this.shutDown || this.draining || this.level == null) return;
 
         // 调用修改后的 borrowThread，传入默认端口 "flow_in" 作为执行起点的占位
         ExecutionThread thread = borrowThread(startNodeId, "flow_in");
@@ -275,13 +321,12 @@ public class GraphProcess {
             return;
         }
         this.shutDown = true;
+        this.draining = false;
+        this.drainCompletion = null;
         String closeReason = reason == null || reason.isBlank() ? "graph_unloaded" : reason;
         branchJoins.clear();
-        for (ExecutionThread thread : new ArrayList<>(externalWaitingThreads)) {
-            thread.abort(closeReason);
-        }
-        for (ExecutionThread thread : new ArrayList<>(sleepingThreads)) {
-            thread.abort(closeReason);
+        for (ExecutionThread thread : new ArrayList<>(liveThreads)) {
+            thread.cancelForShutdown(closeReason);
         }
         externalWaitingThreads.clear();
         sleepingThreads.clear();
@@ -521,7 +566,13 @@ public class GraphProcess {
                         ExecutionResult result = logic.execute(this);
 
                         this.activeNodeId = previousActive;
-                        handleExecutionResult(result);
+                        if (GraphProcess.this.shutDown) {
+                            this.currentFlowId = -1;
+                            this.executionStack.clear();
+                            this.state = State.FINISHED;
+                        } else {
+                            handleExecutionResult(result);
+                        }
 
                     } catch (Exception e) {
                         System.err.println("[GraphVM] Critical error in node " + index.getIdToString(currentFlowId));
@@ -703,6 +754,16 @@ public class GraphProcess {
             recycleIfNeeded();
         }
 
+        private void cancelForShutdown(String reason) {
+            if (this.state == State.WAITING || this.state == State.EXTERNAL_WAITING) {
+                abort(reason);
+                return;
+            }
+            this.currentFlowId = -1;
+            this.executionStack.clear();
+            this.state = State.FINISHED;
+        }
+
         private void failExternalWait() {
             GraphProcess.this.externalWaitingThreads.remove(this);
             this.externalWaitNodeId = -1;
@@ -808,6 +869,17 @@ public class GraphProcess {
             if (this.threadEntityUuid != null && currentLevel != null) {
                 Entity res = currentLevel.getEntity(this.threadEntityUuid);
                 return (res == null || res.isRemoved()) ? null : res;
+            }
+            return null;
+        }
+
+        @Override
+        public Entity getGraphOwnerEntity() {
+            ServerLevel currentLevel = getLevel();
+            UUID ownerUuid = GraphProcess.this.graphOwnerEntityUuid;
+            if (ownerUuid != null && currentLevel != null) {
+                Entity owner = currentLevel.getEntity(ownerUuid);
+                return owner == null || owner.isRemoved() ? null : owner;
             }
             return null;
         }
@@ -1028,6 +1100,7 @@ public class GraphProcess {
             if (currentLevel == null) return;
 
             ExecutionThread delayThread = new ExecutionThread(nodeId, entryPortName);
+            GraphProcess.this.activateThread(delayThread);
             delayThread.restoreEnvironment(currentLevel, getThreadEntityUuid());
             delayThread.wakeUpTick = currentLevel.getGameTime() + delayTicks;
             delayThread.state = State.WAITING;

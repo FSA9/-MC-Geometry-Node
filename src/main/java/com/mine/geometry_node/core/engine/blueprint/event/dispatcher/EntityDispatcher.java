@@ -87,6 +87,15 @@ public class EntityDispatcher {
                         StandardPorts.ATTACK_SOURCE.getId(), attacker,
                         StandardPorts.DIRECT_SOURCE.getId(), directSource
                 ));
+
+                if (attacker != null) {
+                    GraphEngine.dispatchEvent(serverLevel, attacker, OnEntityKill.TYPE_ID, GraphEventData.of(
+                            StandardPorts.ENTITY.getId(), entity,
+                            StandardPorts.DAMAGE_TYPE.getId(), damageTypeId,
+                            StandardPorts.ATTACK_SOURCE.getId(), attacker,
+                            StandardPorts.DIRECT_SOURCE.getId(), directSource
+                    ));
+                }
             }
             return EventResult.pass();
         });
@@ -100,7 +109,10 @@ public class EntityDispatcher {
 
             ServerLevel level = (ServerLevel) entity.level();
             EntityGraphAttachment attachment = entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
-            if (attachment == null || attachment.getBoundGraphs().isEmpty()) return;
+            if (attachment == null || attachment.getBoundGraphs().isEmpty()) {
+                EntityInventoryGainTracker.clear(entity);
+                return;
+            }
             attachment.attachOwner(entity);
             GraphEventHandler.markActive(entity);
 
@@ -109,6 +121,8 @@ public class EntityDispatcher {
             GraphEngine.dispatchBoundEntityEvent(level, entity, OnEntityTick.TYPE_ID, GraphEventData.of(
                     StandardPorts.ENTITY.getId(), entity
             ));
+            EntityInventoryGainTracker.tick(level, entity,
+                    !GraphEngine.getEntityGraphsForEvent(entity, OnEntityGainItem.TYPE_ID).isEmpty());
         });
 
         bus.addListener((BabyEntitySpawnEvent event) -> {

@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachm
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
@@ -61,11 +62,19 @@ public final class BlueprintRuntime implements GraphRuntime {
     }
 
     public void unbindGraph(Entity entity, String graphId) {
-        GraphEngine.unbindGraph(entity, graphId);
+        unbindGraph(entity, graphId, GraphCloseMode.IMMEDIATE);
+    }
+
+    public void unbindGraph(Entity entity, String graphId, GraphCloseMode closeMode) {
+        GraphEngine.unbindGraph(entity, graphId, closeMode);
     }
 
     public void unbindGlobalGraph(ServerLevel level, String graphId) {
-        GraphEngine.unbindGlobalGraph(level, graphId);
+        unbindGlobalGraph(level, graphId, GraphCloseMode.IMMEDIATE);
+    }
+
+    public void unbindGlobalGraph(ServerLevel level, String graphId, GraphCloseMode closeMode) {
+        GraphEngine.unbindGlobalGraph(level, graphId, closeMode);
     }
 
     public void unbindAllGraphs(Entity entity) {
@@ -87,6 +96,12 @@ public final class BlueprintRuntime implements GraphRuntime {
     public void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId,
                               @Nullable Map<String, Object> eventData) {
         GraphEngine.dispatchEvent(level, target, eventNodeId, eventData);
+    }
+
+    public void dispatchBoundGraphEvent(@NotNull ServerLevel level, @NotNull Entity target,
+                                        String graphId, String eventNodeId,
+                                        @Nullable Map<String, Object> eventData) {
+        GraphEngine.dispatchBoundGraphEvent(level, target, graphId, eventNodeId, eventData);
     }
 
     public void dispatchCustomEvent(@NotNull ServerLevel currentLevel, String frequency,

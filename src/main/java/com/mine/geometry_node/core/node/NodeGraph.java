@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.node;
 import com.google.gson.annotations.SerializedName;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,6 +24,9 @@ public class NodeGraph {
     @SerializedName("comment")
     public String comment = "";
 
+    @SerializedName("quest")
+    public QuestDefinition quest = QuestDefinition.EMPTY;
+
     @SerializedName("version")
     public String version;          // 版本
 
@@ -42,7 +46,6 @@ public class NodeGraph {
             return explicitId;
         }
 
-        // Backward compatibility for older graph files that stored graph kind in tags.
         if (tags != null) {
             for (String tag : tags) {
                 String legacyId = GraphType.normalizeId(tag);

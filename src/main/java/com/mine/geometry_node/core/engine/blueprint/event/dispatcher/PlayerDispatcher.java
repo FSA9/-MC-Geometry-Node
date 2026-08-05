@@ -121,22 +121,15 @@ public class PlayerDispatcher {
             }
         });
 
-        bus.addListener((ItemEntityPickupEvent.Pre event) -> {
-            if (!event.getPlayer().level().isClientSide()) {
-                GraphEngine.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnPlayerPickupItemPre.TYPE_ID, GraphEventData.of(
-                        StandardPorts.ENTITY.getId(), event.getPlayer(),
-                        StandardPorts.ITEM_STACK.getId(), event.getItemEntity().getItem()
-                ));
+        dev.architectury.event.events.common.PlayerEvent.PICKUP_ITEM_POST.register((player, itemEntity, pickedStack) -> {
+            if (player.level().isClientSide()) {
+                return;
             }
-        });
-
-        bus.addListener((ItemEntityPickupEvent.Post event) -> {
-            if (!event.getPlayer().level().isClientSide()) {
-                GraphEngine.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnPlayerPickupItemPost.TYPE_ID, GraphEventData.of(
-                        StandardPorts.ENTITY.getId(), event.getPlayer(),
-                        StandardPorts.ITEM_STACK.getId(), event.getItemEntity().getItem()
-                ));
-            }
+            GraphEngine.dispatchEvent((ServerLevel) player.level(), player, OnEntityPickupItem.TYPE_ID, GraphEventData.of(
+                    StandardPorts.ENTITY.getId(), player,
+                    StandardPorts.SOURCE_ENTITY.getId(), itemEntity,
+                    StandardPorts.ITEM_STACK.getId(), pickedStack.copy()
+            ));
         });
 
         bus.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {

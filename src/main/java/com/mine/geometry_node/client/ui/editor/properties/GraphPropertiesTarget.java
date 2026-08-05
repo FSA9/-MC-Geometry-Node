@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.properties;
 
+import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
+
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 
@@ -9,7 +11,8 @@ import java.util.concurrent.CompletionStage;
 public interface GraphPropertiesTarget {
     CompletionStage<GraphPropertiesSnapshot> load();
 
-    CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags);
+    CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags,
+                               QuestDefinition questDefinition);
 
     default String normalizeComment(String comment) {
         return comment != null ? comment : "";

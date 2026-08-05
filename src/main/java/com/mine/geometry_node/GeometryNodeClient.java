@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.dialogue.DialogueStyleRenderer;
 import com.mine.geometry_node.client.key.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.key.KeyBindings;
+import com.mine.geometry_node.client.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
@@ -59,6 +60,11 @@ public class GeometryNodeClient {
         while (KeyBindings.OPEN_EDITOR.consumeClick()) {
             icyllis.modernui.mc.MuiModApi.openScreen(new MainUI());
         }
+        while (KeyBindings.OPEN_QUEST_SCREEN.consumeClick()) {
+            if (Minecraft.getInstance().player != null) {
+                ClientQuestScreenState.requestOpen();
+            }
+        }
 
         ClientVisualManager.tick();
         DialogueStyleRenderer.tick();
@@ -77,6 +83,7 @@ public class GeometryNodeClient {
     }
 
     private void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        ClientQuestScreenState.reset();
         ClientDialogueState.reset();
         RemoteGraphClientState.reset();
         clearClientRenderState();

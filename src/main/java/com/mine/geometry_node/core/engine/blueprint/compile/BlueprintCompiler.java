@@ -6,6 +6,10 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.graph.GraphType;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.node.nodes.events.block.OnMultiblockBuilt;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 
@@ -28,6 +32,15 @@ public final class BlueprintCompiler {
     @SuppressWarnings("unchecked")
     public static RuntimeGraphIndex compile(Reader jsonReader) {
         JsonObject root = JsonParser.parseReader(jsonReader).getAsJsonObject();
+        String graphTypeId = root.has("graph_kind")
+                ? GraphType.normalizeId(root.get("graph_kind").getAsString())
+                : GraphTypeRegistry.BLUEPRINT.id();
+        if (graphTypeId.isEmpty()) {
+            graphTypeId = GraphTypeRegistry.BLUEPRINT.id();
+        }
+        QuestDefinition questDefinition = GraphTypeRegistry.QUEST.id().equals(graphTypeId)
+                ? QuestDefinition.fromJson(root.get("quest"))
+                : QuestDefinition.EMPTY;
         JsonObject rootNodes = root.getAsJsonObject("nodes");
 
         GraphFlattener flattener = new GraphFlattener();
@@ -113,6 +126,17 @@ public final class BlueprintCompiler {
             typeToIntList.put(entry.getKey(), List.copyOf(intList));
         }
 
+        if (GraphTypeRegistry.QUEST.id().equals(graphTypeId)) {
+            for (QuestConditionKind kind : QuestConditionKind.all()) {
+                int count = typeToIntList.getOrDefault(kind.nodeTypeId(), List.of()).size();
+                if (count > 1) {
+                    throw new IllegalStateException(
+                            "Quest graph contains duplicate singleton condition node: kind="
+                                    + kind + ", count=" + count);
+                }
+            }
+        }
+
         Map<String, List<Integer>> receiveLookup = new HashMap<>();
         List<Integer> receiveNodes = typeToIntList.getOrDefault("receive_blueprint", List.of());
         for (int nodeId : receiveNodes) {
@@ -150,6 +174,8 @@ public final class BlueprintCompiler {
         }
 
         return RuntimeGraphIndex.createCompiled(
+                graphTypeId,
+                questDefinition,
                 idToString,
                 stringToId,
                 nodeDataArray,

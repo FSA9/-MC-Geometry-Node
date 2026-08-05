@@ -474,6 +474,7 @@ final class NodeOverlayController {
     private boolean hasDynamicRemoveButton(PortRow row) {
         return isDynamicRow(row)
                 && row.hintParams() != null
+                && !Boolean.FALSE.equals(row.hintParams().get(PortMetaKeys.DYNAMIC_REMOVE_BUTTON))
                 && row.hintParams().get(PortMetaKeys.DYNAMIC_INDEX) instanceof Integer;
     }
 

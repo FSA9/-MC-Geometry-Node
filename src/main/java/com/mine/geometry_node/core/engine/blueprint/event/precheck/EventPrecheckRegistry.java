@@ -24,8 +24,8 @@ public final class EventPrecheckRegistry {
         }
     }
 
-    public static EventPrecheck build(RuntimeGraphIndex index, int nodeId, String eventType) {
-        EventPrecheckContext context = new EventPrecheckContext(index, nodeId, eventType);
+    public static EventPrecheck build(String graphId, RuntimeGraphIndex index, int nodeId, String eventType) {
+        EventPrecheckContext context = new EventPrecheckContext(graphId, index, nodeId, eventType);
         EventPrecheck specPrecheck = EventPrecheckCompiler.compile(context);
 
         EventPrecheckFactory factory = FACTORIES.get(eventType);

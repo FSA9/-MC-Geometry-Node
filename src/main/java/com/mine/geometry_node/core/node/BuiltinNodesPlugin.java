@@ -38,6 +38,7 @@ import com.mine.geometry_node.core.node.nodes.maths.vector.*;
 import com.mine.geometry_node.core.node.nodes.logics.*;
 import com.mine.geometry_node.core.node.nodes.maths.*;
 import com.mine.geometry_node.core.node.nodes.maths.operation.*;
+import com.mine.geometry_node.core.node.nodes.quest.*;
 import com.mine.geometry_node.core.node.nodes.special.RerouteNode;
 
 public class BuiltinNodesPlugin implements GeometryNodePlugin {
@@ -333,6 +334,23 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("dialogue", new OpenShop());
         registry.register("dialogue", new AdjustShopTradeUses());
 
+        // --- QUEST ---
+        registry.register("quest", new AddQuestToList());
+        registry.register("quest", new AcceptQuest());
+        registry.register("quest", new CreateQuestCondition());
+        registry.register("quest", new QuestVisibilityConditions());
+        registry.register("quest", new QuestAcceptConditions());
+        registry.register("quest", new QuestCompletionConditions());
+        registry.register("quest", new SetQuestStatus());
+        registry.register("quest", new GetQuestStatus());
+        registry.register("quest", new GetRegisteredQuestStatus());
+        registry.register("quest", new SetQuestCounter());
+        registry.register("quest", new GetQuestCounter());
+        registry.register("quest", new SubmitQuest());
+        registry.register("quest", new OpenQuestScreen());
+        OnQuestStatusChanged.registerEventPrecheck();
+        registry.register("quest", new OnQuestStatusChanged());
+
         // --- EVENTS ---
 
         // Events/Area
@@ -359,12 +377,15 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/entity", new OnEntityChangeDimension());
         registry.register("events/entity", new OnEntityDealDamage());
         registry.register("events/entity", new OnEntityDeath());
+        registry.register("events/entity", new OnEntityKill());
         registry.register("events/entity", new OnEntityDropItem());
         registry.register("events/entity", new OnEntityGriefBlock());
         registry.register("events/entity", new OnEntityHeal());
         registry.register("events/entity", new OnEntityHurt());
+        registry.register("events/entity", new OnEntityGainItem());
         registry.register("events/entity", new OnEntityJump());
         registry.register("events/entity", new OnEntityMount());
+        registry.register("events/entity", new OnEntityPickupItem());
         registry.register("events/entity", new OnEntityPotionEffectApply());
         registry.register("events/entity", new OnEntityPotionEffectExpire());
         registry.register("events/entity", new OnEntityPotionEffectRemove());
@@ -400,7 +421,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/player", new OnPlayerJoin());
         registry.register("events/player", new OnPlayerLeftClickBlock());
         registry.register("events/player", new OnPlayerLevelChange());
-        registry.register("events/player", new OnPlayerPickupItemPre());
         registry.register("events/player", new OnPlayerPickupXp());
         registry.register("events/player", new OnPlayerQuit());
         registry.register("events/player", new OnPlayerRespawn());
@@ -418,6 +438,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // --- FUNCTIONS ---
         registry.register("functions/graph", new FinishGraph());
+        registry.register("functions/graph", new GraphOwner());
         registry.register("functions/graph", new ReceiveBlueprint());
         registry.register("functions/graph", new TriggerBlueprint());
 

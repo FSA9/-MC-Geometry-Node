@@ -17,6 +17,9 @@ public class GraphProcessSerializer {
     public static CompoundTag save(GraphProcess process, CompoundTag tag, HolderLookup.Provider provider) {
         RuntimeGraphIndex index = process.getIndex();
         tag.putString("GraphId", process.getGraphId());
+        if (process.isDraining()) {
+            tag.putBoolean("Draining", true);
+        }
 
         // 1. 保存变量栈
         ListTag stackTag = new ListTag();
@@ -236,6 +239,7 @@ public class GraphProcessSerializer {
                 process.addBranchJoinForSerialization(join);
             }
         }
+        process.restoreDrainingForSerialization(tag.getBooleanOr("Draining", false));
 
         return process;
     }

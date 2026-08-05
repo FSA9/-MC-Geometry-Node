@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.port;
 
 import com.mine.geometry_node.core.node.value.ColorValue;
 import com.mine.geometry_node.core.node.value.DialogueChoiceValue;
+import com.mine.geometry_node.core.node.value.QuestConditionValue;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
@@ -33,6 +34,7 @@ public enum PortType {
     COLOR("颜色", 0xFFFFD54F, ColorValue.WHITE),
     LIST("列表", 0xFFFF9800, List.of()),
     DIALOGUE_CHOICE("对话选项", 0xFFFF80AB, null),
+    QUEST_CONDITION("任务条件", 0xFFFFA726, null),
     DICT("字典", 0xFFE67E22, java.util.Map.of()),
     SHOP("商店", 0xFFFFB74D, java.util.Map.of("offers", List.of())),
     ANY("任意", 0xFF95A5A6, null);
@@ -180,6 +182,7 @@ public enum PortType {
         if (value instanceof net.minecraft.world.entity.Entity) return ENTITY;
         if (value instanceof net.minecraft.world.item.ItemStack) return ITEM_STACK;
         if (value instanceof DialogueChoiceValue) return DIALOGUE_CHOICE;
+        if (value instanceof QuestConditionValue) return QUEST_CONDITION;
         if (value instanceof java.util.List) return LIST;
         if (value instanceof java.util.Map) return DICT;
         if (value instanceof net.minecraft.world.phys.Vec3) return XYZ;

@@ -12,6 +12,9 @@ import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAtt
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
+import com.mine.geometry_node.core.engine.quest.QuestService;
+import com.mine.geometry_node.core.engine.quest.QuestScreenService;
+import com.mine.geometry_node.core.engine.quest.storage.EntityQuestAttachment;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.schematic.SchematicPlacementDebugSync;
@@ -96,6 +99,27 @@ public class GeometryNode {
                     .copyOnDeath()
                     .build());
 
+    public static final Supplier<AttachmentType<EntityQuestAttachment>> QUEST_DATA_ATTACHMENT =
+            ATTACHMENT_TYPES.register("quest_data", () -> AttachmentType.builder(EntityQuestAttachment::new)
+                    .serialize(new IAttachmentSerializer<EntityQuestAttachment>() {
+                        @Override
+                        public EntityQuestAttachment read(IAttachmentHolder holder, ValueInput input) {
+                            EntityQuestAttachment attachment = new EntityQuestAttachment();
+                            CompoundTag tag = input.read(MapCodec.assumeMapUnsafe(CompoundTag.CODEC)).orElseGet(CompoundTag::new);
+                            attachment.load(tag);
+                            return attachment;
+                        }
+
+                        @Override
+                        public boolean write(EntityQuestAttachment attachment, ValueOutput output) {
+                            CompoundTag tag = attachment.save();
+                            output.store(tag);
+                            return !tag.isEmpty();
+                        }
+                    })
+                    .copyOnDeath()
+                    .build());
+
     public GeometryNode(IEventBus modEventBus, ModContainer modContainer) {
         NeoForge.EVENT_BUS.register(this);
 
@@ -110,11 +134,14 @@ public class GeometryNode {
         GraphRuntimeRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BehaviorTreeRuntime.INSTANCE);
 
-        // 初始化蓝图系统事件引擎！
+        QuestService.INSTANCE.init();
+        QuestScreenService.INSTANCE.init();
+
+        // 初始化蓝图系统事件引擎
         GraphEventHandler.init();
         SchematicPlacementDebugSync.register();
 
-        // 注册蓝图资源管理器 (监听 data/*/graphs/ 目录下的 JSON)
+        // 注册蓝图资源管理器
         ReloadListenerRegistry.register(
                 PackType.SERVER_DATA,
                 GraphResourceManager.getInstance(),
@@ -128,7 +155,7 @@ public class GeometryNode {
 
         ATTACHMENT_TYPES.register(modEventBus);
 
-        // 注册测试指令 (基于 Architectury API)
+        // 注册测试指令
         ModServerCommands.register();
     }
 

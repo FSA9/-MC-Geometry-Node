@@ -24,11 +24,19 @@ public interface ExecutionContext {
     ServerLevel getLevel();
 
     /**
-     * 获取绑定该图的实体（如果有）。
-     * @return 实体对象，如果图是依附于非实体对象（如全局事件）运行，可能为 null。
+     * Returns the entity in the current execution/event context. This may be
+     * an event subject and is therefore not necessarily the graph owner.
      */
     @Nullable
     Entity getEntity();
+
+    /**
+     * Returns the entity that owns the current graph binding. Unlike
+     * {@link #getEntity()}, this is not replaced by an event subject and is
+     * always {@code null} for level/global graph processes.
+     */
+    @Nullable
+    Entity getGraphOwnerEntity();
 
     /**
      * [变量读取] 获取局部变量。

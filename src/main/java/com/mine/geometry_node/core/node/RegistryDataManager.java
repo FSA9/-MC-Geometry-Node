@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
+import com.mine.geometry_node.core.engine.quest.status.QuestStatusRegistry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -172,6 +173,8 @@ public class RegistryDataManager {
             case "minecraft:entity_type" -> getEntityTypes();
             case "minecraft:menu" -> getAllMenus();
             case "geometry_node:port_types" -> getPortTypes();
+            case QuestStatusRegistry.DYNAMIC_REGISTRY_ID -> QuestStatusRegistry.INSTANCE.allIds();
+            case QuestStatusRegistry.ASSIGNABLE_DYNAMIC_REGISTRY_ID -> QuestStatusRegistry.INSTANCE.assignableIds();
             default -> {
                 System.err.println("[RegistryDataManager] 未知的动态注册表 ID: " + registryId);
                 yield List.of();

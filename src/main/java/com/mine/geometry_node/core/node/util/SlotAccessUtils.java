@@ -131,6 +131,20 @@ public final class SlotAccessUtils {
         return remaining;
     }
 
+    public static List<ItemStack> snapshotPrimaryStorage(Entity target) {
+        List<ItemStack> snapshot = new ArrayList<>();
+        if (target == null) {
+            return snapshot;
+        }
+        visitPrimaryStorage(target, access -> {
+            ItemStack stack = access.get();
+            if (stack != null && !stack.isEmpty()) {
+                snapshot.add(stack.copy());
+            }
+        });
+        return snapshot;
+    }
+
     public static List<SlotRef> findMatchingSlots(Entity target, String scope, ItemStack template, String tag, String matchMode, boolean includeEmpty, int limit, ExecutionContext context) {
         List<SlotRef> result = new ArrayList<>();
         if (target == null) {

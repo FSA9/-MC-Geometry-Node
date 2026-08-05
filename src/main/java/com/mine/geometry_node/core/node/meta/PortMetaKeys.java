@@ -11,9 +11,21 @@ public class PortMetaKeys {
     public static final MetaKey<Integer> DYNAMIC_INDEX = new MetaKey<>("dynamic_index");
 
     /**
+     * Controls whether this dynamic row owns the remove button for its index.
+     * Paired rows can share one dynamic index while exposing only one button.
+     */
+    public static final MetaKey<Boolean> DYNAMIC_REMOVE_BUTTON = new MetaKey<>("dynamic_remove_button");
+
+    /**
      * 下拉框控件的可选列表
      */
     public static final MetaKey<String[]> OPTIONS = new MetaKey<>("options");
+
+    /**
+     * Optional translated display labels aligned by index with {@link #OPTIONS}.
+     * The stored value remains the stable option ID from {@code OPTIONS}.
+     */
+    public static final MetaKey<String[]> OPTION_LABELS = new MetaKey<>("option_labels");
 
     /**
      * [UI 指令] 动态注册表 ID (用于按需拉取数据，如 "minecraft:dimension")

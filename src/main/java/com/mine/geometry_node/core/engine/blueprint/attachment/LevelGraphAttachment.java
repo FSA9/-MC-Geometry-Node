@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.blueprint.attachment;
 import com.mine.geometry_node.GeometryNode;
 import com.mojang.serialization.Codec;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
@@ -44,6 +45,7 @@ public class LevelGraphAttachment extends SavedData {
 
     public void addProcess(GraphProcess process) { container.addProcess(process); }
     public void removeProcess(String graphId) { container.removeProcess(graphId); }
+    public void removeProcess(String graphId, GraphCloseMode closeMode) { container.removeProcess(graphId, closeMode); }
     public Collection<GraphProcess> getProcesses() { return container.getProcesses(); }
     public GraphProcess getProcess(String graphId) { return container.getProcess(graphId); }
     public void setAttribute(String key, Object value) { container.setAttribute(key, value); }

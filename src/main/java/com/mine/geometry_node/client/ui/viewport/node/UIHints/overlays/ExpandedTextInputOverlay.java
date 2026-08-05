@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public final class ExpandedTextInputOverlay extends FrameLayout {
     private static final int COLOR_DIM = DialogueHudTheme.OVERLAY_DIM;
@@ -52,21 +53,17 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
 
     private static ExpandedTextInputOverlay sOpenOverlay;
 
-    private final EditorContext editorContext;
-    private final NodeData nodeData;
-    private final String portId;
     private final PortType expectedType;
     private final boolean richTextMode;
+    private final Consumer<Object> commitHandler;
     private final EditText editor;
 
-    private ExpandedTextInputOverlay(Context context, EditorContext editorContext, NodeData nodeData, String portId,
-                                     PortType expectedType, Object value) {
+    private ExpandedTextInputOverlay(Context context, PortType expectedType, Object value,
+                                     Consumer<Object> commitHandler) {
         super(context);
-        this.editorContext = editorContext;
-        this.nodeData = nodeData;
-        this.portId = portId;
         this.expectedType = expectedType;
         this.richTextMode = expectedType == PortType.RICH_TEXT;
+        this.commitHandler = commitHandler;
         UIUtils.syncFixedDensity();
 
         setBackground(rect(COLOR_DIM, 0.0f, 0, 0));
@@ -171,12 +168,37 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         if (editorContext == null || nodeData == null || anchor == null) {
             return;
         }
+        showInternal(context, anchor, expectedType, value, parsedValue -> UIHintValueBinder.commit(
+                editorContext,
+                nodeData,
+                portId,
+                parsedValue instanceof RichTextValue richText ? richText.toMap() : parsedValue));
+    }
+
+    public static void showRichText(Context context, View anchor, RichTextValue value,
+                                    Consumer<RichTextValue> onSave) {
+        if (anchor == null || onSave == null) {
+            return;
+        }
+        showInternal(context, anchor, PortType.RICH_TEXT, value, parsedValue -> {
+            if (parsedValue instanceof RichTextValue richText) {
+                onSave.accept(richText);
+            }
+        });
+    }
+
+    private static void showInternal(Context context, View anchor, PortType expectedType, Object value,
+                                     Consumer<Object> commitHandler) {
         ViewGroup host = findWindowHost(anchor);
         if (host == null) {
             return;
         }
 
-        ExpandedTextInputOverlay overlay = new ExpandedTextInputOverlay(context, editorContext, nodeData, portId, expectedType, value);
+        ExpandedTextInputOverlay overlay = new ExpandedTextInputOverlay(
+                context,
+                expectedType,
+                value,
+                commitHandler);
         closeOpenOverlay();
         host.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sOpenOverlay = overlay;
@@ -210,12 +232,12 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
 
     private void commit() {
         Object parsedValue = richTextMode
-                ? toRichTextValue(editor.getText()).toMap()
+                ? toRichTextValue(editor.getText())
                 : UIHintValueBinder.parseText(editor.getText().toString(), expectedType);
         if (parsedValue == null && UIHintValueBinder.requiresNumericValue(expectedType)) {
             return;
         }
-        UIHintValueBinder.commit(editorContext, nodeData, portId, parsedValue);
+        commitHandler.accept(parsedValue);
         dismiss();
     }
 

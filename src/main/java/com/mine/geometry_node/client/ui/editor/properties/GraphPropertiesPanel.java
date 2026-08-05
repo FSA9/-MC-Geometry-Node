@@ -4,8 +4,11 @@ import com.mine.geometry_node.client.ui.common.TagFlowLayout;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ExpandedTextInputOverlay;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -51,6 +54,13 @@ public final class GraphPropertiesPanel extends FrameLayout {
     private final FrameLayout mTypeSelect;
     private final TextView mTypeValue;
     private final FrameLayout mTypeMenuButton;
+    private final EditText mQuestTitleInput;
+    private final EditText mQuestDescriptionInput;
+    private final QuestConditionOverviewView mQuestConditionOverview;
+    private final QuestObjectivesEditor mQuestObjectivesEditor;
+    private final QuestRewardsEditor mQuestRewardsEditor;
+    private final List<View> mQuestPropertyViews = new ArrayList<>();
+    private final TextView mCommentSectionTitle;
     private final EditText mCommentInput;
     private final TagFlowLayout mTagList;
     private final EditText mTagInput;
@@ -61,6 +71,7 @@ public final class GraphPropertiesPanel extends FrameLayout {
     private GraphPropertiesSnapshot mLoaded;
     private FrameLayout mTypeDropdown;
     private String mSelectedGraphTypeId = "";
+    private QuestDefinition mQuestDefinition = QuestDefinition.EMPTY;
     private int mGeneration;
     private boolean mUpdating;
 
@@ -115,7 +126,99 @@ public final class GraphPropertiesPanel extends FrameLayout {
         mTypeSelect.addView(mTypeMenuButton, typeButtonParams);
         addPropertyRow(tr("geometry_node.graph_properties.type"), mTypeSelect);
 
-        addSectionTitle(tr("geometry_node.graph_properties.comment"), 10);
+        TextView questSectionTitle = addSectionTitle(
+                tr("geometry_node.graph_properties.quest.section"), 10);
+        mQuestPropertyViews.add(questSectionTitle);
+
+        TextView questTitleLabel = label(context,
+                tr("geometry_node.graph_properties.quest.title"), 10.5f, COLOR_LABEL);
+        mContent.addView(questTitleLabel, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                UIUtils.dp2pxInt(20)));
+        mQuestPropertyViews.add(questTitleLabel);
+        LinearLayout questTitleRow = new LinearLayout(context);
+        questTitleRow.setOrientation(LinearLayout.HORIZONTAL);
+        questTitleRow.setGravity(Gravity.CENTER_VERTICAL);
+        mQuestTitleInput = questInput(context, true,
+                tr("geometry_node.graph_properties.quest.title_placeholder"));
+        mQuestTitleInput.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) commitPendingEdits();
+        });
+        questTitleRow.addView(mQuestTitleInput, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                1.0f));
+        TextView editQuestTitle = richTextButton(context);
+        editQuestTitle.setOnClickListener(v -> openQuestTitleEditor(editQuestTitle));
+        LinearLayout.LayoutParams questTitleButtonParams = new LinearLayout.LayoutParams(
+                UIUtils.dp2pxInt(30),
+                ViewGroup.LayoutParams.MATCH_PARENT);
+        questTitleButtonParams.leftMargin = UIUtils.dp2pxInt(6);
+        questTitleRow.addView(editQuestTitle, questTitleButtonParams);
+        mContent.addView(questTitleRow, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                UIUtils.dp2pxInt(30)));
+        mQuestPropertyViews.add(questTitleRow);
+
+        TextView questDescriptionLabel = label(context,
+                tr("geometry_node.graph_properties.quest.description"), 10.5f, COLOR_LABEL);
+        LinearLayout.LayoutParams questDescriptionLabelParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                UIUtils.dp2pxInt(20));
+        questDescriptionLabelParams.topMargin = UIUtils.dp2pxInt(8);
+        mContent.addView(questDescriptionLabel, questDescriptionLabelParams);
+        mQuestPropertyViews.add(questDescriptionLabel);
+        LinearLayout questDescriptionRow = new LinearLayout(context);
+        questDescriptionRow.setOrientation(LinearLayout.HORIZONTAL);
+        questDescriptionRow.setGravity(Gravity.TOP);
+        mQuestDescriptionInput = questInput(context, false,
+                tr("geometry_node.graph_properties.quest.description_placeholder"));
+        mQuestDescriptionInput.setMinLines(3);
+        mQuestDescriptionInput.setGravity(Gravity.LEFT | Gravity.TOP);
+        mQuestDescriptionInput.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) commitPendingEdits();
+        });
+        questDescriptionRow.addView(mQuestDescriptionInput, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                1.0f));
+        TextView editQuestDescription = richTextButton(context);
+        editQuestDescription.setOnClickListener(v -> openQuestDescriptionEditor(editQuestDescription));
+        LinearLayout.LayoutParams questDescriptionButtonParams = new LinearLayout.LayoutParams(
+                UIUtils.dp2pxInt(30),
+                UIUtils.dp2pxInt(30));
+        questDescriptionButtonParams.leftMargin = UIUtils.dp2pxInt(6);
+        questDescriptionRow.addView(editQuestDescription, questDescriptionButtonParams);
+        mContent.addView(questDescriptionRow, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                UIUtils.dp2pxInt(76)));
+        mQuestPropertyViews.add(questDescriptionRow);
+
+        mQuestConditionOverview = new QuestConditionOverviewView(context);
+        LinearLayout.LayoutParams conditionOverviewParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        conditionOverviewParams.topMargin = UIUtils.dp2pxInt(8);
+        mContent.addView(mQuestConditionOverview, conditionOverviewParams);
+        mQuestPropertyViews.add(mQuestConditionOverview);
+
+        mQuestObjectivesEditor = new QuestObjectivesEditor(context, this::commitPendingEdits);
+        LinearLayout.LayoutParams objectiveEditorParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        objectiveEditorParams.topMargin = UIUtils.dp2pxInt(8);
+        mContent.addView(mQuestObjectivesEditor, objectiveEditorParams);
+        mQuestPropertyViews.add(mQuestObjectivesEditor);
+
+        mQuestRewardsEditor = new QuestRewardsEditor(context, this::commitPendingEdits);
+        LinearLayout.LayoutParams rewardEditorParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        rewardEditorParams.topMargin = UIUtils.dp2pxInt(8);
+        mContent.addView(mQuestRewardsEditor, rewardEditorParams);
+        mQuestPropertyViews.add(mQuestRewardsEditor);
+
+        mCommentSectionTitle = addSectionTitle(tr("geometry_node.graph_properties.comment"), 10);
         mCommentInput = new EditText(context);
         mCommentInput.setSingleLine(false);
         mCommentInput.setMinLines(4);
@@ -233,14 +336,22 @@ public final class GraphPropertiesPanel extends FrameLayout {
         String comment = target.normalizeComment(mCommentInput.getText().toString());
         List<String> tags = List.copyOf(mTags);
         String graphTypeId = mSelectedGraphTypeId;
+        QuestDefinition questDefinition = questDefinitionFromInputs();
+        mQuestDefinition = questDefinition;
         if (graphTypeId.equals(previous.graphTypeId())
-                && comment.equals(previous.comment()) && tags.equals(previous.tags())) return;
+                && comment.equals(previous.comment())
+                && tags.equals(previous.tags())
+                && questDefinition.equals(previous.questDefinition())) return;
 
-        GraphPropertiesSnapshot pending = previous.withMetadata(graphTypeId, comment, tags);
+        GraphPropertiesSnapshot pending = previous.withMetadata(
+                graphTypeId,
+                comment,
+                tags,
+                questDefinition);
         int generation = mGeneration;
         mLoaded = pending;
         hideSaveError();
-        target.save(graphTypeId, comment, tags).whenComplete((ignored, error) -> post(() -> {
+        target.save(graphTypeId, comment, tags, questDefinition).whenComplete((ignored, error) -> post(() -> {
             if (error == null) target.onSaveSucceeded(pending);
             if (target != mTarget || generation != mGeneration) return;
             if (error == null) {
@@ -313,10 +424,28 @@ public final class GraphPropertiesPanel extends FrameLayout {
         String pendingComment = mLoaded != null && mCommentInput.hasFocus()
                 ? mCommentInput.getText().toString()
                 : null;
+        String pendingQuestTitle = mLoaded != null && mQuestTitleInput.hasFocus()
+                ? mQuestTitleInput.getText().toString()
+                : null;
+        String pendingQuestDescription = mLoaded != null && mQuestDescriptionInput.hasFocus()
+                ? mQuestDescriptionInput.getText().toString()
+                : null;
         mLoaded = snapshot;
         mFileValue.setText(snapshot.fileName());
         mSelectedGraphTypeId = snapshot.graphTypeId();
         mTypeValue.setText(graphTypeLabel(mSelectedGraphTypeId));
+        QuestDefinition snapshotQuest = snapshot.questDefinition();
+        RichTextValue questTitle = preservePendingText(snapshotQuest.title(), pendingQuestTitle);
+        RichTextValue questDescription = preservePendingText(snapshotQuest.description(), pendingQuestDescription);
+        mQuestDefinition = new QuestDefinition(
+                questTitle, questDescription,
+                snapshotQuest.objectives(), snapshotQuest.rewards());
+        mQuestTitleInput.setText(questTitle.plain());
+        mQuestDescriptionInput.setText(questDescription.plain());
+        mQuestConditionOverview.setOverview(snapshot.conditionOverview());
+        mQuestObjectivesEditor.setObjectives(snapshotQuest.objectives());
+        mQuestRewardsEditor.setRewards(snapshotQuest.rewards());
+        updateQuestSectionVisibility();
         mCommentInput.setText(pendingComment != null ? pendingComment : snapshot.comment());
         mTags.clear();
         mTags.addAll(snapshot.tags());
@@ -332,6 +461,13 @@ public final class GraphPropertiesPanel extends FrameLayout {
         mUpdating = true;
         mTags.clear();
         mSelectedGraphTypeId = "";
+        mQuestDefinition = QuestDefinition.EMPTY;
+        mQuestTitleInput.setText("");
+        mQuestDescriptionInput.setText("");
+        mQuestConditionOverview.setOverview(null);
+        mQuestObjectivesEditor.setObjectives(List.of());
+        mQuestRewardsEditor.setRewards(List.of());
+        updateQuestSectionVisibility();
         rebuildTags();
         mUpdating = false;
         mScroll.setVisibility(View.GONE);
@@ -444,7 +580,11 @@ public final class GraphPropertiesPanel extends FrameLayout {
                 UIUtils.dp2pxInt(28)));
     }
 
-    private void addSectionTitle(String title, int topMarginDp) {
+    private TextView addSectionTitle(String title, int topMarginDp) {
+        return addSectionTitle(mContent, title, topMarginDp);
+    }
+
+    private TextView addSectionTitle(LinearLayout parent, String title, int topMarginDp) {
         TextView sectionLabel = label(getContext(), title, 10.5f, COLOR_LABEL);
         sectionLabel.setBackground(rect(COLOR_SECTION, 0.0f, 0, 0));
         sectionLabel.setPadding(UIUtils.dp2pxInt(6), 0, UIUtils.dp2pxInt(6), 0);
@@ -453,7 +593,8 @@ public final class GraphPropertiesPanel extends FrameLayout {
                 UIUtils.dp2pxInt(24));
         params.topMargin = UIUtils.dp2pxInt(topMarginDp);
         params.bottomMargin = UIUtils.dp2pxInt(5);
-        mContent.addView(sectionLabel, params);
+        parent.addView(sectionLabel, params);
+        return sectionLabel;
     }
 
     private static TextView valueField(Context context) {
@@ -556,7 +697,109 @@ public final class GraphPropertiesPanel extends FrameLayout {
         mSelectedGraphTypeId = graphTypeId;
         mTypeValue.setText(graphTypeLabel(graphTypeId));
         dismissGraphTypeMenu();
+        updateQuestSectionVisibility();
         commitPendingEdits();
+    }
+
+    private void updateQuestSectionVisibility() {
+        boolean questGraph = GraphTypeRegistry.QUEST.id().equals(mSelectedGraphTypeId);
+        int questVisibility = questGraph ? View.VISIBLE : View.GONE;
+        for (View view : mQuestPropertyViews) {
+            view.setVisibility(questVisibility);
+        }
+        mCommentSectionTitle.setVisibility(questGraph ? View.GONE : View.VISIBLE);
+        mCommentInput.setVisibility(questGraph ? View.GONE : View.VISIBLE);
+    }
+
+    private QuestDefinition questDefinitionFromInputs() {
+        return new QuestDefinition(
+                richTextAfterInlineEdit(mQuestDefinition.title(), mQuestTitleInput.getText().toString()),
+                richTextAfterInlineEdit(mQuestDefinition.description(), mQuestDescriptionInput.getText().toString()),
+                mQuestObjectivesEditor.objectives(),
+                mQuestRewardsEditor.rewards());
+    }
+
+    private void openQuestTitleEditor(View anchor) {
+        mQuestDefinition = questDefinitionFromInputs();
+        GraphPropertiesTarget target = mTarget;
+        int generation = mGeneration;
+        ExpandedTextInputOverlay.showRichText(
+                getContext(),
+                anchor,
+                mQuestDefinition.title(),
+                value -> {
+                    if (target != mTarget || generation != mGeneration) return;
+                    mQuestDefinition = new QuestDefinition(
+                            value,
+                            mQuestDefinition.description(),
+                            mQuestDefinition.objectives(),
+                            mQuestDefinition.rewards());
+                    mQuestTitleInput.setText(value.plain());
+                    commitPendingEdits();
+                });
+    }
+
+    private void openQuestDescriptionEditor(View anchor) {
+        mQuestDefinition = questDefinitionFromInputs();
+        GraphPropertiesTarget target = mTarget;
+        int generation = mGeneration;
+        ExpandedTextInputOverlay.showRichText(
+                getContext(),
+                anchor,
+                mQuestDefinition.description(),
+                value -> {
+                    if (target != mTarget || generation != mGeneration) return;
+                    mQuestDefinition = new QuestDefinition(
+                            mQuestDefinition.title(),
+                            value,
+                            mQuestDefinition.objectives(),
+                            mQuestDefinition.rewards());
+                    mQuestDescriptionInput.setText(value.plain());
+                    commitPendingEdits();
+                });
+    }
+
+    private static RichTextValue preservePendingText(RichTextValue value, String pendingText) {
+        if (pendingText == null || pendingText.equals(value.plain())) {
+            return value;
+        }
+        return RichTextValue.plain(pendingText);
+    }
+
+    private static RichTextValue richTextAfterInlineEdit(RichTextValue value, String text) {
+        RichTextValue current = value != null ? value : RichTextValue.EMPTY;
+        String normalizedText = text != null ? text : "";
+        return normalizedText.equals(current.plain()) ? current : RichTextValue.plain(normalizedText);
+    }
+
+    private static EditText questInput(Context context, boolean singleLine, String hint) {
+        EditText input = new EditText(context);
+        input.setSingleLine(singleLine);
+        input.setTextColor(COLOR_TEXT);
+        input.setHintTextColor(COLOR_MUTED);
+        input.setHint(hint);
+        input.setTextSize(0, UIUtils.dp2px(11.0f));
+        input.setPadding(
+                UIUtils.dp2pxInt(8),
+                singleLine ? 0 : UIUtils.dp2pxInt(6),
+                UIUtils.dp2pxInt(8),
+                singleLine ? 0 : UIUtils.dp2pxInt(6));
+        input.setBackground(rect(COLOR_INPUT, 3.0f, 1, COLOR_INPUT_BORDER));
+        return input;
+    }
+
+    private static TextView richTextButton(Context context) {
+        TextView button = label(context, "...", 12.0f, COLOR_TEXT);
+        button.setGravity(Gravity.CENTER);
+        button.setTooltipText(tr("geometry_node.graph_properties.quest.edit_rich_text"));
+        button.setBackground(rect(COLOR_BUTTON, 3.0f, 0, 0));
+        button.setOnHoverListener((v, event) -> {
+            boolean hovered = event.getAction() == MotionEvent.ACTION_HOVER_ENTER
+                    || event.getAction() == MotionEvent.ACTION_HOVER_MOVE;
+            button.setBackground(rect(hovered ? COLOR_BUTTON_HOVER : COLOR_BUTTON, 3.0f, 0, 0));
+            return false;
+        });
+        return button;
     }
 
     private static String graphTypeLabel(String graphTypeId) {

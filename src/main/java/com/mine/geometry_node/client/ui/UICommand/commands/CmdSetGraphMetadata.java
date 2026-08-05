@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.UICommand.commands;
 
 import com.mine.geometry_node.client.ui.UICommand.ICommand;
 import com.mine.geometry_node.client.ui.viewport.GraphController;
+import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.node.NodeGraph;
 
 import java.util.ArrayList;
@@ -17,36 +18,43 @@ public final class CmdSetGraphMetadata implements ICommand {
     private final String mOldGraphTypeId;
     private final String mOldComment;
     private final List<String> mOldTags;
+    private final QuestDefinition mOldQuestDefinition;
     private final String mNewComment;
     private final String mNewGraphTypeId;
     private final List<String> mNewTags;
+    private final QuestDefinition mNewQuestDefinition;
 
-    public CmdSetGraphMetadata(GraphController controller, String newGraphTypeId, String newComment, List<String> newTags) {
+    public CmdSetGraphMetadata(GraphController controller, String newGraphTypeId, String newComment,
+                               List<String> newTags, QuestDefinition newQuestDefinition) {
         mController = controller;
         NodeGraph graph = controller != null ? controller.getContext().getGraph() : null;
         mOldComment = normalizeComment(graph != null ? graph.comment : null);
         mOldGraphTypeId = graph != null ? graph.getGraphTypeId() : "";
         mOldTags = normalizeTags(graph != null ? graph.tags : null);
+        mOldQuestDefinition = graph != null && graph.quest != null ? graph.quest : QuestDefinition.EMPTY;
         mNewComment = normalizeComment(newComment);
         mNewGraphTypeId = newGraphTypeId != null ? newGraphTypeId.trim() : "";
         mNewTags = normalizeTags(newTags);
+        mNewQuestDefinition = newQuestDefinition != null ? newQuestDefinition : QuestDefinition.EMPTY;
     }
 
     @Override
     public boolean canExecute() {
         return mController != null
                 && (!Objects.equals(mOldGraphTypeId, mNewGraphTypeId)
-                || !Objects.equals(mOldComment, mNewComment) || !Objects.equals(mOldTags, mNewTags));
+                || !Objects.equals(mOldComment, mNewComment)
+                || !Objects.equals(mOldTags, mNewTags)
+                || !Objects.equals(mOldQuestDefinition, mNewQuestDefinition));
     }
 
     @Override
     public void execute() {
-        mController.setGraphMetadata(mNewGraphTypeId, mNewComment, mNewTags);
+        mController.setGraphMetadata(mNewGraphTypeId, mNewComment, mNewTags, mNewQuestDefinition);
     }
 
     @Override
     public void undo() {
-        mController.setGraphMetadata(mOldGraphTypeId, mOldComment, mOldTags);
+        mController.setGraphMetadata(mOldGraphTypeId, mOldComment, mOldTags, mOldQuestDefinition);
     }
 
     private static String normalizeComment(String comment) {

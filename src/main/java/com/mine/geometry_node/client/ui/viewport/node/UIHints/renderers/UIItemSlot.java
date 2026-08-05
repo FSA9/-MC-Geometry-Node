@@ -40,6 +40,11 @@ public class UIItemSlot extends FrameLayout {
     private volatile float mViewportScale = 1.0f;
     private int mLastSurfaceWidth = -1;
     private int mLastSurfaceHeight = -1;
+    private Runnable mDisplayClickAction;
+
+    public UIItemSlot(Context context) {
+        this(context, null, "", null);
+    }
 
     public UIItemSlot(Context context, NodeData nodeData, String portId, EditorContext editorContext) {
         super(context);
@@ -104,6 +109,19 @@ public class UIItemSlot extends FrameLayout {
         }
     }
 
+    public void setDisplayStack(ItemStack stack) {
+        ItemStack previousStack = mCachedStack;
+        mCachedStack = stack != null ? stack.copy() : ItemStack.EMPTY;
+        mLastJson = null;
+        ItemTooltipProxy.clearTooltipTask(previousStack);
+        if (mSurfaceView != null) mSurfaceView.invalidate();
+        invalidate();
+    }
+
+    public void setDisplayClickAction(Runnable action) {
+        mDisplayClickAction = action;
+    }
+
     private void updateSurfaceBounds() {
         if (mSurfaceView == null || getWidth() <= 0 || getHeight() <= 0) return;
 
@@ -135,6 +153,7 @@ public class UIItemSlot extends FrameLayout {
     }
 
     private void updateCache() {
+        if (mNodeData == null) return;
         Object rawVal = mNodeData.inputs.get(mPortId);
         String json = rawVal instanceof String ? (String) rawVal : "";
         if (!json.equals(mLastJson)) {
@@ -242,6 +261,10 @@ public class UIItemSlot extends FrameLayout {
     public boolean onTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_UP) {
+            if (mDisplayClickAction != null) {
+                mDisplayClickAction.run();
+                return true;
+            }
             openPicker();
             return true;
         }
@@ -249,6 +272,7 @@ public class UIItemSlot extends FrameLayout {
     }
 
     private void openPicker() {
+        if (mNodeData == null || mEditorContext == null) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
@@ -256,7 +280,7 @@ public class UIItemSlot extends FrameLayout {
         ItemStackTooltipOverlay.hide();
 
         VanillaInventoryPicker.openItem(pickedStack -> {
-            if (mEditorContext == null || mc.level == null) {
+            if (mc.level == null) {
                 return;
             }
             String newJson = ItemCodecUtils.toJson(pickedStack, mc.level.registryAccess());

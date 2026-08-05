@@ -22,6 +22,13 @@ public class KeyBindings {
             MAIN_CATEGORY
     );
 
+    public static final KeyMapping OPEN_QUEST_SCREEN = new KeyMapping(
+            "key.geometry_node.open_quest_screen",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_L,
+            MAIN_CATEGORY
+    );
+
     // 统一定义技能按键的数量
     public static final int SKILL_COUNT = 10;
 
@@ -40,6 +47,7 @@ public class KeyBindings {
 
     public static void register(RegisterKeyMappingsEvent event) {
         event.register(OPEN_EDITOR);
+        event.register(OPEN_QUEST_SCREEN);
         for (KeyMapping key : BLUEPRINT_KEYS) {
             event.register(key);
         }

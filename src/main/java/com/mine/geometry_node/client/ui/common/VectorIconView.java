@@ -12,6 +12,7 @@ public class VectorIconView extends View {
         FOLDER,
         FILE,
         CLOUD,
+        CHEVRON_UP,
         CHEVRON_DOWN,
         SPLIT_HORIZONTAL,
         SPLIT_VERTICAL,
@@ -67,6 +68,7 @@ public class VectorIconView extends View {
             case FOLDER -> drawFolder(canvas, cx, cy, half);
             case FILE -> drawFile(canvas, cx, cy, half);
             case CLOUD -> drawCloud(canvas, cx, cy, half);
+            case CHEVRON_UP -> drawChevronUp(canvas, cx, cy, half);
             case CHEVRON_DOWN -> drawChevronDown(canvas, cx, cy, half);
             case SPLIT_HORIZONTAL -> drawSplitHorizontal(canvas, cx, cy, half);
             case SPLIT_VERTICAL -> drawSplitVertical(canvas, cx, cy, half);
@@ -138,6 +140,16 @@ public class VectorIconView extends View {
         float inset = half * 0.62f;
         canvas.drawLine(cx - inset, cy - half * 0.22f, cx, cy + half * 0.36f, mPaint);
         canvas.drawLine(cx, cy + half * 0.36f, cx + inset, cy - half * 0.22f, mPaint);
+        mPaint.setStrokeCap(Paint.Cap.BUTT);
+    }
+
+    private void drawChevronUp(Canvas canvas, float cx, float cy, float half) {
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(Math.max(1.0f, half * 0.18f));
+        mPaint.setStrokeCap(Paint.Cap.ROUND);
+        float inset = half * 0.62f;
+        canvas.drawLine(cx - inset, cy + half * 0.22f, cx, cy - half * 0.36f, mPaint);
+        canvas.drawLine(cx, cy - half * 0.36f, cx + inset, cy + half * 0.22f, mPaint);
         mPaint.setStrokeCap(Paint.Cap.BUTT);
     }
 

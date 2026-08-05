@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.attachment;
 
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -37,6 +38,9 @@ public class EntityGraphAttachment {
 
     public void attachOwner(Entity entity) {
         this.ownerRef = new WeakReference<>(entity);
+        for (GraphProcess process : container.getProcesses()) {
+            process.setGraphOwner(entity);
+        }
     }
 
     private void onScheduleChanged() {
@@ -53,8 +57,12 @@ public class EntityGraphAttachment {
     }
 
     public void unbindGraph(String graphId) {
+        unbindGraph(graphId, GraphCloseMode.IMMEDIATE);
+    }
+
+    public void unbindGraph(String graphId, GraphCloseMode closeMode) {
         this.boundGraphs.remove(graphId);
-        this.container.removeProcess(graphId); // 同步卸载进程
+        this.container.removeProcess(graphId, closeMode);
     }
 
     public Set<String> getBoundGraphs() {
@@ -68,11 +76,22 @@ public class EntityGraphAttachment {
 
     // --- API 委托层 ---
 
-    public void addProcess(GraphProcess process) { container.addProcess(process); }
+    public void addProcess(GraphProcess process) {
+        Entity owner = ownerRef.get();
+        process.setGraphOwner(owner);
+        container.addProcess(process);
+    }
     public void removeProcess(String graphId) { container.removeProcess(graphId); }
+    public void removeProcess(String graphId, GraphCloseMode closeMode) { container.removeProcess(graphId, closeMode); }
     public Collection<GraphProcess> getProcesses() { return container.getProcesses(); }
     public long getNextScheduledTick() { return container.getNextScheduledTick(); }
-    public GraphProcess getProcess(String graphId) { return container.getProcess(graphId); }
+    public GraphProcess getProcess(String graphId) {
+        GraphProcess process = container.getProcess(graphId);
+        if (process != null) {
+            process.setGraphOwner(ownerRef.get());
+        }
+        return process;
+    }
     public void setAttribute(String key, Object value) { container.setAttribute(key, value); }
     public Object getAttribute(String key) { return container.getAttribute(key); }
 
