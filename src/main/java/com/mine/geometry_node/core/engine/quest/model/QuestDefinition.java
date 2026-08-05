@@ -84,6 +84,33 @@ public record QuestDefinition(
         return RichTextValue.from(GSON.fromJson(element, Object.class));
     }
 
+    static String readString(JsonObject root, String key, String fallback) {
+        JsonElement value = root.get(key);
+        try {
+            return value != null && value.isJsonPrimitive() ? value.getAsString() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    static boolean readBoolean(JsonObject root, String key, boolean fallback) {
+        JsonElement value = root.get(key);
+        try {
+            return value != null && value.isJsonPrimitive() ? value.getAsBoolean() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    static double readDouble(JsonObject root, String key, double fallback) {
+        JsonElement value = root.get(key);
+        try {
+            return value != null && value.isJsonPrimitive() ? value.getAsDouble() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
     private static List<QuestObjectiveDefinition> readObjectives(@Nullable JsonElement element) {
         if (element == null || !element.isJsonArray()) return List.of();
         List<QuestObjectiveDefinition> result = new ArrayList<>();

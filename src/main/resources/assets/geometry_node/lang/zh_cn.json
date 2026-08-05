@@ -985,6 +985,8 @@
   "geometry_node.graph_properties.quest.reward_amount": "数量",
   "geometry_node.node.set_quest_counter": "设置任务计数器",
   "geometry_node.node.get_quest_counter": "获取任务计数器",
+  "geometry_node.node.get_quest_counter.comment.summary": "读取当前任务实例中指定 KEY 的计数器值。",
+  "geometry_node.node.get_quest_counter.comment.initializes_missing": "如果 KEY 尚不存在，本节点会持久化创建该计数器并初始化为 0；它不是纯读取节点。",
   "geometry_node.quest.status.unaccepted": "未接受",
   "geometry_node.quest.status.in_progress": "进行中",
   "geometry_node.quest.status.completed": "已完成",

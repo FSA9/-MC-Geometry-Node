@@ -25,9 +25,6 @@ public final class QuestStatusRegistry {
             "abandoned", "geometry_node.quest.status.abandoned", true, false, true, true, 0xFFF0A14A);
     public static final QuestStatus MISSED = new QuestStatus(
             "missed", "geometry_node.quest.status.missed", true, false, false, true, 0xFF9B7EDB);
-    public static final QuestStatus ALL = new QuestStatus(
-            "all", "geometry_node.quest.status.all", false, false, false, false, 0xFFE6E6E6);
-
     public static final QuestStatusRegistry INSTANCE = new QuestStatusRegistry();
 
     private final Map<String, QuestStatus> statuses = new LinkedHashMap<>();
@@ -39,7 +36,6 @@ public final class QuestStatusRegistry {
         register(FAILED);
         register(ABANDONED);
         register(MISSED);
-        register(ALL);
     }
 
     public synchronized void register(QuestStatus status) {

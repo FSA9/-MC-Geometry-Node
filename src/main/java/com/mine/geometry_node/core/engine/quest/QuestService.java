@@ -10,10 +10,10 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionResult;
+import com.mine.geometry_node.core.engine.quest.model.QuestCounterKey;
 import com.mine.geometry_node.core.engine.quest.model.QuestInstance;
 import com.mine.geometry_node.core.engine.quest.model.QuestListEntry;
 import com.mine.geometry_node.core.engine.quest.model.QuestOperationResult;
-import com.mine.geometry_node.core.engine.quest.model.QuestObjectiveDefinition;
 import com.mine.geometry_node.core.engine.quest.status.QuestStatus;
 import com.mine.geometry_node.core.engine.quest.status.QuestStatusRegistry;
 import com.mine.geometry_node.core.engine.quest.storage.EntityQuestAttachment;
@@ -316,7 +316,7 @@ public final class QuestService {
         }
 
         String normalizedKey = normalizeTaskKey(taskKey);
-        String normalizedCounterKey = QuestObjectiveDefinition.normalizeKey(counterKey);
+        String normalizedCounterKey = QuestCounterKey.normalize(counterKey);
         if (normalizedCounterKey.isEmpty()) {
             return QuestOperationResult.of(QuestOperationResult.Code.INVALID_COUNTER_KEY);
         }
@@ -334,11 +334,15 @@ public final class QuestService {
         return QuestOperationResult.of(QuestOperationResult.Code.SUCCESS, updated);
     }
 
-    public double getCounter(Entity owner, String taskKey, String counterKey) {
+    /**
+     * Returns the current value and persists a zero-valued counter when the key
+     * does not exist yet. This is intentionally not a pure read operation.
+     */
+    public double getOrCreateCounter(Entity owner, String taskKey, String counterKey) {
         if (!isServerOwner(owner)) return 0.0;
 
         String normalizedTaskKey = normalizeTaskKey(taskKey);
-        String normalizedCounterKey = QuestObjectiveDefinition.normalizeKey(counterKey);
+        String normalizedCounterKey = QuestCounterKey.normalize(counterKey);
         if (normalizedTaskKey.isEmpty() || normalizedCounterKey.isEmpty()) return 0.0;
 
         EntityQuestAttachment attachment = EntityQuestAttachment.get(owner);

@@ -5,8 +5,7 @@ import com.mine.geometry_node.client.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.engine.quest.status.QuestStatusRegistry;
-import com.mine.geometry_node.core.engine.quest.model.QuestObjectiveDefinition;
+import com.mine.geometry_node.core.engine.quest.model.QuestHintType;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.fragment.Fragment;
@@ -38,7 +37,9 @@ public final class QuestScreenFragment extends Fragment {
     private static final int WINDOW_WIDTH_DP = 696;
     private static final int WINDOW_HEIGHT_DP = 420;
     private static final int LIST_WIDTH_DP = 238;
-    private static final String ALL_STATUS_ID = QuestStatusRegistry.ALL.id();
+    private static final String ALL_STATUS_ID = "all";
+    private static final String ALL_STATUS_TRANSLATION_KEY = "geometry_node.quest.status.all";
+    private static final int ALL_STATUS_COLOR = 0xFFE6E6E6;
 
     private FrameLayout root;
     private LinearLayout window;
@@ -160,7 +161,10 @@ public final class QuestScreenFragment extends Fragment {
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(0, dp(7), 0, 0);
 
-        for (PacketQuestScreenSnapshot.StatusView status : snapshot.statuses()) {
+        List<PacketQuestScreenSnapshot.StatusView> statusTabs = new ArrayList<>(snapshot.statuses());
+        statusTabs.add(new PacketQuestScreenSnapshot.StatusView(
+                ALL_STATUS_ID, ALL_STATUS_TRANSLATION_KEY, ALL_STATUS_COLOR, false));
+        for (PacketQuestScreenSnapshot.StatusView status : statusTabs) {
             boolean selected = status.id().equals(selectedStatusId);
             int baseColor = selected
                     ? DialogueHudTheme.SURFACE_HOVER
@@ -338,8 +342,8 @@ public final class QuestScreenFragment extends Fragment {
         LinearLayout contentRow = new LinearLayout(getContext());
         contentRow.setOrientation(LinearLayout.HORIZONTAL);
         contentRow.setGravity(Gravity.CENTER_VERTICAL);
-        QuestObjectiveDefinition.HintType hintType = QuestObjectiveDefinition.HintType.fromId(objective.hintType());
-        if (hintType != QuestObjectiveDefinition.HintType.NONE) {
+        QuestHintType hintType = QuestHintType.fromId(objective.hintType());
+        if (hintType != QuestHintType.NONE) {
             QuestHintView hint = new QuestHintView(getContext());
             hint.setHint(hintType, objective.hintValue());
             LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(dp(34), dp(34));
@@ -386,8 +390,8 @@ public final class QuestScreenFragment extends Fragment {
                 DialogueHudTheme.withAlpha(DialogueHudTheme.SURFACE, 0xA8),
                 2.0f, 1, DialogueHudTheme.DIVIDER));
 
-        QuestObjectiveDefinition.HintType hintType = QuestObjectiveDefinition.HintType.fromId(reward.hintType());
-        if (hintType != QuestObjectiveDefinition.HintType.NONE) {
+        QuestHintType hintType = QuestHintType.fromId(reward.hintType());
+        if (hintType != QuestHintType.NONE) {
             QuestHintView hint = new QuestHintView(getContext());
             hint.setHint(hintType, reward.hintValue());
             LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(dp(34), dp(34));
@@ -473,7 +477,7 @@ public final class QuestScreenFragment extends Fragment {
     }
 
     private void normalizeSelection(PacketQuestScreenSnapshot snapshot) {
-        if (findStatus(snapshot, selectedStatusId) == null) {
+        if (!ALL_STATUS_ID.equals(selectedStatusId) && findStatus(snapshot, selectedStatusId) == null) {
             selectedStatusId = firstPopulatedStatus(snapshot);
         }
 
@@ -494,7 +498,7 @@ public final class QuestScreenFragment extends Fragment {
         for (PacketQuestScreenSnapshot.StatusView status : snapshot.statuses()) {
             if (countForStatus(snapshot, status.id()) > 0) return status.id();
         }
-        return snapshot.statuses().isEmpty() ? "" : snapshot.statuses().get(0).id();
+        return snapshot.statuses().isEmpty() ? ALL_STATUS_ID : snapshot.statuses().get(0).id();
     }
 
     private static List<PacketQuestScreenSnapshot.QuestView> questsForStatus(

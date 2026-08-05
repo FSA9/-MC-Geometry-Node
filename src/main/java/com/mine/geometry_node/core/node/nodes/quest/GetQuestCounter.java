@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.quest;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.quest.QuestService;
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -17,6 +18,10 @@ public final class GetQuestCounter extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_quest_counter"))
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .text("initializes_missing")
+                        .build())
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.PATH.toInput(""), null, UIHint.PATH, null, null))
                 .addRow(new PortRow(StandardPorts.KEY.toInput(""), StandardPorts.VALUE.toOutput(), UIHint.INPUT, null, null))
@@ -33,6 +38,6 @@ public final class GetQuestCounter extends BaseNode {
                 context,
                 getInput(context, StandardPorts.PATH.getId(), String.class));
         String counterKey = getInput(context, StandardPorts.KEY.getId(), String.class);
-        return (float) QuestService.INSTANCE.getCounter(owner, questPath, counterKey);
+        return (float) QuestService.INSTANCE.getOrCreateCounter(owner, questPath, counterKey);
     }
 }

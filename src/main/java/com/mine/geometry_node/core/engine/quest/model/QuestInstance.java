@@ -43,12 +43,12 @@ public record QuestInstance(UUID instanceId,
     }
 
     public double counter(String key) {
-        String normalizedKey = QuestObjectiveDefinition.normalizeKey(key);
+        String normalizedKey = QuestCounterKey.normalize(key);
         return normalizedKey.isEmpty() ? 0.0 : counters.getOrDefault(normalizedKey, 0.0);
     }
 
     public QuestInstance withCounter(String key, double value, long changedAt) {
-        String normalizedKey = QuestObjectiveDefinition.normalizeKey(key);
+        String normalizedKey = QuestCounterKey.normalize(key);
         if (normalizedKey.isEmpty() || !Double.isFinite(value)) return this;
         double normalizedValue = Math.max(0.0, value);
         Double previousValue = counters.get(normalizedKey);
@@ -103,7 +103,7 @@ public record QuestInstance(UUID instanceId,
         if (source == null || source.isEmpty()) return Map.of();
         Map<String, Double> normalized = new LinkedHashMap<>();
         source.forEach((key, value) -> {
-            String normalizedKey = QuestObjectiveDefinition.normalizeKey(key);
+            String normalizedKey = QuestCounterKey.normalize(key);
             if (!normalizedKey.isEmpty() && value != null && Double.isFinite(value)) {
                 normalized.put(normalizedKey, Math.max(0.0, value));
             }

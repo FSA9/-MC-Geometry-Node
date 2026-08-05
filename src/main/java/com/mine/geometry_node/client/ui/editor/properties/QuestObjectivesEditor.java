@@ -6,6 +6,8 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaInventoryPicker;
 import com.mine.geometry_node.core.engine.quest.model.QuestObjectiveDefinition;
+import com.mine.geometry_node.core.engine.quest.model.QuestCounterKey;
+import com.mine.geometry_node.core.engine.quest.model.QuestHintType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
@@ -121,7 +123,7 @@ final class QuestObjectivesEditor extends LinearLayout {
         private RichTextValue content;
         private boolean quantityEnabled;
         private boolean counterEnabled;
-        private QuestObjectiveDefinition.HintType hintType;
+        private QuestHintType hintType;
         private String itemHintValue;
 
         private final LinearLayout root;
@@ -230,9 +232,9 @@ final class QuestObjectivesEditor extends LinearLayout {
             hintRow.setGravity(Gravity.CENTER_VERTICAL);
             hintToggle = button("", tr("geometry_node.graph_properties.quest.hint_enabled"));
             hintToggle.setOnClickListener(v -> {
-                hintType = hintType == QuestObjectiveDefinition.HintType.NONE
-                        ? QuestObjectiveDefinition.HintType.ITEM_STACK
-                        : QuestObjectiveDefinition.HintType.NONE;
+                hintType = hintType == QuestHintType.NONE
+                        ? QuestHintType.ITEM_STACK
+                        : QuestHintType.NONE;
                 updateHintUi();
                 changed();
             });
@@ -258,11 +260,11 @@ final class QuestObjectivesEditor extends LinearLayout {
                     entryId,
                     updatedContent,
                     counterEnabled,
-                    QuestObjectiveDefinition.normalizeKey(counterKeyInput.getText().toString()),
+                    QuestCounterKey.normalize(counterKeyInput.getText().toString()),
                     quantityEnabled,
                     parseDouble(targetInput.getText().toString(), 1.0),
                     hintType,
-                    hintType == QuestObjectiveDefinition.HintType.NONE ? "" : itemHintValue);
+                    hintType == QuestHintType.NONE ? "" : itemHintValue);
         }
 
         private void openRichEditor(View anchor) {
@@ -280,7 +282,7 @@ final class QuestObjectivesEditor extends LinearLayout {
             VanillaInventoryPicker.openItem(stack -> {
                 Minecraft minecraft = Minecraft.getInstance();
                 if (minecraft.level == null) return;
-                hintType = QuestObjectiveDefinition.HintType.ITEM_STACK;
+                hintType = QuestHintType.ITEM_STACK;
                 itemHintValue = ItemCodecUtils.toJson(stack, minecraft.level.registryAccess());
                 updateHintPreview();
                 changed();
@@ -300,7 +302,7 @@ final class QuestObjectivesEditor extends LinearLayout {
         }
 
         private void updateHintUi() {
-            boolean hasHint = hintType != QuestObjectiveDefinition.HintType.NONE;
+            boolean hasHint = hintType != QuestHintType.NONE;
             hintToggle.setText(tr("geometry_node.graph_properties.quest.hint_label"));
             styleButton(hintToggle, hasHint ? COLOR_ACTIVE : COLOR_BUTTON);
             hintPreview.setVisibility(hasHint ? View.VISIBLE : View.GONE);
