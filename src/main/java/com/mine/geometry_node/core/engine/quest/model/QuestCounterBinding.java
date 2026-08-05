@@ -2,11 +2,13 @@ package com.mine.geometry_node.core.engine.quest.model;
 
 import com.google.gson.JsonObject;
 
+import java.util.Objects;
+
 public record QuestCounterBinding(boolean enabled, String key) {
     public static final QuestCounterBinding NONE = new QuestCounterBinding(false, "");
 
     public QuestCounterBinding {
-        key = enabled ? QuestCounterKey.normalize(key) : "";
+        key = enabled ? Objects.requireNonNullElse(key, "") : "";
     }
 
     public void writeTo(JsonObject root) {

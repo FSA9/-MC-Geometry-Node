@@ -127,7 +127,6 @@ public final class BlueprintCompiler {
         }
 
         if (GraphTypeRegistry.QUEST.id().equals(graphTypeId)) {
-            validateQuestCounterBindings(questDefinition);
             for (QuestConditionKind kind : QuestConditionKind.all()) {
                 int count = typeToIntList.getOrDefault(kind.nodeTypeId(), List.of()).size();
                 if (count > 1) {
@@ -191,21 +190,6 @@ public final class BlueprintCompiler {
                 keyDict,
                 dictReverse
         );
-    }
-
-    private static void validateQuestCounterBindings(QuestDefinition definition) {
-        for (var objective : definition.objectives()) {
-            if (objective.counterEnabled() && objective.counterKey().isEmpty()) {
-                throw new IllegalStateException(
-                        "Quest objective has an invalid counter key: entryId=" + objective.entryId());
-            }
-        }
-        for (var reward : definition.rewards()) {
-            if (reward.counterEnabled() && reward.counterKey().isEmpty()) {
-                throw new IllegalStateException(
-                        "Quest reward has an invalid counter key: entryId=" + reward.entryId());
-            }
-        }
     }
 
     static Map<String, Object> parseValueMap(JsonObject obj) {

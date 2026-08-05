@@ -6,7 +6,6 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaInventoryPicker;
 import com.mine.geometry_node.core.engine.quest.model.QuestObjectiveDefinition;
-import com.mine.geometry_node.core.engine.quest.model.QuestCounterKey;
 import com.mine.geometry_node.core.engine.quest.model.QuestHintType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
@@ -260,7 +259,7 @@ final class QuestObjectivesEditor extends LinearLayout {
                     entryId,
                     updatedContent,
                     counterEnabled,
-                    QuestCounterKey.normalize(counterKeyInput.getText().toString()),
+                    counterKeyInput.getText().toString(),
                     quantityEnabled,
                     parseDouble(targetInput.getText().toString(), 1.0),
                     hintType,

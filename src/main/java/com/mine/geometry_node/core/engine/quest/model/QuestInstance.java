@@ -43,18 +43,18 @@ public record QuestInstance(UUID instanceId,
     }
 
     public double counter(String key) {
-        String normalizedKey = QuestCounterKey.normalize(key);
-        return normalizedKey.isEmpty() ? 0.0 : counters.getOrDefault(normalizedKey, 0.0);
+        String resolvedKey = Objects.requireNonNullElse(key, "");
+        return resolvedKey.isEmpty() ? 0.0 : counters.getOrDefault(resolvedKey, 0.0);
     }
 
     public QuestInstance withCounter(String key, double value, long changedAt) {
-        String normalizedKey = QuestCounterKey.normalize(key);
-        if (normalizedKey.isEmpty() || !Double.isFinite(value)) return this;
+        String resolvedKey = Objects.requireNonNullElse(key, "");
+        if (resolvedKey.isEmpty() || !Double.isFinite(value)) return this;
         double normalizedValue = Math.max(0.0, value);
-        Double previousValue = counters.get(normalizedKey);
+        Double previousValue = counters.get(resolvedKey);
         if (previousValue != null && Double.compare(previousValue, normalizedValue) == 0) return this;
         Map<String, Double> updatedCounters = new LinkedHashMap<>(counters);
-        updatedCounters.put(normalizedKey, normalizedValue);
+        updatedCounters.put(resolvedKey, normalizedValue);
         return new QuestInstance(
                 instanceId, taskKey, statusId, acceptedAt, changedAt, terminalAt, updatedCounters);
     }
@@ -103,9 +103,9 @@ public record QuestInstance(UUID instanceId,
         if (source == null || source.isEmpty()) return Map.of();
         Map<String, Double> normalized = new LinkedHashMap<>();
         source.forEach((key, value) -> {
-            String normalizedKey = QuestCounterKey.normalize(key);
-            if (!normalizedKey.isEmpty() && value != null && Double.isFinite(value)) {
-                normalized.put(normalizedKey, Math.max(0.0, value));
+            String resolvedKey = Objects.requireNonNullElse(key, "");
+            if (!resolvedKey.isEmpty() && value != null && Double.isFinite(value)) {
+                normalized.put(resolvedKey, Math.max(0.0, value));
             }
         });
         return Map.copyOf(normalized);

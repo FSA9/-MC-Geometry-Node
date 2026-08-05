@@ -10,7 +10,6 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionResult;
-import com.mine.geometry_node.core.engine.quest.model.QuestCounterKey;
 import com.mine.geometry_node.core.engine.quest.model.QuestInstance;
 import com.mine.geometry_node.core.engine.quest.model.QuestListEntry;
 import com.mine.geometry_node.core.engine.quest.model.QuestOperationResult;
@@ -316,8 +315,8 @@ public final class QuestService {
         }
 
         String normalizedKey = normalizeTaskKey(taskKey);
-        String normalizedCounterKey = QuestCounterKey.normalize(counterKey);
-        if (normalizedCounterKey.isEmpty()) {
+        String resolvedCounterKey = counterKey != null ? counterKey : "";
+        if (resolvedCounterKey.isEmpty()) {
             return QuestOperationResult.of(QuestOperationResult.Code.INVALID_COUNTER_KEY);
         }
 
@@ -326,7 +325,7 @@ public final class QuestService {
         if (existing == null) {
             return QuestOperationResult.of(QuestOperationResult.Code.INSTANCE_NOT_FOUND);
         }
-        QuestInstance updated = existing.withCounter(normalizedCounterKey, value, currentTime(owner));
+        QuestInstance updated = existing.withCounter(resolvedCounterKey, value, currentTime(owner));
         if (updated == existing) {
             return QuestOperationResult.of(QuestOperationResult.Code.NO_CHANGE, existing);
         }
@@ -342,21 +341,21 @@ public final class QuestService {
         if (!isServerOwner(owner)) return 0.0;
 
         String normalizedTaskKey = normalizeTaskKey(taskKey);
-        String normalizedCounterKey = QuestCounterKey.normalize(counterKey);
-        if (normalizedTaskKey.isEmpty() || normalizedCounterKey.isEmpty()) return 0.0;
+        String resolvedCounterKey = counterKey != null ? counterKey : "";
+        if (normalizedTaskKey.isEmpty() || resolvedCounterKey.isEmpty()) return 0.0;
 
         EntityQuestAttachment attachment = EntityQuestAttachment.get(owner);
         QuestInstance instance = attachment.getCurrentInstance(normalizedTaskKey);
         if (instance == null) return 0.0;
-        if (instance.counters().containsKey(normalizedCounterKey)) {
-            return instance.counter(normalizedCounterKey);
+        if (instance.counters().containsKey(resolvedCounterKey)) {
+            return instance.counter(resolvedCounterKey);
         }
 
         QuestOperationResult initialization = setCounter(
-                owner, normalizedTaskKey, normalizedCounterKey, 0.0);
+                owner, normalizedTaskKey, resolvedCounterKey, 0.0);
         QuestInstance initialized = initialization.instance();
         return initialization.successful() && initialized != null
-                ? initialized.counter(normalizedCounterKey)
+                ? initialized.counter(resolvedCounterKey)
                 : 0.0;
     }
 
