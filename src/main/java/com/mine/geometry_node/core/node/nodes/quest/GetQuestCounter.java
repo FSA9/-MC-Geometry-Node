@@ -17,7 +17,7 @@ public final class GetQuestCounter extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_quest_counter"))
+        return NodeDef.builder(TYPE_ID, NodeType.QUEST, Component.translatable("geometry_node.node.get_quest_counter"))
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
                         .text("initializes_missing")

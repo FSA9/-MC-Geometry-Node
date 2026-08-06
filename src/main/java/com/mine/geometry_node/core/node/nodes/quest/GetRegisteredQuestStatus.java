@@ -22,7 +22,7 @@ public final class GetRegisteredQuestStatus extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.DATA,
+        return NodeDef.builder(TYPE_ID, NodeType.QUEST,
                         Component.translatable("geometry_node.node.get_registered_quest_status"))
                 .addRow(new PortRow(
                         PortDef.create(SELECTED_STATUS_PORT, "geometry_node.port.quest_status",

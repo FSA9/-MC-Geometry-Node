@@ -47,7 +47,7 @@ public abstract class BaseQuestConditionsNode extends BaseNode {
     private NodeDef buildDefinition(int conditionCount) {
         NodeDef.Builder builder = NodeDef.builder(
                         kind.nodeTypeId(),
-                        NodeType.DATA,
+                        NodeType.QUEST,
                         Component.translatable(titleTranslationKey))
                 .addMeta(SchemaKeys.MIN_DYNAMIC_INPUT, DEFAULT_CONDITION_COUNT)
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, MAX_CONDITION_COUNT);

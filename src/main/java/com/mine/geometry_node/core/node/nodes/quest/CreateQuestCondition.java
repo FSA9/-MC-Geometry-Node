@@ -22,7 +22,7 @@ public final class CreateQuestCondition extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(
                         TYPE_ID,
-                        NodeType.DATA,
+                        NodeType.QUEST,
                         Component.translatable("geometry_node.node.create_quest_condition"))
                 .addRow(new PortRow(
                         null,

@@ -22,7 +22,7 @@ public final class GetQuestStatus extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_quest_status"))
+        return NodeDef.builder(TYPE_ID, NodeType.QUEST, Component.translatable("geometry_node.node.get_quest_status"))
                 .addRow(new PortRow(
                         StandardPorts.ENTITY.toInput(),
                         PortDef.create(EXISTS_PORT, "geometry_node.port.exists", PortType.BOOLEAN),
