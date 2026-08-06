@@ -294,7 +294,7 @@ final class QuestRewardsEditor extends LinearLayout {
                 changed();
             }, () -> {
                 updateHintPreview();
-                hintPreview.requestFocus();
+                hintPreview.requestHintFocus();
             });
         }
 

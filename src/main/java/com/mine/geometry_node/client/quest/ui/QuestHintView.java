@@ -1,22 +1,67 @@
 package com.mine.geometry_node.client.quest.ui;
 
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIItemSlot;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIEntityTemplatePreview;
 import com.mine.geometry_node.core.engine.quest.model.QuestHintType;
+import com.mine.geometry_node.core.node.value.EntityTemplateValue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.view.View;
+import icyllis.modernui.widget.FrameLayout;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 
-public final class QuestHintView extends UIItemSlot {
+import java.util.function.Consumer;
+
+public final class QuestHintView extends FrameLayout {
+    private final UIItemSlot itemView;
+    private final UIEntityTemplatePreview entityView;
+    private QuestHintType hintType = QuestHintType.NONE;
+
     public QuestHintView(Context context) {
         super(context);
+        setClipChildren(false);
+
+        itemView = new UIItemSlot(context);
+        addView(itemView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+
+        entityView = new UIEntityTemplatePreview(
+                context, null, "", null, UIEntityTemplatePreview.RotationMode.HORIZONTAL);
+        entityView.setVisibility(View.GONE);
+        addView(entityView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
     }
 
     public void setHint(QuestHintType type, String value) {
-        setDisplayStack(resolveStack(type, value));
+        hintType = type != null ? type : QuestHintType.NONE;
+        boolean entity = hintType == QuestHintType.ENTITY;
+        itemView.setVisibility(entity ? View.GONE : View.VISIBLE);
+        entityView.setVisibility(entity ? View.VISIBLE : View.GONE);
+        itemView.setDisplayStack(entity ? ItemStack.EMPTY : resolveStack(hintType, value));
+        entityView.setDisplayTemplate(entity ? EntityTemplateValue.from(value) : EntityTemplateValue.EMPTY);
+    }
+
+    public void setDisplayClickAction(Runnable action) {
+        itemView.setDisplayClickAction(action);
+        entityView.setDisplayClickAction(action);
+    }
+
+    public void setDisplayPasteAction(Consumer<String> action) {
+        itemView.setDisplayPasteAction(action);
+    }
+
+    public void setEntityDisplayPasteAction(Consumer<EntityTemplateValue> action) {
+        entityView.setDisplayPasteAction(action);
+    }
+
+    public void requestHintFocus() {
+        if (hintType == QuestHintType.ENTITY) {
+            entityView.requestFocus();
+        } else {
+            itemView.requestFocus();
+        }
     }
 
     private static ItemStack resolveStack(QuestHintType type, String value) {

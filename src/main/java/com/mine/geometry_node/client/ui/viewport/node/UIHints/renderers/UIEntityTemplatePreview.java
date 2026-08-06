@@ -27,6 +27,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.Objects;
+import java.util.function.Consumer;
 
 public final class UIEntityTemplatePreview extends ViewportNativePreviewView implements ViewportScaledHint, ViewportTransformedHint, InteractiveHintTarget {
     private static final float PADDING_DP = 5.0f;
@@ -46,6 +47,9 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
     private volatile Entity mPreviewEntity;
     private EntityTemplateValue mCachedTemplate = EntityTemplateValue.EMPTY;
     private Object mLastRawValue;
+    private Runnable mDisplayClickAction;
+    private Consumer<EntityTemplateValue> mDisplayPasteAction;
+    private boolean mEditable;
     private volatile RotationMode mRotationMode;
     private volatile float mYaw = DEFAULT_YAW;
     private volatile float mPitch = DEFAULT_PITCH;
@@ -73,12 +77,11 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
         mEditorContext = editorContext;
         mRotationMode = rotationMode != null ? rotationMode : RotationMode.HORIZONTAL;
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        mEditable = nodeData != null;
 
         setWillNotDraw(false);
         setClipChildren(false);
-        setFocusable(true);
-        setFocusableInTouchMode(true);
-        setClickable(true);
+        updateFocusableState();
         setOnFocusChangeListener((view, focused) -> invalidate());
 
         updateCache();
@@ -167,7 +170,11 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
     }
 
     private void updateCache() {
-        Object raw = mNodeData != null ? mNodeData.inputs.get(mPortId) : null;
+        if (mNodeData == null) return;
+        applyTemplate(mNodeData.inputs.get(mPortId));
+    }
+
+    private void applyTemplate(Object raw) {
         if (Objects.equals(raw, mLastRawValue)
                 && (mCachedTemplate.isEmpty() || mPreviewEntity != null || Minecraft.getInstance().level == null)) {
             return;
@@ -185,6 +192,32 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
         }
         requestNativePreviewRender();
         invalidate();
+    }
+
+    public void setDisplayTemplate(EntityTemplateValue template) {
+        applyTemplate(template != null ? template : EntityTemplateValue.EMPTY);
+    }
+
+    public void setDisplayClickAction(Runnable action) {
+        mDisplayClickAction = action;
+        if (action != null) {
+            mEditable = true;
+            updateFocusableState();
+        }
+    }
+
+    public void setDisplayPasteAction(Consumer<EntityTemplateValue> action) {
+        mDisplayPasteAction = action;
+        if (action != null) {
+            mEditable = true;
+            updateFocusableState();
+        }
+    }
+
+    private void updateFocusableState() {
+        setFocusable(mEditable);
+        setFocusableInTouchMode(mEditable);
+        setClickable(mEditable);
     }
 
     public RotationMode getRotationMode() {
@@ -238,11 +271,13 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
+        if (!mEditable) return false;
         return onTouchEvent(event);
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (!mEditable) return false;
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             mPressed = true;
@@ -280,8 +315,10 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
             mDragging = false;
             setPressed(false);
             if (clicked) {
+                boolean openEditor = isFocused() && mDisplayClickAction != null;
                 requestFocus();
                 invalidate();
+                if (openEditor) mDisplayClickAction.run();
             }
             return true;
         }
@@ -319,11 +356,20 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
     }
 
     public void openTemplateEditor() {
+        if (mDisplayClickAction != null) {
+            mDisplayClickAction.run();
+            return;
+        }
         EntityTemplatePickerController.open(this::commitTemplate, this::requestFocus);
     }
 
     private void commitTemplate(EntityTemplateValue template) {
         if (template == null || template.isEmpty()) return;
+        if (mDisplayPasteAction != null) {
+            mDisplayPasteAction.accept(template);
+            setDisplayTemplate(template);
+            return;
+        }
         UIHintValueBinder.commit(mEditorContext, mNodeData, mPortId, template.toMap());
         mLastRawValue = null;
         updateCache();

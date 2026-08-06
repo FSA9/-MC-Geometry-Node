@@ -4,10 +4,12 @@ import com.mine.geometry_node.client.quest.ui.QuestHintView;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ExpandedTextInputOverlay;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaInventoryPicker;
 import com.mine.geometry_node.core.engine.quest.model.QuestObjectiveDefinition;
 import com.mine.geometry_node.core.engine.quest.model.QuestHintType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
+import com.mine.geometry_node.core.node.value.EntityTemplateValue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -138,7 +140,7 @@ final class QuestObjectivesEditor extends LinearLayout {
         private boolean quantityEnabled;
         private boolean counterEnabled;
         private QuestHintType hintType;
-        private String itemHintValue;
+        private String hintValue;
         private boolean expanded;
 
         private final LinearLayout root;
@@ -161,7 +163,7 @@ final class QuestObjectivesEditor extends LinearLayout {
             quantityEnabled = definition.quantityEnabled();
             counterEnabled = definition.counterEnabled();
             hintType = definition.hintType();
-            itemHintValue = definition.hintValue();
+            hintValue = definition.hintValue();
             expanded = !collapsedEntryIds.contains(entryId);
 
             root = new LinearLayout(getContext());
@@ -265,17 +267,17 @@ final class QuestObjectivesEditor extends LinearLayout {
             hintRow.setGravity(Gravity.CENTER_VERTICAL);
             hintToggle = button("", tr("geometry_node.graph_properties.quest.hint_enabled"));
             hintToggle.setOnClickListener(v -> {
-                hintType = hintType == QuestHintType.NONE
-                        ? QuestHintType.ITEM_STACK
-                        : QuestHintType.NONE;
+                hintType = nextHintType(hintType);
+                hintValue = "";
                 updateHintUi();
                 changed();
             });
             LayoutParams hintToggleLp = new LayoutParams(UIUtils.dp2pxInt(66), UIUtils.dp2pxInt(28));
             hintRow.addView(hintToggle, hintToggleLp);
             hintPreview = new QuestHintView(getContext());
-            hintPreview.setDisplayClickAction(this::pickItem);
+            hintPreview.setDisplayClickAction(this::pickHint);
             hintPreview.setDisplayPasteAction(this::pasteItem);
+            hintPreview.setEntityDisplayPasteAction(this::pasteEntity);
             LayoutParams previewLp = new LayoutParams(UIUtils.dp2pxInt(32), UIUtils.dp2pxInt(32));
             previewLp.leftMargin = UIUtils.dp2pxInt(4);
             hintRow.addView(hintPreview, previewLp);
@@ -299,7 +301,7 @@ final class QuestObjectivesEditor extends LinearLayout {
                     quantityEnabled,
                     parseDouble(targetInput.getText().toString(), 1.0),
                     hintType,
-                    hintType == QuestHintType.NONE ? "" : itemHintValue);
+                    hintType == QuestHintType.NONE ? "" : hintValue);
         }
 
         private void openRichEditor(View anchor) {
@@ -318,18 +320,46 @@ final class QuestObjectivesEditor extends LinearLayout {
                 Minecraft minecraft = Minecraft.getInstance();
                 if (minecraft.level == null) return;
                 hintType = QuestHintType.ITEM_STACK;
-                itemHintValue = ItemCodecUtils.toJson(stack, minecraft.level.registryAccess());
+                hintValue = ItemCodecUtils.toJson(stack, minecraft.level.registryAccess());
                 updateHintPreview();
                 changed();
             }, () -> {
                 updateHintPreview();
-                hintPreview.requestFocus();
+                hintPreview.requestHintFocus();
             });
+        }
+
+        private void pickEntity() {
+            EntityTemplatePickerController.open(template -> {
+                hintType = QuestHintType.ENTITY;
+                hintValue = template.toJsonString();
+                updateHintPreview();
+                changed();
+            }, () -> {
+                updateHintPreview();
+                hintPreview.requestHintFocus();
+            });
+        }
+
+        private void pickHint() {
+            if (hintType == QuestHintType.ENTITY) {
+                pickEntity();
+            } else if (hintType == QuestHintType.ITEM_STACK || hintType == QuestHintType.BLOCK) {
+                pickItem();
+            }
         }
 
         private void pasteItem(String itemJson) {
             hintType = QuestHintType.ITEM_STACK;
-            itemHintValue = itemJson != null ? itemJson : "";
+            hintValue = itemJson != null ? itemJson : "";
+            updateHintPreview();
+            changed();
+        }
+
+        private void pasteEntity(EntityTemplateValue template) {
+            if (template == null || template.isEmpty()) return;
+            hintType = QuestHintType.ENTITY;
+            hintValue = template.toJsonString();
             updateHintPreview();
             changed();
         }
@@ -348,14 +378,18 @@ final class QuestObjectivesEditor extends LinearLayout {
 
         private void updateHintUi() {
             boolean hasHint = hintType != QuestHintType.NONE;
-            hintToggle.setText(tr("geometry_node.graph_properties.quest.hint_label"));
+            hintToggle.setText(tr(switch (hintType) {
+                case ITEM_STACK, BLOCK -> "geometry_node.graph_properties.quest.hint_item";
+                case ENTITY -> "geometry_node.graph_properties.quest.hint_entity";
+                case NONE -> "geometry_node.graph_properties.quest.hint_none";
+            }));
             styleButton(hintToggle, hasHint ? COLOR_ACTIVE : COLOR_BUTTON);
             hintPreview.setVisibility(hasHint ? View.VISIBLE : View.GONE);
             updateHintPreview();
         }
 
         private void updateHintPreview() {
-            hintPreview.setHint(hintType, itemHintValue);
+            hintPreview.setHint(hintType, hintValue);
         }
 
         private void toggleExpanded() {
@@ -467,6 +501,12 @@ final class QuestObjectivesEditor extends LinearLayout {
         } catch (RuntimeException ignored) {
             return fallback;
         }
+    }
+
+    private static QuestHintType nextHintType(QuestHintType current) {
+        if (current == QuestHintType.NONE) return QuestHintType.ITEM_STACK;
+        if (current == QuestHintType.ITEM_STACK) return QuestHintType.ENTITY;
+        return QuestHintType.NONE;
     }
 
     private static String formatNumber(double value) {
