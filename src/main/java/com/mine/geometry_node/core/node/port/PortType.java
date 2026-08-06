@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.port;
 
 import com.mine.geometry_node.core.node.value.ColorValue;
 import com.mine.geometry_node.core.node.value.DialogueChoiceValue;
+import com.mine.geometry_node.core.node.value.EntityTemplateValue;
 import com.mine.geometry_node.core.node.value.QuestConditionValue;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
@@ -25,6 +26,7 @@ public enum PortType {
     PATH("路径", 0xFF5F6670, ""),
     RICH_TEXT("富文本", 0xFFD56BE8, RichTextValue.EMPTY),
     ENTITY("实体", 0xFFE91E63, null),
+    ENTITY_TEMPLATE("实体模板", 0xFFFF5C8A, EntityTemplateValue.EMPTY),
     ITEM("物品", 0xFFFF8A65, null),
     ITEM_STACK("物品栈", 0xFFFF7043, null),
     SLOT("槽位", 0xFFB0BEC5, SlotRef.DEFAULT.serialize()),
@@ -180,6 +182,7 @@ public enum PortType {
         if (value instanceof GeometryValue) return GEOMETRY;
         if (value instanceof SlotRef) return SLOT;
         if (value instanceof net.minecraft.world.entity.Entity) return ENTITY;
+        if (value instanceof EntityTemplateValue) return ENTITY_TEMPLATE;
         if (value instanceof net.minecraft.world.item.ItemStack) return ITEM_STACK;
         if (value instanceof DialogueChoiceValue) return DIALOGUE_CHOICE;
         if (value instanceof QuestConditionValue) return QUEST_CONDITION;

@@ -16,6 +16,7 @@ public class HintRendererFactory {
         RENDERERS.put(UIHint.VECTOR, new VectorHintRenderer());
         RENDERERS.put(UIHint.BUTTON, new ButtonHintRenderer());
         RENDERERS.put(UIHint.ITEM_SLOT, new ItemSlotHintRenderer());
+        RENDERERS.put(UIHint.ENTITY_TEMPLATE, new EntityTemplateHintRenderer());
         RENDERERS.put(UIHint.SLOT_REF, new SlotRefHintRenderer());
         RENDERERS.put(UIHint.CUSTOM, new CustomHintRenderer());
     }

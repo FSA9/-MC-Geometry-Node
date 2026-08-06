@@ -145,6 +145,9 @@ public enum StandardPorts {
     ATTACK_SOURCE("attack_source", PortType.ENTITY),
     DIRECT_SOURCE("direct_source", PortType.ENTITY),
 
+    // Entity template
+    ENTITY_TEMPLATE("entity_template", PortType.ENTITY_TEMPLATE),
+
     // Block
     BLOCK_STATE("block_state", PortType.BLOCK),
 

@@ -39,6 +39,14 @@ public interface NodeVisualAdapter extends CanvasVisualItem, ConnectionNodeVisua
 
     default void onOverlayScaleChanged(float scale) {}
 
+    default void onOverlayTransformChanged(float scale, float windowLeftPx, float windowTopPx) {
+        onOverlayScaleChanged(scale);
+    }
+
+    default void onOverlayTransformChanged(float scale, float windowLeftPx, float windowTopPx, int overlayOrder) {
+        onOverlayTransformChanged(scale, windowLeftPx, windowTopPx);
+    }
+
     int getTotalHeightDp();
 
     void updateNodeLayout();

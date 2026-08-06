@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ItemStackTooltipOverlay;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaInventoryPicker;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
+import com.mine.geometry_node.client.ui.viewport.preview.ViewportNativePreviewView;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 
@@ -18,16 +19,13 @@ import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.KeyEvent;
-import icyllis.modernui.widget.FrameLayout;
-import icyllis.modernui.mc.MinecraftSurfaceView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.item.ItemStack;
 
-import javax.annotation.Nonnull;
 import java.util.function.Consumer;
 
-public class UIItemSlot extends FrameLayout {
+public class UIItemSlot extends ViewportNativePreviewView implements ViewportScaledHint, ViewportTransformedHint, InteractiveHintTarget {
     private static final float ITEM_SIZE_GUI = 16f;
     private static final float ITEM_PADDING_DP = 4f;
     private static final float ITEM_MAX_SCALE = 1.25f;
@@ -40,14 +38,11 @@ public class UIItemSlot extends FrameLayout {
 
     private volatile ItemStack mCachedStack = ItemStack.EMPTY;
     private String mLastJson = null;
-    private MinecraftSurfaceView mSurfaceView;
-    private volatile float mViewportScale = 1.0f;
-    private int mLastSurfaceWidth = -1;
-    private int mLastSurfaceHeight = -1;
     private Runnable mDisplayClickAction;
     private Consumer<String> mDisplayPasteAction;
     private boolean mEditable;
     private boolean mPressed;
+    private boolean mOpenEditorOnClick = true;
 
     private static String sClipboardItemJson;
 
@@ -71,54 +66,59 @@ public class UIItemSlot extends FrameLayout {
             return true;
         });
         updateCache();
-
-        mSurfaceView = new MinecraftSurfaceView(context);
-        mSurfaceView.setEnabled(false);
-        mSurfaceView.setClickable(false);
-        mSurfaceView.setFocusable(false);
-        mSurfaceView.setRenderer(new MinecraftSurfaceView.Renderer() {
-            @Override
-            public void onSurfaceChanged(int width, int height) {}
-
-            @Override
-            public void onDraw(@Nonnull GuiGraphicsExtractor gr, int mouseX, int mouseY, float deltaTick, double guiScale, float alpha) {
-                if (!mCachedStack.isEmpty()) {
-                    gr.pose().pushMatrix();
-
-                    float safeGuiScale = guiScale > 0.0 ? (float) guiScale : 1.0f;
-                    float viewportScale = mViewportScale;
-                    float slotGuiW = UIItemSlot.this.getWidth() * viewportScale / safeGuiScale;
-                    float slotGuiH = UIItemSlot.this.getHeight() * viewportScale / safeGuiScale;
-                    float padding = UIUtils.dp2px(ITEM_PADDING_DP) * viewportScale / safeGuiScale;
-                    float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - padding * 2.0f);
-                    float itemScale = Math.min(ITEM_MAX_SCALE * viewportScale, contentSize / ITEM_SIZE_GUI);
-                    float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;
-                    float drawY = (slotGuiH - ITEM_SIZE_GUI * itemScale) / 2.0f;
-
-                    gr.pose().translate(drawX, drawY);
-                    gr.pose().scale(itemScale, itemScale);
-                    gr.item(mCachedStack, 0, 0);
-                    gr.itemDecorations(Minecraft.getInstance().font, mCachedStack, 0, 0);
-
-                    gr.pose().popMatrix();
-                }
-            }
-        });
-
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
-        addView(mSurfaceView, lp);
     }
 
-    public void setViewportScale(float scale) {
-        float safeScale = scale > 0.0f ? scale : 1.0f;
-        boolean scaleChanged = Math.abs(mViewportScale - safeScale) > 0.001f;
-        if (!scaleChanged && mLastSurfaceWidth >= 0 && mLastSurfaceHeight >= 0) return;
+    @Override
+    protected void renderNativePreviewContent(
+            GuiGraphicsExtractor graphics,
+            float deltaTick,
+            float guiScale,
+            float alpha,
+            float windowLeftPx,
+            float windowTopPx,
+            float widthPx,
+            float heightPx,
+            float viewportScale
+    ) {
+        ItemStack stack = mCachedStack;
+        if (stack.isEmpty()) return;
 
-        mViewportScale = safeScale;
-        updateSurfaceBounds();
-        if (scaleChanged && mSurfaceView != null) {
-            mSurfaceView.invalidate();
+        graphics.pose().pushMatrix();
+        try {
+            float targetGuiX = windowLeftPx / guiScale;
+            float targetGuiY = windowTopPx / guiScale;
+            graphics.pose().translateLocal(targetGuiX - graphics.pose().m20(), targetGuiY - graphics.pose().m21());
+
+            float slotGuiW = widthPx / guiScale;
+            float slotGuiH = heightPx / guiScale;
+            float padding = UIUtils.dp2px(ITEM_PADDING_DP) * viewportScale / guiScale;
+            float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - padding * 2.0f);
+            float itemScale = Math.min(ITEM_MAX_SCALE * viewportScale, contentSize / ITEM_SIZE_GUI);
+            float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;
+            float drawY = (slotGuiH - ITEM_SIZE_GUI * itemScale) / 2.0f;
+
+            graphics.pose().translate(drawX, drawY);
+            graphics.pose().scale(itemScale, itemScale);
+            graphics.item(stack, 0, 0);
+            graphics.itemDecorations(Minecraft.getInstance().font, stack, 0, 0);
+        } finally {
+            graphics.pose().popMatrix();
         }
+    }
+
+    @Override
+    public void setViewportScale(float scale) {
+        updateNativePreviewScale(scale);
+    }
+
+    @Override
+    public void setViewportTransform(float scale, float windowLeftPx, float windowTopPx) {
+        updateNativePreviewTransform(scale, windowLeftPx, windowTopPx, getNativePreviewOrder());
+    }
+
+    @Override
+    public void setViewportTransform(float scale, float windowLeftPx, float windowTopPx, long previewOrder) {
+        updateNativePreviewTransform(scale, windowLeftPx, windowTopPx, previewOrder);
     }
 
     public void setDisplayStack(ItemStack stack) {
@@ -126,7 +126,7 @@ public class UIItemSlot extends FrameLayout {
         mCachedStack = stack != null ? stack.copy() : ItemStack.EMPTY;
         mLastJson = null;
         ItemTooltipProxy.clearTooltipTask(previousStack);
-        if (mSurfaceView != null) mSurfaceView.invalidate();
+        requestNativePreviewRender();
         invalidate();
     }
 
@@ -146,40 +146,18 @@ public class UIItemSlot extends FrameLayout {
         }
     }
 
+    public void setOpenEditorOnClick(boolean openEditorOnClick) {
+        mOpenEditorOnClick = openEditorOnClick;
+    }
+
+    public void openTemplateEditor() {
+        openEditor();
+    }
+
     private void updateFocusableState() {
         setFocusable(mEditable);
         setFocusableInTouchMode(mEditable);
         setClickable(mEditable);
-    }
-
-    private void updateSurfaceBounds() {
-        if (mSurfaceView == null || getWidth() <= 0 || getHeight() <= 0) return;
-
-        float viewportScale = Math.max(1.0f, mViewportScale);
-        int surfaceWidth = Math.max(1, Math.round(getWidth() * viewportScale));
-        int surfaceHeight = Math.max(1, Math.round(getHeight() * viewportScale));
-        if (surfaceWidth == mLastSurfaceWidth && surfaceHeight == mLastSurfaceHeight) return;
-
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mSurfaceView.getLayoutParams();
-        if (lp == null) {
-            lp = new FrameLayout.LayoutParams(surfaceWidth, surfaceHeight);
-        } else {
-            lp.width = surfaceWidth;
-            lp.height = surfaceHeight;
-        }
-        lp.leftMargin = 0;
-        lp.topMargin = 0;
-        mSurfaceView.setLayoutParams(lp);
-        mSurfaceView.invalidate();
-
-        mLastSurfaceWidth = surfaceWidth;
-        mLastSurfaceHeight = surfaceHeight;
-    }
-
-    @Override
-    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        super.onSizeChanged(w, h, oldw, oldh);
-        updateSurfaceBounds();
     }
 
     private void updateCache() {
@@ -195,9 +173,7 @@ public class UIItemSlot extends FrameLayout {
                 mCachedStack = ItemStack.EMPTY;
             }
             ItemTooltipProxy.clearTooltipTask(previousStack);
-            if (mSurfaceView != null) {
-                mSurfaceView.invalidate();
-            }
+            requestNativePreviewRender();
         }
     }
 
@@ -303,7 +279,7 @@ public class UIItemSlot extends FrameLayout {
             setPressed(false);
             if (!wasPressed) return true;
 
-            if (!isFocused()) {
+            if (!mOpenEditorOnClick || !isFocused()) {
                 requestFocus();
                 invalidate();
                 return true;

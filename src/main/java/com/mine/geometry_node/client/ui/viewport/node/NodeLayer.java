@@ -26,6 +26,7 @@ public class NodeLayer extends FrameLayout {
     // 复用的临时对象，避免在遍历和碰撞检测时频繁创建
     private final RectF mTmpNodeBounds = new RectF();
     private final RectF mTmpVisibleBounds = new RectF();
+    private final int[] mLocationInWindow = new int[2];
     private static final float CULL_PADDING_DP = 64f;
 
     public NodeLayer(Context context, Viewport viewport) {
@@ -82,12 +83,14 @@ public class NodeLayer extends FrameLayout {
 
     public void applySelection(List<String> selectedNodeIds) {
         Set<String> selectedNodeIdSet = selectedNodeIds != null ? new HashSet<>(selectedNodeIds) : new HashSet<>();
-        boolean canCull = prepareVisibleBounds(CULL_PADDING_DP);
         for (NodeVisualAdapter node : mNodeVisuals.values()) {
             node.setSelected(selectedNodeIdSet.contains(node.getNodeId()));
-            syncOverlayHost(node, canCull);
         }
         bringSelectedNodesToFront(getNodeVisuals(selectedNodeIds));
+        boolean canCull = prepareVisibleBounds(CULL_PADDING_DP);
+        for (int i = 0; i < mNodeOrder.size(); i++) {
+            syncOverlayHost(mNodeOrder.get(i), canCull, i);
+        }
         invalidate();
     }
 
@@ -133,8 +136,8 @@ public class NodeLayer extends FrameLayout {
 
     public void updateOverlayTransforms() {
         boolean canCull = prepareVisibleBounds(CULL_PADDING_DP);
-        for (NodeVisualAdapter node : mNodeOrder) {
-            syncOverlayHost(node, canCull);
+        for (int i = 0; i < mNodeOrder.size(); i++) {
+            syncOverlayHost(mNodeOrder.get(i), canCull, i);
         }
         invalidate();
     }
@@ -147,10 +150,10 @@ public class NodeLayer extends FrameLayout {
     }
 
     private void syncOverlayHost(NodeVisualAdapter node) {
-        syncOverlayHost(node, prepareVisibleBounds(CULL_PADDING_DP));
+        syncOverlayHost(node, prepareVisibleBounds(CULL_PADDING_DP), mNodeOrder.indexOf(node));
     }
 
-    private void syncOverlayHost(NodeVisualAdapter node, boolean canCull) {
+    private void syncOverlayHost(NodeVisualAdapter node, boolean canCull, int overlayOrder) {
         if (node == null) return;
 
         View overlayHost = node.getOverlayHostView();
@@ -196,7 +199,13 @@ public class NodeLayer extends FrameLayout {
         overlayHost.setPivotY(0);
         overlayHost.setScaleX(scale);
         overlayHost.setScaleY(scale);
-        node.onOverlayScaleChanged(scale);
+        getLocationInWindow(mLocationInWindow);
+        node.onOverlayTransformChanged(
+                scale,
+                mLocationInWindow[0] + lp.leftMargin,
+                mLocationInWindow[1] + lp.topMargin,
+                Math.max(0, overlayOrder)
+        );
     }
 
     private int getOverlayHostInsertIndex(NodeVisualAdapter node) {

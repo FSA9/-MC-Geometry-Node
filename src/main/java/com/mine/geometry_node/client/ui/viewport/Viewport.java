@@ -6,8 +6,9 @@ import com.mine.geometry_node.client.ui.viewport.frame.FrameLayer;
 import com.mine.geometry_node.client.ui.viewport.layers.BackgroundLayer;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.InventoryItemPickerOverlay;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ShopEditorOverlay;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIItemSlot;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.InteractiveHintTarget;
 import com.mine.geometry_node.client.ui.viewport.node.NodeLayer;
+import com.mine.geometry_node.client.ui.viewport.preview.ViewportNativePreviewLayer;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import com.mine.geometry_node.client.ui.viewport.menu.ViewportMenu;
 import com.mine.geometry_node.client.ui.viewport.connection.ConnectionNodeVisual;
@@ -50,6 +51,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     private final BackgroundLayer mBackgroundLayer;
     private final ConnectionLayer mConnectionLayer;
+    private final ViewportNativePreviewLayer mNativePreviewLayer;
     private NodeLayer mNodeLayer;
     private FrameLayer mFrameLayer;
 
@@ -74,6 +76,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
         mCamera = new ViewportCamera(this::updateTransform);
         mBackgroundLayer = new BackgroundLayer();
         mConnectionLayer = new ConnectionLayer(this);
+        mNativePreviewLayer = new ViewportNativePreviewLayer(context);
+        addView(mNativePreviewLayer, 0, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         mEventDispatcher = new ViewportEventDispatcher(this);
 
         mInteractionManager = new InteractionManager(this);
@@ -254,6 +258,10 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public ViewportCamera getCamera() { return mCamera; }
+
+    public ViewportNativePreviewLayer getNativePreviewLayer() {
+        return mNativePreviewLayer;
+    }
 
     public void updateTransform() {
         if (mController != null) {
@@ -558,7 +566,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
     private boolean isHitOverlay(float x, float y) {
         for (int i = getChildCount() - 1; i >= 0; i--) {
             View child = getChildAt(i);
-            if (child == mNodeLayer || child == mFrameLayer || child == mEmptyHint || child.getVisibility() != View.VISIBLE) continue;
+            if (child == mNodeLayer || child == mFrameLayer || child == mNativePreviewLayer
+                    || child == mEmptyHint || child.getVisibility() != View.VISIBLE) continue;
             if (x >= child.getLeft() && x <= child.getRight() && y >= child.getTop() && y <= child.getBottom()) return true;
         }
         return false;
@@ -609,7 +618,7 @@ public class Viewport extends FrameLayout implements InteractionContext {
     public boolean dispatchKeyEvent(icyllis.modernui.view.KeyEvent event) {
         if (event.getAction() == icyllis.modernui.view.KeyEvent.ACTION_DOWN) {
             View focusedView = findFocus();
-            if (focusedView instanceof EditText || focusedView instanceof UIItemSlot) {
+            if (focusedView instanceof EditText || focusedView instanceof InteractiveHintTarget) {
                 return super.dispatchKeyEvent(event);
             }
             if (mInteractionManager.onKeyDown(event)) return true;

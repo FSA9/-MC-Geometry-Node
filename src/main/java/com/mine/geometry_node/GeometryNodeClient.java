@@ -10,6 +10,7 @@ import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
 import com.mine.geometry_node.core.command.registry.ModClientCommands;
 import icyllis.modernui.mc.ModernUIMod;
 import net.minecraft.client.Minecraft;
@@ -23,6 +24,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
+import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 
@@ -42,6 +44,7 @@ public class GeometryNodeClient {
         NeoForge.EVENT_BUS.addListener(this::onRenderLevelStage);
         NeoForge.EVENT_BUS.addListener(this::onSubmitCustomGeometry);
         NeoForge.EVENT_BUS.addListener(this::onClientLoggingOut);
+        NeoForge.EVENT_BUS.addListener(this::onInteractionKeyMappingTriggered);
 
         // 渲染注册
         ClientVisualManager.init();
@@ -86,7 +89,12 @@ public class GeometryNodeClient {
         ClientQuestScreenState.reset();
         ClientDialogueState.reset();
         RemoteGraphClientState.reset();
+        EntityTemplatePickerController.reset();
         clearClientRenderState();
+    }
+
+    private void onInteractionKeyMappingTriggered(InputEvent.InteractionKeyMappingTriggered event) {
+        EntityTemplatePickerController.handleInteraction(event);
     }
 
     private static void clearClientRenderState() {

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.variables;
 
 import com.mine.geometry_node.core.node.value.SlotRef;
+import com.mine.geometry_node.core.node.value.EntityTemplateValue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -109,6 +110,24 @@ public class VariableRegistry {
                         .parse(provider.createSerializationContext(NbtOps.INSTANCE), tag)
                         .result()
                         .orElse(ItemStack.EMPTY);
+            }
+        });
+
+        register(new VariableSerializer<EntityTemplateValue>() {
+            @Override public String getTypeId() { return "entity_template"; }
+            @Override public Class<EntityTemplateValue> getTargetClass() { return EntityTemplateValue.class; }
+            @Override public Tag serialize(EntityTemplateValue value) {
+                CompoundTag tag = new CompoundTag();
+                tag.putString("entity_type", value.entityTypeId());
+                tag.put("entity_data", value.data());
+                return tag;
+            }
+            @Override public EntityTemplateValue deserialize(Tag tag) {
+                if (!(tag instanceof CompoundTag compound)) return EntityTemplateValue.EMPTY;
+                return new EntityTemplateValue(
+                        compound.getStringOr("entity_type", ""),
+                        compound.getCompoundOrEmpty("entity_data")
+                );
             }
         });
     }

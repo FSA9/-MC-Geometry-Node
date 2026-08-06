@@ -243,6 +243,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // Data/Entity
         registry.register("data/entity", new GetEntitiesByRadius());
         registry.register("data/entity", new GetEntitiesbyRotationBox());
+        registry.register("data/entity", new PickEntityTemplate());
 
         // Data/Entity/Attribution
         registry.register("data/entity/attribution", new GetEntityDimension());

@@ -12,7 +12,9 @@ import com.mine.geometry_node.client.ui.viewport.node.comment.NodeCommentTextBui
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.HintRendererFactory;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIHintRenderer;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIItemSlot;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.InteractiveHintTarget;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.ViewportScaledHint;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.ViewportTransformedHint;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
@@ -50,6 +52,11 @@ final class NodeOverlayController {
     private TextView mCommentTooltip;
     private int mNodeWidth;
     private int mTotalHeight;
+    private float mOverlayScale = 1.0f;
+    private float mOverlayWindowLeftPx;
+    private float mOverlayWindowTopPx;
+    private int mOverlayOrder;
+    private boolean mHasOverlayWindowPosition;
     private boolean mMounted;
     private boolean mHasOverlayViews;
 
@@ -162,9 +169,26 @@ final class NodeOverlayController {
     }
 
     void onOverlayScaleChanged(float scale) {
+        mOverlayScale = scale > 0.0f ? scale : 1.0f;
         for (View view : mHintViews.values()) {
-            if (view instanceof UIItemSlot itemSlot) {
-                itemSlot.setViewportScale(scale);
+            if (view instanceof ViewportScaledHint scaledHint) {
+                scaledHint.setViewportScale(mOverlayScale);
+            }
+        }
+    }
+
+    void onOverlayTransformChanged(float scale, float windowLeftPx, float windowTopPx, int overlayOrder) {
+        mOverlayScale = scale > 0.0f ? scale : 1.0f;
+        mOverlayWindowLeftPx = windowLeftPx;
+        mOverlayWindowTopPx = windowTopPx;
+        mOverlayOrder = overlayOrder;
+        mHasOverlayWindowPosition = true;
+        for (Map.Entry<Integer, View> entry : mHintViews.entrySet()) {
+            View view = entry.getValue();
+            if (view instanceof ViewportTransformedHint) {
+                applyViewportTransform(entry.getKey(), view);
+            } else if (view instanceof ViewportScaledHint scaledHint) {
+                scaledHint.setViewportScale(mOverlayScale);
             }
         }
     }
@@ -248,6 +272,25 @@ final class NodeOverlayController {
         boolean isConnected = mNodeData.isInputConnected(row.leftPort() != null ? row.leftPort().id() : "");
         hintView.setVisibility(isConnected ? View.GONE : View.VISIBLE);
         renderer.updateLayout(hintView, row, currentY, mNodeWidth);
+        if (hintView instanceof ViewportScaledHint scaledHint) {
+            scaledHint.setViewportScale(mOverlayScale);
+        }
+        applyViewportTransform(rowIndex, hintView);
+    }
+
+    private void applyViewportTransform(int rowIndex, View hintView) {
+        if (!mHasOverlayWindowPosition || !(hintView instanceof ViewportTransformedHint transformedHint)) {
+            return;
+        }
+        ViewGroup.LayoutParams rawParams = hintView.getLayoutParams();
+        float localLeftPx = rawParams instanceof FrameLayout.LayoutParams params ? params.leftMargin : hintView.getLeft();
+        float localTopPx = rawParams instanceof FrameLayout.LayoutParams params ? params.topMargin : hintView.getTop();
+        transformedHint.setViewportTransform(
+                mOverlayScale,
+                mOverlayWindowLeftPx + localLeftPx * mOverlayScale,
+                mOverlayWindowTopPx + localTopPx * mOverlayScale,
+                ((long) mOverlayOrder << 32) | (rowIndex & 0xFFFFFFFFL)
+        );
     }
 
     private void addDynamicRemoveButton(Context context, PortRow row, float currentY) {
@@ -444,7 +487,7 @@ final class NodeOverlayController {
             return null;
         }
 
-        if (view instanceof UIItemSlot) {
+        if (view instanceof InteractiveHintTarget) {
             return view;
         }
 

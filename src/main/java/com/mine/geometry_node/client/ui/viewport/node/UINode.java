@@ -131,6 +131,16 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
     }
 
     @Override
+    public void onOverlayTransformChanged(float scale, float windowLeftPx, float windowTopPx) {
+        onOverlayTransformChanged(scale, windowLeftPx, windowTopPx, 0);
+    }
+
+    @Override
+    public void onOverlayTransformChanged(float scale, float windowLeftPx, float windowTopPx, int overlayOrder) {
+        mOverlayController.onOverlayTransformChanged(scale, windowLeftPx, windowTopPx, overlayOrder);
+    }
+
+    @Override
     public int getTotalHeightDp() {
         return mTotalHeight;
     }

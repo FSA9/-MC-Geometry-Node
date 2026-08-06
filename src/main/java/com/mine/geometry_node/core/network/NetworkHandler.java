@@ -7,6 +7,7 @@ import com.mine.geometry_node.client.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
@@ -18,11 +19,13 @@ import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
 import com.mine.geometry_node.core.engine.quest.QuestScreenService;
 import com.mine.geometry_node.core.network.packet.c2s.*;
 import com.mine.geometry_node.core.network.packet.s2c.*;
+import com.mine.geometry_node.core.node.value.EntityTemplateValue;
 import dev.architectury.networking.NetworkManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -283,6 +286,13 @@ public class NetworkHandler {
                 (payload, context) -> context.queue(() -> ClientQuestScreenState.handleSnapshot(payload))
         );
 
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketCaptureEntityTemplateResponse.TYPE,
+                PacketCaptureEntityTemplateResponse.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> EntityTemplatePickerController.handleResponse(payload))
+        );
+
         // ==========================================
         // 7. 注册 C2S: 客户端按键输入 -> 服务端处理
         // ==========================================
@@ -340,6 +350,17 @@ public class NetworkHandler {
                     }
                 })
         );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketCaptureEntityTemplateRequest.TYPE,
+                PacketCaptureEntityTemplateRequest.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> {
+                    if (context.getPlayer() instanceof ServerPlayer player) {
+                        handleEntityTemplateCapture(payload, player);
+                    }
+                })
+        );
     }
 
     // ==========================================
@@ -392,6 +413,53 @@ public class NetworkHandler {
         if (!targetPlayers.isEmpty()) {
             sendToPlayers(targetPlayers, packet);
         }
+    }
+
+    private static void handleEntityTemplateCapture(PacketCaptureEntityTemplateRequest payload, ServerPlayer player) {
+        Entity entity = player.level().getEntity(payload.entityId());
+        if (entity == null || entity.isRemoved()) {
+            sendEntityTemplateCaptureFailure(player, payload.requestId(), "geometry_node.entity_template.capture.not_found");
+            return;
+        }
+        if (!player.isWithinEntityInteractionRange(entity, 1.0)) {
+            sendEntityTemplateCaptureFailure(player, payload.requestId(), "geometry_node.entity_template.capture.too_far");
+            return;
+        }
+        if (!entity.getType().canSerialize() || !entity.getType().canSummon()) {
+            sendEntityTemplateCaptureFailure(player, payload.requestId(), "geometry_node.entity_template.capture.unsupported");
+            return;
+        }
+
+        try {
+            EntityTemplateValue template = EntityTemplateValue.capture(entity);
+            if (template.isEmpty()) {
+                sendEntityTemplateCaptureFailure(player, payload.requestId(), "geometry_node.entity_template.capture.failed");
+                return;
+            }
+            if (template.toJsonString().length() > 1_000_000) {
+                sendEntityTemplateCaptureFailure(player, payload.requestId(), "geometry_node.entity_template.capture.too_large");
+                return;
+            }
+            sendToPlayer(player, new PacketCaptureEntityTemplateResponse(
+                    payload.requestId(),
+                    true,
+                    template.entityTypeId(),
+                    template.data(),
+                    ""
+            ));
+        } catch (RuntimeException exception) {
+            sendEntityTemplateCaptureFailure(player, payload.requestId(), "geometry_node.entity_template.capture.failed");
+        }
+    }
+
+    private static void sendEntityTemplateCaptureFailure(ServerPlayer player, int requestId, String messageKey) {
+        sendToPlayer(player, new PacketCaptureEntityTemplateResponse(
+                requestId,
+                false,
+                "",
+                new net.minecraft.nbt.CompoundTag(),
+                messageKey
+        ));
     }
 
     private static void handleRemoteGraphUpload(PacketRemoteGraphUploadRequest payload, ServerPlayer player) {

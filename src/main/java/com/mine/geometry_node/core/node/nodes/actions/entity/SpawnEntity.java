@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.value.EntityTemplateValue;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -32,6 +33,7 @@ public class SpawnEntity extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.VECTOR.toInput(), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.ENTITY_TEMPLATE.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.TYPE.toInput("minecraft:zombie"),
                         null,
@@ -45,12 +47,18 @@ public class SpawnEntity extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         Vec3 pos = getInput(context, StandardPorts.VECTOR.getId(), Vec3.class);
+        EntityTemplateValue template = getInput(context, StandardPorts.ENTITY_TEMPLATE.getId(), EntityTemplateValue.class);
         String typeId = getInput(context, StandardPorts.TYPE.getId(), String.class);
         if (typeId == null || typeId.isEmpty()) {
             typeId = (String) context.getStaticInput(PROPERTY_SELECTED_TYPE);
         }
 
-        if (pos != null && typeId != null && !typeId.isEmpty() && context.getLevel() instanceof ServerLevel serverLevel) {
+        if (pos != null && context.getLevel() instanceof ServerLevel serverLevel && template != null && !template.isEmpty()) {
+            Entity entity = template.create(serverLevel, pos);
+            if (entity != null && serverLevel.addFreshEntity(entity)) {
+                context.setTempData(StandardPorts.ENTITY.getId(), List.of(entity));
+            }
+        } else if (pos != null && typeId != null && !typeId.isEmpty() && context.getLevel() instanceof ServerLevel serverLevel) {
             Identifier loc = Identifier.tryParse(typeId);
             if (loc != null) {
                 EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.getOptional(loc).orElse(null);
