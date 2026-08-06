@@ -983,6 +983,8 @@
   "geometry_node.graph_properties.quest.reward_remove": "删除任务奖励",
   "geometry_node.graph_properties.quest.reward_move_up": "上移任务奖励",
   "geometry_node.graph_properties.quest.reward_move_down": "下移任务奖励",
+  "geometry_node.graph_properties.quest.reward_expand": "展开奖励",
+  "geometry_node.graph_properties.quest.reward_collapse": "收起奖励",
   "geometry_node.graph_properties.quest.reward_placeholder": "输入奖励内容",
   "geometry_node.graph_properties.quest.reward_counter_enabled": "切换静态或动态奖励数量",
   "geometry_node.graph_properties.quest.reward_amount": "数量",
