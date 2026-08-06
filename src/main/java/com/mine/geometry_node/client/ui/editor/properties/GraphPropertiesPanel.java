@@ -777,7 +777,7 @@ public final class GraphPropertiesPanel extends FrameLayout {
         QuestDefinition definition = questDefinitionFromInputs();
         mQuestDefinition = definition;
         commitPendingEdits();
-        EditorPreviewController.previewQuest(mLoaded.fileName(), definition);
+        EditorPreviewController.previewQuest(mLoaded.fileName(), definition, mLoaded.conditionOverview());
     }
 
     private static RichTextValue preservePendingText(RichTextValue value, String pendingText) {

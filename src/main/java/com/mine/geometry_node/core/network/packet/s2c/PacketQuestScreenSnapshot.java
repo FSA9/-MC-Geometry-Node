@@ -21,6 +21,7 @@ public record PacketQuestScreenSnapshot(
     private static final int MAX_STRING_LENGTH = 32767;
     private static final int MAX_STATUSES = 256;
     private static final int MAX_QUESTS = 4096;
+    private static final int MAX_CONDITIONS_PER_GROUP = 32;
     private static final int MAX_OBJECTIVES_PER_QUEST = 1024;
     private static final int MAX_REWARDS_PER_QUEST = 1024;
 
@@ -60,6 +61,8 @@ public record PacketQuestScreenSnapshot(
             buf.writeUtf(quest.statusId(), MAX_STRING_LENGTH);
             DialogueTextStreamCodec.STREAM_CODEC.encode(buf, quest.title());
             DialogueTextStreamCodec.STREAM_CODEC.encode(buf, quest.description());
+            writeConditions(buf, quest.acceptanceConditions(), "quest acceptance conditions");
+            writeConditions(buf, quest.completionConditions(), "quest completion conditions");
             writeCount(buf, quest.objectives().size(), MAX_OBJECTIVES_PER_QUEST, "quest objectives");
             for (ObjectiveView objective : quest.objectives()) {
                 buf.writeUtf(objective.entryId(), MAX_STRING_LENGTH);
@@ -114,6 +117,8 @@ public record PacketQuestScreenSnapshot(
                     buf.readUtf(MAX_STRING_LENGTH),
                     DialogueTextStreamCodec.STREAM_CODEC.decode(buf),
                     DialogueTextStreamCodec.STREAM_CODEC.decode(buf),
+                    readConditions(buf, "quest acceptance conditions"),
+                    readConditions(buf, "quest completion conditions"),
                     readObjectives(buf),
                     readRewards(buf),
                     buf.readBoolean(),
@@ -157,6 +162,29 @@ public record PacketQuestScreenSnapshot(
         return List.copyOf(rewards);
     }
 
+    private static List<ConditionView> readConditions(RegistryFriendlyByteBuf buf, String label) {
+        int count = readCount(buf, MAX_CONDITIONS_PER_GROUP, label);
+        List<ConditionView> values = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            values.add(new ConditionView(
+                    buf.readUtf(MAX_STRING_LENGTH),
+                    buf.readBoolean(),
+                    buf.readBoolean()));
+        }
+        return List.copyOf(values);
+    }
+
+    private static void writeConditions(RegistryFriendlyByteBuf buf, List<ConditionView> values, String label) {
+        List<ConditionView> safeValues = values != null ? values : List.of();
+        writeCount(buf, safeValues.size(), MAX_CONDITIONS_PER_GROUP, label);
+        for (ConditionView value : safeValues) {
+            ConditionView safeValue = value != null ? value : new ConditionView("", false, false);
+            buf.writeUtf(safeValue.text(), MAX_STRING_LENGTH);
+            buf.writeBoolean(safeValue.evaluated());
+            buf.writeBoolean(safeValue.allowed());
+        }
+    }
+
     private static int readCount(RegistryFriendlyByteBuf buf, int maximum, String label) {
         int count = buf.readVarInt();
         if (count < 0 || count > maximum) {
@@ -190,6 +218,8 @@ public record PacketQuestScreenSnapshot(
             String statusId,
             DialogueText title,
             DialogueText description,
+            List<ConditionView> acceptanceConditions,
+            List<ConditionView> completionConditions,
             List<ObjectiveView> objectives,
             List<RewardView> rewards,
             boolean acceptEnabled,
@@ -201,8 +231,23 @@ public record PacketQuestScreenSnapshot(
             statusId = statusId == null ? "" : statusId;
             title = title == null ? DialogueText.EMPTY : title;
             description = description == null ? DialogueText.EMPTY : description;
+            acceptanceConditions = immutableConditions(acceptanceConditions);
+            completionConditions = immutableConditions(completionConditions);
             objectives = objectives == null ? List.of() : List.copyOf(objectives);
             rewards = rewards == null ? List.of() : List.copyOf(rewards);
+        }
+    }
+
+    private static List<ConditionView> immutableConditions(List<ConditionView> values) {
+        if (values == null || values.isEmpty()) return List.of();
+        return values.stream()
+                .filter(value -> value != null && !value.text().isBlank())
+                .toList();
+    }
+
+    public record ConditionView(String text, boolean evaluated, boolean allowed) {
+        public ConditionView {
+            text = text == null ? "" : text.trim();
         }
     }
 

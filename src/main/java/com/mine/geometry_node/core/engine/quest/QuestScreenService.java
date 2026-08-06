@@ -147,7 +147,7 @@ public final class QuestScreenService {
                     player, entry.taskKey(), QuestConditionKind.VISIBILITY);
             if (!visibility.evaluated() || !visibility.allowed()) continue;
             PacketQuestScreenSnapshot.QuestView view = createView(
-                    entry.taskKey(), "", QuestStatusRegistry.UNACCEPTED.id(),
+                    player, entry.taskKey(), "", QuestStatusRegistry.UNACCEPTED.id(),
                     entry.acceptEnabled(), entry.publishedAt(), null);
             if (view != null) {
                 result.add(view);
@@ -161,7 +161,7 @@ public final class QuestScreenService {
             if (presentedEntryKeys.contains(instance.taskKey())) continue;
             if (!knownStatuses.contains(instance.statusId())) continue;
             PacketQuestScreenSnapshot.QuestView view = createView(
-                    instance.taskKey(), instance.instanceId().toString(), instance.statusId(),
+                    player, instance.taskKey(), instance.instanceId().toString(), instance.statusId(),
                     false, instance.updatedAt(), instance);
             if (view != null) result.add(view);
         }
@@ -172,6 +172,7 @@ public final class QuestScreenService {
 
     @Nullable
     private static PacketQuestScreenSnapshot.QuestView createView(
+            ServerPlayer player,
             String taskKey,
             String instanceId,
             String statusId,
@@ -188,6 +189,8 @@ public final class QuestScreenService {
                 acceptEnabled,
                 updatedAt,
                 definition,
+                index.getQuestConditionOverview(),
+                kind -> QuestConditionService.INSTANCE.evaluateChecks(player, taskKey, kind),
                 instance == null ? null : instance::counter
         );
     }

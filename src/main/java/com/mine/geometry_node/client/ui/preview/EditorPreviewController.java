@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.engine.dialogue.model.shop.ShopPagePayload;
 import com.mine.geometry_node.core.engine.dialogue.model.shop.ShopPagePayloadFactory;
 import com.mine.geometry_node.core.engine.quest.QuestScreenViewFactory;
 import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.engine.quest.status.QuestStatusRegistry;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
@@ -82,7 +83,8 @@ public final class EditorPreviewController {
         return ClientDialogueState.openPreview(toPackets(List.of(page), Component.empty()));
     }
 
-    public static boolean previewQuest(String taskKey, QuestDefinition definition) {
+    public static boolean previewQuest(String taskKey, QuestDefinition definition,
+                                       QuestConditionOverview conditionOverview) {
         QuestDefinition safeDefinition = definition == null ? QuestDefinition.EMPTY : definition;
         String safeTaskKey = normalizeTaskKey(taskKey);
         PacketQuestScreenSnapshot.QuestView quest = QuestScreenViewFactory.quest(
@@ -92,6 +94,8 @@ public final class EditorPreviewController {
                 false,
                 0L,
                 safeDefinition,
+                conditionOverview,
+                null,
                 ignored -> 0.0
         );
         return ClientQuestScreenState.openPreview(new PacketQuestScreenSnapshot(

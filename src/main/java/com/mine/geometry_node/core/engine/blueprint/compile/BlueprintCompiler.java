@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.compile;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -10,6 +11,8 @@ import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionKind;
+import com.mine.geometry_node.core.engine.quest.model.QuestConditionOverview;
+import com.mine.geometry_node.core.node.NodeGraph;
 import com.mine.geometry_node.core.node.nodes.events.block.OnMultiblockBuilt;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 
@@ -26,6 +29,8 @@ import java.util.Set;
  * Compiles blueprint JSON into the immutable runtime index used by the VM.
  */
 public final class BlueprintCompiler {
+    private static final Gson GSON = new Gson();
+
     private BlueprintCompiler() {
     }
 
@@ -41,6 +46,9 @@ public final class BlueprintCompiler {
         QuestDefinition questDefinition = GraphTypeRegistry.QUEST.id().equals(graphTypeId)
                 ? QuestDefinition.fromJson(root.get("quest"))
                 : QuestDefinition.EMPTY;
+        QuestConditionOverview questConditionOverview = GraphTypeRegistry.QUEST.id().equals(graphTypeId)
+                ? QuestConditionOverview.fromGraph(GSON.fromJson(root, NodeGraph.class))
+                : QuestConditionOverview.EMPTY;
         JsonObject rootNodes = root.getAsJsonObject("nodes");
 
         GraphFlattener flattener = new GraphFlattener();
@@ -176,6 +184,7 @@ public final class BlueprintCompiler {
         return RuntimeGraphIndex.createCompiled(
                 graphTypeId,
                 questDefinition,
+                questConditionOverview,
                 idToString,
                 stringToId,
                 nodeDataArray,

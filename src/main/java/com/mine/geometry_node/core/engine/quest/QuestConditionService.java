@@ -5,11 +5,15 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionKind;
+import com.mine.geometry_node.core.engine.quest.model.QuestConditionCheck;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionResult;
+import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.quest.BaseQuestConditionsNode;
+import com.mine.geometry_node.core.node.value.QuestConditionValue;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** Evaluates a singleton quest-condition sink without binding or starting the quest graph. */
@@ -56,6 +60,55 @@ public final class QuestConditionService {
             return QuestConditionResult.evaluationFailed();
         } finally {
             process.shutdown("quest_condition_check_finished");
+        }
+    }
+
+    /** Evaluates every authored condition for a read-only quest-screen snapshot. */
+    public List<QuestConditionCheck> evaluateChecks(Entity owner, String taskKey, QuestConditionKind kind) {
+        RuntimeGraphIndex index = GraphEngine.getGraphIndex(taskKey);
+        if (index == null || owner == null || kind == null
+                || !(owner.level() instanceof ServerLevel level)) {
+            return List.of();
+        }
+
+        List<Integer> conditionNodes = index.findNodesByType(kind.nodeTypeId());
+        if (conditionNodes.isEmpty()) return List.of();
+        if (conditionNodes.size() != 1) {
+            GeometryNode.LOGGER.error(
+                    "Quest graph must contain at most one condition node of each kind: taskKey={}, kind={}, count={}",
+                    taskKey,
+                    kind,
+                    conditionNodes.size());
+            return List.of();
+        }
+
+        int conditionNodeId = conditionNodes.getFirst();
+        int conditionCount = BaseQuestConditionsNode.resolveConditionCount(
+                index.getNodeStaticInput(
+                        conditionNodeId,
+                        StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id()));
+        List<QuestConditionCheck> checks = new ArrayList<>(conditionCount);
+        GraphProcess process = new GraphProcess(taskKey, index);
+        process.setGraphOwner(owner);
+        process.setEnvironment(level, owner);
+        try {
+            for (int i = 1; i <= conditionCount; i++) {
+                RuntimeGraphIndex.IntConnectionSource source = index.findInputSource(
+                        conditionNodeId,
+                        BaseQuestConditionsNode.conditionPort(i));
+                if (source == null) continue;
+
+                Object raw = process.evaluateDataOutput(source.sourceNodeId(), source.sourcePortName());
+                if (raw instanceof QuestConditionValue condition && !condition.displayText().isBlank()) {
+                    checks.add(new QuestConditionCheck(
+                            condition.displayText(),
+                            true,
+                            condition.allowed()));
+                }
+            }
+            return List.copyOf(checks);
+        } finally {
+            process.shutdown("quest_condition_screen_check_finished");
         }
     }
 }

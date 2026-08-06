@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
+import com.mine.geometry_node.core.engine.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 import org.jetbrains.annotations.Nullable;
 
@@ -32,6 +33,7 @@ public class RuntimeGraphIndex {
     private final List<String> dictionaryReverse;
     private final String graphTypeId;
     private final QuestDefinition questDefinition;
+    private final QuestConditionOverview questConditionOverview;
 
     // ====================================================
     // 2. 核心索引结构
@@ -60,6 +62,7 @@ public class RuntimeGraphIndex {
 
     private RuntimeGraphIndex(String graphTypeId,
                               QuestDefinition questDefinition,
+                              QuestConditionOverview questConditionOverview,
                               String[] idToString,
                               Map<String, Integer> stringToId,
                               JsonObject[] nodeDataArray,
@@ -75,6 +78,9 @@ public class RuntimeGraphIndex {
                               List<String> dictionaryReverse) {
         this.graphTypeId = graphTypeId;
         this.questDefinition = questDefinition != null ? questDefinition : QuestDefinition.EMPTY;
+        this.questConditionOverview = questConditionOverview != null
+                ? questConditionOverview
+                : QuestConditionOverview.EMPTY;
         this.idToString = idToString.clone();
         this.stringToId = Map.copyOf(stringToId);
         this.nodeDataArray = nodeDataArray.clone();
@@ -129,6 +135,7 @@ public class RuntimeGraphIndex {
      */
     public static RuntimeGraphIndex createCompiled(String graphTypeId,
                                                    QuestDefinition questDefinition,
+                                                   QuestConditionOverview questConditionOverview,
                                                    String[] idToString,
                                                    Map<String, Integer> stringToId,
                                                    JsonObject[] nodeDataArray,
@@ -145,6 +152,7 @@ public class RuntimeGraphIndex {
         return new RuntimeGraphIndex(
                 graphTypeId,
                 questDefinition,
+                questConditionOverview,
                 idToString,
                 stringToId,
                 nodeDataArray,
@@ -184,6 +192,10 @@ public class RuntimeGraphIndex {
 
     public QuestDefinition getQuestDefinition() {
         return questDefinition;
+    }
+
+    public QuestConditionOverview getQuestConditionOverview() {
+        return questConditionOverview;
     }
 
     /** 通过 Int 索引还原原始的 String ID (常用于报错日志与存档持久化) */
