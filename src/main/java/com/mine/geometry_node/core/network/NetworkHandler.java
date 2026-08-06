@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
+import com.mine.geometry_node.core.entity.template.EntityTemplateTargetResolvers;
 import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
@@ -416,13 +417,19 @@ public class NetworkHandler {
     }
 
     private static void handleEntityTemplateCapture(PacketCaptureEntityTemplateRequest payload, ServerPlayer player) {
-        Entity entity = player.level().getEntity(payload.entityId());
-        if (entity == null || entity.isRemoved()) {
+        Entity selected = player.level().getEntityOrPart(payload.entityId());
+        if (selected == null || selected.isRemoved()) {
             sendEntityTemplateCaptureFailure(player, payload.requestId(), "geometry_node.entity_template.capture.not_found");
             return;
         }
-        if (!player.isWithinEntityInteractionRange(entity, 1.0)) {
+        if (!player.isWithinEntityInteractionRange(selected, 1.0)) {
             sendEntityTemplateCaptureFailure(player, payload.requestId(), "geometry_node.entity_template.capture.too_far");
+            return;
+        }
+
+        Entity entity = EntityTemplateTargetResolvers.resolve(selected);
+        if (entity.isRemoved()) {
+            sendEntityTemplateCaptureFailure(player, payload.requestId(), "geometry_node.entity_template.capture.not_found");
             return;
         }
         if (!entity.getType().canSerialize() || !entity.getType().canSummon()) {
