@@ -38,11 +38,7 @@ public final class ItemStackTooltipOverlay {
             hide();
             return;
         }
-        int[] loc = new int[2];
-        anchor.getLocationOnScreen(loc);
-        float rawX = loc[0] + event.getX();
-        float rawY = loc[1] + event.getY();
-        show(anchor, stack, rawX, rawY);
+        show(anchor, stack, event.getRawX(), event.getRawY());
     }
 
     public static void show(View anchor, ItemStack stack, float rawX, float rawY) {
@@ -80,15 +76,18 @@ public final class ItemStackTooltipOverlay {
         }
         int[] hostLoc = new int[2];
         host.getLocationOnScreen(hostLoc);
-        int left = Math.round(rawX - hostLoc[0]) + dp(12);
-        int top = Math.round(rawY - hostLoc[1]) + dp(12);
+        int pointerX = Math.round(rawX - hostLoc[0]);
+        int pointerY = Math.round(rawY - hostLoc[1]);
+        int pointerOffset = dp(12);
+        int left = pointerX + pointerOffset;
+        int top = pointerY + pointerOffset;
         int estimatedWidth = Math.min(dp(TOOLTIP_MAX_WIDTH_DP), estimateTooltipWidth(lines));
         int estimatedHeight = Math.max(dp(20), lines.size() * dp(15) + dp(10));
         if (left + estimatedWidth > host.getWidth() - dp(6)) {
-            left = Math.max(dp(6), Math.round(rawX - hostLoc[0]) - estimatedWidth - dp(12));
+            left = Math.max(dp(6), pointerX - estimatedWidth - pointerOffset);
         }
         if (top + estimatedHeight > host.getHeight() - dp(6)) {
-            top = Math.max(dp(6), host.getHeight() - estimatedHeight - dp(6));
+            top = Math.max(dp(6), pointerY - estimatedHeight - pointerOffset);
         }
         lp.leftMargin = left;
         lp.topMargin = top;

@@ -27,7 +27,7 @@ import java.util.function.Consumer;
 
 public class UIItemSlot extends ViewportNativePreviewView implements ViewportScaledHint, ViewportTransformedHint, InteractiveHintTarget {
     private static final float ITEM_SIZE_GUI = 16f;
-    private static final float ITEM_PADDING_DP = 4f;
+    private static final float ITEM_PADDING_DP = 4.0f;
     private static final float ITEM_MAX_SCALE = 1.25f;
 
     private final NodeData mNodeData;
@@ -184,30 +184,22 @@ public class UIItemSlot extends ViewportNativePreviewView implements ViewportSca
 
         float w = getWidth();
         float h = getHeight();
-        float radius = UIUtils.dp2px(3.0f);
-        float stroke = UIUtils.dp2px(1.0f);
-        float inset = UIUtils.dp2px(3.0f);
+        float radius = UIUtils.dp2px(TemplatePreviewStyle.CORNER_RADIUS_DP);
+        float stroke = UIUtils.dp2px(TemplatePreviewStyle.STROKE_WIDTH_DP);
         mPaint.setAntiAlias(true);
 
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(0xFF171A1F);
+        mPaint.setColor(TemplatePreviewStyle.COLOR_BACKGROUND);
         mTempRect.set(0, 0, w, h);
         canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(stroke);
-        mPaint.setColor(mEditable && isFocused() ? 0xFF5F91C7 : 0xFF4D535C);
+        mPaint.setColor(mEditable && isFocused()
+                ? TemplatePreviewStyle.COLOR_BORDER_FOCUSED
+                : TemplatePreviewStyle.COLOR_BORDER);
         mTempRect.set(stroke / 2.0f, stroke / 2.0f, w - stroke / 2.0f, h - stroke / 2.0f);
         canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
-
-        mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(0xFF252A31);
-        mTempRect.set(inset, inset, w - inset, h - inset);
-        canvas.drawRoundRect(mTempRect, radius * 0.6f, radius * 0.6f, radius * 0.6f, radius * 0.6f, mPaint);
-
-        mPaint.setColor(0x44343A43);
-        canvas.drawRect(inset, inset, w - inset, inset + stroke, mPaint);
-        canvas.drawRect(inset, inset, inset + stroke, h - inset, mPaint);
     }
 
     @Override

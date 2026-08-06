@@ -70,6 +70,11 @@ public class TypeConverter {
             return type.cast(val);
         }
 
+        if (type == Entity.class && val instanceof EntityTemplateValue template) {
+            if (ctx == null || ctx.getLevel() == null || template.isEmpty()) return null;
+            return type.cast(template.create(ctx.getLevel(), Vec3.ZERO));
+        }
+
         if (type == Entity.class && val instanceof UUID uuid) {
             return type.cast(resolveEntity(uuid, ctx));
         }

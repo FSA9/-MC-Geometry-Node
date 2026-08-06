@@ -113,6 +113,11 @@ public enum PortType {
 
         // --- 隐式类型转换白名单 ---
 
+        // Entity templates can be materialized as unspawned entities at runtime.
+        if (outputport == ENTITY_TEMPLATE && inputport == ENTITY) {
+            return true;
+        }
+
         // 1. 基础数值/布尔互转
         boolean isOutMath = (outputport == INTEGER || outputport == LONG || outputport == FLOAT || outputport == BOOLEAN);
         boolean isInMath  = (inputport == INTEGER || inputport == LONG || inputport == FLOAT || inputport == BOOLEAN);

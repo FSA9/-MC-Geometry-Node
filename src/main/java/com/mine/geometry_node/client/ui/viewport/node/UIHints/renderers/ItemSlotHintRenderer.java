@@ -11,7 +11,7 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 
 public class ItemSlotHintRenderer implements UIHintRenderer {
-    private static final float SLOT_SIZE_DP = 28.0f;
+    private static final float SLOT_SIZE_DP = UIConstants.Node.ROW_HEIGHT * 2.0f;
     private static final float CONTENT_HEIGHT_DP = TemplateEditorHintLayout.contentHeightDp(SLOT_SIZE_DP);
     private static final float EXTRA_ROWS = CONTENT_HEIGHT_DP / UIConstants.Node.ROW_HEIGHT;
 
@@ -30,6 +30,7 @@ public class ItemSlotHintRenderer implements UIHintRenderer {
                 context,
                 slotView,
                 SLOT_SIZE_DP,
+                false,
                 slotView::openTemplateEditor
         );
     }

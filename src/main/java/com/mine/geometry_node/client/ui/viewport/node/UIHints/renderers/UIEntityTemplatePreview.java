@@ -31,6 +31,8 @@ import java.util.Objects;
 public final class UIEntityTemplatePreview extends ViewportNativePreviewView implements ViewportScaledHint, ViewportTransformedHint, InteractiveHintTarget {
     private static final float PADDING_DP = 5.0f;
     private static final float ROTATION_SENSITIVITY = 0.65f;
+    private static final float DEFAULT_YAW = 25.0f;
+    private static final float DEFAULT_PITCH = -10.0f;
 
     private static EntityTemplateValue sClipboardTemplate;
 
@@ -44,8 +46,9 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
     private volatile Entity mPreviewEntity;
     private EntityTemplateValue mCachedTemplate = EntityTemplateValue.EMPTY;
     private Object mLastRawValue;
-    private volatile float mYaw = 25.0f;
-    private volatile float mPitch = -10.0f;
+    private volatile RotationMode mRotationMode;
+    private volatile float mYaw = DEFAULT_YAW;
+    private volatile float mPitch = DEFAULT_PITCH;
     private float mDownX;
     private float mDownY;
     private float mLastX;
@@ -54,10 +57,21 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
     private boolean mDragging;
 
     public UIEntityTemplatePreview(Context context, NodeData nodeData, String portId, EditorContext editorContext) {
+        this(context, nodeData, portId, editorContext, RotationMode.HORIZONTAL);
+    }
+
+    public UIEntityTemplatePreview(
+            Context context,
+            NodeData nodeData,
+            String portId,
+            EditorContext editorContext,
+            RotationMode rotationMode
+    ) {
         super(context);
         mNodeData = nodeData;
         mPortId = portId;
         mEditorContext = editorContext;
+        mRotationMode = rotationMode != null ? rotationMode : RotationMode.HORIZONTAL;
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
         setWillNotDraw(false);
@@ -173,6 +187,24 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
         invalidate();
     }
 
+    public RotationMode getRotationMode() {
+        return mRotationMode;
+    }
+
+    public void setRotationMode(RotationMode mode) {
+        RotationMode resolved = mode != null ? mode : RotationMode.HORIZONTAL;
+        if (resolved == mRotationMode) return;
+        mRotationMode = resolved;
+        if (resolved == RotationMode.FIXED) {
+            mYaw = DEFAULT_YAW;
+            mPitch = DEFAULT_PITCH;
+        } else if (resolved == RotationMode.HORIZONTAL) {
+            mPitch = DEFAULT_PITCH;
+        }
+        requestNativePreviewRender();
+        invalidate();
+    }
+
     private void replacePreviewEntity(Entity entity) {
         Entity previous = mPreviewEntity;
         mPreviewEntity = entity;
@@ -186,18 +218,20 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
 
         float width = getWidth();
         float height = getHeight();
-        float radius = UIUtils.dp2px(4.0f);
-        float stroke = UIUtils.dp2px(1.0f);
+        float radius = UIUtils.dp2px(TemplatePreviewStyle.CORNER_RADIUS_DP);
+        float stroke = UIUtils.dp2px(TemplatePreviewStyle.STROKE_WIDTH_DP);
         mPaint.setAntiAlias(true);
 
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(0xFF171A1F);
+        mPaint.setColor(TemplatePreviewStyle.COLOR_BACKGROUND);
         mTempRect.set(0, 0, width, height);
         canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(stroke);
-        mPaint.setColor(isFocused() ? 0xFF5F91C7 : 0xFF4D535C);
+        mPaint.setColor(isFocused()
+                ? TemplatePreviewStyle.COLOR_BORDER_FOCUSED
+                : TemplatePreviewStyle.COLOR_BORDER);
         mTempRect.set(stroke / 2.0f, stroke / 2.0f, width - stroke / 2.0f, height - stroke / 2.0f);
         canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
     }
@@ -225,9 +259,16 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
                 mDragging = true;
             }
             if (mDragging) {
-                mYaw += (x - mLastX) * ROTATION_SENSITIVITY;
-                mPitch = Math.max(-75.0f, Math.min(75.0f, mPitch + (y - mLastY) * ROTATION_SENSITIVITY));
-                requestNativePreviewRender();
+                boolean rotationChanged = false;
+                if (mRotationMode.allowsYaw()) {
+                    mYaw += (x - mLastX) * ROTATION_SENSITIVITY;
+                    rotationChanged = true;
+                }
+                if (mRotationMode.allowsPitch()) {
+                    mPitch = Math.max(-75.0f, Math.min(75.0f, mPitch + (y - mLastY) * ROTATION_SENSITIVITY));
+                    rotationChanged = true;
+                }
+                if (rotationChanged) requestNativePreviewRender();
             }
             mLastX = x;
             mLastY = y;
@@ -292,5 +333,27 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
     protected void onDetachedFromWindow() {
         replacePreviewEntity(null);
         super.onDetachedFromWindow();
+    }
+
+    public enum RotationMode {
+        FIXED(false, false),
+        HORIZONTAL(true, false),
+        FREE(true, true);
+
+        private final boolean allowsYaw;
+        private final boolean allowsPitch;
+
+        RotationMode(boolean allowsYaw, boolean allowsPitch) {
+            this.allowsYaw = allowsYaw;
+            this.allowsPitch = allowsPitch;
+        }
+
+        public boolean allowsYaw() {
+            return allowsYaw;
+        }
+
+        public boolean allowsPitch() {
+            return allowsPitch;
+        }
     }
 }

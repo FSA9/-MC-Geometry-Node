@@ -23,7 +23,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 final class QuestObjectivesEditor extends LinearLayout {
     private static final int COLOR_ROW = 0xFF292929;
@@ -39,6 +41,7 @@ final class QuestObjectivesEditor extends LinearLayout {
     private final LinearLayout rows;
     private final Runnable onChanged;
     private final List<ObjectiveRow> editors = new ArrayList<>();
+    private final Set<String> collapsedEntryIds = new HashSet<>();
     private boolean updating;
 
     QuestObjectivesEditor(Context context, Runnable onChanged) {
@@ -63,6 +66,7 @@ final class QuestObjectivesEditor extends LinearLayout {
 
     void setObjectives(List<QuestObjectiveDefinition> objectives) {
         updating = true;
+        rememberCollapsedRows();
         rows.removeAllViews();
         editors.clear();
         if (objectives != null) {
@@ -90,6 +94,7 @@ final class QuestObjectivesEditor extends LinearLayout {
 
     private void removeRow(ObjectiveRow row) {
         if (!editors.remove(row)) return;
+        collapsedEntryIds.remove(row.entryId);
         rebuildRows();
         changed();
     }
@@ -117,6 +122,16 @@ final class QuestObjectivesEditor extends LinearLayout {
         if (!updating && onChanged != null) onChanged.run();
     }
 
+    private void rememberCollapsedRows() {
+        for (ObjectiveRow editor : editors) {
+            if (editor.expanded) {
+                collapsedEntryIds.remove(editor.entryId);
+            } else {
+                collapsedEntryIds.add(editor.entryId);
+            }
+        }
+    }
+
     private final class ObjectiveRow {
         private final String entryId;
         private RichTextValue content;
@@ -124,8 +139,11 @@ final class QuestObjectivesEditor extends LinearLayout {
         private boolean counterEnabled;
         private QuestHintType hintType;
         private String itemHintValue;
+        private boolean expanded;
 
         private final LinearLayout root;
+        private final FrameLayout expandButton;
+        private final VectorIconView expandIcon;
         private final EditText contentInput;
         private final TextView quantityToggle;
         private final TextView counterToggle;
@@ -133,6 +151,9 @@ final class QuestObjectivesEditor extends LinearLayout {
         private final EditText targetInput;
         private final TextView hintToggle;
         private final QuestHintView hintPreview;
+        private final LinearLayout quantityRow;
+        private final LinearLayout counterRow;
+        private final LinearLayout hintRow;
 
         private ObjectiveRow(QuestObjectiveDefinition definition) {
             entryId = definition.entryId();
@@ -141,6 +162,7 @@ final class QuestObjectivesEditor extends LinearLayout {
             counterEnabled = definition.counterEnabled();
             hintType = definition.hintType();
             itemHintValue = definition.hintValue();
+            expanded = !collapsedEntryIds.contains(entryId);
 
             root = new LinearLayout(getContext());
             root.setOrientation(VERTICAL);
@@ -151,6 +173,18 @@ final class QuestObjectivesEditor extends LinearLayout {
             LinearLayout contentRow = new LinearLayout(getContext());
             contentRow.setOrientation(HORIZONTAL);
             contentRow.setGravity(Gravity.CENTER_VERTICAL);
+            expandButton = new FrameLayout(getContext());
+            styleButton(expandButton, COLOR_BUTTON);
+            expandIcon = new VectorIconView(getContext(), VectorIconView.Kind.CHEVRON_UP, COLOR_TEXT);
+            expandIcon.setClickable(false);
+            FrameLayout.LayoutParams expandIconLp = new FrameLayout.LayoutParams(
+                    UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(12));
+            expandIconLp.gravity = Gravity.CENTER;
+            expandButton.addView(expandIcon, expandIconLp);
+            expandButton.setOnClickListener(v -> toggleExpanded());
+            LayoutParams expandLp = new LayoutParams(UIUtils.dp2pxInt(26), UIUtils.dp2pxInt(30));
+            expandLp.rightMargin = UIUtils.dp2pxInt(4);
+            contentRow.addView(expandButton, expandLp);
             contentInput = input(content.plain(), tr("geometry_node.graph_properties.quest.objective_placeholder"));
             contentInput.setOnFocusChangeListener((v, focused) -> {
                 if (!focused) changed();
@@ -179,7 +213,7 @@ final class QuestObjectivesEditor extends LinearLayout {
             root.addView(contentRow, new LayoutParams(
                     LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
 
-            LinearLayout quantityRow = new LinearLayout(getContext());
+            quantityRow = new LinearLayout(getContext());
             quantityRow.setOrientation(HORIZONTAL);
             quantityRow.setGravity(Gravity.CENTER_VERTICAL);
             quantityToggle = button("", tr("geometry_node.graph_properties.quest.quantity_enabled"));
@@ -203,7 +237,7 @@ final class QuestObjectivesEditor extends LinearLayout {
             quantityRow.addView(targetInput, targetLp);
             root.addView(quantityRow, compactRowParams());
 
-            LinearLayout counterRow = new LinearLayout(getContext());
+            counterRow = new LinearLayout(getContext());
             counterRow.setOrientation(HORIZONTAL);
             counterRow.setGravity(Gravity.CENTER_VERTICAL);
             counterToggle = button("", tr("geometry_node.graph_properties.quest.counter_enabled"));
@@ -226,7 +260,7 @@ final class QuestObjectivesEditor extends LinearLayout {
             counterRow.addView(counterKeyInput, keyLp);
             root.addView(counterRow, compactRowParams());
 
-            LinearLayout hintRow = new LinearLayout(getContext());
+            hintRow = new LinearLayout(getContext());
             hintRow.setOrientation(HORIZONTAL);
             hintRow.setGravity(Gravity.CENTER_VERTICAL);
             hintToggle = button("", tr("geometry_node.graph_properties.quest.hint_enabled"));
@@ -250,6 +284,7 @@ final class QuestObjectivesEditor extends LinearLayout {
             updateQuantityUi();
             updateCounterUi();
             updateHintUi();
+            updateExpandedUi();
         }
 
         private QuestObjectiveDefinition definition() {
@@ -321,6 +356,27 @@ final class QuestObjectivesEditor extends LinearLayout {
 
         private void updateHintPreview() {
             hintPreview.setHint(hintType, itemHintValue);
+        }
+
+        private void toggleExpanded() {
+            expanded = !expanded;
+            if (expanded) {
+                collapsedEntryIds.remove(entryId);
+            } else {
+                collapsedEntryIds.add(entryId);
+            }
+            updateExpandedUi();
+        }
+
+        private void updateExpandedUi() {
+            int visibility = expanded ? View.VISIBLE : View.GONE;
+            quantityRow.setVisibility(visibility);
+            counterRow.setVisibility(visibility);
+            hintRow.setVisibility(visibility);
+            expandIcon.setKind(expanded ? VectorIconView.Kind.CHEVRON_UP : VectorIconView.Kind.CHEVRON_DOWN);
+            expandButton.setTooltipText(tr(expanded
+                    ? "geometry_node.graph_properties.quest.objective_collapse"
+                    : "geometry_node.graph_properties.quest.objective_expand"));
         }
     }
 

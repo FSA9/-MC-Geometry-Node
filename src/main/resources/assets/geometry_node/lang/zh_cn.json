@@ -981,6 +981,8 @@
   "geometry_node.graph_properties.quest.objective_remove": "删除任务目标",
   "geometry_node.graph_properties.quest.objective_move_up": "上移任务目标",
   "geometry_node.graph_properties.quest.objective_move_down": "下移任务目标",
+  "geometry_node.graph_properties.quest.objective_expand": "展开任务目标",
+  "geometry_node.graph_properties.quest.objective_collapse": "收起任务目标",
   "geometry_node.graph_properties.quest.objective_placeholder": "输入目标内容",
   "geometry_node.graph_properties.quest.quantity_enabled": "是否显示数量",
   "geometry_node.graph_properties.quest.quantity_value": "数量",

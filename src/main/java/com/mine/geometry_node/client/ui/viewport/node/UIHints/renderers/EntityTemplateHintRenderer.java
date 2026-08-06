@@ -11,7 +11,7 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 
 public final class EntityTemplateHintRenderer implements UIHintRenderer {
-    private static final float PREVIEW_SIZE_DP = 76.0f;
+    private static final float PREVIEW_SIZE_DP = UIConstants.Node.ROW_HEIGHT * 6.0f;
     private static final float CONTENT_HEIGHT_DP = TemplateEditorHintLayout.contentHeightDp(PREVIEW_SIZE_DP);
     private static final float EXTRA_ROWS = CONTENT_HEIGHT_DP / UIConstants.Node.ROW_HEIGHT;
 
@@ -27,12 +27,14 @@ public final class EntityTemplateHintRenderer implements UIHintRenderer {
                 context,
                 nodeData,
                 row.leftPort().id(),
-                editorContext
+                editorContext,
+                UIEntityTemplatePreview.RotationMode.HORIZONTAL
         );
         return new TemplateEditorHintLayout(
                 context,
                 preview,
                 PREVIEW_SIZE_DP,
+                true,
                 preview::openTemplateEditor
         );
     }

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
+import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.InlineActionButton;
 import icyllis.modernui.core.Context;
@@ -10,7 +11,7 @@ import net.minecraft.network.chat.Component;
 
 /** Shared preview-and-edit layout for persistent template hints. */
 final class TemplateEditorHintLayout extends FrameLayout implements ViewportScaledHint, ViewportTransformedHint {
-    static final float BUTTON_GAP_DP = 4.0f;
+    private static final float ROW_VERTICAL_INSET_DP = 1.0f;
 
     private final View preview;
     private float viewportScale = 1.0f;
@@ -19,16 +20,24 @@ final class TemplateEditorHintLayout extends FrameLayout implements ViewportScal
     private long previewOrder;
     private boolean hasViewportTransform;
 
-    TemplateEditorHintLayout(Context context, View preview, float previewSizeDp, Runnable editAction) {
+    TemplateEditorHintLayout(
+            Context context,
+            View preview,
+            float previewAreaHeightDp,
+            boolean fillPreviewWidth,
+            Runnable editAction
+    ) {
         super(context);
         this.preview = preview;
         setClipChildren(false);
 
+        int previewHeightPx = UIUtils.dp2pxInt(previewAreaHeightDp - ROW_VERTICAL_INSET_DP * 2.0f);
         LayoutParams previewParams = new LayoutParams(
-                UIUtils.dp2pxInt(previewSizeDp),
-                UIUtils.dp2pxInt(previewSizeDp)
+                fillPreviewWidth ? LayoutParams.MATCH_PARENT : previewHeightPx,
+                previewHeightPx
         );
         previewParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        previewParams.topMargin = UIUtils.dp2pxInt(ROW_VERTICAL_INSET_DP);
         addView(preview, previewParams);
 
         InlineActionButton editButton = new InlineActionButton(
@@ -43,12 +52,14 @@ final class TemplateEditorHintLayout extends FrameLayout implements ViewportScal
                 InlineActionButton.heightPx()
         );
         buttonParams.gravity = Gravity.TOP | Gravity.LEFT;
-        buttonParams.topMargin = UIUtils.dp2pxInt(previewSizeDp + BUTTON_GAP_DP);
+        buttonParams.topMargin = UIUtils.dp2pxInt(
+                previewAreaHeightDp + (UIConstants.Node.ROW_HEIGHT - InlineActionButton.heightDp()) * 0.5f
+        );
         addView(editButton, buttonParams);
     }
 
-    static float contentHeightDp(float previewSizeDp) {
-        return previewSizeDp + BUTTON_GAP_DP + InlineActionButton.heightDp();
+    static float contentHeightDp(float previewAreaHeightDp) {
+        return previewAreaHeightDp + UIConstants.Node.ROW_HEIGHT;
     }
 
     @Override
@@ -88,7 +99,14 @@ final class TemplateEditorHintLayout extends FrameLayout implements ViewportScal
         LayoutParams rootParams = getLayoutParams() instanceof LayoutParams params ? params : null;
         LayoutParams previewParams = preview.getLayoutParams() instanceof LayoutParams params ? params : null;
         int rootWidth = getWidth() > 0 ? getWidth() : rootParams != null ? rootParams.width : 0;
-        int previewWidth = preview.getWidth() > 0 ? preview.getWidth() : previewParams != null ? previewParams.width : 0;
+        int previewWidth;
+        if (preview.getWidth() > 0) {
+            previewWidth = preview.getWidth();
+        } else if (previewParams != null && previewParams.width == LayoutParams.MATCH_PARENT) {
+            previewWidth = rootWidth;
+        } else {
+            previewWidth = previewParams != null ? Math.max(0, previewParams.width) : 0;
+        }
         float previewLeftPx = Math.max(0.0f, (rootWidth - previewWidth) * 0.5f);
         transformedHint.setViewportTransform(
                 viewportScale,
