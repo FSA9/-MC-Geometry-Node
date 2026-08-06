@@ -213,6 +213,7 @@ final class QuestRewardsEditor extends LinearLayout {
             amountRow.addView(hintToggle, hintToggleLp);
             hintPreview = new QuestHintView(getContext());
             hintPreview.setDisplayClickAction(this::pickItem);
+            hintPreview.setDisplayPasteAction(this::pasteItem);
             LayoutParams previewLp = new LayoutParams(UIUtils.dp2pxInt(32), UIUtils.dp2pxInt(32));
             previewLp.leftMargin = UIUtils.dp2pxInt(4);
             amountRow.addView(hintPreview, previewLp);
@@ -258,7 +259,17 @@ final class QuestRewardsEditor extends LinearLayout {
                 itemHintValue = ItemCodecUtils.toJson(stack, minecraft.level.registryAccess());
                 updateHintPreview();
                 changed();
-            }, this::updateHintPreview);
+            }, () -> {
+                updateHintPreview();
+                hintPreview.requestFocus();
+            });
+        }
+
+        private void pasteItem(String itemJson) {
+            hintType = QuestHintType.ITEM_STACK;
+            itemHintValue = itemJson != null ? itemJson : "";
+            updateHintPreview();
+            changed();
         }
 
         private void updateCounterUi() {

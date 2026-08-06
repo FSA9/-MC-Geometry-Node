@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.ItemTooltipProxy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ItemStackTooltipOverlay;
@@ -15,6 +17,7 @@ import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.PointerIcon;
+import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.mc.MinecraftSurfaceView;
 import net.minecraft.client.Minecraft;
@@ -22,6 +25,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.item.ItemStack;
 
 import javax.annotation.Nonnull;
+import java.util.function.Consumer;
 
 public class UIItemSlot extends FrameLayout {
     private static final float ITEM_SIZE_GUI = 16f;
@@ -41,6 +45,11 @@ public class UIItemSlot extends FrameLayout {
     private int mLastSurfaceWidth = -1;
     private int mLastSurfaceHeight = -1;
     private Runnable mDisplayClickAction;
+    private Consumer<String> mDisplayPasteAction;
+    private boolean mEditable;
+    private boolean mPressed;
+
+    private static String sClipboardItemJson;
 
     public UIItemSlot(Context context) {
         this(context, null, "", null);
@@ -51,9 +60,12 @@ public class UIItemSlot extends FrameLayout {
         this.mNodeData = nodeData;
         this.mPortId = portId;
         this.mEditorContext = editorContext;
+        mEditable = nodeData != null && editorContext != null;
 
         setWillNotDraw(false);
         setClipChildren(false);
+        updateFocusableState();
+        setOnFocusChangeListener((v, hasFocus) -> invalidate());
         setOnHoverListener((v, event) -> {
             handleHover(event);
             return true;
@@ -120,6 +132,24 @@ public class UIItemSlot extends FrameLayout {
 
     public void setDisplayClickAction(Runnable action) {
         mDisplayClickAction = action;
+        if (action != null) {
+            mEditable = true;
+            updateFocusableState();
+        }
+    }
+
+    public void setDisplayPasteAction(Consumer<String> action) {
+        mDisplayPasteAction = action;
+        if (action != null) {
+            mEditable = true;
+            updateFocusableState();
+        }
+    }
+
+    private void updateFocusableState() {
+        setFocusable(mEditable);
+        setFocusableInTouchMode(mEditable);
+        setClickable(mEditable);
     }
 
     private void updateSurfaceBounds() {
@@ -190,7 +220,7 @@ public class UIItemSlot extends FrameLayout {
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(stroke);
-        mPaint.setColor(0xFF4D535C);
+        mPaint.setColor(mEditable && isFocused() ? 0xFF5F91C7 : 0xFF4D535C);
         mTempRect.set(stroke / 2.0f, stroke / 2.0f, w - stroke / 2.0f, h - stroke / 2.0f);
         canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
 
@@ -254,21 +284,89 @@ public class UIItemSlot extends FrameLayout {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
+        if (!mEditable) return false;
         return onTouchEvent(event);
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (!mEditable) return false;
         int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            mPressed = true;
+            setPressed(true);
+            return true;
+        }
         if (action == MotionEvent.ACTION_UP) {
-            if (mDisplayClickAction != null) {
-                mDisplayClickAction.run();
+            boolean wasPressed = mPressed;
+            mPressed = false;
+            setPressed(false);
+            if (!wasPressed) return true;
+
+            if (!isFocused()) {
+                requestFocus();
+                invalidate();
                 return true;
             }
-            openPicker();
+
+            openEditor();
+            return true;
+        }
+        if (action == MotionEvent.ACTION_CANCEL) {
+            mPressed = false;
+            setPressed(false);
             return true;
         }
         return true;
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (mEditable && isFocused()) {
+            KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.getConfig().keyBindings.global.copy);
+            if (copy != null && copy.matches(event)) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) copyItem();
+                return true;
+            }
+
+            KeyBinding paste = KeyBinding.parse(ConfigManager.INSTANCE.getConfig().keyBindings.global.paste);
+            if (paste != null && paste.matches(event)) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) pasteItem();
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    private void openEditor() {
+        if (mDisplayClickAction != null) {
+            mDisplayClickAction.run();
+            return;
+        }
+        openPicker();
+    }
+
+    private void copyItem() {
+        updateCache();
+        Minecraft minecraft = Minecraft.getInstance();
+        if (mCachedStack.isEmpty()) {
+            sClipboardItemJson = "";
+            return;
+        }
+        if (minecraft.level == null) return;
+        sClipboardItemJson = ItemCodecUtils.toJson(mCachedStack, minecraft.level.registryAccess());
+    }
+
+    private void pasteItem() {
+        if (sClipboardItemJson == null) return;
+
+        if (mDisplayPasteAction != null) {
+            mDisplayPasteAction.accept(sClipboardItemJson);
+        } else if (mNodeData != null && mEditorContext != null) {
+            UIHintValueBinder.commit(mEditorContext, mNodeData, mPortId, sClipboardItemJson);
+        }
+        updateCache();
+        invalidate();
     }
 
     private void openPicker() {

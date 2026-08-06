@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.viewport.frame.FrameLayer;
 import com.mine.geometry_node.client.ui.viewport.layers.BackgroundLayer;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.InventoryItemPickerOverlay;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ShopEditorOverlay;
+import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIItemSlot;
 import com.mine.geometry_node.client.ui.viewport.node.NodeLayer;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import com.mine.geometry_node.client.ui.viewport.menu.ViewportMenu;
@@ -608,7 +609,9 @@ public class Viewport extends FrameLayout implements InteractionContext {
     public boolean dispatchKeyEvent(icyllis.modernui.view.KeyEvent event) {
         if (event.getAction() == icyllis.modernui.view.KeyEvent.ACTION_DOWN) {
             View focusedView = findFocus();
-            if (focusedView instanceof EditText) return super.dispatchKeyEvent(event);
+            if (focusedView instanceof EditText || focusedView instanceof UIItemSlot) {
+                return super.dispatchKeyEvent(event);
+            }
             if (mInteractionManager.onKeyDown(event)) return true;
             if (mKeyManager.onKeyDown(event)) return true;
         }
