@@ -2,16 +2,12 @@ package com.mine.geometry_node.core.engine.quest;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
-import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionResult;
 import com.mine.geometry_node.core.engine.quest.model.QuestInstance;
 import com.mine.geometry_node.core.engine.quest.model.QuestListEntry;
-import com.mine.geometry_node.core.engine.quest.model.QuestObjectiveDefinition;
-import com.mine.geometry_node.core.engine.quest.model.QuestRewardDefinition;
 import com.mine.geometry_node.core.engine.quest.model.QuestOperationResult;
-import com.mine.geometry_node.core.engine.quest.status.QuestStatus;
 import com.mine.geometry_node.core.engine.quest.status.QuestStatusRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketQuestScreenAction;
@@ -132,12 +128,7 @@ public final class QuestScreenService {
     }
 
     private static List<PacketQuestScreenSnapshot.StatusView> createStatuses() {
-        List<PacketQuestScreenSnapshot.StatusView> result = new ArrayList<>();
-        for (QuestStatus status : QuestStatusRegistry.INSTANCE.all()) {
-            result.add(new PacketQuestScreenSnapshot.StatusView(
-                    status.id(), status.translationKey(), status.color(), status.graphActive()));
-        }
-        return List.copyOf(result);
+        return QuestScreenViewFactory.statuses();
     }
 
     private static List<PacketQuestScreenSnapshot.QuestView> createQuests(
@@ -190,49 +181,14 @@ public final class QuestScreenService {
         RuntimeGraphIndex index = GraphEngine.getGraphIndex(taskKey);
         if (index == null) return null;
         QuestDefinition definition = index.getQuestDefinition();
-        DialogueText title = definition.title().plain().isBlank()
-                ? DialogueText.plain(taskKey)
-                : DialogueText.rich(definition.title());
-        List<PacketQuestScreenSnapshot.ObjectiveView> objectives = new ArrayList<>();
-        for (QuestObjectiveDefinition objective : definition.objectives()) {
-            double currentValue = objective.counterEnabled() && instance != null
-                    ? instance.counter(objective.counterKey())
-                    : 0.0;
-            objectives.add(new PacketQuestScreenSnapshot.ObjectiveView(
-                    objective.entryId(),
-                    DialogueText.rich(objective.content()),
-                    objective.quantityEnabled(),
-                    objective.counterEnabled(),
-                    objective.counterKey(),
-                    currentValue,
-                    objective.targetValue(),
-                    objective.hintType().id(),
-                    objective.hintValue()
-            ));
-        }
-        List<PacketQuestScreenSnapshot.RewardView> rewards = new ArrayList<>();
-        for (QuestRewardDefinition reward : definition.rewards()) {
-            double amount = reward.counterEnabled() && instance != null
-                    ? instance.counter(reward.counterKey())
-                    : reward.counterEnabled() ? 0.0 : reward.amount();
-            rewards.add(new PacketQuestScreenSnapshot.RewardView(
-                    reward.entryId(),
-                    DialogueText.rich(reward.content()),
-                    amount,
-                    reward.hintType().id(),
-                    reward.hintValue()
-            ));
-        }
-        return new PacketQuestScreenSnapshot.QuestView(
+        return QuestScreenViewFactory.quest(
                 taskKey,
                 instanceId,
                 statusId,
-                title,
-                DialogueText.rich(definition.description()),
-                objectives,
-                rewards,
                 acceptEnabled,
-                updatedAt
+                updatedAt,
+                definition,
+                instance == null ? null : instance::counter
         );
     }
 }

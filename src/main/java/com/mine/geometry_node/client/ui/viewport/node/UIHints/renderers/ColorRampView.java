@@ -27,6 +27,7 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 final class ColorRampView extends LinearLayout {
@@ -132,7 +133,8 @@ final class ColorRampView extends LinearLayout {
             parent = parent.getParent();
         }
         if (parent instanceof InteractionContext interactionContext) {
-            SelectHintRenderer.DropdownSearchMenu menu = new SelectHintRenderer.DropdownSearchMenu(getContext(), title, options, onSelect);
+            SelectHintRenderer.DropdownSearchMenu menu = new SelectHintRenderer.DropdownSearchMenu(
+                    getContext(), title, options, Map.of(), onSelect);
             menu.showAt(anchor, interactionContext);
         }
     }

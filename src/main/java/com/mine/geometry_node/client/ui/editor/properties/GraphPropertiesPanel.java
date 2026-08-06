@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.editor.properties;
 import com.mine.geometry_node.client.ui.common.TagFlowLayout;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
+import com.mine.geometry_node.client.ui.preview.EditorPreviewController;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ExpandedTextInputOverlay;
 import com.mine.geometry_node.core.engine.graph.GraphType;
@@ -129,6 +130,18 @@ public final class GraphPropertiesPanel extends FrameLayout {
         TextView questSectionTitle = addSectionTitle(
                 tr("geometry_node.graph_properties.quest.section"), 10);
         mQuestPropertyViews.add(questSectionTitle);
+
+        TextView previewQuest = actionButton(
+                context,
+                tr("geometry_node.button.preview"),
+                tr("geometry_node.graph_properties.quest.preview"));
+        previewQuest.setOnClickListener(v -> previewQuest());
+        LinearLayout.LayoutParams previewQuestParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                UIUtils.dp2pxInt(28));
+        previewQuestParams.bottomMargin = UIUtils.dp2pxInt(8);
+        mContent.addView(previewQuest, previewQuestParams);
+        mQuestPropertyViews.add(previewQuest);
 
         TextView questTitleLabel = label(context,
                 tr("geometry_node.graph_properties.quest.title"), 10.5f, COLOR_LABEL);
@@ -759,6 +772,14 @@ public final class GraphPropertiesPanel extends FrameLayout {
                 });
     }
 
+    private void previewQuest() {
+        if (!GraphTypeRegistry.QUEST.id().equals(mSelectedGraphTypeId) || mLoaded == null) return;
+        QuestDefinition definition = questDefinitionFromInputs();
+        mQuestDefinition = definition;
+        commitPendingEdits();
+        EditorPreviewController.previewQuest(mLoaded.fileName(), definition);
+    }
+
     private static RichTextValue preservePendingText(RichTextValue value, String pendingText) {
         if (pendingText == null || pendingText.equals(value.plain())) {
             return value;
@@ -792,6 +813,20 @@ public final class GraphPropertiesPanel extends FrameLayout {
         TextView button = label(context, "...", 12.0f, COLOR_TEXT);
         button.setGravity(Gravity.CENTER);
         button.setTooltipText(tr("geometry_node.graph_properties.quest.edit_rich_text"));
+        button.setBackground(rect(COLOR_BUTTON, 3.0f, 0, 0));
+        button.setOnHoverListener((v, event) -> {
+            boolean hovered = event.getAction() == MotionEvent.ACTION_HOVER_ENTER
+                    || event.getAction() == MotionEvent.ACTION_HOVER_MOVE;
+            button.setBackground(rect(hovered ? COLOR_BUTTON_HOVER : COLOR_BUTTON, 3.0f, 0, 0));
+            return false;
+        });
+        return button;
+    }
+
+    private static TextView actionButton(Context context, String text, String tooltip) {
+        TextView button = label(context, text, 11.0f, COLOR_TEXT);
+        button.setGravity(Gravity.CENTER);
+        button.setTooltipText(tooltip);
         button.setBackground(rect(COLOR_BUTTON, 3.0f, 0, 0));
         button.setOnHoverListener((v, event) -> {
             boolean hovered = event.getAction() == MotionEvent.ACTION_HOVER_ENTER

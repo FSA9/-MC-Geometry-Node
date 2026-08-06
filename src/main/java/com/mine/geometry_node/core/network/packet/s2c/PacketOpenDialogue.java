@@ -74,6 +74,28 @@ public record PacketOpenDialogue(
             );
         }
 
+        return fromPage(
+                session.getSessionId(),
+                session.getDialogueContext() == null
+                        ? Component.empty()
+                        : session.getDialogueContext().resolveDialogueEntityDisplayName(),
+                page
+        );
+    }
+
+    public static PacketOpenDialogue fromPage(UUID sessionId,
+                                              Component speaker,
+                                              DialoguePagePayload page) {
+        if (page == null) {
+            return new PacketOpenDialogue(
+                    sessionId,
+                    "",
+                    speaker,
+                    new DialoguePagePayload.TextContent(DialogueStyleRegistry.DEFAULT, DialogueText.EMPTY),
+                    "",
+                    List.of()
+            );
+        }
         List<Choice> choices = new ArrayList<>(page.choices().size());
         for (DialogueChoicePayload choice : page.choices()) {
             choices.add(new Choice(
@@ -86,11 +108,9 @@ public record PacketOpenDialogue(
         }
 
         return new PacketOpenDialogue(
-                session.getSessionId(),
+                sessionId,
                 page.id(),
-                session.getDialogueContext() == null
-                        ? Component.empty()
-                        : session.getDialogueContext().resolveDialogueEntityDisplayName(),
+                speaker,
                 page.content(),
                 page.defaultChoiceId(),
                 choices

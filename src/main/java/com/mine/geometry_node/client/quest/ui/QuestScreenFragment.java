@@ -471,7 +471,8 @@ public final class QuestScreenFragment extends Fragment {
     }
 
     private void performAction(BooleanSupplier action) {
-        if (waitingForServer || action == null || !action.getAsBoolean()) return;
+        if (ClientQuestScreenState.isPreviewActive()
+                || waitingForServer || action == null || !action.getAsBoolean()) return;
         waitingForServer = true;
         window.setAlpha(0.76f);
     }

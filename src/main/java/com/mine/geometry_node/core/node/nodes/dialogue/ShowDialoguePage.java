@@ -3,12 +3,11 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.dialogue.DialogueContext;
-import com.mine.geometry_node.core.engine.dialogue.model.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.dialogue.model.DialoguePageFactory;
 import com.mine.geometry_node.core.engine.dialogue.model.DialoguePagePayload;
-import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.engine.dialogue.DialogueWaitRequest;
-import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRoundParser;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -22,7 +21,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +28,7 @@ public class ShowDialoguePage extends BaseNode {
     public static final String TYPE_ID = "show_dialogue_page";
     public static final String TEXT = "text";
     public static final String CLOSED = StandardPorts.CLOSED.getId();
+    public static final String ACTION_PREVIEW = "preview_dialogue";
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -43,6 +42,18 @@ public class ShowDialoguePage extends BaseNode {
                         PortDef.create(TEXT, "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.EMPTY),
                         null,
                         UIHint.INPUT, null, null
+                ))
+                .addRow(new PortRow(
+                        null,
+                        null,
+                        UIHint.BUTTON,
+                        null,
+                        Map.of(
+                                PortMetaKeys.BUTTON_LABEL, "geometry_node.button.preview",
+                                PortMetaKeys.BUTTON_ACTION, ACTION_PREVIEW,
+                                PortMetaKeys.BUTTON_COLOR, 0xFF3D6EA8,
+                                PortMetaKeys.BUTTON_TEXT_COLOR, 0xFFFFFFFF
+                        )
                 ))
                 .addRow(new PortRow(
                         null,
@@ -63,36 +74,10 @@ public class ShowDialoguePage extends BaseNode {
         RichTextValue bodyText = richText(context, TEXT);
         String styleId = dialogueContext.styleId();
 
-        List<RichTextValue> rounds = DialogueRoundParser.split(bodyText);
-        List<DialoguePagePayload> pages = new ArrayList<>(rounds.size());
         String basePageId = "node:" + context.getCurrentNodeId();
-        for (int i = 0; i < rounds.size(); i++) {
-            String pageId = rounds.size() == 1 ? basePageId : basePageId + ":round:" + (i + 1);
-            String choiceId = i == rounds.size() - 1
-                    ? StandardPorts.FLOW_OUT.getId()
-                    : DialogueChoicePayload.continuePageChoiceId(i);
-            DialogueChoicePayload.Action action = i == rounds.size() - 1
-                    ? new DialogueChoicePayload.ResumePort(StandardPorts.FLOW_OUT.getId())
-                    : new DialogueChoicePayload.AdvancePage(i);
-            pages.add(DialoguePagePayload.text(
-                    pageId,
-                    DialogueText.rich(rounds.get(i)),
-                    styleId,
-                    List.of(continueChoice(choiceId, action))
-            ));
-        }
+        List<DialoguePagePayload> pages = DialoguePageFactory.textRounds(basePageId, bodyText, styleId);
 
         return ExecutionResult.externalWait(GraphKind.DIALOGUE, new DialogueWaitRequest(dialogueContext, pages));
-    }
-
-    private static DialogueChoicePayload continueChoice(String choiceId, DialogueChoicePayload.Action action) {
-        return new DialogueChoicePayload(
-                choiceId,
-                DialogueText.rich(RichTextValue.plain("继续")),
-                action,
-                true,
-                DialogueText.EMPTY
-        );
     }
 
     private DialogueContext resolveDialogueContext(ExecutionContext context, ServerPlayer player) {

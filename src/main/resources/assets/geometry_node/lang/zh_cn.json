@@ -640,6 +640,9 @@
   "geometry_node.node.resolve_dialogue_text": "解析对话文本",
   "geometry_node.node.format_dialogue_text": "格式化对话文本",
   "geometry_node.button.edit_shop": "编辑商店",
+  "geometry_node.button.preview": "预览",
+  "geometry_node.preview.dialogue.speaker": "预览",
+  "geometry_node.graph_properties.quest.preview": "预览当前任务界面",
 
   "geometry_node.port.player": "玩家",
   "geometry_node.port.speaker_entity": "对话实体",

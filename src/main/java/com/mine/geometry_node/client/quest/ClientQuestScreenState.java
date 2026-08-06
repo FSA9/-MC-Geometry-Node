@@ -8,6 +8,7 @@ import org.jetbrains.annotations.Nullable;
 public final class ClientQuestScreenState {
     @Nullable
     private static volatile PacketQuestScreenSnapshot current;
+    private static volatile boolean previewActive;
 
     private ClientQuestScreenState() {
     }
@@ -16,8 +17,21 @@ public final class ClientQuestScreenState {
         if (!snapshot.openScreen() && !QuestScreenRenderer.isActive()) {
             return;
         }
+        previewActive = false;
         current = snapshot;
         QuestScreenRenderer.openOrRefresh(snapshot);
+    }
+
+    public static boolean openPreview(PacketQuestScreenSnapshot snapshot) {
+        if (snapshot == null) return false;
+        previewActive = true;
+        current = snapshot;
+        QuestScreenRenderer.openOrRefresh(snapshot);
+        return true;
+    }
+
+    public static boolean isPreviewActive() {
+        return previewActive;
     }
 
     @Nullable
@@ -38,23 +52,28 @@ public final class ClientQuestScreenState {
     }
 
     public static void requestOpen() {
+        previewActive = false;
         NetworkHandler.sendToServer(new PacketQuestScreenAction(PacketQuestScreenAction.OPEN, "", ""));
     }
 
     public static void close() {
-        if (QuestScreenRenderer.isActive()) {
+        boolean closingPreview = previewActive;
+        if (!closingPreview && QuestScreenRenderer.isActive()) {
             NetworkHandler.sendToServer(new PacketQuestScreenAction(PacketQuestScreenAction.CLOSE, "", ""));
         }
+        previewActive = false;
+        if (closingPreview) current = null;
         QuestScreenRenderer.close();
     }
 
     public static void reset() {
+        previewActive = false;
         current = null;
         QuestScreenRenderer.clear();
     }
 
     private static boolean send(String action, String taskKey, String instanceId) {
-        if (!QuestScreenRenderer.isActive()) return false;
+        if (previewActive || !QuestScreenRenderer.isActive()) return false;
         NetworkHandler.sendToServer(new PacketQuestScreenAction(action, taskKey, instanceId));
         return true;
     }
