@@ -118,7 +118,7 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
             float padding = UIUtils.dp2px(PADDING_DP) * viewportScale / guiScale;
             float contentWidth = Math.max(1.0f, guiWidth - padding * 2.0f);
             float contentHeight = Math.max(1.0f, guiHeight - padding * 2.0f);
-            int size = Math.max(1, Math.round(Math.min(contentWidth / width, contentHeight / height) * 0.82f));
+            float size = Math.min(contentWidth / width, contentHeight / height) * 0.82f;
 
             float yaw = mYaw;
             float pitch = mPitch;
