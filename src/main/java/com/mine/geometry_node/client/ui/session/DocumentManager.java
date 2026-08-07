@@ -1,9 +1,9 @@
 package com.mine.geometry_node.client.ui.session;
 
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphDocumentStore;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
 
-import java.io.File;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,8 +55,9 @@ public class DocumentManager {
 
     // 打开或新建一个图纸
     public void openSession(GraphSession session) {
+        if (session == null || session.fileReference().isDeleted()) return;
         for (GraphSession s : mSessions) {
-            if (s.fileId.equals(session.fileId)) {
+            if (s.fileReference() == session.fileReference()) {
                 markSessionOpened(s);
                 switchSession(s);
                 return;
@@ -75,14 +76,16 @@ public class DocumentManager {
     }
 
     public void closeSession(GraphSession session) {
+        if (session == null) return;
         mSessions.remove(session);
+        session.close();
         if (mActiveSession == session) {
             mActiveSession = mSessions.isEmpty() ? null : mSessions.get(mSessions.size() - 1);
         }
         notifyTabChanged();
     }
 
-    public int closeSessionsForDeletion(List<File> deletionTargets) {
+    public int closeSessionsUnder(List<Path> deletionTargets) {
         List<Path> targetPaths = normalizePaths(deletionTargets);
         if (targetPaths.isEmpty()) {
             return 0;
@@ -90,7 +93,7 @@ public class DocumentManager {
 
         List<GraphSession> closingSessions = new ArrayList<>();
         for (GraphSession session : mSessions) {
-            Path sessionPath = normalizePath(session.fileId);
+            Path sessionPath = normalizePath(session.filePath());
             if (sessionPath != null && isWithinAnyTarget(sessionPath, targetPaths)) {
                 closingSessions.add(session);
             }
@@ -100,6 +103,9 @@ public class DocumentManager {
         }
 
         mSessions.removeAll(closingSessions);
+        for (GraphSession session : closingSessions) {
+            session.close();
+        }
         if (closingSessions.contains(mActiveSession)) {
             mActiveSession = mSessions.isEmpty() ? null : mSessions.get(mSessions.size() - 1);
         }
@@ -108,6 +114,38 @@ public class DocumentManager {
         }
         notifyTabChanged();
         return closingSessions.size();
+    }
+
+    public GraphSession findSession(GraphFileReference reference) {
+        if (reference == null) return null;
+        for (GraphSession session : mSessions) {
+            if (session.fileReference() == reference) return session;
+        }
+        return null;
+    }
+
+    public void refreshFileReferences() {
+        List<GraphSession> deleted = new ArrayList<>();
+        for (GraphSession session : mSessions) {
+            if (session.fileReference().isDeleted()) {
+                deleted.add(session);
+            } else {
+                session.refreshTabName();
+            }
+        }
+        if (!deleted.isEmpty()) {
+            mSessions.removeAll(deleted);
+            for (GraphSession session : deleted) {
+                session.close();
+            }
+            if (deleted.contains(mActiveSession)) {
+                mActiveSession = mSessions.isEmpty() ? null : mSessions.get(mSessions.size() - 1);
+            }
+            if (deleted.contains(mLastOpenedSession)) {
+                mLastOpenedSession = null;
+            }
+        }
+        notifyTabChanged();
     }
 
     public void moveSession(int fromIndex, int toIndex) {
@@ -127,7 +165,7 @@ public class DocumentManager {
             String json = GraphJsonIO.toJson(session.editorContext.getGraph());
 
             // 2. 写入文件 (继承你之前在 GraphViewportPanel 中的逻辑)
-            Files.writeString(Path.of(session.fileId), json);
+            GraphDocumentStore.INSTANCE.writeStringAtomic(session.fileReference(), json);
 
             // 3. 清除脏标记
             session.isDirty = false;
@@ -135,7 +173,7 @@ public class DocumentManager {
             // 4. 触发 UI 刷新 (消除 Tab 上的星号)
             notifyTabChanged();
 
-            System.out.println("[DocumentManager] Save Success: " + session.fileId);
+            System.out.println("[DocumentManager] Save Success: " + session.filePath());
             return true;
         } catch (Exception e) {
             System.err.println("[DocumentManager] Save Failed: " + e.getMessage());
@@ -156,16 +194,16 @@ public class DocumentManager {
         mOpenSessionSerial++;
     }
 
-    private static List<Path> normalizePaths(List<File> files) {
+    private static List<Path> normalizePaths(List<Path> sourcePaths) {
         List<Path> paths = new ArrayList<>();
-        if (files == null) {
+        if (sourcePaths == null) {
             return paths;
         }
-        for (File file : files) {
-            if (file == null) {
+        for (Path sourcePath : sourcePaths) {
+            if (sourcePath == null) {
                 continue;
             }
-            Path path = normalizePath(file.getPath());
+            Path path = normalizePath(sourcePath);
             if (path != null && !paths.contains(path)) {
                 paths.add(path);
             }
@@ -173,12 +211,12 @@ public class DocumentManager {
         return paths;
     }
 
-    private static Path normalizePath(String path) {
-        if (path == null || path.isBlank()) {
+    private static Path normalizePath(Path path) {
+        if (path == null) {
             return null;
         }
         try {
-            return Path.of(path).toAbsolutePath().normalize();
+            return path.toAbsolutePath().normalize();
         } catch (RuntimeException ignored) {
             return null;
         }

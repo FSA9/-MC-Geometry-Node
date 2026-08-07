@@ -11,10 +11,11 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphDocumentStore;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -31,7 +32,14 @@ public final class GraphTagIO {
                                 QuestConditionOverview conditionOverview) {}
 
     public static JsonObject readGraphRoot(File file) throws Exception {
-        String content = Files.exists(file.toPath()) ? Files.readString(file.toPath()).trim() : "";
+        return parseGraphRoot(GraphDocumentStore.INSTANCE.readString(file.toPath()).trim());
+    }
+
+    public static JsonObject readGraphRoot(GraphFileReference reference) throws Exception {
+        return parseGraphRoot(GraphDocumentStore.INSTANCE.readString(reference).trim());
+    }
+
+    private static JsonObject parseGraphRoot(String content) {
         if (content.isEmpty() || content.equals("{}")) {
             return new JsonObject();
         }
@@ -48,7 +56,14 @@ public final class GraphTagIO {
     }
 
     public static GraphMetadata readMetadata(File file) throws Exception {
-        JsonObject root = readGraphRoot(file);
+        return readMetadata(readGraphRoot(file));
+    }
+
+    public static GraphMetadata readMetadata(GraphFileReference reference) throws Exception {
+        return readMetadata(readGraphRoot(reference));
+    }
+
+    private static GraphMetadata readMetadata(JsonObject root) {
         String comment = root.has("comment") && root.get("comment").isJsonPrimitive()
                 ? root.get("comment").getAsString()
                 : "";
@@ -87,14 +102,17 @@ public final class GraphTagIO {
         return tags;
     }
 
-    public static void writeMetadata(File file, String graphTypeId, String comment, List<String> tags,
+    public static void writeMetadata(GraphFileReference reference, String graphTypeId, String comment, List<String> tags,
                                      QuestDefinition questDefinition) throws Exception {
-        JsonObject root = readGraphRoot(file);
-        writeMetadataRoot(file, root, graphTypeId, comment != null ? comment.trim() : "", tags, questDefinition);
+        GraphDocumentStore.INSTANCE.updateStringAtomic(reference, StandardCharsets.UTF_8, current -> {
+            JsonObject root = parseGraphRoot(current.trim());
+            writeMetadataRoot(root, graphTypeId, comment != null ? comment.trim() : "", tags, questDefinition);
+            return GSON.toJson(root);
+        });
     }
 
-    private static void writeMetadataRoot(File file, JsonObject root, String graphTypeId, String comment,
-                                          List<String> tags, QuestDefinition questDefinition) throws Exception {
+    private static void writeMetadataRoot(JsonObject root, String graphTypeId, String comment,
+                                          List<String> tags, QuestDefinition questDefinition) {
         String normalizedTypeId = GraphType.normalizeId(graphTypeId);
         if (normalizedTypeId.isEmpty()) {
             throw new IllegalArgumentException("Graph type cannot be empty");
@@ -112,7 +130,6 @@ public final class GraphTagIO {
         if (!root.has("version")) root.addProperty("version", "1.0");
         if (!root.has("nodes") || !root.get("nodes").isJsonObject()) root.add("nodes", new JsonObject());
         if (!root.has("frames") || !root.get("frames").isJsonObject()) root.add("frames", new JsonObject());
-        Files.writeString(file.toPath(), GSON.toJson(root), StandardCharsets.UTF_8);
     }
 
     public static String resolveGraphTypeId(JsonObject root) {

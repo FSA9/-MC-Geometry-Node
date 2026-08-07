@@ -1,5 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
+import com.mine.geometry_node.client.ui.editor.asset.repository.LocalAssetRepository;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 
 import java.io.File;
@@ -16,7 +20,9 @@ final class GraphFavoriteStore {
     }
 
     void toggle(File file) {
-        if (!AssetEntryLoader.isLocalGraphFile(file)) return;
+        if (file == null || !file.isFile()
+                || !AssetTypeRegistry.INSTANCE.resolve(AssetSourceKind.LOCAL, file.getName(), false)
+                .supports(AssetTypeAction.FAVORITE)) return;
 
         String key = pathKey(file);
         ConfigManager.INSTANCE.update(config -> {
@@ -54,7 +60,7 @@ final class GraphFavoriteStore {
     }
 
     String pathKey(File file) {
-        return AssetEntryLoader.pathKey(file);
+        return LocalAssetRepository.pathKey(file);
     }
 
     private void updateDirectoryPath(File oldDirectory, File newDirectory) {

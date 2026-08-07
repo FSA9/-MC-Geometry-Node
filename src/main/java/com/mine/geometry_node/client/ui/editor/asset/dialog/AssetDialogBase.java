@@ -13,7 +13,6 @@ import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-import net.minecraft.client.Minecraft;
 
 abstract class AssetDialogBase extends FrameLayout {
     protected final LinearLayout mPanel;
@@ -50,7 +49,7 @@ abstract class AssetDialogBase extends FrameLayout {
 
         TextView close = label(context, "x", 15, 0xFFE6E6E6);
         close.setGravity(Gravity.CENTER);
-        close.setOnClickListener(v -> dismiss());
+        close.setOnClickListener(v -> onCloseRequested());
         titleBar.addView(close, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(32), ViewGroup.LayoutParams.MATCH_PARENT));
         mWindow.addView(titleBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(34)));
 
@@ -81,7 +80,7 @@ abstract class AssetDialogBase extends FrameLayout {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
-            dismissAndCloseScreen();
+            onCloseRequested();
             return true;
         }
         super.dispatchKeyEvent(event);
@@ -93,6 +92,10 @@ abstract class AssetDialogBase extends FrameLayout {
         if (getParent() instanceof ViewGroup parent) {
             parent.removeView(this);
         }
+    }
+
+    protected void onCloseRequested() {
+        dismiss();
     }
 
     @Override
@@ -152,11 +155,6 @@ abstract class AssetDialogBase extends FrameLayout {
         if (!mRegisteredDragBlocker) return;
         AssetDragDropRegistry.popModalBlocker();
         mRegisteredDragBlocker = false;
-    }
-
-    private void dismissAndCloseScreen() {
-        dismiss();
-        Minecraft.getInstance().setScreen(null);
     }
 
     private boolean onTitleBarTouch(View view, MotionEvent event) {

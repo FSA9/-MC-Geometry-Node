@@ -18,6 +18,7 @@ public final class SchematicThumbnailView extends View {
     private final RectF mRect = new RectF();
     private final float[] mQuadVertices = new float[8];
     private final int[] mQuadColors = new int[4];
+    private SchematicThumbnailCache.Subscription mSubscription;
     private boolean mMaterialRefreshScheduled;
 
     public SchematicThumbnailView(Context context, File file) {
@@ -28,18 +29,21 @@ public final class SchematicThumbnailView extends View {
     }
 
     public void preload() {
-        SchematicThumbnailCache.preload(mFile, this);
+        ensureSubscription();
     }
 
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        preload();
+        ensureSubscription();
     }
 
     @Override
     protected void onDetachedFromWindow() {
-        SchematicThumbnailCache.unobserve(mFile, this);
+        if (mSubscription != null) {
+            mSubscription.close();
+            mSubscription = null;
+        }
         super.onDetachedFromWindow();
     }
 
@@ -47,13 +51,20 @@ public final class SchematicThumbnailView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        SchematicThumbnail thumbnail = SchematicThumbnailCache.get(mFile, this);
+        SchematicThumbnail thumbnail = ensureSubscription().thumbnail();
         if (thumbnail == null || !thumbnail.hasPreview()) {
             drawFallback(canvas);
             return;
         }
 
         drawThumbnail(canvas, thumbnail);
+    }
+
+    private SchematicThumbnailCache.Subscription ensureSubscription() {
+        if (mSubscription == null) {
+            mSubscription = SchematicThumbnailCache.subscribe(mFile, this);
+        }
+        return mSubscription;
     }
 
     private void drawThumbnail(Canvas canvas, SchematicThumbnail thumbnail) {
@@ -221,5 +232,17 @@ public final class SchematicThumbnailView extends View {
 
     private int clamp(int value) {
         return Math.max(0, Math.min(255, value));
+    }
+
+    public static void invalidate(File file) {
+        SchematicThumbnailCache.invalidate(file);
+    }
+
+    public static void invalidateUnder(File file) {
+        SchematicThumbnailCache.invalidateUnder(file);
+    }
+
+    public static void clearCache() {
+        SchematicThumbnailCache.clear();
     }
 }

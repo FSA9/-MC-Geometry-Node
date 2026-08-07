@@ -2,7 +2,10 @@ package com.mine.geometry_node.client.ui.editor.asset.browser;
 
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetPreviewKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -35,10 +38,6 @@ final class AssetFileItemView extends LinearLayout {
     private static final float TEXT_SIZE_LIST_SUBTITLE = 11.0f;
     private static final int COLOR_ITEM_SELECTED = 0xFF445566;
     private static final int COLOR_ITEM_TRANSPARENT = 0x00000000;
-    private static final int COLOR_FOLDER = 0xFFDDAA00;
-    private static final int COLOR_FILE = 0xFF88CCFF;
-    private static final int COLOR_SCHEMATIC = 0xFF86B8FF;
-    private static final int COLOR_IMAGE = 0xFF77C99D;
     private static final int COLOR_TEXT = 0xFFDDDDDD;
     private static final int COLOR_SUBTEXT = 0xFF888888;
     private static final int COLOR_TAG_BG = 0xFF344458;
@@ -77,10 +76,14 @@ final class AssetFileItemView extends LinearLayout {
         setBackground(AssetFileBrowserPanel.createRectDrawable(COLOR_ITEM_TRANSPARENT, 4));
 
         mIconView = new VectorIconView(context, iconKind(), iconColor());
-        mSchematicThumbnailView = entry.isSchematicFile() && entry.localFile() != null
+        mSchematicThumbnailView = entry.supports(AssetTypeAction.PREVIEW)
+                && entry.type().previewKind() == AssetPreviewKind.SCHEMATIC
+                && entry.localFile() != null
                 ? new SchematicThumbnailView(context, entry.localFile())
                 : null;
-        mImageThumbnailView = entry.isImageFile() && entry.localFile() != null
+        mImageThumbnailView = entry.supports(AssetTypeAction.PREVIEW)
+                && entry.type().previewKind() == AssetPreviewKind.IMAGE
+                && entry.localFile() != null
                 ? new ImageThumbnailView(context, entry.localFile())
                 : null;
         mNameView = UIUtils.createLockedTextView(context, displayName, mode.nameTextSizeDp, COLOR_TEXT);
@@ -105,9 +108,6 @@ final class AssetFileItemView extends LinearLayout {
     void preloadThumbnail() {
         if (mSchematicThumbnailView != null) {
             mSchematicThumbnailView.preload();
-        }
-        if (mImageThumbnailView != null) {
-            mImageThumbnailView.preload();
         }
     }
 
@@ -177,7 +177,8 @@ final class AssetFileItemView extends LinearLayout {
     }
 
     private boolean canFavorite() {
-        return mEntry.sourceKind() == AssetSourceKind.LOCAL && mEntry.isJsonFile();
+        return mEntry.sourceKind() == AssetSourceKind.LOCAL
+                && mEntry.supports(AssetTypeAction.FAVORITE);
     }
 
     private TextView createFavoriteButton() {
@@ -213,14 +214,11 @@ final class AssetFileItemView extends LinearLayout {
     }
 
     private int iconColor() {
-        if (mEntry.isDirectory()) return COLOR_FOLDER;
-        if (mEntry.isSchematicFile()) return COLOR_SCHEMATIC;
-        if (mEntry.isImageFile()) return COLOR_IMAGE;
-        if (mEntry.isJsonFile()) {
+        if (AssetTypeRegistry.INSTANCE.isType(mEntry, AssetTypeRegistry.GRAPH_ID)) {
             GraphType graphType = GraphTypeRegistry.INSTANCE.get(mGraphTypeId);
             if (graphType != null) return graphType.assetIconColor();
         }
-        return COLOR_FILE;
+        return mEntry.type().defaultColor();
     }
 
     private View iconView() {

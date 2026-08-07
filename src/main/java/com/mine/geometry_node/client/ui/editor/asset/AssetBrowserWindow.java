@@ -4,9 +4,11 @@ import com.mine.geometry_node.client.ui.editor.asset.dialog.FolderPickerDialog;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.OverwriteConfirmDialog;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.TransferProgressDialog;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.UploadFailureRetryDialog;
+import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationPanel;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.editor.asset.properties.AssetFilePropertiesTarget;
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
@@ -21,6 +23,7 @@ import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
+import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
@@ -176,19 +179,22 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     public void dispatchNavigateToRemoteRoot() {
-        if (RemoteGraphClientState.canBrowse() && mBrowserPanel != null) {
+        if (mBrowserPanel != null
+                && mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE)) {
             mBrowserPanel.navigateToRemoteRoot();
         }
     }
 
     @Override
     public boolean canBrowseRemote() {
-        return RemoteGraphClientState.canBrowse();
+        return mBrowserPanel != null
+                && mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE);
     }
 
     @Override
     public void showUploadDialog(List<File> selectedFiles) {
-        if (selectedFiles == null || selectedFiles.isEmpty()) return;
+        if (selectedFiles == null || selectedFiles.isEmpty() || mBrowserPanel == null
+                || !mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.UPLOAD)) return;
         FolderPickerDialog dialog = FolderPickerDialog.remote(
                 getContext(),
                 "上传到服务器",
@@ -200,7 +206,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     public void showDownloadDialog(List<AssetEntry> remoteEntries) {
-        if (remoteEntries == null || remoteEntries.isEmpty()) return;
+        if (remoteEntries == null || remoteEntries.isEmpty() || mBrowserPanel == null
+                || !mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.DOWNLOAD)) return;
         FolderPickerDialog dialog = FolderPickerDialog.local(
                 getContext(),
                 "下载到本地",
@@ -331,7 +338,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         }
         String remotePath = mPendingRemoteRestore;
         mPendingRemoteRestore = null;
-        if (RemoteGraphClientState.canBrowse()) {
+        if (mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE)) {
             mBrowserPanel.navigateToRemote(remotePath);
             mRestoringLocation = false;
             return;
@@ -511,6 +518,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         mIoTasks.run("保存下载",
                 context -> mLocalAssetService.saveDownloadedFiles(fileSnapshot, targetDirectory, context),
                 (result, progress) -> {
+                    DocumentManager.INSTANCE.refreshFileReferences();
+                    ImageThumbnailView.clearCache();
                     if (mBrowserPanel != null) {
                         mBrowserPanel.refreshFileList();
                     }

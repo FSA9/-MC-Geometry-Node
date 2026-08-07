@@ -1,9 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.model;
 
-import com.mine.geometry_node.core.engine.visual.image.ImageAssetFormats;
-
 import java.io.File;
-import java.util.Locale;
 
 public final class AssetEntry {
     private final AssetSourceKind mSourceKind;
@@ -13,9 +10,10 @@ public final class AssetEntry {
     private final boolean mDirectory;
     private final long mSize;
     private final File mLocalFile;
-    private final AssetKind mKind;
+    private final AssetType mType;
 
-    private AssetEntry(AssetSourceKind sourceKind, String key, String name, String path, boolean directory, long size, File localFile) {
+    private AssetEntry(AssetSourceKind sourceKind, String key, String name, String path,
+                       boolean directory, long size, File localFile, AssetType type) {
         mSourceKind = sourceKind;
         mKey = key;
         mName = name;
@@ -23,18 +21,21 @@ public final class AssetEntry {
         mDirectory = directory;
         mSize = size;
         mLocalFile = localFile;
-        mKind = resolveKind(name, directory);
+        mType = type != null ? type : AssetTypeRegistry.INSTANCE.resolve(sourceKind, name, directory);
     }
 
     public static AssetEntry local(File file, String key, String displayPath) {
         String name = file.getName().isEmpty() ? file.getAbsolutePath() : file.getName();
-        return new AssetEntry(AssetSourceKind.LOCAL, key, name, displayPath, file.isDirectory(), file.length(), file);
+        AssetType type = AssetTypeRegistry.INSTANCE.resolve(AssetSourceKind.LOCAL, name, file.isDirectory());
+        return new AssetEntry(AssetSourceKind.LOCAL, key, name, displayPath,
+                file.isDirectory(), file.length(), file, type);
     }
 
     public static AssetEntry remote(String path, String name, boolean directory, long size) {
         String normalizedPath = path == null ? "" : path.replace('\\', '/');
         String key = "remote:" + normalizedPath;
-        return new AssetEntry(AssetSourceKind.REMOTE, key, name, normalizedPath, directory, size, null);
+        AssetType type = AssetTypeRegistry.INSTANCE.resolve(AssetSourceKind.REMOTE, name, directory);
+        return new AssetEntry(AssetSourceKind.REMOTE, key, name, normalizedPath, directory, size, null, type);
     }
 
     public AssetSourceKind sourceKind() {
@@ -65,28 +66,11 @@ public final class AssetEntry {
         return mLocalFile;
     }
 
-    public AssetKind kind() {
-        return mKind;
+    public AssetType type() {
+        return mType;
     }
 
-    public boolean isJsonFile() {
-        return mKind == AssetKind.GRAPH;
-    }
-
-    public boolean isSchematicFile() {
-        return mKind == AssetKind.SCHEMATIC;
-    }
-
-    public boolean isImageFile() {
-        return mKind == AssetKind.IMAGE;
-    }
-
-    private static AssetKind resolveKind(String name, boolean directory) {
-        if (directory) return AssetKind.DIRECTORY;
-        String lowerName = name == null ? "" : name.toLowerCase(Locale.ROOT);
-        if (lowerName.endsWith(".json")) return AssetKind.GRAPH;
-        if (lowerName.endsWith(".schem") || lowerName.endsWith(".schematic")) return AssetKind.SCHEMATIC;
-        if (ImageAssetFormats.isSupportedPath(lowerName)) return AssetKind.IMAGE;
-        return AssetKind.FILE;
+    public boolean supports(AssetTypeAction action) {
+        return mType != null && mType.supports(action);
     }
 }

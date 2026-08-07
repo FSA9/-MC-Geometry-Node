@@ -9,7 +9,15 @@ import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragDropRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.menu.FileContextMenu;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
-import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetBrowseRequest;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetListing;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetLocation;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetQuery;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepository;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryRegistry;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRequest;
 import com.mine.geometry_node.client.ui.editor.asset.service.GraphAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
@@ -18,9 +26,6 @@ import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.shortcut.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
-import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphListRequest;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -40,14 +45,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
@@ -65,7 +66,6 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final Map<String, AssetFileItemView> mItemViews = new HashMap<>();
     private final Set<String> mSelectedPaths = new LinkedHashSet<>();
     private final List<AssetEntry> mVisibleEntries = new ArrayList<>();
-    private final AssetEntryLoader mEntryLoader = new AssetEntryLoader();
     private final GraphFavoriteStore mFavoriteStore = new GraphFavoriteStore();
     private final LocalAssetService mLocalAssetService = new LocalAssetService();
     private final GraphAssetService mGraphAssetService = new GraphAssetService();
@@ -84,10 +84,9 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private String mPendingTagSearchQuery = "";
     private String mLastClickedPath = null;
     private long mLastClickTime = 0L;
-    private int mActiveRemoteListRequestId = 0;
-    private int mActiveLocalLoadRequestId = 0;
-    private Future<?> mActiveLocalLoad;
-    private AssetEntryLoader.Result mCurrentEntryResult = AssetEntryLoader.Result.empty();
+    private long mBrowseGeneration;
+    private AssetRequest mActiveBrowseRequest = AssetRequest.NONE;
+    private AssetListing mCurrentListing = AssetListing.empty(null);
     private final boolean mEnableQuickAccessAdd;
     private final boolean mEnableLocalFileActions;
     private final boolean mEnableRemoteTransferActions;
@@ -100,12 +99,6 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private Runnable mPickCurrentDirectoryAction;
     private Consumer<AssetEntry> mPickFileAction;
     private Predicate<AssetEntry> mEntryFilter;
-
-    private static final ExecutorService LOCAL_LOAD_EXECUTOR = Executors.newSingleThreadExecutor(task -> {
-        Thread thread = new Thread(task, "GeometryNode-AssetBrowser-Loader");
-        thread.setDaemon(true);
-        return thread;
-    });
 
     private static final float NAV_BAR_HEIGHT = 76.0f;
     private static final float NAV_ROW_HEIGHT = 32.0f;
@@ -205,7 +198,6 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
                 mLocalAssetService,
                 mGraphAssetService,
                 mFavoriteStore,
-                mEntryLoader,
                 mIoTasks,
                 mEnableLocalFileActions,
                 mEnableRemoteTransferActions,
@@ -382,7 +374,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     public void deactivatePanel() {
         hideToolbarTooltip();
         mKeyManager.dispose();
-        cancelRemoteListRequest();
+        cancelBrowseRequest();
         mActionController.cancelRemoteRequests();
     }
 
@@ -455,7 +447,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         mRemoteDirectory = AssetPathUtils.normalizeRemoteDirectory(directory);
         mPathInput.setText(AssetPathUtils.formatRemotePath(mRemoteDirectory));
         clearSelection();
-        refreshRemoteFileList(createIfMissing);
+        refreshFileList(createIfMissing, null);
         notifyLocationChanged();
     }
 
@@ -560,113 +552,70 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     void refreshFileList(Runnable afterRender) {
-        cancelLocalLoad();
+        refreshFileList(false, afterRender);
+    }
+
+    private void refreshFileList(boolean createIfMissing, Runnable afterRender) {
+        cancelBrowseRequest();
         mFileContent.setEntries(List.of());
         mItemViews.clear();
         mVisibleEntries.clear();
-        mCurrentEntryResult = AssetEntryLoader.Result.empty();
+        mCurrentListing = AssetListing.empty(currentLocation(createIfMissing));
 
-        if (mSourceKind == AssetSourceKind.REMOTE) {
-            refreshRemoteFileList(false);
+        if (mSourceKind == AssetSourceKind.LOCAL && !mFavoritesMode && mCurrentDirectory == null) return;
+        AssetLocation location = currentLocation(createIfMissing);
+        AssetRepository repository = AssetRepositoryRegistry.INSTANCE.get(location.sourceKind());
+        if (repository == null
+                || !repository.supports(AssetRepositoryOperation.BROWSE)
+                || (createIfMissing && !repository.supports(AssetRepositoryOperation.CREATE))) {
+            renderEntries(AssetListing.failure(location));
             return;
         }
-
-        if (!mFavoritesMode && mCurrentDirectory == null) return;
-
-        int requestId = ++mActiveLocalLoadRequestId;
-        boolean requestedFavoritesMode = mFavoritesMode;
-        File requestedDirectory = mCurrentDirectory;
-        String requestedDirectoryKey = requestedDirectory == null ? "" : pathKey(requestedDirectory);
-        AssetEntryLoader.Query query = new AssetEntryLoader.Query(mSearchQuery, mTagSearchQuery);
-        boolean includeTags = mViewMode == AssetViewMode.LIST;
-        List<String> favoritePaths = requestedFavoritesMode ? mFavoriteStore.pathsSnapshot() : List.of();
-
-        mActiveLocalLoad = LOCAL_LOAD_EXECUTOR.submit(() -> {
-            AssetEntryLoader.Result result;
-            try {
-                result = requestedFavoritesMode
-                        ? mEntryLoader.loadFavorites(favoritePaths, query, includeTags)
-                        : mEntryLoader.loadCurrentDirectory(requestedDirectory, query, includeTags);
-            } catch (Exception e) {
-                e.printStackTrace();
-                result = AssetEntryLoader.Result.empty();
-            }
-
-            if (Thread.currentThread().isInterrupted()) return;
-            AssetEntryLoader.Result finalResult = result;
-            post(() -> {
-                if (requestId != mActiveLocalLoadRequestId || mSourceKind != AssetSourceKind.LOCAL || mFavoritesMode != requestedFavoritesMode) return;
-                if (!requestedFavoritesMode && (mCurrentDirectory == null || !requestedDirectoryKey.equals(pathKey(mCurrentDirectory)))) return;
-                renderEntries(finalResult);
-                if (afterRender != null) {
-                    afterRender.run();
-                }
-            });
-        });
-    }
-
-    private void refreshRemoteFileList(boolean createIfMissing) {
-        cancelLocalLoad();
-        cancelRemoteListRequest();
-        renderEntries(AssetEntryLoader.Result.empty());
-        int requestId = RemoteGraphClientState.nextRequestId();
-        mActiveRemoteListRequestId = requestId;
-        String requestedDirectory = AssetPathUtils.normalizeRemoteDirectory(mRemoteDirectory);
-        RemoteGraphClientState.onList(requestId, response -> {
-            post(() -> {
-                if (mSourceKind != AssetSourceKind.REMOTE || requestId != mActiveRemoteListRequestId) return;
-                mActiveRemoteListRequestId = 0;
-                if (!response.success()) {
-                    renderEntries(AssetEntryLoader.Result.empty());
-                    return;
-                }
-                String responseDirectory = AssetPathUtils.normalizeRemoteDirectory(response.directory());
-                if (!responseDirectory.equals(requestedDirectory) || !responseDirectory.equals(mRemoteDirectory)) return;
-                mRemoteDirectory = responseDirectory;
+        long generation = ++mBrowseGeneration;
+        AssetBrowseRequest request = new AssetBrowseRequest(location,
+                new AssetQuery(mSearchQuery, mTagSearchQuery, mViewMode == AssetViewMode.LIST));
+        mActiveBrowseRequest = repository.browse(request, result -> post(() -> {
+            if (generation != mBrowseGeneration || result == null || !matchesCurrentLocation(result.location())) return;
+            mActiveBrowseRequest = AssetRequest.NONE;
+            if (result.location() instanceof AssetLocation.Remote remote && result.success()) {
+                mRemoteDirectory = remote.directory();
                 mPathInput.setText(AssetPathUtils.formatRemotePath(mRemoteDirectory));
-                if (mRemoteDirectoryChangedListener != null) {
-                    mRemoteDirectoryChangedListener.accept(mRemoteDirectory);
-                }
-                List<AssetEntry> entries = new ArrayList<>();
-                Map<String, String> graphTypeIdsByKey = new HashMap<>();
-                for (RemoteGraphEntry entry : response.entries()) {
-                    if (!mTagSearchQuery.isEmpty()) {
-                        continue;
-                    }
-                    if (!mSearchQuery.isEmpty() && !entry.name().toLowerCase(Locale.ROOT).contains(mSearchQuery.toLowerCase(Locale.ROOT))) {
-                        continue;
-                    }
-                    AssetEntry assetEntry = AssetEntry.remote(entry.path(), entry.name(), entry.directory(), entry.size());
-                    entries.add(assetEntry);
-                    if (!entry.graphTypeId().isBlank()) {
-                        graphTypeIdsByKey.put(assetEntry.key(), entry.graphTypeId());
-                    }
-                }
-                renderEntries(new AssetEntryLoader.Result(entries, Map.of(), graphTypeIdsByKey));
-            });
-        });
-        NetworkHandler.sendToServer(new PacketRemoteGraphListRequest(requestId, requestedDirectory, createIfMissing));
+                if (mRemoteDirectoryChangedListener != null) mRemoteDirectoryChangedListener.accept(mRemoteDirectory);
+            }
+            renderEntries(result);
+            if (afterRender != null) afterRender.run();
+        }));
     }
 
-    private void cancelRemoteListRequest() {
-        if (mActiveRemoteListRequestId == 0) return;
-        RemoteGraphClientState.cancel(mActiveRemoteListRequestId);
-        mActiveRemoteListRequestId = 0;
-    }
-
-    private void cancelLocalLoad() {
-        mActiveLocalLoadRequestId++;
-        if (mActiveLocalLoad != null) {
-            mActiveLocalLoad.cancel(true);
-            mActiveLocalLoad = null;
+    private AssetLocation currentLocation(boolean createIfMissing) {
+        if (mSourceKind == AssetSourceKind.REMOTE) {
+            return new AssetLocation.Remote(mRemoteDirectory, createIfMissing);
         }
+        return new AssetLocation.Local(mCurrentDirectory, mFavoritesMode,
+                mFavoritesMode ? mFavoriteStore.pathsSnapshot() : List.of());
     }
 
-    private void renderEntries(AssetEntryLoader.Result result) {
-        mCurrentEntryResult = result == null ? AssetEntryLoader.Result.empty() : result;
+    private boolean matchesCurrentLocation(AssetLocation location) {
+        if (location == null || location.sourceKind() != mSourceKind) return false;
+        if (location instanceof AssetLocation.Remote remote) {
+            return remote.directory().equals(AssetPathUtils.normalizeRemoteDirectory(mRemoteDirectory));
+        }
+        if (!(location instanceof AssetLocation.Local local) || local.favorites() != mFavoritesMode) return false;
+        return mFavoritesMode || (mCurrentDirectory != null && local.directory() != null
+                && pathKey(mCurrentDirectory).equals(pathKey(local.directory())));
+    }
+
+    private void cancelBrowseRequest() {
+        mBrowseGeneration++;
+        mActiveBrowseRequest.cancel();
+        mActiveBrowseRequest = AssetRequest.NONE;
+    }
+
+    private void renderEntries(AssetListing result) {
+        mCurrentListing = result == null ? AssetListing.empty(currentLocation(false)) : result;
         mItemViews.clear();
         mVisibleEntries.clear();
-        List<AssetEntry> entries = mCurrentEntryResult.entries();
+        List<AssetEntry> entries = mCurrentListing.entries();
         Set<String> visibleKeys = new LinkedHashSet<>();
 
         for (AssetEntry entry : entries) {
@@ -859,8 +808,8 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     @Override
     public AssetFileItemView createItemView(AssetEntry entry) {
         String parentLabel = (mFavoritesMode || !mSearchQuery.isEmpty() || !mTagSearchQuery.isEmpty()) ? parentLabel(entry) : "";
-        List<String> tags = mViewMode == AssetViewMode.LIST ? mCurrentEntryResult.tagsFor(entry) : List.of();
-        String graphTypeId = mCurrentEntryResult.graphTypeIdFor(entry);
+        List<String> tags = mViewMode == AssetViewMode.LIST ? mCurrentListing.tagsFor(entry) : List.of();
+        String graphTypeId = mCurrentListing.graphTypeIdFor(entry);
         AssetFileItemView item = new AssetFileItemView(getContext(), entry, mViewMode, displayName(entry), parentLabel,
                 tags, graphTypeId, isFavorite(entry), this);
         item.setSelected(mSelectedPaths.contains(entry.key()));
@@ -921,7 +870,8 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     @Override
     public void onFavoriteToggled(AssetEntry entry) {
-        if (entry == null || entry.sourceKind() != AssetSourceKind.LOCAL || entry.localFile() == null || !isLocalGraphFile(entry.localFile())) {
+        if (entry == null || entry.sourceKind() != AssetSourceKind.LOCAL || entry.localFile() == null
+                || !entry.supports(AssetTypeAction.FAVORITE)) {
             return;
         }
 
@@ -930,7 +880,8 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private boolean isFavorite(AssetEntry entry) {
-        if (entry == null || entry.sourceKind() != AssetSourceKind.LOCAL || entry.localFile() == null || !entry.isJsonFile()) {
+        if (entry == null || entry.sourceKind() != AssetSourceKind.LOCAL || entry.localFile() == null
+                || !entry.supports(AssetTypeAction.FAVORITE)) {
             return false;
         }
         return mFavoriteStore.isFavorite(entry.localFile());
@@ -957,8 +908,9 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         return candidate != null && candidate.isDirectory() ? candidate : null;
     }
 
-    private boolean isLocalGraphFile(File file) {
-        return AssetEntryLoader.isLocalGraphFile(file);
+    public boolean repositorySupports(AssetSourceKind source, AssetRepositoryOperation operation) {
+        AssetRepository repository = AssetRepositoryRegistry.INSTANCE.get(source);
+        return repository != null && repository.supports(operation);
     }
 
     void clearSearch() {

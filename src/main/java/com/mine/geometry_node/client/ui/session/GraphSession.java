@@ -1,12 +1,14 @@
 package com.mine.geometry_node.client.ui.session;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
 import com.mine.geometry_node.core.node.NodeGraph;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-public class GraphSession {
-    public final String fileId;
+public class GraphSession implements AutoCloseable {
+    private final GraphFileReference mFileReference;
     public String tabName;
     public boolean isDirty = false;
     public final EditorContext editorContext;
@@ -21,10 +23,11 @@ public class GraphSession {
     public final List<String> selectedNodeIds = new ArrayList<>();
     public final List<String> selectedFrameIds = new ArrayList<>();
 
-    // 构造函数现在只需要 3 个参数，且完全不涉及 UI
-    public GraphSession(String fileId, String tabName, NodeGraph graph) {
-        this.fileId = fileId;
-        this.tabName = tabName;
+    // Session owns one claimed graph-file reference and does not hold UI objects.
+    public GraphSession(GraphFileReference fileReference, NodeGraph graph) {
+        mFileReference = fileReference;
+        Path path = fileReference.requireActivePath();
+        this.tabName = path.getFileName() != null ? path.getFileName().toString() : path.toString();
         this.editorContext = new EditorContext(graph);
         this.editorContext.getCommandManager().setDirtyListener(() -> {
             if (!isDirty) {
@@ -32,5 +35,23 @@ public class GraphSession {
                 DocumentManager.INSTANCE.notifyTabChanged();
             }
         });
+    }
+
+    public GraphFileReference fileReference() {
+        return mFileReference;
+    }
+
+    public Path filePath() {
+        return mFileReference.path();
+    }
+
+    public void refreshTabName() {
+        Path path = mFileReference.path();
+        tabName = path.getFileName() != null ? path.getFileName().toString() : path.toString();
+    }
+
+    @Override
+    public void close() {
+        mFileReference.releaseDocument();
     }
 }

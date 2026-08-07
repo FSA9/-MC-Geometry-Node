@@ -1,293 +1,346 @@
 package com.mine.geometry_node.client.ui.editor.asset.service;
 
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskContext;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphDocumentStore;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileStore;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 public final class LocalAssetService {
 
     public FileOperationResult deleteFiles(List<File> files, AssetTaskContext context) throws InterruptedException {
-        List<File> sources = snapshotFiles(files);
-        List<File> successfulFiles = new ArrayList<>();
+        List<File> sources = topLevelFiles(files);
         List<String> failedPaths = new ArrayList<>();
-        int total = sources.size();
-        int processed = 0;
-
-        for (File file : sources) {
+        List<DeletePlan> plans = new ArrayList<>();
+        for (File source : sources) {
             context.checkCancelled();
-            context.progress("删除 " + displayName(file), processed, total);
+            context.progress("准备删除 " + displayName(source), plans.size(), sources.size());
             try {
-                deleteRecursively(file, context);
-                successfulFiles.add(file);
-            } catch (InterruptedException e) {
-                throw e;
-            } catch (Exception e) {
-                failedPaths.add(pathLabel(file));
-                e.printStackTrace();
-            }
-            processed++;
-            context.progress("删除中", processed, total);
-        }
-
-        return new FileOperationResult(successfulFiles, failedPaths);
-    }
-
-    public PasteResult pasteFiles(
-            List<File> sources,
-            File targetDirectory,
-            boolean cutOperation,
-            AssetTaskContext context
-    ) throws InterruptedException {
-        List<File> sourceSnapshot = snapshotFiles(sources);
-        List<FileMove> movedFiles = new ArrayList<>();
-        List<File> successfulFiles = new ArrayList<>();
-        List<String> failedPaths = new ArrayList<>();
-        if (targetDirectory == null) {
-            return new PasteResult(successfulFiles, movedFiles, List.of("目标目录为空"));
-        }
-
-        int total = sourceSnapshot.size();
-        int processed = 0;
-        for (File source : sourceSnapshot) {
-            context.checkCancelled();
-            context.progress((cutOperation ? "移动 " : "复制 ") + displayName(source), processed, total);
-            try {
-                if (source == null || !source.exists()) {
-                    failedPaths.add(pathLabel(source));
-                    processed++;
-                    context.progress(cutOperation ? "移动中" : "复制中", processed, total);
-                    continue;
-                }
-                File destination = resolveAvailableDestination(targetDirectory, source.getName(), source.isDirectory());
-                if (source.isDirectory() && isDescendantOrSelf(destination, source)) {
-                    failedPaths.add(pathLabel(source));
-                    processed++;
-                    context.progress(cutOperation ? "移动中" : "复制中", processed, total);
-                    continue;
-                }
-                if (cutOperation) {
-                    File actualDestination = moveRecursively(source, destination, context);
-                    movedFiles.add(new FileMove(source, actualDestination));
-                    successfulFiles.add(source);
-                } else {
-                    copyRecursively(source, destination, context);
-                    successfulFiles.add(source);
-                }
-            } catch (InterruptedException e) {
-                throw e;
+                validateSource(source);
+                Path sourcePath = normalize(source.toPath());
+                plans.add(new DeletePlan(source, sourcePath,
+                        GraphDocumentStore.siblingTemporary(sourcePath, "delete")));
             } catch (Exception e) {
                 failedPaths.add(pathLabel(source));
-                e.printStackTrace();
             }
-            processed++;
-            context.progress(cutOperation ? "移动中" : "复制中", processed, total);
+        }
+        if (plans.isEmpty()) return new FileOperationResult(List.of(), failedPaths);
+
+        try {
+            context.enterCommitPhase();
+        } catch (InterruptedException e) {
+            throw e;
+        }
+        try {
+            GraphFileRegistry.Mutation mutation = GraphFileRegistry.INSTANCE.beginDelete(
+                    plans.stream().map(DeletePlan::sourcePath).toList());
+            mutation.commit(() -> {
+                commitDeletes(plans);
+                return null;
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+            for (DeletePlan plan : plans) failedPaths.add(pathLabel(plan.source()));
+            return new FileOperationResult(List.of(), failedPaths);
         }
 
-        return new PasteResult(successfulFiles, movedFiles, failedPaths);
+        for (DeletePlan plan : plans) {
+            try {
+                deleteRecursively(plan.trashPath());
+            } catch (IOException e) {
+                System.err.println("[AssetLibrary] Failed to clean deleted asset: " + plan.trashPath());
+                e.printStackTrace();
+            }
+        }
+        context.progress("删除完成", plans.size(), plans.size());
+        return new FileOperationResult(plans.stream().map(DeletePlan::source).toList(), failedPaths);
     }
 
-    public MoveResult moveFilesToDirectory(
-            List<File> sources,
-            File targetDirectory,
-            AssetTaskContext context
-    ) throws InterruptedException {
-        List<File> sourceSnapshot = snapshotFiles(sources);
-        List<FileMove> movedFiles = new ArrayList<>();
+    public PasteResult pasteFiles(List<File> sources, File targetDirectory, boolean cutOperation,
+                                  AssetTaskContext context) throws InterruptedException {
+        if (cutOperation) {
+            MoveResult moved = moveFilesToDirectory(sources, targetDirectory, context);
+            return new PasteResult(
+                    moved.movedFiles().stream().map(FileMove::source).toList(),
+                    moved.movedFiles(), moved.failedPaths());
+        }
+        return copyFiles(sources, targetDirectory, context);
+    }
+
+    private PasteResult copyFiles(List<File> files, File targetDirectory, AssetTaskContext context)
+            throws InterruptedException {
+        List<File> sources = topLevelFiles(files);
+        List<CopyPlan> plans = new ArrayList<>();
         List<String> failedPaths = new ArrayList<>();
         if (targetDirectory == null || !targetDirectory.isDirectory()) {
-            return new MoveResult(movedFiles, List.of("目标目录无效"));
+            return new PasteResult(List.of(), List.of(), List.of("目标目录无效"));
         }
 
-        int total = sourceSnapshot.size();
-        int processed = 0;
-        for (File source : sourceSnapshot) {
+        for (File source : sources) {
             context.checkCancelled();
-            context.progress("移动 " + displayName(source), processed, total);
+            context.progress("准备复制 " + displayName(source), plans.size(), sources.size());
+            Path temporary = null;
             try {
-                if (source == null
-                        || !source.exists()
-                        || source.equals(targetDirectory)
-                        || isDescendantOrSelf(targetDirectory, source)
-                        || (source.getParentFile() != null && source.getParentFile().equals(targetDirectory))) {
-                    failedPaths.add(pathLabel(source));
-                    processed++;
-                    context.progress("移动中", processed, total);
-                    continue;
-                }
+                validateSource(source);
                 File destination = resolveAvailableDestination(targetDirectory, source.getName(), source.isDirectory());
-                File actualDestination = moveRecursively(source, destination, context);
-                movedFiles.add(new FileMove(source, actualDestination));
+                ensureNotNestedInSource(source, destination);
+                temporary = GraphDocumentStore.siblingTemporary(destination.toPath(), "copy");
+                copyRecursively(source.toPath(), temporary, context);
+                plans.add(new CopyPlan(source, normalize(destination.toPath()), temporary));
             } catch (InterruptedException e) {
+                cleanupQuietly(temporary);
+                cleanupCopyPlans(plans);
                 throw e;
             } catch (Exception e) {
+                cleanupQuietly(temporary);
                 failedPaths.add(pathLabel(source));
                 e.printStackTrace();
             }
-            processed++;
-            context.progress("移动中", processed, total);
         }
+        if (plans.isEmpty()) return new PasteResult(List.of(), List.of(), failedPaths);
 
-        return new MoveResult(movedFiles, failedPaths);
+        try {
+            context.enterCommitPhase();
+        } catch (InterruptedException e) {
+            cleanupCopyPlans(plans);
+            throw e;
+        }
+        try {
+            GraphDocumentStore.INSTANCE.withStructureMutation(() -> {
+                commitCopies(plans);
+                return null;
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+            cleanupCopyPlans(plans);
+            for (CopyPlan plan : plans) failedPaths.add(pathLabel(plan.source()));
+            return new PasteResult(List.of(), List.of(), failedPaths);
+        }
+        context.progress("复制完成", plans.size(), plans.size());
+        return new PasteResult(plans.stream().map(CopyPlan::source).toList(), List.of(), failedPaths);
     }
 
-    public DownloadSaveResult saveDownloadedFiles(
-            List<RemoteGraphUploadFile> files,
-            File targetDirectory,
-            AssetTaskContext context
-    ) throws InterruptedException {
-        List<RemoteGraphUploadFile> fileSnapshot = files == null ? List.of() : List.copyOf(files);
+    public MoveResult moveFilesToDirectory(List<File> files, File targetDirectory, AssetTaskContext context)
+            throws InterruptedException {
+        List<File> sources = topLevelFiles(files);
+        List<MovePlan> plans = new ArrayList<>();
         List<String> failedPaths = new ArrayList<>();
+        if (targetDirectory == null || !targetDirectory.isDirectory()) {
+            return new MoveResult(List.of(), List.of("目标目录无效"));
+        }
+
+        for (File source : sources) {
+            context.checkCancelled();
+            context.progress("准备移动 " + displayName(source), plans.size(), sources.size());
+            Path temporary = null;
+            try {
+                validateSource(source);
+                if (source.equals(targetDirectory) || isDescendantOrSelf(targetDirectory, source)
+                        || targetDirectory.equals(source.getParentFile())) {
+                    throw new IOException("无效的移动目标");
+                }
+                File destination = resolveAvailableDestination(targetDirectory, source.getName(), source.isDirectory());
+                ensureNotNestedInSource(source, destination);
+                Path sourcePath = normalize(source.toPath());
+                Path destinationPath = normalize(destination.toPath());
+                boolean direct = sameFileStore(sourcePath, normalize(targetDirectory.toPath()));
+                Path trash = GraphDocumentStore.siblingTemporary(sourcePath, "move-source");
+                if (!direct) {
+                    temporary = GraphDocumentStore.siblingTemporary(destinationPath, "move-target");
+                    copyRecursively(sourcePath, temporary, context);
+                }
+                plans.add(new MovePlan(source, sourcePath, destinationPath, temporary, trash, direct));
+            } catch (InterruptedException e) {
+                cleanupQuietly(temporary);
+                cleanupMovePlans(plans);
+                throw e;
+            } catch (Exception e) {
+                cleanupQuietly(temporary);
+                failedPaths.add(pathLabel(source));
+                e.printStackTrace();
+            }
+        }
+        if (plans.isEmpty()) return new MoveResult(List.of(), failedPaths);
+
+        try {
+            context.enterCommitPhase();
+        } catch (InterruptedException e) {
+            cleanupMovePlans(plans);
+            throw e;
+        }
+        Map<Path, Path> pathChanges = new LinkedHashMap<>();
+        for (MovePlan plan : plans) pathChanges.put(plan.sourcePath(), plan.destinationPath());
+        try {
+            GraphFileRegistry.Mutation mutation = GraphFileRegistry.INSTANCE.beginMoves(pathChanges);
+            mutation.commit(() -> {
+                commitMoves(plans);
+                return null;
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+            for (MovePlan plan : plans) cleanupQuietly(plan.temporaryPath());
+            for (MovePlan plan : plans) failedPaths.add(pathLabel(plan.source()));
+            return new MoveResult(List.of(), failedPaths);
+        }
+
+        for (MovePlan plan : plans) {
+            if (!plan.direct()) cleanupQuietly(plan.trashPath());
+        }
+        context.progress("移动完成", plans.size(), plans.size());
+        return new MoveResult(plans.stream()
+                .map(plan -> new FileMove(plan.source(), plan.destinationPath().toFile())).toList(), failedPaths);
+    }
+
+    public DownloadSaveResult saveDownloadedFiles(List<RemoteGraphUploadFile> files, File targetDirectory,
+                                                   AssetTaskContext context) throws InterruptedException {
         if (targetDirectory == null) {
             return new DownloadSaveResult(0, List.of("目标目录为空"));
         }
-
-        Path root = targetDirectory.toPath().toAbsolutePath().normalize();
-        int total = fileSnapshot.size();
-        int processed = 0;
-        try {
-            Files.createDirectories(root);
-        } catch (Exception e) {
-            return new DownloadSaveResult(0, List.of(targetDirectory.getAbsolutePath()));
-        }
-
-        for (RemoteGraphUploadFile file : fileSnapshot) {
-            context.checkCancelled();
-            context.progress("保存 " + file.targetPath(), processed, total);
+        Path root = normalize(targetDirectory.toPath());
+        List<String> failedPaths = new ArrayList<>();
+        Map<Path, RemoteGraphUploadFile> uniqueFiles = new LinkedHashMap<>();
+        for (RemoteGraphUploadFile file : files == null ? List.<RemoteGraphUploadFile>of() : files) {
             try {
                 String relative = AssetPathUtils.normalizeRemoteFilePath(file.targetPath());
                 Path target = root.resolve(relative).normalize();
-                if (!target.startsWith(root)) {
-                    throw new IllegalArgumentException("invalid download path: " + file.targetPath());
-                }
-                Path parent = target.getParent();
-                if (parent != null) {
-                    Files.createDirectories(parent);
-                }
-                context.checkCancelled();
-                Files.writeString(target, file.jsonContent());
-            } catch (InterruptedException e) {
-                throw e;
+                if (!target.startsWith(root)) throw new IllegalArgumentException("invalid download path");
+                uniqueFiles.put(target, file);
             } catch (Exception e) {
+                failedPaths.add(file.targetPath());
+            }
+        }
+
+        List<DownloadPlan> plans = new ArrayList<>();
+        for (Map.Entry<Path, RemoteGraphUploadFile> entry : uniqueFiles.entrySet()) {
+            context.checkCancelled();
+            RemoteGraphUploadFile file = entry.getValue();
+            Path temporary = null;
+            try {
+                Path target = entry.getKey();
+                if (Files.isDirectory(target)) throw new IOException("download target is a directory");
+                if (target.getParent() != null) Files.createDirectories(target.getParent());
+                temporary = GraphDocumentStore.siblingTemporary(target, "download");
+                Files.writeString(temporary, file.jsonContent(), StandardCharsets.UTF_8);
+                Path backup = GraphDocumentStore.siblingTemporary(target, "download-backup");
+                plans.add(new DownloadPlan(file.targetPath(), target, temporary, backup, Files.exists(target)));
+                context.progress("准备保存 " + file.targetPath(), plans.size(), uniqueFiles.size());
+            } catch (Exception e) {
+                cleanupQuietly(temporary);
                 failedPaths.add(file.targetPath());
                 e.printStackTrace();
             }
-            processed++;
-            context.progress("保存中", processed, total);
         }
+        if (plans.isEmpty()) return new DownloadSaveResult(0, failedPaths);
 
-        return new DownloadSaveResult(total - failedPaths.size(), failedPaths);
+        try {
+            context.enterCommitPhase();
+        } catch (InterruptedException e) {
+            cleanupDownloadPlans(plans);
+            throw e;
+        }
+        List<Path> replaced = plans.stream().filter(DownloadPlan::replacesExisting)
+                .map(DownloadPlan::targetPath).toList();
+        try {
+            GraphFileRegistry.Mutation mutation = GraphFileRegistry.INSTANCE.beginDelete(replaced);
+            mutation.commit(() -> {
+                commitDownloads(plans);
+                return null;
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+            for (DownloadPlan plan : plans) cleanupQuietly(plan.temporaryPath());
+            for (DownloadPlan plan : plans) failedPaths.add(plan.remotePath());
+            return new DownloadSaveResult(0, failedPaths);
+        }
+        for (DownloadPlan plan : plans) cleanupQuietly(plan.backupPath());
+        context.progress("下载完成", plans.size(), plans.size());
+        return new DownloadSaveResult(plans.size(), failedPaths);
     }
 
-    public UploadCollectionResult collectUploadFiles(
-            List<File> selectedFiles,
-            String targetDirectory,
-            AssetTaskContext context
-    ) throws InterruptedException {
+    public UploadCollectionResult collectUploadFiles(List<File> selectedFiles, String targetDirectory,
+                                                      AssetTaskContext context) throws InterruptedException {
         List<RemoteGraphUploadFile> files = new ArrayList<>();
         List<String> failedPaths = new ArrayList<>();
         String targetPrefix = AssetPathUtils.normalizeRemoteDirectory(targetDirectory);
-        List<File> selections = snapshotFiles(selectedFiles);
+        List<File> selections = topLevelFiles(selectedFiles);
         int processed = 0;
-
         for (File selected : selections) {
             context.checkCancelled();
             context.progress("扫描 " + displayName(selected), processed, selections.size());
-            if (selected == null || !selected.exists()) {
+            if (selected == null || !selected.exists() || selected.toPath().getParent() == null) {
                 failedPaths.add(pathLabel(selected));
-                processed++;
-                context.progress("扫描中", processed, selections.size());
-                continue;
+            } else {
+                Path selectedPath = normalize(selected.toPath());
+                collectUploadFile(files, failedPaths, selectedPath.getParent(), selectedPath, targetPrefix, context);
             }
-
-            Path selectedPath = selected.toPath().toAbsolutePath().normalize();
-            Path base = selectedPath.getParent();
-            if (base == null) {
-                failedPaths.add(pathLabel(selected));
-                processed++;
-                context.progress("扫描中", processed, selections.size());
-                continue;
-            }
-            collectUploadFile(files, failedPaths, base, selectedPath, targetPrefix, context);
             processed++;
-            context.progress("扫描中", processed, selections.size());
         }
-
         return new UploadCollectionResult(files, failedPaths);
     }
 
-    public CreatedAssetItem createAssetItem(
-            File directory,
-            String sourceName,
-            boolean directoryItem,
-            AssetTaskContext context
-    ) throws Exception {
+    public CreatedAssetItem createAssetItem(File directory, String sourceName, boolean directoryItem,
+                                            AssetTaskContext context) throws Exception {
         context.checkCancelled();
-        if (directory == null || !directory.isDirectory()) {
-            throw new IOException("目标目录无效");
-        }
-
-        context.progress("创建 " + sourceName, 0, 1);
-        File newFile = resolveAvailableDestination(directory, sourceName, directoryItem);
-        context.checkCancelled();
-        if (directoryItem) {
-            Files.createDirectory(newFile.toPath());
-        } else {
-            Files.createFile(newFile.toPath());
-        }
-        context.progress("创建中", 1, 1);
-        return new CreatedAssetItem(newFile);
+        if (directory == null || !directory.isDirectory()) throw new IOException("目标目录无效");
+        validateSourceName(sourceName);
+        context.enterCommitPhase();
+        Path created = GraphDocumentStore.INSTANCE.withStructureMutation(() -> {
+            File destination = resolveAvailableDestination(directory, sourceName, directoryItem);
+            if (directoryItem) Files.createDirectory(destination.toPath());
+            else Files.createFile(destination.toPath());
+            return normalize(destination.toPath());
+        });
+        context.progress("创建完成", 1, 1);
+        return new CreatedAssetItem(created.toFile());
     }
 
     public RenameResult renameFile(File source, String newName, AssetTaskContext context) throws Exception {
         context.checkCancelled();
         validateSource(source);
         validateSourceName(newName);
-
         File parent = source.getParentFile();
-        if (parent == null) {
-            throw new IOException("源文件没有父目录: " + source.getAbsolutePath());
-        }
+        if (parent == null) throw new IOException("源文件没有父目录: " + source.getAbsolutePath());
+        if (newName.equals(source.getName())) return new RenameResult(source, source, false);
 
-        if (newName.equals(source.getName())) {
-            return new RenameResult(source, source, false);
-        }
-
-        Path parentPath = parent.toPath().toAbsolutePath().normalize();
-        Path destinationPath = parentPath.resolve(newName).normalize();
-        if (!parentPath.equals(destinationPath.getParent())) {
+        Path sourcePath = normalize(source.toPath());
+        Path destinationPath = normalize(parent.toPath().resolve(newName));
+        if (!normalize(parent.toPath()).equals(destinationPath.getParent())) {
             throw new IllegalArgumentException("newName must stay within the source directory");
         }
-        File destination = destinationPath.toFile();
-        if (Files.exists(destinationPath)) {
-            return new RenameResult(source, source, false);
-        }
+        if (Files.exists(destinationPath)) return new RenameResult(source, source, false);
 
-        context.progress("重命名 " + displayName(source), 0, 1);
-        context.checkCancelled();
-        Files.move(source.toPath(), destinationPath);
-        context.progress("重命名中", 1, 1);
-        return new RenameResult(source, destination, true);
+        context.enterCommitPhase();
+        GraphFileRegistry.Mutation mutation = GraphFileRegistry.INSTANCE.beginMove(sourcePath, destinationPath);
+        mutation.commit(() -> {
+            GraphDocumentStore.moveNew(sourcePath, destinationPath);
+            return null;
+        });
+        context.progress("重命名完成", 1, 1);
+        return new RenameResult(source, destinationPath.toFile(), true);
     }
 
     public static File resolveAvailableDestination(File directory, String sourceName, boolean directoryName) {
-        if (directory == null) {
-            directory = new File(".");
-        }
+        if (directory == null) directory = new File(".");
         validateSourceName(sourceName);
-
         File candidate = new File(directory, sourceName);
-        if (!candidate.exists()) {
-            return candidate;
-        }
+        if (!candidate.exists()) return candidate;
 
         String baseName = sourceName;
         String extension = "";
@@ -298,51 +351,34 @@ public final class LocalAssetService {
                 extension = sourceName.substring(dotIndex);
             }
         }
-
         int counter = 1;
         File resolved;
         do {
-            resolved = new File(directory, baseName + "_" + counter + extension);
-            counter++;
+            resolved = new File(directory, baseName + "_" + counter++ + extension);
         } while (resolved.exists());
         return resolved;
     }
 
-    private void collectUploadFile(
-            List<RemoteGraphUploadFile> out,
-            List<String> failedPaths,
-            Path base,
-            Path path,
-            String targetPrefix,
-            AssetTaskContext context
-    ) throws InterruptedException {
+    private void collectUploadFile(List<RemoteGraphUploadFile> out, List<String> failedPaths, Path base,
+                                   Path path, String targetPrefix, AssetTaskContext context)
+            throws InterruptedException {
         context.checkCancelled();
         try {
-            if (Files.isSymbolicLink(path)) {
-                return;
-            }
+            if (Files.isSymbolicLink(path)) return;
             if (Files.isDirectory(path)) {
                 try (var stream = Files.list(path)) {
-                    var iterator = stream.iterator();
-                    while (iterator.hasNext()) {
-                        Path child = iterator.next();
+                    for (Path child : stream.toList()) {
                         collectUploadFile(out, failedPaths, base, child, targetPrefix, context);
                     }
                 }
                 return;
             }
-            if (!Files.isRegularFile(path)) {
-                return;
-            }
-            if (!path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".json")) {
-                return;
-            }
-
+            if (!Files.isRegularFile(path)
+                    || !AssetTypeRegistry.INSTANCE.isType(path.toFile(), AssetTypeRegistry.GRAPH_ID)) return;
             String relative = base.relativize(path).toString().replace('\\', '/');
             String targetPath = targetPrefix.isEmpty() ? relative : targetPrefix + "/" + relative;
             targetPath = AssetPathUtils.normalizeRemoteFilePath(targetPath);
-            context.progress("读取 " + path.getFileName(), out.size(), 0);
-            String json = Files.readString(path);
+            String json = GraphDocumentStore.INSTANCE.readString(path);
             context.checkCancelled();
             out.add(new RemoteGraphUploadFile(targetPath, json));
         } catch (InterruptedException e) {
@@ -353,96 +389,168 @@ public final class LocalAssetService {
         }
     }
 
-    private static File copyRecursively(File source, File destination, AssetTaskContext context)
-            throws IOException, InterruptedException {
-        validateSource(source);
-        File actualDestination = resolveDestinationFor(source, destination);
-        ensureNotNestedInSource(source, actualDestination);
-        copyRecursivelyInternal(source, actualDestination, context);
-        return actualDestination;
-    }
-
-    private static File moveRecursively(File source, File destination, AssetTaskContext context)
-            throws IOException, InterruptedException {
-        validateSource(source);
-        File actualDestination = resolveDestinationFor(source, destination);
-        ensureNotNestedInSource(source, actualDestination);
-        ensureParentDirectory(actualDestination);
-
-        context.checkCancelled();
-        if (source.renameTo(actualDestination)) {
-            return actualDestination;
-        }
-
-        copyRecursivelyInternal(source, actualDestination, context);
-        context.checkCancelled();
+    private static void commitCopies(List<CopyPlan> plans) throws IOException {
+        List<CopyPlan> committed = new ArrayList<>();
         try {
-            deleteRecursively(source, context);
-        } catch (IOException deleteException) {
-            throw new IOException("Copied but failed to delete source: " + source.getAbsolutePath(), deleteException);
+            for (CopyPlan plan : plans) {
+                GraphDocumentStore.moveNew(plan.temporaryPath(), plan.destinationPath());
+                committed.add(plan);
+            }
+        } catch (IOException e) {
+            for (int i = committed.size() - 1; i >= 0; i--) {
+                CopyPlan plan = committed.get(i);
+                try {
+                    GraphDocumentStore.moveNew(plan.destinationPath(), plan.temporaryPath());
+                } catch (IOException rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+            }
+            throw e;
         }
-        return actualDestination;
     }
 
-    private static void deleteRecursively(File file, AssetTaskContext context) throws IOException, InterruptedException {
-        context.checkCancelled();
-        if (file == null || !file.exists()) {
-            return;
-        }
-
-        Path path = file.toPath();
-        if (Files.isDirectory(path) && !Files.isSymbolicLink(path)) {
-            File[] children = file.listFiles();
-            if (children == null) {
-                throw new IOException("Unable to list directory: " + file.getAbsolutePath());
+    private static void commitDeletes(List<DeletePlan> plans) throws IOException {
+        List<DeletePlan> committed = new ArrayList<>();
+        try {
+            for (DeletePlan plan : plans) {
+                GraphDocumentStore.moveNew(plan.sourcePath(), plan.trashPath());
+                committed.add(plan);
             }
-            for (File child : children) {
-                deleteRecursively(child, context);
+        } catch (IOException e) {
+            for (int i = committed.size() - 1; i >= 0; i--) {
+                DeletePlan plan = committed.get(i);
+                try {
+                    GraphDocumentStore.moveNew(plan.trashPath(), plan.sourcePath());
+                } catch (IOException rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+            }
+            throw e;
+        }
+    }
+
+    private static void commitMoves(List<MovePlan> plans) throws IOException {
+        List<MovePlan> committed = new ArrayList<>();
+        try {
+            for (MovePlan plan : plans) {
+                if (plan.direct()) {
+                    GraphDocumentStore.moveNew(plan.sourcePath(), plan.destinationPath());
+                } else {
+                    GraphDocumentStore.moveNew(plan.sourcePath(), plan.trashPath());
+                    try {
+                        GraphDocumentStore.moveNew(plan.temporaryPath(), plan.destinationPath());
+                    } catch (IOException e) {
+                        try {
+                            GraphDocumentStore.moveNew(plan.trashPath(), plan.sourcePath());
+                        } catch (IOException rollbackError) {
+                            e.addSuppressed(rollbackError);
+                        }
+                        throw e;
+                    }
+                }
+                committed.add(plan);
+            }
+        } catch (IOException e) {
+            for (int i = committed.size() - 1; i >= 0; i--) {
+                MovePlan plan = committed.get(i);
+                try {
+                    if (plan.direct()) {
+                        GraphDocumentStore.moveNew(plan.destinationPath(), plan.sourcePath());
+                    } else {
+                        try {
+                            GraphDocumentStore.moveNew(plan.destinationPath(), plan.temporaryPath());
+                        } catch (IOException rollbackError) {
+                            e.addSuppressed(rollbackError);
+                        }
+                        GraphDocumentStore.moveNew(plan.trashPath(), plan.sourcePath());
+                    }
+                } catch (IOException rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+            }
+            throw e;
+        }
+    }
+
+    private static void commitDownloads(List<DownloadPlan> plans) throws IOException {
+        List<DownloadPlan> committed = new ArrayList<>();
+        try {
+            for (DownloadPlan plan : plans) {
+                if (plan.replacesExisting()) {
+                    GraphDocumentStore.moveNew(plan.targetPath(), plan.backupPath());
+                }
+                try {
+                    GraphDocumentStore.moveNew(plan.temporaryPath(), plan.targetPath());
+                } catch (IOException e) {
+                    if (plan.replacesExisting()) {
+                        try {
+                            GraphDocumentStore.moveNew(plan.backupPath(), plan.targetPath());
+                        } catch (IOException rollbackError) {
+                            e.addSuppressed(rollbackError);
+                        }
+                    }
+                    throw e;
+                }
+                committed.add(plan);
+            }
+        } catch (IOException e) {
+            for (int i = committed.size() - 1; i >= 0; i--) {
+                DownloadPlan plan = committed.get(i);
+                try {
+                    if (plan.replacesExisting()) {
+                        GraphDocumentStore.moveReplacing(plan.backupPath(), plan.targetPath());
+                    } else {
+                        Files.deleteIfExists(plan.targetPath());
+                    }
+                } catch (IOException rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+            }
+            throw e;
+        }
+    }
+
+    private static void copyRecursively(Path source, Path destination, AssetTaskContext context)
+            throws IOException, InterruptedException {
+        context.checkCancelled();
+        Path parent = destination.getParent();
+        if (parent != null) Files.createDirectories(parent);
+        if (Files.isDirectory(source, LinkOption.NOFOLLOW_LINKS)) {
+            Files.createDirectory(destination);
+            try (var stream = Files.list(source)) {
+                for (Path child : stream.toList()) {
+                    copyRecursively(child, destination.resolve(child.getFileName()), context);
+                }
+            }
+        } else {
+            Files.copy(source, destination, LinkOption.NOFOLLOW_LINKS, StandardCopyOption.COPY_ATTRIBUTES);
+        }
+    }
+
+    private static void deleteRecursively(Path path) throws IOException {
+        if (path == null || !Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return;
+        if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+            try (var stream = Files.list(path)) {
+                List<Path> children = stream.sorted(Comparator.reverseOrder()).toList();
+                for (Path child : children) deleteRecursively(child);
             }
         }
-
-        context.checkCancelled();
         Files.deleteIfExists(path);
     }
 
-    private static void copyRecursivelyInternal(File source, File destination, AssetTaskContext context)
-            throws IOException, InterruptedException {
-        context.checkCancelled();
-        ensureParentDirectory(destination);
-
-        Path sourcePath = source.toPath();
-        Path destinationPath = destination.toPath();
-        if (Files.isDirectory(sourcePath) && !Files.isSymbolicLink(sourcePath)) {
-            Files.createDirectory(destinationPath);
-            File[] children = source.listFiles();
-            if (children == null) {
-                throw new IOException("Unable to list directory: " + source.getAbsolutePath());
-            }
-            for (File child : children) {
-                copyRecursivelyInternal(child, new File(destination, child.getName()), context);
-            }
-        } else {
-            Files.copy(sourcePath, destinationPath, StandardCopyOption.COPY_ATTRIBUTES);
+    private static boolean sameFileStore(Path source, Path destinationDirectory) {
+        try {
+            FileStore sourceStore = Files.getFileStore(source);
+            FileStore destinationStore = Files.getFileStore(destinationDirectory);
+            return sourceStore.equals(destinationStore);
+        } catch (IOException ignored) {
+            return false;
         }
-    }
-
-    private static File resolveDestinationFor(File source, File destination) {
-        if (destination == null) {
-            throw new IllegalArgumentException("destination must not be null");
-        }
-        if (destination.exists()) {
-            return resolveAvailableDestination(destination.getParentFile(), destination.getName(), source.isDirectory());
-        }
-        return destination;
     }
 
     private static void validateSource(File source) throws IOException {
-        if (source == null) {
-            throw new IOException("Source file is null");
-        }
-        if (!source.exists()) {
-            throw new IOException("Source file does not exist: " + source.getAbsolutePath());
-        }
+        if (source == null) throw new IOException("Source file is null");
+        if (!source.exists()) throw new IOException("Source file does not exist: " + source.getAbsolutePath());
     }
 
     private static void validateSourceName(String sourceName) {
@@ -455,43 +563,91 @@ public final class LocalAssetService {
         }
     }
 
-    private static void ensureParentDirectory(File file) throws IOException {
-        File parent = file.getParentFile();
-        if (parent != null) {
-            Files.createDirectories(parent.toPath());
-        }
-    }
-
     private static void ensureNotNestedInSource(File source, File destination) throws IOException {
-        Path sourcePath = source.toPath().toAbsolutePath().normalize();
-        Path destinationPath = destination.toPath().toAbsolutePath().normalize();
+        Path sourcePath = normalize(source.toPath());
+        Path destinationPath = normalize(destination.toPath());
         if (source.isDirectory() && destinationPath.startsWith(sourcePath)) {
             throw new IOException("Destination is inside source directory: " + destination.getAbsolutePath());
         }
     }
 
     private static boolean isDescendantOrSelf(File candidate, File root) {
-        try {
-            String candidatePath = candidate.getCanonicalPath();
-            String rootPath = root.getCanonicalPath();
-            return candidatePath.equals(rootPath) || candidatePath.startsWith(rootPath + File.separator);
-        } catch (Exception e) {
-            return false;
+        if (candidate == null || root == null) return false;
+        Path candidatePath = normalize(candidate.toPath());
+        Path rootPath = normalize(root.toPath());
+        return candidatePath.equals(rootPath) || candidatePath.startsWith(rootPath);
+    }
+
+    private static List<File> topLevelFiles(List<File> files) {
+        if (files == null || files.isEmpty()) return List.of();
+        Set<Path> unique = new LinkedHashSet<>();
+        Map<Path, File> byPath = new LinkedHashMap<>();
+        for (File file : files) {
+            if (file == null) continue;
+            Path path = normalize(file.toPath());
+            unique.add(path);
+            byPath.putIfAbsent(path, file);
+        }
+        List<Path> sorted = new ArrayList<>(unique);
+        sorted.sort(Comparator.comparingInt(Path::getNameCount));
+        List<Path> topLevel = new ArrayList<>();
+        for (Path path : sorted) {
+            if (topLevel.stream().noneMatch(path::startsWith)) topLevel.add(path);
+        }
+        return topLevel.stream().map(byPath::get).toList();
+    }
+
+    private static Path normalize(Path path) {
+        return path.toAbsolutePath().normalize();
+    }
+
+    private static void cleanupCopyPlans(List<CopyPlan> plans) {
+        for (CopyPlan plan : plans) cleanupQuietly(plan.temporaryPath());
+    }
+
+    private static void cleanupMovePlans(List<MovePlan> plans) {
+        for (MovePlan plan : plans) {
+            cleanupQuietly(plan.temporaryPath());
+            cleanupQuietly(plan.trashPath());
         }
     }
 
-    private static List<File> snapshotFiles(List<File> files) {
-        return files == null ? List.of() : List.copyOf(files);
+    private static void cleanupDownloadPlans(List<DownloadPlan> plans) {
+        for (DownloadPlan plan : plans) {
+            cleanupQuietly(plan.temporaryPath());
+            cleanupQuietly(plan.backupPath());
+        }
+    }
+
+    private static void cleanupQuietly(Path path) {
+        if (path == null) return;
+        try {
+            deleteRecursively(path);
+        } catch (IOException ignored) {
+        }
     }
 
     private static String displayName(File file) {
         if (file == null) return "未知文件";
-        String name = file.getName();
-        return name == null || name.isEmpty() ? file.getAbsolutePath() : name;
+        return file.getName().isEmpty() ? file.getAbsolutePath() : file.getName();
     }
 
     private static String pathLabel(File file) {
         return file == null ? "未知文件" : file.getAbsolutePath();
+    }
+
+    private record CopyPlan(File source, Path destinationPath, Path temporaryPath) {
+    }
+
+    private record DeletePlan(File source, Path sourcePath, Path trashPath) {
+    }
+
+    private record MovePlan(File source, Path sourcePath, Path destinationPath, Path temporaryPath,
+                            Path trashPath, boolean direct) {
+    }
+
+    private record DownloadPlan(String remotePath, Path targetPath, Path temporaryPath, Path backupPath,
+                                boolean replacesExisting) {
     }
 
     public record FileMove(File source, File destination) {

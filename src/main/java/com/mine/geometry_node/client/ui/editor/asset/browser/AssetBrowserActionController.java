@@ -5,15 +5,24 @@ import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionId
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.ConfirmDialog;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.TransferProgressDialog;
+import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.menu.FileContextMenu;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
+import com.mine.geometry_node.client.ui.editor.asset.repository.LocalAssetRepository;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.service.GraphAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
+import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphFileOperationRequest;
 import icyllis.modernui.resources.TypedValue;
@@ -30,7 +39,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -45,7 +53,6 @@ final class AssetBrowserActionController {
     private final LocalAssetService mLocalAssetService;
     private final GraphAssetService mGraphAssetService;
     private final GraphFavoriteStore mFavoriteStore;
-    private final AssetEntryLoader mEntryLoader;
     private final AssetTaskController mIoTasks;
     private final boolean mEnableLocalFileActions;
     private final boolean mEnableRemoteTransferActions;
@@ -63,7 +70,6 @@ final class AssetBrowserActionController {
             LocalAssetService localAssetService,
             GraphAssetService graphAssetService,
             GraphFavoriteStore favoriteStore,
-            AssetEntryLoader entryLoader,
             AssetTaskController ioTasks,
             boolean enableLocalFileActions,
             boolean enableRemoteTransferActions,
@@ -75,7 +81,6 @@ final class AssetBrowserActionController {
         mLocalAssetService = localAssetService;
         mGraphAssetService = graphAssetService;
         mFavoriteStore = favoriteStore;
-        mEntryLoader = entryLoader;
         mIoTasks = ioTasks;
         mEnableLocalFileActions = enableLocalFileActions;
         mEnableRemoteTransferActions = enableRemoteTransferActions;
@@ -84,38 +89,50 @@ final class AssetBrowserActionController {
     }
 
     boolean canCopySelection() {
-        List<AssetEntry> entries = mPanel.getSelectedEntries();
-        if (entries.isEmpty()) return false;
-        if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
-            return mEnableLocalFileActions && !mPanel.getSelectedLocalFiles().isEmpty();
-        }
-        return mEnableRemoteTransferActions && RemoteGraphClientState.canManage()
-                && entries.stream().anyMatch(entry -> entry.sourceKind() == AssetSourceKind.REMOTE);
+        return canActOnSelection(AssetTypeAction.COPY);
     }
 
     boolean canPasteClipboard() {
         if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
             return mEnableLocalFileActions && !mPanel.isFavoritesMode() && !mClipboardFiles.isEmpty();
         }
-        return mEnableRemoteTransferActions && RemoteGraphClientState.canManage()
+        return mEnableRemoteTransferActions
+                && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)
                 && !RemoteGraphClientState.clipboardPaths().isEmpty();
     }
 
     boolean canCutSelection() {
-        return canCopySelection();
+        return canActOnSelection(AssetTypeAction.MOVE);
     }
 
     boolean canDeleteSelection() {
-        return canCopySelection();
+        return canActOnSelection(AssetTypeAction.DELETE);
     }
 
     boolean canRenameSelection() {
         return mPanel.getSourceKind() == AssetSourceKind.LOCAL
                 && mEnableLocalFileActions
-                && mPanel.getSelectedLocalFiles().size() == 1;
+                && mPanel.repositorySupports(AssetSourceKind.LOCAL, AssetRepositoryOperation.MANAGE)
+                && mPanel.getSelectedEntries().size() == 1
+                && mPanel.getSelectedEntries().get(0).supports(AssetTypeAction.RENAME);
+    }
+
+    private boolean canActOnSelection(AssetTypeAction action) {
+        List<AssetEntry> entries = mPanel.getSelectedEntries();
+        if (entries.isEmpty() || entries.stream().anyMatch(entry -> !entry.supports(action))) return false;
+        if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
+            return mEnableLocalFileActions
+                    && mPanel.repositorySupports(AssetSourceKind.LOCAL, AssetRepositoryOperation.MANAGE)
+                    && entries.stream().allMatch(entry -> entry.sourceKind() == AssetSourceKind.LOCAL
+                    && entry.localFile() != null);
+        }
+        return mEnableRemoteTransferActions
+                && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)
+                && entries.stream().allMatch(entry -> entry.sourceKind() == AssetSourceKind.REMOTE);
     }
 
     void copySelectionToClipboard() {
+        if (!canCopySelection()) return;
         if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
             List<File> files = mPanel.getSelectedLocalFiles();
             if (files.isEmpty()) return;
@@ -124,7 +141,8 @@ final class AssetBrowserActionController {
             return;
         }
 
-        if (!mEnableRemoteTransferActions || !RemoteGraphClientState.canManage()) return;
+        if (!mEnableRemoteTransferActions
+                || !mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)) return;
         List<AssetEntry> entries = mPanel.getSelectedEntries();
         if (entries.isEmpty()) return;
         setRemoteClipboard(entries, false);
@@ -139,6 +157,7 @@ final class AssetBrowserActionController {
     }
 
     void cutSelectionToClipboard() {
+        if (!canCutSelection()) return;
         if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
             List<File> files = mPanel.getSelectedLocalFiles();
             if (files.isEmpty()) return;
@@ -147,13 +166,15 @@ final class AssetBrowserActionController {
             return;
         }
 
-        if (!mEnableRemoteTransferActions || !RemoteGraphClientState.canManage()) return;
+        if (!mEnableRemoteTransferActions
+                || !mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)) return;
         List<AssetEntry> entries = mPanel.getSelectedEntries();
         if (entries.isEmpty()) return;
         setRemoteClipboard(entries, true);
     }
 
     void deleteSelection() {
+        if (!canDeleteSelection()) return;
         if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
             confirmDeleteLocalFiles(mPanel.getSelectedLocalFiles());
         } else {
@@ -162,6 +183,7 @@ final class AssetBrowserActionController {
     }
 
     void renameSelection() {
+        if (!canRenameSelection()) return;
         List<File> files = mPanel.getSelectedLocalFiles();
         if (mPanel.getSourceKind() == AssetSourceKind.LOCAL && files.size() == 1) {
             startInlineEdit(files.get(0));
@@ -175,6 +197,10 @@ final class AssetBrowserActionController {
     }
 
     boolean moveLocalEntries(List<AssetEntry> entries, AssetEntry targetDirectoryEntry) {
+        if (!mEnableLocalFileActions
+                || !mPanel.repositorySupports(AssetSourceKind.LOCAL, AssetRepositoryOperation.MANAGE)
+                || entries == null || entries.isEmpty()
+                || entries.stream().anyMatch(entry -> !entry.supports(AssetTypeAction.MOVE))) return false;
         if (targetDirectoryEntry.sourceKind() != AssetSourceKind.LOCAL || targetDirectoryEntry.localFile() == null) return false;
         File targetDirectory = targetDirectoryEntry.localFile();
         if (!targetDirectory.isDirectory()) return false;
@@ -190,7 +216,10 @@ final class AssetBrowserActionController {
         mIoTasks.run("移动文件",
                 context -> mLocalAssetService.moveFilesToDirectory(sourceFiles, targetDirectory, context),
                 (result, progress) -> {
+                    DocumentManager.INSTANCE.refreshFileReferences();
                     for (LocalAssetService.FileMove move : result.movedFiles()) {
+                        ImageThumbnailView.invalidateUnder(move.source());
+                        SchematicThumbnailView.invalidateUnder(move.source());
                         mFavoriteStore.updatePath(move.source(), move.destination());
                     }
                     if (!result.movedFiles().isEmpty()) {
@@ -204,7 +233,10 @@ final class AssetBrowserActionController {
 
     boolean moveRemoteEntries(List<AssetEntry> entries, AssetEntry targetDirectoryEntry) {
         if (targetDirectoryEntry.sourceKind() != AssetSourceKind.REMOTE || !targetDirectoryEntry.isDirectory()) return false;
-        if (!mEnableRemoteTransferActions || !RemoteGraphClientState.canManage()) return false;
+        if (!mEnableRemoteTransferActions
+                || !mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)
+                || entries == null || entries.isEmpty()
+                || entries.stream().anyMatch(entry -> !entry.supports(AssetTypeAction.MOVE))) return false;
 
         List<String> paths = new ArrayList<>();
         for (AssetEntry entry : entries) {
@@ -219,7 +251,8 @@ final class AssetBrowserActionController {
     }
 
     void triggerNewItem(boolean isFolder) {
-        if (mPanel.isFavoritesMode()) return;
+        if (mPanel.isFavoritesMode()
+                || !mPanel.repositorySupports(AssetSourceKind.LOCAL, AssetRepositoryOperation.CREATE)) return;
         mPanel.clearSearch();
         File currentDirectory = mPanel.getCurrentDirectory();
         if (currentDirectory == null) return;
@@ -229,7 +262,8 @@ final class AssetBrowserActionController {
                 context -> mLocalAssetService.createAssetItem(currentDirectory, defaultName, isFolder, context),
                 (result, progress) -> {
                     File newFile = result.file();
-                    AssetEntry newEntry = mEntryLoader.toLocalEntry(newFile, currentDirectory, false);
+                    AssetEntry newEntry = AssetEntry.local(newFile,
+                            LocalAssetRepository.pathKey(newFile), newFile.getName());
                     mPanel.refreshFileList(() -> {
                         mPanel.selectOnly(newEntry);
                         startInlineEdit(newFile);
@@ -240,7 +274,7 @@ final class AssetBrowserActionController {
 
     void handleDoubleClick(AssetEntry entry) {
         Consumer<AssetEntry> pickFileAction = mPanel.pickFileAction();
-        if (pickFileAction != null && !entry.isDirectory()) {
+        if (pickFileAction != null && !entry.isDirectory() && entry.supports(AssetTypeAction.PICK)) {
             pickFileAction.accept(entry);
             return;
         }
@@ -256,36 +290,53 @@ final class AssetBrowserActionController {
         if (file == null) return;
         if (file.isDirectory()) {
             mPanel.navigateTo(file);
-        } else if (mOpenLocalJsonOnDoubleClick && file.getName().toLowerCase(Locale.ROOT).endsWith(".json")) {
+        } else if (mOpenLocalJsonOnDoubleClick && entry.supports(AssetTypeAction.OPEN)) {
             openGraphFile(file);
         }
     }
 
-    private void addLocalContextActions(FileContextMenu menu, List<File> filesSnapshot) {
+    private void addLocalContextActions(FileContextMenu menu, List<AssetEntry> entriesSnapshot) {
+        List<File> filesSnapshot = entriesSnapshot.stream()
+                .filter(entry -> entry.sourceKind() == AssetSourceKind.LOCAL && entry.localFile() != null)
+                .map(AssetEntry::localFile)
+                .toList();
         if (filesSnapshot.isEmpty()) return;
         String suffix = filesSnapshot.size() > 1 ? " (" + filesSnapshot.size() + ")" : "";
         List<File> uploadCandidates = getUploadCandidates(filesSnapshot);
-        if (mEnableRemoteTransferActions && mCoordinator != null && RemoteGraphClientState.canUpload() && !uploadCandidates.isEmpty()) {
+        if (mEnableRemoteTransferActions && mCoordinator != null
+                && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.UPLOAD)
+                && !uploadCandidates.isEmpty()) {
             String uploadSuffix = uploadCandidates.size() > 1 ? " (" + uploadCandidates.size() + ")" : "";
             menu.addMenuItem("上传到服务器" + uploadSuffix, () -> mCoordinator.showUploadDialog(uploadCandidates));
             menu.addDivider();
         }
         if (!mEnableLocalFileActions) return;
-        menu.addMenuItem(actionLabel(AssetLibraryActionId.COPY) + suffix,
-                shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
-        menu.addMenuItem(actionLabel(AssetLibraryActionId.CUT) + suffix,
-                shortcutText(AssetLibraryActionId.CUT), () -> {
-            mClipboardFiles = new ArrayList<>(filesSnapshot);
-            mIsCutOperation = true;
-        });
-        menu.addMenuItem(actionLabel(AssetLibraryActionId.DELETE) + suffix,
-                shortcutText(AssetLibraryActionId.DELETE), () -> confirmDeleteLocalFiles(filesSnapshot));
-        if (filesSnapshot.size() == 1) {
-            menu.addDivider();
+        boolean added = false;
+        if (entriesSnapshot.stream().allMatch(entry -> entry.supports(AssetTypeAction.COPY))) {
+            menu.addMenuItem(actionLabel(AssetLibraryActionId.COPY) + suffix,
+                    shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
+            added = true;
+        }
+        if (entriesSnapshot.stream().allMatch(entry -> entry.supports(AssetTypeAction.MOVE))) {
+            menu.addMenuItem(actionLabel(AssetLibraryActionId.CUT) + suffix,
+                    shortcutText(AssetLibraryActionId.CUT), () -> {
+                mClipboardFiles = new ArrayList<>(filesSnapshot);
+                mIsCutOperation = true;
+            });
+            added = true;
+        }
+        if (entriesSnapshot.stream().allMatch(entry -> entry.supports(AssetTypeAction.DELETE))) {
+            menu.addMenuItem(actionLabel(AssetLibraryActionId.DELETE) + suffix,
+                    shortcutText(AssetLibraryActionId.DELETE), () -> confirmDeleteLocalFiles(filesSnapshot));
+            added = true;
+        }
+        if (entriesSnapshot.size() == 1 && entriesSnapshot.get(0).supports(AssetTypeAction.RENAME)) {
+            if (added) menu.addDivider();
             menu.addMenuItem(actionLabel(AssetLibraryActionId.RENAME),
                     shortcutText(AssetLibraryActionId.RENAME), () -> startInlineEdit(filesSnapshot.get(0)));
+            added = true;
         }
-        menu.addDivider();
+        if (added) menu.addDivider();
     }
 
     private void confirmDeleteLocalFiles(List<File> filesSnapshot) {
@@ -309,21 +360,19 @@ final class AssetBrowserActionController {
         deletionTargets.removeIf(file -> file == null);
         if (deletionTargets.isEmpty()) return;
 
-        DocumentManager.INSTANCE.closeSessionsForDeletion(deletionTargets);
-        mPanel.post(() -> {
-            // Capture graph loads that completed while the confirmation dialog was closing,
-            // then allow viewport tab refreshes to unbind before file I/O begins.
-            DocumentManager.INSTANCE.closeSessionsForDeletion(deletionTargets);
-            mPanel.post(() -> runLocalDeleteTask(deletionTargets));
-        });
+        DocumentManager.INSTANCE.closeSessionsUnder(
+                deletionTargets.stream().map(File::toPath).toList());
+        runLocalDeleteTask(deletionTargets);
     }
 
     private void runLocalDeleteTask(List<File> files) {
         mIoTasks.run("删除文件",
                 context -> mLocalAssetService.deleteFiles(files, context),
                 (result, progress) -> {
-                    DocumentManager.INSTANCE.closeSessionsForDeletion(result.successfulFiles());
+                    DocumentManager.INSTANCE.refreshFileReferences();
                     for (File file : result.successfulFiles()) {
+                        ImageThumbnailView.invalidateUnder(file);
+                        SchematicThumbnailView.invalidateUnder(file);
                         mFavoriteStore.removePath(file);
                     }
                     if (!result.successfulFiles().isEmpty()) {
@@ -335,7 +384,8 @@ final class AssetBrowserActionController {
     }
 
     private boolean isLocalGraphFile(File file) {
-        return AssetEntryLoader.isLocalGraphFile(file);
+        return file != null && file.isFile()
+                && AssetTypeRegistry.INSTANCE.isType(file, AssetTypeRegistry.GRAPH_ID);
     }
 
     private List<File> getUploadCandidates(List<File> files) {
@@ -352,18 +402,30 @@ final class AssetBrowserActionController {
     private void addRemoteContextActions(FileContextMenu menu, List<AssetEntry> entriesSnapshot) {
         if (entriesSnapshot.isEmpty() || !mEnableRemoteTransferActions) return;
         String suffix = entriesSnapshot.size() > 1 ? " (" + entriesSnapshot.size() + ")" : "";
-        if (mCoordinator != null && RemoteGraphClientState.canDownload()) {
+        if (mCoordinator != null
+                && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.DOWNLOAD)
+                && entriesSnapshot.stream().allMatch(entry -> entry.supports(AssetTypeAction.DOWNLOAD))) {
             menu.addMenuItem("下载到本地" + suffix, () -> mCoordinator.showDownloadDialog(entriesSnapshot));
             menu.addDivider();
         }
-        if (RemoteGraphClientState.canManage()) {
-            menu.addMenuItem(actionLabel(AssetLibraryActionId.COPY) + suffix,
-                    shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
-            menu.addMenuItem(actionLabel(AssetLibraryActionId.CUT) + suffix,
-                    shortcutText(AssetLibraryActionId.CUT), () -> setRemoteClipboard(entriesSnapshot, true));
-            menu.addMenuItem(actionLabel(AssetLibraryActionId.DELETE) + suffix,
-                    shortcutText(AssetLibraryActionId.DELETE), () -> deleteRemoteEntries(entriesSnapshot));
-            menu.addDivider();
+        if (mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)) {
+            boolean added = false;
+            if (entriesSnapshot.stream().allMatch(entry -> entry.supports(AssetTypeAction.COPY))) {
+                menu.addMenuItem(actionLabel(AssetLibraryActionId.COPY) + suffix,
+                        shortcutText(AssetLibraryActionId.COPY), this::copySelectionToClipboard);
+                added = true;
+            }
+            if (entriesSnapshot.stream().allMatch(entry -> entry.supports(AssetTypeAction.MOVE))) {
+                menu.addMenuItem(actionLabel(AssetLibraryActionId.CUT) + suffix,
+                        shortcutText(AssetLibraryActionId.CUT), () -> setRemoteClipboard(entriesSnapshot, true));
+                added = true;
+            }
+            if (entriesSnapshot.stream().allMatch(entry -> entry.supports(AssetTypeAction.DELETE))) {
+                menu.addMenuItem(actionLabel(AssetLibraryActionId.DELETE) + suffix,
+                        shortcutText(AssetLibraryActionId.DELETE), () -> deleteRemoteEntries(entriesSnapshot));
+                added = true;
+            }
+            if (added) menu.addDivider();
         }
     }
 
@@ -377,7 +439,7 @@ final class AssetBrowserActionController {
         List<AssetEntry> actionEntries = targetEntry == null ? Collections.emptyList() : mPanel.getSelectedEntries();
         if (!actionEntries.isEmpty()) {
             if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
-                addLocalContextActions(menu, mPanel.getSelectedLocalFiles());
+                addLocalContextActions(menu, new ArrayList<>(actionEntries));
             } else {
                 addRemoteContextActions(menu, new ArrayList<>(actionEntries));
             }
@@ -390,7 +452,8 @@ final class AssetBrowserActionController {
             menu.addDivider();
         }
         if (mEnableRemoteTransferActions && mPanel.getSourceKind() == AssetSourceKind.REMOTE
-                && RemoteGraphClientState.canManage() && !RemoteGraphClientState.clipboardPaths().isEmpty()) {
+                && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)
+                && !RemoteGraphClientState.clipboardPaths().isEmpty()) {
             menu.addMenuItem(RemoteGraphClientState.isCutOperation()
                             ? translated("geometry_node.asset_library.action.move_here")
                             : actionLabel(AssetLibraryActionId.PASTE),
@@ -403,7 +466,8 @@ final class AssetBrowserActionController {
         }
 
         Consumer<AssetEntry> pickFileAction = mPanel.pickFileAction();
-        if (mShowPickerContextActions && pickFileAction != null && targetEntry != null && !targetEntry.isDirectory()) {
+        if (mShowPickerContextActions && pickFileAction != null && targetEntry != null
+                && !targetEntry.isDirectory() && targetEntry.supports(AssetTypeAction.PICK)) {
             menu.addMenuItem("选择文件", () -> pickFileAction.accept(targetEntry));
         }
         Runnable pickCurrentDirectoryAction = mPanel.pickCurrentDirectoryAction();
@@ -492,7 +556,10 @@ final class AssetBrowserActionController {
         mIoTasks.run("重命名文件",
                 context -> mLocalAssetService.renameFile(targetFile, newName, context),
                 (result, progress) -> {
+                    DocumentManager.INSTANCE.refreshFileReferences();
                     if (result.renamed()) {
+                        ImageThumbnailView.invalidateUnder(result.source());
+                        SchematicThumbnailView.invalidateUnder(result.source());
                         mFavoriteStore.updatePath(result.source(), result.destination());
                     }
                     mPanel.refreshFileList();
@@ -508,7 +575,12 @@ final class AssetBrowserActionController {
         mIoTasks.run(cutOperation ? "移动文件" : "复制文件",
                 context -> mLocalAssetService.pasteFiles(clipboardSnapshot, currentDirectory, cutOperation, context),
                 (result, progress) -> {
+                    if (cutOperation) {
+                        DocumentManager.INSTANCE.refreshFileReferences();
+                    }
                     for (LocalAssetService.FileMove move : result.movedFiles()) {
+                        ImageThumbnailView.invalidateUnder(move.source());
+                        SchematicThumbnailView.invalidateUnder(move.source());
                         mFavoriteStore.updatePath(move.source(), move.destination());
                     }
                     if (cutOperation && !result.movedFiles().isEmpty()) {
@@ -639,6 +711,12 @@ final class AssetBrowserActionController {
     }
 
     private void openGraphFile(File file) {
+        GraphFileReference reference = GraphFileRegistry.INSTANCE.reference(file.toPath());
+        GraphSession existing = DocumentManager.INSTANCE.findSession(reference);
+        if (existing != null) {
+            DocumentManager.INSTANCE.switchSession(existing);
+            return;
+        }
         mIoTasks.run("打开图纸",
                 context -> mGraphAssetService.loadGraphSession(file, context),
                 (session, progress) -> {

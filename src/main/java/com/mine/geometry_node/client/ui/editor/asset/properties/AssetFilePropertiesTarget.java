@@ -2,17 +2,19 @@ package com.mine.geometry_node.client.ui.editor.asset.properties;
 
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.editor.properties.GraphPropertiesSnapshot;
 import com.mine.geometry_node.client.ui.editor.properties.GraphPropertiesTarget;
+import com.mine.geometry_node.client.ui.editor.graph.properties.GraphSessionPropertiesTarget;
 import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
+import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -29,11 +31,11 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
         return thread;
     });
 
-    private final File mFile;
+    private final GraphFileReference mFileReference;
     private final Runnable mOnSaved;
 
     private AssetFilePropertiesTarget(File file, Runnable onSaved) {
-        mFile = file;
+        mFileReference = GraphFileRegistry.INSTANCE.reference(file.toPath());
         mOnSaved = onSaved;
     }
 
@@ -44,11 +46,15 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
 
     @Override
     public CompletionStage<GraphPropertiesSnapshot> load() {
+        GraphSessionPropertiesTarget sessionTarget = openSessionTarget();
+        if (sessionTarget != null) {
+            return sessionTarget.load();
+        }
         return CompletableFuture.supplyAsync(() -> {
             try {
-                GraphTagIO.GraphMetadata metadata = GraphTagIO.readMetadata(mFile);
+                GraphTagIO.GraphMetadata metadata = GraphTagIO.readMetadata(mFileReference);
                 return new GraphPropertiesSnapshot(
-                        mFile.getName(),
+                        mFileReference.requireActivePath().getFileName().toString(),
                         metadata.graphTypeId(),
                         normalizeComment(metadata.comment()),
                         metadata.tags(),
@@ -63,9 +69,13 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
     @Override
     public CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags,
                                       QuestDefinition questDefinition) {
+        GraphSessionPropertiesTarget sessionTarget = openSessionTarget();
+        if (sessionTarget != null) {
+            return sessionTarget.save(graphTypeId, comment, tags, questDefinition);
+        }
         return CompletableFuture.runAsync(() -> {
             try {
-                GraphTagIO.writeMetadata(mFile, graphTypeId, comment, tags, questDefinition);
+                GraphTagIO.writeMetadata(mFileReference, graphTypeId, comment, tags, questDefinition);
             } catch (Exception e) {
                 throw new CompletionException(e);
             }
@@ -79,7 +89,6 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
 
     @Override
     public void onSaveSucceeded(GraphPropertiesSnapshot snapshot) {
-        syncOpenSession(mFile, snapshot.graphTypeId(), snapshot.comment(), snapshot.tags(), snapshot.questDefinition());
         if (mOnSaved != null) mOnSaved.run();
     }
 
@@ -87,37 +96,15 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
         if (entries == null || entries.size() != 1) return null;
         AssetEntry entry = entries.get(0);
         if (entry == null || entry.sourceKind() != AssetSourceKind.LOCAL
-                || !entry.isJsonFile() || entry.localFile() == null || !entry.localFile().isFile()) {
+                || !AssetTypeRegistry.INSTANCE.isType(entry, AssetTypeRegistry.GRAPH_ID)
+                || entry.localFile() == null || !entry.localFile().isFile()) {
             return null;
         }
         return entry.localFile();
     }
 
-    private static void syncOpenSession(File file, String graphTypeId, String comment, List<String> tags,
-                                        QuestDefinition questDefinition) {
-        for (GraphSession session : DocumentManager.INSTANCE.getSessions()) {
-            if (session == null || session.fileId == null
-                    || session.editorContext == null || session.editorContext.getGraph() == null) {
-                continue;
-            }
-            if (!sameFile(file, new File(session.fileId))) continue;
-            session.editorContext.getGraph().graphKind = graphTypeId;
-            session.editorContext.getGraph().comment = comment;
-            session.editorContext.getGraph().tags = new ArrayList<>(tags);
-            session.editorContext.getGraph().quest = questDefinition;
-            session.editorContext.notifyGraphMetadataChanged();
-        }
-    }
-
-    private static boolean sameFile(File first, File second) {
-        if (first == null || second == null) return false;
-        try {
-            String firstPath = first.getCanonicalPath();
-            String secondPath = second.getCanonicalPath();
-            boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
-            return windows ? firstPath.equalsIgnoreCase(secondPath) : firstPath.equals(secondPath);
-        } catch (Exception ignored) {
-            return first.getAbsoluteFile().equals(second.getAbsoluteFile());
-        }
+    private GraphSessionPropertiesTarget openSessionTarget() {
+        GraphSession session = DocumentManager.INSTANCE.findSession(mFileReference);
+        return session != null ? new GraphSessionPropertiesTarget(session) : null;
     }
 }

@@ -5,6 +5,8 @@ import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationPanel;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.common.ResizableDivider;
@@ -155,6 +157,7 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
     private boolean isPickableFile(AssetEntry entry) {
         return entry != null
                 && !entry.isDirectory()
+                && entry.supports(AssetTypeAction.PICK)
                 && (entry.sourceKind() == AssetSourceKind.REMOTE || entry.localFile() != null);
     }
 
@@ -198,7 +201,8 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
     private void navigateInitial(String initialPath) {
         String remoteDirectory = initialRemoteDirectory(initialPath);
         File localDirectory = initialLocalDirectory(initialPath);
-        if (remoteDirectory != null && RemoteGraphClientState.canBrowse()) {
+        if (remoteDirectory != null
+                && mBrowser.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE)) {
             mBrowser.navigateToRemote(remoteDirectory);
             return;
         }
@@ -293,14 +297,14 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
 
     @Override
     public void dispatchNavigateToRemoteRoot() {
-        if (RemoteGraphClientState.canBrowse()) {
+        if (mBrowser.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE)) {
             mBrowser.navigateToRemoteRoot();
         }
     }
 
     @Override
     public boolean canBrowseRemote() {
-        return RemoteGraphClientState.canBrowse();
+        return mBrowser.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE);
     }
 
     @Override

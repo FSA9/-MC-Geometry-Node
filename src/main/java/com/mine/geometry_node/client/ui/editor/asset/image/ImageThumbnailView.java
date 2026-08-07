@@ -16,6 +16,7 @@ public final class ImageThumbnailView extends View {
 
     private final File mFile;
     private final Paint mPaint = new Paint();
+    private ImageThumbnailCache.Subscription mSubscription;
     private Bitmap mSourceBitmap;
     private Image mImage;
 
@@ -26,19 +27,18 @@ public final class ImageThumbnailView extends View {
         setWillNotDraw(false);
     }
 
-    public void preload() {
-        ImageThumbnailCache.preload(mFile, this);
-    }
-
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        preload();
+        mSubscription = ImageThumbnailCache.subscribe(mFile, this);
     }
 
     @Override
     protected void onDetachedFromWindow() {
-        ImageThumbnailCache.unobserve(mFile, this);
+        if (mSubscription != null) {
+            mSubscription.close();
+            mSubscription = null;
+        }
         closeImage();
         super.onDetachedFromWindow();
     }
@@ -49,7 +49,7 @@ public final class ImageThumbnailView extends View {
         mPaint.setColor(BACKGROUND_COLOR);
         canvas.drawRect(0, 0, getWidth(), getHeight(), mPaint);
 
-        Bitmap bitmap = ImageThumbnailCache.get(mFile, this);
+        Bitmap bitmap = mSubscription != null ? mSubscription.bitmap() : null;
         if (bitmap == null) {
             drawFallback(canvas);
             return;
@@ -93,5 +93,17 @@ public final class ImageThumbnailView extends View {
             mImage = null;
         }
         mSourceBitmap = null;
+    }
+
+    public static void invalidate(File file) {
+        ImageThumbnailCache.invalidate(file);
+    }
+
+    public static void invalidateUnder(File file) {
+        ImageThumbnailCache.invalidateUnder(file);
+    }
+
+    public static void clearCache() {
+        ImageThumbnailCache.clear();
     }
 }

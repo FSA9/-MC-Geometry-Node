@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.editor.asset.schematic;
 import icyllis.modernui.view.View;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -25,187 +26,229 @@ final class SchematicThumbnailCache {
     private SchematicThumbnailCache() {
     }
 
-    static SchematicThumbnail get(File file, View observer) {
-        if (file == null || !file.isFile()) {
-            return SchematicThumbnail.error("missing file");
-        }
-
-        String key = key(file);
+    static Subscription subscribe(File file, View view) {
+        if (file == null || view == null || !file.isFile()) return Subscription.EMPTY;
+        String path = canonicalPath(file);
+        String key = key(path, file);
         Entry entry;
+        Observer observer = new Observer(view);
         synchronized (CACHE) {
             entry = CACHE.get(key);
             if (entry == null) {
-                entry = new Entry(key, file);
+                entry = new Entry(key, path, file);
                 CACHE.put(key, entry);
-                trimCacheLocked();
             }
+            entry.addObserver(observer);
+            trimLocked();
         }
-        entry.observe(observer);
         entry.start();
-        return entry.thumbnail;
+        return new Subscription(entry, observer);
     }
 
-    static void preload(File file, View observer) {
-        get(file, observer);
-    }
-
-    static void unobserve(File file, View observer) {
-        if (file == null || observer == null) {
-            return;
-        }
-        String key = key(file);
-        Entry entry;
+    static void invalidate(File file) {
+        if (file == null) return;
+        String path = canonicalPath(file);
         synchronized (CACHE) {
-            entry = CACHE.get(key);
-        }
-        if (entry == null) {
-            return;
-        }
-
-        entry.unobserve(observer);
-        if (entry.cancelIfUnobserved()) {
-            synchronized (CACHE) {
-                if (CACHE.get(key) == entry) {
-                    CACHE.remove(key);
-                }
+            Iterator<Map.Entry<String, Entry>> iterator = CACHE.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Entry entry = iterator.next().getValue();
+                if (!entry.path.equals(path)) continue;
+                iterator.remove();
+                entry.evict();
             }
         }
     }
 
-    private static String key(File file) {
-        try {
-            return file.getCanonicalPath() + "|" + file.lastModified() + "|" + file.length();
-        } catch (Exception ignored) {
-            return file.getAbsolutePath() + "|" + file.lastModified() + "|" + file.length();
-        }
-    }
-
-    private static void removeIfCurrent(String key, Entry entry) {
+    static void invalidateUnder(File file) {
+        if (file == null) return;
+        String root = canonicalPath(file);
+        String prefix = root.endsWith(File.separator) ? root : root + File.separator;
         synchronized (CACHE) {
-            if (CACHE.get(key) == entry) {
-                CACHE.remove(key);
+            Iterator<Map.Entry<String, Entry>> iterator = CACHE.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Entry entry = iterator.next().getValue();
+                if (!entry.path.equals(root) && !entry.path.startsWith(prefix)) continue;
+                iterator.remove();
+                entry.evict();
             }
         }
     }
 
-    private static void trimCache() {
+    static void clear() {
         synchronized (CACHE) {
-            trimCacheLocked();
+            for (Entry entry : CACHE.values()) entry.evict();
+            CACHE.clear();
         }
     }
 
-    private static void trimCacheLocked() {
-        if (CACHE.size() <= MAX_CACHE_ENTRIES) {
-            return;
+    private static void release(Entry entry, Observer observer) {
+        synchronized (CACHE) {
+            entry.removeObserver(observer);
+            if (!entry.hasObservers() && !entry.isResolved()) {
+                CACHE.remove(entry.key, entry);
+                entry.evict();
+            }
+            trimLocked();
         }
+    }
 
+    private static void removeIfCurrent(Entry entry) {
+        synchronized (CACHE) {
+            if (CACHE.remove(entry.key, entry)) entry.evict();
+        }
+    }
+
+    private static void trimLocked() {
+        if (CACHE.size() <= MAX_CACHE_ENTRIES) return;
         Iterator<Map.Entry<String, Entry>> iterator = CACHE.entrySet().iterator();
         while (CACHE.size() > MAX_CACHE_ENTRIES && iterator.hasNext()) {
             Entry entry = iterator.next().getValue();
-            if (entry.canEvict()) {
-                iterator.remove();
-            }
+            if (entry.hasObservers()) continue;
+            iterator.remove();
+            entry.evict();
+        }
+    }
+
+    private static String key(String path, File file) {
+        return path + '|' + file.lastModified() + '|' + file.length();
+    }
+
+    private static String canonicalPath(File file) {
+        try {
+            return file.getCanonicalPath();
+        } catch (IOException ignored) {
+            return file.getAbsolutePath();
+        }
+    }
+
+    static final class Subscription implements AutoCloseable {
+        private static final Subscription EMPTY = new Subscription(null, null);
+        private Entry mEntry;
+        private Observer mObserver;
+
+        private Subscription(Entry entry, Observer observer) {
+            mEntry = entry;
+            mObserver = observer;
+        }
+
+        SchematicThumbnail thumbnail() {
+            Entry entry = mEntry;
+            if (entry == null) return null;
+            entry.start();
+            return entry.thumbnail;
+        }
+
+        @Override
+        public void close() {
+            Entry entry = mEntry;
+            Observer observer = mObserver;
+            mEntry = null;
+            mObserver = null;
+            if (entry != null && observer != null) release(entry, observer);
+        }
+    }
+
+    private static final class Observer {
+        private final WeakReference<View> view;
+
+        private Observer(View view) {
+            this.view = new WeakReference<>(view);
         }
     }
 
     private static final class Entry {
         private final String key;
+        private final String path;
         private final File file;
-        private final List<WeakReference<View>> observers = new ArrayList<>();
+        private final List<Observer> observers = new ArrayList<>();
         private volatile SchematicThumbnail thumbnail;
         private Future<?> future;
+        private boolean started;
+        private boolean evicted;
 
-        private Entry(String key, File file) {
+        private Entry(String key, String path, File file) {
             this.key = key;
+            this.path = path;
             this.file = file;
         }
 
-        private void observe(View view) {
-            if (view == null || thumbnail != null) {
-                return;
-            }
-            synchronized (observers) {
-                for (WeakReference<View> ref : observers) {
-                    if (ref.get() == view) {
-                        return;
-                    }
-                }
-                observers.add(new WeakReference<>(view));
-            }
+        private synchronized void addObserver(Observer observer) {
+            observers.add(observer);
         }
 
-        private void unobserve(View view) {
-            synchronized (observers) {
-                observers.removeIf(ref -> {
-                    View observed = ref.get();
-                    return observed == null || observed == view;
-                });
-            }
+        private synchronized void removeObserver(Observer observer) {
+            observers.remove(observer);
+            observers.removeIf(candidate -> candidate.view.get() == null);
         }
 
-        private boolean hasObservers() {
-            synchronized (observers) {
-                observers.removeIf(ref -> ref.get() == null);
-                return !observers.isEmpty();
-            }
+        private synchronized boolean hasObservers() {
+            observers.removeIf(observer -> observer.view.get() == null);
+            return !observers.isEmpty();
         }
 
-        private boolean canEvict() {
-            return thumbnail != null && !hasObservers();
+        private synchronized boolean isResolved() {
+            return thumbnail != null;
         }
 
         private synchronized void start() {
-            if (thumbnail != null || future != null) {
-                return;
-            }
-            future = EXECUTOR.submit(() -> {
-                if (!hasObservers()) {
-                    removeIfCurrent(key, this);
-                    return;
-                }
-
-                SchematicThumbnail loaded;
-                try {
-                    loaded = SchematicThumbnailReader.read(file);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    removeIfCurrent(key, this);
-                    return;
-                } catch (Exception e) {
-                    if (Thread.currentThread().isInterrupted()) {
-                        removeIfCurrent(key, this);
-                        return;
-                    }
-                    loaded = SchematicThumbnail.error(e.getMessage());
-                }
-
-                thumbnail = loaded;
-                notifyObservers();
-                trimCache();
-            });
+            if (started || evicted || thumbnail != null) return;
+            started = true;
+            future = EXECUTOR.submit(this::decode);
         }
 
-        private synchronized boolean cancelIfUnobserved() {
-            if (thumbnail != null || hasObservers()) {
-                return false;
+        private void decode() {
+            if (!hasObservers()) {
+                removeIfCurrent(this);
+                return;
             }
-            if (future != null) {
-                future.cancel(true);
+
+            SchematicThumbnail decoded;
+            try {
+                decoded = SchematicThumbnailReader.read(file);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                removeIfCurrent(this);
+                return;
+            } catch (Exception e) {
+                if (Thread.currentThread().isInterrupted()) {
+                    removeIfCurrent(this);
+                    return;
+                }
+                decoded = SchematicThumbnail.error(e.getMessage());
             }
-            return true;
+
+            synchronized (this) {
+                if (evicted) return;
+                thumbnail = decoded;
+                future = null;
+            }
+            notifyObservers();
+            synchronized (CACHE) {
+                trimLocked();
+            }
         }
 
         private void notifyObservers() {
-            synchronized (observers) {
-                Iterator<WeakReference<View>> iterator = observers.iterator();
-                while (iterator.hasNext()) {
-                    View view = iterator.next().get();
-                    iterator.remove();
-                    if (view != null) {
-                        view.post(view::invalidate);
-                    }
+            List<View> views = new ArrayList<>();
+            synchronized (this) {
+                observers.removeIf(observer -> observer.view.get() == null);
+                for (Observer observer : observers) {
+                    View view = observer.view.get();
+                    if (view != null) views.add(view);
                 }
             }
+            for (View view : views) view.post(view::invalidate);
+        }
+
+        private synchronized void evict() {
+            if (evicted) return;
+            evicted = true;
+            observers.clear();
+            if (future != null) {
+                future.cancel(true);
+                future = null;
+            }
+            thumbnail = null;
         }
     }
 }

@@ -34,8 +34,9 @@ public final class AssetTaskController {
         TaskHandle handle = new TaskHandle();
         mActiveTasks.add(handle);
         progress.setOnCancel(() -> {
-            handle.cancel();
-            finish(handle, progress::cancelled);
+            if (handle.cancel()) {
+                finish(handle, progress::cancelled);
+            }
         });
         progress.showIn(mOwner);
 
@@ -45,10 +46,11 @@ public final class AssetTaskController {
 
     public void cancelAll() {
         for (TaskHandle handle : new ArrayList<>(mActiveTasks)) {
-            handle.cancel();
-            handle.markFinished();
+            if (handle.cancel()) {
+                handle.markFinished();
+                mActiveTasks.remove(handle);
+            }
         }
-        mActiveTasks.clear();
     }
 
     private <T> void execute(
@@ -58,23 +60,27 @@ public final class AssetTaskController {
             TransferProgressDialog progress
     ) {
         TaskContext context = new TaskContext(handle, progress);
+        T result = null;
         postIfActive(handle, () -> progress.update("准备中", 0, 0));
         try {
             context.checkCancelled();
-            T result = task.run(context);
+            result = task.run(context);
             context.checkCancelled();
+            T completedResult = result;
             postTerminal(handle, () -> {
                 if (onSuccess != null) {
-                    onSuccess.accept(result, progress);
+                    onSuccess.accept(completedResult, progress);
                 } else {
                     progress.update("操作完成", 1, 1);
                 }
-            });
+            }, () -> closeAbandoned(completedResult));
         } catch (InterruptedException | CancellationException e) {
+            closeAbandoned(result);
             Thread.interrupted();
             handle.markCancelled();
             postTerminal(handle, progress::cancelled);
         } catch (Exception e) {
+            closeAbandoned(result);
             if (handle.isCancelled()) {
                 postTerminal(handle, progress::cancelled);
             } else {
@@ -97,13 +103,28 @@ public final class AssetTaskController {
     }
 
     private void postTerminal(TaskHandle handle, Runnable action) {
-        mOwner.post(() -> finish(handle, action));
+        postTerminal(handle, action, null);
     }
 
-    private void finish(TaskHandle handle, Runnable action) {
-        if (!handle.markFinished()) return;
+    private void postTerminal(TaskHandle handle, Runnable action, Runnable onAbandoned) {
+        mOwner.post(() -> {
+            if (!finish(handle, action) && onAbandoned != null) onAbandoned.run();
+        });
+    }
+
+    private boolean finish(TaskHandle handle, Runnable action) {
+        if (!handle.markFinished()) return false;
         mActiveTasks.remove(handle);
         action.run();
+        return true;
+    }
+
+    private static void closeAbandoned(Object result) {
+        if (!(result instanceof AutoCloseable closeable)) return;
+        try {
+            closeable.close();
+        } catch (Exception ignored) {
+        }
     }
 
     private final class TaskContext implements AssetTaskContext {
@@ -127,19 +148,36 @@ public final class AssetTaskController {
             int safeTotal = Math.max(0, total);
             postIfActive(mHandle, () -> mProgress.update(safeMessage, safeProcessed, safeTotal));
         }
+
+        @Override
+        public void enterCommitPhase() throws InterruptedException {
+            if (!mHandle.enterCommitPhase()) {
+                throw new InterruptedException("asset task cancelled before commit");
+            }
+            postIfActive(mHandle, mProgress::enterCommitPhase);
+        }
     }
 
     private static final class TaskHandle {
         private final AtomicBoolean mCancelled = new AtomicBoolean(false);
         private final AtomicBoolean mFinished = new AtomicBoolean(false);
+        private boolean mCommitting;
         private volatile Future<?> mFuture;
 
-        private void cancel() {
+        private synchronized boolean cancel() {
+            if (mCommitting || mFinished.get()) return false;
             mCancelled.set(true);
             Future<?> future = mFuture;
             if (future != null) {
                 future.cancel(true);
             }
+            return true;
+        }
+
+        private synchronized boolean enterCommitPhase() {
+            if (mCancelled.get() || mFinished.get()) return false;
+            mCommitting = true;
+            return true;
         }
 
         private boolean isCancelled() {
@@ -158,7 +196,7 @@ public final class AssetTaskController {
             return mFinished.compareAndSet(false, true);
         }
 
-        private void setFuture(Future<?> future) {
+        private synchronized void setFuture(Future<?> future) {
             mFuture = future;
             if (mCancelled.get() && future != null) {
                 future.cancel(true);

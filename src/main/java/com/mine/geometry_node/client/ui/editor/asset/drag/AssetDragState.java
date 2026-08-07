@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.drag;
 
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,7 +42,7 @@ public final class AssetDragState {
 
         public boolean isSingleJsonGraph() {
             AssetEntry entry = entry();
-            return entry != null && entry.isJsonFile();
+            return AssetTypeRegistry.INSTANCE.isType(entry, AssetTypeRegistry.GRAPH_ID);
         }
     }
 }

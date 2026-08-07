@@ -14,6 +14,7 @@ public class TransferProgressDialog extends AssetDialogBase {
     private final Button mCancelButton;
     private Runnable mOnCancel;
     private boolean mFinished;
+    private boolean mCommitting;
 
     public TransferProgressDialog(Context context, String title) {
         super(context, title);
@@ -26,17 +27,7 @@ public class TransferProgressDialog extends AssetDialogBase {
         LinearLayout actions = new LinearLayout(context);
         actions.setGravity(Gravity.RIGHT);
         mCancelButton = button(context, "取消", 0xFF4A4A4A);
-        mCancelButton.setOnClickListener(v -> {
-            if (mFinished) {
-                dismiss();
-                return;
-            }
-            if (mOnCancel != null) {
-                mOnCancel.run();
-            } else {
-                dismiss();
-            }
-        });
+        mCancelButton.setOnClickListener(v -> onCloseRequested());
         actions.addView(mCancelButton, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(92), UIUtils.dp2pxInt(32)));
         mPanel.addView(actions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(36)));
     }
@@ -50,13 +41,23 @@ public class TransferProgressDialog extends AssetDialogBase {
         mProgress.setText(total > 0 ? processed + " / " + total : String.valueOf(processed));
         if (message != null && message.contains("完成")) {
             mFinished = true;
+            mCommitting = false;
+            mCancelButton.setEnabled(true);
             mCancelButton.setText("关闭");
             postDelayed(this::dismiss, 900);
         }
     }
 
+    public void enterCommitPhase() {
+        mCommitting = true;
+        mCancelButton.setEnabled(false);
+        mCancelButton.setText("提交中");
+    }
+
     public void fail(String message) {
         mFinished = true;
+        mCommitting = false;
+        mCancelButton.setEnabled(true);
         mStatus.setText(message == null || message.isEmpty() ? "操作失败" : message);
         mStatus.setTextColor(0xFFFF7777);
         mCancelButton.setText("关闭");
@@ -64,9 +65,20 @@ public class TransferProgressDialog extends AssetDialogBase {
 
     public void cancelled() {
         mFinished = true;
+        mCommitting = false;
+        mCancelButton.setEnabled(true);
         mStatus.setText("已取消");
         mStatus.setTextColor(0xFFFFB86C);
         mProgress.setText("");
         mCancelButton.setText("关闭");
+    }
+
+    @Override
+    protected void onCloseRequested() {
+        if (mFinished) {
+            dismiss();
+        } else if (!mCommitting && mOnCancel != null) {
+            mOnCancel.run();
+        }
     }
 }
