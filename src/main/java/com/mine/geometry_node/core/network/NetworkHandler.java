@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.client.render.ClientVisualManager;
+import com.mine.geometry_node.client.render.image.ClientImageAssetManager;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
@@ -36,8 +37,11 @@ import java.util.List;
 import java.util.Map;
 import java.nio.file.Files;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 public class NetworkHandler {
+    private static final Map<ServerPlayer, Set<String>> SENT_VISUAL_ASSETS =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     public static void init() {
         GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
@@ -49,6 +53,14 @@ public class NetworkHandler {
                 (payload, context) -> {
                     context.queue(() -> ClientVisualManager.spawnEffectFromPacket(payload));
                 }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketVisualAssetData.TYPE,
+                PacketVisualAssetData.STREAM_CODEC,
+                (payload, context) -> context.queue(() ->
+                        ClientImageAssetManager.acceptServerAsset(payload.assetId(), payload.data()))
         );
 
         NetworkManager.registerReceiver(
@@ -412,7 +424,25 @@ public class NetworkHandler {
             }
         }
         if (!targetPlayers.isEmpty()) {
+            List<GraphEngineServices.VisualAsset> assets = effect.assets() != null
+                    ? effect.assets()
+                    : Collections.emptyList();
+            for (GraphEngineServices.VisualAsset asset : assets) {
+                if (asset == null || asset.data().length == 0) continue;
+                PacketVisualAssetData assetPacket = new PacketVisualAssetData(asset.assetId(), asset.data());
+                for (ServerPlayer player : targetPlayers) {
+                    if (markVisualAssetSent(player, asset.assetId())) {
+                        sendToPlayer(player, assetPacket);
+                    }
+                }
+            }
             sendToPlayers(targetPlayers, packet);
+        }
+    }
+
+    private static boolean markVisualAssetSent(ServerPlayer player, String assetId) {
+        synchronized (SENT_VISUAL_ASSETS) {
+            return SENT_VISUAL_ASSETS.computeIfAbsent(player, ignored -> new HashSet<>()).add(assetId);
         }
     }
 

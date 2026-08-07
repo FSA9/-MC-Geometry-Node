@@ -4,5 +4,6 @@ public enum AssetKind {
     DIRECTORY,
     GRAPH,
     SCHEMATIC,
+    IMAGE,
     FILE
 }

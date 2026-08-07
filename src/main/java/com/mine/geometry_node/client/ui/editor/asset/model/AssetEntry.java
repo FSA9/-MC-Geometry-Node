@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.model;
 
+import com.mine.geometry_node.core.engine.visual.image.ImageAssetFormats;
+
 import java.io.File;
 import java.util.Locale;
 
@@ -75,11 +77,16 @@ public final class AssetEntry {
         return mKind == AssetKind.SCHEMATIC;
     }
 
+    public boolean isImageFile() {
+        return mKind == AssetKind.IMAGE;
+    }
+
     private static AssetKind resolveKind(String name, boolean directory) {
         if (directory) return AssetKind.DIRECTORY;
         String lowerName = name == null ? "" : name.toLowerCase(Locale.ROOT);
         if (lowerName.endsWith(".json")) return AssetKind.GRAPH;
         if (lowerName.endsWith(".schem") || lowerName.endsWith(".schematic")) return AssetKind.SCHEMATIC;
+        if (ImageAssetFormats.isSupportedPath(lowerName)) return AssetKind.IMAGE;
         return AssetKind.FILE;
     }
 }

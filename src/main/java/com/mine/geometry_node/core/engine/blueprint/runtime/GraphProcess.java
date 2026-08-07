@@ -1142,6 +1142,21 @@ public class GraphProcess {
             GraphVisualEmitter.broadcastDynamicVisual(currentLevel, effectType, color, durationTicks,
                     expressions, bindings, extraData);
         }
+
+        @Override
+        public void broadcastDynamicVisual(String effectType, int color, int durationTicks,
+                                           Map<String, String> expressions,
+                                           Map<String, String> bindings,
+                                           net.minecraft.nbt.CompoundTag extraData,
+                                           Vec3 center,
+                                           double radius,
+                                           List<GraphEngineServices.VisualAsset> assets) {
+            ServerLevel currentLevel = getLevel();
+            if (currentLevel == null) return;
+
+            GraphVisualEmitter.broadcastDynamicVisual(currentLevel, effectType, color, durationTicks,
+                    expressions, bindings, extraData, center, radius, assets);
+        }
     }
 
     // ================================

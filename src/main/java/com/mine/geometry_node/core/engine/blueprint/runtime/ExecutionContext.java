@@ -282,4 +282,12 @@ public interface ExecutionContext {
                                 Map<String, String> expressions,
                                 Map<String, String> bindings,
                                 net.minecraft.nbt.CompoundTag extraData);
+
+    void broadcastDynamicVisual(String effectType, int color, int durationTicks,
+                                Map<String, String> expressions,
+                                Map<String, String> bindings,
+                                net.minecraft.nbt.CompoundTag extraData,
+                                net.minecraft.world.phys.Vec3 center,
+                                double radius,
+                                java.util.List<com.mine.geometry_node.core.engine.service.GraphEngineServices.VisualAsset> assets);
 }

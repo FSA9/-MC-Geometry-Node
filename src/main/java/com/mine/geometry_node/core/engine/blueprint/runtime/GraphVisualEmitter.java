@@ -8,6 +8,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.List;
 
 final class GraphVisualEmitter {
     private static final int RADIUS = 128;
@@ -44,7 +45,8 @@ final class GraphVisualEmitter {
                 Collections.emptyMap(),
                 extraData,
                 center,
-                RADIUS
+                RADIUS,
+                List.of()
         ));
     }
 
@@ -74,6 +76,16 @@ final class GraphVisualEmitter {
             center = Vec3.ZERO;
         }
 
+        broadcastDynamicVisual(level, effectType, color, durationTicks, expressions, bindings, extraData, center, RADIUS, List.of());
+    }
+
+    static void broadcastDynamicVisual(ServerLevel level, String effectType, int color, int durationTicks,
+                                       Map<String, String> expressions,
+                                       Map<String, String> bindings,
+                                       CompoundTag extraData,
+                                       Vec3 center,
+                                       double radius,
+                                       List<GraphEngineServices.VisualAsset> assets) {
         GraphEngineServices.INSTANCE.visualSink().broadcast(new GraphEngineServices.VisualEffect(
                 level,
                 effectType,
@@ -82,8 +94,9 @@ final class GraphVisualEmitter {
                 expressions,
                 bindings,
                 extraData,
-                center,
-                RADIUS
+                center != null ? center : Vec3.ZERO,
+                radius,
+                assets != null ? List.copyOf(assets) : List.of()
         ));
     }
 }

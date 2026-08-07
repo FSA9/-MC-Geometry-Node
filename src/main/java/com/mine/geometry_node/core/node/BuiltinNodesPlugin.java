@@ -64,6 +64,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/visual", new DrawLaserBeam());
         registry.register("actions/visual", new DrawRayBeam());
         registry.register("actions/visual", new DrawItemVisual());
+        registry.register("actions/visual", new DrawImageVisual());
 
 //        registry.register("actions", new SpawnHitbox());
 

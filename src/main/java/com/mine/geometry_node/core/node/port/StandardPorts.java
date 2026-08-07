@@ -92,6 +92,7 @@ public enum StandardPorts {
     SHADOW_RADIUS("shadow_radius", PortType.FLOAT),
     SHADOW_STRENGTH("shadow_strength", PortType.FLOAT),
     VIEW_RANGE("view_range", PortType.FLOAT),
+    VISIBILITY_RANGE("visibility_range", PortType.FLOAT),
     WIDTH("width", PortType.FLOAT),
     HEIGHT("height", PortType.FLOAT),
     DEPTH("depth", PortType.FLOAT),
@@ -132,6 +133,7 @@ public enum StandardPorts {
     VARIABLE_NAME("variable_name", PortType.STRING),
     FILL_TYPE("fill_type", PortType.STRING),
     VOXEL_MODE("voxel_mode", PortType.STRING),
+    SIZE_MODE("size_mode", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),

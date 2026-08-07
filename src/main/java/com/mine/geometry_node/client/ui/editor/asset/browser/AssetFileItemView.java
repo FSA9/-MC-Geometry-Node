@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.editor.asset.browser;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.graph.GraphType;
@@ -37,6 +38,7 @@ final class AssetFileItemView extends LinearLayout {
     private static final int COLOR_FOLDER = 0xFFDDAA00;
     private static final int COLOR_FILE = 0xFF88CCFF;
     private static final int COLOR_SCHEMATIC = 0xFF86B8FF;
+    private static final int COLOR_IMAGE = 0xFF77C99D;
     private static final int COLOR_TEXT = 0xFFDDDDDD;
     private static final int COLOR_SUBTEXT = 0xFF888888;
     private static final int COLOR_TAG_BG = 0xFF344458;
@@ -50,6 +52,7 @@ final class AssetFileItemView extends LinearLayout {
     private final boolean mFavorite;
     private final VectorIconView mIconView;
     private final SchematicThumbnailView mSchematicThumbnailView;
+    private final ImageThumbnailView mImageThumbnailView;
     private final TextView mNameView;
     private final TextView mSubtitleView;
     private final Listener mListener;
@@ -77,6 +80,9 @@ final class AssetFileItemView extends LinearLayout {
         mSchematicThumbnailView = entry.isSchematicFile() && entry.localFile() != null
                 ? new SchematicThumbnailView(context, entry.localFile())
                 : null;
+        mImageThumbnailView = entry.isImageFile() && entry.localFile() != null
+                ? new ImageThumbnailView(context, entry.localFile())
+                : null;
         mNameView = UIUtils.createLockedTextView(context, displayName, mode.nameTextSizeDp, COLOR_TEXT);
         mNameView.setGravity(mode == AssetViewMode.LIST ? Gravity.CENTER_VERTICAL : Gravity.CENTER);
         mNameView.setSingleLine(true);
@@ -96,9 +102,12 @@ final class AssetFileItemView extends LinearLayout {
         return mNameView;
     }
 
-    void preloadSchematicThumbnail() {
+    void preloadThumbnail() {
         if (mSchematicThumbnailView != null) {
             mSchematicThumbnailView.preload();
+        }
+        if (mImageThumbnailView != null) {
+            mImageThumbnailView.preload();
         }
     }
 
@@ -206,6 +215,7 @@ final class AssetFileItemView extends LinearLayout {
     private int iconColor() {
         if (mEntry.isDirectory()) return COLOR_FOLDER;
         if (mEntry.isSchematicFile()) return COLOR_SCHEMATIC;
+        if (mEntry.isImageFile()) return COLOR_IMAGE;
         if (mEntry.isJsonFile()) {
             GraphType graphType = GraphTypeRegistry.INSTANCE.get(mGraphTypeId);
             if (graphType != null) return graphType.assetIconColor();
@@ -214,7 +224,9 @@ final class AssetFileItemView extends LinearLayout {
     }
 
     private View iconView() {
-        return mSchematicThumbnailView != null ? mSchematicThumbnailView : mIconView;
+        if (mSchematicThumbnailView != null) return mSchematicThumbnailView;
+        if (mImageThumbnailView != null) return mImageThumbnailView;
+        return mIconView;
     }
 
     private TextView createTagChip(String tag) {

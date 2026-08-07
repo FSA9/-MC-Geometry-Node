@@ -481,5 +481,22 @@
   "geometry_node.graph_properties.kind.blueprint": "Blueprint",
   "geometry_node.graph_properties.kind.dialogue": "Dialogue",
   "geometry_node.graph_properties.kind.behavior_tree": "Behavior Tree",
-  "geometry_node.graph_properties.kind.unknown": "Unknown"
+  "geometry_node.graph_properties.kind.unknown": "Unknown",
+  "geometry_node.port.visibility_range": "Visibility Range",
+  "geometry_node.port.size_mode": "Size Mode",
+  "geometry_node.node.draw_image_visual": "Display Image",
+  "geometry_node.node.draw_image_visual.comment.summary": "Temporarily displays a PNG, JPG/JPEG, BMP, GIF, or TGA image in world space. remote:/ reads a server image; other paths are resolved locally by each client.",
+  "geometry_node.node.draw_image_visual.comment.flow_in": "Displays the image.",
+  "geometry_node.node.draw_image_visual.comment.flow_out": "Continues after sending the display request.",
+  "geometry_node.node.draw_image_visual.comment.path": "Image path. remote:/ refers to the server geometry_nodes directory; other paths are client-local.",
+  "geometry_node.node.draw_image_visual.comment.xyz": "World position of the image center.",
+  "geometry_node.node.draw_image_visual.comment.rotation": "XYZ Euler rotation of the image plane.",
+  "geometry_node.node.draw_image_visual.comment.size_mode": "Free size uses width and height directly; keep aspect fits the complete image inside those bounds.",
+  "geometry_node.node.draw_image_visual.comment.width": "Image width in free-size mode, or maximum width in keep-aspect mode.",
+  "geometry_node.node.draw_image_visual.comment.height": "Image height in free-size mode, or maximum height in keep-aspect mode.",
+  "geometry_node.node.draw_image_visual.comment.alpha": "Image opacity from 0 to 1.",
+  "geometry_node.node.draw_image_visual.comment.tick": "Display duration in ticks.",
+  "geometry_node.node.draw_image_visual.comment.visibility_range": "Only players within this distance of the image center receive the visual.",
+  "geometry_node.image.size_mode.stretch": "Free Size",
+  "geometry_node.image.size_mode.fit": "Keep Aspect"
 }

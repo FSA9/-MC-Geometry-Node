@@ -874,7 +874,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
             mItemViews.putAll(mountedItems);
         }
         for (AssetFileItemView view : mItemViews.values()) {
-            view.preloadSchematicThumbnail();
+            view.preloadThumbnail();
         }
         syncSelectionViews();
     }

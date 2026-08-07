@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.key.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.key.KeyBindings;
 import com.mine.geometry_node.client.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.render.ClientVisualManager;
+import com.mine.geometry_node.client.render.image.ClientImageAssetManager;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
@@ -99,6 +100,7 @@ public class GeometryNodeClient {
 
     private static void clearClientRenderState() {
         ClientVisualManager.clear();
+        ClientImageAssetManager.clear();
         GeometryDebugRenderer.clear();
         SchematicProjectionRenderer.clear();
     }

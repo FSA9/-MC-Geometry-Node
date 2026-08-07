@@ -8,6 +8,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
+import java.util.List;
 
 /**
  * Root placeholder for services shared by graph runtimes.
@@ -57,8 +58,18 @@ public final class GraphEngineServices {
             Map<String, String> bindings,
             CompoundTag extraData,
             Vec3 center,
-            double radius
+            double radius,
+            List<VisualAsset> assets
     ) {
+    }
+
+    public record VisualAsset(String assetId, byte[] data) {
+        public VisualAsset {
+            if (assetId == null || assetId.isBlank()) {
+                throw new IllegalArgumentException("assetId must not be blank");
+            }
+            data = data != null ? data : new byte[0];
+        }
     }
 
     public interface PersistentAttributeStore {

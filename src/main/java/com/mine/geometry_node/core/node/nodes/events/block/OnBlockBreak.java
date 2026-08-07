@@ -32,7 +32,7 @@ public class OnBlockBreak extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.DIMENSION.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        PortDef.create(BLOCK_TYPE_PORT, "geometry_node.port.block_type", PortType.STRING, "").hiddenPin(),
+                        StandardPorts.TYPE.toInput().hiddenPin(),
                         null,
                         UIHint.SELECT,
                         null,

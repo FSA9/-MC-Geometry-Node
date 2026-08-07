@@ -30,6 +30,7 @@ public class ClientVisualManager {
         registerFactory("ray_beam", RayBeamEffect::new);
         registerFactory("debug_box", DebugBoxEffect::new);
         registerFactory("item_visual", ItemVisualEffect::new);
+        registerFactory("image_visual", ImageVisualEffect::new);
     }
 
     public static void registerFactory(String effectType, Function<PacketSpawnDynamicVisual, AbstractVisualEffect> factory) {

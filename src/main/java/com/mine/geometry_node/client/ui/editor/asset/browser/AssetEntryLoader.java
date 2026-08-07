@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.editor.asset.browser;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
+import com.mine.geometry_node.core.engine.visual.image.ImageAssetFormats;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -263,7 +264,11 @@ final class AssetEntryLoader {
     }
 
     static boolean isLocalAssetFile(File file) {
-        return isLocalGraphFile(file) || isLocalSchematicFile(file);
+        return isLocalGraphFile(file) || isLocalSchematicFile(file) || isLocalImageFile(file);
+    }
+
+    static boolean isLocalImageFile(File file) {
+        return file != null && file.isFile() && ImageAssetFormats.isSupportedPath(file.getName());
     }
 
     static String pathKey(File file) {
