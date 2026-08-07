@@ -4,7 +4,9 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.editor.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.editor.sidebar.SidebarLayoutController;
-import com.mine.geometry_node.client.ui.editor.properties.GraphPropertiesPanel;
+import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelContext;
+import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelScope;
+import com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphSessionPropertiesTarget;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
@@ -25,8 +27,6 @@ import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 
 public class GraphEditorWindow extends LinearLayout implements AreaEditorWindow {
-    private static final String SIDEBAR_PROPERTIES = "properties";
-
     private final GraphViewportPanel mGraphViewportPanel;
     private final GraphPropertiesPanel mPropertiesPanel;
     private final EditorSidebar mRightSidebar;
@@ -70,22 +70,13 @@ public class GraphEditorWindow extends LinearLayout implements AreaEditorWindow 
         View sidebarDivider = ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL);
         workspace.addView(sidebarDivider);
 
-        mPropertiesPanel = new GraphPropertiesPanel(context);
         mRightSidebar = new EditorSidebar(context);
-        mRightSidebar.registerPanel(
-                SIDEBAR_PROPERTIES,
-                tr("geometry_node.graph_properties.title"),
-                new EditorSidebar.Panel() {
-                    @Override
-                    public View getView() {
-                        return mPropertiesPanel;
-                    }
-
-                    @Override
-                    public void onDeselected() {
-                        mPropertiesPanel.commitPendingEdits();
-                    }
-        });
+        mRightSidebar.installRegisteredPanels(new SidebarPanelContext(
+                context,
+                SidebarPanelScope.GRAPH_EDITOR));
+        mPropertiesPanel = mRightSidebar.requirePanel(
+                GraphPropertiesPanel.PANEL_ID,
+                GraphPropertiesPanel.class);
         mRightSidebar.restoreSelectedPanel(viewportConfig.rightSidebarTab);
         workspace.addView(mRightSidebar, createWeightParams(sidebarWeight));
 

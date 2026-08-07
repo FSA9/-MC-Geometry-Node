@@ -17,7 +17,9 @@ import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
 import com.mine.geometry_node.client.ui.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.editor.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.editor.sidebar.SidebarLayoutController;
-import com.mine.geometry_node.client.ui.editor.properties.GraphPropertiesPanel;
+import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelContext;
+import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelScope;
+import com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
@@ -51,8 +53,6 @@ import java.util.Set;
 import java.util.function.Function;
 
 public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow, AssetBrowserCoordinator {
-    private static final String SIDEBAR_PROPERTIES = "properties";
-
     private final LinearLayout mMainLayout;
     private final AssetNavigationPanel mNavigationPanel;
     private final AssetFileBrowserPanel mBrowserPanel;
@@ -115,22 +115,13 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         View propertiesDivider = ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL);
         browserWorkspace.addView(propertiesDivider);
 
-        mPropertiesPanel = new GraphPropertiesPanel(context);
         mPropertiesSidebar = new EditorSidebar(context);
-        mPropertiesSidebar.registerPanel(
-                SIDEBAR_PROPERTIES,
-                tr("geometry_node.graph_properties.title"),
-                new EditorSidebar.Panel() {
-                    @Override
-                    public View getView() {
-                        return mPropertiesPanel;
-                    }
-
-                    @Override
-                    public void onDeselected() {
-                        mPropertiesPanel.commitPendingEdits();
-                    }
-        });
+        mPropertiesSidebar.installRegisteredPanels(new SidebarPanelContext(
+                context,
+                SidebarPanelScope.ASSET_BROWSER));
+        mPropertiesPanel = mPropertiesSidebar.requirePanel(
+                GraphPropertiesPanel.PANEL_ID,
+                GraphPropertiesPanel.class);
         mPropertiesSidebar.restoreSelectedPanel(browserConfig.rightSidebarTab);
         browserWorkspace.addView(mPropertiesSidebar, new LinearLayout.LayoutParams(
                 0,

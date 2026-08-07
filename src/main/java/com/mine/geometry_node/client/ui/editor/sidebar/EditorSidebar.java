@@ -1,5 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.sidebar;
 
+import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanel;
+import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelContext;
+import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelDefinition;
+import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelRegistry;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -21,16 +25,6 @@ import java.util.function.Consumer;
  * Editor-owned, Blender-style sidebar with a content host and a vertical tab rail.
  */
 public final class EditorSidebar extends LinearLayout {
-    public interface Panel {
-        View getView();
-
-        default void onSelected() {
-        }
-
-        default void onDeselected() {
-        }
-    }
-
     private static final int COLOR_BACKGROUND = 0xFF303030;
     private static final int COLOR_HEADER = 0xFF292929;
     private static final int COLOR_BORDER = 0xFF181818;
@@ -118,9 +112,19 @@ public final class EditorSidebar extends LinearLayout {
         mOnSelectedPanelChanged = listener;
     }
 
+    public void installRegisteredPanels(SidebarPanelContext context) {
+        for (SidebarPanelDefinition definition
+                : SidebarPanelRegistry.INSTANCE.definitionsFor(context.scope())) {
+            registerPanel(
+                    definition.id(),
+                    tr(definition.titleTranslationKey()),
+                    definition.create(context));
+        }
+    }
+
     public void registerPanel(String id, String title, View view) {
         if (view == null) throw new IllegalArgumentException("Sidebar panel view cannot be null");
-        registerPanel(id, title, new Panel() {
+        registerPanel(id, title, new SidebarPanel() {
             @Override
             public View getView() {
                 return view;
@@ -128,7 +132,7 @@ public final class EditorSidebar extends LinearLayout {
         });
     }
 
-    public void registerPanel(String id, String title, Panel panel) {
+    public void registerPanel(String id, String title, SidebarPanel panel) {
         String normalizedId = normalizeId(id);
         if (panel == null || panel.getView() == null) {
             throw new IllegalArgumentException("Sidebar panel cannot be null");
@@ -156,8 +160,17 @@ public final class EditorSidebar extends LinearLayout {
         if (mSelected == null) selectPanel(normalizedId, false);
     }
 
+    public <T extends SidebarPanel> T requirePanel(String id, Class<T> panelType) {
+        PanelEntry entry = mPanels.get(normalizeId(id));
+        if (entry == null) throw new IllegalStateException("Sidebar panel is not installed: " + id);
+        if (!panelType.isInstance(entry.panel())) {
+            throw new IllegalStateException("Sidebar panel has unexpected type: " + id);
+        }
+        return panelType.cast(entry.panel());
+    }
+
     public boolean unregisterPanel(String id) {
-        PanelEntry entry = mPanels.remove(id);
+        PanelEntry entry = mPanels.remove(normalizeId(id));
         if (entry == null) return false;
 
         mTabStrip.removeView(entry.tab());
@@ -283,7 +296,7 @@ public final class EditorSidebar extends LinearLayout {
         return Component.translatable(key).getString();
     }
 
-    private record PanelEntry(String id, String title, Panel panel, SidebarTabView tab) {
+    private record PanelEntry(String id, String title, SidebarPanel panel, SidebarTabView tab) {
     }
 
     private static final class SidebarTabView extends FrameLayout {

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.properties;
+package com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.quest;
 
 import com.mine.geometry_node.client.quest.ui.QuestHintView;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
@@ -10,9 +10,7 @@ import com.mine.geometry_node.core.engine.quest.model.QuestHintType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
@@ -20,14 +18,24 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-final class QuestRewardsEditor extends LinearLayout {
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.button;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.iconButton;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.label;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.orderButtons;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.rect;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.singleLineInput;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.styleButton;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.tr;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertyNumbers.format;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertyNumbers.parseNonNegativeDouble;
+
+public final class QuestRewardsEditor extends LinearLayout {
     private static final int COLOR_ROW = 0xFF292929;
     private static final int COLOR_INPUT = 0xFF242424;
     private static final int COLOR_BORDER = 0xFF4A4A4A;
@@ -44,7 +52,7 @@ final class QuestRewardsEditor extends LinearLayout {
     private final Set<String> collapsedEntryIds = new HashSet<>();
     private boolean updating;
 
-    QuestRewardsEditor(Context context, Runnable onChanged) {
+    public QuestRewardsEditor(Context context, Runnable onChanged) {
         super(context);
         this.onChanged = onChanged;
         setOrientation(VERTICAL);
@@ -52,9 +60,10 @@ final class QuestRewardsEditor extends LinearLayout {
         LinearLayout header = new LinearLayout(context);
         header.setOrientation(HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(label(tr("geometry_node.graph_properties.quest.rewards"), 10.5f, 0xFFA8A8A8),
+        header.addView(label(context, tr("geometry_node.graph_properties.quest.rewards"), 10.5f, 0xFFA8A8A8),
                 new LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f));
-        TextView add = button("+", tr("geometry_node.graph_properties.quest.reward_add"));
+        TextView add = button(context, "+", tr("geometry_node.graph_properties.quest.reward_add"),
+                COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
         add.setOnClickListener(v -> addReward());
         header.addView(add, new LayoutParams(UIUtils.dp2pxInt(30), UIUtils.dp2pxInt(26)));
         addView(header, new LayoutParams(LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
@@ -64,7 +73,7 @@ final class QuestRewardsEditor extends LinearLayout {
         addView(rows, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
     }
 
-    void setRewards(List<QuestRewardDefinition> rewards) {
+    public void setRewards(List<QuestRewardDefinition> rewards) {
         updating = true;
         rememberCollapsedRows();
         rows.removeAllViews();
@@ -76,7 +85,7 @@ final class QuestRewardsEditor extends LinearLayout {
         updating = false;
     }
 
-    List<QuestRewardDefinition> rewards() {
+    public List<QuestRewardDefinition> rewards() {
         List<QuestRewardDefinition> result = new ArrayList<>(editors.size());
         for (RewardRow editor : editors) result.add(editor.definition());
         return List.copyOf(result);
@@ -165,7 +174,7 @@ final class QuestRewardsEditor extends LinearLayout {
             contentRow.setOrientation(HORIZONTAL);
             contentRow.setGravity(Gravity.CENTER_VERTICAL);
             expandButton = new FrameLayout(getContext());
-            styleButton(expandButton, COLOR_BUTTON);
+            styleButton(expandButton, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             expandIcon = new VectorIconView(getContext(), VectorIconView.Kind.CHEVRON_UP, COLOR_TEXT);
             expandIcon.setClickable(false);
             FrameLayout.LayoutParams expandIconLp = new FrameLayout.LayoutParams(
@@ -176,27 +185,33 @@ final class QuestRewardsEditor extends LinearLayout {
             LayoutParams expandLp = new LayoutParams(UIUtils.dp2pxInt(26), UIUtils.dp2pxInt(30));
             expandLp.rightMargin = UIUtils.dp2pxInt(4);
             contentRow.addView(expandButton, expandLp);
-            contentInput = input(content.plain(), tr("geometry_node.graph_properties.quest.reward_placeholder"));
+            contentInput = singleLineInput(getContext(), content.plain(),
+                    tr("geometry_node.graph_properties.quest.reward_placeholder"),
+                    COLOR_TEXT, COLOR_MUTED, COLOR_INPUT, COLOR_BORDER);
             contentInput.setOnFocusChangeListener((v, focused) -> {
                 if (!focused) changed();
             });
             contentRow.addView(contentInput, new LayoutParams(0, UIUtils.dp2pxInt(30), 1.0f));
-            TextView rich = button("...", tr("geometry_node.graph_properties.quest.edit_rich_text"));
+            TextView rich = button(getContext(), "...",
+                    tr("geometry_node.graph_properties.quest.edit_rich_text"),
+                    COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             rich.setOnClickListener(v -> openRichEditor(rich));
             LayoutParams richLp = new LayoutParams(UIUtils.dp2pxInt(30), UIUtils.dp2pxInt(30));
             richLp.leftMargin = UIUtils.dp2pxInt(4);
             contentRow.addView(rich, richLp);
-            LinearLayout order = orderButtons(
+            LinearLayout order = orderButtons(getContext(),
                     () -> moveRow(this, -1),
                     () -> moveRow(this, 1),
                     tr("geometry_node.graph_properties.quest.reward_move_up"),
-                    tr("geometry_node.graph_properties.quest.reward_move_down"));
+                    tr("geometry_node.graph_properties.quest.reward_move_down"),
+                    COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             LayoutParams orderLp = new LayoutParams(UIUtils.dp2pxInt(26), UIUtils.dp2pxInt(30));
             orderLp.leftMargin = UIUtils.dp2pxInt(4);
             contentRow.addView(order, orderLp);
-            FrameLayout remove = iconButton(VectorIconView.Kind.CLOSE,
-                    tr("geometry_node.graph_properties.quest.reward_remove"));
-            styleButton(remove, COLOR_REMOVE);
+            FrameLayout remove = iconButton(getContext(), VectorIconView.Kind.CLOSE,
+                    tr("geometry_node.graph_properties.quest.reward_remove"),
+                    15, COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
+            styleButton(remove, COLOR_REMOVE, COLOR_BUTTON_HOVER);
             remove.setOnClickListener(v -> removeRow(this));
             LayoutParams removeLp = new LayoutParams(UIUtils.dp2pxInt(26), UIUtils.dp2pxInt(30));
             removeLp.leftMargin = UIUtils.dp2pxInt(3);
@@ -207,7 +222,9 @@ final class QuestRewardsEditor extends LinearLayout {
             amountRow = new LinearLayout(getContext());
             amountRow.setOrientation(HORIZONTAL);
             amountRow.setGravity(Gravity.CENTER_VERTICAL);
-            counterToggle = button("", tr("geometry_node.graph_properties.quest.reward_counter_enabled"));
+            counterToggle = button(getContext(), "",
+                    tr("geometry_node.graph_properties.quest.reward_counter_enabled"),
+                    COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             counterToggle.setOnClickListener(v -> {
                 counterEnabled = !counterEnabled;
                 updateCounterUi();
@@ -215,16 +232,18 @@ final class QuestRewardsEditor extends LinearLayout {
             });
             amountRow.addView(counterToggle, new LayoutParams(
                     UIUtils.dp2pxInt(68), UIUtils.dp2pxInt(28)));
-            counterKeyInput = input(definition.counterKey(),
-                    tr("geometry_node.graph_properties.quest.counter_key"));
+            counterKeyInput = singleLineInput(getContext(), definition.counterKey(),
+                    tr("geometry_node.graph_properties.quest.counter_key"),
+                    COLOR_TEXT, COLOR_MUTED, COLOR_INPUT, COLOR_BORDER);
             counterKeyInput.setOnFocusChangeListener((v, focused) -> {
                 if (!focused) changed();
             });
             LayoutParams counterKeyLp = new LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f);
             counterKeyLp.leftMargin = UIUtils.dp2pxInt(4);
             amountRow.addView(counterKeyInput, counterKeyLp);
-            amountInput = input(formatNumber(definition.amount()),
-                    tr("geometry_node.graph_properties.quest.reward_amount"));
+            amountInput = singleLineInput(getContext(), format(definition.amount()),
+                    tr("geometry_node.graph_properties.quest.reward_amount"),
+                    COLOR_TEXT, COLOR_MUTED, COLOR_INPUT, COLOR_BORDER);
             amountInput.setGravity(Gravity.CENTER);
             amountInput.setOnFocusChangeListener((v, focused) -> {
                 if (!focused) changed();
@@ -232,7 +251,9 @@ final class QuestRewardsEditor extends LinearLayout {
             LayoutParams amountLp = new LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f);
             amountLp.leftMargin = UIUtils.dp2pxInt(4);
             amountRow.addView(amountInput, amountLp);
-            hintToggle = button("", tr("geometry_node.graph_properties.quest.hint_enabled"));
+            hintToggle = button(getContext(), "",
+                    tr("geometry_node.graph_properties.quest.hint_enabled"),
+                    COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             hintToggle.setOnClickListener(v -> {
                 hintType = hintType == QuestHintType.NONE
                         ? QuestHintType.ITEM_STACK
@@ -268,7 +289,7 @@ final class QuestRewardsEditor extends LinearLayout {
                     updatedContent,
                     counterEnabled,
                     counterKeyInput.getText().toString(),
-                    parseDouble(amountInput.getText().toString(), 1.0),
+                    parseNonNegativeDouble(amountInput.getText().toString(), 1.0),
                     hintType,
                     hintType == QuestHintType.NONE ? "" : itemHintValue);
         }
@@ -307,7 +328,9 @@ final class QuestRewardsEditor extends LinearLayout {
 
         private void updateCounterUi() {
             counterToggle.setText(tr("geometry_node.graph_properties.quest.counter_label"));
-            styleButton(counterToggle, counterEnabled ? COLOR_ACTIVE : COLOR_BUTTON);
+            styleButton(counterToggle,
+                    counterEnabled ? COLOR_ACTIVE : COLOR_BUTTON,
+                    COLOR_BUTTON_HOVER);
             counterKeyInput.setVisibility(counterEnabled ? View.VISIBLE : View.GONE);
             amountInput.setVisibility(counterEnabled ? View.GONE : View.VISIBLE);
         }
@@ -315,7 +338,9 @@ final class QuestRewardsEditor extends LinearLayout {
         private void updateHintUi() {
             boolean hasHint = hintType != QuestHintType.NONE;
             hintToggle.setText(tr("geometry_node.graph_properties.quest.hint_label"));
-            styleButton(hintToggle, hasHint ? COLOR_ACTIVE : COLOR_BUTTON);
+            styleButton(hintToggle,
+                    hasHint ? COLOR_ACTIVE : COLOR_BUTTON,
+                    COLOR_BUTTON_HOVER);
             hintPreview.setVisibility(hasHint ? View.VISIBLE : View.GONE);
             updateHintPreview();
         }
@@ -343,104 +368,4 @@ final class QuestRewardsEditor extends LinearLayout {
         }
     }
 
-    private LinearLayout orderButtons(Runnable moveUp, Runnable moveDown, String upTooltip, String downTooltip) {
-        LinearLayout order = new LinearLayout(getContext());
-        order.setOrientation(VERTICAL);
-        FrameLayout up = iconButton(VectorIconView.Kind.CHEVRON_UP, upTooltip, 9);
-        up.setOnClickListener(v -> moveUp.run());
-        order.addView(up, new LayoutParams(LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(14)));
-        FrameLayout down = iconButton(VectorIconView.Kind.CHEVRON_DOWN, downTooltip, 9);
-        down.setOnClickListener(v -> moveDown.run());
-        LayoutParams downLp = new LayoutParams(LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(14));
-        downLp.topMargin = UIUtils.dp2pxInt(2);
-        order.addView(down, downLp);
-        return order;
-    }
-
-    private EditText input(String value, String hint) {
-        EditText input = new EditText(getContext());
-        input.setSingleLine(true);
-        input.setText(value != null ? value : "");
-        input.setHint(hint);
-        input.setTextColor(COLOR_TEXT);
-        input.setHintTextColor(COLOR_MUTED);
-        input.setTextSize(0, UIUtils.dp2px(10.5f));
-        input.setPadding(UIUtils.dp2pxInt(7), 0, UIUtils.dp2pxInt(7), 0);
-        input.setBackground(rect(COLOR_INPUT, 3.0f, 1, COLOR_BORDER));
-        return input;
-    }
-
-    private TextView button(String text, String tooltip) {
-        TextView button = label(text, 10.0f, COLOR_TEXT);
-        button.setGravity(Gravity.CENTER);
-        button.setTooltipText(tooltip);
-        styleButton(button, COLOR_BUTTON);
-        return button;
-    }
-
-    private FrameLayout iconButton(VectorIconView.Kind kind, String tooltip) {
-        return iconButton(kind, tooltip, 15);
-    }
-
-    private FrameLayout iconButton(VectorIconView.Kind kind, String tooltip, int iconSizeDp) {
-        FrameLayout button = new FrameLayout(getContext());
-        button.setTooltipText(tooltip);
-        styleButton(button, COLOR_BUTTON);
-        VectorIconView icon = new VectorIconView(getContext(), kind, COLOR_TEXT);
-        icon.setClickable(false);
-        FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(
-                UIUtils.dp2pxInt(iconSizeDp), UIUtils.dp2pxInt(iconSizeDp));
-        iconLp.gravity = Gravity.CENTER;
-        button.addView(icon, iconLp);
-        return button;
-    }
-
-    private void styleButton(View button, int normalColor) {
-        button.setBackground(rect(normalColor, 3.0f, 0, 0));
-        button.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                v.setBackground(rect(COLOR_BUTTON_HOVER, 3.0f, 0, 0));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                v.setBackground(rect(normalColor, 3.0f, 0, 0));
-            }
-            return false;
-        });
-    }
-
-    private TextView label(String text, float sizeDp, int color) {
-        TextView view = new TextView(getContext());
-        view.setText(text);
-        view.setTextSize(0, UIUtils.dp2px(sizeDp));
-        view.setTextColor(color);
-        view.setGravity(Gravity.CENTER_VERTICAL);
-        view.setSingleLine(true);
-        return view;
-    }
-
-    private static double parseDouble(String value, double fallback) {
-        try {
-            double parsed = Double.parseDouble(value.trim());
-            return Double.isFinite(parsed) ? Math.max(0.0, parsed) : fallback;
-        } catch (RuntimeException ignored) {
-            return fallback;
-        }
-    }
-
-    private static String formatNumber(double value) {
-        return value == Math.rint(value) ? Long.toString((long) value) : Double.toString(value);
-    }
-
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
-
-    private static String tr(String key) {
-        return Component.translatable(key).getString();
-    }
 }

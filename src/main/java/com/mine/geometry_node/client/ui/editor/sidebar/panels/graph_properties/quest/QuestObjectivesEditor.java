@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.properties;
+package com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.quest;
 
 import com.mine.geometry_node.client.quest.ui.QuestHintView;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
@@ -12,9 +12,7 @@ import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.EntityTemplateValue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
@@ -22,14 +20,24 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-final class QuestObjectivesEditor extends LinearLayout {
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.button;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.iconButton;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.label;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.orderButtons;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.rect;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.singleLineInput;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.styleButton;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.tr;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertyNumbers.format;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertyNumbers.parseNonNegativeDouble;
+
+public final class QuestObjectivesEditor extends LinearLayout {
     private static final int COLOR_ROW = 0xFF292929;
     private static final int COLOR_INPUT = 0xFF242424;
     private static final int COLOR_BORDER = 0xFF4A4A4A;
@@ -46,7 +54,7 @@ final class QuestObjectivesEditor extends LinearLayout {
     private final Set<String> collapsedEntryIds = new HashSet<>();
     private boolean updating;
 
-    QuestObjectivesEditor(Context context, Runnable onChanged) {
+    public QuestObjectivesEditor(Context context, Runnable onChanged) {
         super(context);
         this.onChanged = onChanged;
         setOrientation(VERTICAL);
@@ -54,9 +62,10 @@ final class QuestObjectivesEditor extends LinearLayout {
         LinearLayout header = new LinearLayout(context);
         header.setOrientation(HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(label(tr("geometry_node.graph_properties.quest.objectives"), 10.5f, 0xFFA8A8A8),
+        header.addView(label(context, tr("geometry_node.graph_properties.quest.objectives"), 10.5f, 0xFFA8A8A8),
                 new LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f));
-        TextView add = button("+", tr("geometry_node.graph_properties.quest.objective_add"));
+        TextView add = button(context, "+", tr("geometry_node.graph_properties.quest.objective_add"),
+                COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
         add.setOnClickListener(v -> addObjective());
         header.addView(add, new LayoutParams(UIUtils.dp2pxInt(30), UIUtils.dp2pxInt(26)));
         addView(header, new LayoutParams(LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
@@ -66,7 +75,7 @@ final class QuestObjectivesEditor extends LinearLayout {
         addView(rows, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
     }
 
-    void setObjectives(List<QuestObjectiveDefinition> objectives) {
+    public void setObjectives(List<QuestObjectiveDefinition> objectives) {
         updating = true;
         rememberCollapsedRows();
         rows.removeAllViews();
@@ -78,7 +87,7 @@ final class QuestObjectivesEditor extends LinearLayout {
         updating = false;
     }
 
-    List<QuestObjectiveDefinition> objectives() {
+    public List<QuestObjectiveDefinition> objectives() {
         List<QuestObjectiveDefinition> result = new ArrayList<>(editors.size());
         for (ObjectiveRow editor : editors) result.add(editor.definition());
         return List.copyOf(result);
@@ -176,7 +185,7 @@ final class QuestObjectivesEditor extends LinearLayout {
             contentRow.setOrientation(HORIZONTAL);
             contentRow.setGravity(Gravity.CENTER_VERTICAL);
             expandButton = new FrameLayout(getContext());
-            styleButton(expandButton, COLOR_BUTTON);
+            styleButton(expandButton, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             expandIcon = new VectorIconView(getContext(), VectorIconView.Kind.CHEVRON_UP, COLOR_TEXT);
             expandIcon.setClickable(false);
             FrameLayout.LayoutParams expandIconLp = new FrameLayout.LayoutParams(
@@ -187,27 +196,33 @@ final class QuestObjectivesEditor extends LinearLayout {
             LayoutParams expandLp = new LayoutParams(UIUtils.dp2pxInt(26), UIUtils.dp2pxInt(30));
             expandLp.rightMargin = UIUtils.dp2pxInt(4);
             contentRow.addView(expandButton, expandLp);
-            contentInput = input(content.plain(), tr("geometry_node.graph_properties.quest.objective_placeholder"));
+            contentInput = singleLineInput(getContext(), content.plain(),
+                    tr("geometry_node.graph_properties.quest.objective_placeholder"),
+                    COLOR_TEXT, COLOR_MUTED, COLOR_INPUT, COLOR_BORDER);
             contentInput.setOnFocusChangeListener((v, focused) -> {
                 if (!focused) changed();
             });
             contentRow.addView(contentInput, new LayoutParams(0, UIUtils.dp2pxInt(30), 1.0f));
-            TextView rich = button("...", tr("geometry_node.graph_properties.quest.edit_rich_text"));
+            TextView rich = button(getContext(), "...",
+                    tr("geometry_node.graph_properties.quest.edit_rich_text"),
+                    COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             rich.setOnClickListener(v -> openRichEditor(rich));
             LayoutParams smallButtonLp = new LayoutParams(UIUtils.dp2pxInt(30), UIUtils.dp2pxInt(30));
             smallButtonLp.leftMargin = UIUtils.dp2pxInt(4);
             contentRow.addView(rich, smallButtonLp);
-            LinearLayout order = orderButtons(
+            LinearLayout order = orderButtons(getContext(),
                     () -> moveRow(this, -1),
                     () -> moveRow(this, 1),
                     tr("geometry_node.graph_properties.quest.objective_move_up"),
-                    tr("geometry_node.graph_properties.quest.objective_move_down"));
+                    tr("geometry_node.graph_properties.quest.objective_move_down"),
+                    COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             LayoutParams orderLp = new LayoutParams(UIUtils.dp2pxInt(26), UIUtils.dp2pxInt(30));
             orderLp.leftMargin = UIUtils.dp2pxInt(4);
             contentRow.addView(order, orderLp);
-            FrameLayout remove = iconButton(VectorIconView.Kind.CLOSE,
-                    tr("geometry_node.graph_properties.quest.objective_remove"));
-            styleButton(remove, COLOR_REMOVE);
+            FrameLayout remove = iconButton(getContext(), VectorIconView.Kind.CLOSE,
+                    tr("geometry_node.graph_properties.quest.objective_remove"),
+                    15, COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
+            styleButton(remove, COLOR_REMOVE, COLOR_BUTTON_HOVER);
             remove.setOnClickListener(v -> removeRow(this));
             LayoutParams removeLp = new LayoutParams(UIUtils.dp2pxInt(26), UIUtils.dp2pxInt(30));
             removeLp.leftMargin = UIUtils.dp2pxInt(3);
@@ -218,7 +233,9 @@ final class QuestObjectivesEditor extends LinearLayout {
             quantityRow = new LinearLayout(getContext());
             quantityRow.setOrientation(HORIZONTAL);
             quantityRow.setGravity(Gravity.CENTER_VERTICAL);
-            quantityToggle = button("", tr("geometry_node.graph_properties.quest.quantity_enabled"));
+            quantityToggle = button(getContext(), "",
+                    tr("geometry_node.graph_properties.quest.quantity_enabled"),
+                    COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             quantityToggle.setOnClickListener(v -> {
                 quantityEnabled = !quantityEnabled;
                 if (!quantityEnabled) counterEnabled = false;
@@ -228,8 +245,9 @@ final class QuestObjectivesEditor extends LinearLayout {
             });
             quantityRow.addView(quantityToggle, new LayoutParams(
                     UIUtils.dp2pxInt(66), UIUtils.dp2pxInt(28)));
-            targetInput = input(formatNumber(definition.targetValue()),
-                    tr("geometry_node.graph_properties.quest.quantity_value"));
+            targetInput = singleLineInput(getContext(), format(definition.targetValue()),
+                    tr("geometry_node.graph_properties.quest.quantity_value"),
+                    COLOR_TEXT, COLOR_MUTED, COLOR_INPUT, COLOR_BORDER);
             targetInput.setGravity(Gravity.CENTER);
             targetInput.setOnFocusChangeListener((v, focused) -> {
                 if (!focused) changed();
@@ -242,7 +260,9 @@ final class QuestObjectivesEditor extends LinearLayout {
             counterRow = new LinearLayout(getContext());
             counterRow.setOrientation(HORIZONTAL);
             counterRow.setGravity(Gravity.CENTER_VERTICAL);
-            counterToggle = button("", tr("geometry_node.graph_properties.quest.counter_enabled"));
+            counterToggle = button(getContext(), "",
+                    tr("geometry_node.graph_properties.quest.counter_enabled"),
+                    COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             counterToggle.setOnClickListener(v -> {
                 counterEnabled = !counterEnabled;
                 if (counterEnabled) quantityEnabled = true;
@@ -252,8 +272,9 @@ final class QuestObjectivesEditor extends LinearLayout {
             });
             counterRow.addView(counterToggle, new LayoutParams(
                     UIUtils.dp2pxInt(66), UIUtils.dp2pxInt(28)));
-            counterKeyInput = input(definition.counterKey(),
-                    tr("geometry_node.graph_properties.quest.counter_key"));
+            counterKeyInput = singleLineInput(getContext(), definition.counterKey(),
+                    tr("geometry_node.graph_properties.quest.counter_key"),
+                    COLOR_TEXT, COLOR_MUTED, COLOR_INPUT, COLOR_BORDER);
             counterKeyInput.setOnFocusChangeListener((v, focused) -> {
                 if (!focused) changed();
             });
@@ -265,7 +286,9 @@ final class QuestObjectivesEditor extends LinearLayout {
             hintRow = new LinearLayout(getContext());
             hintRow.setOrientation(HORIZONTAL);
             hintRow.setGravity(Gravity.CENTER_VERTICAL);
-            hintToggle = button("", tr("geometry_node.graph_properties.quest.hint_enabled"));
+            hintToggle = button(getContext(), "",
+                    tr("geometry_node.graph_properties.quest.hint_enabled"),
+                    COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
             hintToggle.setOnClickListener(v -> {
                 hintType = nextHintType(hintType);
                 hintValue = "";
@@ -299,7 +322,7 @@ final class QuestObjectivesEditor extends LinearLayout {
                     counterEnabled,
                     counterKeyInput.getText().toString(),
                     quantityEnabled,
-                    parseDouble(targetInput.getText().toString(), 1.0),
+                    parseNonNegativeDouble(targetInput.getText().toString(), 1.0),
                     hintType,
                     hintType == QuestHintType.NONE ? "" : hintValue);
         }
@@ -366,13 +389,17 @@ final class QuestObjectivesEditor extends LinearLayout {
 
         private void updateQuantityUi() {
             quantityToggle.setText(tr("geometry_node.graph_properties.quest.quantity_value"));
-            styleButton(quantityToggle, quantityEnabled ? COLOR_ACTIVE : COLOR_BUTTON);
+            styleButton(quantityToggle,
+                    quantityEnabled ? COLOR_ACTIVE : COLOR_BUTTON,
+                    COLOR_BUTTON_HOVER);
             targetInput.setVisibility(quantityEnabled ? View.VISIBLE : View.GONE);
         }
 
         private void updateCounterUi() {
             counterToggle.setText(tr("geometry_node.graph_properties.quest.counter_label"));
-            styleButton(counterToggle, counterEnabled ? COLOR_ACTIVE : COLOR_BUTTON);
+            styleButton(counterToggle,
+                    counterEnabled ? COLOR_ACTIVE : COLOR_BUTTON,
+                    COLOR_BUTTON_HOVER);
             counterKeyInput.setVisibility(counterEnabled ? View.VISIBLE : View.GONE);
         }
 
@@ -383,7 +410,9 @@ final class QuestObjectivesEditor extends LinearLayout {
                 case ENTITY -> "geometry_node.graph_properties.quest.hint_entity";
                 case NONE -> "geometry_node.graph_properties.quest.hint_none";
             }));
-            styleButton(hintToggle, hasHint ? COLOR_ACTIVE : COLOR_BUTTON);
+            styleButton(hintToggle,
+                    hasHint ? COLOR_ACTIVE : COLOR_BUTTON,
+                    COLOR_BUTTON_HOVER);
             hintPreview.setVisibility(hasHint ? View.VISIBLE : View.GONE);
             updateHintPreview();
         }
@@ -420,108 +449,10 @@ final class QuestObjectivesEditor extends LinearLayout {
         return lp;
     }
 
-    private LinearLayout orderButtons(Runnable moveUp, Runnable moveDown, String upTooltip, String downTooltip) {
-        LinearLayout order = new LinearLayout(getContext());
-        order.setOrientation(VERTICAL);
-        FrameLayout up = iconButton(VectorIconView.Kind.CHEVRON_UP, upTooltip, 9);
-        up.setOnClickListener(v -> moveUp.run());
-        order.addView(up, new LayoutParams(LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(14)));
-        FrameLayout down = iconButton(VectorIconView.Kind.CHEVRON_DOWN, downTooltip, 9);
-        down.setOnClickListener(v -> moveDown.run());
-        LayoutParams downLp = new LayoutParams(LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(14));
-        downLp.topMargin = UIUtils.dp2pxInt(2);
-        order.addView(down, downLp);
-        return order;
-    }
-
-    private EditText input(String value, String hint) {
-        EditText input = new EditText(getContext());
-        input.setSingleLine(true);
-        input.setText(value != null ? value : "");
-        input.setHint(hint);
-        input.setTextColor(COLOR_TEXT);
-        input.setHintTextColor(COLOR_MUTED);
-        input.setTextSize(0, UIUtils.dp2px(10.5f));
-        input.setPadding(UIUtils.dp2pxInt(7), 0, UIUtils.dp2pxInt(7), 0);
-        input.setBackground(rect(COLOR_INPUT, 3.0f, 1, COLOR_BORDER));
-        return input;
-    }
-
-    private TextView button(String text, String tooltip) {
-        TextView button = label(text, 10.0f, COLOR_TEXT);
-        button.setGravity(Gravity.CENTER);
-        button.setTooltipText(tooltip);
-        styleButton(button, COLOR_BUTTON);
-        return button;
-    }
-
-    private FrameLayout iconButton(VectorIconView.Kind kind, String tooltip) {
-        return iconButton(kind, tooltip, 15);
-    }
-
-    private FrameLayout iconButton(VectorIconView.Kind kind, String tooltip, int iconSizeDp) {
-        FrameLayout button = new FrameLayout(getContext());
-        button.setTooltipText(tooltip);
-        styleButton(button, COLOR_BUTTON);
-        VectorIconView icon = new VectorIconView(getContext(), kind, COLOR_TEXT);
-        icon.setClickable(false);
-        FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(
-                UIUtils.dp2pxInt(iconSizeDp), UIUtils.dp2pxInt(iconSizeDp));
-        iconLp.gravity = Gravity.CENTER;
-        button.addView(icon, iconLp);
-        return button;
-    }
-
-    private void styleButton(View button, int normalColor) {
-        button.setBackground(rect(normalColor, 3.0f, 0, 0));
-        button.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                v.setBackground(rect(COLOR_BUTTON_HOVER, 3.0f, 0, 0));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                v.setBackground(rect(normalColor, 3.0f, 0, 0));
-            }
-            return false;
-        });
-    }
-
-    private TextView label(String text, float sizeDp, int color) {
-        TextView view = new TextView(getContext());
-        view.setText(text);
-        view.setTextSize(0, UIUtils.dp2px(sizeDp));
-        view.setTextColor(color);
-        view.setGravity(Gravity.CENTER_VERTICAL);
-        view.setSingleLine(true);
-        return view;
-    }
-
-    private static double parseDouble(String value, double fallback) {
-        try {
-            double parsed = Double.parseDouble(value.trim());
-            return Double.isFinite(parsed) ? Math.max(0.0, parsed) : fallback;
-        } catch (RuntimeException ignored) {
-            return fallback;
-        }
-    }
-
     private static QuestHintType nextHintType(QuestHintType current) {
         if (current == QuestHintType.NONE) return QuestHintType.ITEM_STACK;
         if (current == QuestHintType.ITEM_STACK) return QuestHintType.ENTITY;
         return QuestHintType.NONE;
     }
 
-    private static String formatNumber(double value) {
-        return value == Math.rint(value) ? Long.toString((long) value) : Double.toString(value);
-    }
-
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        return drawable;
-    }
-
-    private static String tr(String key) {
-        return Component.translatable(key).getString();
-    }
 }

@@ -11,6 +11,7 @@ import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.ui.editor.sidebar.BuiltinSidebarPanels;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
 import com.mine.geometry_node.core.command.registry.ModClientCommands;
 import icyllis.modernui.mc.ModernUIMod;
@@ -49,6 +50,8 @@ public class GeometryNodeClient {
 
         // 渲染注册
         ClientVisualManager.init();
+
+        BuiltinSidebarPanels.register();
 
         ModClientCommands.register();
     }

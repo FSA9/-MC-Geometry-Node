@@ -1,30 +1,31 @@
-package com.mine.geometry_node.client.ui.editor.properties;
+package com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.quest;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionOverview;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-import net.minecraft.network.chat.Component;
 
 import java.util.List;
 
-final class QuestConditionOverviewView extends LinearLayout {
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.rect;
+import static com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.utils.GraphPropertiesUi.tr;
+
+public final class QuestConditionOverviewView extends LinearLayout {
     private static final int COLOR_LABEL = 0xFFA8A8A8;
     private static final int COLOR_TEXT = 0xFFE3E3E3;
     private static final int COLOR_MUTED = 0xFF777777;
     private static final int COLOR_ROW = 0xFF292929;
 
-    QuestConditionOverviewView(Context context) {
+    public QuestConditionOverviewView(Context context) {
         super(context);
         setOrientation(VERTICAL);
         setOverview(QuestConditionOverview.EMPTY);
     }
 
-    void setOverview(QuestConditionOverview overview) {
+    public void setOverview(QuestConditionOverview overview) {
         QuestConditionOverview value = overview != null ? overview : QuestConditionOverview.EMPTY;
         removeAllViews();
         addSection("geometry_node.graph_properties.quest.visibility_conditions", value.visibility());
@@ -77,14 +78,4 @@ final class QuestConditionOverviewView extends LinearLayout {
         return view;
     }
 
-    private static ShapeDrawable rect(int color, float radiusDp) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        return drawable;
-    }
-
-    private static String tr(String key) {
-        return Component.translatable(key).getString();
-    }
 }

@@ -2,8 +2,8 @@ package com.mine.geometry_node.client.ui.editor.graph.properties;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdSetGraphMetadata;
-import com.mine.geometry_node.client.ui.editor.properties.GraphPropertiesSnapshot;
-import com.mine.geometry_node.client.ui.editor.properties.GraphPropertiesTarget;
+import com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.GraphPropertiesSnapshot;
+import com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.GraphPropertiesTarget;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.quest.model.QuestConditionKind;
