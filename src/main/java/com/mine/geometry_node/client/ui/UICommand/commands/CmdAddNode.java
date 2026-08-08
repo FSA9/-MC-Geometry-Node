@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.UICommand.commands;
 
 import com.mine.geometry_node.client.ui.UICommand.ICommand;
 import com.mine.geometry_node.client.ui.viewport.GraphController;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 
 public class CmdAddNode implements ICommand {
     private final GraphController mController;

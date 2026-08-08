@@ -7,7 +7,7 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
 import com.mine.geometry_node.client.ui.viewport.preview.ViewportNativePreviewView;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;

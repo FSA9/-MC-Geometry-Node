@@ -12,7 +12,7 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
-import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.nodes.events.block.OnMultiblockBuilt;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 

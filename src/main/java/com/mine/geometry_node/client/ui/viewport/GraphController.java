@@ -2,10 +2,11 @@ package com.mine.geometry_node.client.ui.viewport;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.viewport.frame.FrameBoundsCalculator;
-import com.mine.geometry_node.core.node.Connection;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.Connection;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.document.NodeGraph;
+import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -946,7 +947,7 @@ public class GraphController {
                 && config.order == null;
     }
 
-    public void addFrame(com.mine.geometry_node.core.node.FrameData frame) {
+    public void addFrame(FrameData frame) {
         if (mContext.isInsideGroupScope()) return;
         mContext.getGraph().addFrame(frame);
         for (EditorContext.EditorListener l : mContext.getListeners()) {
@@ -974,7 +975,7 @@ public class GraphController {
                 node.parentFrame = newParentFrameId;
             }
         } else {
-            com.mine.geometry_node.core.node.FrameData frame = mContext.getGraph().getFrame(elementId);
+            FrameData frame = mContext.getGraph().getFrame(elementId);
             if (frame != null) {
                 oldParentId = frame.parentFrame;
                 frame.parentFrame = newParentFrameId;
@@ -994,7 +995,7 @@ public class GraphController {
      * Recomputes a frame's auto bounds from committed graph data.
      */
     public void updateFrameBounds(String frameId) {
-        com.mine.geometry_node.core.node.FrameData frame = mContext.getGraph().getFrame(frameId);
+        FrameData frame = mContext.getGraph().getFrame(frameId);
         if (frame == null) return;
 
         FrameBoundsCalculator.Result bounds = FrameBoundsCalculator.computeCommittedBounds(
@@ -1025,7 +1026,7 @@ public class GraphController {
     }
 
     public void setFrameProperty(String frameId, String title, int color) {
-        com.mine.geometry_node.core.node.FrameData frame = mContext.getGraph().getFrame(frameId);
+        FrameData frame = mContext.getGraph().getFrame(frameId);
         if (frame != null) {
             frame.title = title;
             frame.color = color;
@@ -1041,7 +1042,7 @@ public class GraphController {
      * 设置图框的位置（主要用于移动空图框）
      */
     public void setFramePosition(String frameId, float x, float y) {
-        com.mine.geometry_node.core.node.FrameData frame = mContext.getGraph().getFrame(frameId);
+        FrameData frame = mContext.getGraph().getFrame(frameId);
         if (frame != null) {
             frame.setPosition(x, y);
 

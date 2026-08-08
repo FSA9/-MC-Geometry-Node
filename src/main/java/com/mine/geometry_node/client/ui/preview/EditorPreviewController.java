@@ -15,7 +15,7 @@ import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverv
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.dialogue.OpenShop;
 import com.mine.geometry_node.core.node.nodes.dialogue.ShowDialoguePage;

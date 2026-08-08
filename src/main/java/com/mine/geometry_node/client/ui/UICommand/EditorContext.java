@@ -1,9 +1,9 @@
 package com.mine.geometry_node.client.ui.UICommand;
 
 import com.mine.geometry_node.client.ui.viewport.GraphController;
-import com.mine.geometry_node.core.node.FrameData;
-import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.document.FrameData;
+import com.mine.geometry_node.core.node.document.NodeData;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 
 import java.util.ArrayList;
@@ -103,7 +103,7 @@ public class EditorContext {
         default void onNodeStructureChanged(NodeData nodeData) {}
         default void onGraphMetadataChanged() {}
         default void onGraphConnectionsRebuildRequested() {}
-        default void onFrameAdded(com.mine.geometry_node.core.node.FrameData frame) {}
+        default void onFrameAdded(FrameData frame) {}
         default void onFrameRemoved(String frameId) {}
         default void onFrameBoundsUpdated(String frameId, float x, float y, float w, float h) {}
         default void onFrameTitleChanged(String frameId, String newTitle) {}

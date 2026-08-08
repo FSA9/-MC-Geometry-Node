@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.engine.system.quest.model;
 
-import com.mine.geometry_node.core.node.Connection;
-import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.document.Connection;
+import com.mine.geometry_node.core.node.document.NodeData;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.nodes.quest.BaseQuestConditionsNode;
 import com.mine.geometry_node.core.node.nodes.quest.CreateQuestCondition;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;

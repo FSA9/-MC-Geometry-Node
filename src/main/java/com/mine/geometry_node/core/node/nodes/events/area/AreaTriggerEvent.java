@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.node.nodes.events.area;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAnchor;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;

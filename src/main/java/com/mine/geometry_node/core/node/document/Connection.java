@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node;
+package com.mine.geometry_node.core.node.document;
 
 import com.google.gson.annotations.SerializedName;
 

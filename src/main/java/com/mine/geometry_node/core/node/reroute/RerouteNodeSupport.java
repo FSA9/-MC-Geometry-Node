@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.reroute;
 
-import com.mine.geometry_node.core.node.Connection;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.Connection;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.special.RerouteNode;

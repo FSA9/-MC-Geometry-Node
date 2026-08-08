@@ -6,7 +6,7 @@ import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;

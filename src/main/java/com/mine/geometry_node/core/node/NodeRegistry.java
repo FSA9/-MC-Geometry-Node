@@ -10,6 +10,7 @@ import com.mine.geometry_node.api.GeometryEventDispatcher;
 import com.mine.geometry_node.api.MarkerRegistrationContext;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.group.GroupNodeDefinitions;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;

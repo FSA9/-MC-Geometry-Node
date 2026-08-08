@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.viewport.node;
 
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;

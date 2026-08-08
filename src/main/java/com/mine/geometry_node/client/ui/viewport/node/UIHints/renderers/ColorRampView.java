@@ -7,7 +7,7 @@ import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.NumericInputSpec;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.functions.color.ColorRamp;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.value.color.ColorGradientValue;

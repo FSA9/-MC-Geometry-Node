@@ -10,7 +10,7 @@ import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
-import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphDocumentStore;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
 

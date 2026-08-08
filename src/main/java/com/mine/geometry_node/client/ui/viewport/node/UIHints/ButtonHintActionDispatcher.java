@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.viewport.node.UIHints;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.preview.EditorPreviewController;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ShopEditorOverlay;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.dialogue.OpenShop;
 import com.mine.geometry_node.core.node.nodes.dialogue.ShowDialoguePage;
 import com.mine.geometry_node.core.node.port.PortRow;

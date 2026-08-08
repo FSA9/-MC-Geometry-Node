@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.system.chunk_loading.EntityChunkLoadingConfig;
 import com.mine.geometry_node.core.engine.system.chunk_loading.EntityChunkLoadingService;
 import com.mine.geometry_node.core.node.NodeComment;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;

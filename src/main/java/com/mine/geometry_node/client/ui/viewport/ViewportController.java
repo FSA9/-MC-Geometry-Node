@@ -15,9 +15,10 @@ import com.mine.geometry_node.client.ui.viewport.frame.UIFrame;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionManager;
 import com.mine.geometry_node.client.ui.viewport.node.UINode;
 import com.mine.geometry_node.client.ui.viewport.node.UIRerouteNode;
-import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.document.NodeData;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
@@ -75,7 +76,7 @@ public class ViewportController implements EditorContext.EditorListener,
 
             setEditorContext(session.editorContext);
 
-            com.mine.geometry_node.core.node.NodeGraph graph = session.editorContext.getCurrentGraph();
+            NodeGraph graph = session.editorContext.getCurrentGraph();
             rebuildScopeVisuals(graph);
 
             mViewport.updateSelectionState(state.selectedNodeIds, state.selectedFrameIds);
@@ -202,7 +203,7 @@ public class ViewportController implements EditorContext.EditorListener,
         if (graph == null) return;
         if (mEditorContext == null || !mEditorContext.isInsideGroupScope()) {
             if (graph.frames != null) {
-                for (com.mine.geometry_node.core.node.FrameData frameData : graph.frames.values()) {
+                for (FrameData frameData : graph.frames.values()) {
                     onFrameAdded(frameData);
                 }
             }
@@ -226,7 +227,7 @@ public class ViewportController implements EditorContext.EditorListener,
 
     public void executeAddFrame(float uiX, float uiY) {
         if (mEditorContext == null || mEditorContext.isInsideGroupScope()) return;
-        com.mine.geometry_node.core.node.FrameData frameData = new com.mine.geometry_node.core.node.FrameData(UUID.randomUUID().toString(), uiX, uiY);
+        FrameData frameData = new FrameData(UUID.randomUUID().toString(), uiX, uiY);
         CmdAddFrame cmd = new CmdAddFrame(mEditorContext.getGraphController(), frameData);
         mEditorContext.getCommandManager().execute(cmd);
     }
@@ -325,7 +326,7 @@ public class ViewportController implements EditorContext.EditorListener,
                 mViewport.addToSelection(visual);
             }
         }
-        for (com.mine.geometry_node.core.node.FrameData frame : cmd.getPastedFrames()) {
+        for (FrameData frame : cmd.getPastedFrames()) {
             FrameVisualAdapter visual = mViewport.getFrameVisuals().get(frame.id);
             if (visual != null) {
                 mViewport.addToSelection(visual);
@@ -418,7 +419,7 @@ public class ViewportController implements EditorContext.EditorListener,
         if (mEditorContext == null || mEditorContext.isInsideGroupScope() || parentId == null) return false;
         if (childId.equals(parentId)) return true;
 
-        com.mine.geometry_node.core.node.FrameData current = mEditorContext.getGraph().getFrame(parentId);
+        FrameData current = mEditorContext.getGraph().getFrame(parentId);
         while (current != null) {
             if (childId.equals(current.parentFrame)) return true;
             current = mEditorContext.getGraph().getFrame(current.parentFrame);
@@ -516,7 +517,7 @@ public class ViewportController implements EditorContext.EditorListener,
             while (addedNew) {
                 addedNew = false;
                 if (mainGraph.frames != null) {
-                    for (com.mine.geometry_node.core.node.FrameData f : mainGraph.frames.values()) {
+                    for (FrameData f : mainGraph.frames.values()) {
                         if (f.parentFrame != null && copiedFrameIds.contains(f.parentFrame) && !copiedFrameIds.contains(f.id)) {
                             copiedFrameIds.add(f.id);
                             addedNew = true;
@@ -602,7 +603,7 @@ public class ViewportController implements EditorContext.EditorListener,
     // EditorListener 数据驱动视图更新接口实现
     // ==========================================
 
-    @Override public void onFrameAdded(com.mine.geometry_node.core.node.FrameData frame) { mViewport.addFrameVisual(frame.id, new UIFrame(frame)); }
+    @Override public void onFrameAdded(FrameData frame) { mViewport.addFrameVisual(frame.id, new UIFrame(frame)); }
     @Override public void onFrameRemoved(String frameId) { mViewport.removeFrameVisual(frameId); }
     @Override public void onFrameBoundsUpdated(String frameId, float x, float y, float w, float h) { mViewport.updateFrameBounds(frameId); }
     @Override public void onFrameTitleChanged(String frameId, String newTitle) { mViewport.updateFrameVisual(frameId); }

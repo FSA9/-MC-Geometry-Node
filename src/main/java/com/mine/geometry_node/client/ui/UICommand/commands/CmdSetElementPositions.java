@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.UICommand.commands;
 
 import com.mine.geometry_node.client.ui.UICommand.ICommand;
 import com.mine.geometry_node.client.ui.viewport.GraphController;
-import com.mine.geometry_node.core.node.FrameData;
+import com.mine.geometry_node.core.node.document.FrameData;
 
 import java.util.HashMap;
 import java.util.Map;

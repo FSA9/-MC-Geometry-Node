@@ -15,7 +15,7 @@ import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.InteractiveHintTarget;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.ViewportScaledHint;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.ViewportTransformedHint;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;

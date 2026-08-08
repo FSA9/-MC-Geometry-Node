@@ -9,7 +9,7 @@ import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ItemStack
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaInventoryPicker;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.client.ui.viewport.preview.ViewportNativePreviewView;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 
 import icyllis.modernui.core.Context;

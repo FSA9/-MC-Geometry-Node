@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueWaitRequest;
 import com.mine.geometry_node.core.engine.system.dialogue.richtext.DialogueRoundParser;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;

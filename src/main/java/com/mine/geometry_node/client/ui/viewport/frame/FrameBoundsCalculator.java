@@ -3,8 +3,8 @@ package com.mine.geometry_node.client.ui.viewport.frame;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.viewport.node.NodeUiMetrics;
 import com.mine.geometry_node.client.ui.viewport.node.NodeVisualAdapter;
-import com.mine.geometry_node.core.node.FrameData;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.FrameData;
+import com.mine.geometry_node.core.node.document.NodeData;
 
 /**
  * Pure frame auto-bounds calculator shared by committed graph data and drag previews.

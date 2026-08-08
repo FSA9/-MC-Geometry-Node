@@ -1,14 +1,15 @@
 package com.mine.geometry_node.client.ui.viewport.connection;
 
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionManager;
+import com.mine.geometry_node.core.node.document.Connection;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.viewport.Viewport;
 import com.mine.geometry_node.client.ui.viewport.ViewportCamera;
-import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.document.NodeData;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import java.util.ArrayList;
@@ -96,10 +97,10 @@ public class ConnectionLayer {
 
             // 处理数据连接
             if (outData.outputs != null) {
-                for (Map.Entry<String, List<com.mine.geometry_node.core.node.Connection>> entry : outData.outputs.entrySet()) {
+                for (Map.Entry<String, List<Connection>> entry : outData.outputs.entrySet()) {
                     String outPortId = entry.getKey();
                     if (entry.getValue() == null) continue;
-                    for (com.mine.geometry_node.core.node.Connection link : entry.getValue()) {
+                    for (Connection link : entry.getValue()) {
                         ConnectionNodeVisual inUi = nodeVisuals.get(link.targetNodeId());
                         if (inUi != null) {
                             int color = resolveConnectionColor(graph, outData, outPortId, false);
@@ -114,9 +115,9 @@ public class ConnectionLayer {
 
             // 处理执行连接
             if (outData.execOutputs != null) {
-                for (Map.Entry<String, com.mine.geometry_node.core.node.Connection> entry : outData.execOutputs.entrySet()) {
+                for (Map.Entry<String, Connection> entry : outData.execOutputs.entrySet()) {
                     String execOutPortId = entry.getKey();
-                    com.mine.geometry_node.core.node.Connection link = entry.getValue();
+                    Connection link = entry.getValue();
 
                     ConnectionNodeVisual inUi = nodeVisuals.get(link.targetNodeId());
                     if (inUi != null) {

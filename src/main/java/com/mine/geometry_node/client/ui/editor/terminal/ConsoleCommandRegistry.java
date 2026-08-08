@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.editor.terminal;
 
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.UICommand.commands.*;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import java.util.*;
 

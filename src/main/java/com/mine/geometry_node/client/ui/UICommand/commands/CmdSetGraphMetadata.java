@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.UICommand.commands;
 import com.mine.geometry_node.client.ui.UICommand.ICommand;
 import com.mine.geometry_node.client.ui.viewport.GraphController;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;

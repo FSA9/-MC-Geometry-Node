@@ -5,11 +5,10 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.HintRendererFactory;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.NumericInputSpec;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIHintRenderer;
-import com.mine.geometry_node.core.node.NodeData;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.UIHint;
 
 import icyllis.modernui.graphics.RectF;

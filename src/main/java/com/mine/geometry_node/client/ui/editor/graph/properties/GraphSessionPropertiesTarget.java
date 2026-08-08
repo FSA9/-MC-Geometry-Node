@@ -8,8 +8,8 @@ import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
-import com.mine.geometry_node.core.node.NodeData;
-import com.mine.geometry_node.core.node.NodeGraph;
+import com.mine.geometry_node.core.node.document.NodeData;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.nodes.quest.CreateQuestCondition;
 
 import java.util.List;
