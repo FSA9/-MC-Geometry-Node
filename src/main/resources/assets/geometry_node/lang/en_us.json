@@ -1071,5 +1071,17 @@
   "geometry_node.quest.action_result.invalid_status": "Action Result Invalid Status",
   "geometry_node.quest.action_result.invalid_counter_key": "Action Result Invalid Counter Key",
   "geometry_node.quest.action_result.invalid_counter_value": "Action Result Invalid Counter Value",
-  "key.geometry_node.open_quest_screen": "Key Geometry Node Open Quest Screen"
+  "key.geometry_node.open_quest_screen": "Key Geometry Node Open Quest Screen",
+  "geometry_node.port.chunk_radius": "Chunk Radius",
+  "geometry_node.port.entity_chunk_loading_mode": "Chunk Loading",
+  "geometry_node.entity_chunk_loading.mode.enabled": "Enabled",
+  "geometry_node.entity_chunk_loading.mode.disabled": "Disabled",
+  "geometry_node.node.set_entity_chunk_loading": "Set Entity Chunk Loading",
+  "geometry_node.node.set_entity_chunk_loading.comment.summary": "Sets the entity's single persistent chunk-loading configuration. Enabling replaces the previous configuration; disabling releases all forced chunks.",
+  "geometry_node.node.set_entity_chunk_loading.comment.flow_in": "Updates the chunk-loading configuration.",
+  "geometry_node.node.set_entity_chunk_loading.comment.flow_out": "Continues after the configuration has been processed.",
+  "geometry_node.node.set_entity_chunk_loading.comment.bool": "Whether at least one target entity was updated successfully.",
+  "geometry_node.node.set_entity_chunk_loading.comment.entity": "The server-side entity to configure. Each entity retains only one configuration.",
+  "geometry_node.node.set_entity_chunk_loading.comment.mode": "Enabled creates or replaces the configuration. Disabled deletes it and releases its chunks.",
+  "geometry_node.node.set_entity_chunk_loading.comment.chunk_radius": "Square radius in chunks. 1 means 3 x 3 chunks; 32 means 65 x 65 chunks."
 }

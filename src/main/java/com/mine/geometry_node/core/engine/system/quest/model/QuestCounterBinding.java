@@ -1,0 +1,25 @@
+package com.mine.geometry_node.core.engine.system.quest.model;
+
+import com.google.gson.JsonObject;
+
+import java.util.Objects;
+
+public record QuestCounterBinding(boolean enabled, String key) {
+    public static final QuestCounterBinding NONE = new QuestCounterBinding(false, "");
+
+    public QuestCounterBinding {
+        key = enabled ? Objects.requireNonNullElse(key, "") : "";
+    }
+
+    public void writeTo(JsonObject root) {
+        root.addProperty("counter_enabled", enabled);
+        if (enabled) root.addProperty("counter_key", key);
+    }
+
+    public static QuestCounterBinding fromJson(JsonObject root) {
+        boolean enabled = QuestDefinition.readBoolean(root, "counter_enabled", false);
+        return new QuestCounterBinding(
+                enabled,
+                QuestDefinition.readString(root, "counter_key", ""));
+    }
+}

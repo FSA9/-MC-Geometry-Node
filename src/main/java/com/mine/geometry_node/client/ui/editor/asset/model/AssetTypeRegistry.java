@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.model;
 
-import com.mine.geometry_node.core.engine.visual.image.ImageAssetFormats;
+import com.mine.geometry_node.core.engine.system.visual.image.ImageAssetFormats;
 
 import java.util.ArrayList;
 import java.util.EnumSet;

@@ -11,7 +11,7 @@ import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
-import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 
 import java.io.File;
 import java.util.List;

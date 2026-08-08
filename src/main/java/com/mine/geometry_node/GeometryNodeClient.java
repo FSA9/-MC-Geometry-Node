@@ -5,6 +5,8 @@ import com.mine.geometry_node.client.dialogue.DialogueStyleRenderer;
 import com.mine.geometry_node.client.key.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.key.KeyBindings;
 import com.mine.geometry_node.client.quest.ClientQuestScreenState;
+import com.mine.geometry_node.client.marker.ClientMarkerStore;
+import com.mine.geometry_node.client.marker.MarkerHudRenderer;
 import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.render.image.ClientImageAssetManager;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
@@ -16,6 +18,7 @@ import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTem
 import com.mine.geometry_node.core.command.registry.ModClientCommands;
 import icyllis.modernui.mc.ModernUIMod;
 import net.minecraft.client.Minecraft;
+import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -25,6 +28,7 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -38,6 +42,7 @@ public class GeometryNodeClient {
 
         // 注册按键
         modBus.addListener(KeyBindings::register);
+        modBus.addListener(this::onRegisterGuiLayers);
 
         // 监听按键
         NeoForge.EVENT_BUS.addListener(this::onClientTick);
@@ -50,6 +55,7 @@ public class GeometryNodeClient {
 
         // 渲染注册
         ClientVisualManager.init();
+        MarkerHudRenderer.init();
 
         BuiltinSidebarPanels.register();
 
@@ -101,8 +107,16 @@ public class GeometryNodeClient {
         EntityTemplatePickerController.handleInteraction(event);
     }
 
+    private void onRegisterGuiLayers(RegisterGuiLayersEvent event) {
+        event.registerAboveAll(
+                Identifier.fromNamespaceAndPath(GeometryNode.MODID, "markers"),
+                MarkerHudRenderer::render
+        );
+    }
+
     private static void clearClientRenderState() {
         ClientVisualManager.clear();
+        ClientMarkerStore.clear();
         ClientImageAssetManager.clear();
         GeometryDebugRenderer.clear();
         SchematicProjectionRenderer.clear();

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.dialogue;
 
-import com.mine.geometry_node.core.engine.dialogue.DialogueStyleRegistry;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueStyleRegistry;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import com.mine.geometry_node.client.dialogue.ui.RpgDialogueFragment;
 import com.mine.geometry_node.client.dialogue.ui.ShopMenuFragment;

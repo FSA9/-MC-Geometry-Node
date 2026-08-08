@@ -9,9 +9,9 @@ import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructu
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
-import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.engine.quest.model.QuestConditionKind;
-import com.mine.geometry_node.core.engine.quest.model.QuestConditionOverview;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.node.NodeGraph;
 import com.mine.geometry_node.core.node.nodes.events.block.OnMultiblockBuilt;
 import com.mine.geometry_node.core.node.port.StandardPorts;

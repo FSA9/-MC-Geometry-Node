@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.quest;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.engine.quest.model.QuestConditionOverview;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;

@@ -2,8 +2,8 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
-import com.mine.geometry_node.core.engine.quest.model.QuestConditionOverview;
-import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.Reader;

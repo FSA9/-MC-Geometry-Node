@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.dialogue;
 
-import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRichText;
-import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueTextParser;
-import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
+import com.mine.geometry_node.core.engine.system.dialogue.richtext.DialogueRichText;
+import com.mine.geometry_node.core.engine.system.dialogue.richtext.DialogueTextParser;
+import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.text.SpannableStringBuilder;
 import icyllis.modernui.text.Spanned;

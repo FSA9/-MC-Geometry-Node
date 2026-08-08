@@ -12,7 +12,7 @@ import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
-import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 
 import java.util.ArrayList;
 import java.util.HashSet;

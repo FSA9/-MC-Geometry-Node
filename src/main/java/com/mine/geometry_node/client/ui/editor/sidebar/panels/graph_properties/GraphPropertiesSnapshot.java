@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties;
 
 import com.mine.geometry_node.core.engine.graph.GraphType;
-import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.engine.quest.model.QuestConditionOverview;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 
 import java.util.List;
 

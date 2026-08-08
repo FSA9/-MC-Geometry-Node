@@ -6,11 +6,12 @@ import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.quest.ClientQuestScreenState;
+import com.mine.geometry_node.client.marker.ClientMarkerStore;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
 import com.mine.geometry_node.core.entity.template.EntityTemplateTargetResolvers;
-import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
@@ -18,7 +19,7 @@ import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphFileService;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphPermissions;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
-import com.mine.geometry_node.core.engine.quest.QuestScreenService;
+import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
 import com.mine.geometry_node.core.network.packet.c2s.*;
 import com.mine.geometry_node.core.network.packet.s2c.*;
 import com.mine.geometry_node.core.node.value.EntityTemplateValue;
@@ -297,6 +298,27 @@ public class NetworkHandler {
                 PacketQuestScreenSnapshot.TYPE,
                 PacketQuestScreenSnapshot.STREAM_CODEC,
                 (payload, context) -> context.queue(() -> ClientQuestScreenState.handleSnapshot(payload))
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketMarkerSnapshot.TYPE,
+                PacketMarkerSnapshot.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> ClientMarkerStore.handleSnapshot(payload))
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketMarkerUpsert.TYPE,
+                PacketMarkerUpsert.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> ClientMarkerStore.handleUpsert(payload))
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                PacketMarkerRemove.TYPE,
+                PacketMarkerRemove.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> ClientMarkerStore.handleRemove(payload))
         );
 
         NetworkManager.registerReceiver(

@@ -1,12 +1,16 @@
 package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.api.GeometryNodePlugin;
+import com.mine.geometry_node.api.MarkerRegistrationContext;
 import com.mine.geometry_node.api.NodeRegistrationContext;
+import com.mine.geometry_node.core.engine.system.marker.MarkerType;
+import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import com.mine.geometry_node.core.node.nodes.actions.block.*;
 import com.mine.geometry_node.core.node.nodes.actions.display_entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
 import com.mine.geometry_node.core.node.nodes.actions.item.*;
+import com.mine.geometry_node.core.node.nodes.actions.marker.*;
 import com.mine.geometry_node.core.node.nodes.actions.player.*;
 import com.mine.geometry_node.core.node.nodes.actions.schematic.*;
 import com.mine.geometry_node.core.node.nodes.actions.visual.*;
@@ -49,6 +53,20 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
     }
 
     @Override
+    public void registerMarkerTypes(MarkerRegistrationContext registry) {
+        registry.register(new MarkerType(MarkerTypeRegistry.DEFAULT_TYPE_ID,
+                "geometry_node.marker.type.default", 0xFF4DA3FF, MarkerTypeRegistry.DEFAULT_RENDERER_ID));
+        registry.register(new MarkerType("geometry_node:objective",
+                "geometry_node.marker.type.objective", 0xFFFFA726, MarkerTypeRegistry.DEFAULT_RENDERER_ID));
+        registry.register(new MarkerType("geometry_node:danger",
+                "geometry_node.marker.type.danger", 0xFFE05A5A, MarkerTypeRegistry.DEFAULT_RENDERER_ID));
+        registry.register(new MarkerType("geometry_node:destination",
+                "geometry_node.marker.type.destination", 0xFF55B96B, MarkerTypeRegistry.DEFAULT_RENDERER_ID));
+        registry.register(new MarkerType("geometry_node:entity",
+                "geometry_node.marker.type.entity", 0xFFFF5C8A, MarkerTypeRegistry.DEFAULT_RENDERER_ID));
+    }
+
+    @Override
     public void registerNodes(NodeRegistrationContext registry) {
         System.out.println("[BuiltinNodesPlugin] Start to register Nodes...");
 
@@ -65,6 +83,9 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/visual", new DrawRayBeam());
         registry.register("actions/visual", new DrawItemVisual());
         registry.register("actions/visual", new DrawImageVisual());
+        registry.register("actions/marker", new CreateMarker());
+        registry.register("actions/marker", new RemoveMarker());
+        registry.register("actions/entity", new SetEntityChunkLoading());
 
 //        registry.register("actions", new SpawnHitbox());
 

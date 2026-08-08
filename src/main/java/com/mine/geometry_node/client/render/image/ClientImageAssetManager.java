@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.render.image;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.visual.image.ImageAssetValidator;
+import com.mine.geometry_node.core.engine.system.visual.image.ImageAssetValidator;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;

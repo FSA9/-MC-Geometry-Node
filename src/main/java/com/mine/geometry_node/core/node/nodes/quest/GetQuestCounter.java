@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.quest;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
-import com.mine.geometry_node.core.engine.quest.QuestService;
+import com.mine.geometry_node.core.engine.system.quest.QuestService;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;

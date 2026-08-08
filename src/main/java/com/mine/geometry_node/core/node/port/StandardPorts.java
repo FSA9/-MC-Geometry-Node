@@ -25,6 +25,7 @@ public enum StandardPorts {
     TICK("tick", PortType.INTEGER),
     COUNT("count", PortType.INTEGER),
     REMOVED_COUNT("removed_count", PortType.INTEGER),
+    CHUNK_RADIUS("chunk_radius", PortType.INTEGER),
     VERTICES("vertices", PortType.INTEGER),
     RINGS("rings", PortType.INTEGER),
     VERTICES_X("vertices_x", PortType.INTEGER),
@@ -72,6 +73,7 @@ public enum StandardPorts {
     REPAIR_AIR("repair_air", PortType.BOOLEAN),
     AFFECT_ENTITIES("affect_entities", PortType.BOOLEAN),
     UNIQUE_IF_EXISTS("unique_if_exists", PortType.BOOLEAN),
+    SHOW_DISTANCE("show_distance", PortType.BOOLEAN),
 
     // Float
     VALUE("value", PortType.FLOAT),
@@ -134,6 +136,8 @@ public enum StandardPorts {
     FILL_TYPE("fill_type", PortType.STRING),
     VOXEL_MODE("voxel_mode", PortType.STRING),
     SIZE_MODE("size_mode", PortType.STRING),
+    MARKER_TYPE("marker_type", PortType.STRING),
+    ANCHOR_TYPE("anchor_type", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),

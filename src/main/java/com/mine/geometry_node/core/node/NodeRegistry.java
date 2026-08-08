@@ -7,13 +7,15 @@ import com.mine.geometry_node.api.NodeRegistrationContext;
 import com.mine.geometry_node.api.EventDef;
 import com.mine.geometry_node.api.EventScope;
 import com.mine.geometry_node.api.GeometryEventDispatcher;
+import com.mine.geometry_node.api.MarkerRegistrationContext;
+import com.mine.geometry_node.core.engine.system.marker.MarkerType;
+import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import com.mine.geometry_node.core.node.group.GroupNodeDefinitions;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -63,6 +65,8 @@ public class NodeRegistry {
             System.out.println("[NodeRegistry] Find plugin: " + addonId + " (" + plugin.getClass().getName() + ")");
 
             try {
+                plugin.registerMarkerTypes(new PluginMarkerRegistrationContext(addonId));
+
                 PluginNodeRegistrationContext nodeContext = new PluginNodeRegistrationContext(addonId);
                 plugin.registerNodes(nodeContext);
                 if (nodeContext.registeredCount() == 0) {
@@ -290,6 +294,24 @@ public class NodeRegistry {
 
         private int registeredCount() {
             return registeredCount;
+        }
+    }
+
+    private static final class PluginMarkerRegistrationContext implements MarkerRegistrationContext {
+        private final String addonId;
+
+        private PluginMarkerRegistrationContext(String addonId) {
+            this.addonId = addonId;
+        }
+
+        @Override
+        public String addonId() {
+            return addonId;
+        }
+
+        @Override
+        public void registerMarkerType(MarkerType type) {
+            MarkerTypeRegistry.INSTANCE.register(type);
         }
     }
 

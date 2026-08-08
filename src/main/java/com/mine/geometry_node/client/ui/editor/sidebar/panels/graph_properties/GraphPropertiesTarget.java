@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties;
 
-import com.mine.geometry_node.core.engine.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 
 import java.util.List;
 import java.util.concurrent.CompletionStage;

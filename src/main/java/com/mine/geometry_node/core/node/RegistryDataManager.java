@@ -2,14 +2,15 @@ package com.mine.geometry_node.core.node;
 
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
-import com.mine.geometry_node.core.engine.quest.status.QuestStatusRegistry;
+import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;
+import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.Identifier;
 
 import java.util.List;
+import java.util.Map;
 
 public class RegistryDataManager {
 
@@ -175,11 +176,23 @@ public class RegistryDataManager {
             case "geometry_node:port_types" -> getPortTypes();
             case QuestStatusRegistry.DYNAMIC_REGISTRY_ID -> QuestStatusRegistry.INSTANCE.allIds();
             case QuestStatusRegistry.ASSIGNABLE_DYNAMIC_REGISTRY_ID -> QuestStatusRegistry.INSTANCE.assignableIds();
+            case MarkerTypeRegistry.DYNAMIC_REGISTRY_ID -> MarkerTypeRegistry.INSTANCE.allIds();
             default -> {
                 System.err.println("[RegistryDataManager] 未知的动态注册表 ID: " + registryId);
                 yield List.of();
             }
         };
+    }
+
+    /**
+     * Optional translated labels for dynamic option ids. Registries not listed
+     * here intentionally display their raw ids.
+     */
+    public static Map<String, String> getDynamicOptionLabelKeys(String registryId) {
+        if (MarkerTypeRegistry.DYNAMIC_REGISTRY_ID.equals(registryId)) {
+            return MarkerTypeRegistry.INSTANCE.translationKeys();
+        }
+        return Map.of();
     }
 
     /**

@@ -87,7 +87,13 @@ public class SelectHintRenderer implements UIHintRenderer {
                 String dynamicRegistryId = (String) row.hintParams().get(PortMetaKeys.DYNAMIC_REGISTRY_ID);
                 if (dynamicRegistryId != null) {
                     var mc = net.minecraft.client.Minecraft.getInstance();
-                    if (mc.level != null) resolvedOptions.addAll(RegistryDataManager.getDynamicOptions(dynamicRegistryId, mc.level.registryAccess()));
+                    if (mc.level != null) {
+                        resolvedOptions.addAll(RegistryDataManager.getDynamicOptions(dynamicRegistryId, mc.level.registryAccess()));
+                        for (Map.Entry<String, String> entry : RegistryDataManager.getDynamicOptionLabelKeys(dynamicRegistryId).entrySet()) {
+                            optionLabels.put(entry.getKey(), net.minecraft.network.chat.Component
+                                    .translatable(entry.getValue()).getString());
+                        }
+                    }
                 }
             }
         }

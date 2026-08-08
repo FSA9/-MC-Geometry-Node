@@ -2,9 +2,9 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.engine.dialogue.DialogueContext;
-import com.mine.geometry_node.core.engine.dialogue.DialogueSession;
-import com.mine.geometry_node.core.engine.dialogue.DialogueStyleRegistry;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueContext;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueSession;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueStyleRegistry;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;

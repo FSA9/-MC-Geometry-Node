@@ -16,6 +16,13 @@ public interface GeometryNodePlugin {
     }
 
     /**
+     * Registers common marker types. Custom client renderer ids are bound from
+     * client-only initialization code so dedicated servers stay client-free.
+     */
+    default void registerMarkerTypes(MarkerRegistrationContext registry) {
+    }
+
+    /**
      * 标准节点注册入口。
      * 新 Addon 优先实现这个方法，避免直接依赖 NodeRegistry 的内部细节。
      */

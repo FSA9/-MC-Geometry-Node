@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.engine.quest.model.QuestHintType;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.fragment.Fragment;

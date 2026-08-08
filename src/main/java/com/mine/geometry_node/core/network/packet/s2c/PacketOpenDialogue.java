@@ -1,11 +1,11 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
-import com.mine.geometry_node.core.engine.dialogue.DialogueSession;
-import com.mine.geometry_node.core.engine.dialogue.DialogueStyleRegistry;
-import com.mine.geometry_node.core.engine.dialogue.model.DialogueChoicePayload;
-import com.mine.geometry_node.core.engine.dialogue.model.DialoguePagePayload;
-import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
-import com.mine.geometry_node.core.engine.dialogue.model.shop.ShopPagePayload;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueSession;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueStyleRegistry;
+import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.system.dialogue.model.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
+import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayload;
 import com.mine.geometry_node.core.network.codec.DialogueTextStreamCodec;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;

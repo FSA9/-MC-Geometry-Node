@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.command.server;
 
-import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
-import com.mine.geometry_node.core.engine.dialogue.presenter.ChatDialoguePresenter;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
+import com.mine.geometry_node.core.engine.system.dialogue.presenter.ChatDialoguePresenter;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;

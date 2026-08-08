@@ -2,12 +2,12 @@ package com.mine.geometry_node.core.node.nodes.dialogue;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.engine.dialogue.DialogueContext;
-import com.mine.geometry_node.core.engine.dialogue.model.DialogueChoicePayload;
-import com.mine.geometry_node.core.engine.dialogue.model.DialoguePagePayload;
-import com.mine.geometry_node.core.engine.dialogue.model.DialogueText;
-import com.mine.geometry_node.core.engine.dialogue.DialogueWaitRequest;
-import com.mine.geometry_node.core.engine.dialogue.richtext.DialogueRoundParser;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueContext;
+import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueChoicePayload;
+import com.mine.geometry_node.core.engine.system.dialogue.model.DialoguePagePayload;
+import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueWaitRequest;
+import com.mine.geometry_node.core.engine.system.dialogue.richtext.DialogueRoundParser;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.node.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;

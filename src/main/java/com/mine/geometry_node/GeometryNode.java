@@ -5,20 +5,21 @@ import com.mine.geometry_node.core.command.registry.ModServerCommands;
 import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
-import com.mine.geometry_node.core.engine.dialogue.DialogueRuntime;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
-import com.mine.geometry_node.core.engine.quest.QuestService;
-import com.mine.geometry_node.core.engine.quest.QuestScreenService;
-import com.mine.geometry_node.core.engine.quest.storage.EntityQuestAttachment;
+import com.mine.geometry_node.core.engine.system.quest.QuestService;
+import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
+import com.mine.geometry_node.core.engine.system.marker.MarkerService;
+import com.mine.geometry_node.core.engine.system.chunk_loading.EntityChunkLoadingService;
+import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttachment;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.schematic.SchematicPlacementDebugSync;
-import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.registry.ReloadListenerRegistry;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -122,6 +123,7 @@ public class GeometryNode {
 
     public GeometryNode(IEventBus modEventBus, ModContainer modContainer) {
         NeoForge.EVENT_BUS.register(this);
+        modEventBus.addListener(EntityChunkLoadingService::registerTicketController);
 
         // 初始化网络包
         NetworkHandler.init();
@@ -136,6 +138,8 @@ public class GeometryNode {
 
         QuestService.INSTANCE.init();
         QuestScreenService.INSTANCE.init();
+        MarkerService.INSTANCE.init();
+        EntityChunkLoadingService.INSTANCE.init();
 
         // 初始化蓝图系统事件引擎
         GraphEventHandler.init();
