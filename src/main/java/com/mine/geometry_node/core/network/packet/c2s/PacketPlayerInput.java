@@ -12,9 +12,11 @@ import net.minecraft.world.phys.Vec3;
 public record PacketPlayerInput(
         String keyId,      // 按键标识符，如 "skill_1", "ctrl"
         String action,     // 动作类型: "PRESS", "RELEASE"
-        int durationTicks, // 按住 tick 数 (仅在 RELEASE 时有意义)
         Vec3 clientVelocity // 客户端当前 tick 物理结算后的真实速度
 ) implements CustomPacketPayload {
+
+    public static final int MAX_KEY_ID_LENGTH = 32;
+    public static final int MAX_ACTION_LENGTH = 16;
 
     public static final Type<PacketPlayerInput> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath("geometry_node", "player_input")
@@ -22,18 +24,22 @@ public record PacketPlayerInput(
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketPlayerInput> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> {
-                buf.writeUtf(packet.keyId);
-                buf.writeUtf(packet.action);
-                buf.writeVarInt(packet.durationTicks);
+                buf.writeUtf(packet.keyId, MAX_KEY_ID_LENGTH);
+                buf.writeUtf(packet.action, MAX_ACTION_LENGTH);
                 Vec3.STREAM_CODEC.encode(buf, packet.clientVelocity);
             },
             buf -> new PacketPlayerInput(
-                    buf.readUtf(),
-                    buf.readUtf(),
-                    buf.readVarInt(),
+                    buf.readUtf(MAX_KEY_ID_LENGTH),
+                    buf.readUtf(MAX_ACTION_LENGTH),
                     Vec3.STREAM_CODEC.decode(buf)
             )
     );
+
+    public PacketPlayerInput {
+        keyId = keyId == null ? "" : keyId;
+        action = action == null ? "" : action;
+        clientVelocity = clientVelocity == null ? Vec3.ZERO : clientVelocity;
+    }
 
     @Override
     public Type<? extends CustomPacketPayload> type() {

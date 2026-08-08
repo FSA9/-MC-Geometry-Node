@@ -15,11 +15,7 @@ public class ClientBlueprintInputManager {
     // 状态记录器：3个直接按键 + 3个修饰键 (Ctrl, Shift, Alt) + 10个技能键
     private static final int TOTAL_TRACKED = DIRECT_KEY_IDS.length + KeyBindings.SKILL_COUNT + 3;
     private static final boolean[] lastStates = new boolean[TOTAL_TRACKED];
-    private static final long[] pressTicks = new long[TOTAL_TRACKED];
-    private static long tickCounter;
-
     public static void tick() {
-        long currentTick = ++tickCounter;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.screen != null) return;
 
@@ -58,21 +54,19 @@ public class ClientBlueprintInputManager {
 
             // 1. 触发按下
             if (isCurrentlyDown && !wasDown) {
-                pressTicks[i] = currentTick;
-                sendInputPacket(keyId, "PRESS", 0, mc.player.getDeltaMovement());
+                sendInputPacket(keyId, "PRESS", mc.player.getDeltaMovement());
             }
 
             // 2. 触发抬起
             if (!isCurrentlyDown && wasDown) {
-                int durationTicks = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, currentTick - pressTicks[i]));
-                sendInputPacket(keyId, "RELEASE", durationTicks, mc.player.getDeltaMovement());
+                sendInputPacket(keyId, "RELEASE", mc.player.getDeltaMovement());
             }
 
             lastStates[i] = isCurrentlyDown;
         }
     }
 
-    private static void sendInputPacket(String keyId, String action, int durationTicks, Vec3 clientVelocity) {
-        NetworkHandler.sendToServer(new PacketPlayerInput(keyId, action, durationTicks, clientVelocity));
+    private static void sendInputPacket(String keyId, String action, Vec3 clientVelocity) {
+        NetworkHandler.sendToServer(new PacketPlayerInput(keyId, action, clientVelocity));
     }
 }

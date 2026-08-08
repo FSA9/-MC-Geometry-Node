@@ -13,32 +13,52 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * [服务端状态管家] 记录玩家的按键状态，并派发蓝图事件
- */
-public class PlayerInputStateManager {
+/** Server-authoritative player input state and blueprint-event dispatcher. */
+public final class PlayerInputStateManager {
+    private static final Set<String> VALID_KEY_IDS = Set.of(OnPlayerKeyEvent.VALID_KEYS);
+    private static final int MAX_TRANSITIONS_PER_TICK = VALID_KEY_IDS.size() * 2;
 
-    // 内存字典：UUID -> 当前按下的所有 KeyId 集合
     private static final Map<UUID, Set<String>> ACTIVE_KEYS = new ConcurrentHashMap<>();
+    private static final Map<UUID, Map<String, Long>> PRESS_START_TICKS = new ConcurrentHashMap<>();
+    private static final Map<UUID, TransitionBudget> TRANSITION_BUDGETS = new ConcurrentHashMap<>();
+
+    private PlayerInputStateManager() {
+    }
 
     public static void handleInput(ServerPlayer player, PacketPlayerInput payload) {
-        UUID uuid = player.getUUID();
-        // 使用并发集合防止多线程修改引发 ConcurrentModificationException
-        Set<String> keys = ACTIVE_KEYS.computeIfAbsent(uuid, k -> ConcurrentHashMap.newKeySet());
-
+        if (player == null || payload == null || !VALID_KEY_IDS.contains(payload.keyId())) {
+            return;
+        }
         String action = payload.action();
+        if (!"PRESS".equals(action) && !"RELEASE".equals(action)) {
+            return;
+        }
+
+        UUID playerId = player.getUUID();
         String keyId = payload.keyId();
+        long gameTime = player.level().getGameTime();
+        Set<String> activeKeys = ACTIVE_KEYS.computeIfAbsent(playerId, ignored -> ConcurrentHashMap.newKeySet());
+        boolean changesState = "PRESS".equals(action) ? !activeKeys.contains(keyId) : activeKeys.contains(keyId);
+        if (!changesState || !tryConsumeTransition(playerId, gameTime)) {
+            return;
+        }
+
+        Map<String, Long> pressStarts = PRESS_START_TICKS.computeIfAbsent(playerId, ignored -> new ConcurrentHashMap<>());
+        int durationTicks = 0;
+        if ("PRESS".equals(action)) {
+            activeKeys.add(keyId);
+            pressStarts.put(keyId, gameTime);
+        } else {
+            activeKeys.remove(keyId);
+            Long pressStart = pressStarts.remove(keyId);
+            if (pressStart != null) {
+                durationTicks = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, gameTime - pressStart));
+            }
+        }
+
         Vec3 clientVelocity = payload.clientVelocity().isFinite()
                 ? payload.clientVelocity()
                 : player.getKnownMovement();
-
-        // 1. 维护状态字典
-        if ("PRESS".equals(action)) {
-            keys.add(keyId);
-        } else if ("RELEASE".equals(action)) {
-            keys.remove(keyId);
-        }
-        // 2. 唤醒并派发蓝图事件
         GeometryNodeEvents.dispatch(
                 (net.minecraft.server.level.ServerLevel) player.level(),
                 player,
@@ -47,26 +67,45 @@ public class PlayerInputStateManager {
                         .put(StandardPorts.ENTITY.getId(), player)
                         .put(GraphEventFields.KEY_ID, keyId)
                         .put(GraphEventFields.ACTION, action)
-                        .put(GraphEventFields.DURATION, payload.durationTicks())
+                        .put(GraphEventFields.DURATION, durationTicks)
                         .put(GraphEventFields.CLIENT_VELOCITY, clientVelocity)
-                        .put(GraphEventFields.CLIENT_VELOCITY_GAME_TIME, player.level().getGameTime())
-                        .put(StandardPorts.TIME.getId(), payload.durationTicks())
+                        .put(GraphEventFields.CLIENT_VELOCITY_GAME_TIME, gameTime)
+                        .put(StandardPorts.TIME.getId(), durationTicks)
                         .build()
         );
     }
 
-    /**
-     * 供 IsKeyPressed 数据节点瞬间查询使用的 API
-     */
-    public static boolean isKeyPressed(UUID uuid, String keyId) {
-        Set<String> keys = ACTIVE_KEYS.get(uuid);
+    public static boolean isKeyPressed(UUID playerId, String keyId) {
+        if (!VALID_KEY_IDS.contains(keyId)) return false;
+        Set<String> keys = ACTIVE_KEYS.get(playerId);
         return keys != null && keys.contains(keyId);
     }
 
-    /**
-     * 清理玩家数据，防止内存泄漏
-     */
-    public static void clearPlayer(UUID uuid) {
-        ACTIVE_KEYS.remove(uuid);
+    public static void clearPlayer(UUID playerId) {
+        ACTIVE_KEYS.remove(playerId);
+        PRESS_START_TICKS.remove(playerId);
+        TRANSITION_BUDGETS.remove(playerId);
+    }
+
+    private static boolean tryConsumeTransition(UUID playerId, long gameTime) {
+        TransitionBudget budget = TRANSITION_BUDGETS.computeIfAbsent(playerId, ignored -> new TransitionBudget());
+        return budget.tryConsume(gameTime);
+    }
+
+    private static final class TransitionBudget {
+        private long gameTime = Long.MIN_VALUE;
+        private int used;
+
+        private synchronized boolean tryConsume(long currentGameTime) {
+            if (gameTime != currentGameTime) {
+                gameTime = currentGameTime;
+                used = 0;
+            }
+            if (used >= MAX_TRANSITIONS_PER_TICK) {
+                return false;
+            }
+            used++;
+            return true;
+        }
     }
 }
