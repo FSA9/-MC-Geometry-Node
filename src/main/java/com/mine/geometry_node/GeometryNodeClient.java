@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.key.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.key.KeyBindings;
 import com.mine.geometry_node.client.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.marker.ClientMarkerStore;
+import com.mine.geometry_node.core.network.ClientNetworkReceiverRegistry;
 import com.mine.geometry_node.client.marker.MarkerHudRenderer;
 import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.render.image.ClientImageAssetManager;
@@ -39,6 +40,7 @@ import net.neoforged.neoforge.common.NeoForge;
 public class GeometryNodeClient {
     public GeometryNodeClient(IEventBus modBus) {
         disableModernUiDevRegistries();
+        ClientNetworkReceiverRegistry.init();
 
         // 注册按键
         modBus.addListener(KeyBindings::register);
