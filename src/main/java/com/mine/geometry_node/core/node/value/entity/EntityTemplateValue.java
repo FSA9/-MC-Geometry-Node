@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.node.value.entity;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.mine.geometry_node.core.utils.EntityNbtCompat;
+import com.mine.geometry_node.core.utils.nbt.EntityNbtCompat;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;

@@ -10,10 +10,10 @@ import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
-import com.mine.geometry_node.core.utils.ASTNode;
-import com.mine.geometry_node.core.utils.ASTNodes;
-import com.mine.geometry_node.core.utils.ExpressionCompiler;
-import com.mine.geometry_node.core.utils.VariableRegistry;
+import com.mine.geometry_node.core.utils.expression.ASTNode;
+import com.mine.geometry_node.core.utils.expression.ASTNodes;
+import com.mine.geometry_node.core.utils.expression.ExpressionCompiler;
+import com.mine.geometry_node.core.utils.expression.VariableRegistry;
 import net.minecraft.network.chat.Component;
 
 import java.util.HashMap;

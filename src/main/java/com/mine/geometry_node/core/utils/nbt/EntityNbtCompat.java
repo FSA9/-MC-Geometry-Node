@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.utils;
+package com.mine.geometry_node.core.utils.nbt;
 
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;

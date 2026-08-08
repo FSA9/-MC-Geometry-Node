@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.actions.entity;
 
-import com.mine.geometry_node.core.utils.EntityNbtCompat;
+import com.mine.geometry_node.core.utils.nbt.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Mob;

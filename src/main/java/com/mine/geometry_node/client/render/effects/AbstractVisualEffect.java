@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.render.effects;
 
-import com.mine.geometry_node.core.utils.ASTNode;
-import com.mine.geometry_node.core.utils.ExpressionCompiler;
-import com.mine.geometry_node.core.utils.VariableRegistry;
+import com.mine.geometry_node.core.utils.expression.ASTNode;
+import com.mine.geometry_node.core.utils.expression.ExpressionCompiler;
+import com.mine.geometry_node.core.utils.expression.VariableRegistry;
 import com.mine.geometry_node.client.render.math.ClientPropertyFetcher;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mojang.blaze3d.vertex.PoseStack;
