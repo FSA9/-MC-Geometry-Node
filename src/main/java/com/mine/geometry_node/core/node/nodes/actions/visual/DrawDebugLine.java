@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
-import com.mine.geometry_node.core.node.value.ColorValue;
+import com.mine.geometry_node.core.node.value.color.ColorValue;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 

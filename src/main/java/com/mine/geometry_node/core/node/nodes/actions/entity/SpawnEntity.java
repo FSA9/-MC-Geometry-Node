@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
-import com.mine.geometry_node.core.node.value.EntityTemplateValue;
+import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;

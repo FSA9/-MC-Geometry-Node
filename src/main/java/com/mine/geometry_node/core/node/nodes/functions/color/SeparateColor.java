@@ -11,7 +11,7 @@ import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
-import com.mine.geometry_node.core.node.value.ColorValue;
+import com.mine.geometry_node.core.node.value.color.ColorValue;
 import net.minecraft.network.chat.Component;
 
 import java.util.Locale;

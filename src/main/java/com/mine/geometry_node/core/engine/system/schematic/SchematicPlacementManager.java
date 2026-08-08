@@ -1,5 +1,6 @@
-package com.mine.geometry_node.core.schematic;
+package com.mine.geometry_node.core.engine.system.schematic;
 
+import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;

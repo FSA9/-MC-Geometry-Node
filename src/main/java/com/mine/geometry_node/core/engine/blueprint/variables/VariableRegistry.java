@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.variables;
 
 import com.mine.geometry_node.core.node.value.SlotRef;
-import com.mine.geometry_node.core.node.value.EntityTemplateValue;
+import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;

@@ -1,13 +1,12 @@
 package com.mine.geometry_node.core.node.port;
 
-import com.mine.geometry_node.core.node.value.ColorValue;
+import com.mine.geometry_node.core.node.value.color.ColorValue;
 import com.mine.geometry_node.core.node.value.DialogueChoiceValue;
-import com.mine.geometry_node.core.node.value.EntityTemplateValue;
+import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.core.node.value.QuestConditionValue;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 

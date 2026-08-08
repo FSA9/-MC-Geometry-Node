@@ -1,10 +1,10 @@
 package com.mine.geometry_node.core.node.port;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
-import com.mine.geometry_node.core.node.value.ColorValue;
-import com.mine.geometry_node.core.node.value.DynamicData;
-import com.mine.geometry_node.core.node.value.ExpressionData;
-import com.mine.geometry_node.core.node.value.EntityTemplateValue;
+import com.mine.geometry_node.core.node.value.color.ColorValue;
+import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
+import com.mine.geometry_node.core.node.value.dynamic.ExpressionData;
+import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;

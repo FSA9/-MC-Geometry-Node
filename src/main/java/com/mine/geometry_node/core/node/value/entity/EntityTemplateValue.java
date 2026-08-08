@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.value;
+package com.mine.geometry_node.core.node.value.entity;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.value;
+package com.mine.geometry_node.core.node.value.dynamic;
 
 /**
  * [双模数字]

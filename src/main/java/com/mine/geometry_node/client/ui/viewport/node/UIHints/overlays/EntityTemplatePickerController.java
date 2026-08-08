@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketCaptureEntityTemplateRequest;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
-import com.mine.geometry_node.core.node.value.EntityTemplateValue;
+import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.mc.MuiModApi;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;

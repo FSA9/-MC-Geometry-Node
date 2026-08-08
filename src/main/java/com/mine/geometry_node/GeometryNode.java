@@ -19,7 +19,7 @@ import com.mine.geometry_node.core.engine.system.chunk_loading.EntityChunkLoadin
 import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttachment;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.schematic.SchematicPlacementDebugSync;
+import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementDebugSync;
 import dev.architectury.registry.ReloadListenerRegistry;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;

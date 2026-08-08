@@ -9,8 +9,8 @@ import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
-import com.mine.geometry_node.core.node.value.ColorGradientValue;
-import com.mine.geometry_node.core.node.value.ColorValue;
+import com.mine.geometry_node.core.node.value.color.ColorGradientValue;
+import com.mine.geometry_node.core.node.value.color.ColorValue;
 import net.minecraft.network.chat.Component;
 
 import java.util.Map;

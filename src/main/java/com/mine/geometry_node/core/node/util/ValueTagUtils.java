@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.util;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
-import com.mine.geometry_node.core.node.value.DynamicData;
+import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;

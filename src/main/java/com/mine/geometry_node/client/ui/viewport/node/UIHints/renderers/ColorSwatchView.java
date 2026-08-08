@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.common.ColorPickerDialog;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.node.value.ColorValue;
+import com.mine.geometry_node.core.node.value.color.ColorValue;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;

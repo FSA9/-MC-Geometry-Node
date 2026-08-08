@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.quest.ui;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIItemSlot;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers.UIEntityTemplatePreview;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
-import com.mine.geometry_node.core.node.value.EntityTemplateValue;
+import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;

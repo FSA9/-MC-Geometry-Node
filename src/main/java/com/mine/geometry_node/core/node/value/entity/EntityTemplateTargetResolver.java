@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.entity.template;
+package com.mine.geometry_node.core.node.value.entity;
 
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
