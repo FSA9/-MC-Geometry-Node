@@ -1,24 +1,23 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.common.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
 public class TransferProgressDialog extends AssetDialogBase {
     private final TextView mStatus;
     private final TextView mProgress;
-    private final Button mCancelButton;
+    private final UiActionButton mCancelButton;
     private Runnable mOnCancel;
     private boolean mFinished;
     private boolean mCommitting;
 
     public TransferProgressDialog(Context context, String title) {
         super(context, title);
-        setOnClickListener(v -> {});
         mStatus = label(context, "准备中", 13, 0xFFDDDDDD);
         mProgress = label(context, "0 / 0", 13, 0xFF9FD0FF);
         mPanel.addView(mStatus, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(32)));
@@ -26,10 +25,10 @@ public class TransferProgressDialog extends AssetDialogBase {
 
         LinearLayout actions = new LinearLayout(context);
         actions.setGravity(Gravity.RIGHT);
-        mCancelButton = button(context, "取消", 0xFF4A4A4A);
+        mCancelButton = actionButton(context, "取消", UiActionButton.Role.SECONDARY);
         mCancelButton.setOnClickListener(v -> onCloseRequested());
         actions.addView(mCancelButton, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(92), UIUtils.dp2pxInt(32)));
-        mPanel.addView(actions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(36)));
+        setActions(actions);
     }
 
     public void setOnCancel(Runnable onCancel) {
@@ -44,7 +43,7 @@ public class TransferProgressDialog extends AssetDialogBase {
             mCommitting = false;
             mCancelButton.setEnabled(true);
             mCancelButton.setText("关闭");
-            postDelayed(this::dismiss, 900);
+            postDelayed(this::requestClose, 900);
         }
     }
 
@@ -76,9 +75,15 @@ public class TransferProgressDialog extends AssetDialogBase {
     @Override
     protected void onCloseRequested() {
         if (mFinished) {
-            dismiss();
+            requestClose();
         } else if (!mCommitting && mOnCancel != null) {
             mOnCancel.run();
         }
+    }
+
+    @Override
+    public boolean onEscapePressed() {
+        onCloseRequested();
+        return true;
     }
 }

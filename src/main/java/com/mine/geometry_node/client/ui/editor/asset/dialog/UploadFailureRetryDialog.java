@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.common.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
@@ -40,14 +40,13 @@ public class UploadFailureRetryDialog extends AssetDialogBase {
         LinearLayout actions = new LinearLayout(context);
         actions.setGravity(Gravity.RIGHT);
 
-        Button cancel = button(context, "取消", 0xFF4A4A4A);
-        cancel.setOnClickListener(v -> dismiss());
+        UiActionButton cancel = actionButton(context, "取消", UiActionButton.Role.SECONDARY);
+        cancel.setOnClickListener(v -> requestClose());
         actions.addView(cancel, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(92), UIUtils.dp2pxInt(32)));
 
-        Button retry = button(context, "全部重新上传", 0xFF2F7DDE);
+        UiActionButton retry = actionButton(context, "全部重新上传", UiActionButton.Role.PRIMARY);
         retry.setOnClickListener(v -> {
-            dismiss();
-            if (mOnRetry != null) {
+            if (requestClose() && mOnRetry != null) {
                 mOnRetry.run();
             }
         });
@@ -55,10 +54,7 @@ public class UploadFailureRetryDialog extends AssetDialogBase {
         retryLp.leftMargin = UIUtils.dp2pxInt(8);
         actions.addView(retry, retryLp);
 
-        mPanel.addView(actions, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(38)
-        ));
+        setActions(actions);
     }
 
     private String buildFailureList(List<String> failedPaths) {

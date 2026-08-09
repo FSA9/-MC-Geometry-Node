@@ -22,6 +22,7 @@ import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
+import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
@@ -192,7 +193,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 "",
                 targetDirectory -> preflightUpload(selectedFiles, targetDirectory)
         );
-        dialog.showIn(this);
+        dialog.show(this);
     }
 
     @Override
@@ -205,7 +206,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 AssetBrowserPathPolicy.getLocalDraftsDir(),
                 targetDirectory -> startDownload(remoteEntries, targetDirectory)
         );
-        dialog.showIn(this);
+        dialog.show(this);
     }
 
     /**
@@ -258,8 +259,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            KeyBinding saveBinding = KeyBinding.parse(
-                    ConfigManager.INSTANCE.getConfig().keyBindings.global.save);
+            KeyBinding saveBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_SAVE));
             if (saveBinding != null && saveBinding.matches(event)) {
                 mPropertiesPanel.commitPendingEdits();
                 return true;
@@ -267,8 +267,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
             if (findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
             if (mBrowserPanel != null && mBrowserPanel.handleShortcut(event)) return true;
-            KeyBinding sidebarBinding = KeyBinding.parse(
-                    ConfigManager.INSTANCE.getConfig().keyBindings.viewport.toggleRightSidebar);
+            KeyBinding sidebarBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.VIEWPORT_TOGGLE_SIDEBAR));
             if (sidebarBinding != null && sidebarBinding.matches(event)) {
                 mSidebarLayout.toggle();
                 return true;
@@ -425,7 +424,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                         case CANCEL -> {
                         }
                     }
-                }).showIn(this);
+                }).show(this);
             });
         });
         NetworkHandler.sendToServer(new PacketRemoteGraphUploadRequest(requestId, true, false, files));
@@ -460,7 +459,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
             post(() -> {
                 if (!response.success()) {
                     TransferProgressDialog progress = new TransferProgressDialog(getContext(), "下载图纸");
-                    progress.showIn(this);
+                    progress.show(this);
                     progress.fail(response.message());
                     return;
                 }
@@ -501,7 +500,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 case CANCEL -> {
                 }
             }
-        }).showIn(this);
+        }).show(this);
     }
 
     private void saveDownloadedFiles(List<RemoteGraphUploadFile> files, File targetDirectory) {
@@ -536,7 +535,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 getContext(),
                 failedPaths,
                 () -> startUpload(failedFiles, overwrite, overwritePaths)
-        ).showIn(this);
+        ).show(this);
     }
 
     private String summarizePaths(List<String> paths) {

@@ -1,35 +1,109 @@
 package com.mine.geometry_node.client.ui.persistence.config;
 
-import java.util.List;
+import com.mine.geometry_node.client.ui.shortcut.KeyScope;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+/** Registry consumed by persistence, runtime APIs and the global settings dialog. */
 public final class ConfigRegistry {
-    private static final List<ConfigDefinition> ENTRIES = List.of(
-            ConfigDefinition.integer("viewport.gridSize", "网格大小", "节点和图框吸附、背景网格绘制使用的基础尺寸。", 1, 500, 1),
-            ConfigDefinition.bool("viewport.snapToGrid", "吸附到网格", "开启后移动节点和图框时对齐到网格。"),
-            ConfigDefinition.bool("viewport.showGridAndAxis", "显示栅格与坐标轴", "控制 viewport 背景栅格和坐标轴是否显示。"),
-            ConfigDefinition.floating("node.cornerRadius", "节点圆角", "节点、输入框和选择提示使用的圆角尺寸。", 0, 24, 0.5),
-            ConfigDefinition.pathList("assetBrowser.quickAccessPaths", "快捷访问路径", "资产浏览器左侧快捷访问目录列表。"),
-            ConfigDefinition.choice("assetBrowser.viewMode", "资产显示模式", "资产浏览器文件列表的显示方式。",
-                    List.of("LIST", "ICON_SMALL", "ICON_MEDIUM", "ICON_LARGE")),
-            ConfigDefinition.keyBinding("keyBindings.global.undo", "撤销", "撤销上一次操作。"),
-            ConfigDefinition.keyBinding("keyBindings.global.redo", "重做", "恢复上一次撤销的操作。"),
-            ConfigDefinition.keyBinding("keyBindings.global.save", "保存", "保存当前打开的蓝图。"),
-            ConfigDefinition.keyBinding("keyBindings.global.copy", "复制", "复制当前作用域选中的内容。"),
-            ConfigDefinition.keyBinding("keyBindings.global.paste", "粘贴", "在当前作用域粘贴剪贴板内容。"),
-            ConfigDefinition.keyBinding("keyBindings.viewport.delete", "删除", "删除 viewport 当前选中的节点或图框。"),
-            ConfigDefinition.keyBinding("keyBindings.viewport.toggleSnapToGrid", "切换吸附", "开启或关闭 viewport 网格吸附。"),
-            ConfigDefinition.keyBinding("keyBindings.viewport.toggleGridAndAxis", "切换栅格与坐标轴", "显示或隐藏 viewport 背景栅格和坐标轴。"),
-            ConfigDefinition.keyBinding("keyBindings.viewport.toggleRightSidebar", "切换右侧栏", "显示或隐藏图属性侧栏。"),
-            ConfigDefinition.keyBinding("keyBindings.viewport.moveSelection", "移动", "让 viewport 当前选中节点跟随鼠标移动。"),
-            ConfigDefinition.keyBinding("keyBindings.viewport.groupIntoFrame", "并入图框", "把 viewport 当前选中的节点并入新图框。"),
-            ConfigDefinition.keyBinding("keyBindings.viewport.groupIntoNodeGroup", "合并为图组", "把 viewport 当前选中的节点合并为新图组。"),
-            ConfigDefinition.shortcut("keyBindings.shopEditor.clearSlot", "清空商品槽", "清空商店编辑器中的商品槽。")
-    );
+    public static final ConfigRegistry INSTANCE = new ConfigRegistry();
+
+    private final Map<String, ConfigCategory> mCategories = new LinkedHashMap<>();
+    private final Map<String, ConfigEntry<?>> mEntries = new LinkedHashMap<>();
 
     private ConfigRegistry() {
+        BuiltinConfigEntries.register(this);
     }
 
-    public static List<ConfigDefinition> entries() {
-        return ENTRIES;
+    public synchronized void registerCategory(ConfigCategory category) {
+        Objects.requireNonNull(category, "category");
+        ConfigCategory previous = mCategories.putIfAbsent(category.id(), category);
+        if (previous != null && !previous.equals(category)) {
+            throw new IllegalArgumentException("Duplicate config category id: " + category.id());
+        }
+    }
+
+    public synchronized <T> ConfigEntry<T> register(ConfigEntry<T> entry) {
+        Objects.requireNonNull(entry, "entry");
+        registerCategory(entry.category());
+        if (mEntries.putIfAbsent(entry.id(), entry) != null) {
+            throw new IllegalArgumentException("Duplicate config entry id: " + entry.id());
+        }
+        return entry;
+    }
+
+    public synchronized ConfigEntry<?> find(String id) {
+        return id != null ? mEntries.get(id) : null;
+    }
+
+    public synchronized List<ConfigCategory> categories() {
+        return mCategories.values().stream()
+                .sorted(Comparator.comparingInt(ConfigCategory::order).thenComparing(ConfigCategory::id))
+                .toList();
+    }
+
+    public synchronized List<ConfigEntry<?>> entries() {
+        return sortedEntries(mEntries.values());
+    }
+
+    public synchronized List<ConfigEntry<?>> entries(ConfigCategory category) {
+        if (category == null) return List.of();
+        return sortedEntries(mEntries.values().stream().filter(entry -> entry.category().id().equals(category.id())).toList());
+    }
+
+    /** Applies every registered entry's canonical validation contract in place. */
+    public synchronized boolean normalize(AppConfig config) {
+        Objects.requireNonNull(config, "config");
+        boolean changed = false;
+        for (ConfigEntry<?> entry : mEntries.values()) changed |= normalizeEntry(entry, config);
+        return changed;
+    }
+
+    public synchronized List<ConfigEntry<String>> shortcutConflicts(
+            ConfigEntry<String> target, String candidate, AppConfig config) {
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(config, "config");
+        InputBinding binding = InputBinding.parse(candidate);
+        if (binding == null || target.keyScope() == null) return List.of();
+
+        List<ConfigEntry<String>> conflicts = new ArrayList<>();
+        for (ConfigEntry<?> raw : mEntries.values()) {
+            if (raw == target || raw.keyScope() == null || !scopesOverlap(target.keyScope(), raw.keyScope())) continue;
+            if (raw.editorType() != ConfigEntry.EditorType.KEY_BINDING
+                    && raw.editorType() != ConfigEntry.EditorType.SHORTCUT) continue;
+            @SuppressWarnings("unchecked") ConfigEntry<String> entry = (ConfigEntry<String>) raw;
+            InputBinding existing = InputBinding.parse(entry.get(config));
+            if (existing != null && binding.device() == existing.device() && binding.text().equals(existing.text())) {
+                conflicts.add(entry);
+            }
+        }
+        return List.copyOf(conflicts);
+    }
+
+    private static List<ConfigEntry<?>> sortedEntries(Iterable<ConfigEntry<?>> source) {
+        List<ConfigEntry<?>> result = new ArrayList<>();
+        source.forEach(result::add);
+        result.sort(Comparator.comparingInt((ConfigEntry<?> entry) -> entry.category().order())
+                .thenComparing(entry -> entry.category().id())
+                .thenComparingInt(ConfigEntry::order)
+                .thenComparing(ConfigEntry::id));
+        return List.copyOf(result);
+    }
+
+    private static <T> boolean normalizeEntry(ConfigEntry<T> entry, AppConfig config) {
+        T before = entry.get(config);
+        T after = entry.normalize(before);
+        if (Objects.equals(before, after)) return false;
+        entry.set(config, after);
+        return true;
+    }
+
+    private static boolean scopesOverlap(KeyScope first, KeyScope second) {
+        return first == second;
     }
 }

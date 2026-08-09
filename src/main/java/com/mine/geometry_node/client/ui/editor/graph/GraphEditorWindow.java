@@ -9,6 +9,7 @@ import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphSessionPropertiesTarget;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
+import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
@@ -121,8 +122,7 @@ public class GraphEditorWindow extends LinearLayout implements AreaEditorWindow 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            KeyBinding saveBinding = KeyBinding.parse(
-                    ConfigManager.INSTANCE.getConfig().keyBindings.global.save);
+            KeyBinding saveBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_SAVE));
             if (saveBinding != null && saveBinding.matches(event)) {
                 mPropertiesPanel.commitPendingEdits();
                 mGraphViewportPanel.saveCurrentSession();
@@ -130,8 +130,7 @@ public class GraphEditorWindow extends LinearLayout implements AreaEditorWindow 
             }
 
             if (findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
-            KeyBinding binding = KeyBinding.parse(
-                    ConfigManager.INSTANCE.getConfig().keyBindings.viewport.toggleRightSidebar);
+            KeyBinding binding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.VIEWPORT_TOGGLE_SIDEBAR));
             if (binding != null && binding.matches(event)) {
                 mSidebarLayout.toggle();
                 return true;

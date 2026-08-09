@@ -57,6 +57,19 @@ public final class KeyBinding {
         return new KeyBinding(keyDef.keyCode, ctrl, shift, alt, superKey, canonicalText(ctrl, shift, alt, superKey, keyName));
     }
 
+    public static KeyBinding fromEvent(KeyEvent event) {
+        if (event == null || KeyEvent.isModifierKey(event.getKeyCode())) return null;
+        KeyDef keyDef = KEY_CODES.values().stream()
+                .filter(candidate -> candidate.keyCode == event.getKeyCode())
+                .findFirst()
+                .orElse(null);
+        if (keyDef == null) return null;
+        String canonical = canonicalText(event.isCtrlPressed(), event.isShiftPressed(), event.isAltPressed(),
+                event.isSuperPressed(), keyDef.name);
+        return new KeyBinding(keyDef.keyCode, event.isCtrlPressed(), event.isShiftPressed(), event.isAltPressed(),
+                event.isSuperPressed(), canonical);
+    }
+
     public boolean matches(KeyEvent event) {
         return event != null
                 && event.getKeyCode() == keyCode

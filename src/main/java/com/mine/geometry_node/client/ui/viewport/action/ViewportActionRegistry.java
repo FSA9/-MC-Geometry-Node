@@ -1,7 +1,10 @@
 package com.mine.geometry_node.client.ui.viewport.action;
 
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
+import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigEntry;
 import com.mine.geometry_node.client.ui.shortcut.KeyScope;
+import net.minecraft.network.chat.Component;
 
 import java.util.Collection;
 import java.util.EnumMap;
@@ -11,20 +14,20 @@ public final class ViewportActionRegistry {
     private static final Map<ViewportActionId, ViewportAction> ACTIONS = new EnumMap<>(ViewportActionId.class);
 
     static {
-        register(KeyScope.GLOBAL, ViewportActionId.UNDO, "撤销", config -> config.keyBindings.global.undo, ViewportActionState::isReady);
-        register(KeyScope.GLOBAL, ViewportActionId.REDO, "重做", config -> config.keyBindings.global.redo, ViewportActionState::isReady);
-        register(KeyScope.GLOBAL, ViewportActionId.SAVE, "保存", config -> config.keyBindings.global.save, state -> true);
+        register(KeyScope.GLOBAL, ViewportActionId.UNDO, BuiltinConfigEntries.GLOBAL_UNDO, ViewportActionState::isReady);
+        register(KeyScope.GLOBAL, ViewportActionId.REDO, BuiltinConfigEntries.GLOBAL_REDO, ViewportActionState::isReady);
+        register(KeyScope.GLOBAL, ViewportActionId.SAVE, BuiltinConfigEntries.GLOBAL_SAVE, state -> true);
         register(KeyScope.VIEWPORT, ViewportActionId.EXPORT_IMAGE, "导出为图片", null, ViewportActionState::isReady);
-        register(KeyScope.GLOBAL, ViewportActionId.COPY, "复制", config -> config.keyBindings.global.copy, ViewportActionState::isReady);
-        register(KeyScope.GLOBAL, ViewportActionId.PASTE, "粘贴", config -> config.keyBindings.global.paste, ViewportActionState::isReady);
-        register(KeyScope.VIEWPORT, ViewportActionId.DELETE, "删除", config -> config.keyBindings.viewport.delete, ViewportActionState::isReady);
-        register(KeyScope.VIEWPORT, ViewportActionId.TOGGLE_SNAP_TO_GRID, "吸附", config -> config.keyBindings.viewport.toggleSnapToGrid, state -> true);
-        register(KeyScope.VIEWPORT, ViewportActionId.TOGGLE_GRID_AND_AXIS, "坐标轴", config -> config.keyBindings.viewport.toggleGridAndAxis, state -> true);
-        register(KeyScope.VIEWPORT, ViewportActionId.MOVE_SELECTION, "移动", config -> config.keyBindings.viewport.moveSelection,
+        register(KeyScope.GLOBAL, ViewportActionId.COPY, BuiltinConfigEntries.GLOBAL_COPY, ViewportActionState::isReady);
+        register(KeyScope.GLOBAL, ViewportActionId.PASTE, BuiltinConfigEntries.GLOBAL_PASTE, ViewportActionState::isReady);
+        register(KeyScope.VIEWPORT, ViewportActionId.DELETE, BuiltinConfigEntries.VIEWPORT_DELETE, ViewportActionState::isReady);
+        register(KeyScope.VIEWPORT, ViewportActionId.TOGGLE_SNAP_TO_GRID, BuiltinConfigEntries.VIEWPORT_TOGGLE_SNAP, state -> true);
+        register(KeyScope.VIEWPORT, ViewportActionId.TOGGLE_GRID_AND_AXIS, BuiltinConfigEntries.VIEWPORT_TOGGLE_GRID, state -> true);
+        register(KeyScope.VIEWPORT, ViewportActionId.MOVE_SELECTION, BuiltinConfigEntries.VIEWPORT_MOVE,
                 state -> state.isReady() && state.hasSelection());
-        register(KeyScope.VIEWPORT, ViewportActionId.GROUP_INTO_FRAME, "并入图框", config -> config.keyBindings.viewport.groupIntoFrame,
+        register(KeyScope.VIEWPORT, ViewportActionId.GROUP_INTO_FRAME, BuiltinConfigEntries.VIEWPORT_GROUP_FRAME,
                 state -> state.isReady() && !state.isInsideGroupScope());
-        register(KeyScope.VIEWPORT, ViewportActionId.GROUP_INTO_NODE_GROUP, "合并为图组", config -> config.keyBindings.viewport.groupIntoNodeGroup,
+        register(KeyScope.VIEWPORT, ViewportActionId.GROUP_INTO_NODE_GROUP, BuiltinConfigEntries.VIEWPORT_GROUP_NODE,
                 ViewportActionState::isReady);
         register(KeyScope.VIEWPORT, ViewportActionId.EXIT_GROUP, "退出图组", null,
                 state -> state.isReady() && state.isInsideGroupScope());
@@ -50,7 +53,7 @@ public final class ViewportActionRegistry {
 
     public static String label(ViewportActionId id) {
         ViewportAction action = get(id);
-        return action != null ? action.label() : "";
+        return action != null ? Component.translatable(action.label()).getString() : "";
     }
 
     public static String shortcutText(ViewportActionId id, AppConfig config) {
@@ -66,10 +69,19 @@ public final class ViewportActionRegistry {
     private static void register(
             KeyScope scope,
             ViewportActionId id,
-            String label,
-            ViewportAction.ShortcutReader shortcutReader,
+            ConfigEntry<String> shortcutEntry,
             ViewportAction.EnabledReader<ViewportActionState> enabledReader
     ) {
-        ACTIONS.put(id, new ViewportAction(scope, id, label, shortcutReader, enabledReader));
+        ACTIONS.put(id, new ViewportAction(scope, id, shortcutEntry.labelTranslationKey(), shortcutEntry, enabledReader));
+    }
+
+    private static void register(
+            KeyScope scope,
+            ViewportActionId id,
+            String label,
+            ConfigEntry<String> shortcutEntry,
+            ViewportAction.EnabledReader<ViewportActionState> enabledReader
+    ) {
+        ACTIONS.put(id, new ViewportAction(scope, id, label, shortcutEntry, enabledReader));
     }
 }

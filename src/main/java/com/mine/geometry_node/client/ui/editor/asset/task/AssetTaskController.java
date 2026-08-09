@@ -38,7 +38,7 @@ public final class AssetTaskController {
                 finish(handle, progress::cancelled);
             }
         });
-        progress.showIn(mOwner);
+        progress.show(mOwner);
 
         Future<?> future = IO_EXECUTOR.submit(() -> execute(handle, task, onSuccess, progress));
         handle.setFuture(future);

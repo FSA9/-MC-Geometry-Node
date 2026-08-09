@@ -139,8 +139,10 @@ public final class ColorPickerDialog extends FrameLayout {
         content.addView(actions, actionsLp);
         LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(dpPx(82), dpPx(30));
         cancelLp.rightMargin = dpPx(8);
-        actions.addView(button(context, "取消", COLOR_BUTTON, v -> dismiss()), cancelLp);
-        actions.addView(button(context, "应用", COLOR_PRIMARY, v -> applyAndDismiss()), new LinearLayout.LayoutParams(dpPx(86), dpPx(30)));
+        actions.addView(UiActionButton.create(context, "取消", UiActionButton.Role.SECONDARY,
+                v -> dismiss()), cancelLp);
+        actions.addView(UiActionButton.create(context, "应用", UiActionButton.Role.PRIMARY,
+                v -> applyAndDismiss()), new LinearLayout.LayoutParams(dpPx(86), dpPx(30)));
 
         mWindow.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -386,13 +388,6 @@ public final class ColorPickerDialog extends FrameLayout {
         input.setPadding(dpPx(5), 0, dpPx(5), 0);
         input.setBackground(rect(COLOR_FIELD, 4.0f, 1, 0xFF303846));
         return input;
-    }
-
-    private TextView button(Context context, String text, int color, View.OnClickListener listener) {
-        TextView view = label(context, text, 13.0f, 0xFFFFFFFF, Gravity.CENTER);
-        view.setBackground(rect(color, 4.0f, 1, 0x553C4658));
-        view.setOnClickListener(listener);
-        return view;
     }
 
     private static TextView label(Context context, String text, float sizeDp, int color, int gravity) {

@@ -34,7 +34,10 @@ public class SvgIconView extends View {
         GRAPH_EDITOR("graph_editor.svg"),
         ASSET_LIBRARY("asset_library.svg"),
         TERMINAL("console.svg"),
-        PERFORMANCE("analysis.svg");
+        PERFORMANCE("analysis.svg"),
+        CLEAR("clear.svg"),
+        RESET("refresh.svg"),
+        CLOSE("close.svg");
 
         private final String mFileName;
 

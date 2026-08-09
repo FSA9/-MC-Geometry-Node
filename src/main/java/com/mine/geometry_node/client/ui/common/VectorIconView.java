@@ -193,4 +193,5 @@ public class VectorIconView extends View {
         canvas.drawLine(cx - size, cy - size, cx + size, cy + size, mPaint);
         canvas.drawLine(cx + size, cy - size, cx - size, cy + size, mPaint);
     }
+
 }

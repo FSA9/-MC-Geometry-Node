@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.viewport.node.UIHints.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
@@ -339,12 +340,12 @@ public final class UIEntityTemplatePreview extends ViewportNativePreviewView imp
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (isFocused()) {
-            KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.getConfig().keyBindings.global.copy);
+            KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_COPY));
             if (copy != null && copy.matches(event)) {
                 if (event.getAction() == KeyEvent.ACTION_DOWN) sClipboardTemplate = mCachedTemplate;
                 return true;
             }
-            KeyBinding paste = KeyBinding.parse(ConfigManager.INSTANCE.getConfig().keyBindings.global.paste);
+            KeyBinding paste = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_PASTE));
             if (paste != null && paste.matches(event)) {
                 if (event.getAction() == KeyEvent.ACTION_DOWN && sClipboardTemplate != null) {
                     commitTemplate(sClipboardTemplate);

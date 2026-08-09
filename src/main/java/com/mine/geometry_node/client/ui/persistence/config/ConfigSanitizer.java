@@ -3,19 +3,11 @@ package com.mine.geometry_node.client.ui.persistence.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
 final class ConfigSanitizer {
-    private static final List<String> VIEW_MODES = List.of("LIST", "ICON_SMALL", "ICON_MEDIUM", "ICON_LARGE");
-
-    private static final int GRID_SIZE_MIN = 1;
-    private static final int GRID_SIZE_MAX = 500;
-    private static final float CORNER_RADIUS_MIN = 0.0f;
-    private static final float CORNER_RADIUS_MAX = 24.0f;
     private static final float RIGHT_SIDEBAR_WEIGHT_MIN = 0.08f;
     private static final float RIGHT_SIDEBAR_WEIGHT_MAX = 0.75f;
 
@@ -38,9 +30,8 @@ final class ConfigSanitizer {
         } else {
             ReadList paths = readStringList(assetBrowser, "quickAccessPaths");
             if (paths.valid) {
-                NormalizeList normalized = normalizeQuickAccessPaths(paths.value);
-                config.assetBrowser.quickAccessPaths = normalized.value;
-                changed |= paths.changed || normalized.changed;
+                config.assetBrowser.quickAccessPaths = paths.value;
+                changed |= paths.changed;
             } else {
                 config.assetBrowser.quickAccessPaths = defaults.assetBrowser.quickAccessPaths;
                 changed = true;
@@ -57,7 +48,7 @@ final class ConfigSanitizer {
             }
 
             ReadString viewMode = readString(assetBrowser, "viewMode");
-            if (viewMode.valid && VIEW_MODES.contains(viewMode.value)) {
+            if (viewMode.valid && BuiltinConfigEntries.ASSET_VIEW_MODE.choices().contains(viewMode.value)) {
                 config.assetBrowser.viewMode = viewMode.value;
                 changed |= viewMode.changed;
             } else {
@@ -101,7 +92,8 @@ final class ConfigSanitizer {
             changed = true;
         } else {
             ReadInt gridSize = readInt(viewport, "gridSize");
-            if (gridSize.valid && gridSize.value >= GRID_SIZE_MIN && gridSize.value <= GRID_SIZE_MAX) {
+            if (gridSize.valid && gridSize.value >= BuiltinConfigEntries.VIEWPORT_GRID_SIZE.min()
+                    && gridSize.value <= BuiltinConfigEntries.VIEWPORT_GRID_SIZE.max()) {
                 config.viewport.gridSize = gridSize.value;
                 changed |= gridSize.changed;
             } else {
@@ -164,7 +156,8 @@ final class ConfigSanitizer {
         } else {
             ReadFloat cornerRadius = readFloat(node, "cornerRadius");
             if (cornerRadius.valid && Float.isFinite(cornerRadius.value)
-                    && cornerRadius.value >= CORNER_RADIUS_MIN && cornerRadius.value <= CORNER_RADIUS_MAX) {
+                    && cornerRadius.value >= BuiltinConfigEntries.NODE_CORNER_RADIUS.min()
+                    && cornerRadius.value <= BuiltinConfigEntries.NODE_CORNER_RADIUS.max()) {
                 config.node.cornerRadius = cornerRadius.value;
                 changed |= cornerRadius.changed;
             } else {
@@ -176,6 +169,7 @@ final class ConfigSanitizer {
         JsonObject keyBindings = readObject(root, "keyBindings");
         changed |= readKeyBindings(keyBindings, config, defaults);
 
+        changed |= ConfigRegistry.INSTANCE.normalize(config);
         return new Result(config, changed);
     }
 
@@ -192,12 +186,6 @@ final class ConfigSanitizer {
             if (config.assetBrowser.quickAccessPaths == null) {
                 config.assetBrowser.quickAccessPaths = defaults.assetBrowser.quickAccessPaths;
                 changed = true;
-            } else {
-                NormalizeList normalized = normalizeQuickAccessPaths(config.assetBrowser.quickAccessPaths);
-                if (normalized.changed) {
-                    config.assetBrowser.quickAccessPaths = normalized.value;
-                    changed = true;
-                }
             }
 
             if (config.assetBrowser.favoriteGraphPaths == null) {
@@ -211,7 +199,7 @@ final class ConfigSanitizer {
                 }
             }
 
-            if (!VIEW_MODES.contains(config.assetBrowser.viewMode)) {
+            if (!BuiltinConfigEntries.ASSET_VIEW_MODE.choices().contains(config.assetBrowser.viewMode)) {
                 config.assetBrowser.viewMode = defaults.assetBrowser.viewMode;
                 changed = true;
             }
@@ -231,7 +219,8 @@ final class ConfigSanitizer {
             config.viewport = defaults.viewport;
             changed = true;
         } else {
-            if (config.viewport.gridSize < GRID_SIZE_MIN || config.viewport.gridSize > GRID_SIZE_MAX) {
+            if (config.viewport.gridSize < BuiltinConfigEntries.VIEWPORT_GRID_SIZE.min()
+                    || config.viewport.gridSize > BuiltinConfigEntries.VIEWPORT_GRID_SIZE.max()) {
                 config.viewport.gridSize = defaults.viewport.gridSize;
                 changed = true;
             }
@@ -252,7 +241,8 @@ final class ConfigSanitizer {
             changed = true;
         } else {
             if (!Float.isFinite(config.node.cornerRadius)
-                    || config.node.cornerRadius < CORNER_RADIUS_MIN || config.node.cornerRadius > CORNER_RADIUS_MAX) {
+                    || config.node.cornerRadius < BuiltinConfigEntries.NODE_CORNER_RADIUS.min()
+                    || config.node.cornerRadius > BuiltinConfigEntries.NODE_CORNER_RADIUS.max()) {
                 config.node.cornerRadius = defaults.node.cornerRadius;
                 changed = true;
             }
@@ -265,6 +255,7 @@ final class ConfigSanitizer {
             changed |= sanitizeKeyBindings(config.keyBindings, defaults.keyBindings);
         }
 
+        changed |= ConfigRegistry.INSTANCE.normalize(config);
         return new Result(config, changed);
     }
 
@@ -363,35 +354,16 @@ final class ConfigSanitizer {
         if (keyBindings.global == null) {
             keyBindings.global = defaults.global;
             changed = true;
-        } else {
-            changed |= sanitizeKeyBinding(keyBindings.global.undo, defaults.global.undo, value -> keyBindings.global.undo = value);
-            changed |= sanitizeKeyBinding(keyBindings.global.redo, defaults.global.redo, value -> keyBindings.global.redo = value);
-            changed |= sanitizeKeyBinding(keyBindings.global.save, defaults.global.save, value -> keyBindings.global.save = value);
-            changed |= sanitizeKeyBinding(keyBindings.global.copy, defaults.global.copy, value -> keyBindings.global.copy = value);
-            changed |= sanitizeKeyBinding(keyBindings.global.paste, defaults.global.paste, value -> keyBindings.global.paste = value);
-            changed |= sanitizeKeyBinding(keyBindings.global.cut, defaults.global.cut, value -> keyBindings.global.cut = value);
-            changed |= sanitizeKeyBinding(keyBindings.global.delete, defaults.global.delete, value -> keyBindings.global.delete = value);
-            changed |= sanitizeKeyBinding(keyBindings.global.rename, defaults.global.rename, value -> keyBindings.global.rename = value);
         }
 
         if (keyBindings.viewport == null) {
             keyBindings.viewport = defaults.viewport;
             changed = true;
-        } else {
-            changed |= sanitizeKeyBinding(keyBindings.viewport.delete, defaults.viewport.delete, value -> keyBindings.viewport.delete = value);
-            changed |= sanitizeKeyBinding(keyBindings.viewport.toggleSnapToGrid, defaults.viewport.toggleSnapToGrid, value -> keyBindings.viewport.toggleSnapToGrid = value);
-            changed |= sanitizeKeyBinding(keyBindings.viewport.toggleGridAndAxis, defaults.viewport.toggleGridAndAxis, value -> keyBindings.viewport.toggleGridAndAxis = value);
-            changed |= sanitizeKeyBinding(keyBindings.viewport.groupIntoFrame, defaults.viewport.groupIntoFrame, value -> keyBindings.viewport.groupIntoFrame = value);
-            changed |= sanitizeKeyBinding(keyBindings.viewport.groupIntoNodeGroup, defaults.viewport.groupIntoNodeGroup, value -> keyBindings.viewport.groupIntoNodeGroup = value);
-            changed |= sanitizeKeyBinding(keyBindings.viewport.moveSelection, defaults.viewport.moveSelection, value -> keyBindings.viewport.moveSelection = value);
-            changed |= sanitizeKeyBinding(keyBindings.viewport.toggleRightSidebar, defaults.viewport.toggleRightSidebar, value -> keyBindings.viewport.toggleRightSidebar = value);
         }
 
         if (keyBindings.shopEditor == null) {
             keyBindings.shopEditor = defaults.shopEditor;
             changed = true;
-        } else {
-            changed |= sanitizeShortcutText(keyBindings.shopEditor.clearSlot, defaults.shopEditor.clearSlot, value -> keyBindings.shopEditor.clearSlot = value);
         }
 
         return changed;
@@ -503,6 +475,7 @@ final class ConfigSanitizer {
     private static ReadKeyBinding readKeyBinding(JsonObject parent, String key, String defaultValue) {
         ReadString value = readString(parent, key);
         if (!value.valid) return ReadKeyBinding.defaulted(defaultValue);
+        if (value.value != null && value.value.isBlank()) return new ReadKeyBinding("", value.changed);
 
         KeyBinding binding = KeyBinding.parse(value.value);
         if (binding == null) return ReadKeyBinding.defaulted(defaultValue);
@@ -524,39 +497,12 @@ final class ConfigSanitizer {
         ReadString value = parent != null && parent.has(key)
                 ? readString(parent, key)
                 : readString(legacy, legacyKey);
-        if (!value.valid || value.value == null || value.value.isBlank()) {
+        if (!value.valid || value.value == null) {
             return ReadString.valid(defaultValue, true);
         }
 
         String normalized = value.value.trim();
         return ReadString.valid(normalized, value.changed || !normalized.equals(value.value));
-    }
-
-    private static boolean sanitizeKeyBinding(String value, String defaultValue, StringConsumer setter) {
-        KeyBinding binding = KeyBinding.parse(value);
-        if (binding == null) {
-            setter.accept(defaultValue);
-            return true;
-        }
-        if (!binding.text.equals(value)) {
-            setter.accept(binding.text);
-            return true;
-        }
-        return false;
-    }
-
-    private static boolean sanitizeShortcutText(String value, String defaultValue, StringConsumer setter) {
-        if (value == null || value.isBlank()) {
-            setter.accept(defaultValue);
-            return true;
-        }
-
-        String normalized = value.trim();
-        if (!normalized.equals(value)) {
-            setter.accept(normalized);
-            return true;
-        }
-        return false;
     }
 
     private static boolean hasAny(JsonObject object, String... keys) {
@@ -565,33 +511,6 @@ final class ConfigSanitizer {
             if (object.has(key)) return true;
         }
         return false;
-    }
-
-    private static NormalizeList normalizeQuickAccessPaths(List<String> source) {
-        List<String> normalized = new ArrayList<>();
-        boolean changed = false;
-        for (String path : source) {
-            if (path == null || path.isBlank()) {
-                changed = true;
-                continue;
-            }
-
-            if (!AssetBrowserPathPolicy.canPersistQuickAccessPath(path)) {
-                changed = true;
-                continue;
-            }
-
-            File file = AssetBrowserPathPolicy.resolveConfigPath(path);
-            String normalizedPath = AssetBrowserPathPolicy.toConfigPath(file);
-            if (normalized.contains(normalizedPath)) {
-                changed = true;
-                continue;
-            }
-            normalized.add(normalizedPath);
-            changed |= !normalizedPath.equals(path);
-        }
-        changed |= normalized.size() != source.size();
-        return new NormalizeList(normalized, changed);
     }
 
     private static NormalizeList normalizeFavoriteGraphPaths(List<String> source) {
@@ -689,7 +608,4 @@ final class ConfigSanitizer {
         }
     }
 
-    private interface StringConsumer {
-        void accept(String value);
-    }
 }

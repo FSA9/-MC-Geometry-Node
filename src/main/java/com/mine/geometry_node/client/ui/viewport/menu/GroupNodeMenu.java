@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.viewport.menu;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.common.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
@@ -39,9 +40,6 @@ public final class GroupNodeMenu {
     private static final int COLOR_INPUT_BORDER = 0xFF3A404A;
     private static final int COLOR_LABEL = 0xFF8F98A6;
     private static final int COLOR_TEXT = 0xFFE7EAF0;
-    private static final int COLOR_BUTTON = 0xFF3E4652;
-    private static final int COLOR_BUTTON_PRIMARY = 0xFF4B7FBD;
-    private static final int COLOR_BUTTON_DANGER = 0xFF8A4A4A;
 
     private static final int[] PRESET_COLORS = {
             NodeData.DEFAULT_GROUP_COLOR,
@@ -137,15 +135,16 @@ public final class GroupNodeMenu {
         actionsLp.topMargin = dp(12);
         panel.addView(actions, actionsLp);
 
-        TextView dissolve = button(uiContext, "解散", COLOR_BUTTON_DANGER, v -> {
+        UiActionButton dissolve = UiActionButton.create(uiContext, "解散", UiActionButton.Role.DANGER, v -> {
             close(context, popupOverlay);
             context.getActionSink().performAction(
                     ViewportActionId.DISSOLVE_NODE_GROUP,
                     ViewportActionRequest.builder().nodeId(nodeData.id).build()
             );
         });
-        TextView cancel = button(uiContext, "取消", COLOR_BUTTON, v -> close(context, popupOverlay));
-        TextView apply = button(uiContext, "应用", COLOR_BUTTON_PRIMARY, v -> {
+        UiActionButton cancel = UiActionButton.create(uiContext, "取消", UiActionButton.Role.SECONDARY,
+                v -> close(context, popupOverlay));
+        UiActionButton apply = UiActionButton.create(uiContext, "应用", UiActionButton.Role.PRIMARY, v -> {
             String newTitle = titleInput.getText().toString().trim();
             if (newTitle.isEmpty()) newTitle = defaultTitle;
             String newComment = commentInput.getText().toString().trim();
@@ -223,23 +222,6 @@ public final class GroupNodeMenu {
         TextView view = UIUtils.createLockedTextView(context, text, sizeDp, color);
         view.setGravity(gravity);
         view.setSingleLine(true);
-        return view;
-    }
-
-    private static TextView button(Context context, String text, int color, View.OnClickListener listener) {
-        TextView view = label(context, text, 12f, COLOR_TEXT, Gravity.CENTER);
-        view.setBackground(rect(color, 4.0f, 1, 0x553C4658));
-        view.setOnClickListener(listener);
-        view.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                view.setTextColor(UIConstants.CLR_WHITE);
-                view.setBackground(rect(lighten(color, 0.13f), 4.0f, 1, 0x664D5B70));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                view.setTextColor(COLOR_TEXT);
-                view.setBackground(rect(color, 4.0f, 1, 0x553C4658));
-            }
-            return false;
-        });
         return view;
     }
 

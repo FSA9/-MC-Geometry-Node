@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.common.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
@@ -24,14 +24,13 @@ public class ConfirmDialog extends AssetDialogBase {
         LinearLayout actions = new LinearLayout(context);
         actions.setGravity(Gravity.RIGHT);
 
-        Button cancel = button(context, "取消", 0xFF4A4A4A);
-        cancel.setOnClickListener(v -> dismiss());
+        UiActionButton cancel = actionButton(context, "取消", UiActionButton.Role.SECONDARY);
+        cancel.setOnClickListener(v -> requestClose());
         actions.addView(cancel, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(92), UIUtils.dp2pxInt(32)));
 
-        Button confirm = button(context, confirmText, 0xFF9A3D3D);
+        UiActionButton confirm = actionButton(context, confirmText, UiActionButton.Role.DANGER);
         confirm.setOnClickListener(v -> {
-            dismiss();
-            if (mOnConfirm != null) {
+            if (requestClose() && mOnConfirm != null) {
                 mOnConfirm.run();
             }
         });
@@ -39,9 +38,6 @@ public class ConfirmDialog extends AssetDialogBase {
         confirmLp.leftMargin = UIUtils.dp2pxInt(8);
         actions.addView(confirm, confirmLp);
 
-        mPanel.addView(actions, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(36)
-        ));
+        setActions(actions);
     }
 }

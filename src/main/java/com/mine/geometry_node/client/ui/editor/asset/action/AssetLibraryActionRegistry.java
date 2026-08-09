@@ -2,6 +2,8 @@ package com.mine.geometry_node.client.ui.editor.asset.action;
 
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
+import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigEntry;
 import com.mine.geometry_node.client.ui.shortcut.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedAction;
 import net.minecraft.network.chat.Component;
@@ -14,15 +16,15 @@ public final class AssetLibraryActionRegistry {
     private static final Map<AssetLibraryActionId, ScopedAction<AssetLibraryActionId>> ACTIONS = new EnumMap<>(AssetLibraryActionId.class);
 
     static {
-        register(AssetLibraryActionId.COPY, "geometry_node.asset_library.action.copy", config -> config.keyBindings.global.copy,
+        register(AssetLibraryActionId.COPY, "geometry_node.asset_library.action.copy", BuiltinConfigEntries.GLOBAL_COPY,
                 state -> state != null && state.canCopySelection());
-        register(AssetLibraryActionId.PASTE, "geometry_node.asset_library.action.paste", config -> config.keyBindings.global.paste,
+        register(AssetLibraryActionId.PASTE, "geometry_node.asset_library.action.paste", BuiltinConfigEntries.GLOBAL_PASTE,
                 state -> state != null && state.canPasteClipboard());
-        register(AssetLibraryActionId.CUT, "geometry_node.asset_library.action.cut", config -> config.keyBindings.global.cut,
+        register(AssetLibraryActionId.CUT, "geometry_node.asset_library.action.cut", BuiltinConfigEntries.GLOBAL_CUT,
                 state -> state != null && state.canCutSelection());
-        register(AssetLibraryActionId.DELETE, "geometry_node.asset_library.action.delete", config -> config.keyBindings.global.delete,
+        register(AssetLibraryActionId.DELETE, "geometry_node.asset_library.action.delete", BuiltinConfigEntries.GLOBAL_DELETE,
                 state -> state != null && state.canDeleteSelection());
-        register(AssetLibraryActionId.RENAME, "geometry_node.asset_library.action.rename", config -> config.keyBindings.global.rename,
+        register(AssetLibraryActionId.RENAME, "geometry_node.asset_library.action.rename", BuiltinConfigEntries.GLOBAL_RENAME,
                 state -> state != null && state.canRenameSelection());
     }
 
@@ -45,8 +47,8 @@ public final class AssetLibraryActionRegistry {
 
     private static void register(AssetLibraryActionId id,
                                  String translationKey,
-                                 ScopedAction.ShortcutReader shortcutReader,
+                                 ConfigEntry<String> shortcutEntry,
                                  ScopedAction.EnabledReader<AssetFileBrowserPanel> enabledReader) {
-        ACTIONS.put(id, new ScopedAction<>(KeyScope.GLOBAL, id, translationKey, shortcutReader, enabledReader));
+        ACTIONS.put(id, new ScopedAction<>(KeyScope.GLOBAL, id, translationKey, shortcutEntry, enabledReader));
     }
 }

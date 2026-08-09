@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.common.UiActionButton;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationPanel;
@@ -18,8 +19,6 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.Button;
-import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
@@ -50,12 +49,8 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
         if (anchor == null) {
             return null;
         }
-        ViewGroup host = findWindowHost(anchor);
-        if (host == null) {
-            return null;
-        }
         FilePickerDialog dialog = path(anchor.getContext(), "选择路径", initialPath, onPick);
-        dialog.showIn(host);
+        dialog.show(anchor);
         return dialog;
     }
 
@@ -103,11 +98,11 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
 
         LinearLayout actions = new LinearLayout(context);
         actions.setGravity(Gravity.RIGHT);
-        Button cancel = button(context, "取消", 0xFF4A4A4A);
-        cancel.setOnClickListener(v -> dismiss());
-        Button chooseDirectory = button(context, "选择当前文件夹", 0xFF4A5563);
+        UiActionButton cancel = actionButton(context, "取消", UiActionButton.Role.SECONDARY);
+        cancel.setOnClickListener(v -> requestClose());
+        UiActionButton chooseDirectory = actionButton(context, "选择当前文件夹", UiActionButton.Role.QUIET);
         chooseDirectory.setOnClickListener(v -> chooseCurrentDirectory());
-        Button choose = button(context, "选择路径", 0xFF2F7DDE);
+        UiActionButton choose = actionButton(context, "选择路径", UiActionButton.Role.PRIMARY);
         choose.setOnClickListener(v -> chooseSelectedFile());
         actions.addView(cancel, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(92), UIUtils.dp2pxInt(32)));
         LinearLayout.LayoutParams chooseDirectoryLp = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(126), UIUtils.dp2pxInt(32));
@@ -116,20 +111,10 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
         LinearLayout.LayoutParams chooseLp = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(100), UIUtils.dp2pxInt(32));
         chooseLp.leftMargin = UIUtils.dp2pxInt(8);
         actions.addView(choose, chooseLp);
-        LinearLayout.LayoutParams actionsLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(36)
-        );
-        actionsLp.topMargin = UIUtils.dp2pxInt(8);
-        mPanel.addView(actions, actionsLp);
+        setActions(actions);
 
         navigateInitial(initialPath);
         requestRemoteCapabilities();
-    }
-
-    @Override
-    public void showIn(ViewGroup parent) {
-        super.showIn(parent);
     }
 
     private void chooseSelectedFile() {
@@ -148,10 +133,9 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
             mStatus.setText("请选择一个支持的文件。");
             return;
         }
-        if (mOnPick != null) {
+        if (requestClose() && mOnPick != null) {
             mOnPick.accept(toNodePath(entry));
         }
-        dismiss();
     }
 
     private boolean isPickableFile(AssetEntry entry) {
@@ -167,10 +151,9 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
             mStatus.setText("当前没有可选择的文件夹。");
             return;
         }
-        if (mOnPick != null) {
+        if (requestClose() && mOnPick != null) {
             mOnPick.accept(selectedPath);
         }
-        dismiss();
     }
 
     private String currentDirectoryPath() {
@@ -227,12 +210,11 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
     }
 
     @Override
-    protected void onDetachedFromWindow() {
+    protected void onAssetDialogDestroyed() {
         if (mCapabilityRequestId != 0) {
             RemoteGraphClientState.cancel(mCapabilityRequestId);
             mCapabilityRequestId = 0;
         }
-        super.onDetachedFromWindow();
     }
 
     private static File initialLocalDirectory(String currentPath) {
@@ -320,18 +302,4 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
         mLeftPanel.buildSidebar();
     }
 
-    private static ViewGroup findWindowHost(View anchor) {
-        View current = anchor;
-        ViewGroup best = anchor instanceof ViewGroup viewGroup ? viewGroup : null;
-        while (current != null) {
-            if (current instanceof FrameLayout frameLayout) {
-                best = frameLayout;
-            }
-            if (!(current.getParent() instanceof View parentView)) {
-                break;
-            }
-            current = parentView;
-        }
-        return best != null ? best : anchor.getParent() instanceof ViewGroup parent ? parent : null;
-    }
 }

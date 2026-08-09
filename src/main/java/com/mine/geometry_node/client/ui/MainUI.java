@@ -1,103 +1,35 @@
 package com.mine.geometry_node.client.ui;
 
-import com.mine.geometry_node.client.ui.area.AreaLayoutRoot;
+import com.mine.geometry_node.client.ui.shell.MainUiShell;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import icyllis.modernui.ModernUI;
 import icyllis.modernui.audio.AudioManager;
-import icyllis.modernui.core.Context;
 import icyllis.modernui.fragment.Fragment;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.util.DataSet;
 import icyllis.modernui.view.LayoutInflater;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.FrameLayout;
-import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.RelativeLayout;
-import icyllis.modernui.widget.TextView;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
 
 public class MainUI extends Fragment {
-    private AreaLayoutRoot mAreaRoot;
+    private MainUiShell shell;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, DataSet savedInstanceState) {
-        Context context = getContext();
-
         UIUtils.syncFixedDensity();
-
-        FrameLayout rootFrame = new FrameLayout(context);
-        LinearLayout rootLayout = createRootLayout(context);
-        rootFrame.addView(rootLayout, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-        setupHeader(context, rootLayout);
-        setupAreaSection(context, rootLayout);
-
-        return rootFrame;
+        shell = new MainUiShell(getContext());
+        return shell;
     }
 
     @Override
     public void onDestroyView() {
-        if (mAreaRoot != null) {
-            mAreaRoot.persistNow();
-            mAreaRoot = null;
+        if (shell != null) {
+            shell.destroy();
+            shell = null;
         }
         super.onDestroyView();
-    }
-
-    private LinearLayout createRootLayout(Context context) {
-        LinearLayout root = new LinearLayout(context);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackground(createColorDrawable(UIConstants.MainUI.BG_ROOT));
-        return root;
-    }
-
-    private void setupHeader(Context context, LinearLayout root) {
-        RelativeLayout header = createPanel(context, "Header / Menu", UIConstants.MainUI.BG_HEADER);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(UIConstants.MainUI.HEIGHT_HEADER)
-        );
-        root.addView(header, params);
-    }
-
-    private void setupAreaSection(Context context, LinearLayout root) {
-        LinearLayout.LayoutParams areaParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0);
-        areaParams.weight = 1.0f;
-
-        mAreaRoot = new AreaLayoutRoot(context);
-        root.addView(mAreaRoot, areaParams);
-    }
-
-    private RelativeLayout createPanel(Context context, String title, int colorHex) {
-        RelativeLayout panel = new RelativeLayout(context);
-        panel.setBackground(createColorDrawable(colorHex));
-
-        // 【修改点】使用 COMPLEX_UNIT_PX 锁定字体大小
-        TextView textView = new TextView(context);
-        textView.setText(title);
-        UIUtils.setLockedTextSize(textView, UIConstants.MainUI.TEXT_SIZE);
-        textView.setTextColor(UIConstants.MainUI.TEXT_COLOR);
-
-        RelativeLayout.LayoutParams textParams = new RelativeLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        textParams.addRule(RelativeLayout.CENTER_IN_PARENT);
-        panel.addView(textView, textParams);
-        return panel;
-    }
-
-    private ShapeDrawable createColorDrawable(int color) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setShape(ShapeDrawable.RECTANGLE);
-        drawable.setColor(color);
-        return drawable;
     }
 
     public static void main(String[] args) {

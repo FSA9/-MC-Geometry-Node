@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.common.UiActionButton;
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
@@ -7,8 +8,8 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.LinearLayout;
+import net.minecraft.network.chat.Component;
 
 import java.io.File;
 import java.util.function.Consumer;
@@ -57,11 +58,14 @@ public class FolderPickerDialog extends AssetDialogBase {
 
         LinearLayout actions = new LinearLayout(context);
         actions.setGravity(Gravity.RIGHT);
-        Button create = button(context, "新建文件夹", 0xFF4C6B4C);
+        UiActionButton create = actionButton(context, tr("geometry_node.folder_picker.create_folder"),
+                UiActionButton.Role.QUIET);
         create.setOnClickListener(v -> createFolderInCurrentDirectory());
-        Button cancel = button(context, "取消", 0xFF4A4A4A);
-        cancel.setOnClickListener(v -> dismiss());
-        Button choose = button(context, "选择当前文件夹", 0xFF2F7DDE);
+        UiActionButton cancel = actionButton(context, tr("geometry_node.folder_picker.cancel"),
+                UiActionButton.Role.SECONDARY);
+        cancel.setOnClickListener(v -> requestClose());
+        UiActionButton choose = actionButton(context, tr("geometry_node.folder_picker.select_current"),
+                UiActionButton.Role.PRIMARY);
         choose.setOnClickListener(v -> chooseCurrentDirectory());
         actions.addView(create, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(108), UIUtils.dp2pxInt(32)));
         LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(92), UIUtils.dp2pxInt(32));
@@ -70,12 +74,7 @@ public class FolderPickerDialog extends AssetDialogBase {
         LinearLayout.LayoutParams chooseLp = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(150), UIUtils.dp2pxInt(32));
         chooseLp.leftMargin = UIUtils.dp2pxInt(8);
         actions.addView(choose, chooseLp);
-        LinearLayout.LayoutParams actionsLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(36)
-        );
-        actionsLp.topMargin = UIUtils.dp2pxInt(8);
-        mPanel.addView(actions, actionsLp);
+        setActions(actions);
 
         if (mSource == Source.REMOTE) {
             mCurrentRemoteDirectory = AssetPathUtils.normalizeRemoteDirectory(initialRemoteDirectory);
@@ -100,6 +99,10 @@ public class FolderPickerDialog extends AssetDialogBase {
     }
 
     private void chooseCurrentDirectory() {
+        boolean closed = requestClose();
+        if (!closed) {
+            return;
+        }
         if (mSource == Source.REMOTE) {
             if (mOnRemotePick != null) {
                 mOnRemotePick.accept(mCurrentRemoteDirectory);
@@ -107,6 +110,9 @@ public class FolderPickerDialog extends AssetDialogBase {
         } else if (mOnLocalPick != null) {
             mOnLocalPick.accept(mCurrentLocalDirectory);
         }
-        dismiss();
+    }
+
+    private static String tr(String key) {
+        return Component.translatable(key).getString();
     }
 }

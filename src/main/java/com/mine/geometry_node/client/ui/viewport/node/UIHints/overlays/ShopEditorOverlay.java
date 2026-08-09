@@ -1,8 +1,11 @@
 package com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays;
 
+import com.mine.geometry_node.client.ui.common.UiActionButton;
 import com.mine.geometry_node.client.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.ui.persistence.config.InputBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -217,10 +220,14 @@ public final class ShopEditorOverlay extends FrameLayout {
         actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         actions.setPadding(0, UIUtils.dp2pxInt(8), 0, 0);
 
-        actions.addView(button(context, tr("geometry_node.common.cancel"), COLOR_BUTTON, v -> dismiss()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(82), UIUtils.dp2pxInt(32)));
+        actions.addView(UiActionButton.create(context, tr("geometry_node.common.cancel"),
+                UiActionButton.Role.SECONDARY, v -> dismiss()),
+                new LinearLayout.LayoutParams(UIUtils.dp2pxInt(82), UIUtils.dp2pxInt(32)));
         TextView spacer = label(context, "", 1.0f, 0, Gravity.CENTER);
         actions.addView(spacer, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(10), 1));
-        actions.addView(button(context, tr("geometry_node.common.save"), COLOR_PRIMARY, v -> commit()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(90), UIUtils.dp2pxInt(32)));
+        actions.addView(UiActionButton.create(context, tr("geometry_node.common.save"),
+                UiActionButton.Role.PRIMARY, v -> commit()),
+                new LinearLayout.LayoutParams(UIUtils.dp2pxInt(90), UIUtils.dp2pxInt(32)));
         return actions;
     }
 
@@ -420,12 +427,12 @@ public final class ShopEditorOverlay extends FrameLayout {
     }
 
     private String clearSlotShortcutText() {
-        try {
-            String shortcut = ConfigManager.INSTANCE.getConfig().keyBindings.shopEditor.clearSlot;
-            return shortcut == null || shortcut.isBlank() ? "CTRL+LEFT_CLICK" : shortcut;
-        } catch (Exception ignored) {
-            return "CTRL+LEFT_CLICK";
-        }
+        return ConfigManager.INSTANCE.get(BuiltinConfigEntries.SHOP_CLEAR_SLOT);
+    }
+
+    private boolean matchesClearSlotShortcut(MotionEvent event) {
+        InputBinding binding = InputBinding.parse(clearSlotShortcutText());
+        return binding != null && binding.matches(event);
     }
 
     private boolean beginSlotGesture(StackEntryView entry, MotionEvent event) {
@@ -1416,7 +1423,7 @@ public final class ShopEditorOverlay extends FrameLayout {
                 boolean dragged = finishSlotGesture(event);
                 if (rightClickPending || isRightMouse(event)) {
                     showSlotMenu(this, event.getRawX(), event.getRawY());
-                } else if (!dragged && event.isCtrlPressed() && isLeftMouse(event)) {
+                } else if (!dragged && matchesClearSlotShortcut(event)) {
                     removeFromOwner();
                 } else if (!dragged) {
                     openPicker();
@@ -1588,10 +1595,14 @@ public final class ShopEditorOverlay extends FrameLayout {
             actions.setOrientation(LinearLayout.HORIZONTAL);
             actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
             actions.setPadding(0, UIUtils.dp2pxInt(12), 0, 0);
-            actions.addView(button(context, tr("geometry_node.common.cancel"), COLOR_BUTTON, v -> closeQuantityDialog()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(72), UIUtils.dp2pxInt(28)));
+            actions.addView(UiActionButton.create(context, tr("geometry_node.common.cancel"),
+                    UiActionButton.Role.SECONDARY, v -> closeQuantityDialog()),
+                    new LinearLayout.LayoutParams(UIUtils.dp2pxInt(72), UIUtils.dp2pxInt(28)));
             TextView spacer = label(context, "", 1.0f, 0, Gravity.CENTER);
             actions.addView(spacer, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(8), 1));
-            actions.addView(button(context, tr("geometry_node.common.confirm"), COLOR_PRIMARY, v -> apply()), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(72), UIUtils.dp2pxInt(28)));
+            actions.addView(UiActionButton.create(context, tr("geometry_node.common.confirm"),
+                    UiActionButton.Role.PRIMARY, v -> apply()),
+                    new LinearLayout.LayoutParams(UIUtils.dp2pxInt(72), UIUtils.dp2pxInt(28)));
             panel.addView(actions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(42)));
 
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(260), ViewGroup.LayoutParams.WRAP_CONTENT);

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays;
 
+import com.mine.geometry_node.client.ui.common.UiActionButton;
 import com.mine.geometry_node.client.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.common.ColorPickerDialog;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
@@ -154,11 +155,13 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         actions.setPadding(0, dp(8), 0, 0);
 
-        actions.addView(actionButton(context, tr("geometry_node.common.cancel"), false, v -> dismiss()),
+        actions.addView(UiActionButton.create(context, tr("geometry_node.common.cancel"),
+                        UiActionButton.Role.SECONDARY, v -> dismiss()),
                 new LinearLayout.LayoutParams(dp(82), dp(32)));
         TextView spacer = label(context, "", 1.0f, 0, Gravity.CENTER);
         actions.addView(spacer, new LinearLayout.LayoutParams(dp(10), 1));
-        actions.addView(actionButton(context, tr("geometry_node.common.save"), true, v -> commit()),
+        actions.addView(UiActionButton.create(context, tr("geometry_node.common.save"),
+                        UiActionButton.Role.PRIMARY, v -> commit()),
                 new LinearLayout.LayoutParams(dp(90), dp(32)));
         return actions;
     }
@@ -541,14 +544,6 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         } catch (NumberFormatException ignored) {
             return fallback;
         }
-    }
-
-    private static TextView actionButton(Context context, String text, boolean primary, View.OnClickListener listener) {
-        int textColor = primary ? 0xFF17191B : COLOR_TEXT;
-        int normal = primary ? COLOR_PRIMARY : COLOR_BUTTON;
-        int hover = primary ? COLOR_PRIMARY_HOVER : COLOR_BUTTON_HOVER;
-        int pressed = primary ? COLOR_PRIMARY_PRESSED : COLOR_BUTTON_PRESSED;
-        return interactiveButton(context, text, 12.5f, textColor, normal, hover, pressed, listener);
     }
 
     private static TextView interactiveButton(Context context, String text, float textSize, int textColor,

@@ -1,10 +1,11 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.common.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
@@ -24,6 +25,7 @@ public class OverwriteConfirmDialog extends AssetDialogBase {
     private final Consumer<Decision> mOnDecision;
     private final TextView mMessage;
     private int mIndex = 0;
+    private boolean mClosingDecisionDelivered;
 
     public OverwriteConfirmDialog(Context context, List<String> conflicts, Consumer<Decision> onDecision) {
         super(context, "目标已存在");
@@ -40,12 +42,13 @@ public class OverwriteConfirmDialog extends AssetDialogBase {
         addAction(actions, "跳过当前", () -> decide(Decision.SKIP_CURRENT));
         addAction(actions, "跳过全部", () -> decide(Decision.SKIP_ALL));
         addAction(actions, "取消", () -> decide(Decision.CANCEL));
-        mPanel.addView(actions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(38)));
+        setActions(actions);
         updateMessage();
     }
 
     private void addAction(LinearLayout actions, String text, Runnable action) {
-        Button button = button(getContext(), text, text.equals("取消") ? 0xFF4A4A4A : 0xFF2F7DDE);
+        UiActionButton button = actionButton(getContext(), text,
+                text.equals("取消") ? UiActionButton.Role.SECONDARY : UiActionButton.Role.PRIMARY);
         button.setOnClickListener(v -> {
             action.run();
         });
@@ -63,11 +66,21 @@ public class OverwriteConfirmDialog extends AssetDialogBase {
                 return;
             }
         }
-        dismiss();
+        mClosingDecisionDelivered = true;
+        requestClose();
     }
 
     private void updateMessage() {
         String target = mConflicts.isEmpty() ? "未知文件" : mConflicts.get(Math.min(mIndex, mConflicts.size() - 1));
         mMessage.setText("发现 " + mConflicts.size() + " 个冲突，当前 " + (mIndex + 1) + " / " + Math.max(1, mConflicts.size()) + ": " + target);
+    }
+
+    @Override
+    protected void onWindowClosed(OverlayCloseReason reason) {
+        if (!mClosingDecisionDelivered) {
+            mClosingDecisionDelivered = true;
+            mOnDecision.accept(Decision.CANCEL);
+        }
+        super.onWindowClosed(reason);
     }
 }

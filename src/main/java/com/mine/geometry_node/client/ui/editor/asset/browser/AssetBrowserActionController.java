@@ -267,7 +267,7 @@ final class AssetBrowserActionController {
                     mPanel.refreshFileList(() -> {
                         mPanel.selectOnly(newEntry);
                         startInlineEdit(newFile);
-                        progress.dismiss();
+                        progress.requestClose();
                     });
                 });
     }
@@ -352,7 +352,7 @@ final class AssetBrowserActionController {
                 actionLabel(AssetLibraryActionId.DELETE),
                 () -> deleteLocalFiles(files)
         );
-        dialog.showIn(mPanel);
+        dialog.show(mPanel);
     }
 
     private void deleteLocalFiles(List<File> files) {
@@ -563,7 +563,7 @@ final class AssetBrowserActionController {
                         mFavoriteStore.updatePath(result.source(), result.destination());
                     }
                     mPanel.refreshFileList();
-                    progress.dismiss();
+                    progress.requestClose();
                 });
     }
 
@@ -637,7 +637,7 @@ final class AssetBrowserActionController {
                 actionLabel(AssetLibraryActionId.DELETE),
                 () -> sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation.DELETE, paths, "")
         );
-        dialog.showIn(mPanel);
+        dialog.show(mPanel);
     }
 
     private void pasteRemoteEntries() {
@@ -659,7 +659,7 @@ final class AssetBrowserActionController {
             case MOVE -> "移动云端文件";
         };
         TransferProgressDialog progress = new TransferProgressDialog(mPanel.getContext(), title);
-        progress.showIn(mPanel);
+        progress.show(mPanel);
         RemoteGraphClientState.onFileOperation(requestId, response -> {
             mRemoteRequestIds.remove(requestId);
             mPanel.post(() -> {
@@ -721,7 +721,7 @@ final class AssetBrowserActionController {
                 context -> mGraphAssetService.loadGraphSession(file, context),
                 (session, progress) -> {
                     DocumentManager.INSTANCE.openSession(session);
-                    progress.dismiss();
+                    progress.requestClose();
                 });
     }
 }
