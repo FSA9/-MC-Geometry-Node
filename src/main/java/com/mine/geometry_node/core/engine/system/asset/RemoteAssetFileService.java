@@ -1,10 +1,13 @@
-package com.mine.geometry_node.core.engine.graph.storage;
+package com.mine.geometry_node.core.engine.system.asset;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -14,8 +17,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public final class RemoteGraphFileService {
-    private RemoteGraphFileService() {
+public final class RemoteAssetFileService {
+    private RemoteAssetFileService() {
     }
 
     public static List<RemoteGraphEntry> list(MinecraftServer server, String directoryPath) throws IOException {
@@ -31,6 +34,8 @@ public final class RemoteGraphFileService {
         List<RemoteGraphEntry> entries = new ArrayList<>();
         try (var stream = Files.list(directory)) {
             stream.filter(path -> !Files.isSymbolicLink(path))
+                    .filter(path -> Files.isDirectory(path)
+                            || AssetTransferPolicy.isTransferablePath(path.toString()))
                     .sorted(Comparator.comparing((Path p) -> !Files.isDirectory(p))
                             .thenComparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
                     .forEach(path -> entries.add(toEntry(root, path)));
@@ -43,7 +48,7 @@ public final class RemoteGraphFileService {
         List<RemoteGraphConflict> conflicts = new ArrayList<>();
         for (String targetPath : targetPaths) {
             Path resolved = resolveFile(server, targetPath);
-            validateGraphFilePath(resolved);
+            validateAssetFilePath(resolved);
             if (Files.exists(resolved)) {
                 conflicts.add(new RemoteGraphConflict("", GraphPathMapper.pathToId(root, resolved), Files.isDirectory(resolved)));
             }
@@ -51,25 +56,36 @@ public final class RemoteGraphFileService {
         return conflicts;
     }
 
-    public static void saveUpload(MinecraftServer server, RemoteGraphUploadFile file, boolean overwrite) throws Exception {
+    public static void saveUpload(MinecraftServer server, RemoteAssetFile file, boolean overwrite) throws Exception {
         Path target = resolveFile(server, file.targetPath());
-        validateGraphFilePath(target);
+        validateAssetFilePath(target);
         if (Files.exists(target) && Files.isDirectory(target)) {
             throw new IOException("Remote target is a directory: " + file.targetPath());
         }
         if (Files.exists(target) && !overwrite) {
-            throw new IOException("Remote graph already exists: " + file.targetPath());
+            throw new IOException("Remote asset already exists: " + file.targetPath());
         }
-        DynamicGraphManager.saveAndHotReload(server, GraphPathMapper.pathToId(root(server), target), file.jsonContent());
+        if (AssetTransferPolicy.isGraphPath(file.targetPath())) {
+            DynamicGraphManager.saveAndHotReload(
+                    server,
+                    GraphPathMapper.pathToId(root(server), target),
+                    file.utf8Text());
+        } else {
+            writeAssetAtomic(target, file.content());
+        }
     }
 
-    public static String readGraph(MinecraftServer server, String graphPath) throws IOException {
-        Path file = resolveFile(server, graphPath);
-        validateGraphFilePath(file);
+    public static byte[] readAsset(MinecraftServer server, String assetPath) throws IOException {
+        Path file = resolveFile(server, assetPath);
+        validateAssetFilePath(file);
         if (!Files.exists(file) || Files.isDirectory(file)) {
-            throw new IOException("Remote graph file does not exist: " + graphPath);
+            throw new IOException("Remote asset file does not exist: " + assetPath);
         }
-        return Files.readString(file, StandardCharsets.UTF_8);
+        long size = Files.size(file);
+        if (size > RemoteAssetFile.MAX_CONTENT_BYTES) {
+            throw new IOException("Remote asset exceeds transfer limit: " + assetPath);
+        }
+        return Files.readAllBytes(file);
     }
 
     public static List<RemoteGraphEntry> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
@@ -81,12 +97,14 @@ public final class RemoteGraphFileService {
             if (!Files.exists(path)) continue;
             if (Files.isDirectory(path)) {
                 try (var walk = Files.walk(path)) {
-                    walk.filter(p -> Files.isRegularFile(p) && !Files.isSymbolicLink(p) && isGraphFile(p))
+                    walk.filter(p -> Files.isRegularFile(p) && !Files.isSymbolicLink(p)
+                                    && AssetTransferPolicy.isTransferablePath(p.toString()))
                             .map(p -> p.toAbsolutePath().normalize())
                             .filter(seen::add)
                             .forEach(p -> files.add(toEntry(root, p)));
                 }
-            } else if (Files.isRegularFile(path) && !Files.isSymbolicLink(path) && isGraphFile(path)) {
+            } else if (Files.isRegularFile(path) && !Files.isSymbolicLink(path)
+                    && AssetTransferPolicy.isTransferablePath(path.toString())) {
                 Path normalized = path.toAbsolutePath().normalize();
                 if (seen.add(normalized)) {
                     files.add(toEntry(root, normalized));
@@ -182,15 +200,28 @@ public final class RemoteGraphFileService {
         return resolved;
     }
 
-    private static void validateGraphFilePath(Path path) {
-        if (!isGraphFile(path)) {
-            throw new IllegalArgumentException("Remote graph files must be .json: " + path.getFileName());
+    private static void validateAssetFilePath(Path path) {
+        if (!AssetTransferPolicy.isTransferablePath(path.toString())) {
+            throw new IllegalArgumentException("Unsupported remote asset type: " + path.getFileName());
         }
     }
 
-    private static boolean isGraphFile(Path path) {
-        Path fileName = path.getFileName();
-        return fileName != null && fileName.toString().toLowerCase(java.util.Locale.ROOT).endsWith(".json");
+    private static void writeAssetAtomic(Path target, byte[] content) throws IOException {
+        Path parent = target.getParent();
+        if (parent != null) Files.createDirectories(parent);
+        Path temporary = Files.createTempFile(parent, ".geometrynode-asset-", ".tmp");
+        boolean committed = false;
+        try {
+            Files.write(temporary, content);
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            committed = true;
+        } finally {
+            if (!committed) Files.deleteIfExists(temporary);
+        }
     }
 
     private static int deleteRecursively(Path path) throws IOException {
@@ -324,7 +355,9 @@ public final class RemoteGraphFileService {
             }
         }
         String graphId = GraphPathMapper.pathToId(root, path);
-        RuntimeGraphIndex graphIndex = directory ? null : DynamicGraphManager.getIndex(graphId);
+        RuntimeGraphIndex graphIndex = directory || !AssetTransferPolicy.isGraphPath(path.toString())
+                ? null
+                : DynamicGraphManager.getIndex(graphId);
         return new RemoteGraphEntry(
                 graphId,
                 path.getFileName().toString(),

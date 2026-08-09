@@ -6,9 +6,9 @@ import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphFileService;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphPermissions;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFile;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
 import com.mine.geometry_node.core.network.packet.c2s.PacketCaptureEntityTemplateRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketDialogueChoice;
@@ -115,16 +115,16 @@ public class NetworkHandler {
                             return;
                         }
                         try {
-                            String directory = RemoteGraphFileService.normalizeDirectoryPath(payload.directory());
+                            String directory = RemoteAssetFileService.normalizeDirectoryPath(payload.directory());
                             if (payload.createIfMissing()) {
                                 if (!RemoteGraphPermissions.canCreateRemoteFolders(player)) {
                                     sendToPlayer(player, new PacketRemoteGraphListResponse(
                                             payload.requestId(), false, payload.directory(), "没有创建服务器图纸文件夹的权限。", Collections.emptyList()));
                                     return;
                                 }
-                                Files.createDirectories(RemoteGraphFileService.resolveDirectory(player.level().getServer(), directory));
+                                Files.createDirectories(RemoteAssetFileService.resolveDirectory(player.level().getServer(), directory));
                             }
-                            List<RemoteGraphEntry> entries = RemoteGraphFileService.list(player.level().getServer(), directory);
+                            List<RemoteGraphEntry> entries = RemoteAssetFileService.list(player.level().getServer(), directory);
                             sendToPlayer(player, new PacketRemoteGraphListResponse(payload.requestId(), true, directory, "", entries));
                         } catch (Exception e) {
                             sendToPlayer(player, new PacketRemoteGraphListResponse(
@@ -370,16 +370,16 @@ public class NetworkHandler {
         if (!RemoteGraphPermissions.canUploadGraphs(player)) {
             sendToPlayer(player, new PacketRemoteGraphUploadResponse(
                     payload.requestId(), payload.preflightOnly(), false, true, 0, payload.files().size(),
-                    "没有上传服务器图纸的权限。", Collections.emptyList()));
+                    "没有上传服务器资产的权限。", Collections.emptyList()));
             return;
         }
 
         try {
             List<String> targetPaths = new ArrayList<>();
-            for (RemoteGraphUploadFile file : payload.files()) {
+            for (RemoteAssetFile file : payload.files()) {
                 targetPaths.add(file.targetPath());
             }
-            List<RemoteGraphConflict> conflicts = RemoteGraphFileService.findUploadConflicts(player.level().getServer(), targetPaths);
+            List<RemoteGraphConflict> conflicts = RemoteAssetFileService.findUploadConflicts(player.level().getServer(), targetPaths);
             if (payload.preflightOnly()) {
                 sendToPlayer(player, new PacketRemoteGraphUploadResponse(
                         payload.requestId(), true, conflicts.isEmpty(), true,
@@ -404,8 +404,8 @@ public class NetworkHandler {
 
             int processed = 0;
             int total = payload.files().size();
-            for (RemoteGraphUploadFile file : payload.files()) {
-                RemoteGraphFileService.saveUpload(
+            for (RemoteAssetFile file : payload.files()) {
+                RemoteAssetFileService.saveUpload(
                         player.level().getServer(),
                         file,
                         payload.overwrite() || allowedOverwritePaths.contains(file.targetPath())
@@ -429,18 +429,18 @@ public class NetworkHandler {
         if (!RemoteGraphPermissions.canDownloadGraphs(player)) {
             sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
                     payload.requestId(), false, true,
-                    0, payload.paths().size(), "没有下载服务器图纸的权限。", Collections.emptyList()));
+                    0, payload.paths().size(), "没有下载服务器资产的权限。", Collections.emptyList()));
             return;
         }
 
         try {
-            List<RemoteGraphEntry> files = RemoteGraphFileService.flattenSelection(player.level().getServer(), payload.paths());
+            List<RemoteGraphEntry> files = RemoteAssetFileService.flattenSelection(player.level().getServer(), payload.paths());
             int total = files.size();
             int processed = 0;
             for (RemoteGraphEntry entry : files) {
-                RemoteGraphUploadFile downloaded = new RemoteGraphUploadFile(
+                RemoteAssetFile downloaded = new RemoteAssetFile(
                         entry.path(),
-                        RemoteGraphFileService.readGraph(player.level().getServer(), entry.path())
+                        RemoteAssetFileService.readAsset(player.level().getServer(), entry.path())
                 );
                 processed++;
                 sendToPlayer(player, new PacketRemoteGraphDownloadResponse(
@@ -464,9 +464,9 @@ public class NetworkHandler {
 
         try {
             int count = switch (payload.operation()) {
-                case DELETE -> RemoteGraphFileService.deleteSelection(player.level().getServer(), payload.paths());
-                case COPY -> RemoteGraphFileService.copySelection(player.level().getServer(), payload.paths(), payload.targetDirectory());
-                case MOVE -> RemoteGraphFileService.moveSelection(player.level().getServer(), payload.paths(), payload.targetDirectory());
+                case DELETE -> RemoteAssetFileService.deleteSelection(player.level().getServer(), payload.paths());
+                case COPY -> RemoteAssetFileService.copySelection(player.level().getServer(), payload.paths(), payload.targetDirectory());
+                case MOVE -> RemoteAssetFileService.moveSelection(player.level().getServer(), payload.paths(), payload.targetDirectory());
             };
             DynamicGraphManager.loadAllFromDisk(player.level().getServer());
             String action = switch (payload.operation()) {

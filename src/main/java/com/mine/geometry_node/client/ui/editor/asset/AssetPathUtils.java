@@ -2,7 +2,6 @@ package com.mine.geometry_node.client.ui.editor.asset;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public final class AssetPathUtils {
     private AssetPathUtils() {
@@ -30,14 +29,11 @@ public final class AssetPathUtils {
                 throw new IllegalArgumentException("invalid path: " + path);
             }
         }
-        if (!normalized.toLowerCase(Locale.ROOT).endsWith(".json")) {
-            throw new IllegalArgumentException("only .json graph files can be transferred: " + path);
-        }
         return normalized;
     }
 
     public static boolean isRemotePathInput(String path) {
-        return path != null && path.trim().toLowerCase(Locale.ROOT).startsWith("remote:");
+        return path != null && path.trim().toLowerCase(java.util.Locale.ROOT).startsWith("remote:");
     }
 
     public static String remotePathFromInput(String path) {
@@ -52,7 +48,7 @@ public final class AssetPathUtils {
     private static String trimRemoteRelativePath(String path) {
         if (path == null || path.isBlank() || "/".equals(path.trim())) return "";
         String normalized = path.replace('\\', '/').trim();
-        String lower = normalized.toLowerCase(Locale.ROOT);
+        String lower = normalized.toLowerCase(java.util.Locale.ROOT);
         if (lower.startsWith("remote://")) {
             normalized = normalized.substring("remote://".length());
         } else if (lower.startsWith("remote:/")) {

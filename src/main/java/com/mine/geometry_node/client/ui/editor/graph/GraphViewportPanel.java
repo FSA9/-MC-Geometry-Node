@@ -197,7 +197,7 @@ public class GraphViewportPanel extends LinearLayout {
                     if (response.files().isEmpty()) return;
                     if (!isReadyForImport(targetSession)) return;
                     mViewport.getController().executeImportGraphJson(
-                            response.files().get(0).jsonContent(), viewportX, viewportY);
+                            response.files().get(0).utf8Text(), viewportX, viewportY);
                 });
             });
             NetworkHandler.sendToServer(new PacketRemoteGraphDownloadRequest(requestId, List.of(entry.path())));

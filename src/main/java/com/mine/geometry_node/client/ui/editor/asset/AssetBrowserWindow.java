@@ -30,7 +30,7 @@ import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFile;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphCapabilitiesRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphDownloadRequest;
@@ -375,7 +375,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 (result, progress) -> {
                     if (result.files().isEmpty()) {
                         progress.fail(result.failedPaths().isEmpty()
-                                ? "没有可上传的 .json 图纸"
+                                ? "没有可上传的资产"
                                 : "文件读取失败: " + summarizePaths(result.failedPaths()));
                         return;
                     }
@@ -387,7 +387,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 });
     }
 
-    private void requestUploadPreflight(List<RemoteGraphUploadFile> files) {
+    private void requestUploadPreflight(List<RemoteAssetFile> files) {
         int requestId = beginRemoteRequest();
         RemoteGraphClientState.onUpload(requestId, response -> {
             if (response.terminal()) finishRemoteRequest(requestId);
@@ -405,8 +405,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 for (RemoteGraphConflict conflict : response.conflicts()) {
                     conflictPaths.add(conflict.targetPath());
                 }
-                ConflictResolutionState<RemoteGraphUploadFile> resolution =
-                        new ConflictResolutionState<>(files, conflictPaths, RemoteGraphUploadFile::targetPath);
+                ConflictResolutionState<RemoteAssetFile> resolution =
+                        new ConflictResolutionState<>(files, conflictPaths, RemoteAssetFile::targetPath);
                 new OverwriteConfirmDialog(getContext(), conflictPaths, decision -> {
                     switch (decision) {
                         case OVERWRITE_CURRENT -> {
@@ -427,14 +427,17 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 }).show(this);
             });
         });
-        NetworkHandler.sendToServer(new PacketRemoteGraphUploadRequest(requestId, true, false, files));
+        List<RemoteAssetFile> metadata = files.stream()
+                .map(file -> new RemoteAssetFile(file.targetPath(), new byte[0]))
+                .toList();
+        NetworkHandler.sendToServer(new PacketRemoteGraphUploadRequest(requestId, true, false, metadata));
     }
 
-    private void startUpload(List<RemoteGraphUploadFile> files, boolean overwrite) {
+    private void startUpload(List<RemoteAssetFile> files, boolean overwrite) {
         startUpload(files, overwrite, List.of());
     }
 
-    private void startUpload(List<RemoteGraphUploadFile> files, boolean overwrite, List<String> overwritePaths) {
+    private void startUpload(List<RemoteAssetFile> files, boolean overwrite, List<String> overwritePaths) {
         if (files.isEmpty()) return;
         UploadBatchRunner runner = new UploadBatchRunner(files, overwrite, overwritePaths);
         runner.sendNext();
@@ -453,12 +456,12 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         }
 
         int requestId = beginRemoteRequest();
-        List<RemoteGraphUploadFile> downloaded = new ArrayList<>();
+        List<RemoteAssetFile> downloaded = new ArrayList<>();
         RemoteGraphClientState.onDownload(requestId, response -> {
             if (response.terminal()) finishRemoteRequest(requestId);
             post(() -> {
                 if (!response.success()) {
-                    TransferProgressDialog progress = new TransferProgressDialog(getContext(), "下载图纸");
+                    TransferProgressDialog progress = new TransferProgressDialog(getContext(), "下载资产");
                     progress.show(this);
                     progress.fail(response.message());
                     return;
@@ -474,14 +477,14 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         NetworkHandler.sendToServer(new PacketRemoteGraphDownloadRequest(requestId, paths));
     }
 
-    private void finishDownload(List<RemoteGraphUploadFile> files, File targetDirectory) {
+    private void finishDownload(List<RemoteAssetFile> files, File targetDirectory) {
         List<String> conflicts = findLocalDownloadConflicts(files, targetDirectory);
         if (conflicts.isEmpty()) {
             saveDownloadedFiles(files, targetDirectory);
             return;
         }
 
-        ConflictResolutionState<RemoteGraphUploadFile> resolution =
+        ConflictResolutionState<RemoteAssetFile> resolution =
                 new ConflictResolutionState<>(files, conflicts, file -> AssetPathUtils.normalizeRemoteFilePath(file.targetPath()));
         new OverwriteConfirmDialog(getContext(), conflicts, decision -> {
             switch (decision) {
@@ -503,8 +506,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         }).show(this);
     }
 
-    private void saveDownloadedFiles(List<RemoteGraphUploadFile> files, File targetDirectory) {
-        List<RemoteGraphUploadFile> fileSnapshot = files == null ? List.of() : List.copyOf(files);
+    private void saveDownloadedFiles(List<RemoteAssetFile> files, File targetDirectory) {
+        List<RemoteAssetFile> fileSnapshot = files == null ? List.of() : List.copyOf(files);
         mIoTasks.run("保存下载",
                 context -> mLocalAssetService.saveDownloadedFiles(fileSnapshot, targetDirectory, context),
                 (result, progress) -> {
@@ -522,13 +525,13 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     }
 
     private void showUploadFailureDialog(
-            List<RemoteGraphUploadFile> failedFiles,
+            List<RemoteAssetFile> failedFiles,
             boolean overwrite,
             List<String> overwritePaths
     ) {
         if (failedFiles == null || failedFiles.isEmpty()) return;
         List<String> failedPaths = new ArrayList<>();
-        for (RemoteGraphUploadFile file : failedFiles) {
+        for (RemoteAssetFile file : failedFiles) {
             failedPaths.add(file.targetPath());
         }
         new UploadFailureRetryDialog(
@@ -549,10 +552,10 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         return summary;
     }
 
-    private List<String> findLocalDownloadConflicts(List<RemoteGraphUploadFile> files, File targetDirectory) {
+    private List<String> findLocalDownloadConflicts(List<RemoteAssetFile> files, File targetDirectory) {
         List<String> conflicts = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (RemoteGraphUploadFile file : files) {
+        for (RemoteAssetFile file : files) {
             String path = AssetPathUtils.normalizeRemoteFilePath(file.targetPath());
             if (!seen.add(path)) continue;
             File target = new File(targetDirectory, path);
@@ -624,14 +627,14 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     }
 
     private final class UploadBatchRunner {
-        private final List<RemoteGraphUploadFile> mFiles;
+        private final List<RemoteAssetFile> mFiles;
         private final boolean mOverwriteAll;
         private final Set<String> mOverwritePaths;
-        private final List<RemoteGraphUploadFile> mFailedFiles = new ArrayList<>();
+        private final List<RemoteAssetFile> mFailedFiles = new ArrayList<>();
         private int mIndex = 0;
 
         private UploadBatchRunner(
-                List<RemoteGraphUploadFile> files,
+                List<RemoteAssetFile> files,
                 boolean overwriteAll,
                 List<String> overwritePaths
         ) {
@@ -651,7 +654,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 return;
             }
 
-            RemoteGraphUploadFile file = mFiles.get(mIndex);
+            RemoteAssetFile file = mFiles.get(mIndex);
             int requestId = beginRemoteRequest();
             RemoteGraphClientState.onUpload(requestId, response -> {
                 if (response.terminal()) finishRemoteRequest(requestId);

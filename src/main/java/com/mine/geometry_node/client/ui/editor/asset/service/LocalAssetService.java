@@ -1,15 +1,14 @@
 package com.mine.geometry_node.client.ui.editor.asset.service;
 
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskContext;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphDocumentStore;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
+import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFile;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -208,15 +207,15 @@ public final class LocalAssetService {
                 .map(plan -> new FileMove(plan.source(), plan.destinationPath().toFile())).toList(), failedPaths);
     }
 
-    public DownloadSaveResult saveDownloadedFiles(List<RemoteGraphUploadFile> files, File targetDirectory,
+    public DownloadSaveResult saveDownloadedFiles(List<RemoteAssetFile> files, File targetDirectory,
                                                    AssetTaskContext context) throws InterruptedException {
         if (targetDirectory == null) {
             return new DownloadSaveResult(0, List.of("目标目录为空"));
         }
         Path root = normalize(targetDirectory.toPath());
         List<String> failedPaths = new ArrayList<>();
-        Map<Path, RemoteGraphUploadFile> uniqueFiles = new LinkedHashMap<>();
-        for (RemoteGraphUploadFile file : files == null ? List.<RemoteGraphUploadFile>of() : files) {
+        Map<Path, RemoteAssetFile> uniqueFiles = new LinkedHashMap<>();
+        for (RemoteAssetFile file : files == null ? List.<RemoteAssetFile>of() : files) {
             try {
                 String relative = AssetPathUtils.normalizeRemoteFilePath(file.targetPath());
                 Path target = root.resolve(relative).normalize();
@@ -228,16 +227,16 @@ public final class LocalAssetService {
         }
 
         List<DownloadPlan> plans = new ArrayList<>();
-        for (Map.Entry<Path, RemoteGraphUploadFile> entry : uniqueFiles.entrySet()) {
+        for (Map.Entry<Path, RemoteAssetFile> entry : uniqueFiles.entrySet()) {
             context.checkCancelled();
-            RemoteGraphUploadFile file = entry.getValue();
+            RemoteAssetFile file = entry.getValue();
             Path temporary = null;
             try {
                 Path target = entry.getKey();
                 if (Files.isDirectory(target)) throw new IOException("download target is a directory");
                 if (target.getParent() != null) Files.createDirectories(target.getParent());
                 temporary = GraphDocumentStore.siblingTemporary(target, "download");
-                Files.writeString(temporary, file.jsonContent(), StandardCharsets.UTF_8);
+                Files.write(temporary, file.content());
                 Path backup = GraphDocumentStore.siblingTemporary(target, "download-backup");
                 plans.add(new DownloadPlan(file.targetPath(), target, temporary, backup, Files.exists(target)));
                 context.progress("准备保存 " + file.targetPath(), plans.size(), uniqueFiles.size());
@@ -276,7 +275,7 @@ public final class LocalAssetService {
 
     public UploadCollectionResult collectUploadFiles(List<File> selectedFiles, String targetDirectory,
                                                       AssetTaskContext context) throws InterruptedException {
-        List<RemoteGraphUploadFile> files = new ArrayList<>();
+        List<RemoteAssetFile> files = new ArrayList<>();
         List<String> failedPaths = new ArrayList<>();
         String targetPrefix = AssetPathUtils.normalizeRemoteDirectory(targetDirectory);
         List<File> selections = topLevelFiles(selectedFiles);
@@ -359,7 +358,7 @@ public final class LocalAssetService {
         return resolved;
     }
 
-    private void collectUploadFile(List<RemoteGraphUploadFile> out, List<String> failedPaths, Path base,
+    private void collectUploadFile(List<RemoteAssetFile> out, List<String> failedPaths, Path base,
                                    Path path, String targetPrefix, AssetTaskContext context)
             throws InterruptedException {
         context.checkCancelled();
@@ -373,14 +372,13 @@ public final class LocalAssetService {
                 }
                 return;
             }
-            if (!Files.isRegularFile(path)
-                    || !AssetTypeRegistry.INSTANCE.isType(path.toFile(), AssetTypeRegistry.GRAPH_ID)) return;
+            if (!Files.isRegularFile(path) || !AssetTransferPolicy.isTransferablePath(path.toString())) return;
             String relative = base.relativize(path).toString().replace('\\', '/');
             String targetPath = targetPrefix.isEmpty() ? relative : targetPrefix + "/" + relative;
             targetPath = AssetPathUtils.normalizeRemoteFilePath(targetPath);
-            String json = GraphDocumentStore.INSTANCE.readString(path);
+            byte[] content = Files.readAllBytes(path);
             context.checkCancelled();
-            out.add(new RemoteGraphUploadFile(targetPath, json));
+            out.add(new RemoteAssetFile(targetPath, content));
         } catch (InterruptedException e) {
             throw e;
         } catch (Exception e) {
@@ -688,7 +686,7 @@ public final class LocalAssetService {
         }
     }
 
-    public record UploadCollectionResult(List<RemoteGraphUploadFile> files, List<String> failedPaths) {
+    public record UploadCollectionResult(List<RemoteAssetFile> files, List<String> failedPaths) {
         public UploadCollectionResult {
             files = files == null ? List.of() : List.copyOf(files);
             failedPaths = failedPaths == null ? List.of() : List.copyOf(failedPaths);

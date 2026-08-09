@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.model;
 
+import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
 import com.mine.geometry_node.core.engine.system.visual.image.ImageAssetFormats;
 
 import java.util.ArrayList;
@@ -11,9 +12,9 @@ import java.util.Map;
 
 public final class AssetTypeRegistry {
     public static final String DIRECTORY_ID = "directory";
-    public static final String GRAPH_ID = "graph";
-    public static final String SCHEMATIC_ID = "schematic";
-    public static final String IMAGE_ID = "image";
+    public static final String GRAPH_ID = AssetTransferPolicy.GRAPH_TYPE_ID;
+    public static final String SCHEMATIC_ID = AssetTransferPolicy.SCHEMATIC_TYPE_ID;
+    public static final String IMAGE_ID = AssetTransferPolicy.IMAGE_TYPE_ID;
     public static final String FILE_ID = "file";
 
     public static final AssetTypeRegistry INSTANCE = new AssetTypeRegistry();
@@ -37,15 +38,17 @@ public final class AssetTypeRegistry {
                 extensionMatcher(".json")));
         register(new AssetType(
                 SCHEMATIC_ID, 0xFF86B8FF, false, true, AssetPreviewKind.SCHEMATIC,
-                EnumSet.of(AssetSourceKind.LOCAL),
+                EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.COPY,
-                        AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME),
+                        AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME,
+                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD),
                 extensionMatcher(".schem", ".schematic")));
         register(new AssetType(
                 IMAGE_ID, 0xFF77C99D, false, true, AssetPreviewKind.IMAGE,
-                EnumSet.of(AssetSourceKind.LOCAL),
+                EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.COPY,
-                        AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME),
+                        AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME,
+                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD),
                 (name, directory) -> !directory && ImageAssetFormats.isSupportedPath(name)));
         register(new AssetType(
                 FILE_ID, 0xFF88CCFF, false, false, AssetPreviewKind.NONE,

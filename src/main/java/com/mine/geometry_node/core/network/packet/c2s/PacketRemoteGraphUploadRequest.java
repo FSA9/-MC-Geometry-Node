@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.c2s;
 
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphUploadFile;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFile;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -14,7 +14,7 @@ public record PacketRemoteGraphUploadRequest(
         boolean preflightOnly,
         boolean overwrite,
         List<String> overwritePaths,
-        List<RemoteGraphUploadFile> files
+        List<RemoteAssetFile> files
 ) implements CustomPacketPayload {
     public static final Type<PacketRemoteGraphUploadRequest> TYPE =
             new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "remote_graph_upload_request"));
@@ -28,7 +28,7 @@ public record PacketRemoteGraphUploadRequest(
         this(buf.readInt(), buf.readBoolean(), buf.readBoolean(), readStrings(buf), readFiles(buf));
     }
 
-    public PacketRemoteGraphUploadRequest(int requestId, boolean preflightOnly, boolean overwrite, List<RemoteGraphUploadFile> files) {
+    public PacketRemoteGraphUploadRequest(int requestId, boolean preflightOnly, boolean overwrite, List<RemoteAssetFile> files) {
         this(requestId, preflightOnly, overwrite, List.of(), files);
     }
 
@@ -38,9 +38,9 @@ public record PacketRemoteGraphUploadRequest(
         buf.writeBoolean(overwrite);
         writeStrings(buf, overwritePaths);
         buf.writeInt(files.size());
-        for (RemoteGraphUploadFile file : files) {
+        for (RemoteAssetFile file : files) {
             buf.writeUtf(file.targetPath(), 32767);
-            buf.writeUtf(file.jsonContent(), 262144);
+            buf.writeByteArray(file.content());
         }
     }
 
@@ -60,11 +60,13 @@ public record PacketRemoteGraphUploadRequest(
         }
     }
 
-    private static List<RemoteGraphUploadFile> readFiles(RegistryFriendlyByteBuf buf) {
+    private static List<RemoteAssetFile> readFiles(RegistryFriendlyByteBuf buf) {
         int size = buf.readInt();
-        List<RemoteGraphUploadFile> files = new ArrayList<>(size);
+        List<RemoteAssetFile> files = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            files.add(new RemoteGraphUploadFile(buf.readUtf(32767), buf.readUtf(262144)));
+            files.add(new RemoteAssetFile(
+                    buf.readUtf(32767),
+                    buf.readByteArray(RemoteAssetFile.MAX_CONTENT_BYTES)));
         }
         return files;
     }

@@ -302,7 +302,12 @@ final class AssetBrowserActionController {
                 .toList();
         if (filesSnapshot.isEmpty()) return;
         String suffix = filesSnapshot.size() > 1 ? " (" + filesSnapshot.size() + ")" : "";
-        List<File> uploadCandidates = getUploadCandidates(filesSnapshot);
+        List<File> uploadCandidates = entriesSnapshot.stream()
+                .filter(entry -> entry.sourceKind() == AssetSourceKind.LOCAL
+                        && entry.localFile() != null
+                        && entry.supports(AssetTypeAction.UPLOAD))
+                .map(AssetEntry::localFile)
+                .toList();
         if (mEnableRemoteTransferActions && mCoordinator != null
                 && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.UPLOAD)
                 && !uploadCandidates.isEmpty()) {
@@ -381,22 +386,6 @@ final class AssetBrowserActionController {
                     }
                     finishFileOperation(progress, "删除完成", result.successfulFiles().size(), result.failedPaths());
                 });
-    }
-
-    private boolean isLocalGraphFile(File file) {
-        return file != null && file.isFile()
-                && AssetTypeRegistry.INSTANCE.isType(file, AssetTypeRegistry.GRAPH_ID);
-    }
-
-    private List<File> getUploadCandidates(List<File> files) {
-        List<File> result = new ArrayList<>();
-        for (File file : files) {
-            if (file == null || !file.exists()) continue;
-            if (file.isDirectory() || isLocalGraphFile(file)) {
-                result.add(file);
-            }
-        }
-        return result;
     }
 
     private void addRemoteContextActions(FileContextMenu menu, List<AssetEntry> entriesSnapshot) {
