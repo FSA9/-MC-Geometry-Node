@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 public final class AssetTaskController {
     private static final ExecutorService IO_EXECUTOR = Executors.newSingleThreadExecutor(task -> {
@@ -41,6 +42,13 @@ public final class AssetTaskController {
         progress.show(mOwner);
 
         Future<?> future = IO_EXECUTOR.submit(() -> execute(handle, task, onSuccess, progress));
+        handle.setFuture(future);
+    }
+
+    public <T> void runSilent(AssetTask<T> task, Consumer<T> onSuccess, Consumer<Exception> onFailure) {
+        TaskHandle handle = new TaskHandle();
+        mActiveTasks.add(handle);
+        Future<?> future = IO_EXECUTOR.submit(() -> executeSilent(handle, task, onSuccess, onFailure));
         handle.setFuture(future);
     }
 
@@ -89,6 +97,40 @@ public final class AssetTaskController {
                     progress.fail(e.getMessage() == null || e.getMessage().isEmpty()
                             ? "操作失败"
                             : e.getMessage());
+                });
+            }
+        }
+    }
+
+    private <T> void executeSilent(
+            TaskHandle handle,
+            AssetTask<T> task,
+            Consumer<T> onSuccess,
+            Consumer<Exception> onFailure
+    ) {
+        SilentTaskContext context = new SilentTaskContext(handle);
+        T result = null;
+        try {
+            context.checkCancelled();
+            result = task.run(context);
+            context.checkCancelled();
+            T completedResult = result;
+            postTerminal(handle, () -> {
+                if (onSuccess != null) onSuccess.accept(completedResult);
+            }, () -> closeAbandoned(completedResult));
+        } catch (InterruptedException | CancellationException exception) {
+            closeAbandoned(result);
+            Thread.interrupted();
+            handle.markCancelled();
+            postTerminal(handle, () -> { });
+        } catch (Exception exception) {
+            closeAbandoned(result);
+            if (handle.isCancelled()) {
+                postTerminal(handle, () -> { });
+            } else {
+                postTerminal(handle, () -> {
+                    if (onFailure != null) onFailure.accept(exception);
+                    else exception.printStackTrace();
                 });
             }
         }
@@ -155,6 +197,22 @@ public final class AssetTaskController {
                 throw new InterruptedException("asset task cancelled before commit");
             }
             postIfActive(mHandle, mProgress::enterCommitPhase);
+        }
+    }
+
+    private static final class SilentTaskContext implements AssetTaskContext {
+        private final TaskHandle mHandle;
+
+        private SilentTaskContext(TaskHandle handle) {
+            mHandle = handle;
+        }
+
+        @Override public boolean isCancelled() { return mHandle.isCancelled(); }
+        @Override public void progress(String message, int processed, int total) { }
+
+        @Override
+        public void enterCommitPhase() throws InterruptedException {
+            if (!mHandle.enterCommitPhase()) throw new InterruptedException("asset task cancelled before commit");
         }
     }
 

@@ -2,8 +2,9 @@ package com.mine.geometry_node.client.ui.editor.asset;
 
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FolderPickerDialog;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.OverwriteConfirmDialog;
-import com.mine.geometry_node.client.ui.editor.asset.dialog.TransferProgressDialog;
-import com.mine.geometry_node.client.ui.editor.asset.dialog.UploadFailureRetryDialog;
+import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
+import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferRequest;
+import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationPanel;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
@@ -30,11 +31,11 @@ import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFile;
+import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
+import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import com.mine.geometry_node.core.network.NetworkHandler;
+import com.mine.geometry_node.core.network.packet.asset.AssetTransferPlanKind;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphCapabilitiesRequest;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphDownloadRequest;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphUploadRequest;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
@@ -46,6 +47,7 @@ import icyllis.modernui.widget.LinearLayout;
 import net.minecraft.network.chat.Component;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -63,6 +65,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     private final LocalAssetService mLocalAssetService = new LocalAssetService();
     private final AssetTaskController mIoTasks;
     private final Set<Integer> mRemoteRequestIds = new HashSet<>();
+    private final Set<Integer> mTransferPlanRequestIds = new HashSet<>();
     private final EditorSessionState.AssetBrowserState mSessionState;
     private final Runnable mSessionChanged;
     private boolean mRestoringLocation;
@@ -370,31 +373,31 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     private void preflightUpload(List<File> selectedFiles, String targetDirectory) {
         List<File> selectedSnapshot = selectedFiles == null ? List.of() : List.copyOf(selectedFiles);
-        mIoTasks.run("准备上传",
-                context -> mLocalAssetService.collectUploadFiles(selectedSnapshot, targetDirectory, context),
-                (result, progress) -> {
+        mIoTasks.runSilent(
+                context -> mLocalAssetService.collectUploadSources(selectedSnapshot, targetDirectory, context),
+                result -> {
                     if (result.files().isEmpty()) {
-                        progress.fail(result.failedPaths().isEmpty()
-                                ? "没有可上传的资产"
-                                : "文件读取失败: " + summarizePaths(result.failedPaths()));
+                        System.err.println("[AssetBrowser] No transferable upload sources: " + result.failedPaths());
                         return;
                     }
                     if (!result.failedPaths().isEmpty()) {
-                        System.err.println("[AssetBrowser] Some upload files failed to read: " + result.failedPaths());
+                        System.err.println("[AssetBrowser] Some upload sources could not be scanned: " + result.failedPaths());
                     }
-                    progress.update("准备完成", result.files().size(), result.files().size());
                     requestUploadPreflight(result.files());
+                }, exception -> {
+                    System.err.println("[AssetBrowser] Upload scan failed: " + exception.getMessage());
+                    exception.printStackTrace();
                 });
     }
 
-    private void requestUploadPreflight(List<RemoteAssetFile> files) {
-        int requestId = beginRemoteRequest();
-        RemoteGraphClientState.onUpload(requestId, response -> {
-            if (response.terminal()) finishRemoteRequest(requestId);
+    private void requestUploadPreflight(List<LocalAssetService.UploadSource> files) {
+        int[] requestHolder = new int[1];
+        int requestId = ClientAssetTransferPlanState.request(AssetTransferPlanKind.UPLOAD_CONFLICTS,
+                files.stream().map(LocalAssetService.UploadSource::targetPath).toList(), response -> {
+            mTransferPlanRequestIds.remove(requestHolder[0]);
             post(() -> {
-                if (!response.preflight()) return;
-                if (!response.success() && response.conflicts().isEmpty()) {
-                    showUploadFailureDialog(files, false, List.of());
+                if (!response.success()) {
+                    System.err.println("[AssetBrowser] Upload planning failed: " + response.message());
                     return;
                 }
                 if (response.conflicts().isEmpty()) {
@@ -405,8 +408,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 for (RemoteGraphConflict conflict : response.conflicts()) {
                     conflictPaths.add(conflict.targetPath());
                 }
-                ConflictResolutionState<RemoteAssetFile> resolution =
-                        new ConflictResolutionState<>(files, conflictPaths, RemoteAssetFile::targetPath);
+                ConflictResolutionState<LocalAssetService.UploadSource> resolution =
+                        new ConflictResolutionState<>(files, conflictPaths, LocalAssetService.UploadSource::targetPath);
                 new OverwriteConfirmDialog(getContext(), conflictPaths, decision -> {
                     switch (decision) {
                         case OVERWRITE_CURRENT -> {
@@ -427,136 +430,101 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 }).show(this);
             });
         });
-        List<RemoteAssetFile> metadata = files.stream()
-                .map(file -> new RemoteAssetFile(file.targetPath(), new byte[0]))
-                .toList();
-        NetworkHandler.sendToServer(new PacketRemoteGraphUploadRequest(requestId, true, false, metadata));
+        requestHolder[0] = requestId;
+        mTransferPlanRequestIds.add(requestId);
     }
 
-    private void startUpload(List<RemoteAssetFile> files, boolean overwrite) {
+    private void startUpload(List<LocalAssetService.UploadSource> files, boolean overwrite) {
         startUpload(files, overwrite, List.of());
     }
 
-    private void startUpload(List<RemoteAssetFile> files, boolean overwrite, List<String> overwritePaths) {
+    private void startUpload(List<LocalAssetService.UploadSource> files, boolean overwrite, List<String> overwritePaths) {
         if (files.isEmpty()) return;
-        UploadBatchRunner runner = new UploadBatchRunner(files, overwrite, overwritePaths);
-        runner.sendNext();
+        Set<String> overwriteSet = new HashSet<>(overwritePaths);
+        List<ClientAssetTransferRequest> requests = files.stream().map(file -> ClientAssetTransferRequest.upload(
+                file.sourcePath(), file.targetPath(), overwrite || overwriteSet.contains(file.targetPath())
+                        ? AssetTransferConflictPolicy.OVERWRITE : AssetTransferConflictPolicy.FAIL_IF_EXISTS)).toList();
+        java.util.UUID jobId = ClientAssetTransferService.INSTANCE.submit(requests);
+        ClientAssetTransferService.INSTANCE.completion(jobId).thenRun(() -> post(() -> {
+            if (mBrowserPanel != null) mBrowserPanel.refreshFileList();
+        }));
     }
 
     private void startDownload(List<AssetEntry> remoteEntries, File targetDirectory) {
         if (remoteEntries.isEmpty() || targetDirectory == null) return;
-        requestDownload(remoteEntries, targetDirectory);
-    }
-
-    private void requestDownload(List<AssetEntry> remoteEntries, File targetDirectory) {
-        if (remoteEntries.isEmpty()) return;
-        List<String> paths = new ArrayList<>();
-        for (AssetEntry entry : remoteEntries) {
-            paths.add(entry.path());
-        }
-
-        int requestId = beginRemoteRequest();
-        List<RemoteAssetFile> downloaded = new ArrayList<>();
-        RemoteGraphClientState.onDownload(requestId, response -> {
-            if (response.terminal()) finishRemoteRequest(requestId);
+        List<String> paths = remoteEntries.stream().map(AssetEntry::path).toList();
+        int[] requestHolder = new int[1];
+        int requestId = ClientAssetTransferPlanState.request(AssetTransferPlanKind.DOWNLOAD_MANIFEST, paths, response -> {
+            mTransferPlanRequestIds.remove(requestHolder[0]);
             post(() -> {
                 if (!response.success()) {
-                    TransferProgressDialog progress = new TransferProgressDialog(getContext(), "下载资产");
-                    progress.show(this);
-                    progress.fail(response.message());
+                    System.err.println("[AssetBrowser] Download planning failed: " + response.message());
                     return;
                 }
-                if (!response.files().isEmpty()) {
-                    downloaded.addAll(response.files());
-                }
-                if (response.terminal()) {
-                    finishDownload(downloaded, targetDirectory);
-                }
+                finishDownload(response.files(), targetDirectory);
             });
         });
-        NetworkHandler.sendToServer(new PacketRemoteGraphDownloadRequest(requestId, paths));
+        requestHolder[0] = requestId;
+        mTransferPlanRequestIds.add(requestId);
     }
 
-    private void finishDownload(List<RemoteAssetFile> files, File targetDirectory) {
+    private void finishDownload(List<RemoteGraphEntry> files, File targetDirectory) {
         List<String> conflicts = findLocalDownloadConflicts(files, targetDirectory);
         if (conflicts.isEmpty()) {
-            saveDownloadedFiles(files, targetDirectory);
+            submitDownload(files, targetDirectory, false, List.of());
             return;
         }
 
-        ConflictResolutionState<RemoteAssetFile> resolution =
-                new ConflictResolutionState<>(files, conflicts, file -> AssetPathUtils.normalizeRemoteFilePath(file.targetPath()));
+        ConflictResolutionState<RemoteGraphEntry> resolution =
+                new ConflictResolutionState<>(files, conflicts, file -> AssetPathUtils.normalizeRemoteFilePath(file.path()));
         new OverwriteConfirmDialog(getContext(), conflicts, decision -> {
             switch (decision) {
                 case OVERWRITE_CURRENT -> {
                     if (resolution.markCurrentOverwrite()) {
-                        saveDownloadedFiles(resolution.remainingFiles(), targetDirectory);
+                        submitDownload(resolution.remainingFiles(), targetDirectory, false, resolution.overwritePaths());
                     }
                 }
-                case OVERWRITE_ALL -> saveDownloadedFiles(files, targetDirectory);
+                case OVERWRITE_ALL -> submitDownload(files, targetDirectory, true, List.of());
                 case SKIP_CURRENT -> {
                     if (resolution.markCurrentSkip()) {
-                        saveDownloadedFiles(resolution.remainingFiles(), targetDirectory);
+                        submitDownload(resolution.remainingFiles(), targetDirectory, false, resolution.overwritePaths());
                     }
                 }
-                case SKIP_ALL -> saveDownloadedFiles(resolution.withoutConflicts(), targetDirectory);
+                case SKIP_ALL -> submitDownload(resolution.withoutConflicts(), targetDirectory, false, List.of());
                 case CANCEL -> {
                 }
             }
         }).show(this);
     }
 
-    private void saveDownloadedFiles(List<RemoteAssetFile> files, File targetDirectory) {
-        List<RemoteAssetFile> fileSnapshot = files == null ? List.of() : List.copyOf(files);
-        mIoTasks.run("保存下载",
-                context -> mLocalAssetService.saveDownloadedFiles(fileSnapshot, targetDirectory, context),
-                (result, progress) -> {
-                    DocumentManager.INSTANCE.refreshFileReferences();
-                    ImageThumbnailView.clearCache();
-                    if (mBrowserPanel != null) {
-                        mBrowserPanel.refreshFileList();
-                    }
-                    if (!result.failedPaths().isEmpty()) {
-                        progress.fail("部分文件保存失败: " + summarizePaths(result.failedPaths()));
-                        return;
-                    }
-                    progress.update("下载完成", result.successCount(), Math.max(1, fileSnapshot.size()));
-                });
-    }
-
-    private void showUploadFailureDialog(
-            List<RemoteAssetFile> failedFiles,
-            boolean overwrite,
-            List<String> overwritePaths
-    ) {
-        if (failedFiles == null || failedFiles.isEmpty()) return;
-        List<String> failedPaths = new ArrayList<>();
-        for (RemoteAssetFile file : failedFiles) {
-            failedPaths.add(file.targetPath());
+    private void submitDownload(List<RemoteGraphEntry> files, File targetDirectory,
+                                boolean overwrite, List<String> overwritePaths) {
+        if (files.isEmpty()) return;
+        Path root = targetDirectory.toPath().toAbsolutePath().normalize();
+        Set<String> overwriteSet = new HashSet<>(overwritePaths);
+        List<ClientAssetTransferRequest> requests = new ArrayList<>();
+        for (RemoteGraphEntry file : files) {
+            String remotePath = AssetPathUtils.normalizeRemoteFilePath(file.path());
+            Path target = root.resolve(remotePath).normalize();
+            if (!target.startsWith(root)) continue;
+            requests.add(ClientAssetTransferRequest.download(remotePath, target,
+                    overwrite || overwriteSet.contains(remotePath)
+                            ? AssetTransferConflictPolicy.OVERWRITE : AssetTransferConflictPolicy.FAIL_IF_EXISTS));
         }
-        new UploadFailureRetryDialog(
-                getContext(),
-                failedPaths,
-                () -> startUpload(failedFiles, overwrite, overwritePaths)
-        ).show(this);
+        if (requests.isEmpty()) return;
+        java.util.UUID jobId = ClientAssetTransferService.INSTANCE.submit(requests);
+        ClientAssetTransferService.INSTANCE.completion(jobId).thenRun(() -> post(() -> {
+            DocumentManager.INSTANCE.refreshFileReferences();
+            ImageThumbnailView.clearCache();
+            if (mBrowserPanel != null) mBrowserPanel.refreshFileList();
+        }));
     }
 
-    private String summarizePaths(List<String> paths) {
-        if (paths == null || paths.isEmpty()) return "";
-        int limit = Math.min(3, paths.size());
-        List<String> head = paths.subList(0, limit);
-        String summary = String.join(", ", head);
-        if (paths.size() > limit) {
-            summary += " 等 " + paths.size() + " 项";
-        }
-        return summary;
-    }
-
-    private List<String> findLocalDownloadConflicts(List<RemoteAssetFile> files, File targetDirectory) {
+    private List<String> findLocalDownloadConflicts(List<RemoteGraphEntry> files, File targetDirectory) {
         List<String> conflicts = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (RemoteAssetFile file : files) {
-            String path = AssetPathUtils.normalizeRemoteFilePath(file.targetPath());
+        for (RemoteGraphEntry file : files) {
+            String path = AssetPathUtils.normalizeRemoteFilePath(file.path());
             if (!seen.add(path)) continue;
             File target = new File(targetDirectory, path);
             if (target.exists()) {
@@ -626,62 +594,6 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         }
     }
 
-    private final class UploadBatchRunner {
-        private final List<RemoteAssetFile> mFiles;
-        private final boolean mOverwriteAll;
-        private final Set<String> mOverwritePaths;
-        private final List<RemoteAssetFile> mFailedFiles = new ArrayList<>();
-        private int mIndex = 0;
-
-        private UploadBatchRunner(
-                List<RemoteAssetFile> files,
-                boolean overwriteAll,
-                List<String> overwritePaths
-        ) {
-            mFiles = files;
-            mOverwriteAll = overwriteAll;
-            mOverwritePaths = new HashSet<>(overwritePaths);
-        }
-
-        void sendNext() {
-            if (mIndex >= mFiles.size()) {
-                if (mBrowserPanel != null) {
-                    mBrowserPanel.refreshFileList();
-                }
-                if (!mFailedFiles.isEmpty()) {
-                    showUploadFailureDialog(mFailedFiles, mOverwriteAll, new ArrayList<>(mOverwritePaths));
-                }
-                return;
-            }
-
-            RemoteAssetFile file = mFiles.get(mIndex);
-            int requestId = beginRemoteRequest();
-            RemoteGraphClientState.onUpload(requestId, response -> {
-                if (response.terminal()) finishRemoteRequest(requestId);
-                post(() -> {
-                    if (!response.success()) {
-                        mFailedFiles.add(file);
-                        mIndex++;
-                        sendNext();
-                        return;
-                    }
-                    if (response.terminal()) {
-                        mIndex++;
-                        sendNext();
-                    }
-                });
-            });
-            boolean overwrite = mOverwriteAll || mOverwritePaths.contains(file.targetPath());
-            NetworkHandler.sendToServer(new PacketRemoteGraphUploadRequest(
-                    requestId,
-                    false,
-                    overwrite,
-                    overwrite ? List.of(file.targetPath()) : List.of(),
-                    List.of(file)
-            ));
-        }
-    }
-
     private int beginRemoteRequest() {
         int requestId = RemoteGraphClientState.nextRequestId();
         mRemoteRequestIds.add(requestId);
@@ -697,5 +609,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
             RemoteGraphClientState.cancel(requestId);
         }
         mRemoteRequestIds.clear();
+        for (int requestId : mTransferPlanRequestIds) ClientAssetTransferPlanState.cancel(requestId);
+        mTransferPlanRequestIds.clear();
     }
 }

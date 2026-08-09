@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.editor.sidebar;
 
 import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelRegistry;
 import com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.GraphPropertiesPanel;
+import com.mine.geometry_node.client.ui.editor.sidebar.panels.asset_transfer.AssetTransferPanel;
 
 /**
  * Registers sidebar panels supplied by the base mod.
@@ -15,6 +16,7 @@ public final class BuiltinSidebarPanels {
     public static synchronized void register() {
         if (registered) return;
         SidebarPanelRegistry.INSTANCE.register(GraphPropertiesPanel.DEFINITION);
+        SidebarPanelRegistry.INSTANCE.register(AssetTransferPanel.DEFINITION);
         registered = true;
     }
 }

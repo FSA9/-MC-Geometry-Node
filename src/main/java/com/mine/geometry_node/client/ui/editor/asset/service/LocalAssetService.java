@@ -5,7 +5,6 @@ import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskContext;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphDocumentStore;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
 import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFile;
 
 import java.io.File;
 import java.io.IOException;
@@ -207,75 +206,9 @@ public final class LocalAssetService {
                 .map(plan -> new FileMove(plan.source(), plan.destinationPath().toFile())).toList(), failedPaths);
     }
 
-    public DownloadSaveResult saveDownloadedFiles(List<RemoteAssetFile> files, File targetDirectory,
-                                                   AssetTaskContext context) throws InterruptedException {
-        if (targetDirectory == null) {
-            return new DownloadSaveResult(0, List.of("目标目录为空"));
-        }
-        Path root = normalize(targetDirectory.toPath());
-        List<String> failedPaths = new ArrayList<>();
-        Map<Path, RemoteAssetFile> uniqueFiles = new LinkedHashMap<>();
-        for (RemoteAssetFile file : files == null ? List.<RemoteAssetFile>of() : files) {
-            try {
-                String relative = AssetPathUtils.normalizeRemoteFilePath(file.targetPath());
-                Path target = root.resolve(relative).normalize();
-                if (!target.startsWith(root)) throw new IllegalArgumentException("invalid download path");
-                uniqueFiles.put(target, file);
-            } catch (Exception e) {
-                failedPaths.add(file.targetPath());
-            }
-        }
-
-        List<DownloadPlan> plans = new ArrayList<>();
-        for (Map.Entry<Path, RemoteAssetFile> entry : uniqueFiles.entrySet()) {
-            context.checkCancelled();
-            RemoteAssetFile file = entry.getValue();
-            Path temporary = null;
-            try {
-                Path target = entry.getKey();
-                if (Files.isDirectory(target)) throw new IOException("download target is a directory");
-                if (target.getParent() != null) Files.createDirectories(target.getParent());
-                temporary = GraphDocumentStore.siblingTemporary(target, "download");
-                Files.write(temporary, file.content());
-                Path backup = GraphDocumentStore.siblingTemporary(target, "download-backup");
-                plans.add(new DownloadPlan(file.targetPath(), target, temporary, backup, Files.exists(target)));
-                context.progress("准备保存 " + file.targetPath(), plans.size(), uniqueFiles.size());
-            } catch (Exception e) {
-                cleanupQuietly(temporary);
-                failedPaths.add(file.targetPath());
-                e.printStackTrace();
-            }
-        }
-        if (plans.isEmpty()) return new DownloadSaveResult(0, failedPaths);
-
-        try {
-            context.enterCommitPhase();
-        } catch (InterruptedException e) {
-            cleanupDownloadPlans(plans);
-            throw e;
-        }
-        List<Path> replaced = plans.stream().filter(DownloadPlan::replacesExisting)
-                .map(DownloadPlan::targetPath).toList();
-        try {
-            GraphFileRegistry.Mutation mutation = GraphFileRegistry.INSTANCE.beginDelete(replaced);
-            mutation.commit(() -> {
-                commitDownloads(plans);
-                return null;
-            });
-        } catch (Exception e) {
-            e.printStackTrace();
-            for (DownloadPlan plan : plans) cleanupQuietly(plan.temporaryPath());
-            for (DownloadPlan plan : plans) failedPaths.add(plan.remotePath());
-            return new DownloadSaveResult(0, failedPaths);
-        }
-        for (DownloadPlan plan : plans) cleanupQuietly(plan.backupPath());
-        context.progress("下载完成", plans.size(), plans.size());
-        return new DownloadSaveResult(plans.size(), failedPaths);
-    }
-
-    public UploadCollectionResult collectUploadFiles(List<File> selectedFiles, String targetDirectory,
-                                                      AssetTaskContext context) throws InterruptedException {
-        List<RemoteAssetFile> files = new ArrayList<>();
+    public UploadCollectionResult collectUploadSources(List<File> selectedFiles, String targetDirectory,
+                                                        AssetTaskContext context) throws InterruptedException {
+        List<UploadSource> files = new ArrayList<>();
         List<String> failedPaths = new ArrayList<>();
         String targetPrefix = AssetPathUtils.normalizeRemoteDirectory(targetDirectory);
         List<File> selections = topLevelFiles(selectedFiles);
@@ -358,7 +291,7 @@ public final class LocalAssetService {
         return resolved;
     }
 
-    private void collectUploadFile(List<RemoteAssetFile> out, List<String> failedPaths, Path base,
+    private void collectUploadFile(List<UploadSource> out, List<String> failedPaths, Path base,
                                    Path path, String targetPrefix, AssetTaskContext context)
             throws InterruptedException {
         context.checkCancelled();
@@ -376,9 +309,7 @@ public final class LocalAssetService {
             String relative = base.relativize(path).toString().replace('\\', '/');
             String targetPath = targetPrefix.isEmpty() ? relative : targetPrefix + "/" + relative;
             targetPath = AssetPathUtils.normalizeRemoteFilePath(targetPath);
-            byte[] content = Files.readAllBytes(path);
-            context.checkCancelled();
-            out.add(new RemoteAssetFile(targetPath, content));
+            out.add(new UploadSource(path, targetPath));
         } catch (InterruptedException e) {
             throw e;
         } catch (Exception e) {
@@ -461,44 +392,6 @@ public final class LocalAssetService {
                             e.addSuppressed(rollbackError);
                         }
                         GraphDocumentStore.moveNew(plan.trashPath(), plan.sourcePath());
-                    }
-                } catch (IOException rollbackError) {
-                    e.addSuppressed(rollbackError);
-                }
-            }
-            throw e;
-        }
-    }
-
-    private static void commitDownloads(List<DownloadPlan> plans) throws IOException {
-        List<DownloadPlan> committed = new ArrayList<>();
-        try {
-            for (DownloadPlan plan : plans) {
-                if (plan.replacesExisting()) {
-                    GraphDocumentStore.moveNew(plan.targetPath(), plan.backupPath());
-                }
-                try {
-                    GraphDocumentStore.moveNew(plan.temporaryPath(), plan.targetPath());
-                } catch (IOException e) {
-                    if (plan.replacesExisting()) {
-                        try {
-                            GraphDocumentStore.moveNew(plan.backupPath(), plan.targetPath());
-                        } catch (IOException rollbackError) {
-                            e.addSuppressed(rollbackError);
-                        }
-                    }
-                    throw e;
-                }
-                committed.add(plan);
-            }
-        } catch (IOException e) {
-            for (int i = committed.size() - 1; i >= 0; i--) {
-                DownloadPlan plan = committed.get(i);
-                try {
-                    if (plan.replacesExisting()) {
-                        GraphDocumentStore.moveReplacing(plan.backupPath(), plan.targetPath());
-                    } else {
-                        Files.deleteIfExists(plan.targetPath());
                     }
                 } catch (IOException rollbackError) {
                     e.addSuppressed(rollbackError);
@@ -610,13 +503,6 @@ public final class LocalAssetService {
         }
     }
 
-    private static void cleanupDownloadPlans(List<DownloadPlan> plans) {
-        for (DownloadPlan plan : plans) {
-            cleanupQuietly(plan.temporaryPath());
-            cleanupQuietly(plan.backupPath());
-        }
-    }
-
     private static void cleanupQuietly(Path path) {
         if (path == null) return;
         try {
@@ -642,10 +528,6 @@ public final class LocalAssetService {
 
     private record MovePlan(File source, Path sourcePath, Path destinationPath, Path temporaryPath,
                             Path trashPath, boolean direct) {
-    }
-
-    private record DownloadPlan(String remotePath, Path targetPath, Path temporaryPath, Path backupPath,
-                                boolean replacesExisting) {
     }
 
     public record FileMove(File source, File destination) {
@@ -679,14 +561,14 @@ public final class LocalAssetService {
         }
     }
 
-    public record DownloadSaveResult(int successCount, List<String> failedPaths) {
-        public DownloadSaveResult {
-            successCount = Math.max(0, successCount);
-            failedPaths = failedPaths == null ? List.of() : List.copyOf(failedPaths);
+    public record UploadSource(Path sourcePath, String targetPath) {
+        public UploadSource {
+            sourcePath = normalize(sourcePath);
+            targetPath = AssetPathUtils.normalizeRemoteFilePath(targetPath);
         }
     }
 
-    public record UploadCollectionResult(List<RemoteAssetFile> files, List<String> failedPaths) {
+    public record UploadCollectionResult(List<UploadSource> files, List<String> failedPaths) {
         public UploadCollectionResult {
             files = files == null ? List.of() : List.copyOf(files);
             failedPaths = failedPaths == null ? List.of() : List.copyOf(failedPaths);

@@ -1,10 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.asset.remote;
 
 import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphCapabilitiesResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphDownloadResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphFileOperationResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphListResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphUploadResponse;
 
 import java.util.List;
 import java.util.Map;
@@ -30,10 +28,6 @@ public final class RemoteGraphClientState {
     private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteGraphCapabilitiesResponse>> CAPABILITY_CALLBACKS =
             new ConcurrentHashMap<>();
     private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteGraphListResponse>> LIST_CALLBACKS =
-            new ConcurrentHashMap<>();
-    private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteGraphUploadResponse>> UPLOAD_CALLBACKS =
-            new ConcurrentHashMap<>();
-    private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteGraphDownloadResponse>> DOWNLOAD_CALLBACKS =
             new ConcurrentHashMap<>();
     private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteGraphFileOperationResponse>> FILE_OPERATION_CALLBACKS =
             new ConcurrentHashMap<>();
@@ -94,14 +88,6 @@ public final class RemoteGraphClientState {
         register(LIST_CALLBACKS, requestId, callback);
     }
 
-    public static void onUpload(int requestId, Consumer<PacketRemoteGraphUploadResponse> callback) {
-        register(UPLOAD_CALLBACKS, requestId, callback);
-    }
-
-    public static void onDownload(int requestId, Consumer<PacketRemoteGraphDownloadResponse> callback) {
-        register(DOWNLOAD_CALLBACKS, requestId, callback);
-    }
-
     public static void onFileOperation(int requestId, Consumer<PacketRemoteGraphFileOperationResponse> callback) {
         register(FILE_OPERATION_CALLBACKS, requestId, callback);
     }
@@ -109,16 +95,12 @@ public final class RemoteGraphClientState {
     public static void cancel(int requestId) {
         cancel(CAPABILITY_CALLBACKS, requestId);
         cancel(LIST_CALLBACKS, requestId);
-        cancel(UPLOAD_CALLBACKS, requestId);
-        cancel(DOWNLOAD_CALLBACKS, requestId);
         cancel(FILE_OPERATION_CALLBACKS, requestId);
     }
 
     public static void reset() {
         clear(CAPABILITY_CALLBACKS);
         clear(LIST_CALLBACKS);
-        clear(UPLOAD_CALLBACKS);
-        clear(DOWNLOAD_CALLBACKS);
         clear(FILE_OPERATION_CALLBACKS);
         canBrowse = false;
         canUpload = false;
@@ -137,14 +119,6 @@ public final class RemoteGraphClientState {
 
     public static void handle(PacketRemoteGraphListResponse response) {
         dispatch(LIST_CALLBACKS, response.requestId(), response, true);
-    }
-
-    public static void handle(PacketRemoteGraphUploadResponse response) {
-        dispatch(UPLOAD_CALLBACKS, response.requestId(), response, response.terminal());
-    }
-
-    public static void handle(PacketRemoteGraphDownloadResponse response) {
-        dispatch(DOWNLOAD_CALLBACKS, response.requestId(), response, response.terminal());
     }
 
     public static void handle(PacketRemoteGraphFileOperationResponse response) {

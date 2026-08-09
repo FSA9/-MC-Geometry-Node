@@ -5,17 +5,21 @@ import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
+import com.mine.geometry_node.core.engine.system.asset.transfer.io.VerifiedAssetCommitter;
+import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 public final class RemoteAssetFileService {
     private RemoteAssetFileService() {
@@ -56,36 +60,55 @@ public final class RemoteAssetFileService {
         return conflicts;
     }
 
-    public static void saveUpload(MinecraftServer server, RemoteAssetFile file, boolean overwrite) throws Exception {
-        Path target = resolveFile(server, file.targetPath());
-        validateAssetFilePath(target);
-        if (Files.exists(target) && Files.isDirectory(target)) {
-            throw new IOException("Remote target is a directory: " + file.targetPath());
-        }
-        if (Files.exists(target) && !overwrite) {
-            throw new IOException("Remote asset already exists: " + file.targetPath());
-        }
-        if (AssetTransferPolicy.isGraphPath(file.targetPath())) {
-            DynamicGraphManager.saveAndHotReload(
-                    server,
-                    GraphPathMapper.pathToId(root(server), target),
-                    file.utf8Text());
-        } else {
-            writeAssetAtomic(target, file.content());
-        }
-    }
-
-    public static byte[] readAsset(MinecraftServer server, String assetPath) throws IOException {
+    public static Path resolveTransferSource(MinecraftServer server, String assetPath) throws IOException {
         Path file = resolveFile(server, assetPath);
         validateAssetFilePath(file);
-        if (!Files.exists(file) || Files.isDirectory(file)) {
+        if (!Files.isRegularFile(file) || Files.isSymbolicLink(file)) {
             throw new IOException("Remote asset file does not exist: " + assetPath);
         }
-        long size = Files.size(file);
-        if (size > RemoteAssetFile.MAX_CONTENT_BYTES) {
-            throw new IOException("Remote asset exceeds transfer limit: " + assetPath);
+        return file;
+    }
+
+    public static Path transferTemporaryDirectory(MinecraftServer server) {
+        return root(server).resolveSibling(".geometrynode-transfer").normalize();
+    }
+
+    public static CompletableFuture<VerifiedAssetCommitter.CommitResult> commitVerifiedUpload(
+            MinecraftServer server,
+            String targetPath,
+            Path verifiedTemporaryFile,
+            AssetTransferConflictPolicy conflictPolicy
+    ) throws IOException {
+        Path target = resolveFile(server, targetPath);
+        validateAssetFilePath(target);
+        if (!AssetTransferPolicy.isGraphPath(targetPath)) {
+            return CompletableFuture.completedFuture(
+                    VerifiedAssetCommitter.commit(verifiedTemporaryFile, target, conflictPolicy));
         }
-        return Files.readAllBytes(file);
+
+        if (Files.exists(target)) {
+            if (conflictPolicy == AssetTransferConflictPolicy.SKIP) {
+                Files.deleteIfExists(verifiedTemporaryFile);
+                return CompletableFuture.completedFuture(VerifiedAssetCommitter.CommitResult.SKIPPED);
+            }
+            if (conflictPolicy == AssetTransferConflictPolicy.FAIL_IF_EXISTS) {
+                throw new VerifiedAssetCommitter.AssetTransferConflictException("Transfer target now exists");
+            }
+        }
+        String graphJson = Files.readString(verifiedTemporaryFile, StandardCharsets.UTF_8);
+        CompletableFuture<VerifiedAssetCommitter.CommitResult> result = new CompletableFuture<>();
+        server.execute(() -> {
+            try {
+                DynamicGraphManager.saveAndHotReload(
+                        server, GraphPathMapper.pathToId(root(server), target), graphJson);
+                Files.deleteIfExists(verifiedTemporaryFile);
+                result.complete(VerifiedAssetCommitter.CommitResult.COMMITTED);
+            } catch (Exception exception) {
+                try { Files.deleteIfExists(verifiedTemporaryFile); } catch (IOException ignored) { }
+                result.completeExceptionally(exception);
+            }
+        });
+        return result;
     }
 
     public static List<RemoteGraphEntry> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
@@ -203,24 +226,6 @@ public final class RemoteAssetFileService {
     private static void validateAssetFilePath(Path path) {
         if (!AssetTransferPolicy.isTransferablePath(path.toString())) {
             throw new IllegalArgumentException("Unsupported remote asset type: " + path.getFileName());
-        }
-    }
-
-    private static void writeAssetAtomic(Path target, byte[] content) throws IOException {
-        Path parent = target.getParent();
-        if (parent != null) Files.createDirectories(parent);
-        Path temporary = Files.createTempFile(parent, ".geometrynode-asset-", ".tmp");
-        boolean committed = false;
-        try {
-            Files.write(temporary, content);
-            try {
-                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-            committed = true;
-        } finally {
-            if (!committed) Files.deleteIfExists(temporary);
         }
     }
 

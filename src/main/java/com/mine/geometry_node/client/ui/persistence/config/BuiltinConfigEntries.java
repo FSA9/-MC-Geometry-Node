@@ -13,6 +13,7 @@ public final class BuiltinConfigEntries {
     public static final ConfigCategory VIEWPORT = category("viewport", 100);
     public static final ConfigCategory NODE = category("node", 200);
     public static final ConfigCategory ASSET_BROWSER = category("asset_browser", 300);
+    public static final ConfigCategory NETWORK_TRANSFER = category("network_transfer", 350);
     public static final ConfigCategory SHORTCUT_GLOBAL = category("shortcut_global", 400);
     public static final ConfigCategory SHORTCUT_VIEWPORT = category("shortcut_viewport", 500);
     public static final ConfigCategory SHORTCUT_SHOP = category("shortcut_shop", 600);
@@ -53,6 +54,42 @@ public final class BuiltinConfigEntries {
             .settingsVisibility(ConfigEntry.SettingsVisibility.HIDDEN)
             .normalize(value -> List.of("LIST", "ICON_SMALL", "ICON_MEDIUM", "ICON_LARGE").contains(value) ? value : null)
             .build();
+
+    public static final ConfigEntry<Integer> TRANSFER_MAX_UPLOAD_FILE_MIB = integer(
+            "networkTransfer.maxUploadFileSizeMiB", NETWORK_TRANSFER, 100, 1, 2048,
+            ConfigEntry.SettingsVisibility.VISIBLE,
+            config -> config.networkTransfer.maxUploadFileSizeMiB,
+            (config, value) -> config.networkTransfer.maxUploadFileSizeMiB = value);
+    public static final ConfigEntry<Integer> TRANSFER_MAX_DOWNLOAD_FILE_MIB = integer(
+            "networkTransfer.maxDownloadFileSizeMiB", NETWORK_TRANSFER, 200, 1, 2048,
+            ConfigEntry.SettingsVisibility.VISIBLE,
+            config -> config.networkTransfer.maxDownloadFileSizeMiB,
+            (config, value) -> config.networkTransfer.maxDownloadFileSizeMiB = value);
+    public static final ConfigEntry<Integer> TRANSFER_CHUNK_SIZE_KIB = integer(
+            "networkTransfer.chunkSizeKiB", NETWORK_TRANSFER, 300, 4, 24,
+            ConfigEntry.SettingsVisibility.VISIBLE,
+            config -> config.networkTransfer.chunkSizeKiB,
+            (config, value) -> config.networkTransfer.chunkSizeKiB = value);
+    public static final ConfigEntry<Integer> TRANSFER_UPLOAD_RATE_KIBPS = integer(
+            "networkTransfer.uploadRateLimitKiBps", NETWORK_TRANSFER, 400, 0, 1_048_576,
+            ConfigEntry.SettingsVisibility.VISIBLE,
+            config -> config.networkTransfer.uploadRateLimitKiBps,
+            (config, value) -> config.networkTransfer.uploadRateLimitKiBps = value);
+    public static final ConfigEntry<Integer> TRANSFER_DOWNLOAD_RATE_KIBPS = integer(
+            "networkTransfer.downloadRateLimitKiBps", NETWORK_TRANSFER, 500, 0, 1_048_576,
+            ConfigEntry.SettingsVisibility.VISIBLE,
+            config -> config.networkTransfer.downloadRateLimitKiBps,
+            (config, value) -> config.networkTransfer.downloadRateLimitKiBps = value);
+    public static final ConfigEntry<Integer> TRANSFER_COMPLETED_HISTORY_LIMIT = integer(
+            "networkTransfer.completedHistoryLimit", NETWORK_TRANSFER, 600, 0, 1000,
+            ConfigEntry.SettingsVisibility.VISIBLE,
+            config -> config.networkTransfer.completedHistoryLimit,
+            (config, value) -> config.networkTransfer.completedHistoryLimit = value);
+    public static final ConfigEntry<Integer> TRANSFER_FAILED_HISTORY_LIMIT = integer(
+            "networkTransfer.failedHistoryLimit", NETWORK_TRANSFER, 700, 0, 1000,
+            ConfigEntry.SettingsVisibility.VISIBLE,
+            config -> config.networkTransfer.failedHistoryLimit,
+            (config, value) -> config.networkTransfer.failedHistoryLimit = value);
 
     public static final ConfigEntry<String> GLOBAL_UNDO = key("keyBindings.global.undo", SHORTCUT_GLOBAL, 100, KeyScope.GLOBAL,
             config -> config.keyBindings.global.undo, (config, value) -> config.keyBindings.global.undo = value);
@@ -99,6 +136,9 @@ public final class BuiltinConfigEntries {
     private static final List<ConfigEntry<?>> ALL = List.of(
             VIEWPORT_GRID_SIZE, VIEWPORT_SNAP_TO_GRID, VIEWPORT_SHOW_GRID_AND_AXIS,
             NODE_CORNER_RADIUS, ASSET_QUICK_ACCESS_PATHS, ASSET_VIEW_MODE,
+            TRANSFER_MAX_UPLOAD_FILE_MIB, TRANSFER_MAX_DOWNLOAD_FILE_MIB, TRANSFER_CHUNK_SIZE_KIB,
+            TRANSFER_UPLOAD_RATE_KIBPS, TRANSFER_DOWNLOAD_RATE_KIBPS,
+            TRANSFER_COMPLETED_HISTORY_LIMIT, TRANSFER_FAILED_HISTORY_LIMIT,
             GLOBAL_UNDO, GLOBAL_REDO, GLOBAL_SAVE, GLOBAL_COPY, GLOBAL_PASTE, GLOBAL_CUT, GLOBAL_DELETE, GLOBAL_RENAME,
             VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
             VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT);
@@ -106,7 +146,8 @@ public final class BuiltinConfigEntries {
     private BuiltinConfigEntries() {}
 
     static void register(ConfigRegistry registry) {
-        for (ConfigCategory category : List.of(VIEWPORT, NODE, ASSET_BROWSER, SHORTCUT_GLOBAL, SHORTCUT_VIEWPORT, SHORTCUT_SHOP)) {
+        for (ConfigCategory category : List.of(VIEWPORT, NODE, ASSET_BROWSER, NETWORK_TRANSFER,
+                SHORTCUT_GLOBAL, SHORTCUT_VIEWPORT, SHORTCUT_SHOP)) {
             registry.registerCategory(category);
         }
         for (ConfigEntry<?> entry : ALL) registerUnchecked(registry, entry);

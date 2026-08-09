@@ -10,6 +10,14 @@ import com.mine.geometry_node.client.render.image.ClientImageAssetManager;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
+import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
+import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
+import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferAccepted;
+import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferDownloadChunk;
+import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferDownloadComplete;
+import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferServerResult;
+import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferUploadAck;
+import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferPlanResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
@@ -19,10 +27,8 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerUpsert;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
 import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphCapabilitiesResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphDownloadResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphFileOperationResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphListResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphUploadResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload;
@@ -42,6 +48,24 @@ public final class ClientNetworkReceiverRegistry {
         if (initialized) return;
         initialized = true;
 
+        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferAccepted.TYPE,
+                PacketAssetTransferAccepted.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
+        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferPlanResponse.TYPE,
+                PacketAssetTransferPlanResponse.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> ClientAssetTransferPlanState.handle(payload)));
+        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferDownloadChunk.TYPE,
+                PacketAssetTransferDownloadChunk.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
+        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferUploadAck.TYPE,
+                PacketAssetTransferUploadAck.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
+        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferDownloadComplete.TYPE,
+                PacketAssetTransferDownloadComplete.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
+        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferServerResult.TYPE,
+                PacketAssetTransferServerResult.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
         NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketSpawnDynamicVisual.TYPE,
                 PacketSpawnDynamicVisual.STREAM_CODEC,
                 (payload, context) -> context.queue(() -> ClientVisualManager.spawnEffectFromPacket(payload)));
@@ -71,10 +95,6 @@ public final class ClientNetworkReceiverRegistry {
                 PacketRemoteGraphCapabilitiesResponse.STREAM_CODEC, (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
         NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketRemoteGraphListResponse.TYPE,
                 PacketRemoteGraphListResponse.STREAM_CODEC, (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketRemoteGraphUploadResponse.TYPE,
-                PacketRemoteGraphUploadResponse.STREAM_CODEC, (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketRemoteGraphDownloadResponse.TYPE,
-                PacketRemoteGraphDownloadResponse.STREAM_CODEC, (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
         NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketRemoteGraphFileOperationResponse.TYPE,
                 PacketRemoteGraphFileOperationResponse.STREAM_CODEC, (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
         NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketOpenDialogue.TYPE,
