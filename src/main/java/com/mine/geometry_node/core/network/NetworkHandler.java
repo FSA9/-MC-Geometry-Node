@@ -54,6 +54,7 @@ public class NetworkHandler {
             Collections.synchronizedMap(new WeakHashMap<>());
 
     public static void init() {
+        ClientboundPayloadRegistry.registerDedicatedServerTypes();
         GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
         ServerAssetTransferService.INSTANCE.init();
 

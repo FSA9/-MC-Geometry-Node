@@ -34,7 +34,6 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
-import dev.architectury.networking.NetworkManager;
 import net.minecraft.network.chat.Component;
 
 /** Registers S2C receivers and routes their payloads into client-owned state. */
@@ -48,69 +47,58 @@ public final class ClientNetworkReceiverRegistry {
         if (initialized) return;
         initialized = true;
 
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferAccepted.TYPE,
-                PacketAssetTransferAccepted.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferAccepted.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferPlanResponse.TYPE,
-                PacketAssetTransferPlanResponse.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferPlanResponse.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferPlanState.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferDownloadChunk.TYPE,
-                PacketAssetTransferDownloadChunk.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferDownloadChunk.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferUploadAck.TYPE,
-                PacketAssetTransferUploadAck.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferUploadAck.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferDownloadComplete.TYPE,
-                PacketAssetTransferDownloadComplete.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferDownloadComplete.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketAssetTransferServerResult.TYPE,
-                PacketAssetTransferServerResult.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferServerResult.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketSpawnDynamicVisual.TYPE,
-                PacketSpawnDynamicVisual.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketSpawnDynamicVisual.TYPE,
                 (payload, context) -> context.queue(() -> ClientVisualManager.spawnEffectFromPacket(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketVisualAssetData.TYPE,
-                PacketVisualAssetData.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketVisualAssetData.TYPE,
                 (payload, context) -> context.queue(() -> ClientImageAssetManager.acceptServerAsset(payload.assetId(), payload.data())));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketGeometryDebugSnapshot.TYPE,
-                PacketGeometryDebugSnapshot.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketGeometryDebugSnapshot.TYPE,
                 (payload, context) -> context.queue(() -> GeometryDebugRenderer.handleSnapshot(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketSchematicProjection.TYPE,
-                PacketSchematicProjection.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketSchematicProjection.TYPE,
                 (payload, context) -> context.queue(() -> SchematicProjectionRenderer.handleProjection(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketSyncResponse.TYPE,
-                PacketSyncResponse.STREAM_CODEC, (payload, context) -> context.queue(() -> {
+        ClientboundPayloadRegistry.registerClientReceiver(PacketSyncResponse.TYPE,
+                (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() == null) return;
                     String prefix = payload.success() ? "§a[图纸同步成功]§r " : "§c[图纸同步失败]§r ";
                     context.getPlayer().sendSystemMessage(Component.literal(prefix + payload.graphId() + " - " + payload.message()));
                 }));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketSyncDownload.TYPE,
-                PacketSyncDownload.STREAM_CODEC, (payload, context) -> context.queue(() -> {
+        ClientboundPayloadRegistry.registerClientReceiver(PacketSyncDownload.TYPE,
+                (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() == null) return;
                     LocalDraftManager.saveDraft(payload.graphId(), payload.jsonContent());
                     context.getPlayer().sendSystemMessage(Component.literal(
                             "§a[☁ 云端下载成功]§r 图纸 " + payload.graphId() + " 已保存到你的本地草稿箱！"));
                 }));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketRemoteGraphCapabilitiesResponse.TYPE,
-                PacketRemoteGraphCapabilitiesResponse.STREAM_CODEC, (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketRemoteGraphListResponse.TYPE,
-                PacketRemoteGraphListResponse.STREAM_CODEC, (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketRemoteGraphFileOperationResponse.TYPE,
-                PacketRemoteGraphFileOperationResponse.STREAM_CODEC, (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketOpenDialogue.TYPE,
-                PacketOpenDialogue.STREAM_CODEC, (payload, context) -> context.queue(() -> ClientDialogueState.handleOpen(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketCloseDialogue.TYPE,
-                PacketCloseDialogue.STREAM_CODEC, (payload, context) -> context.queue(() -> ClientDialogueState.handleClose(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketQuestScreenSnapshot.TYPE,
-                PacketQuestScreenSnapshot.STREAM_CODEC, (payload, context) -> context.queue(() -> ClientQuestScreenState.handleSnapshot(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketMarkerSnapshot.TYPE,
-                PacketMarkerSnapshot.STREAM_CODEC, (payload, context) -> context.queue(() -> ClientMarkerStore.handleSnapshot(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketMarkerUpsert.TYPE,
-                PacketMarkerUpsert.STREAM_CODEC, (payload, context) -> context.queue(() -> ClientMarkerStore.handleUpsert(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketMarkerRemove.TYPE,
-                PacketMarkerRemove.STREAM_CODEC, (payload, context) -> context.queue(() -> ClientMarkerStore.handleRemove(payload)));
-        NetworkManager.registerReceiver(NetworkManager.Side.S2C, PacketCaptureEntityTemplateResponse.TYPE,
-                PacketCaptureEntityTemplateResponse.STREAM_CODEC,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteGraphCapabilitiesResponse.TYPE,
+                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteGraphListResponse.TYPE,
+                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteGraphFileOperationResponse.TYPE,
+                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketOpenDialogue.TYPE,
+                (payload, context) -> context.queue(() -> ClientDialogueState.handleOpen(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketCloseDialogue.TYPE,
+                (payload, context) -> context.queue(() -> ClientDialogueState.handleClose(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketQuestScreenSnapshot.TYPE,
+                (payload, context) -> context.queue(() -> ClientQuestScreenState.handleSnapshot(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketMarkerSnapshot.TYPE,
+                (payload, context) -> context.queue(() -> ClientMarkerStore.handleSnapshot(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketMarkerUpsert.TYPE,
+                (payload, context) -> context.queue(() -> ClientMarkerStore.handleUpsert(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketMarkerRemove.TYPE,
+                (payload, context) -> context.queue(() -> ClientMarkerStore.handleRemove(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketCaptureEntityTemplateResponse.TYPE,
                 (payload, context) -> context.queue(() -> EntityTemplatePickerController.handleResponse(payload)));
     }
 }
