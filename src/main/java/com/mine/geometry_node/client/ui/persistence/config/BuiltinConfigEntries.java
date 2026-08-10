@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.persistence.config;
 
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.shortcut.KeyScope;
+import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferConfigKeys;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -56,27 +57,27 @@ public final class BuiltinConfigEntries {
             .build();
 
     public static final ConfigEntry<Integer> TRANSFER_MAX_UPLOAD_FILE_MIB = integer(
-            "networkTransfer.maxUploadFileSizeMiB", NETWORK_TRANSFER, 100, 1, 2048,
+            AssetTransferConfigKeys.clientId(AssetTransferConfigKeys.MAX_UPLOAD_FILE_SIZE_MIB), NETWORK_TRANSFER, 100, 1, 2048,
             ConfigEntry.SettingsVisibility.VISIBLE,
             config -> config.networkTransfer.maxUploadFileSizeMiB,
             (config, value) -> config.networkTransfer.maxUploadFileSizeMiB = value);
     public static final ConfigEntry<Integer> TRANSFER_MAX_DOWNLOAD_FILE_MIB = integer(
-            "networkTransfer.maxDownloadFileSizeMiB", NETWORK_TRANSFER, 200, 1, 2048,
+            AssetTransferConfigKeys.clientId(AssetTransferConfigKeys.MAX_DOWNLOAD_FILE_SIZE_MIB), NETWORK_TRANSFER, 200, 1, 2048,
             ConfigEntry.SettingsVisibility.VISIBLE,
             config -> config.networkTransfer.maxDownloadFileSizeMiB,
             (config, value) -> config.networkTransfer.maxDownloadFileSizeMiB = value);
     public static final ConfigEntry<Integer> TRANSFER_CHUNK_SIZE_KIB = integer(
-            "networkTransfer.chunkSizeKiB", NETWORK_TRANSFER, 300, 4, 24,
+            AssetTransferConfigKeys.clientId(AssetTransferConfigKeys.CHUNK_SIZE_KIB), NETWORK_TRANSFER, 300, 4, 24,
             ConfigEntry.SettingsVisibility.VISIBLE,
             config -> config.networkTransfer.chunkSizeKiB,
             (config, value) -> config.networkTransfer.chunkSizeKiB = value);
     public static final ConfigEntry<Integer> TRANSFER_UPLOAD_RATE_KIBPS = integer(
-            "networkTransfer.uploadRateLimitKiBps", NETWORK_TRANSFER, 400, 0, 1_048_576,
+            AssetTransferConfigKeys.clientId(AssetTransferConfigKeys.UPLOAD_RATE_LIMIT_KIBPS), NETWORK_TRANSFER, 400, 0, 1_048_576,
             ConfigEntry.SettingsVisibility.VISIBLE,
             config -> config.networkTransfer.uploadRateLimitKiBps,
             (config, value) -> config.networkTransfer.uploadRateLimitKiBps = value);
     public static final ConfigEntry<Integer> TRANSFER_DOWNLOAD_RATE_KIBPS = integer(
-            "networkTransfer.downloadRateLimitKiBps", NETWORK_TRANSFER, 500, 0, 1_048_576,
+            AssetTransferConfigKeys.clientId(AssetTransferConfigKeys.DOWNLOAD_RATE_LIMIT_KIBPS), NETWORK_TRANSFER, 500, 0, 1_048_576,
             ConfigEntry.SettingsVisibility.VISIBLE,
             config -> config.networkTransfer.downloadRateLimitKiBps,
             (config, value) -> config.networkTransfer.downloadRateLimitKiBps = value);

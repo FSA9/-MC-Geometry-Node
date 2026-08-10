@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.system.asset.transfer.service;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphPermissions;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferProtocolLimits;
+import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferServerConfig;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferServerPolicy;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.IncomingAssetTransferFile;
@@ -40,7 +41,6 @@ import java.util.concurrent.TimeUnit;
 public final class ServerAssetTransferService implements AutoCloseable {
     public static final ServerAssetTransferService INSTANCE = new ServerAssetTransferService();
 
-    private final AssetTransferServerPolicy policy = AssetTransferServerPolicy.defaults();
     private final AssetTransferIoExecutor io = new AssetTransferIoExecutor("GeometryNode-AssetTransfer-ServerIO", 2, 128);
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(task -> {
         Thread thread = new Thread(task, "GeometryNode-AssetTransfer-ServerRate");
@@ -66,7 +66,9 @@ public final class ServerAssetTransferService implements AutoCloseable {
             sendFailure(player, packet.transferId(), AssetTransferErrorCode.PERMISSION_DENIED, "permission_denied", "");
             return;
         }
-        PlayerContext owner = players.computeIfAbsent(player.getUUID(), ignored -> new PlayerContext());
+        AssetTransferServerPolicy policy = AssetTransferServerConfig.policy();
+        PlayerContext owner = players.computeIfAbsent(player.getUUID(), ignored -> new PlayerContext(policy));
+        owner.applyPolicy(policy);
         int chunkBytes = Math.min(packet.requestedChunkBytes(), policy.maxChunkBytes());
         synchronized (owner) {
             if (owner.sessions.containsKey(packet.transferId())) {
@@ -82,17 +84,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
                         "concurrency_limit", "");
                 return;
             }
-            if (packet.direction() == AssetTransferDirection.UPLOAD) {
-                long reservedTemporaryBytes = owner.sessions.values().stream()
-                        .filter(session -> session.direction == AssetTransferDirection.UPLOAD)
-                        .mapToLong(session -> session.open.totalBytes()).sum();
-                if (packet.totalBytes() > policy.maxTemporaryBytesPerPlayer() - reservedTemporaryBytes) {
-                    sendFailure(player, packet.transferId(), AssetTransferErrorCode.TEMPORARY_STORAGE_LIMIT,
-                            "temporary_storage_limit", "");
-                    return;
-                }
-            }
-            ServerSession session = new ServerSession(player, packet, chunkBytes);
+            ServerSession session = new ServerSession(player, packet, chunkBytes, policy);
             owner.sessions.put(packet.transferId(), session);
         }
 
@@ -200,7 +192,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
     private void openUpload(PlayerContext owner, UUID transferId) {
         ServerSession session = owner.sessions.get(transferId);
         if (session == null) return;
-        if (session.open.totalBytes() > policy.maxUploadFileBytes()) {
+        if (session.open.totalBytes() > session.policy.maxUploadFileBytes()) {
             failAndClose(owner, session, AssetTransferErrorCode.FILE_TOO_LARGE, "file_too_large", "");
             return;
         }
@@ -225,7 +217,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
         if (session == null) return;
         io.submit(() -> OutgoingAssetTransferFile.open(
                 RemoteAssetFileService.resolveTransferSource(session.player.level().getServer(), session.remotePath),
-                policy.maxDownloadFileBytes())).whenComplete((outgoing, throwable) ->
+                session.policy.maxDownloadFileBytes())).whenComplete((outgoing, throwable) ->
                 session.player.level().getServer().execute(() -> {
                     if (throwable != null || owner.sessions.get(transferId) != session) {
                         closeQuietly(outgoing);
@@ -280,10 +272,11 @@ public final class ServerAssetTransferService implements AutoCloseable {
     }
 
     private void expireIdleSessions() {
-        long deadline = System.nanoTime() - policy.idleTimeout().toNanos();
+        long now = System.nanoTime();
         for (PlayerContext owner : players.values()) {
             for (ServerSession session : owner.sessions.values()) {
-                if (session.lastActivityNanos >= deadline || !owner.sessions.remove(session.transferId, session)) continue;
+                if (now - session.lastActivityNanos < session.policy.idleTimeout().toNanos()
+                        || !owner.sessions.remove(session.transferId, session)) continue;
                 closeQuietly(session);
                 session.player.level().getServer().execute(() -> sendFailure(session.player, session.transferId,
                         AssetTransferErrorCode.TIMEOUT, "timeout", ""));
@@ -348,8 +341,19 @@ public final class ServerAssetTransferService implements AutoCloseable {
 
     private final class PlayerContext implements AutoCloseable {
         private final Map<UUID, ServerSession> sessions = new ConcurrentHashMap<>();
-        private final ByteRateLimiter uploadLimiter = new ByteRateLimiter(policy.uploadRateBytesPerSecond());
-        private final ByteRateLimiter downloadLimiter = new ByteRateLimiter(policy.downloadRateBytesPerSecond());
+        private final ByteRateLimiter uploadLimiter;
+        private final ByteRateLimiter downloadLimiter;
+
+        private PlayerContext(AssetTransferServerPolicy policy) {
+            uploadLimiter = new ByteRateLimiter(policy.uploadRateBytesPerSecond());
+            downloadLimiter = new ByteRateLimiter(policy.downloadRateBytesPerSecond());
+        }
+
+        private void applyPolicy(AssetTransferServerPolicy policy) {
+            uploadLimiter.setRate(policy.uploadRateBytesPerSecond());
+            downloadLimiter.setRate(policy.downloadRateBytesPerSecond());
+        }
+
         @Override public void close() {
             for (ServerSession session : sessions.values()) closeQuietly(session);
             sessions.clear();
@@ -363,6 +367,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
         private final AssetTransferDirection direction;
         private final String remotePath;
         private final int chunkBytes;
+        private final AssetTransferServerPolicy policy;
         private volatile IncomingAssetTransferFile incoming;
         private volatile OutgoingAssetTransferFile outgoing;
         private volatile long lastActivityNanos = System.nanoTime();
@@ -370,7 +375,8 @@ public final class ServerAssetTransferService implements AutoCloseable {
         private long nextOffset;
         private boolean sendInProgress;
 
-        private ServerSession(ServerPlayer player, PacketAssetTransferOpen open, int chunkBytes) {
+        private ServerSession(ServerPlayer player, PacketAssetTransferOpen open, int chunkBytes,
+                              AssetTransferServerPolicy policy) {
             this.player = player;
             this.open = open;
             transferId = open.transferId();
@@ -378,6 +384,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
             remotePath = open.relativePath();
             this.chunkBytes = Math.clamp(chunkBytes, AssetTransferProtocolLimits.MIN_CHUNK_BYTES,
                     AssetTransferProtocolLimits.MAX_CHUNK_BYTES);
+            this.policy = policy;
         }
 
         private void touch() { lastActivityNanos = System.nanoTime(); }

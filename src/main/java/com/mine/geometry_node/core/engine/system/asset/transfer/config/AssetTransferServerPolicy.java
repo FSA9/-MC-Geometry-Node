@@ -10,7 +10,6 @@ public record AssetTransferServerPolicy(
         long downloadRateBytesPerSecond,
         int maxConcurrentUploadsPerPlayer,
         int maxConcurrentDownloadsPerPlayer,
-        long maxTemporaryBytesPerPlayer,
         Duration idleTimeout
 ) {
     public AssetTransferServerPolicy {
@@ -21,7 +20,6 @@ public record AssetTransferServerPolicy(
         downloadRateBytesPerSecond = Math.max(1L, downloadRateBytesPerSecond);
         maxConcurrentUploadsPerPlayer = Math.max(1, maxConcurrentUploadsPerPlayer);
         maxConcurrentDownloadsPerPlayer = Math.max(1, maxConcurrentDownloadsPerPlayer);
-        maxTemporaryBytesPerPlayer = Math.max(1L, maxTemporaryBytesPerPlayer);
         idleTimeout = idleTimeout != null && !idleTimeout.isNegative() && !idleTimeout.isZero()
                 ? idleTimeout : Duration.ofSeconds(30);
     }
@@ -30,6 +28,6 @@ public record AssetTransferServerPolicy(
         long mebibyte = 1024L * 1024L;
         return new AssetTransferServerPolicy(
                 32L * mebibyte, 32L * mebibyte, 24 * 1024,
-                mebibyte, mebibyte, 2, 2, 128L * mebibyte, Duration.ofSeconds(30));
+                mebibyte, mebibyte, 2, 2, Duration.ofSeconds(30));
     }
 }
