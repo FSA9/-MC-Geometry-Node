@@ -10,13 +10,13 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-final class GraphFavoriteStore {
+final class AssetFavoriteStore {
     List<String> pathsSnapshot() {
-        return new ArrayList<>(ConfigManager.INSTANCE.getConfig().assetBrowser.favoriteGraphPaths);
+        return new ArrayList<>(ConfigManager.INSTANCE.getConfig().assetBrowser.favoriteAssetPaths);
     }
 
     boolean isFavorite(File file) {
-        return file != null && ConfigManager.INSTANCE.getConfig().assetBrowser.favoriteGraphPaths.contains(pathKey(file));
+        return file != null && ConfigManager.INSTANCE.getConfig().assetBrowser.favoriteAssetPaths.contains(pathKey(file));
     }
 
     void toggle(File file) {
@@ -26,7 +26,7 @@ final class GraphFavoriteStore {
 
         String key = pathKey(file);
         ConfigManager.INSTANCE.update(config -> {
-            List<String> favorites = config.assetBrowser.favoriteGraphPaths;
+            List<String> favorites = config.assetBrowser.favoriteAssetPaths;
             if (favorites.contains(key)) {
                 favorites.remove(key);
             } else {
@@ -44,7 +44,7 @@ final class GraphFavoriteStore {
             return;
         }
         ConfigManager.INSTANCE.update(config -> {
-            List<String> favorites = config.assetBrowser.favoriteGraphPaths;
+            List<String> favorites = config.assetBrowser.favoriteAssetPaths;
             int index = favorites.indexOf(oldKey);
             if (index < 0) return;
             favorites.set(index, newKey);
@@ -54,7 +54,7 @@ final class GraphFavoriteStore {
     void removePath(File file) {
         String key = pathKey(file);
         ConfigManager.INSTANCE.update(config -> {
-            List<String> favorites = config.assetBrowser.favoriteGraphPaths;
+            List<String> favorites = config.assetBrowser.favoriteAssetPaths;
             favorites.removeIf(favorite -> favorite.equals(key) || favorite.startsWith(key + File.separator));
         });
     }
@@ -67,7 +67,7 @@ final class GraphFavoriteStore {
         String oldPrefix = pathKey(oldDirectory);
         String newPrefix = pathKey(newDirectory);
         ConfigManager.INSTANCE.update(config -> {
-            List<String> favorites = config.assetBrowser.favoriteGraphPaths;
+            List<String> favorites = config.assetBrowser.favoriteAssetPaths;
             for (int i = 0; i < favorites.size(); i++) {
                 String favorite = favorites.get(i);
                 if (favorite.equals(oldPrefix)) {

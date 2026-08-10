@@ -66,7 +66,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final Map<String, AssetFileItemView> mItemViews = new HashMap<>();
     private final Set<String> mSelectedPaths = new LinkedHashSet<>();
     private final List<AssetEntry> mVisibleEntries = new ArrayList<>();
-    private final GraphFavoriteStore mFavoriteStore = new GraphFavoriteStore();
+    private final AssetFavoriteStore mFavoriteStore = new AssetFavoriteStore();
     private final LocalAssetService mLocalAssetService = new LocalAssetService();
     private final GraphAssetService mGraphAssetService = new GraphAssetService();
     private final ScopedKeyManager<AssetLibraryActionId, AssetFileBrowserPanel> mKeyManager;

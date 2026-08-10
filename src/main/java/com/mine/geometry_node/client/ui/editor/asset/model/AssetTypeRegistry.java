@@ -39,14 +39,16 @@ public final class AssetTypeRegistry {
         register(new AssetType(
                 SCHEMATIC_ID, 0xFF86B8FF, false, true, AssetPreviewKind.SCHEMATIC,
                 EnumSet.allOf(AssetSourceKind.class),
-                EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.COPY,
+                EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.FAVORITE,
+                        AssetTypeAction.COPY,
                         AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME,
                         AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD),
                 extensionMatcher(".schem", ".schematic")));
         register(new AssetType(
                 IMAGE_ID, 0xFF77C99D, false, true, AssetPreviewKind.IMAGE,
                 EnumSet.allOf(AssetSourceKind.class),
-                EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.COPY,
+                EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.FAVORITE,
+                        AssetTypeAction.COPY,
                         AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME,
                         AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD),
                 (name, directory) -> !directory && ImageAssetFormats.isSupportedPath(name)));

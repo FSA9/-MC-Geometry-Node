@@ -52,7 +52,7 @@ final class AssetBrowserActionController {
     private final AssetBrowserCoordinator mCoordinator;
     private final LocalAssetService mLocalAssetService;
     private final GraphAssetService mGraphAssetService;
-    private final GraphFavoriteStore mFavoriteStore;
+    private final AssetFavoriteStore mFavoriteStore;
     private final AssetTaskController mIoTasks;
     private final boolean mEnableLocalFileActions;
     private final boolean mEnableRemoteTransferActions;
@@ -69,7 +69,7 @@ final class AssetBrowserActionController {
             AssetBrowserCoordinator coordinator,
             LocalAssetService localAssetService,
             GraphAssetService graphAssetService,
-            GraphFavoriteStore favoriteStore,
+            AssetFavoriteStore favoriteStore,
             AssetTaskController ioTasks,
             boolean enableLocalFileActions,
             boolean enableRemoteTransferActions,

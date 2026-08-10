@@ -28,7 +28,7 @@ public class AppConfig {
 
     public static class AssetBrowserConfig {
         public List<String> quickAccessPaths = new ArrayList<>();
-        public List<String> favoriteGraphPaths = new ArrayList<>();
+        public List<String> favoriteAssetPaths = new ArrayList<>();
         public String viewMode = "LIST";
         public boolean rightSidebarVisible = true;
         public float rightSidebarWeight = 0.2f;
@@ -37,7 +37,7 @@ public class AppConfig {
         AssetBrowserConfig copy() {
             AssetBrowserConfig copy = new AssetBrowserConfig();
             copy.quickAccessPaths = quickAccessPaths != null ? new ArrayList<>(quickAccessPaths) : null;
-            copy.favoriteGraphPaths = favoriteGraphPaths != null ? new ArrayList<>(favoriteGraphPaths) : null;
+            copy.favoriteAssetPaths = favoriteAssetPaths != null ? new ArrayList<>(favoriteAssetPaths) : null;
             copy.viewMode = viewMode;
             copy.rightSidebarVisible = rightSidebarVisible;
             copy.rightSidebarWeight = rightSidebarWeight;

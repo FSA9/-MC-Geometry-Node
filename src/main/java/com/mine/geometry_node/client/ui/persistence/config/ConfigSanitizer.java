@@ -38,13 +38,18 @@ final class ConfigSanitizer {
                 changed = true;
             }
 
-            ReadList favorites = readStringList(assetBrowser, "favoriteGraphPaths");
+            ReadList favorites = readStringList(assetBrowser, "favoriteAssetPaths");
+            boolean migratedFavorites = false;
+            if (!favorites.valid) {
+                favorites = readStringList(assetBrowser, "favoriteGraphPaths");
+                migratedFavorites = favorites.valid;
+            }
             if (favorites.valid) {
-                NormalizeList normalized = normalizeFavoriteGraphPaths(favorites.value);
-                config.assetBrowser.favoriteGraphPaths = normalized.value;
-                changed |= favorites.changed || normalized.changed;
+                NormalizeList normalized = normalizeFavoriteAssetPaths(favorites.value);
+                config.assetBrowser.favoriteAssetPaths = normalized.value;
+                changed |= migratedFavorites || favorites.changed || normalized.changed;
             } else {
-                config.assetBrowser.favoriteGraphPaths = defaults.assetBrowser.favoriteGraphPaths;
+                config.assetBrowser.favoriteAssetPaths = defaults.assetBrowser.favoriteAssetPaths;
                 changed = true;
             }
 
@@ -206,13 +211,13 @@ final class ConfigSanitizer {
                 changed = true;
             }
 
-            if (config.assetBrowser.favoriteGraphPaths == null) {
-                config.assetBrowser.favoriteGraphPaths = defaults.assetBrowser.favoriteGraphPaths;
+            if (config.assetBrowser.favoriteAssetPaths == null) {
+                config.assetBrowser.favoriteAssetPaths = defaults.assetBrowser.favoriteAssetPaths;
                 changed = true;
             } else {
-                NormalizeList normalized = normalizeFavoriteGraphPaths(config.assetBrowser.favoriteGraphPaths);
+                NormalizeList normalized = normalizeFavoriteAssetPaths(config.assetBrowser.favoriteAssetPaths);
                 if (normalized.changed) {
-                    config.assetBrowser.favoriteGraphPaths = normalized.value;
+                    config.assetBrowser.favoriteAssetPaths = normalized.value;
                     changed = true;
                 }
             }
@@ -579,7 +584,7 @@ final class ConfigSanitizer {
         return false;
     }
 
-    private static NormalizeList normalizeFavoriteGraphPaths(List<String> source) {
+    private static NormalizeList normalizeFavoriteAssetPaths(List<String> source) {
         List<String> normalized = new ArrayList<>();
         boolean changed = false;
         for (String path : source) {
@@ -589,7 +594,7 @@ final class ConfigSanitizer {
             }
 
             File file = new File(path);
-            if (!file.exists() || !file.isFile() || !file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".json")) {
+            if (!file.exists() || !file.isFile()) {
                 changed = true;
                 continue;
             }
