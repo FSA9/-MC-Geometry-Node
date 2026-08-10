@@ -12,6 +12,10 @@ The project aims to let creators organize logic and data through in-game node gr
 
 The project is still under development. Node APIs, graph data formats, and runtime architecture may continue to change.
 
+## License
+
+GeometryNode is licensed under the [MIT License](LICENSE).
+
 ## Interface Preview
 
 ![GeometryNode interface preview](docs/img.png)

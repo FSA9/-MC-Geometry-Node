@@ -12,6 +12,10 @@ GeometryNode 是一款面向 Minecraft 的可视化节点编程 Mod，目标是�
 
 项目目前仍在开发中，节点接口、图数据格式和运行时架构可能继续调整。
 
+## 许可证
+
+GeometryNode 使用 [MIT License](../LICENSE) 开源。
+
 ## 界面展示
 
 ![GeometryNode 界面展示](img.png)
