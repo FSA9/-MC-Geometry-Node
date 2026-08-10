@@ -69,7 +69,8 @@ public final class RemoteAssetRepository implements AssetRepository {
         Map<String, String> graphTypesByKey = new HashMap<>();
         for (RemoteGraphEntry remote : source == null ? List.<RemoteGraphEntry>of() : source) {
             if (!nameQuery.isEmpty() && !remote.name().toLowerCase(Locale.ROOT).contains(nameQuery)) continue;
-            AssetEntry entry = AssetEntry.remote(remote.path(), remote.name(), remote.directory(), remote.size());
+            AssetEntry entry = AssetEntry.remote(remote.path(), remote.name(), remote.directory(),
+                    remote.size(), remote.lastModified());
             if (entry.type() == null || !entry.type().displayInBrowser()
                     || !entry.type().supportsSource(AssetSourceKind.REMOTE)) continue;
             entries.add(entry);

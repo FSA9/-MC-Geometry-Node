@@ -2,6 +2,10 @@ package com.mine.geometry_node.client.asset.transfer;
 
 import com.mine.geometry_node.client.ui.persistence.config.AssetTransferConfigAdapter;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnail;
+import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicUploadPreview;
+import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicUploadPreviewGenerator;
+import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferClientPreferences;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.IncomingAssetTransferFile;
@@ -298,17 +302,33 @@ public final class ClientAssetTransferService implements AutoCloseable {
             return;
         }
         AssetTransferClientPreferences preferences = preferences();
-        io.submit(() -> OutgoingAssetTransferFile.open(file.request.localPath(), preferences.maxUploadFileBytes()))
-                .whenComplete((outgoing, throwable) -> post(() -> {
+        io.submit(() -> new PreparedUpload(
+                        OutgoingAssetTransferFile.open(file.request.localPath(), preferences.maxUploadFileBytes()),
+                        AssetTransferPolicy.SCHEMATIC_TYPE_ID.equals(
+                                AssetTransferPolicy.resolveTypeId(file.request.remotePath()))
+                                ? SchematicUploadPreviewGenerator.read(file.request.localPath()) : null))
+                .whenComplete((prepared, throwable) -> post(() -> {
                     if (throwable != null) {
                         failLocal(file, AssetTransferErrorCode.IO_FAILURE, "open_failed", rootMessage(throwable));
                         return;
                     }
+                    SchematicUploadPreview preview = null;
+                    try {
+                        if (prepared.thumbnail() != null) {
+                            preview = SchematicUploadPreviewGenerator.render(prepared.thumbnail());
+                        }
+                    } catch (Throwable previewFailure) {
+                        closeQuietly(prepared.outgoing());
+                        failLocal(file, AssetTransferErrorCode.IO_FAILURE, "preview_generation_failed",
+                                rootMessage(previewFailure));
+                        return;
+                    }
                     synchronized (this) {
-                        if (file.state.isTerminal()) { closeQuietly(outgoing); return; }
-                        file.outgoing = outgoing;
-                        file.totalBytes = outgoing.totalBytes();
-                        file.sha256 = outgoing.sha256();
+                        if (file.state.isTerminal()) { closeQuietly(prepared.outgoing()); return; }
+                        file.outgoing = prepared.outgoing();
+                        file.preview = preview;
+                        file.totalBytes = prepared.outgoing().totalBytes();
+                        file.sha256 = prepared.outgoing().sha256();
                         publish();
                     }
                     NetworkHandler.sendToServer(new PacketAssetTransferOpen(file.transferId, file.direction,
@@ -341,7 +361,11 @@ public final class ClientAssetTransferService implements AutoCloseable {
             if (file.transferredBytes >= file.totalBytes) {
                 file.state = AssetTransferState.VERIFYING;
                 publish();
-                NetworkHandler.sendToServer(new PacketAssetTransferComplete(file.transferId));
+                SchematicUploadPreview preview = file.preview;
+                NetworkHandler.sendToServer(preview == null
+                        ? new PacketAssetTransferComplete(file.transferId)
+                        : new PacketAssetTransferComplete(file.transferId, preview.format(), preview.width(),
+                        preview.height(), preview.content()));
                 return;
             }
             file.sendInProgress = true;
@@ -477,6 +501,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
         private AssetTransferFailure failure;
         private OutgoingAssetTransferFile outgoing;
         private IncomingAssetTransferFile incoming;
+        private SchematicUploadPreview preview;
         private String sha256 = "";
         private long totalBytes;
         private long transferredBytes;
@@ -502,5 +527,8 @@ public final class ClientAssetTransferService implements AutoCloseable {
             return new AssetTransferFileSnapshot(transferId, direction, request.localPath().toString(),
                     request.remotePath(), state, totalBytes, transferredBytes, speed, failure);
         }
+    }
+
+    private record PreparedUpload(OutgoingAssetTransferFile outgoing, SchematicThumbnail thumbnail) {
     }
 }

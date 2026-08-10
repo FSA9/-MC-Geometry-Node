@@ -12,6 +12,7 @@ import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
+import com.mine.geometry_node.client.asset.preview.protocol.ClientAssetPreviewProtocol;
 import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferAccepted;
 import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferDownloadChunk;
 import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferDownloadComplete;
@@ -34,6 +35,10 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
+import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewAccepted;
+import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewChunk;
+import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewComplete;
+import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewResult;
 import net.minecraft.network.chat.Component;
 
 /** Registers S2C receivers and routes their payloads into client-owned state. */
@@ -100,5 +105,13 @@ public final class ClientNetworkReceiverRegistry {
                 (payload, context) -> context.queue(() -> ClientMarkerStore.handleRemove(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketCaptureEntityTemplateResponse.TYPE,
                 (payload, context) -> context.queue(() -> EntityTemplatePickerController.handleResponse(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetPreviewAccepted.TYPE,
+                (payload, context) -> context.queue(() -> ClientAssetPreviewProtocol.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetPreviewChunk.TYPE,
+                (payload, context) -> context.queue(() -> ClientAssetPreviewProtocol.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetPreviewComplete.TYPE,
+                (payload, context) -> context.queue(() -> ClientAssetPreviewProtocol.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetPreviewResult.TYPE,
+                (payload, context) -> context.queue(() -> ClientAssetPreviewProtocol.handle(payload)));
     }
 }

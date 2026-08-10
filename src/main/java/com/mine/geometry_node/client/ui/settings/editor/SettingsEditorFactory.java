@@ -19,6 +19,7 @@ public final class SettingsEditorFactory {
         register(ConfigEntry.EditorType.INTEGER, NumberConfigEntryEditor::create);
         register(ConfigEntry.EditorType.FLOAT, NumberConfigEntryEditor::create);
         register(ConfigEntry.EditorType.CHOICE, ChoiceConfigEntryEditor::create);
+        register(ConfigEntry.EditorType.PATH, PathConfigEntryEditor::create);
         register(ConfigEntry.EditorType.PATH_LIST, PathListConfigEntryEditor::create);
         register(ConfigEntry.EditorType.KEY_BINDING, ShortcutConfigEntryEditor::create);
         register(ConfigEntry.EditorType.SHORTCUT, ShortcutConfigEntryEditor::create);

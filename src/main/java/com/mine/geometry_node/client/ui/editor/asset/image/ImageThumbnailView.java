@@ -11,7 +11,6 @@ import icyllis.modernui.view.View;
 import java.io.File;
 
 public final class ImageThumbnailView extends View {
-    private static final int BACKGROUND_COLOR = 0xFF24282D;
     private static final int FALLBACK_COLOR = 0xFF77C99D;
 
     private final File mFile;
@@ -46,9 +45,6 @@ public final class ImageThumbnailView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        mPaint.setColor(BACKGROUND_COLOR);
-        canvas.drawRect(0, 0, getWidth(), getHeight(), mPaint);
-
         Bitmap bitmap = mSubscription != null ? mSubscription.bitmap() : null;
         if (bitmap == null) {
             drawFallback(canvas);

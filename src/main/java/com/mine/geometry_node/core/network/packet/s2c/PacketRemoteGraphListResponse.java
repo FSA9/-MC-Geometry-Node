@@ -39,6 +39,7 @@ public record PacketRemoteGraphListResponse(
             buf.writeUtf(entry.name(), 32767);
             buf.writeBoolean(entry.directory());
             buf.writeLong(entry.size());
+            buf.writeLong(entry.lastModified());
             buf.writeUtf(entry.graphTypeId(), 32767);
         }
     }
@@ -51,6 +52,7 @@ public record PacketRemoteGraphListResponse(
                     buf.readUtf(32767),
                     buf.readUtf(32767),
                     buf.readBoolean(),
+                    buf.readLong(),
                     buf.readLong(),
                     buf.readUtf(32767)
             ));

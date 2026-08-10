@@ -20,6 +20,7 @@ public final class AssetTransferServerConfig {
     public static final ModConfigSpec.IntValue MAX_CONCURRENT_UPLOADS_PER_PLAYER;
     public static final ModConfigSpec.IntValue MAX_CONCURRENT_DOWNLOADS_PER_PLAYER;
     public static final ModConfigSpec.IntValue IDLE_TIMEOUT_SECONDS;
+    public static final ModConfigSpec.IntValue PREVIEW_CACHE_MAX_SIZE_MIB;
     public static final ModConfigSpec SPEC;
 
     static {
@@ -59,8 +60,16 @@ public final class AssetTransferServerConfig {
                 .comment("Seconds before an inactive transfer session is closed.")
                 .defineInRange(AssetTransferConfigKeys.IDLE_TIMEOUT_SECONDS,
                         Math.toIntExact(defaults.idleTimeout().toSeconds()), 1, 3600);
+        PREVIEW_CACHE_MAX_SIZE_MIB = BUILDER
+                .comment("Maximum persistent preview-cache size in MiB. The cache directory is the sibling "
+                        + "'.geometrynode-preview-cache' beside the server geometry-nodes asset root.")
+                .defineInRange("previewCacheMaxSizeMiB", 512, 64, 65_536);
         BUILDER.pop();
         SPEC = BUILDER.build();
+    }
+
+    public static long previewCacheMaxBytes() {
+        return PREVIEW_CACHE_MAX_SIZE_MIB.getAsInt() * MEBIBYTE;
     }
 
     private AssetTransferServerConfig() {

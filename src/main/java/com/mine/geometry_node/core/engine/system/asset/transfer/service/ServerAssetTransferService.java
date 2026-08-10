@@ -2,12 +2,20 @@ package com.mine.geometry_node.core.engine.system.asset.transfer.service;
 
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphPermissions;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
+import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescriptor;
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewIdentity;
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
+import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferProtocolLimits;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferServerConfig;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferServerPolicy;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.IncomingAssetTransferFile;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.OutgoingAssetTransferFile;
+import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
+import com.mine.geometry_node.core.engine.system.asset.transfer.io.VerifiedAssetCommitter;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferDirection;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferErrorCode;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferState;
@@ -30,6 +38,11 @@ import dev.architectury.event.events.common.PlayerEvent;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import java.util.Map;
 import java.util.List;
 import java.util.UUID;
@@ -48,6 +61,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
         return thread;
     });
     private final Map<UUID, PlayerContext> players = new ConcurrentHashMap<>();
+    private final ServerAssetPreviewStore previewStore = new ServerAssetPreviewStore();
     private volatile boolean initialized;
 
     private ServerAssetTransferService() {
@@ -158,12 +172,20 @@ public final class ServerAssetTransferService implements AutoCloseable {
         io.run(() -> {
             session.incoming.verifyAndClose();
             var temporary = session.incoming.retainVerifiedFile();
+            Path previewTemporary = null;
             try {
-                RemoteAssetFileService.commitVerifiedUpload(player.level().getServer(), session.remotePath, temporary,
+                previewTemporary = stageSchematicPreview(player, session, packet);
+                VerifiedAssetCommitter.CommitResult commit = RemoteAssetFileService.commitVerifiedUpload(
+                        player.level().getServer(), session.remotePath, temporary,
                         session.open.conflictPolicy()).join();
+                if (commit == VerifiedAssetCommitter.CommitResult.COMMITTED && previewTemporary != null) {
+                    publishSchematicPreview(player, session, packet, previewTemporary);
+                }
             } catch (Throwable throwable) {
                 Files.deleteIfExists(temporary);
                 throw throwable;
+            } finally {
+                if (previewTemporary != null) Files.deleteIfExists(previewTemporary);
             }
         }).whenComplete((ignored, throwable) -> player.level().getServer().execute(() -> {
             if (throwable != null) {
@@ -173,6 +195,72 @@ public final class ServerAssetTransferService implements AutoCloseable {
                 completeAndClose(lookup.owner, session);
             }
         }));
+    }
+
+    private Path stageSchematicPreview(ServerPlayer player, ServerSession session,
+                                       PacketAssetTransferComplete packet) throws Exception {
+        boolean schematic = AssetTransferPolicy.SCHEMATIC_TYPE_ID.equals(
+                AssetTransferPolicy.resolveTypeId(session.remotePath));
+        if (!schematic) {
+            if (packet.hasPreview()) throw new java.io.IOException("Preview attachment is not valid for this asset type");
+            return null;
+        }
+        if (!packet.hasPreview() || packet.previewFormat()
+                != com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewFormat.PNG) {
+            throw new java.io.IOException("Schematic upload requires a PNG preview");
+        }
+        byte[] content = packet.previewContent();
+        Path directory = RemoteAssetFileService.transferTemporaryDirectory(player.level().getServer());
+        Files.createDirectories(directory);
+        Path temporary = directory.resolve(session.transferId + ".preview.tmp");
+        Files.write(temporary, content);
+        try {
+            validatePreviewImage(temporary, packet.previewFormat(),
+                    packet.previewWidth(), packet.previewHeight());
+            return temporary;
+        } catch (Throwable failure) {
+            Files.deleteIfExists(temporary);
+            throw failure;
+        }
+    }
+
+    private static void validatePreviewImage(Path source,
+                                             com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewFormat format,
+                                             int expectedWidth, int expectedHeight) throws Exception {
+        try (ImageInputStream input = ImageIO.createImageInputStream(source.toFile())) {
+            if (input == null) throw new java.io.IOException("Cannot inspect schematic preview image");
+            java.util.Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) throw new java.io.IOException("Unsupported schematic preview image");
+            ImageReader reader = readers.next();
+            try {
+                if (!format.name().equalsIgnoreCase(reader.getFormatName())) {
+                    throw new java.io.IOException("Schematic preview encoding does not match its descriptor");
+                }
+                reader.setInput(input, true, true);
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+                if (width != expectedWidth || height != expectedHeight
+                        || !com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewLimits
+                        .validDimensions(width, height)) {
+                    throw new java.io.IOException("Invalid schematic preview dimensions");
+                }
+            } finally {
+                reader.dispose();
+            }
+        }
+    }
+
+    private void publishSchematicPreview(ServerPlayer player, ServerSession session,
+                                         PacketAssetTransferComplete packet, Path previewTemporary) throws Exception {
+        Path source = RemoteAssetFileService.resolveTransferSource(player.level().getServer(), session.remotePath);
+        BasicFileAttributes attributes = Files.readAttributes(source, BasicFileAttributes.class);
+        AssetPreviewRevision revision = AssetPreviewRevision.current(
+                new AssetPreviewIdentity(session.remotePath, AssetPreviewKind.SCHEMATIC),
+                attributes.size(), attributes.lastModifiedTime().toMillis());
+        AssetPreviewDescriptor descriptor = new AssetPreviewDescriptor(revision, packet.previewFormat(),
+                packet.previewWidth(), packet.previewHeight(), Math.toIntExact(Files.size(previewTemporary)),
+                AssetTransferHashing.sha256(previewTemporary));
+        previewStore.publish(player.level().getServer(), previewTemporary, descriptor);
     }
 
     public void handleResult(ServerPlayer player, PacketAssetTransferResult packet) {

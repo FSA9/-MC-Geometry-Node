@@ -47,6 +47,7 @@ public record PacketAssetTransferPlanResponse(
             buffer.writeUtf(file.name(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
             buffer.writeBoolean(file.directory());
             buffer.writeLong(file.size());
+            buffer.writeLong(file.lastModified());
             buffer.writeUtf(file.graphTypeId(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
         }
         buffer.writeVarInt(conflicts.size());
@@ -64,6 +65,7 @@ public record PacketAssetTransferPlanResponse(
         for (int i = 0; i < size; i++) files.add(new RemoteGraphEntry(
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH),
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH), buffer.readBoolean(), buffer.readLong(),
+                buffer.readLong(),
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH)));
         return files;
     }

@@ -6,8 +6,7 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetPreviewKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
-import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
-import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
+import com.mine.geometry_node.client.ui.editor.asset.preview.AssetPreviewView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
@@ -50,8 +49,7 @@ final class AssetFileItemView extends LinearLayout {
     private final String mGraphTypeId;
     private final boolean mFavorite;
     private final VectorIconView mIconView;
-    private final SchematicThumbnailView mSchematicThumbnailView;
-    private final ImageThumbnailView mImageThumbnailView;
+    private final AssetPreviewView mPreviewView;
     private final TextView mNameView;
     private final TextView mSubtitleView;
     private final Listener mListener;
@@ -76,15 +74,9 @@ final class AssetFileItemView extends LinearLayout {
         setBackground(AssetFileBrowserPanel.createRectDrawable(COLOR_ITEM_TRANSPARENT, 4));
 
         mIconView = new VectorIconView(context, iconKind(), iconColor());
-        mSchematicThumbnailView = entry.supports(AssetTypeAction.PREVIEW)
-                && entry.type().previewKind() == AssetPreviewKind.SCHEMATIC
-                && entry.localFile() != null
-                ? new SchematicThumbnailView(context, entry.localFile())
-                : null;
-        mImageThumbnailView = entry.supports(AssetTypeAction.PREVIEW)
-                && entry.type().previewKind() == AssetPreviewKind.IMAGE
-                && entry.localFile() != null
-                ? new ImageThumbnailView(context, entry.localFile())
+        mPreviewView = entry.supports(AssetTypeAction.PREVIEW)
+                && entry.type().previewKind() != AssetPreviewKind.NONE
+                ? new AssetPreviewView(context, entry, mIconView)
                 : null;
         mNameView = UIUtils.createLockedTextView(context, displayName, mode.nameTextSizeDp, COLOR_TEXT);
         mNameView.setGravity(mode == AssetViewMode.LIST ? Gravity.CENTER_VERTICAL : Gravity.CENTER);
@@ -106,9 +98,7 @@ final class AssetFileItemView extends LinearLayout {
     }
 
     void preloadThumbnail() {
-        if (mSchematicThumbnailView != null) {
-            mSchematicThumbnailView.preload();
-        }
+        if (mPreviewView != null) mPreviewView.preload();
     }
 
     @Override
@@ -222,9 +212,7 @@ final class AssetFileItemView extends LinearLayout {
     }
 
     private View iconView() {
-        if (mSchematicThumbnailView != null) return mSchematicThumbnailView;
-        if (mImageThumbnailView != null) return mImageThumbnailView;
-        return mIconView;
+        return mPreviewView != null ? mPreviewView : mIconView;
     }
 
     private TextView createTagChip(String tag) {

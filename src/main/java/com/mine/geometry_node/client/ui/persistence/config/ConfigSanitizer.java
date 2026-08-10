@@ -16,7 +16,7 @@ final class ConfigSanitizer {
 
     static boolean looksLikeConfig(JsonObject root) {
         return root != null && (root.has("assetBrowser") || root.has("viewport") || root.has("node")
-                || root.has("networkTransfer") || root.has("keyBindings"));
+                || root.has("networkTransfer") || root.has("previewCache") || root.has("keyBindings"));
     }
 
     static Result fromJson(JsonObject root) {
@@ -178,6 +178,14 @@ final class ConfigSanitizer {
             config.networkTransfer = new AppConfig.NetworkTransferConfig();
             changed |= readNetworkTransfer(networkTransfer, config.networkTransfer, defaults.networkTransfer);
         }
+        JsonObject previewCache = readObject(root, "previewCache");
+        if (previewCache == null) {
+            config.previewCache = defaults.previewCache;
+            changed = true;
+        } else {
+            config.previewCache = new AppConfig.PreviewCacheConfig();
+            changed |= readPreviewCache(previewCache, config.previewCache, defaults.previewCache);
+        }
 
         changed |= ConfigRegistry.INSTANCE.normalize(config);
         return new Result(config, changed);
@@ -269,6 +277,10 @@ final class ConfigSanitizer {
             config.networkTransfer = defaults.networkTransfer;
             changed = true;
         }
+        if (config.previewCache == null) {
+            config.previewCache = defaults.previewCache;
+            changed = true;
+        }
 
         changed |= ConfigRegistry.INSTANCE.normalize(config);
         return new Result(config, changed);
@@ -298,6 +310,18 @@ final class ConfigSanitizer {
         ReadInt failedHistory = readInt(source, "failedHistoryLimit");
         target.failedHistoryLimit = failedHistory.valid ? failedHistory.value : defaults.failedHistoryLimit;
         changed |= !failedHistory.valid || failedHistory.changed;
+        return changed;
+    }
+
+    private static boolean readPreviewCache(JsonObject source, AppConfig.PreviewCacheConfig target,
+                                            AppConfig.PreviewCacheConfig defaults) {
+        boolean changed = false;
+        ReadInt maxSize = readInt(source, "maxSizeMiB");
+        target.maxSizeMiB = maxSize.valid ? maxSize.value : defaults.maxSizeMiB;
+        changed |= !maxSize.valid || maxSize.changed;
+        ReadString location = readString(source, "location");
+        target.location = location.valid ? location.value : defaults.location;
+        changed |= !location.valid || location.changed;
         return changed;
     }
 

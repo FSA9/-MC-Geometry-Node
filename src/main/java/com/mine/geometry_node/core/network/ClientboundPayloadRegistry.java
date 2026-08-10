@@ -22,6 +22,10 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
+import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewAccepted;
+import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewChunk;
+import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewComplete;
+import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewResult;
 import dev.architectury.networking.NetworkManager;
 import dev.architectury.platform.Platform;
 import dev.architectury.utils.Env;
@@ -60,6 +64,10 @@ public final class ClientboundPayloadRegistry {
         add(PacketMarkerUpsert.TYPE, PacketMarkerUpsert.STREAM_CODEC);
         add(PacketMarkerRemove.TYPE, PacketMarkerRemove.STREAM_CODEC);
         add(PacketCaptureEntityTemplateResponse.TYPE, PacketCaptureEntityTemplateResponse.STREAM_CODEC);
+        add(PacketAssetPreviewAccepted.TYPE, PacketAssetPreviewAccepted.STREAM_CODEC);
+        add(PacketAssetPreviewChunk.TYPE, PacketAssetPreviewChunk.STREAM_CODEC);
+        add(PacketAssetPreviewComplete.TYPE, PacketAssetPreviewComplete.STREAM_CODEC);
+        add(PacketAssetPreviewResult.TYPE, PacketAssetPreviewResult.STREAM_CODEC);
     }
 
     private ClientboundPayloadRegistry() {

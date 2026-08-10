@@ -73,15 +73,22 @@ final class SettingsWindowEnvironment implements SettingsEditorEnvironment, Auto
 
     @Override
     public boolean requestDirectory(View anchor, Consumer<String> onSelect) {
+        return requestDirectory(anchor, null, onSelect);
+    }
+
+    @Override
+    public boolean requestDirectory(View anchor, String initialDirectory, Consumer<String> onSelect) {
         if (closed || anchor == null || onSelect == null) {
             return false;
         }
         closeTransient();
+        var initial = AssetBrowserPathPolicy.resolveConfigPath(initialDirectory);
+        if (initial == null || !initial.isDirectory()) initial = AssetBrowserPathPolicy.getLocalDraftsDir();
         FolderPickerDialog dialog = FolderPickerDialog.local(
                 context,
                 tr("geometry_node.settings.directory.title"),
-                AssetBrowserPathPolicy.getLocalDraftsDir(),
-                file -> onSelect.accept(file.getAbsolutePath())
+                initial,
+                file -> onSelect.accept(AssetBrowserPathPolicy.toConfigPath(file))
         );
         services.layerManager().showModal(dialog, new ModalOptions(false, true, anchor));
         return true;

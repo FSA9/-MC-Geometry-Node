@@ -15,6 +15,7 @@ public final class BuiltinConfigEntries {
     public static final ConfigCategory NODE = category("node", 200);
     public static final ConfigCategory ASSET_BROWSER = category("asset_browser", 300);
     public static final ConfigCategory NETWORK_TRANSFER = category("network_transfer", 350);
+    public static final ConfigCategory PREVIEW_CACHE = category("preview_cache", 375);
     public static final ConfigCategory SHORTCUT_GLOBAL = category("shortcut_global", 400);
     public static final ConfigCategory SHORTCUT_VIEWPORT = category("shortcut_viewport", 500);
     public static final ConfigCategory SHORTCUT_SHOP = category("shortcut_shop", 600);
@@ -91,6 +92,21 @@ public final class BuiltinConfigEntries {
             ConfigEntry.SettingsVisibility.VISIBLE,
             config -> config.networkTransfer.failedHistoryLimit,
             (config, value) -> config.networkTransfer.failedHistoryLimit = value);
+    public static final ConfigEntry<Integer> PREVIEW_MAX_SIZE_MIB = integer(
+            "previewCache.maxSizeMiB", PREVIEW_CACHE, 100, 32, 16_384,
+            ConfigEntry.SettingsVisibility.VISIBLE,
+            config -> config.previewCache.maxSizeMiB,
+            (config, value) -> config.previewCache.maxSizeMiB = value);
+    public static final ConfigEntry<String> PREVIEW_LOCATION = ConfigEntry
+            .<String>builder("previewCache.location", PREVIEW_CACHE, ConfigEntry.EditorType.PATH,
+                    config -> config.previewCache.location,
+                    (config, value) -> config.previewCache.location = value)
+            .label(labelKey("previewCache.location"))
+            .description(descriptionKey("previewCache.location"))
+            .order(200)
+            .settingsVisibility(ConfigEntry.SettingsVisibility.VISIBLE)
+            .normalize(BuiltinConfigEntries::normalizePreviewLocation)
+            .build();
 
     public static final ConfigEntry<String> GLOBAL_UNDO = key("keyBindings.global.undo", SHORTCUT_GLOBAL, 100, KeyScope.GLOBAL,
             config -> config.keyBindings.global.undo, (config, value) -> config.keyBindings.global.undo = value);
@@ -140,6 +156,7 @@ public final class BuiltinConfigEntries {
             TRANSFER_MAX_UPLOAD_FILE_MIB, TRANSFER_MAX_DOWNLOAD_FILE_MIB, TRANSFER_CHUNK_SIZE_KIB,
             TRANSFER_UPLOAD_RATE_KIBPS, TRANSFER_DOWNLOAD_RATE_KIBPS,
             TRANSFER_COMPLETED_HISTORY_LIMIT, TRANSFER_FAILED_HISTORY_LIMIT,
+            PREVIEW_MAX_SIZE_MIB, PREVIEW_LOCATION,
             GLOBAL_UNDO, GLOBAL_REDO, GLOBAL_SAVE, GLOBAL_COPY, GLOBAL_PASTE, GLOBAL_CUT, GLOBAL_DELETE, GLOBAL_RENAME,
             VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
             VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT);
@@ -147,7 +164,7 @@ public final class BuiltinConfigEntries {
     private BuiltinConfigEntries() {}
 
     static void register(ConfigRegistry registry) {
-        for (ConfigCategory category : List.of(VIEWPORT, NODE, ASSET_BROWSER, NETWORK_TRANSFER,
+        for (ConfigCategory category : List.of(VIEWPORT, NODE, ASSET_BROWSER, NETWORK_TRANSFER, PREVIEW_CACHE,
                 SHORTCUT_GLOBAL, SHORTCUT_VIEWPORT, SHORTCUT_SHOP)) {
             registry.registerCategory(category);
         }
@@ -215,6 +232,11 @@ public final class BuiltinConfigEntries {
         if (value != null && value.isBlank()) return "";
         InputBinding binding = InputBinding.parse(value);
         return binding != null ? binding.text() : null;
+    }
+
+    private static String normalizePreviewLocation(String value) {
+        if (value == null || value.isBlank()) return null;
+        return AssetBrowserPathPolicy.toConfigPath(AssetBrowserPathPolicy.resolveConfigPath(value.trim()));
     }
 
     private static String labelKey(String id) {

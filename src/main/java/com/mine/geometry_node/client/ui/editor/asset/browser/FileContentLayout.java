@@ -30,8 +30,6 @@ final class FileContentLayout extends ViewGroup {
         void onMountedItemViewsChanged(Map<String, AssetFileItemView> mountedItems);
     }
 
-    private static final int OVERSCAN_ROWS = 3;
-
     private final SelectionHost mHost;
     private final Paint mSelectionFillPaint = new Paint();
     private final Paint mSelectionBorderPaint = new Paint();
@@ -340,16 +338,17 @@ final class FileContentLayout extends ViewGroup {
         int scrollY = Math.max(0, mViewportScrollY);
         if (mMode == AssetViewMode.LIST) {
             int rowHeight = itemHeight();
-            int firstRow = Math.max(0, scrollY / rowHeight - OVERSCAN_ROWS);
-            int lastRow = Math.min(mEntries.size() - 1, (scrollY + viewportHeight) / rowHeight + OVERSCAN_ROWS);
+            int firstRow = scrollY / rowHeight;
+            int lastRow = Math.min(mEntries.size() - 1, (scrollY + viewportHeight) / rowHeight);
             return new IndexRange(firstRow, Math.max(firstRow, lastRow));
         }
 
         int columns = columnsForWidth(getWidth());
         int rowPitch = itemHeight() + gridGap();
         int contentTop = Math.max(0, scrollY - gridPadding());
-        int firstRow = Math.max(0, contentTop / rowPitch - OVERSCAN_ROWS);
-        int lastRow = Math.max(firstRow, (Math.max(0, scrollY + viewportHeight - gridPadding())) / rowPitch + OVERSCAN_ROWS);
+        int firstRow = contentTop / rowPitch;
+        int lastRow = Math.max(firstRow,
+                Math.max(0, scrollY + viewportHeight - gridPadding()) / rowPitch);
         int first = Math.min(mEntries.size() - 1, firstRow * columns);
         int last = Math.min(mEntries.size() - 1, ((lastRow + 1) * columns) - 1);
         return new IndexRange(first, Math.max(first, last));

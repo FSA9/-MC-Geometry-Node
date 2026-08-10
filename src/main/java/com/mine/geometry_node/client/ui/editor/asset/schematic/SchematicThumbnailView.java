@@ -68,33 +68,12 @@ public final class SchematicThumbnailView extends View {
     }
 
     private void drawThumbnail(Canvas canvas, SchematicThumbnail thumbnail) {
-        int gridWidth = Math.max(1, thumbnail.gridWidth());
-        int gridLength = Math.max(1, thumbnail.gridLength());
         float padding = UIUtils.dp2px(3.0f);
-        float availableW = Math.max(1.0f, getWidth() - padding * 2.0f);
-        float availableH = Math.max(1.0f, getHeight() - padding * 2.0f);
-        float diagonal = Math.max(2.0f, gridWidth + gridLength);
-        float maxLift = availableH * 0.30f;
-        float tileW = Math.max(1.4f, Math.min(availableW * 1.85f / diagonal, Math.max(1.0f, availableH - maxLift) * 3.0f / diagonal));
-        float tileH = tileW * 0.5f;
-        float sideDepthBase = tileH * 0.88f;
-        float maxSideDepth = sideDepthBase + maxLift * 0.46f;
-        float isoHeight = (gridWidth + gridLength) * tileH * 0.5f + maxSideDepth;
-        float originX = getWidth() * 0.5f + (gridLength - gridWidth) * tileW * 0.25f;
-        float originY = Math.max(padding + maxLift, (getHeight() - isoHeight) * 0.5f + maxLift) + tileH;
-        int maxY = Math.max(1, thumbnail.height() - 1);
         boolean[] deferredMaterials = {false};
-
-        for (SchematicThumbnail.Column column : thumbnail.columns()) {
-            float cx = originX + (column.x() - column.z()) * tileW * 0.5f;
-            float baseY = originY + (column.x() + column.z()) * tileH * 0.5f;
-            float heightRatio = Math.max(0.0f, Math.min(1.0f, column.y() / (float) maxY));
-            float lift = maxLift * heightRatio;
-            float sideDepth = sideDepthBase + lift * 0.46f;
-            SchematicThumbnailMaterialResolver.MaterialColors colors =
-                    SchematicThumbnailMaterialResolver.resolveBudgeted(column.state(), column.color(), deferredMaterials);
-            drawColumn(canvas, cx, baseY - lift, tileW * 0.54f, tileH * 0.60f, sideDepth, colors, heightRatio);
-        }
+        SchematicThumbnailRenderer.render(thumbnail, getWidth(), getHeight(), padding,
+                (state, color) -> SchematicThumbnailMaterialResolver.resolveBudgeted(state, color, deferredMaterials),
+                (x0, y0, x1, y1, x2, y2, x3, y3, color) ->
+                        drawQuad(canvas, x0, y0, x1, y1, x2, y2, x3, y3, color));
 
         if (deferredMaterials[0]) {
             scheduleMaterialRefresh();
@@ -119,51 +98,6 @@ public final class SchematicThumbnailView extends View {
             mMaterialRefreshScheduled = false;
             invalidate();
         }, 33L);
-    }
-
-    private void drawColumn(Canvas canvas,
-                            float cx,
-                            float cy,
-                            float halfW,
-                            float halfH,
-                            float sideDepth,
-                            SchematicThumbnailMaterialResolver.MaterialColors colors,
-                            float heightRatio) {
-        float topX = cx;
-        float topY = cy - halfH;
-        float rightX = cx + halfW;
-        float rightY = cy;
-        float bottomX = cx;
-        float bottomY = cy + halfH;
-        float leftX = cx - halfW;
-        float leftY = cy;
-
-        float lowerRightY = rightY + sideDepth;
-        float lowerBottomY = bottomY + sideDepth;
-        float lowerLeftY = leftY + sideDepth;
-
-        int leftColor = shade(colors.left(), 0.58f + heightRatio * 0.08f);
-        int rightColor = shade(colors.right(), 0.70f + heightRatio * 0.08f);
-        int topColor = shade(colors.top(), 0.92f + heightRatio * 0.12f);
-
-        drawQuad(canvas,
-                leftX, leftY,
-                bottomX, bottomY,
-                bottomX, lowerBottomY,
-                leftX, lowerLeftY,
-                leftColor);
-        drawQuad(canvas,
-                bottomX, bottomY,
-                rightX, rightY,
-                rightX, lowerRightY,
-                bottomX, lowerBottomY,
-                rightColor);
-        drawQuad(canvas,
-                topX, topY,
-                rightX, rightY,
-                bottomX, bottomY,
-                leftX, leftY,
-                topColor);
     }
 
     private void drawQuad(Canvas canvas,
@@ -220,18 +154,6 @@ public final class SchematicThumbnailView extends View {
         canvas.drawLine(left, top + half * 0.18f, left, bottom - half * 0.18f, mPaint);
         canvas.drawLine(right, top + half * 0.18f, right, bottom - half * 0.18f, mPaint);
         canvas.drawLine(cx, top + half * 0.72f, cx, bottom + half * 0.32f, mPaint);
-    }
-
-    private int shade(int color, float factor) {
-        int a = (color >>> 24) & 0xFF;
-        int r = clamp((int) (((color >>> 16) & 0xFF) * factor));
-        int g = clamp((int) (((color >>> 8) & 0xFF) * factor));
-        int b = clamp((int) ((color & 0xFF) * factor));
-        return (a << 24) | (r << 16) | (g << 8) | b;
-    }
-
-    private int clamp(int value) {
-        return Math.max(0, Math.min(255, value));
     }
 
     public static void invalidate(File file) {

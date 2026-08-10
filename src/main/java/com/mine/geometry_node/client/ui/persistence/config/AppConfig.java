@@ -8,6 +8,7 @@ public class AppConfig {
     public ViewportConfig viewport = new ViewportConfig();
     public NodeConfig node = new NodeConfig();
     public NetworkTransferConfig networkTransfer = new NetworkTransferConfig();
+    public PreviewCacheConfig previewCache = new PreviewCacheConfig();
     public KeyBindingsConfig keyBindings = new KeyBindingsConfig();
 
     public static AppConfig defaults() {
@@ -20,6 +21,7 @@ public class AppConfig {
         copy.viewport = viewport != null ? viewport.copy() : null;
         copy.node = node != null ? node.copy() : null;
         copy.networkTransfer = networkTransfer != null ? networkTransfer.copy() : null;
+        copy.previewCache = previewCache != null ? previewCache.copy() : null;
         copy.keyBindings = keyBindings != null ? keyBindings.copy() : null;
         return copy;
     }
@@ -92,6 +94,18 @@ public class AppConfig {
             copy.downloadRateLimitKiBps = downloadRateLimitKiBps;
             copy.completedHistoryLimit = completedHistoryLimit;
             copy.failedHistoryLimit = failedHistoryLimit;
+            return copy;
+        }
+    }
+
+    public static class PreviewCacheConfig {
+        public int maxSizeMiB = 64;
+        public String location = ".cache/geometry_node/asset_previews";
+
+        PreviewCacheConfig copy() {
+            PreviewCacheConfig copy = new PreviewCacheConfig();
+            copy.maxSizeMiB = maxSizeMiB;
+            copy.location = location;
             return copy;
         }
     }

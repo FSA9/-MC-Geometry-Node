@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.VerifiedAssetCommitter;
+import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewAssociations;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import net.minecraft.server.MinecraftServer;
 
@@ -71,6 +72,10 @@ public final class RemoteAssetFileService {
 
     public static Path transferTemporaryDirectory(MinecraftServer server) {
         return root(server).resolveSibling(".geometrynode-transfer").normalize();
+    }
+
+    public static Path previewCacheRoot(MinecraftServer server) {
+        return root(server).resolveSibling(".geometrynode-preview-cache").toAbsolutePath().normalize();
     }
 
     public static CompletableFuture<VerifiedAssetCommitter.CommitResult> commitVerifiedUpload(
@@ -166,7 +171,10 @@ public final class RemoteAssetFileService {
             if (Files.isDirectory(source) && target.toAbsolutePath().normalize().startsWith(source.toAbsolutePath().normalize())) {
                 continue;
             }
+            ServerAssetPreviewAssociations.Migration previews =
+                    ServerAssetPreviewAssociations.capture(server, source, target);
             copied += copyRecursively(source, target);
+            previews.apply();
         }
         return copied;
     }
@@ -192,7 +200,10 @@ public final class RemoteAssetFileService {
             if (Files.isDirectory(source) && target.toAbsolutePath().normalize().startsWith(normalizedSource)) {
                 continue;
             }
+            ServerAssetPreviewAssociations.Migration previews =
+                    ServerAssetPreviewAssociations.capture(server, source, target);
             moved += moveRecursively(source, target);
+            previews.apply();
         }
         return moved;
     }
@@ -352,12 +363,18 @@ public final class RemoteAssetFileService {
     private static RemoteGraphEntry toEntry(Path root, Path path) {
         boolean directory = Files.isDirectory(path);
         long size = 0L;
+        long lastModified = 0L;
         if (!directory) {
             try {
                 size = Files.size(path);
             } catch (IOException ignored) {
                 size = 0L;
             }
+        }
+        try {
+            lastModified = Files.getLastModifiedTime(path).toMillis();
+        } catch (IOException ignored) {
+            lastModified = 0L;
         }
         String graphId = GraphPathMapper.pathToId(root, path);
         RuntimeGraphIndex graphIndex = directory || !AssetTransferPolicy.isGraphPath(path.toString())
@@ -368,6 +385,7 @@ public final class RemoteAssetFileService {
                 path.getFileName().toString(),
                 directory,
                 size,
+                lastModified,
                 graphIndex != null ? graphIndex.getGraphTypeId() : ""
         );
     }

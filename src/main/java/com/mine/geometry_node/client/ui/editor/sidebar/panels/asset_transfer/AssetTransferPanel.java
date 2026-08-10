@@ -39,7 +39,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
             PANEL_ID,
             "geometry_node.asset_transfer.panel.title",
             200,
-            Set.of(SidebarPanelScope.GRAPH_EDITOR, SidebarPanelScope.ASSET_BROWSER),
+            Set.of(SidebarPanelScope.ASSET_BROWSER),
             AssetTransferPanel::create);
 
     private static final int COLOR_BACKGROUND = 0xFF303030;

@@ -18,6 +18,7 @@ import com.mine.geometry_node.client.ui.editor.sidebar.BuiltinSidebarPanels;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
+import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewService;
 import com.mine.geometry_node.core.command.registry.ModClientCommands;
 import icyllis.modernui.mc.ModernUIMod;
 import net.minecraft.client.Minecraft;
@@ -105,6 +106,7 @@ public class GeometryNodeClient {
         RemoteGraphClientState.reset();
         ClientAssetTransferPlanState.reset();
         ClientAssetTransferService.INSTANCE.resetConnection();
+        ClientAssetPreviewService.INSTANCE.resetConnection();
         EntityTemplatePickerController.reset();
         clearClientRenderState();
     }

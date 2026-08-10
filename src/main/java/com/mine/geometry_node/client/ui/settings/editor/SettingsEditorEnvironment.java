@@ -15,4 +15,8 @@ public interface SettingsEditorEnvironment {
     default boolean requestDirectory(View anchor, Consumer<String> onSelect) {
         return false;
     }
+
+    default boolean requestDirectory(View anchor, String initialDirectory, Consumer<String> onSelect) {
+        return requestDirectory(anchor, onSelect);
+    }
 }

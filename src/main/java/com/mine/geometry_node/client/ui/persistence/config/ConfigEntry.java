@@ -18,6 +18,7 @@ public final class ConfigEntry<T> {
         INTEGER,
         FLOAT,
         CHOICE,
+        PATH,
         PATH_LIST,
         KEY_BINDING,
         SHORTCUT

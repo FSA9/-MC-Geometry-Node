@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphPermissions;
 import com.mine.geometry_node.core.engine.system.asset.transfer.service.ServerAssetTransferService;
+import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewService;
 import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferAck;
 import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferCancel;
 import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferChunk;
@@ -17,6 +18,8 @@ import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferPlanR
 import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferResult;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
 import com.mine.geometry_node.core.network.packet.c2s.PacketCaptureEntityTemplateRequest;
+import com.mine.geometry_node.core.network.packet.c2s.PacketAssetPreviewRequest;
+import com.mine.geometry_node.core.network.packet.c2s.PacketAssetPreviewCancel;
 import com.mine.geometry_node.core.network.packet.c2s.PacketDialogueChoice;
 import com.mine.geometry_node.core.network.packet.c2s.PacketPlayerInput;
 import com.mine.geometry_node.core.network.packet.c2s.PacketQuestScreenAction;
@@ -57,6 +60,16 @@ public class NetworkHandler {
         ClientboundPayloadRegistry.registerDedicatedServerTypes();
         GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
         ServerAssetTransferService.INSTANCE.init();
+        ServerAssetPreviewService.INSTANCE.init();
+
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetPreviewRequest.TYPE,
+                PacketAssetPreviewRequest.STREAM_CODEC, (payload, context) -> context.queue(() -> {
+                    if (context.getPlayer() instanceof ServerPlayer player) ServerAssetPreviewService.INSTANCE.handleRequest(player, payload);
+                }));
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetPreviewCancel.TYPE,
+                PacketAssetPreviewCancel.STREAM_CODEC, (payload, context) -> context.queue(() -> {
+                    if (context.getPlayer() instanceof ServerPlayer player) ServerAssetPreviewService.INSTANCE.cancel(player, payload.requestId());
+                }));
 
         NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetTransferOpen.TYPE,
                 PacketAssetTransferOpen.STREAM_CODEC, (payload, context) -> context.queue(() -> {
