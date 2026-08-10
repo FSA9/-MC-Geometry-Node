@@ -39,15 +39,10 @@ final class ConfigSanitizer {
             }
 
             ReadList favorites = readStringList(assetBrowser, "favoriteAssetPaths");
-            boolean migratedFavorites = false;
-            if (!favorites.valid) {
-                favorites = readStringList(assetBrowser, "favoriteGraphPaths");
-                migratedFavorites = favorites.valid;
-            }
             if (favorites.valid) {
                 NormalizeList normalized = normalizeFavoriteAssetPaths(favorites.value);
                 config.assetBrowser.favoriteAssetPaths = normalized.value;
-                changed |= migratedFavorites || favorites.changed || normalized.changed;
+                changed |= favorites.changed || normalized.changed;
             } else {
                 config.assetBrowser.favoriteAssetPaths = defaults.assetBrowser.favoriteAssetPaths;
                 changed = true;
