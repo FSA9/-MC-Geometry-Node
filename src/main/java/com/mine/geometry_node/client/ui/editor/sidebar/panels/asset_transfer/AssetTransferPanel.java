@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.editor.sidebar.panels.asset_transfer;
 
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.ui.common.SvgIconView;
+import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.editor.sidebar.api.SidebarPanelDefinition;
@@ -26,8 +27,11 @@ import net.minecraft.network.chat.Component;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public final class AssetTransferPanel extends FrameLayout implements SidebarPanel {
     public static final String PANEL_ID = "asset_transfers";
@@ -53,6 +57,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
 
     private final ScrollView scroll;
     private final LinearLayout content;
+    private final Map<Section, Boolean> expandedSections = new EnumMap<>(Section.class);
     private ClientAssetTransferService.Subscription subscription;
     private AssetTransferSnapshot pendingSnapshot = AssetTransferSnapshot.empty();
     private boolean renderScheduled;
@@ -63,6 +68,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         scroll = new ScrollView(context);
         content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
+        for (Section section : Section.values()) expandedSections.put(section, true);
         scroll.addView(content, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(scroll, new FrameLayout.LayoutParams(
@@ -108,18 +114,19 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     }
 
     private void addActiveSection(List<AssetTransferJobSnapshot> jobs) {
-        addSectionHeader(tr("geometry_node.asset_transfer.panel.active"), null);
-        if (jobs.isEmpty()) {
-            addEmpty(tr("geometry_node.asset_transfer.panel.no_active"));
-            return;
-        }
-        int rowIndex = 0;
-        for (AssetTransferJobSnapshot job : jobs) {
-            content.addView(jobHeader(job), match(28));
-            for (AssetTransferFileSnapshot file : job.files()) {
-                content.addView(fileRow(file, rowIndex++ % 2 == 0), match(52));
+        addSection(Section.ACTIVE, tr("geometry_node.asset_transfer.panel.active"), null, host -> {
+            if (jobs.isEmpty()) {
+                addEmpty(host, tr("geometry_node.asset_transfer.panel.no_active"));
+                return;
             }
-        }
+            int rowIndex = 0;
+            for (AssetTransferJobSnapshot job : jobs) {
+                host.addView(jobHeader(job), match(28));
+                for (AssetTransferFileSnapshot file : job.files()) {
+                    host.addView(fileRow(file, rowIndex++ % 2 == 0), match(52));
+                }
+            }
+        });
     }
 
     private View jobHeader(AssetTransferJobSnapshot job) {
@@ -162,7 +169,6 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     }
 
     private void addTotalSection(List<AssetTransferJobSnapshot> jobs) {
-        addSectionHeader(tr("geometry_node.asset_transfer.panel.total"), null);
         long totalBytes = jobs.stream().mapToLong(AssetTransferJobSnapshot::totalBytes).sum();
         long transferred = jobs.stream().mapToLong(AssetTransferJobSnapshot::transferredBytes).sum();
         long totalFiles = jobs.stream().mapToLong(job -> job.files().size()).sum();
@@ -170,28 +176,31 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         long speed = jobs.stream().flatMap(job -> job.files().stream())
                 .mapToLong(AssetTransferFileSnapshot::bytesPerSecond).sum();
 
-        LinearLayout block = new LinearLayout(getContext());
-        block.setOrientation(LinearLayout.VERTICAL);
-        block.setPadding(px(8), px(7), px(8), px(7));
-        block.addView(new TransferProgressView(getContext(), totalBytes == 0 ? 0 : (double) transferred / totalBytes), match(7));
-        TextView bytes = label(formatBytes(transferred) + " / " + formatBytes(totalBytes), 9, COLOR_TEXT);
-        block.addView(bytes, match(18));
-        TextView files = label(completedFiles + " / " + totalFiles + " "
-                + tr("geometry_node.asset_transfer.panel.files") + "  " + formatBytes(speed) + "/s", 9, COLOR_MUTED);
-        block.addView(files, match(18));
-        content.addView(block, match(50));
+        addSection(Section.TOTAL, tr("geometry_node.asset_transfer.panel.total"), null, host -> {
+            LinearLayout block = new LinearLayout(getContext());
+            block.setOrientation(LinearLayout.VERTICAL);
+            block.setPadding(px(8), px(7), px(8), px(7));
+            block.addView(new TransferProgressView(getContext(), totalBytes == 0 ? 0 : (double) transferred / totalBytes), match(7));
+            TextView bytes = label(formatBytes(transferred) + " / " + formatBytes(totalBytes), 9, COLOR_TEXT);
+            block.addView(bytes, match(18));
+            TextView files = label(completedFiles + " / " + totalFiles + " "
+                    + tr("geometry_node.asset_transfer.panel.files") + "  " + formatBytes(speed) + "/s", 9, COLOR_MUTED);
+            block.addView(files, match(18));
+            host.addView(block, wrapMatch());
+        });
     }
 
     private void addCompletedSection(List<AssetTransferFileSnapshot> history) {
-        addSectionHeader(tr("geometry_node.asset_transfer.panel.completed"),
-                history.isEmpty() ? null : iconButton(SvgIconView.Icon.CLEAR, COLOR_MUTED,
-                        tr("geometry_node.asset_transfer.action.clear"),
-                        ClientAssetTransferService.INSTANCE::clearCompletedHistory));
-        if (history.isEmpty()) {
-            addEmpty(tr("geometry_node.asset_transfer.panel.no_completed"));
-            return;
-        }
-        for (AssetTransferFileSnapshot file : history) content.addView(historyRow(file, false), match(42));
+        View action = history.isEmpty() ? null : iconButton(SvgIconView.Icon.CLEAR, COLOR_MUTED,
+                tr("geometry_node.asset_transfer.action.clear"),
+                ClientAssetTransferService.INSTANCE::clearCompletedHistory);
+        addSection(Section.COMPLETED, tr("geometry_node.asset_transfer.panel.completed"), action, host -> {
+            if (history.isEmpty()) {
+                addEmpty(host, tr("geometry_node.asset_transfer.panel.no_completed"));
+                return;
+            }
+            for (AssetTransferFileSnapshot file : history) host.addView(historyRow(file, false), match(42));
+        });
     }
 
     private void addFailedSection(List<AssetTransferFileSnapshot> history) {
@@ -206,12 +215,13 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
                     tr("geometry_node.asset_transfer.action.clear"),
                     ClientAssetTransferService.INSTANCE::clearFailedHistory), new LinearLayout.LayoutParams(px(24), px(24)));
         }
-        addSectionHeader(tr("geometry_node.asset_transfer.panel.failed"), actions);
-        if (history.isEmpty()) {
-            addEmpty(tr("geometry_node.asset_transfer.panel.no_failed"));
-            return;
-        }
-        for (AssetTransferFileSnapshot file : history) content.addView(historyRow(file, true), match(48));
+        addSection(Section.FAILED, tr("geometry_node.asset_transfer.panel.failed"), actions, host -> {
+            if (history.isEmpty()) {
+                addEmpty(host, tr("geometry_node.asset_transfer.panel.no_failed"));
+                return;
+            }
+            for (AssetTransferFileSnapshot file : history) host.addView(historyRow(file, true), match(48));
+        });
     }
 
     private View historyRow(AssetTransferFileSnapshot file, boolean failed) {
@@ -245,26 +255,59 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         return row;
     }
 
-    private void addSectionHeader(String title, View action) {
+    private void addSection(Section section, String title, View action, Consumer<LinearLayout> bodyBuilder) {
+        LinearLayout sectionView = new LinearLayout(getContext());
+        sectionView.setOrientation(LinearLayout.VERTICAL);
+        sectionView.setBackground(rect(COLOR_SECTION, 1, COLOR_BORDER));
+
         LinearLayout header = new LinearLayout(getContext());
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(px(8), 0, px(4), 0);
-        header.setBackground(rect(COLOR_SECTION, 1, COLOR_BORDER));
+        header.setPadding(px(4), 0, px(4), 0);
+        header.setBackground(rect(COLOR_SECTION, 0, 0));
+
+        boolean expanded = expandedSections.getOrDefault(section, true);
+        VectorIconView disclosure = new VectorIconView(getContext(),
+                expanded ? VectorIconView.Kind.CHEVRON_UP : VectorIconView.Kind.CHEVRON_DOWN, COLOR_MUTED);
+        header.addView(disclosure, new LinearLayout.LayoutParams(px(22), px(22)));
         TextView label = label(title, 10, COLOR_TEXT);
         header.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
         if (action != null) header.addView(action, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        LinearLayout.LayoutParams params = match(28);
+        sectionView.addView(header, match(28));
+
+        LinearLayout body = new LinearLayout(getContext());
+        body.setOrientation(LinearLayout.VERTICAL);
+        bodyBuilder.accept(body);
+        body.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        sectionView.addView(body, wrapMatch());
+
+        header.setContentDescription(title);
+        header.setOnClickListener(view -> {
+            boolean next = !expandedSections.getOrDefault(section, true);
+            expandedSections.put(section, next);
+            body.setVisibility(next ? View.VISIBLE : View.GONE);
+            disclosure.setKind(next ? VectorIconView.Kind.CHEVRON_UP : VectorIconView.Kind.CHEVRON_DOWN);
+        });
+        header.setOnHoverListener((view, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                header.setBackground(rect(COLOR_HOVER, 0, 0));
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+                header.setBackground(rect(COLOR_SECTION, 0, 0));
+            }
+            return false;
+        });
+
+        LinearLayout.LayoutParams params = wrapMatch();
         params.topMargin = content.getChildCount() == 0 ? 0 : px(6);
-        content.addView(header, params);
+        content.addView(sectionView, params);
     }
 
-    private void addEmpty(String text) {
+    private void addEmpty(LinearLayout host, String text) {
         TextView empty = label(text, 9, COLOR_MUTED);
         empty.setGravity(Gravity.CENTER_VERTICAL);
         empty.setPadding(px(8), 0, px(8), 0);
-        content.addView(empty, match(30));
+        host.addView(empty, match(30));
     }
 
     private View iconButton(SvgIconView.Icon icon, int color, String tooltip, Runnable action) {
@@ -336,10 +379,16 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     private static LinearLayout.LayoutParams match(int heightDp) {
         return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(heightDp));
     }
+    private static LinearLayout.LayoutParams wrapMatch() {
+        return new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    }
     private static ShapeDrawable rect(int color, int strokeDp, int strokeColor) {
         ShapeDrawable drawable = new ShapeDrawable();
         drawable.setColor(color);
         if (strokeDp > 0) drawable.setStroke(px(strokeDp), strokeColor);
         return drawable;
     }
+
+    private enum Section { ACTIVE, TOTAL, COMPLETED, FAILED }
 }
