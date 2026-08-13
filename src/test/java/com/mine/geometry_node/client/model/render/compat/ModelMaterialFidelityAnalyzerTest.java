@@ -20,7 +20,7 @@ class ModelMaterialFidelityAnalyzerTest {
                 ModelAlphaMode.MASK, 0.25F, true, 0, 0, 0, StaticModelTexture.absent());
 
         ModelCompatibilityProjection result = ModelMaterialFidelityAnalyzer.analyze(
-                ModelCompatibilityProfile.ENTITY, material, false);
+                ModelCompatibilityProfile.HOST_NATIVE_ENTITY, material, false);
 
         assertTrue(result.selectable());
         assertEquals(2, result.projectedUvSet());
@@ -37,9 +37,10 @@ class ModelMaterialFidelityAnalyzerTest {
                 0.5F, 0.2F, StaticModelTexture.absent(), StaticModelTexture.absent(), 1,
                 StaticModelTexture.absent(), 1);
         ModelCompatibilityProjection result = ModelMaterialFidelityAnalyzer.analyze(
-                ModelCompatibilityProfile.ENTITY, material, true);
+                ModelCompatibilityProfile.HOST_NATIVE_ENTITY, material, true);
         assertFalse(result.selectable());
-        assertTrue(result.losses().contains(ModelCompatibilityLoss.GPU_SKINNING_UNREPRESENTABLE));
+        assertFalse(result.selectable());
+        assertFalse(result.losses().contains(ModelCompatibilityLoss.GPU_SKINNING_UNREPRESENTABLE));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.ROUGHNESS_UNREPRESENTABLE));
         assertFalse(result.losses().contains(ModelCompatibilityLoss.METALLIC_ROUGHNESS_APPROXIMATED));
@@ -54,7 +55,7 @@ class ModelMaterialFidelityAnalyzerTest {
                     endpoint, 1, StaticModelTexture.absent(), StaticModelTexture.absent(), 1,
                     StaticModelTexture.absent(), 1);
             ModelCompatibilityProjection result = ModelMaterialFidelityAnalyzer.analyze(
-                    ModelCompatibilityProfile.IRIS_1_11_LABPBR, material, false);
+                    ModelCompatibilityProfile.HOST_NATIVE_LABPBR, material, false);
             assertFalse(result.losses().contains(ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE));
         }
     }
@@ -66,7 +67,7 @@ class ModelMaterialFidelityAnalyzerTest {
                 0.5F, 1, StaticModelTexture.absent(), StaticModelTexture.absent(), 1,
                 StaticModelTexture.absent(), 1);
         ModelCompatibilityProjection result = ModelMaterialFidelityAnalyzer.analyze(
-                ModelCompatibilityProfile.IRIS_1_11_LABPBR, material, false);
+                ModelCompatibilityProfile.HOST_NATIVE_LABPBR, material, false);
         assertTrue(result.losses().contains(ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE));
     }
 
@@ -82,7 +83,7 @@ class ModelMaterialFidelityAnalyzerTest {
                 0, 0.6F, StaticModelTexture.absent(), normal, 1, ao, 1);
 
         ModelCompatibilityProjection result = ModelMaterialFidelityAnalyzer.analyze(
-                ModelCompatibilityProfile.IRIS_1_11_LABPBR, material, false);
+                ModelCompatibilityProfile.HOST_NATIVE_LABPBR, material, false);
 
         assertTrue(result.selectable());
         assertTrue(result.losses().contains(ModelCompatibilityLoss.NORMAL_TEXTURE_APPROXIMATED));
@@ -90,7 +91,7 @@ class ModelMaterialFidelityAnalyzerTest {
         assertTrue(result.losses().contains(ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.OCCLUSION_TEXTURE_UNREPRESENTABLE));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.INDEPENDENT_UV_UNREPRESENTABLE));
-        assertTrue(result.losses().contains(ModelCompatibilityLoss.LABPBR_SHADERPACK_CONSUMPTION_UNVERIFIED));
+        assertFalse(result.losses().contains(ModelCompatibilityLoss.LABPBR_SHADERPACK_CONSUMPTION_UNVERIFIED));
     }
 
     @Test
@@ -106,7 +107,7 @@ class ModelMaterialFidelityAnalyzerTest {
                 0, 1, StaticModelTexture.absent(), normal, 1, StaticModelTexture.absent(), 1);
 
         ModelCompatibilityProjection result = ModelMaterialFidelityAnalyzer.analyze(
-                ModelCompatibilityProfile.IRIS_1_11_LABPBR, material, false);
+                ModelCompatibilityProfile.HOST_NATIVE_LABPBR, material, false);
 
         assertTrue(result.losses().contains(ModelCompatibilityLoss.NORMAL_TEXTURE_UNREPRESENTABLE));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.TEXTURE_SAMPLER_APPROXIMATED));
@@ -124,7 +125,7 @@ class ModelMaterialFidelityAnalyzerTest {
                 1, 1, mr, normal, 1, StaticModelTexture.absent(), 1);
 
         ModelCompatibilityProjection result = ModelMaterialFidelityAnalyzer.analyze(
-                ModelCompatibilityProfile.IRIS_1_11_LABPBR, material, false);
+                ModelCompatibilityProfile.HOST_NATIVE_LABPBR, material, false);
 
         assertTrue(result.losses().contains(ModelCompatibilityLoss.ROUGHNESS_APPROXIMATED));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.NORMAL_TEXTURE_APPROXIMATED));
@@ -138,7 +139,7 @@ class ModelMaterialFidelityAnalyzerTest {
         StaticModelMaterial material = new StaticModelMaterial(1, 1, 1, 0.5F, StaticModelTexture.absent(),
                 ModelAlphaMode.BLEND, 0.5F, false, 0, 0, 0, StaticModelTexture.absent());
         ModelCompatibilityProjection result = ModelMaterialFidelityAnalyzer.analyze(
-                ModelCompatibilityProfile.ENTITY, material, false);
+                ModelCompatibilityProfile.HOST_NATIVE_ENTITY, material, false);
         assertTrue(result.selectable());
         assertFalse(result.doubleSided());
         assertTrue(result.losses().contains(ModelCompatibilityLoss.SINGLE_SIDED_TRANSLUCENCY_UNREPRESENTABLE));
@@ -151,9 +152,9 @@ class ModelMaterialFidelityAnalyzerTest {
                 ModelAlphaMode.MASK, 0.5F, false, 0, 0, 0, StaticModelTexture.absent());
         StaticModelMaterial minecraftThreshold = new StaticModelMaterial(1, 1, 1, 1, StaticModelTexture.absent(),
                 ModelAlphaMode.MASK, 0.1F, false, 0, 0, 0, StaticModelTexture.absent());
-        assertTrue(ModelMaterialFidelityAnalyzer.analyze(ModelCompatibilityProfile.ENTITY, gltfDefault, false)
+        assertTrue(ModelMaterialFidelityAnalyzer.analyze(ModelCompatibilityProfile.HOST_NATIVE_ENTITY, gltfDefault, false)
                 .losses().contains(ModelCompatibilityLoss.ALPHA_CUTOFF_APPROXIMATED));
-        assertFalse(ModelMaterialFidelityAnalyzer.analyze(ModelCompatibilityProfile.ENTITY, minecraftThreshold, false)
+        assertFalse(ModelMaterialFidelityAnalyzer.analyze(ModelCompatibilityProfile.HOST_NATIVE_ENTITY, minecraftThreshold, false)
                 .losses().contains(ModelCompatibilityLoss.ALPHA_CUTOFF_APPROXIMATED));
     }
 
@@ -166,7 +167,7 @@ class ModelMaterialFidelityAnalyzerTest {
                 ModelAlphaMode.OPAQUE, 0.5F, false, 0, 0, 0, StaticModelTexture.absent(),
                 1, 1, mr, StaticModelTexture.absent(), 1, StaticModelTexture.absent(), 1);
         ModelCompatibilityProjection result = ModelMaterialFidelityAnalyzer.analyze(
-                ModelCompatibilityProfile.IRIS_1_11_LABPBR, material, false);
+                ModelCompatibilityProfile.HOST_NATIVE_LABPBR, material, false);
         assertTrue(result.losses().contains(ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.ROUGHNESS_UNREPRESENTABLE));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.INDEPENDENT_UV_UNREPRESENTABLE));

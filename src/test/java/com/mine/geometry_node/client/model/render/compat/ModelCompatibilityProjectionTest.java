@@ -10,9 +10,9 @@ class ModelCompatibilityProjectionTest {
     @Test
     void gpuSkinningLossMakesEntityProjectionUnselectable() {
         assertThrows(IllegalArgumentException.class, () -> new ModelCompatibilityProjection(true,
-                ModelCompatibilityProfile.ENTITY, 0, true, true, true, true, false,
+                ModelCompatibilityProfile.HOST_NATIVE_ENTITY, 0, true, true, true, true, false,
                 Set.of(ModelCompatibilityLoss.GPU_SKINNING_UNREPRESENTABLE)));
-        assertFalse(new ModelCompatibilityProjection(false, ModelCompatibilityProfile.ENTITY,
+        assertFalse(new ModelCompatibilityProjection(false, ModelCompatibilityProfile.HOST_NATIVE_ENTITY,
                 0, true, true, true, true, false,
                 Set.of(ModelCompatibilityLoss.GPU_SKINNING_UNREPRESENTABLE)).selectable());
     }

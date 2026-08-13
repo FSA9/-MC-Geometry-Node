@@ -36,6 +36,7 @@ public final class EntityCompatibilityRenderer {
     private static final Set<GeometryKey> FAILED_GEOMETRY = new HashSet<>();
     private static final Map<TextureKey, CompatibilityTexture> TEXTURES = new HashMap<>();
     private static final Set<TextureKey> FAILED_TEXTURES = new HashSet<>();
+    private static final Set<TextureKey> LOGGED_RUNTIME_TEXTURE_FAILURES = new HashSet<>();
     private static long nextTextureId;
     private static ModelProjectorCapability lastProjectorCapability;
     private static Set<ModelCompatibilityLoss> lastLosses = Set.of();
@@ -46,25 +47,55 @@ public final class EntityCompatibilityRenderer {
         if (Minecraft.getInstance().level == null) return;
         long started = System.nanoTime();
         ClientModelRuntime runtime = ClientModelRuntime.INSTANCE;
-        ModelProjectorCapability projector = Iris111LabPbrProjector.capability();
+        List<ClientModelInstanceRegistry.ReadyInstance> ready = runtime.instances().readySnapshot();
+        if (ready.isEmpty()) {
+            prune(ready);
+            lastLosses = Set.of();
+            ModelShaderCompatibility.reportCompatibility(Set.of(), ModelIntegrationVerification.NOT_APPLICABLE,
+                    List.of(), Map.of());
+            runtime.recordFrame(0, 0, 0, System.nanoTime() - started, -1);
+            return;
+        }
+        Iris111LabPbrProjector.Snapshot projectorSnapshot = Iris111LabPbrProjector.snapshot(
+                ModelResourceReloadListener.reloadGeneration());
+        ModelProjectorCapability projector = projectorSnapshot.capability();
         synchronizeCapability(projector);
         runtime.instances().tickAnimations(System.nanoTime());
         Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
         ModelDimensionId dimension = new ModelDimensionId(Minecraft.getInstance().level.dimension().identifier().toString());
         EnumSet<ModelCompatibilityLoss> frameLosses = EnumSet.noneOf(ModelCompatibilityLoss.class);
-        frameLosses.addAll(projector.frameLosses());
+        EnumMap<ModelDrawRejection, Integer> frameRejections = new EnumMap<>(ModelDrawRejection.class);
+        List<String> runtimeFaults = new ArrayList<>();
+        if (projector.runtimeFault()) {
+            runtimeFaults.add(projectorSnapshot.diagnostic());
+        }
         FrameStatistics statistics = new FrameStatistics();
-        List<ClientModelInstanceRegistry.ReadyInstance> ready = runtime.instances().readySnapshot();
         prune(ready);
         for (ClientModelInstanceRegistry.ReadyInstance instance : ready) {
             if (!instance.state().visible() || !dimension.equals(instance.state().dimension())) continue;
             if (instance.state().maxDistance() > 0 && ModelWorldRenderer.worldBounds(
                     instance.pose().modelBounds(), instance.state().placement()).distanceToSqr(camera)
                     > instance.state().maxDistance() * instance.state().maxDistance()) continue;
-            submitInstance(root, collector, camera, instance, frameLosses, statistics, projector);
+            submitInstance(root, collector, camera, instance, frameLosses, frameRejections,
+                    runtimeFaults, statistics, projector);
+        }
+        ModelIntegrationVerification verification = frameLosses.remove(ModelCompatibilityLoss.PROJECTOR_HOLDER_PENDING)
+                ? ModelIntegrationVerification.PENDING
+                : projector.verification();
+        if (frameLosses.remove(ModelCompatibilityLoss.TEXTURE_DECODE_FAILED)) {
+            runtimeFaults.add("AUXILIARY_TEXTURE_DECODE_FAILED");
+        }
+        if (frameLosses.remove(ModelCompatibilityLoss.PROJECTOR_RUNTIME_UNAVAILABLE)) {
+            runtimeFaults.add("PROJECTOR_RUNTIME_UNAVAILABLE");
         }
         lastLosses = Set.copyOf(frameLosses);
-        ModelShaderCompatibility.reportCompatibility(lastLosses);
+        Set<ModelIntegrationCapability> capabilities = EnumSet.of(ModelIntegrationCapability.HOST_ENTITY_SHADER,
+                ModelIntegrationCapability.BASE_COLOR, ModelIntegrationCapability.ALPHA_MODES);
+        if (projector.auxiliaryEnabled()) {
+            capabilities.add(ModelIntegrationCapability.LABPBR_AUXILIARY_TEXTURES);
+        }
+        ModelShaderCompatibility.reportCompatibility(projector.profile(), capabilities, lastLosses,
+                verification, runtimeFaults, frameRejections);
         runtime.recordFrame(statistics.drawCalls, statistics.triangles, statistics.singularTransformSkips,
                 System.nanoTime() - started, -1);
     }
@@ -74,7 +105,8 @@ public final class EntityCompatibilityRenderer {
     public static void clear() {
         var manager = Minecraft.getInstance().getTextureManager();
         TEXTURES.values().forEach(texture -> release(manager, texture));
-        TEXTURES.clear(); FAILED_TEXTURES.clear(); GEOMETRY.clear(); FAILED_GEOMETRY.clear();
+        TEXTURES.clear(); FAILED_TEXTURES.clear(); LOGGED_RUNTIME_TEXTURE_FAILURES.clear();
+        GEOMETRY.clear(); FAILED_GEOMETRY.clear();
         nextTextureId = 0; lastProjectorCapability = null; lastLosses = Set.of();
     }
 
@@ -91,6 +123,7 @@ public final class EntityCompatibilityRenderer {
         TEXTURES.values().forEach(texture -> release(manager, texture));
         TEXTURES.clear();
         FAILED_TEXTURES.clear();
+        LOGGED_RUNTIME_TEXTURE_FAILURES.clear();
         lastProjectorCapability = capability;
     }
 
@@ -102,6 +135,7 @@ public final class EntityCompatibilityRenderer {
         GEOMETRY.keySet().removeIf(key -> !assets.contains(key.asset()));
         FAILED_GEOMETRY.removeIf(key -> !assets.contains(key.asset()));
         FAILED_TEXTURES.removeIf(key -> !assets.contains(key.asset()));
+        LOGGED_RUNTIME_TEXTURE_FAILURES.removeIf(key -> !assets.contains(key.asset()));
         var manager = Minecraft.getInstance().getTextureManager();
         Iterator<Map.Entry<TextureKey, CompatibilityTexture>> iterator = TEXTURES.entrySet().iterator();
         while (iterator.hasNext()) {
@@ -115,7 +149,9 @@ public final class EntityCompatibilityRenderer {
 
     private static void submitInstance(PoseStack root, SubmitNodeCollector collector, Vec3 camera,
                                        ClientModelInstanceRegistry.ReadyInstance instance,
-                                       EnumSet<ModelCompatibilityLoss> losses, FrameStatistics statistics,
+                                       EnumSet<ModelCompatibilityLoss> losses,
+                                       EnumMap<ModelDrawRejection, Integer> rejections,
+                                       List<String> runtimeFaults, FrameStatistics statistics,
                                        ModelProjectorCapability projector) {
         LoadedModelResource loaded = instance.resource();
         ModelDefinition definition = loaded.definition();
@@ -134,22 +170,23 @@ public final class EntityCompatibilityRenderer {
                 losses.addAll(projection.losses());
                 ModelMaterialFidelityAnalyzer.addInstanceLosses(material, placement.alpha(),
                         placement.forceDoubleSided(), losses);
-                if (!projection.selectable()) continue;
-                if (!primitive.attributes().containsKey(ModelAttributeSemantic.NORMAL)) {
-                    losses.add(ModelCompatibilityLoss.MISSING_NORMALS_GENERATED);
+                if (!projection.selectable()) {
+                    reject(rejections, ModelDrawRejection.UNSUPPORTED_SKINNING);
+                    continue;
                 }
                 StaticModelTexture coordinateSource = coordinateSource(material);
                 GeometryKey key = new GeometryKey(loaded.asset().cacheIdentity(), node.meshIndex(), primitiveIndex,
                         coordinateSource.texCoord(), coordinateSource.transform());
                 if (FAILED_GEOMETRY.contains(key)) {
-                    losses.add(ModelCompatibilityLoss.GEOMETRY_PROJECTION_FAILED);
+                    reject(rejections, ModelDrawRejection.GEOMETRY_PROJECTION_FAILED);
                     continue;
                 }
                 EntityGeometry geometry;
                 try {
                     geometry = GEOMETRY.computeIfAbsent(key, ignored -> project(primitive, coordinateSource));
                 } catch (RuntimeException exception) {
-                    losses.add(ModelCompatibilityLoss.GEOMETRY_PROJECTION_FAILED);
+                    reject(rejections, ModelDrawRejection.GEOMETRY_PROJECTION_FAILED);
+                    runtimeFaults.add("geometry-projection:" + exception.getClass().getSimpleName());
                     if (FAILED_GEOMETRY.add(key)) {
                         GeometryNode.LOGGER.warn("Skipping compatibility draw whose geometry could not be projected: {}",
                                 loaded.asset().cacheIdentity(), exception);
@@ -159,13 +196,23 @@ public final class EntityCompatibilityRenderer {
                 CompatibilityTexture texture;
                 try {
                     texture = texture(loaded, material, labPbr);
-                } catch (RuntimeException exception) {
-                    losses.add(ModelCompatibilityLoss.TEXTURE_DECODE_FAILED);
+                } catch (TextureProjectionFailure exception) {
                     TextureKey failed = textureKey(loaded, material, labPbr);
-                    if (FAILED_TEXTURES.add(failed)) {
-                        GeometryNode.LOGGER.warn("Skipping compatibility draw whose base-color texture could not be projected: {}",
-                                loaded.asset().cacheIdentity(), exception);
+                    if (exception.cacheForAssetLifetime()) {
+                        runtimeFaults.add("texture-decode:" + exception.getClass().getSimpleName());
+                        if (FAILED_TEXTURES.add(failed)) {
+                            GeometryNode.LOGGER.warn("Skipping compatibility draw whose base-color asset is invalid: {}",
+                                    loaded.asset().cacheIdentity(), exception);
+                        }
+                    } else {
+                        runtimeFaults.add("texture-projection:" + exception.getClass().getSimpleName());
+                        losses.add(ModelCompatibilityLoss.PROJECTOR_RUNTIME_UNAVAILABLE);
+                        if (LOGGED_RUNTIME_TEXTURE_FAILURES.add(failed)) {
+                            GeometryNode.LOGGER.warn("Compatibility texture runtime projection failed; this generation may retry: {}",
+                                    loaded.asset().cacheIdentity(), exception);
+                        }
                     }
+                    reject(rejections, ModelDrawRejection.TEXTURE_PROJECTION_FAILED);
                     continue;
                 }
                 mergeTextureLosses(losses, texture.losses());
@@ -177,7 +224,7 @@ public final class EntityCompatibilityRenderer {
                         .mul(instance.pose().worldMatrix(nodeIndex));
                 float determinant = transform.determinant3x3();
                 if (!Float.isFinite(determinant) || Math.abs(determinant) <= 1.0E-8F) {
-                    losses.add(ModelCompatibilityLoss.SINGULAR_TRANSFORM_REJECTED);
+                    reject(rejections, ModelDrawRejection.SINGULAR_TRANSFORM);
                     statistics.singularTransformSkips++;
                     continue;
                 }
@@ -317,7 +364,7 @@ public final class EntityCompatibilityRenderer {
                                                 boolean labPbr) {
         TextureKey key = textureKey(loaded, material, labPbr);
         if (FAILED_TEXTURES.contains(key)) {
-            throw new IllegalStateException("compatibility texture projection previously failed");
+            throw TextureProjectionFailure.asset("compatibility base-color asset previously failed", null);
         }
         return TEXTURES.computeIfAbsent(key, ignored -> {
             Identifier id = Identifier.fromNamespaceAndPath(GeometryNode.MODID,
@@ -326,7 +373,12 @@ public final class EntityCompatibilityRenderer {
             boolean registered = false;
             List<NativeImage> inputs = new ArrayList<>();
             try {
-                NativeImage image = decode(loaded, material.baseColorTexture(), inputs);
+                NativeImage image;
+                try {
+                    image = decode(loaded, material.baseColorTexture(), inputs);
+                } catch (IOException | RuntimeException assetFailure) {
+                    throw TextureProjectionFailure.asset("failed to decode compatibility base-color asset", assetFailure);
+                }
                 if (image == null) {
                     image = new NativeImage(1, 1, false);
                     image.setPixel(0, 0, 0xFFFFFFFF);
@@ -385,10 +437,14 @@ public final class EntityCompatibilityRenderer {
                 registered = true;
                 if (key.labPbr()) Iris111LabPbrProjector.afterAlbedoRegistration(dynamic);
                 return new CompatibilityTexture(id, dynamic, textureLosses);
-            } catch (IOException | RuntimeException exception) {
+            } catch (TextureProjectionFailure exception) {
                 if (registered) Minecraft.getInstance().getTextureManager().release(id);
                 else if (dynamic != null) dynamic.close();
-                throw new IllegalStateException("failed to decode compatibility base-color texture", exception);
+                throw exception;
+            } catch (RuntimeException exception) {
+                if (registered) Minecraft.getInstance().getTextureManager().release(id);
+                else if (dynamic != null) dynamic.close();
+                throw TextureProjectionFailure.runtime("compatibility texture host operation failed", exception);
             } finally {
                 inputs.forEach(NativeImage::close);
             }
@@ -453,6 +509,10 @@ public final class EntityCompatibilityRenderer {
 
     private static int dimension(NativeImage first, NativeImage second) {
         return first != null ? first.getWidth() : second != null ? second.getWidth() : 1;
+    }
+
+    private static void reject(EnumMap<ModelDrawRejection, Integer> rejections, ModelDrawRejection reason) {
+        rejections.merge(reason, 1, Integer::sum);
     }
     private static int dimensionHeight(NativeImage first, NativeImage second) {
         return first != null ? first.getHeight() : second != null ? second.getHeight() : 1;

@@ -159,10 +159,17 @@ public final class LocalModelPreviewCommand {
                 + " draws=" + status.drawCalls() + " loadMs=" + nanosToMs(status.loadNanos())
                 + " renderCpuMs=" + nanosToMs(status.lastRenderCpuNanos())
                 + " gpuMs=" + nanosToMs(status.lastGpuNanos()) + details);
-        var shader = ModelShaderCompatibility.status();
-        ClientCommandUtils.sendClientMsg("§eShader backend=" + shader.id() + " fidelity=" + shader.fidelity()
-                + " selectable=" + shader.selectable()
-                + (shader.losses().isEmpty() ? "" : " losses=" + String.join(",", shader.losses())));
+        var integration = ModelShaderCompatibility.integrationStatus();
+        ClientCommandUtils.sendClientMsg("§eModel integration requested=" + integration.requestedMode()
+                + " effective=" + integration.effectiveMode() + " profile=" + integration.profileId()
+                + " fidelity=" + integration.fidelity() + " verification=" + integration.verification()
+                + " generation=" + integration.generation()
+                + (integration.semanticLosses().isEmpty() ? "" : " losses=" + integration.semanticLosses())
+                + (integration.runtimeFaults().isEmpty() ? "" : " runtimeFaults=" + integration.runtimeFaults())
+                + (integration.rejectedDraws().isEmpty() ? "" : " rejectedDraws=" + integration.rejectedDraws())
+                + (integration.fallback() == com.mine.geometry_node.client.model.render.compat.ModelIntegrationFallback.NONE
+                ? "" : " fallback=" + integration.fallback() + " detail=" + integration.fallbackDetail()));
+        ClientCommandUtils.sendClientMsg("§eModel integration capabilities=" + integration.capabilities());
         ClientCommandUtils.sendClientMsg("§eModel binding reload generation="
                 + ModelResourceReloadListener.reloadGeneration());
         statusShared();

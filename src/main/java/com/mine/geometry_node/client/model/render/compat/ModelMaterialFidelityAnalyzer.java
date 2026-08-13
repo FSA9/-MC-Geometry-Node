@@ -12,7 +12,6 @@ public final class ModelMaterialFidelityAnalyzer {
     public static ModelCompatibilityProjection analyze(ModelCompatibilityProfile profile,
                                                         StaticModelMaterial material, boolean skinned) {
         EnumSet<ModelCompatibilityLoss> losses = EnumSet.noneOf(ModelCompatibilityLoss.class);
-        if (skinned) losses.add(ModelCompatibilityLoss.GPU_SKINNING_UNREPRESENTABLE);
         if (material.alphaMode() == com.mine.geometry_node.core.engine.system.model.domain.ModelAlphaMode.MASK
                 && Math.abs(material.alphaCutoff() - 0.1F) > 1.0E-6F) {
             losses.add(ModelCompatibilityLoss.ALPHA_CUTOFF_APPROXIMATED);
@@ -23,7 +22,7 @@ public final class ModelMaterialFidelityAnalyzer {
             losses.add(ModelCompatibilityLoss.TRANSPARENT_ORDERING_APPROXIMATED);
         }
         if (material.doubleSided()) losses.add(ModelCompatibilityLoss.SIDED_NORMAL_APPROXIMATED);
-        boolean labPbr = profile == ModelCompatibilityProfile.IRIS_1_11_LABPBR;
+        boolean labPbr = profile == ModelCompatibilityProfile.HOST_NATIVE_LABPBR;
         boolean roughnessInput = material.roughnessFactor() != 1.0F
                 || material.metallicRoughnessTexture().present();
         // Textured metallic requires pixel inspection while constructing the auxiliary.
@@ -47,8 +46,6 @@ public final class ModelMaterialFidelityAnalyzer {
                 ? ModelCompatibilityLoss.OCCLUSION_TEXTURE_APPROXIMATED : ModelCompatibilityLoss.OCCLUSION_TEXTURE_UNREPRESENTABLE);
         if (material.emissiveTexture().present() || material.emissiveRed() != 0 || material.emissiveGreen() != 0
                 || material.emissiveBlue() != 0) losses.add(ModelCompatibilityLoss.EMISSIVE_TEXTURE_UNREPRESENTABLE);
-        if (labPbr) losses.add(ModelCompatibilityLoss.LABPBR_SHADERPACK_CONSUMPTION_UNVERIFIED);
-
         int selectedUv = material.baseColorTexture().present() ? material.baseColorTexture().texCoord() : -1;
         StaticModelTexture[] textures = {material.baseColorTexture(), material.metallicRoughnessTexture(),
                 material.normalTexture(), material.occlusionTexture(), material.emissiveTexture()};

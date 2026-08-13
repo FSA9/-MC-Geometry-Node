@@ -1,26 +1,29 @@
 package com.mine.geometry_node.client.model.render.compat;
 
-import java.util.Set;
-
 /** Stable result of a versioned material-projector probe. */
 public enum ModelProjectorCapability {
-    ACTIVE(ModelCompatibilityProfile.IRIS_1_11_LABPBR, true, Set.of()),
-    INACTIVE(ModelCompatibilityProfile.ENTITY, false, Set.of()),
-    RUNTIME_FAILED(ModelCompatibilityProfile.ENTITY, false,
-            Set.of(ModelCompatibilityLoss.PROJECTOR_RUNTIME_UNAVAILABLE));
+    ACTIVE(ModelCompatibilityProfile.HOST_NATIVE_LABPBR, true, ModelIntegrationVerification.UNVERIFIED, false),
+    PENDING(ModelCompatibilityProfile.HOST_NATIVE_ENTITY, false, ModelIntegrationVerification.PENDING, false),
+    UNVERIFIED(ModelCompatibilityProfile.HOST_NATIVE_LABPBR, true, ModelIntegrationVerification.UNVERIFIED, false),
+    ABSENT(ModelCompatibilityProfile.HOST_NATIVE_ENTITY, false, ModelIntegrationVerification.NOT_APPLICABLE, false),
+    INACTIVE(ModelCompatibilityProfile.HOST_NATIVE_ENTITY, false, ModelIntegrationVerification.NOT_APPLICABLE, false),
+    FAILED(ModelCompatibilityProfile.HOST_NATIVE_ENTITY, false, ModelIntegrationVerification.UNVERIFIED, true);
 
     private final ModelCompatibilityProfile profile;
     private final boolean auxiliaryEnabled;
-    private final Set<ModelCompatibilityLoss> frameLosses;
+    private final ModelIntegrationVerification verification;
+    private final boolean runtimeFault;
 
     ModelProjectorCapability(ModelCompatibilityProfile profile, boolean auxiliaryEnabled,
-                             Set<ModelCompatibilityLoss> frameLosses) {
+                             ModelIntegrationVerification verification, boolean runtimeFault) {
         this.profile = profile;
         this.auxiliaryEnabled = auxiliaryEnabled;
-        this.frameLosses = frameLosses;
+        this.verification = verification;
+        this.runtimeFault = runtimeFault;
     }
 
     public ModelCompatibilityProfile profile() { return profile; }
     public boolean auxiliaryEnabled() { return auxiliaryEnabled; }
-    public Set<ModelCompatibilityLoss> frameLosses() { return frameLosses; }
+    public ModelIntegrationVerification verification() { return verification; }
+    public boolean runtimeFault() { return runtimeFault; }
 }

@@ -2,23 +2,25 @@ package com.mine.geometry_node.client.model.render.compat;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Set;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 class ModelProjectorCapabilityTest {
-    @Test void onlyActiveCapabilityEnablesLabPbrAuxiliaries() {
+    @Test void positiveSamplerEvidenceEnablesUnverifiedLabPbrAuxiliaries() {
         assertTrue(ModelProjectorCapability.ACTIVE.auxiliaryEnabled());
-        assertEquals(ModelCompatibilityProfile.IRIS_1_11_LABPBR,
+        assertTrue(ModelProjectorCapability.UNVERIFIED.auxiliaryEnabled());
+        assertEquals(ModelCompatibilityProfile.HOST_NATIVE_LABPBR,
                 ModelProjectorCapability.ACTIVE.profile());
         assertFalse(ModelProjectorCapability.INACTIVE.auxiliaryEnabled());
-        assertFalse(ModelProjectorCapability.RUNTIME_FAILED.auxiliaryEnabled());
+        assertFalse(ModelProjectorCapability.FAILED.auxiliaryEnabled());
     }
 
-    @Test void runtimeFailureFallsBackToEntityWithAnExplicitFrameLoss() {
-        assertEquals(ModelCompatibilityProfile.ENTITY, ModelProjectorCapability.RUNTIME_FAILED.profile());
-        assertEquals(Set.of(ModelCompatibilityLoss.PROJECTOR_RUNTIME_UNAVAILABLE),
-                ModelProjectorCapability.RUNTIME_FAILED.frameLosses());
-        assertTrue(ModelProjectorCapability.INACTIVE.frameLosses().isEmpty());
+    @Test void probeStateIsSeparateFromMaterialSemanticLosses() {
+        assertEquals(ModelIntegrationVerification.PENDING, ModelProjectorCapability.PENDING.verification());
+        assertEquals(ModelIntegrationVerification.UNVERIFIED, ModelProjectorCapability.UNVERIFIED.verification());
+        assertEquals(ModelIntegrationVerification.NOT_APPLICABLE, ModelProjectorCapability.ABSENT.verification());
+        assertEquals(ModelIntegrationVerification.NOT_APPLICABLE, ModelProjectorCapability.INACTIVE.verification());
+        assertTrue(ModelProjectorCapability.FAILED.runtimeFault());
+        assertFalse(ModelProjectorCapability.UNVERIFIED.runtimeFault());
+        assertEquals(ModelCompatibilityProfile.HOST_NATIVE_ENTITY, ModelProjectorCapability.FAILED.profile());
     }
 }

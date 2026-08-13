@@ -85,6 +85,7 @@ public class GeometryNodeClient {
     }
 
     private void onClientTick(ClientTickEvent.Post event) {
+        ModelShaderCompatibility.captureFrameEnvironment();
         while (KeyBindings.OPEN_EDITOR.consumeClick()) {
             icyllis.modernui.mc.MuiModApi.openScreen(new MainUI());
         }
