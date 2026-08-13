@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.command.client;
 
 import com.mine.geometry_node.client.model.runtime.*;
+import com.mine.geometry_node.client.model.render.ModelShaderCompatibility;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -34,6 +35,7 @@ public final class LocalModelPreviewCommand {
                         .then(RequiredArgumentBuilder.<S, String>argument("path", StringArgumentType.greedyString())
                                 .executes(context -> load(StringArgumentType.getString(context, "path")))))
                 .then(LiteralArgumentBuilder.<S>literal("clear").executes(context -> clear()))
+                .then(LiteralArgumentBuilder.<S>literal("reload").executes(context -> reloadBindings()))
                 .then(LiteralArgumentBuilder.<S>literal("status").executes(context -> status()))
                 .then(pathCommand("shared", LocalModelPreviewCommand::spawnShared))
                 .then(pathCommand("correctness", LocalModelPreviewCommand::spawnCorrectness))
@@ -135,6 +137,21 @@ public final class LocalModelPreviewCommand {
         return 1;
     }
 
+    private static int reloadBindings() {
+        ClientModelRuntime runtime = ClientModelRuntime.INSTANCE;
+        var before = runtime.gpuDiagnostics();
+        long generation = ModelResourceReloadListener.reloadBindings();
+        var after = runtime.gpuDiagnostics();
+        ClientCommandUtils.sendClientMsg("§aModel material and shader bindings reloaded generation=" + generation
+                + "; static GPU resources retained.");
+        ClientCommandUtils.sendClientMsg("§eReload GPU before/after uploads=" + before.completedUploads() + '/'
+                + after.completedUploads() + " liveResources=" + before.liveResources() + '/'
+                + after.liveResources() + " bufferBytes=" + before.liveBufferBytes() + '/'
+                + after.liveBufferBytes() + " textureBytes=" + before.liveTextureBytes() + '/'
+                + after.liveTextureBytes());
+        return 1;
+    }
+
     private static int status() {
         LocalModelStatus status = ClientModelRuntime.INSTANCE.status();
         String details = status.failure().isEmpty() ? "" : " failure=" + status.failure();
@@ -142,6 +159,12 @@ public final class LocalModelPreviewCommand {
                 + " draws=" + status.drawCalls() + " loadMs=" + nanosToMs(status.loadNanos())
                 + " renderCpuMs=" + nanosToMs(status.lastRenderCpuNanos())
                 + " gpuMs=" + nanosToMs(status.lastGpuNanos()) + details);
+        var shader = ModelShaderCompatibility.status();
+        ClientCommandUtils.sendClientMsg("§eShader backend=" + shader.id() + " fidelity=" + shader.fidelity()
+                + " selectable=" + shader.selectable()
+                + (shader.losses().isEmpty() ? "" : " losses=" + String.join(",", shader.losses())));
+        ClientCommandUtils.sendClientMsg("§eModel binding reload generation="
+                + ModelResourceReloadListener.reloadGeneration());
         statusShared();
         statusSkin();
         statusTests();

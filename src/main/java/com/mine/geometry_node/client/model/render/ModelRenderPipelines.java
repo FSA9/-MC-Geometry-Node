@@ -22,25 +22,21 @@ public final class ModelRenderPipelines {
 
     public static void register(RegisterRenderPipelinesEvent event) {
         for (int bits = 0; bits < 16; bits++) {
-            ModelVertexLayout layout = layout(bits);
-            for (ModelAlphaMode alphaMode : ModelAlphaMode.values()) {
-                for (boolean textured : List.of(false, true)) {
-                    if (textured && (bits & 2) == 0) continue;
-                    for (boolean emissiveTextured : List.of(false, true)) {
-                    if (emissiveTextured && (bits & 2) == 0) continue;
+            for (int uvCount = 0; uvCount <= 5; uvCount++) {
+                ModelVertexLayout layout = layout(bits, uvCount);
+                for (ModelAlphaMode alphaMode : ModelAlphaMode.values()) {
                     for (boolean doubleSided : List.of(false, true)) {
                         for (boolean mirrored : List.of(false, true)) {
                             for (boolean translucent : List.of(false, true)) {
                                 if (alphaMode == ModelAlphaMode.BLEND && !translucent) continue;
-                                boolean skinned = (bits & 8) != 0;
-                                ModelPipelineKey key = new ModelPipelineKey(layout, alphaMode, textured,
-                                        emissiveTextured, doubleSided, mirrored, translucent, skinned);
-                                RenderPipeline pipeline = create(key, bits);
+                                boolean skinned = (bits & 4) != 0;
+                                ModelPipelineKey key = new ModelPipelineKey(layout, alphaMode,
+                                        doubleSided, mirrored, translucent, skinned);
+                                RenderPipeline pipeline = create(key, bits, uvCount);
                                 PIPELINES.put(key, pipeline);
                                 event.registerPipeline(pipeline);
+                            }
                         }
-                        }
-                    }
                     }
                 }
             }
@@ -53,10 +49,8 @@ public final class ModelRenderPipelines {
         return pipeline;
     }
 
-    private static RenderPipeline create(ModelPipelineKey key, int bits) {
-        String suffix = Integer.toString(bits) + "_" + key.alphaMode().name().toLowerCase(Locale.ROOT)
-                + (key.baseColorTextured() ? "_texture" : "_plain")
-                + (key.emissiveTextured() ? "_emissive_texture" : "_emissive_factor")
+    private static RenderPipeline create(ModelPipelineKey key, int bits, int uvCount) {
+        String suffix = bits + "_uv" + uvCount + "_" + key.alphaMode().name().toLowerCase(Locale.ROOT)
                 + (key.doubleSided() ? "_double" : "_cull");
         suffix += key.mirrored() ? "_mirrored" : "_normal";
         suffix += key.translucent() ? "_blend_queue" : "_depth_queue";
@@ -67,16 +61,19 @@ public final class ModelRenderPipelines {
                 .withFragmentShader(Identifier.fromNamespaceAndPath(GeometryNode.MODID, "core/static_model"))
                 .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
                 .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                .withUniform("ModelMaterial", UniformType.UNIFORM_BUFFER)
                 .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, !key.translucent()))
                 .withCull(!key.doubleSided() && !key.mirrored())
                 .withVertexFormat(MinecraftModelVertexFormats.create(key.layout()), VertexFormat.Mode.TRIANGLES);
         if (key.skinned()) builder.withShaderDefine("HAS_SKIN").withUniform("SkinPalette", UniformType.UNIFORM_BUFFER);
         if (key.translucent()) builder.withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT));
         if ((bits & 1) != 0) builder.withShaderDefine("HAS_NORMAL");
-        if ((bits & 2) != 0) builder.withShaderDefine("HAS_UV");
-        if ((bits & 4) != 0) builder.withShaderDefine("HAS_COLOR");
-        if (key.baseColorTextured()) builder.withShaderDefine("HAS_TEXTURE").withSampler("Sampler0");
-        if (key.emissiveTextured()) builder.withShaderDefine("HAS_EMISSIVE_TEXTURE").withSampler("Sampler1");
+        if (uvCount > 0) builder.withShaderDefine("HAS_UV");
+        for (int uv = 1; uv < uvCount; uv++) builder.withShaderDefine("HAS_UV" + uv);
+        if ((bits & 2) != 0) builder.withShaderDefine("HAS_COLOR");
+        if ((bits & 8) != 0) builder.withShaderDefine("HAS_TANGENT");
+        builder.withSampler("Sampler0").withSampler("Sampler1").withSampler("Sampler2")
+                .withSampler("Sampler3").withSampler("Sampler4");
         if (key.alphaMode() == ModelAlphaMode.OPAQUE) builder.withShaderDefine("ALPHA_OPAQUE");
         if (key.alphaMode() == ModelAlphaMode.MASK) builder.withShaderDefine("ALPHA_MASK");
         if (key.doubleSided()) builder.withShaderDefine("DOUBLE_SIDED");
@@ -85,13 +82,15 @@ public final class ModelRenderPipelines {
         return builder.build();
     }
 
-    private static ModelVertexLayout layout(int bits) {
+    private static ModelVertexLayout layout(int bits, int uvCount) {
         List<ModelVertexLayoutElement> elements = new ArrayList<>();
         elements.add(new ModelVertexLayoutElement(ModelAttributeSemantic.POSITION, ModelComponentType.FLOAT32, 3, false));
         if ((bits & 1) != 0) elements.add(new ModelVertexLayoutElement(ModelAttributeSemantic.NORMAL, ModelComponentType.INT8, 3, true));
-        if ((bits & 2) != 0) elements.add(new ModelVertexLayoutElement(ModelAttributeSemantic.TEXCOORD_0, ModelComponentType.FLOAT32, 2, false));
-        if ((bits & 4) != 0) elements.add(new ModelVertexLayoutElement(ModelAttributeSemantic.COLOR_0, ModelComponentType.UINT8, 4, true));
-        if ((bits & 8) != 0) {
+        for (int uv = 0; uv < uvCount; uv++) elements.add(new ModelVertexLayoutElement(
+                ModelAttributeSemantic.indexed(ModelAttributeSemantic.Kind.TEXCOORD, uv), ModelComponentType.FLOAT32, 2, false));
+        if ((bits & 2) != 0) elements.add(new ModelVertexLayoutElement(ModelAttributeSemantic.COLOR_0, ModelComponentType.UINT8, 4, true));
+        if ((bits & 8) != 0) elements.add(new ModelVertexLayoutElement(ModelAttributeSemantic.TANGENT, ModelComponentType.INT8, 4, true));
+        if ((bits & 4) != 0) {
             elements.add(new ModelVertexLayoutElement(ModelAttributeSemantic.JOINTS_0, ModelComponentType.FLOAT32, 4, false));
             elements.add(new ModelVertexLayoutElement(ModelAttributeSemantic.WEIGHTS_0, ModelComponentType.FLOAT32, 4, false));
         }

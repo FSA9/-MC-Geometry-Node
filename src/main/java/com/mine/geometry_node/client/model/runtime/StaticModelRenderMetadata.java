@@ -33,7 +33,11 @@ public final class StaticModelRenderMetadata {
             materials.add(new StaticModelMaterial(material.red(), material.green(), material.blue(), material.alpha(),
                     texture(definition, material.baseColorTexture()), material.alphaMode(), material.alphaCutoff(),
                     material.doubleSided(), material.emissiveRed(), material.emissiveGreen(), material.emissiveBlue(),
-                    texture(definition, material.emissiveTexture())));
+                    texture(definition, material.emissiveTexture()),
+                    material.metallicRoughness().metallicFactor(), material.metallicRoughness().roughnessFactor(),
+                    texture(definition, material.metallicRoughness().texture()),
+                    texture(definition, material.normalTexture().texture()), material.normalTexture().scale(),
+                    texture(definition, material.occlusionTexture().texture()), material.occlusionTexture().strength()));
         }
         List<ModelBounds> nodeBounds = new ArrayList<>(definition.nodes().size());
         for (int index = 0; index < definition.nodes().size(); index++) {
@@ -62,7 +66,7 @@ public final class StaticModelRenderMetadata {
     private static StaticModelTexture texture(ModelDefinition definition, ModelTextureInfo info) {
         if (info.textureIndex() < 0) return StaticModelTexture.absent();
         ModelTexture texture = definition.textures().get(info.textureIndex());
-        return new StaticModelTexture(texture.imageIndex(), texture.sampler(), info.transform());
+        return new StaticModelTexture(texture.imageIndex(), texture.sampler(), info.texCoordSet(), info.transform());
     }
 
     private static ModelBounds transformBounds(ModelBounds bounds, Matrix4f transform) {

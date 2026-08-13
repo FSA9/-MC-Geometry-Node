@@ -18,6 +18,83 @@ import static org.junit.jupiter.api.Assertions.*;
 class GlbModelImporterTest {
 
     @Test
+    void generatesMikkTangentsOnlyForNormalMappedPrimitive() {
+        ModelPrimitive primitive = success(normalMappedTriangleGlb()).meshes().getFirst().primitives().getFirst();
+        ModelVertexAttribute tangent = primitive.attributes().get(ModelAttributeSemantic.TANGENT);
+        assertNotNull(tangent);
+        assertEquals(ModelComponentType.FLOAT32, tangent.componentType());
+        assertEquals(4, tangent.componentCount());
+        assertEquals(3, tangent.elementCount());
+        for (int vertex = 0; vertex < 3; vertex++) {
+            assertEquals(1.0F, attributeFloat(primitive, ModelAttributeSemantic.TANGENT, vertex * 4), 1.0E-6F);
+            assertEquals(0.0F, attributeFloat(primitive, ModelAttributeSemantic.TANGENT, vertex * 4 + 1), 1.0E-6F);
+            assertEquals(0.0F, attributeFloat(primitive, ModelAttributeSemantic.TANGENT, vertex * 4 + 2), 1.0E-6F);
+            assertEquals(1.0F, attributeFloat(primitive, ModelAttributeSemantic.TANGENT, vertex * 4 + 3), 1.0E-6F);
+        }
+        assertFalse(success(triangleGlb(true, false, false)).meshes().getFirst().primitives().getFirst()
+                .attributes().containsKey(ModelAttributeSemantic.TANGENT));
+    }
+
+    @Test
+    void tangentGenerationHonorsCancellationAndWorkspaceBudget() {
+        byte[] glb = normalMappedTriangleGlb();
+        ModelCancellationSource cancellation = new ModelCancellationSource();
+        cancellation.cancel();
+        ModelImportResult.Failure cancelled = assertInstanceOf(ModelImportResult.Failure.class,
+                importResult(glb, new ModelImportContext(ModelImportBudget.DEFAULT, cancellation.token(), null)));
+        assertEquals(ModelImportErrorCode.CANCELLED, cancelled.failure().code());
+
+        ModelImportBudget defaults = ModelImportBudget.DEFAULT;
+        ModelImportBudget constrained = new ModelImportBudget(defaults.maxSourceBytes(), defaults.maxBufferViews(),
+                defaults.maxAccessors(), defaults.maxScenes(), defaults.maxNodes(), defaults.maxNodeDepth(),
+                defaults.maxMeshes(), defaults.maxPrimitives(), defaults.maxVertices(), defaults.maxIndices(),
+                defaults.maxTriangles(), defaults.maxMaterials(), defaults.maxTextures(), defaults.maxImages(),
+                defaults.maxImageDimension(), defaults.maxEncodedImageBytes(), defaults.maxDecodedImageBytes(),
+                defaults.maxAnimations(), defaults.maxAnimationChannels(), defaults.maxAnimationKeyframes(), 200L);
+        ModelImportResult.Failure limited = assertInstanceOf(ModelImportResult.Failure.class,
+                importResult(glb, new ModelImportContext(constrained, ModelCancellationToken.NONE, null)));
+        assertEquals(ModelImportErrorCode.LIMIT_EXCEEDED, limited.failure().code());
+        assertTrue(limited.failure().location().contains("generatedTangents.workspace"));
+    }
+
+    @Test
+    void generatesTangentsForPrimitivesSharingAccessorsAndIndices() {
+        ByteBuffer data = ByteBuffer.allocate(36 + 36 + 24 + 6 + 2 + PNG_1X1.length)
+                .order(ByteOrder.LITTLE_ENDIAN);
+        data.putFloat(0).putFloat(0).putFloat(0);
+        data.putFloat(1).putFloat(0).putFloat(0);
+        data.putFloat(0).putFloat(1).putFloat(0);
+        for (int vertex = 0; vertex < 3; vertex++) data.putFloat(0).putFloat(0).putFloat(1);
+        putTriangleUvs(data);
+        data.putShort((short) 0).putShort((short) 1).putShort((short) 2).putShort((short) 0);
+        data.put(PNG_1X1);
+        byte[] binary = data.array();
+        String shared = "{\"attributes\":{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2},"
+                + "\"indices\":3,\"material\":0}";
+        String body = "\"bufferViews\":["
+                + "{\"buffer\":0,\"byteOffset\":0,\"byteLength\":36},"
+                + "{\"buffer\":0,\"byteOffset\":36,\"byteLength\":36},"
+                + "{\"buffer\":0,\"byteOffset\":72,\"byteLength\":24},"
+                + "{\"buffer\":0,\"byteOffset\":96,\"byteLength\":6},"
+                + "{\"buffer\":0,\"byteOffset\":104,\"byteLength\":" + PNG_1X1.length + "}],"
+                + "\"accessors\":["
+                + "{\"bufferView\":0,\"componentType\":5126,\"count\":3,\"type\":\"VEC3\"},"
+                + "{\"bufferView\":1,\"componentType\":5126,\"count\":3,\"type\":\"VEC3\"},"
+                + "{\"bufferView\":2,\"componentType\":5126,\"count\":3,\"type\":\"VEC2\"},"
+                + "{\"bufferView\":3,\"componentType\":5123,\"count\":3,\"type\":\"SCALAR\"}],"
+                + "\"images\":[{\"bufferView\":4,\"mimeType\":\"image/png\"}],"
+                + "\"textures\":[{\"source\":0}],"
+                + "\"materials\":[{\"normalTexture\":{\"index\":0}}],"
+                + "\"meshes\":[{\"primitives\":[" + shared + "," + shared + "]}],"
+                + "\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0";
+        ModelDefinition model = success(glb(baseJson(body, binary.length), binary));
+        assertEquals(2, model.meshes().getFirst().primitives().size());
+        for (ModelPrimitive primitive : model.meshes().getFirst().primitives()) {
+            assertTrue(primitive.attributes().containsKey(ModelAttributeSemantic.TANGENT));
+        }
+    }
+
+    @Test
     void preservesTangentAndConsecutiveIndexedUvSets() {
         ByteBuffer data = ByteBuffer.allocate(36 + 6 + 48 + 24 + 24).order(ByteOrder.LITTLE_ENDIAN);
         data.put(triangleBinary(false, false));
@@ -152,6 +229,96 @@ class GlbModelImporterTest {
         assertEquals(3, material.baseColorTexture().transform().scaleY());
         assertEquals(0.3F, material.emissiveBlue());
         assertEquals(0, material.emissiveTexture().textureIndex());
+    }
+
+    @Test
+    void importsMetallicRoughnessNormalAndOcclusionMaterialContract() {
+        byte[] binary = triangleBinary(true, false);
+        String body = "\"extensionsUsed\":[\"KHR_texture_transform\"]," + triangleBody(true, false, binary.length)
+                .replace("\"baseColorTexture\":{\"index\":0}",
+                        "\"baseColorTexture\":{\"index\":0},\"metallicFactor\":0.25,"
+                                + "\"roughnessFactor\":0.75,\"metallicRoughnessTexture\":{\"index\":0,"
+                                + "\"extensions\":{\"KHR_texture_transform\":{\"offset\":[0.1,0.2]}}}")
+                .replace("}}}]", "}},\"normalTexture\":{\"index\":0,\"scale\":-2},"
+                        + "\"occlusionTexture\":{\"index\":0,\"strength\":0.4}}]");
+
+        ModelMaterial material = success(glb(baseJson(body, binary.length), binary)).materials().getFirst();
+
+        assertEquals(0.25F, material.metallicRoughness().metallicFactor());
+        assertEquals(0.75F, material.metallicRoughness().roughnessFactor());
+        assertEquals(0, material.metallicRoughness().texture().textureIndex());
+        assertEquals(0.1F, material.metallicRoughness().texture().transform().offsetX());
+        assertEquals(-2, material.normalTexture().scale());
+        assertEquals(0, material.normalTexture().texture().textureIndex());
+        assertEquals(0.4F, material.occlusionTexture().strength());
+        assertEquals(0, material.occlusionTexture().texture().textureIndex());
+    }
+
+    @Test
+    void rejectsSingularNormalTextureTransformButAllowsInvertibleJacobian() {
+        byte[] binary = triangleBinary(true, false);
+        String original = "\"baseColorTexture\":{\"index\":0}}}";
+        String prefix = "\"baseColorTexture\":{\"index\":0}},\"normalTexture\":{\"index\":0,"
+                + "\"extensions\":{\"KHR_texture_transform\":{";
+        String suffix = "}}}}";
+        String invertibleBody = "\"extensionsUsed\":[\"KHR_texture_transform\"],"
+                + triangleBody(true, false, binary.length).replace(original,
+                prefix + "\"rotation\":0.7,\"scale\":[-2,0.25]" + suffix);
+        ModelTextureTransform transform = success(glb(baseJson(invertibleBody, binary.length), binary))
+                .materials().getFirst().normalTexture().texture().transform();
+        assertEquals(0.7F, transform.rotation());
+        assertEquals(-2.0F, transform.scaleX());
+        assertEquals(0.25F, transform.scaleY());
+
+        String singularBody = "\"extensionsUsed\":[\"KHR_texture_transform\"],"
+                + triangleBody(true, false, binary.length).replace(original,
+                prefix + "\"scale\":[0,1]" + suffix);
+        ModelImportResult.Failure failure = assertInstanceOf(ModelImportResult.Failure.class,
+                importResult(glb(baseJson(singularBody, binary.length), binary)));
+        assertEquals(ModelImportErrorCode.INVALID_DATA, failure.failure().code());
+        assertTrue(failure.failure().location().endsWith("KHR_texture_transform.scale"));
+    }
+
+    @Test
+    void appliesGltfDefaultsToDeferredPbrFields() {
+        ModelMaterial material = success(triangleGlb(true, false, false)).materials().getFirst();
+
+        assertEquals(1, material.metallicRoughness().metallicFactor());
+        assertEquals(1, material.metallicRoughness().roughnessFactor());
+        assertEquals(-1, material.metallicRoughness().texture().textureIndex());
+        assertEquals(1, material.normalTexture().scale());
+        assertEquals(-1, material.normalTexture().texture().textureIndex());
+        assertEquals(1, material.occlusionTexture().strength());
+        assertEquals(-1, material.occlusionTexture().texture().textureIndex());
+    }
+
+    @Test
+    void rejectsOutOfRangePbrFactorsAndOcclusionStrength() {
+        byte[] binary = triangleBinary(true, false);
+        String body = triangleBody(true, false, binary.length);
+        assertFailure(glb(baseJson(body.replace("\"baseColorTexture\":{\"index\":0}",
+                        "\"baseColorTexture\":{\"index\":0},\"metallicFactor\":1.01"), binary.length), binary),
+                ModelImportErrorCode.INVALID_DATA, "metallicFactor");
+        assertFailure(glb(baseJson(body.replace("}}}]", "}},\"occlusionTexture\":{\"index\":0,"
+                        + "\"strength\":-0.01}}]"), binary.length), binary),
+                ModelImportErrorCode.INVALID_DATA, "occlusionTexture.strength");
+    }
+
+    @Test
+    void requiresTheSelectedUvSetForEveryPbrTextureRole() {
+        byte[] binary = triangleBinary(true, false);
+        String original = triangleBody(true, false, binary.length);
+        String[] bodies = {
+                original.replace("\"baseColorTexture\":{\"index\":0}",
+                        "\"baseColorTexture\":{\"index\":0},\"metallicRoughnessTexture\":{\"index\":0,"
+                                + "\"texCoord\":1}"),
+                original.replace("}}}]", "}},\"normalTexture\":{\"index\":0,\"texCoord\":1}}]"),
+                original.replace("}}}]", "}},\"occlusionTexture\":{\"index\":0,\"texCoord\":1}}]")
+        };
+        for (String body : bodies) {
+            assertFailure(glb(baseJson(body, binary.length), binary),
+                    ModelImportErrorCode.INVALID_ATTRIBUTE, "TEXCOORD_1");
+        }
     }
 
     @Test
@@ -431,15 +598,27 @@ class GlbModelImporterTest {
     }
 
     private static ModelImportResult importResult(byte[] glb) {
+        return importResult(glb, ModelImportContext.defaults());
+    }
+
+    private static ModelImportResult importResult(byte[] glb, ModelImportContext context) {
         ModelAssetReference asset = new ModelAssetReference(ModelSourceKind.MEMORY, "test", "fixture.glb",
                 new ModelAssetRevision(glb.length, 0L, ""));
         return BuiltinModelImporters.createRegistry().importModel(GlbModelImporter.ID,
-                new ModelImportSource(asset, glb), ModelImportContext.defaults());
+                new ModelImportSource(asset, glb), context);
     }
 
     private static byte[] triangleGlb(boolean textured, boolean noIndices, boolean invalidIndex) {
         byte[] binary = triangleBinary(textured, invalidIndex);
         return glb(baseJson(triangleBody(textured, noIndices, binary.length), binary.length), binary);
+    }
+
+    private static byte[] normalMappedTriangleGlb() {
+        byte[] binary = triangleBinary(true, false);
+        String body = triangleBody(true, false, binary.length).replace(
+                "\"baseColorTexture\":{\"index\":0}}}",
+                "\"baseColorTexture\":{\"index\":0}},\"normalTexture\":{\"index\":0}}");
+        return glb(baseJson(body, binary.length), binary);
     }
 
     private static byte[] texturedSamplerGlb(int min, int mag, int wrapS, int wrapT) {

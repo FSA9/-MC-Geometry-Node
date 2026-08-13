@@ -10,6 +10,14 @@ public final class MinecraftModelVertexFormats {
             12, 0, VertexFormatElement.Type.FLOAT, false, 4);
     private static final VertexFormatElement WEIGHTS = VertexFormatElement.register(
             13, 0, VertexFormatElement.Type.FLOAT, false, 4);
+    private static final VertexFormatElement TANGENT = VertexFormatElement.register(
+            14, 0, VertexFormatElement.Type.BYTE, true, 4);
+    private static final VertexFormatElement[] EXTRA_UV = {
+            VertexFormatElement.register(15, 0, VertexFormatElement.Type.FLOAT, false, 2),
+            VertexFormatElement.register(16, 0, VertexFormatElement.Type.FLOAT, false, 2),
+            VertexFormatElement.register(17, 0, VertexFormatElement.Type.FLOAT, false, 2),
+            VertexFormatElement.register(18, 0, VertexFormatElement.Type.FLOAT, false, 2)
+    };
 
     private MinecraftModelVertexFormats() {}
 
@@ -33,11 +41,11 @@ public final class MinecraftModelVertexFormats {
         return switch (semantic.kind()) {
             case POSITION -> "Position";
             case NORMAL -> "Normal";
-            case TEXCOORD -> "UV0";
+            case TEXCOORD -> "UV" + semantic.setIndex();
             case COLOR -> "Color";
             case JOINTS -> "Joints";
             case WEIGHTS -> "Weights";
-            case TANGENT -> throw unsupported(semantic);
+            case TANGENT -> "Tangent";
         };
     }
 
@@ -45,12 +53,20 @@ public final class MinecraftModelVertexFormats {
         return switch (element.semantic().kind()) {
             case POSITION -> require(element, ModelComponentType.FLOAT32, 3, false, VertexFormatElement.POSITION);
             case NORMAL -> require(element, ModelComponentType.INT8, 3, true, VertexFormatElement.NORMAL);
-            case TEXCOORD -> require(element, ModelComponentType.FLOAT32, 2, false, VertexFormatElement.UV0);
+            case TEXCOORD -> require(element, ModelComponentType.FLOAT32, 2, false,
+                    element.semantic().setIndex() == 0 ? VertexFormatElement.UV0
+                            : extraUv(element.semantic().setIndex()));
             case COLOR -> require(element, ModelComponentType.UINT8, 4, true, VertexFormatElement.COLOR);
             case JOINTS -> require(element, ModelComponentType.FLOAT32, 4, false, JOINTS);
             case WEIGHTS -> require(element, ModelComponentType.FLOAT32, 4, false, WEIGHTS);
-            case TANGENT -> throw unsupported(element.semantic());
+            case TANGENT -> require(element, ModelComponentType.INT8, 4, true, TANGENT);
         };
+    }
+
+    private static VertexFormatElement extraUv(int setIndex) {
+        if (setIndex < 1 || setIndex > EXTRA_UV.length) throw unsupported(
+                ModelAttributeSemantic.indexed(ModelAttributeSemantic.Kind.TEXCOORD, setIndex));
+        return EXTRA_UV[setIndex - 1];
     }
 
     private static IllegalArgumentException unsupported(ModelAttributeSemantic semantic) {

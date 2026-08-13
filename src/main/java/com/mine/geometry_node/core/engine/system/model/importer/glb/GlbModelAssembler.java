@@ -272,11 +272,22 @@ final class GlbModelAssembler {
             ModelTextureInfo emissiveTexture = material.has("emissiveTexture")
                     ? parseTextureInfo(GlbJson.object(material.get("emissiveTexture"), location + ".emissiveTexture"),
                     location + ".emissiveTexture") : ModelTextureInfo.absent();
+            float metallicFactor = unitFactor(pbr, "metallicFactor", 1,
+                    location + ".pbrMetallicRoughness");
+            float roughnessFactor = unitFactor(pbr, "roughnessFactor", 1,
+                    location + ".pbrMetallicRoughness");
+            ModelTextureInfo metallicRoughnessTexture = pbr.has("metallicRoughnessTexture")
+                    ? parseTextureInfo(GlbJson.object(pbr.get("metallicRoughnessTexture"),
+                    location + ".pbrMetallicRoughness.metallicRoughnessTexture"),
+                    location + ".pbrMetallicRoughness.metallicRoughnessTexture") : ModelTextureInfo.absent();
+            ModelNormalTextureInfo normalTexture = parseNormalTexture(material, location);
+            ModelOcclusionTextureInfo occlusionTexture = parseOcclusionTexture(material, location);
             materials.add(new ModelMaterial(GlbJson.string(material, "name", "", location),
                     factor[0], factor[1], factor[2], factor[3], texture, alphaMode, cutoff,
                     GlbJson.bool(material, "doubleSided", false, location),
-                    emissive[0], emissive[1], emissive[2], emissiveTexture));
-            diagnoseDeferredMaterialFeatures(material, pbr, location);
+                    emissive[0], emissive[1], emissive[2], emissiveTexture,
+                    new ModelPbrMetallicRoughness(metallicFactor, roughnessFactor, metallicRoughnessTexture),
+                    normalTexture, occlusionTexture));
         }
         if (needsDefault) {
             defaultMaterial = materials.size();
@@ -284,14 +295,39 @@ final class GlbModelAssembler {
         }
     }
 
-    private void diagnoseDeferredMaterialFeatures(JsonObject material, JsonObject pbr, String location) {
-        if (pbr.has("metallicFactor") || pbr.has("roughnessFactor") || pbr.has("metallicRoughnessTexture")
-                || material.has("normalTexture") || material.has("occlusionTexture")
-                ) {
-            session.diagnose(new ModelImportDiagnostic(ModelImportDiagnostic.Severity.WARNING,
-                    "unsupported_material_fields", location,
-                    "metallic-roughness, normal, and occlusion fields are not part of the current material contract"));
+    private float unitFactor(JsonObject object, String key, float fallback, String location)
+            throws ModelImportException {
+        float value = object.has(key) ? GlbJson.number(object.get(key), location + "." + key) : fallback;
+        if (value < 0 || value > 1) throw GlbFailures.invalid(location + "." + key,
+                key + " must be within [0, 1]");
+        return value;
+    }
+
+    private ModelNormalTextureInfo parseNormalTexture(JsonObject material, String location)
+            throws ModelImportException {
+        if (!material.has("normalTexture")) return ModelNormalTextureInfo.absent();
+        String textureLocation = location + ".normalTexture";
+        JsonObject info = GlbJson.object(material.get("normalTexture"), textureLocation);
+        float scale = info.has("scale") ? GlbJson.number(info.get("scale"), textureLocation + ".scale") : 1;
+        ModelTextureInfo texture = parseTextureInfo(info, textureLocation);
+        ModelTextureTransform transform = texture.transform();
+        if (transform.scaleX() == 0.0F || transform.scaleY() == 0.0F) {
+            throw GlbFailures.invalid(textureLocation + ".extensions.KHR_texture_transform.scale",
+                    "normal texture transform must have an invertible UV Jacobian");
         }
+        return new ModelNormalTextureInfo(texture, scale);
+    }
+
+    private ModelOcclusionTextureInfo parseOcclusionTexture(JsonObject material, String location)
+            throws ModelImportException {
+        if (!material.has("occlusionTexture")) return ModelOcclusionTextureInfo.absent();
+        String textureLocation = location + ".occlusionTexture";
+        JsonObject info = GlbJson.object(material.get("occlusionTexture"), textureLocation);
+        float strength = info.has("strength")
+                ? GlbJson.number(info.get("strength"), textureLocation + ".strength") : 1;
+        if (strength < 0 || strength > 1) throw GlbFailures.invalid(textureLocation + ".strength",
+                "occlusion strength must be within [0, 1]");
+        return new ModelOcclusionTextureInfo(parseTextureInfo(info, textureLocation), strength);
     }
 
     private ModelTextureInfo parseTextureInfo(JsonObject info, String location) throws ModelImportException {
@@ -465,11 +501,21 @@ final class GlbModelAssembler {
         if (!attributes.containsKey(ModelAttributeSemantic.NORMAL)) {
             attributes.put(ModelAttributeSemantic.NORMAL, generateNormals(positions, indices, location));
         }
+        int material = primitive.has("material") ? GlbJson.requiredInt(primitive, "material", location) : defaultMaterial;
+        if (material >= 0 && material < materials.size()) {
+            ModelTextureInfo normalTexture = materials.get(material).normalTexture().texture();
+            if (normalTexture.textureIndex() >= 0 && !attributes.containsKey(ModelAttributeSemantic.TANGENT)) {
+                GlbMikkTangentGenerator.Result generated = GlbMikkTangentGenerator.generate(
+                        attributes, indices, normalTexture.texCoordSet(), session, location);
+                attributes = new LinkedHashMap<>(generated.attributes());
+                indices = generated.indices();
+                positions = attributes.get(ModelAttributeSemantic.POSITION);
+            }
+        }
         for (var entry : attributes.entrySet()) if (entry.getKey().is(ModelAttributeSemantic.Kind.COLOR)) {
             validateColorRange(entry.getValue(), location + ".attributes." + entry.getKey());
         }
         ModelBounds bounds = GlbBounds.fromPositions(positions);
-        int material = primitive.has("material") ? GlbJson.requiredInt(primitive, "material", location) : defaultMaterial;
         return new ModelPrimitive(ModelPrimitiveTopology.TRIANGLES, attributes, indices, material, bounds);
     }
 

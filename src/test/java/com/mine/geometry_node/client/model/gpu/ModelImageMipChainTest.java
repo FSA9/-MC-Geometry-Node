@@ -8,6 +8,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ModelImageMipChainTest {
     @Test
+    void normalMipRenormalizesAveragedVectors() {
+        DecodedModelImage source = new DecodedModelImage(2, 2, new byte[]{
+                (byte)255, (byte)128, (byte)128, (byte)255, (byte)255, (byte)128, (byte)128, (byte)255,
+                (byte)128, (byte)255, (byte)128, (byte)255, (byte)128, (byte)255, (byte)128, (byte)255});
+        DecodedModelImage mip = ModelImageMipChain.downsampleNormal(source);
+        byte[] rgba = mip.rgba();
+        assertEquals(218, Byte.toUnsignedInt(rgba[0]), 1);
+        assertEquals(218, Byte.toUnsignedInt(rgba[1]), 1);
+        assertEquals(128, Byte.toUnsignedInt(rgba[2]), 1);
+    }
+    @Test
     void generatesGpuSafeChainAndIncludesOddDimensionTailPixels() {
         byte[] rgba = new byte[3 * 3 * 4];
         for (int y = 0; y < 3; y++) {

@@ -111,12 +111,15 @@ public final class ModelDefinitionValidator {
         }
         for (int materialIndex = 0; materialIndex < model.materials().size(); materialIndex++) {
             ModelMaterial material = model.materials().get(materialIndex);
-            int textureIndex = material.baseColorTexture().textureIndex();
-            if (textureIndex >= 0) requireIndex("materials[" + materialIndex + "].baseColorTexture",
-                    textureIndex, model.textures().size());
-            int emissiveTexture = material.emissiveTexture().textureIndex();
-            if (emissiveTexture >= 0) requireIndex("materials[" + materialIndex + "].emissiveTexture",
-                    emissiveTexture, model.textures().size());
+            String location = "materials[" + materialIndex + "]";
+            requireTextureReference(material.baseColorTexture(), location + ".baseColorTexture", model.textures().size());
+            requireTextureReference(material.emissiveTexture(), location + ".emissiveTexture", model.textures().size());
+            requireTextureReference(material.metallicRoughness().texture(),
+                    location + ".metallicRoughness.texture", model.textures().size());
+            requireTextureReference(material.normalTexture().texture(),
+                    location + ".normalTexture.texture", model.textures().size());
+            requireTextureReference(material.occlusionTexture().texture(),
+                    location + ".occlusionTexture.texture", model.textures().size());
         }
 
         long primitiveCount = 0L;
@@ -286,6 +289,14 @@ public final class ModelDefinitionValidator {
         ModelMaterial material = materials.get(primitive.materialIndex());
         requireTextureCoordinates(primitive, material.baseColorTexture(), location);
         requireTextureCoordinates(primitive, material.emissiveTexture(), location);
+        requireTextureCoordinates(primitive, material.metallicRoughness().texture(), location);
+        requireTextureCoordinates(primitive, material.normalTexture().texture(), location);
+        requireTextureCoordinates(primitive, material.occlusionTexture().texture(), location);
+    }
+
+    private static void requireTextureReference(ModelTextureInfo texture, String location, int textureCount)
+            throws ModelImportException {
+        if (texture.textureIndex() >= 0) requireIndex(location, texture.textureIndex(), textureCount);
     }
 
     private static void requireTextureCoordinates(ModelPrimitive primitive, ModelTextureInfo texture, String location)

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.model.gpu;
 
 import com.mine.geometry_node.core.engine.system.model.domain.ModelBounds;
+import java.util.Map;
 
 public record ModelGpuDrawRange(
         int nodeIndex,
@@ -10,7 +11,8 @@ public record ModelGpuDrawRange(
         int firstIndex,
         int indexCount,
         int materialIndex,
-        ModelBounds localBounds
+        ModelBounds localBounds,
+        Map<Integer, Integer> physicalUvSlots
 ) {
     public ModelGpuDrawRange {
         if (nodeIndex < 0 || meshIndex < 0 || primitiveIndex < 0 || layoutGroupIndex < 0
@@ -18,5 +20,6 @@ public record ModelGpuDrawRange(
             throw new IllegalArgumentException("draw range values must not be negative");
         }
         if (localBounds == null) throw new IllegalArgumentException("localBounds must not be null");
+        physicalUvSlots = physicalUvSlots == null ? Map.of() : Map.copyOf(physicalUvSlots);
     }
 }

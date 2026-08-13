@@ -87,7 +87,7 @@ class ModelDrawContractTest {
     }
 
     @Test
-    void textureRequiresUvAndWorldLightMultipliesMaterialAndInstanceTint() {
+    void worldLightRemainsSeparateFromMaterialAndInstanceTint() {
         ModelVertexLayout positionOnly = new ModelVertexLayout(List.of(
                 new ModelVertexLayoutElement(ModelAttributeSemantic.POSITION,
                         ModelComponentType.FLOAT32, 3, false)));
@@ -96,16 +96,15 @@ class ModelDrawContractTest {
         ModelInstancePlacement placement = new ModelInstancePlacement(new Vector3d(), new Quaternionf(),
                 new Vector3f(1), false, false, 0.8F, 0.4F, 0.2F, 1);
 
-        ModelDrawContract withoutUv = ModelDrawContract.resolve(positionOnly, material, placement, 0.5F, false);
         ModelDrawContract withUv = ModelDrawContract.resolve(LAYOUT, material, placement, 0.5F, false);
 
-        assertFalse(withoutUv.pipeline().textured());
-        assertTrue(withUv.pipeline().textured());
-        assertEquals(new Vector4f(0.2F, 0.05F, 0.1F, 1), withUv.color());
+        assertEquals(new Vector4f(0.4F, 0.1F, 0.2F, 1), withUv.color());
+        assertEquals(0.5F, withUv.worldLight());
+        assertFalse(withUv.fullBright());
     }
 
     @Test
-    void emissiveTextureRequiresUvAndSelectsSecondSamplerVariant() {
+    void texturePresenceDoesNotCreatePipelineVariants() {
         StaticModelTexture absent = StaticModelTexture.absent();
         StaticModelTexture emissive = new StaticModelTexture(1, ModelTextureSampler.gltfDefault(),
                 ModelTextureTransform.identity());
@@ -115,17 +114,15 @@ class ModelDrawContractTest {
                 new ModelVertexLayoutElement(ModelAttributeSemantic.POSITION,
                         ModelComponentType.FLOAT32, 3, false)));
 
-        assertFalse(ModelDrawContract.resolve(positionOnly, material, placement(false, 1), 1, false)
-                .pipeline().emissiveTextured());
-        assertTrue(ModelDrawContract.resolve(LAYOUT, material, placement(false, 1), 1, false)
-                .pipeline().emissiveTextured());
+        assertEquals(ModelDrawContract.resolve(positionOnly, material, placement(false, 1), 1, false).pipeline(),
+                ModelDrawContract.resolve(positionOnly, material, placement(false, 1), 1, false).pipeline());
     }
 
     @Test
     void fullBrightDisablesDirectionalTermAndMirroredDoubleSidedKeepsOrientationVariant() {
         ModelDrawContract full = ModelDrawContract.resolve(LAYOUT, material(ModelAlphaMode.OPAQUE, 1, true),
                 placement(true, 1), 1, true);
-        assertEquals(0, full.directionalLightStrength());
+        assertTrue(full.fullBright());
         assertTrue(full.pipeline().doubleSided());
         assertTrue(full.pipeline().mirrored());
     }

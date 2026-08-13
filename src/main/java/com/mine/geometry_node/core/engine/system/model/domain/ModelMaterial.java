@@ -3,7 +3,8 @@ package com.mine.geometry_node.core.engine.system.model.domain;
 public record ModelMaterial(String name, float red, float green, float blue, float alpha,
                             ModelTextureInfo baseColorTexture, ModelAlphaMode alphaMode, float alphaCutoff,
                             boolean doubleSided, float emissiveRed, float emissiveGreen, float emissiveBlue,
-                            ModelTextureInfo emissiveTexture) {
+                            ModelTextureInfo emissiveTexture, ModelPbrMetallicRoughness metallicRoughness,
+                            ModelNormalTextureInfo normalTexture, ModelOcclusionTextureInfo occlusionTexture) {
     public ModelMaterial {
         name = name == null ? "" : name;
         red = unit(red, "red"); green = unit(green, "green"); blue = unit(blue, "blue"); alpha = unit(alpha, "alpha");
@@ -15,6 +16,19 @@ public record ModelMaterial(String name, float red, float green, float blue, flo
         emissiveGreen = unit(emissiveGreen, "emissiveGreen");
         emissiveBlue = unit(emissiveBlue, "emissiveBlue");
         emissiveTexture = emissiveTexture == null ? ModelTextureInfo.absent() : emissiveTexture;
+        metallicRoughness = metallicRoughness == null ? ModelPbrMetallicRoughness.gltfDefault() : metallicRoughness;
+        normalTexture = normalTexture == null ? ModelNormalTextureInfo.absent() : normalTexture;
+        occlusionTexture = occlusionTexture == null ? ModelOcclusionTextureInfo.absent() : occlusionTexture;
+    }
+
+    public ModelMaterial(String name, float red, float green, float blue, float alpha,
+                         ModelTextureInfo baseColorTexture, ModelAlphaMode alphaMode, float alphaCutoff,
+                         boolean doubleSided, float emissiveRed, float emissiveGreen, float emissiveBlue,
+                         ModelTextureInfo emissiveTexture) {
+        this(name, red, green, blue, alpha, baseColorTexture, alphaMode, alphaCutoff, doubleSided,
+                emissiveRed, emissiveGreen, emissiveBlue, emissiveTexture,
+                ModelPbrMetallicRoughness.gltfDefault(), ModelNormalTextureInfo.absent(),
+                ModelOcclusionTextureInfo.absent());
     }
 
     public ModelMaterial(String name, float red, float green, float blue, float alpha,

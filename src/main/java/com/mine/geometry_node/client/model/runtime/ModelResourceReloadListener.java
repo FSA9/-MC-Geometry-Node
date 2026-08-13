@@ -1,20 +1,31 @@
 package com.mine.geometry_node.client.model.runtime;
 
 import com.mine.geometry_node.client.model.render.ModelWorldRenderer;
+import com.mine.geometry_node.client.model.render.ModelShaderCompatibility;
+import com.mine.geometry_node.client.model.render.compat.entity.EntityCompatibilityRenderer;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 public final class ModelResourceReloadListener implements PreparableReloadListener {
+    private static long reloadGeneration;
+
     @Override
     public CompletableFuture<Void> reload(SharedState state, Executor preparationExecutor,
                                           PreparationBarrier barrier, Executor gameExecutor) {
-        return barrier.wait(null).thenRunAsync(() -> {
-            ModelWorldRenderer.clear();
-            ClientModelRuntime.INSTANCE.resetGpuBackend();
-        }, gameExecutor);
+        return barrier.wait(null).thenRunAsync(ModelResourceReloadListener::reloadBindings, gameExecutor);
     }
 
-    @Override public String getName() { return "GeometryNode static model GPU reset"; }
+    /** Rebuilds only model render bindings; authoritative instances and uploaded geometry remain resident. */
+    public static long reloadBindings() {
+        ModelWorldRenderer.clear();
+        EntityCompatibilityRenderer.clear();
+        ModelShaderCompatibility.reset();
+        return ++reloadGeneration;
+    }
+
+    public static long reloadGeneration() { return reloadGeneration; }
+
+    @Override public String getName() { return "GeometryNode model material and shader bindings reload"; }
 }

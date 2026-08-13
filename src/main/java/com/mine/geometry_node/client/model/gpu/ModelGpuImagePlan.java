@@ -2,10 +2,10 @@ package com.mine.geometry_node.client.model.gpu;
 
 import java.util.List;
 
-/** Immutable, linear-color texture levels prepared off the render thread. */
-public record ModelGpuImagePlan(int imageIndex, List<DecodedModelImage> levels) {
+/** Immutable texture projection prepared off the render thread for one color-space role. */
+public record ModelGpuImagePlan(ModelGpuTextureKey key, List<DecodedModelImage> levels) {
     public ModelGpuImagePlan {
-        if (imageIndex < 0) throw new IllegalArgumentException("imageIndex must be non-negative");
+        if (key == null) throw new IllegalArgumentException("key must not be null");
         levels = levels == null ? List.of() : List.copyOf(levels);
         if (levels.isEmpty()) throw new IllegalArgumentException("GPU image plan requires a base level");
         for (int level = 1; level < levels.size(); level++) {
@@ -17,6 +17,12 @@ public record ModelGpuImagePlan(int imageIndex, List<DecodedModelImage> levels) 
             }
         }
     }
+
+    public ModelGpuImagePlan(int imageIndex, List<DecodedModelImage> levels) {
+        this(new ModelGpuTextureKey(imageIndex, ModelTextureColorSpace.SRGB_COLOR), levels);
+    }
+
+    public int imageIndex() { return key.imageIndex(); }
 
     public DecodedModelImage base() { return levels.getFirst(); }
 }

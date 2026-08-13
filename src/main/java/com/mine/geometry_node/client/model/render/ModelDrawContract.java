@@ -12,7 +12,7 @@ import org.joml.Vector4f;
 
 /** Pure draw-state contract shared by the production renderer and M7 correctness tests. */
 public record ModelDrawContract(ModelPipelineKey pipeline, Vector4f color, Vector3f emissive,
-                                float alphaCutoff, float directionalLightStrength,
+                                float alphaCutoff, float worldLight, boolean fullBright,
                                 com.mine.geometry_node.core.engine.system.model.domain.ModelTextureTransform baseTransform,
                                 com.mine.geometry_node.core.engine.system.model.domain.ModelTextureTransform emissiveTransform) {
     private static final Vector3f WORLD_LIGHT_DIRECTION = new Vector3f(0.2F, 1.0F, 0.35F).normalize();
@@ -24,23 +24,19 @@ public record ModelDrawContract(ModelPipelineKey pipeline, Vector4f color, Vecto
 
     public static ModelDrawContract resolve(ModelVertexLayout layout, StaticModelMaterial material,
                                             ModelInstancePlacement placement, float worldLight, boolean mirrored) {
-        boolean hasUv = layout.elements().stream()
-                .anyMatch(element -> element.semantic().equals(ModelAttributeSemantic.TEXCOORD_0));
-        boolean textured = material.baseColorTexture().present() && hasUv;
-        boolean emissiveTextured = material.emissiveTexture().present() && hasUv;
         float alpha = placement.alpha() * (material.alphaMode() == ModelAlphaMode.OPAQUE ? 1.0F : material.alpha());
         boolean doubleSided = material.doubleSided() || placement.forceDoubleSided();
         boolean skinned = layout.elements().stream()
                 .anyMatch(element -> element.semantic().equals(ModelAttributeSemantic.JOINTS_0));
-        ModelPipelineKey pipeline = new ModelPipelineKey(layout, material.alphaMode(), textured, emissiveTextured,
+        ModelPipelineKey pipeline = new ModelPipelineKey(layout, material.alphaMode(),
                 doubleSided, mirrored, material.alphaMode() == ModelAlphaMode.BLEND || placement.alpha() < 0.999F,
                 skinned);
         return new ModelDrawContract(pipeline, new Vector4f(
-                placement.red() * material.red() * worldLight,
-                placement.green() * material.green() * worldLight,
-                placement.blue() * material.blue() * worldLight,
+                placement.red() * material.red(),
+                placement.green() * material.green(),
+                placement.blue() * material.blue(),
                 alpha), new Vector3f(material.emissiveRed(), material.emissiveGreen(), material.emissiveBlue()),
-                material.alphaCutoff(), placement.fullBright() ? 0.0F : 1.0F,
+                material.alphaCutoff(), worldLight, placement.fullBright(),
                 material.baseColorTexture().transform(), material.emissiveTexture().transform());
     }
 

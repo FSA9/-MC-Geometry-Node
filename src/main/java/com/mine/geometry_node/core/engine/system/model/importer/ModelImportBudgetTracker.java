@@ -29,6 +29,14 @@ public final class ModelImportBudgetTracker {
         return usage.getOrDefault(resource, 0L);
     }
 
+    /** Releases storage that has been replaced or temporary workspace whose lifetime has ended. */
+    public void release(ModelBudgetResource resource, long amount) {
+        if (resource == null || amount < 0L) throw new IllegalArgumentException("budget release is invalid");
+        long previous = usage.getOrDefault(resource, 0L);
+        if (amount > previous) throw new IllegalStateException("budget release exceeds claimed usage");
+        usage.put(resource, previous - amount);
+    }
+
     private long limit(ModelBudgetResource resource) {
         return switch (resource) {
             case SOURCE_BYTES -> budget.maxSourceBytes();

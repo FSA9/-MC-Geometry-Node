@@ -12,6 +12,8 @@ import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.render.image.ClientImageAssetManager;
 import com.mine.geometry_node.client.model.render.ModelWorldRenderer;
 import com.mine.geometry_node.client.model.render.ModelRenderPipelines;
+import com.mine.geometry_node.client.model.render.ModelShaderCompatibility;
+import com.mine.geometry_node.client.model.render.compat.entity.EntityCompatibilityRenderer;
 import com.mine.geometry_node.client.model.runtime.ClientModelRuntime;
 import com.mine.geometry_node.client.model.runtime.ModelResourceReloadListener;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
@@ -62,7 +64,6 @@ public class GeometryNodeClient {
 
         // 监听世界渲染
         NeoForge.EVENT_BUS.addListener(this::onRenderLevelStage);
-        NeoForge.EVENT_BUS.addListener(this::onRenderLevelComplete);
         NeoForge.EVENT_BUS.addListener(this::onSubmitCustomGeometry);
         NeoForge.EVENT_BUS.addListener(this::onClientLoggingOut);
         NeoForge.EVENT_BUS.addListener(this::onInteractionKeyMappingTriggered);
@@ -102,15 +103,17 @@ public class GeometryNodeClient {
     private void onRenderLevelStage(RenderLevelStageEvent.AfterTranslucentParticles event) {
         GeometryDebugRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
         SchematicProjectionRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
-    }
-
-    private void onRenderLevelComplete(RenderLevelStageEvent.AfterLevel event) {
-        ModelWorldRenderer.render(event.getModelViewMatrix(), Minecraft.getInstance().gameRenderer.getMainCamera());
+        if (!ModelShaderCompatibility.requiresCompatibilityBackend()) {
+            ModelWorldRenderer.render(event.getModelViewMatrix(), Minecraft.getInstance().gameRenderer.getMainCamera());
+        }
     }
 
     private void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
         ClientVisualManager.renderWorld(event.getPoseStack(), event.getSubmitNodeCollector());
         SchematicProjectionRenderer.submitFeatures(event.getPoseStack(), event.getSubmitNodeCollector(), event.getLevelRenderState());
+        if (ModelShaderCompatibility.requiresCompatibilityBackend()) {
+            EntityCompatibilityRenderer.submit(event.getPoseStack(), event.getSubmitNodeCollector());
+        }
     }
 
     private void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
@@ -143,6 +146,8 @@ public class GeometryNodeClient {
         GeometryDebugRenderer.clear();
         SchematicProjectionRenderer.clear();
         ModelWorldRenderer.clear();
+        EntityCompatibilityRenderer.clear();
+        ModelShaderCompatibility.reset();
         ClientModelRuntime.INSTANCE.resetGpuBackend();
     }
 

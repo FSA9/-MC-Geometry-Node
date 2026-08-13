@@ -73,10 +73,13 @@ class ModelGpuBackendTest {
         assertFalse(group.layout().elements().stream().anyMatch(element ->
                 element.semantic().equals(ModelAttributeSemantic.TANGENT) || element.semantic().equals(color1)));
         assertEquals(0.2F, ByteBuffer.wrap(group.vertexData()).order(ByteOrder.LITTLE_ENDIAN).getFloat(12));
+        assertEquals(Map.of(1, 0), new ModelGpuUploadPlanner().plan(definition,
+                List.of(new DecodedModelImage(1, 1, new byte[]{0, 0, 0, (byte) 255})))
+                .drawRanges().getFirst().physicalUvSlots());
     }
 
     @Test
-    void rejectsBackendUsageThatNeedsTwoUvSetsOrAdditionalSkinSets() {
+    void projectsTwoReferencedUvSetsAndRejectsAdditionalSkinSets() {
         ModelBounds bounds = new ModelBounds(ModelVector3.ZERO, new ModelVector3(1, 1, 0));
         ModelAttributeSemantic uv1 = ModelAttributeSemantic.indexed(ModelAttributeSemantic.Kind.TEXCOORD, 1);
         Map<ModelAttributeSemantic, ModelVertexAttribute> attributes = new java.util.LinkedHashMap<>();
@@ -90,9 +93,14 @@ class ModelGpuBackendTest {
         ModelMaterial material = new ModelMaterial("twoUv", 1, 1, 1, 1,
                 new ModelTextureInfo(0, 0, ModelTextureTransform.identity()), ModelAlphaMode.OPAQUE, 0.5F, false,
                 0, 0, 0, new ModelTextureInfo(0, 1, ModelTextureTransform.identity()));
-        assertThrows(IllegalArgumentException.class, () -> new ModelGpuUploadPlanner().plan(
+        ModelGpuLayoutGroupPlan multiUv = new ModelGpuUploadPlanner().plan(
                 modelWithMaterial(primitive, bounds, material),
-                List.of(new DecodedModelImage(1, 1, new byte[]{0, 0, 0, (byte) 255}))));
+                List.of(new DecodedModelImage(1, 1, new byte[]{0, 0, 0, (byte) 255})))
+                .layoutGroups().getFirst();
+        assertTrue(multiUv.layout().elements().stream().anyMatch(element ->
+                element.semantic().equals(ModelAttributeSemantic.TEXCOORD_0)));
+        assertTrue(multiUv.layout().elements().stream().anyMatch(element ->
+                element.semantic().equals(ModelAttributeSemantic.indexed(ModelAttributeSemantic.Kind.TEXCOORD, 1))));
 
         ModelAttributeSemantic joints1 = ModelAttributeSemantic.indexed(ModelAttributeSemantic.Kind.JOINTS, 1);
         ModelAttributeSemantic weights1 = ModelAttributeSemantic.indexed(ModelAttributeSemantic.Kind.WEIGHTS, 1);
@@ -237,6 +245,7 @@ class ModelGpuBackendTest {
                 List.of(new DecodedModelImage(8, 2, pixels))).images().getFirst();
 
         assertEquals(0, image.imageIndex());
+        assertEquals(ModelTextureColorSpace.SRGB_COLOR, image.key().colorSpace());
         assertEquals(List.of(8, 4), image.levels().stream().map(DecodedModelImage::width).toList());
         assertEquals(List.of(2, 1), image.levels().stream().map(DecodedModelImage::height).toList());
     }

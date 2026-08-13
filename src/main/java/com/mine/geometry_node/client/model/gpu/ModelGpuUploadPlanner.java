@@ -35,7 +35,7 @@ public final class ModelGpuUploadPlanner {
                 PrimitivePlacement placement = placements.get(new PrimitiveKey(meshIndex, primitiveIndex));
                 draws.add(new ModelGpuDrawRange(nodeIndex, meshIndex, primitiveIndex, placement.groupIndex(),
                         placement.firstIndex(), primitive.indices().indexCount(), primitive.materialIndex(),
-                        primitive.bounds()));
+                        primitive.bounds(), placement.physicalUvSlots()));
             }
         }
         draws.sort(Comparator.comparingInt(ModelGpuDrawRange::layoutGroupIndex)
@@ -45,33 +45,60 @@ public final class ModelGpuUploadPlanner {
                 .thenComparingInt(ModelGpuDrawRange::primitiveIndex));
 
         List<ModelGpuLayoutGroupPlan> plans = groups.values().stream().map(GroupBuilder::build).toList();
-        List<ModelGpuImagePlan> imagePlans = new ArrayList<>(images.size());
-        for (int index = 0; index < images.size(); index++) {
-            int imageIndex = index;
-            boolean mipmapped = definition.textures().stream()
-                    .anyMatch(texture -> texture.imageIndex() == imageIndex && texture.sampler().minFilter().mipmapped());
-            imagePlans.add(new ModelGpuImagePlan(index, ModelImageMipChain.prepare(images.get(index), mipmapped)));
+        Map<ModelGpuTextureKey, Boolean> imageUsage = imageUsage(definition);
+        List<ModelGpuImagePlan> imagePlans = new ArrayList<>(imageUsage.size());
+        for (Map.Entry<ModelGpuTextureKey, Boolean> usage : imageUsage.entrySet()) {
+            ModelGpuTextureKey key = usage.getKey();
+            imagePlans.add(new ModelGpuImagePlan(key, ModelImageMipChain.prepare(images.get(key.imageIndex()),
+                    usage.getValue(), key.colorSpace())));
         }
         return new ModelGpuUploadPlan(definition.source(), plans, draws, imagePlans);
     }
 
+    private static Map<ModelGpuTextureKey, Boolean> imageUsage(ModelDefinition definition) {
+        Map<ModelGpuTextureKey, Boolean> usage = new LinkedHashMap<>();
+        for (ModelMaterial material : definition.materials()) {
+            claimTexture(definition, usage, material.baseColorTexture(), ModelTextureColorSpace.SRGB_COLOR);
+            claimTexture(definition, usage, material.emissiveTexture(), ModelTextureColorSpace.SRGB_COLOR);
+            claimTexture(definition, usage, material.metallicRoughness().texture(), ModelTextureColorSpace.LINEAR_DATA);
+            claimTexture(definition, usage, material.normalTexture().texture(), ModelTextureColorSpace.NORMAL_VECTOR);
+            claimTexture(definition, usage, material.occlusionTexture().texture(), ModelTextureColorSpace.LINEAR_DATA);
+        }
+        return Map.copyOf(usage);
+    }
+
+    private static void claimTexture(ModelDefinition definition, Map<ModelGpuTextureKey, Boolean> usage,
+                                     ModelTextureInfo info, ModelTextureColorSpace colorSpace) {
+        if (info.textureIndex() < 0) return;
+        ModelTexture texture = definition.textures().get(info.textureIndex());
+        ModelGpuTextureKey key = new ModelGpuTextureKey(texture.imageIndex(), colorSpace);
+        usage.merge(key, texture.sampler().minFilter().mipmapped(), Boolean::logicalOr);
+    }
+
     private record PrimitiveKey(int meshIndex, int primitiveIndex) {}
-    private record PrimitivePlacement(int groupIndex, int firstIndex) {}
+    private record PrimitivePlacement(int groupIndex, int firstIndex, Map<Integer, Integer> physicalUvSlots) {}
 
     private record AttributeProjection(ModelVertexLayout layout,
-                                       Map<ModelAttributeSemantic, ModelAttributeSemantic> sources) {}
+                                       Map<ModelAttributeSemantic, ModelAttributeSemantic> sources,
+                                       Map<Integer, Integer> physicalUvSlots) {}
 
     private static AttributeProjection gpuLayout(ModelPrimitive primitive, ModelMaterial material) {
+        if (material.normalTexture().texture().textureIndex() >= 0
+                && !primitive.attributes().containsKey(ModelAttributeSemantic.TANGENT)) {
+            throw new IllegalArgumentException("normal-mapped primitive requires a canonical TANGENT attribute");
+        }
         ModelVertexLayout source = primitive.vertexLayout();
         List<ModelVertexLayoutElement> elements = new ArrayList<>(source.elements().size());
         Map<ModelAttributeSemantic, ModelAttributeSemantic> sources = new HashMap<>();
         Set<Integer> requiredUvSets = new LinkedHashSet<>();
         if (material.baseColorTexture().textureIndex() >= 0) requiredUvSets.add(material.baseColorTexture().texCoordSet());
         if (material.emissiveTexture().textureIndex() >= 0) requiredUvSets.add(material.emissiveTexture().texCoordSet());
-        if (requiredUvSets.size() > 1) throw new IllegalArgumentException(
-                "Minecraft model backend cannot consume multiple UV sets in one draw: " + requiredUvSets);
-        ModelAttributeSemantic selectedUv = requiredUvSets.isEmpty() ? null : ModelAttributeSemantic.indexed(
-                ModelAttributeSemantic.Kind.TEXCOORD, requiredUvSets.iterator().next());
+        if (material.metallicRoughness().texture().textureIndex() >= 0) requiredUvSets.add(material.metallicRoughness().texture().texCoordSet());
+        if (material.normalTexture().texture().textureIndex() >= 0) requiredUvSets.add(material.normalTexture().texture().texCoordSet());
+        if (material.occlusionTexture().texture().textureIndex() >= 0) requiredUvSets.add(material.occlusionTexture().texture().texCoordSet());
+        if (requiredUvSets.size() > 5) throw new IllegalArgumentException(
+                "Minecraft model backend supports at most five referenced UV sets per draw: " + requiredUvSets);
+        List<Integer> sortedUvSets = requiredUvSets.stream().sorted().toList();
         for (ModelVertexLayoutElement element : source.elements()) {
             ModelAttributeSemantic semantic = element.semantic();
             if ((semantic.is(ModelAttributeSemantic.Kind.JOINTS) || semantic.is(ModelAttributeSemantic.Kind.WEIGHTS))
@@ -79,21 +106,26 @@ public final class ModelGpuUploadPlanner {
                 throw new IllegalArgumentException("Minecraft model backend cannot consume vertex attribute " + semantic);
             }
             if (!semantic.equals(ModelAttributeSemantic.POSITION) && !semantic.equals(ModelAttributeSemantic.NORMAL)
-                    && !semantic.equals(selectedUv) && !semantic.equals(ModelAttributeSemantic.COLOR_0)
+                    && !semantic.equals(ModelAttributeSemantic.TANGENT)
+                    && !(semantic.is(ModelAttributeSemantic.Kind.TEXCOORD) && sortedUvSets.contains(semantic.setIndex()))
+                    && !semantic.equals(ModelAttributeSemantic.COLOR_0)
                     && !semantic.equals(ModelAttributeSemantic.JOINTS_0) && !semantic.equals(ModelAttributeSemantic.WEIGHTS_0)) continue;
             ModelAttributeSemantic physical = semantic.is(ModelAttributeSemantic.Kind.TEXCOORD)
-                    ? ModelAttributeSemantic.TEXCOORD_0 : semantic;
+                    ? ModelAttributeSemantic.indexed(ModelAttributeSemantic.Kind.TEXCOORD,
+                    sortedUvSets.indexOf(semantic.setIndex())) : semantic;
             elements.add(switch (physical.kind()) {
                 case POSITION -> new ModelVertexLayoutElement(physical, ModelComponentType.FLOAT32, 3, false);
                 case NORMAL -> new ModelVertexLayoutElement(physical, ModelComponentType.INT8, 3, true);
+                case TANGENT -> new ModelVertexLayoutElement(physical, ModelComponentType.INT8, 4, true);
                 case TEXCOORD -> new ModelVertexLayoutElement(physical, ModelComponentType.FLOAT32, 2, false);
                 case COLOR -> new ModelVertexLayoutElement(physical, ModelComponentType.UINT8, 4, true);
                 case JOINTS, WEIGHTS -> new ModelVertexLayoutElement(physical, ModelComponentType.FLOAT32, 4, false);
-                case TANGENT -> throw new IllegalStateException();
             });
             sources.put(physical, semantic);
         }
-        return new AttributeProjection(new ModelVertexLayout(elements), Map.copyOf(sources));
+        Map<Integer, Integer> physicalUvSlots = new LinkedHashMap<>();
+        for (int physical = 0; physical < sortedUvSets.size(); physical++) physicalUvSlots.put(sortedUvSets.get(physical), physical);
+        return new AttributeProjection(new ModelVertexLayout(elements), Map.copyOf(sources), Map.copyOf(physicalUvSlots));
     }
 
     private static final class GroupBuilder {
@@ -138,7 +170,7 @@ public final class ModelGpuUploadPlanner {
             }
             vertexCount = Math.addExact(vertexCount, primitive.vertexCount());
             indexCount = Math.addExact(indexCount, primitive.indices().indexCount());
-            return new PrimitivePlacement(groupIndex, firstIndex);
+            return new PrimitivePlacement(groupIndex, firstIndex, projection.physicalUvSlots());
         }
 
         private ModelGpuLayoutGroupPlan build() {
@@ -151,8 +183,8 @@ public final class ModelGpuUploadPlanner {
             int offset = Math.multiplyExact(vertex, sourceElementSize);
             switch (source.semantic().kind()) {
                 case POSITION, TEXCOORD -> output.write(sourceData, offset, sourceElementSize);
-                case NORMAL -> {
-                    for (int component = 0; component < 3; component++) {
+                case NORMAL, TANGENT -> {
+                    for (int component = 0; component < source.componentCount(); component++) {
                         float value = float32(sourceData, offset + component * 4);
                         output.write((byte) Math.round(Math.max(-1.0F, Math.min(1.0F, value)) * 127.0F));
                     }
@@ -180,7 +212,6 @@ public final class ModelGpuUploadPlanner {
                         output.writeBytes(floatBytes(value));
                     }
                 }
-                case TANGENT -> throw new IllegalArgumentException("unsupported backend attribute " + source.semantic());
             }
         }
 

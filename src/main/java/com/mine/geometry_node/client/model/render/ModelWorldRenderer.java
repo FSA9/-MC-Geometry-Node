@@ -23,7 +23,9 @@ import java.util.*;
 public final class ModelWorldRenderer {
     private static GpuQuery pendingGpuQuery;
     private static final ModelSkinPaletteArena SKIN_PALETTES = new ModelSkinPaletteArena();
+    private static final ModelMaterialUniformArena MATERIALS = new ModelMaterialUniformArena();
     private static final MinecraftModelSamplerCache SAMPLERS = new MinecraftModelSamplerCache();
+    private static final ModelFallbackTextures FALLBACK_TEXTURES = new ModelFallbackTextures();
 
     private ModelWorldRenderer() {}
 
@@ -58,19 +60,24 @@ public final class ModelWorldRenderer {
             if (draw.paletteKey() != null) paletteData.putIfAbsent(draw.paletteKey(), draw.skinPalette());
         }
         Map<ModelSkinPaletteArena.PaletteKey, GpuBufferSlice> palettes = SKIN_PALETTES.upload(encoder, paletteData);
+        List<GpuBufferSlice> materials = MATERIALS.upload(encoder, prepared.stream().map(PreparedDraw::material).toList());
         GpuQuery query = pendingGpuQuery == null ? encoder.timerQueryBegin() : null;
         try (RenderPass pass = encoder.createRenderPass(
                 () -> "GeometryNode model instances", color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
-            for (PreparedDraw draw : prepared) {
+            ModelShaderCompatibility.decorate(pass);
+            for (int drawIndex = 0; drawIndex < prepared.size(); drawIndex++) {
+                PreparedDraw draw = prepared.get(drawIndex);
                 pass.setPipeline(draw.pipeline());
                 RenderSystem.bindDefaultUniforms(pass);
                 pass.setUniform("DynamicTransforms", draw.dynamicTransforms());
+                pass.setUniform("ModelMaterial", materials.get(drawIndex));
                 pass.setVertexBuffer(0, draw.vertexBuffer());
                 pass.setIndexBuffer(draw.indexBuffer(), VertexFormat.IndexType.INT);
-                if (draw.texture() != null) pass.bindTexture("Sampler0", draw.texture(), SAMPLERS.get(draw.baseSampler()));
-                if (draw.emissiveTexture() != null) {
-                    pass.bindTexture("Sampler1", draw.emissiveTexture(), SAMPLERS.get(draw.emissiveSampler()));
-                }
+                pass.bindTexture("Sampler0", draw.baseColorTexture(), draw.baseSampler());
+                pass.bindTexture("Sampler1", draw.metallicRoughnessTexture(), draw.metallicRoughnessSampler());
+                pass.bindTexture("Sampler2", draw.normalTexture(), draw.normalSampler());
+                pass.bindTexture("Sampler3", draw.occlusionTexture(), draw.occlusionSampler());
+                pass.bindTexture("Sampler4", draw.emissiveTexture(), draw.emissiveSampler());
                 if (draw.paletteKey() != null) pass.setUniform("SkinPalette", palettes.get(draw.paletteKey()));
                 pass.drawIndexed(0, draw.firstIndex(), draw.indexCount(), 1);
             }
@@ -147,18 +154,16 @@ public final class ModelWorldRenderer {
             float depth = pipelineKey.translucent() ? ModelDrawOrdering.viewDepth(draw.localBounds(), transform) : 0.0F;
             DrawSortKey sortKey = new DrawSortKey(pipelineKey.translucent() ? 1 : 0,
                     depth,
-                    pipelineKey.alphaMode().ordinal(), pipelineKey.textured(), pipelineKey.doubleSided(),
+                    pipelineKey.alphaMode().ordinal(), material.baseColorTexture().present(), pipelineKey.doubleSided(),
                     pipelineKey.mirrored(),
                     pipelineKey.translucent(), pipelineKey.layout().elements().toString(),
                     loaded.asset().cacheIdentity(), draw.layoutGroupIndex(), draw.materialIndex(), rangeIndex,
                     instance.id().value());
-            GpuTextureView texture = ModelMaterialBindings.baseColor(resource, material, pipelineKey.baseColorTextured());
-            GpuTextureView emissiveTexture = ModelMaterialBindings.emissive(resource, material, pipelineKey.emissiveTextured());
-            if ((pipelineKey.baseColorTextured() && texture == null)
-                    || (pipelineKey.emissiveTextured() && emissiveTexture == null)) {
-                singularSkips++;
-                continue;
-            }
+            GpuTextureView texture = ModelMaterialBindings.baseColor(resource, material, material.baseColorTexture().present());
+            GpuTextureView emissiveTexture = ModelMaterialBindings.emissive(resource, material, material.emissiveTexture().present());
+            GpuTextureView metallicRoughnessTexture = ModelMaterialBindings.metallicRoughness(resource, material);
+            GpuTextureView normalTexture = ModelMaterialBindings.normal(resource, material);
+            GpuTextureView occlusionTexture = ModelMaterialBindings.occlusion(resource, material);
             ModelSkinPaletteArena.PaletteKey paletteKey = null;
             float[] skinPalette = null;
             if (pipelineKey.skinned()) {
@@ -172,18 +177,18 @@ public final class ModelWorldRenderer {
                     continue;
                 }
             }
-            output.add(new DrawCandidate(sortKey, pipelineKey, transform, contract.color(), contract.alphaCutoff(),
-                    contract.emissive(), contract.baseTransform(), contract.emissiveTransform(), lightDirection,
-                    contract.directionalLightStrength(),
+            output.add(new DrawCandidate(sortKey, pipelineKey, transform, lightDirection, contract.worldLight(), contract.fullBright(),
                     MinecraftModelGpuAccess.buffer(group.vertexBuffer()),
-                    MinecraftModelGpuAccess.buffer(group.indexBuffer()), texture, emissiveTexture,
-                    material.baseColorTexture().sampler(), material.emissiveTexture().sampler(),
+                    MinecraftModelGpuAccess.buffer(group.indexBuffer()), texture, metallicRoughnessTexture,
+                    normalTexture, occlusionTexture, emissiveTexture, materialUniform(contract, material, draw.physicalUvSlots()),
+                    material.baseColorTexture().sampler(), material.metallicRoughnessTexture().sampler(),
+                    material.normalTexture().sampler(), material.occlusionTexture().sampler(), material.emissiveTexture().sampler(),
                     draw.firstIndex(), draw.indexCount(), paletteKey, skinPalette));
         }
         return singularSkips;
     }
 
-    static AABB worldBounds(ModelBounds bounds, ModelInstancePlacement placement) {
+    public static AABB worldBounds(ModelBounds bounds, ModelInstancePlacement placement) {
         Vector3d origin = placement.position();
         Quaternionf rotation = placement.rotation();
         Vector3f scale = placement.scale();
@@ -199,7 +204,40 @@ public final class ModelWorldRenderer {
             pendingGpuQuery = null;
         }
         SKIN_PALETTES.close();
+        MATERIALS.close();
         SAMPLERS.close();
+        FALLBACK_TEXTURES.close();
+    }
+
+    private static GpuTextureView orNeutral(GpuTextureView texture) { return texture == null ? FALLBACK_TEXTURES.neutral() : texture; }
+    private static GpuTextureView orNormal(GpuTextureView texture) { return texture == null ? FALLBACK_TEXTURES.normal() : texture; }
+
+    private static ModelMaterialUniform materialUniform(ModelDrawContract contract, StaticModelMaterial material,
+                                                        Map<Integer, Integer> uvSlots) {
+        return new ModelMaterialUniform(contract.color(), new Vector4f(contract.emissive(), contract.alphaCutoff()),
+                new Vector4f(material.metallicFactor(), material.roughnessFactor(), material.normalScale(), material.occlusionStrength()),
+                new Vector4f(present(material.baseColorTexture()), present(material.metallicRoughnessTexture()),
+                        present(material.normalTexture()), present(material.occlusionTexture())),
+                new Vector4f(present(material.emissiveTexture()), 0, 0, 0),
+                uvSlots0(material, uvSlots), new Vector4f(physicalUv(uvSlots, material.emissiveTexture()), 0, 0, 0),
+                List.of(material.baseColorTexture().transform(), material.metallicRoughnessTexture().transform(),
+                        material.normalTexture().transform(), material.occlusionTexture().transform(),
+                        material.emissiveTexture().transform()));
+    }
+
+    private static float present(StaticModelTexture texture) { return texture.present() ? 1.0F : 0.0F; }
+
+    private static Vector4f uvSlots0(StaticModelMaterial material, Map<Integer, Integer> uvSlots) {
+        return new Vector4f(physicalUv(uvSlots, material.baseColorTexture()),
+                physicalUv(uvSlots, material.metallicRoughnessTexture()),
+                physicalUv(uvSlots, material.normalTexture()), physicalUv(uvSlots, material.occlusionTexture()));
+    }
+
+    private static float physicalUv(Map<Integer, Integer> uvSlots, StaticModelTexture selected) {
+        if (!selected.present()) return 0;
+        Integer slot = uvSlots.get(selected.texCoord());
+        if (slot == null) throw new IllegalStateException("draw is missing projected texture coordinates " + selected.texCoord());
+        return slot;
     }
 
     private static Matrix4f instanceMatrix(Matrix4fc view, ModelInstancePlacement placement, Vec3 camera) {
@@ -250,26 +288,32 @@ public final class ModelWorldRenderer {
     }
 
     private record DrawCandidate(DrawSortKey sortKey, ModelPipelineKey pipelineKey, Matrix4f transform,
-                                 Vector4f color, float alphaCutoff, Vector3f emissive,
-                                 ModelTextureTransform baseTransform, ModelTextureTransform emissiveTransform, Vector3f lightDirection,
-                                 float directionalLightStrength, GpuBuffer vertexBuffer,
-                                 GpuBuffer indexBuffer, GpuTextureView texture, GpuTextureView emissiveTexture,
-                                 ModelTextureSampler baseSampler, ModelTextureSampler emissiveSampler,
+                                 Vector3f lightDirection, float worldLight, boolean fullBright, GpuBuffer vertexBuffer,
+                                 GpuBuffer indexBuffer, GpuTextureView texture, GpuTextureView metallicRoughnessTexture,
+                                 GpuTextureView normalTexture, GpuTextureView occlusionTexture, GpuTextureView emissiveTexture,
+                                 ModelMaterialUniform material, ModelTextureSampler baseSampler,
+                                 ModelTextureSampler metallicRoughnessSampler, ModelTextureSampler normalSampler,
+                                 ModelTextureSampler occlusionSampler, ModelTextureSampler emissiveSampler,
                                  int firstIndex, int indexCount, ModelSkinPaletteArena.PaletteKey paletteKey,
                                  float[] skinPalette) {
         PreparedDraw prepare() {
-            GpuBufferSlice dynamic = ModelDynamicUniformWriter.write(transform, color, emissive, alphaCutoff,
-                    baseTransform, emissiveTransform, lightDirection, directionalLightStrength);
+            GpuBufferSlice dynamic = ModelDynamicUniformWriter.write(transform, lightDirection, worldLight, fullBright);
             return new PreparedDraw(ModelRenderPipelines.get(pipelineKey), dynamic, vertexBuffer,
-                    indexBuffer, texture, emissiveTexture, baseSampler, emissiveSampler,
+                    indexBuffer, orNeutral(texture), orNeutral(metallicRoughnessTexture), orNormal(normalTexture),
+                    orNeutral(occlusionTexture), orNeutral(emissiveTexture), material,
+                    SAMPLERS.get(baseSampler), SAMPLERS.get(metallicRoughnessSampler), SAMPLERS.get(normalSampler),
+                    SAMPLERS.get(occlusionSampler), SAMPLERS.get(emissiveSampler),
                     firstIndex, indexCount, paletteKey, skinPalette);
         }
     }
 
     private record PreparedDraw(RenderPipeline pipeline, GpuBufferSlice dynamicTransforms,
-                                GpuBuffer vertexBuffer, GpuBuffer indexBuffer, GpuTextureView texture,
-                                GpuTextureView emissiveTexture, ModelTextureSampler baseSampler,
-                                ModelTextureSampler emissiveSampler, int firstIndex, int indexCount,
+                                GpuBuffer vertexBuffer, GpuBuffer indexBuffer, GpuTextureView baseColorTexture,
+                                GpuTextureView metallicRoughnessTexture, GpuTextureView normalTexture,
+                                GpuTextureView occlusionTexture, GpuTextureView emissiveTexture,
+                                ModelMaterialUniform material, GpuSampler baseSampler,
+                                GpuSampler metallicRoughnessSampler, GpuSampler normalSampler,
+                                GpuSampler occlusionSampler, GpuSampler emissiveSampler, int firstIndex, int indexCount,
                                 ModelSkinPaletteArena.PaletteKey paletteKey, float[] skinPalette) {}
     private record PreparedFrame(List<PreparedDraw> draws, int singularTransformSkips) {}
 }

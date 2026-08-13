@@ -12,15 +12,21 @@ public final class ModelImageMipChain {
     }
 
     public static List<DecodedModelImage> prepare(DecodedModelImage source, boolean mipmapped) {
+        return prepare(source, mipmapped, ModelTextureColorSpace.SRGB_COLOR);
+    }
+
+    public static List<DecodedModelImage> prepare(DecodedModelImage source, boolean mipmapped,
+                                                   ModelTextureColorSpace colorSpace) {
         List<DecodedModelImage> levels = new ArrayList<>();
-        DecodedModelImage current = linearize(source);
+        DecodedModelImage current = colorSpace == ModelTextureColorSpace.SRGB_COLOR ? linearize(source) : source;
         levels.add(current);
         if (!mipmapped) return List.copyOf(levels);
         // Minecraft 26.1 derives upload dimensions with an unclamped right shift. A complete
         // rectangular chain would therefore expose a zero-sized axis. Keep the maximal safe
         // prefix until the backend provides independently clamped per-level dimensions.
         while (current.width() > 1 && current.height() > 1) {
-            current = downsample(current);
+            current = colorSpace == ModelTextureColorSpace.NORMAL_VECTOR
+                    ? downsampleNormal(current) : downsample(current);
             levels.add(current);
         }
         return List.copyOf(levels);
@@ -53,6 +59,38 @@ public final class ModelImageMipChain {
                 output[target + 2] = unitByte(blue / samples);
                 output[target + 3] = (byte) Math.round(alpha / samples * 255.0);
             }
+        }
+        return new DecodedModelImage(width, height, output);
+    }
+
+    static DecodedModelImage downsampleNormal(DecodedModelImage source) {
+        int width = Math.max(1, source.width() / 2);
+        int height = Math.max(1, source.height() / 2);
+        byte[] input = source.rgba();
+        byte[] output = new byte[Math.multiplyExact(Math.multiplyExact(width, height), 4)];
+        for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) {
+            int samples = 0;
+            double nx = 0, ny = 0, nz = 0, alpha = 0;
+            int startX = x * source.width() / width;
+            int endX = Math.max(startX + 1, (x + 1) * source.width() / width);
+            int startY = y * source.height() / height;
+            int endY = Math.max(startY + 1, (y + 1) * source.height() / height);
+            for (int sy = startY; sy < endY; sy++) for (int sx = startX; sx < endX; sx++) {
+                int offset = (sy * source.width() + sx) * 4;
+                nx += (input[offset] & 0xFF) / 127.5 - 1.0;
+                ny += (input[offset + 1] & 0xFF) / 127.5 - 1.0;
+                nz += (input[offset + 2] & 0xFF) / 127.5 - 1.0;
+                alpha += (input[offset + 3] & 0xFF) / 255.0;
+                samples++;
+            }
+            double length = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            if (length <= 1.0E-12) { nx = 0; ny = 0; nz = 1; }
+            else { nx /= length; ny /= length; nz /= length; }
+            int target = (y * width + x) * 4;
+            output[target] = unitByte(nx * 0.5 + 0.5);
+            output[target + 1] = unitByte(ny * 0.5 + 0.5);
+            output[target + 2] = unitByte(nz * 0.5 + 0.5);
+            output[target + 3] = (byte) Math.round(alpha / samples * 255.0);
         }
         return new DecodedModelImage(width, height, output);
     }
