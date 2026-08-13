@@ -14,6 +14,7 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
 import com.mine.geometry_node.client.ui.editor.asset.repository.LocalAssetRepository;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewServerIdentity;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.service.GraphAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
@@ -641,6 +642,7 @@ final class AssetBrowserActionController {
     private void sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation operation, List<String> paths, String targetDirectory) {
         if (paths.isEmpty()) return;
         int requestId = RemoteGraphClientState.nextRequestId();
+        String serverIdentity = ClientAssetPreviewServerIdentity.current();
         mRemoteRequestIds.add(requestId);
         String title = switch (operation) {
             case DELETE -> "删除云端文件";
@@ -660,6 +662,11 @@ final class AssetBrowserActionController {
                 progress.update(response.message(), 1, 1);
                 if (operation == PacketRemoteGraphFileOperationRequest.Operation.MOVE) {
                     RemoteGraphClientState.clearClipboard();
+                }
+                if (operation == PacketRemoteGraphFileOperationRequest.Operation.DELETE
+                        || operation == PacketRemoteGraphFileOperationRequest.Operation.MOVE) {
+                    com.mine.geometry_node.client.model.asset.ClientModelAssetCacheService.INSTANCE
+                            .invalidate(serverIdentity, paths);
                 }
                 mPanel.clearSelection();
                 mPanel.refreshFileList();

@@ -93,7 +93,7 @@ public final class PreviewCacheSettingsPage implements SettingsPage {
                 view -> clearCurrentServerCache());
         UiActionButton clearAll = UiActionButton.create(context.uiContext(),
                 tr("geometry_node.settings.preview_cache.clear_all"), UiActionButton.Role.DANGER,
-                view -> runClear(ClientAssetPreviewService.INSTANCE.clearAllCaches()));
+                view -> runClear(com.mine.geometry_node.client.ui.editor.asset.preview.AssetPreviewProviders.clearAllRemoteCaches()));
         actions.addView(clearCurrent, new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f));
         LinearLayout.LayoutParams clearAllParams = new LinearLayout.LayoutParams(
                 0, UIUtils.dp2pxInt(28), 1.0f);
@@ -143,7 +143,7 @@ public final class PreviewCacheSettingsPage implements SettingsPage {
 
     private void clearCurrentServerCache() {
         try {
-            runClear(ClientAssetPreviewService.INSTANCE.clearCurrentServerCache());
+            runClear(com.mine.geometry_node.client.ui.editor.asset.preview.AssetPreviewProviders.clearCurrentRemoteCache());
         } catch (RuntimeException exception) {
             statusValue.setText(tr("geometry_node.settings.preview_cache.clear_failed"));
         }

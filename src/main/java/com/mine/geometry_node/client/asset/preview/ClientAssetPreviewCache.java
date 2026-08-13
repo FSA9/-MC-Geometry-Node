@@ -69,7 +69,7 @@ public final class ClientAssetPreviewCache {
         Path root = ClientAssetPreviewPaths.root();
         if (!Files.isDirectory(root) || Files.isSymbolicLink(root)) return;
         try (var children = Files.list(root)) {
-            for (Path child : children.filter(ClientAssetPreviewCache::isServerNamespace).toList()) {
+            for (Path child : children.filter(ClientAssetPreviewPaths::isServerNamespace).toList()) {
                 deleteOwnedRoot(child);
             }
         }
@@ -171,12 +171,6 @@ public final class ClientAssetPreviewCache {
                 }
             }
         }
-    }
-
-    private static boolean isServerNamespace(Path path) {
-        String name = path.getFileName() != null ? path.getFileName().toString() : "";
-        return name.length() == 64 && name.chars().allMatch(character ->
-                character >= '0' && character <= '9' || character >= 'a' && character <= 'f');
     }
 
     public record CachedPreview(AssetPreviewDescriptor descriptor, Path path) {

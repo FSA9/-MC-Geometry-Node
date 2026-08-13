@@ -5,6 +5,8 @@ import com.mine.geometry_node.client.ui.editor.asset.dialog.OverwriteConfirmDial
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferRequest;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
+import com.mine.geometry_node.client.model.asset.ClientModelAssetCacheService;
+import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewServerIdentity;
 import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationPanel;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
@@ -33,6 +35,7 @@ import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
+import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferState;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.AssetTransferPlanKind;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphCapabilitiesRequest;
@@ -445,9 +448,21 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 file.sourcePath(), file.targetPath(), overwrite || overwriteSet.contains(file.targetPath())
                         ? AssetTransferConflictPolicy.OVERWRITE : AssetTransferConflictPolicy.FAIL_IF_EXISTS)).toList();
         java.util.UUID jobId = ClientAssetTransferService.INSTANCE.submit(requests);
-        ClientAssetTransferService.INSTANCE.completion(jobId).thenRun(() -> post(() -> {
-            if (mBrowserPanel != null) mBrowserPanel.refreshFileList();
-        }));
+        String serverIdentity = ClientAssetPreviewServerIdentity.current();
+        ClientAssetTransferService.INSTANCE.completion(jobId).whenComplete((snapshot, error) -> {
+            if (error == null && snapshot != null) {
+                List<String> completedPaths = snapshot.files().stream()
+                        .filter(file -> file.state() == AssetTransferState.COMPLETED)
+                        .map(file -> file.targetPath())
+                        .toList();
+                if (!completedPaths.isEmpty()) {
+                    ClientModelAssetCacheService.INSTANCE.invalidate(serverIdentity, completedPaths);
+                }
+            }
+            post(() -> {
+                if (mBrowserPanel != null) mBrowserPanel.refreshFileList();
+            });
+        });
     }
 
     private void startDownload(List<AssetEntry> remoteEntries, File targetDirectory) {

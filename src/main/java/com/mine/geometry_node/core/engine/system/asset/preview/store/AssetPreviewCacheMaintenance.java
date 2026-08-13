@@ -39,7 +39,7 @@ public final class AssetPreviewCacheMaintenance {
         try (var paths = Files.walk(root)) {
             candidates.addAll(paths.filter(Files::isRegularFile)
                     .filter(path -> !Files.isSymbolicLink(path))
-                    .filter(path -> cacheRootForArtifact(path) != null)
+                    .filter(AssetPreviewCacheMaintenance::isPrimaryArtifact)
                     .filter(path -> protectedPath == null || !path.toAbsolutePath().normalize().equals(protectedPath))
                     .toList());
         }
@@ -52,10 +52,12 @@ public final class AssetPreviewCacheMaintenance {
             String key = dot > 0 ? fileName.substring(0, dot) : fileName;
             Path cacheRoot = cacheRootForArtifact(artifact);
             if (cacheRoot == null || key.length() < 2) continue;
+            boolean model = isModelArtifact(artifact);
             Path metadata = cacheRoot.resolve("metadata").toAbsolutePath().normalize();
-            Path metadataFile = metadata.resolve(key.substring(0, 2)).resolve(key + ".bin").normalize();
+            Path metadataFile = model ? artifact.resolveSibling(fileName + ".revision")
+                    : metadata.resolve(key.substring(0, 2)).resolve(key + ".bin").normalize();
             Files.deleteIfExists(artifact);
-            if (metadataFile.startsWith(metadata) && Files.isRegularFile(metadataFile)) {
+            if ((model || metadataFile.startsWith(metadata)) && Files.isRegularFile(metadataFile)) {
                 removed = Math.addExact(removed, Files.size(metadataFile));
                 Files.deleteIfExists(metadataFile);
             }
@@ -67,10 +69,36 @@ public final class AssetPreviewCacheMaintenance {
         Path current = artifact.toAbsolutePath().normalize().getParent();
         while (current != null) {
             Path name = current.getFileName();
-            if (name != null && "artifacts".equals(name.toString())) return current.getParent();
+            if (name != null && ("artifacts".equals(name.toString()) || "model-assets".equals(name.toString()))) {
+                return current.getParent();
+            }
             current = current.getParent();
         }
         return null;
+    }
+
+    private static boolean isModelArtifact(Path path) {
+        if (!path.getFileName().toString().endsWith(".glb")) return false;
+        Path current = path.toAbsolutePath().normalize().getParent();
+        while (current != null) {
+            Path name = current.getFileName();
+            if (name != null && "model-assets".equals(name.toString())) return true;
+            current = current.getParent();
+        }
+        return false;
+    }
+
+    private static boolean isPrimaryArtifact(Path path) {
+        if (isModelArtifact(path)) return true;
+        Path current = path.toAbsolutePath().normalize().getParent();
+        while (current != null) {
+            Path name = current.getFileName();
+            if (name != null && "artifacts".equals(name.toString())) return true;
+            if (name != null && ("metadata".equals(name.toString()) || "model-assets".equals(name.toString())
+                    || "model-staging".equals(name.toString()))) return false;
+            current = current.getParent();
+        }
+        return false;
     }
 
     private static long modifiedTime(Path path) {

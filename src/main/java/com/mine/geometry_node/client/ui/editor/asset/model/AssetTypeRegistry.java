@@ -15,6 +15,7 @@ public final class AssetTypeRegistry {
     public static final String GRAPH_ID = AssetTransferPolicy.GRAPH_TYPE_ID;
     public static final String SCHEMATIC_ID = AssetTransferPolicy.SCHEMATIC_TYPE_ID;
     public static final String IMAGE_ID = AssetTransferPolicy.IMAGE_TYPE_ID;
+    public static final String MODEL_ID = AssetTransferPolicy.MODEL_TYPE_ID;
     public static final String FILE_ID = "file";
 
     public static final AssetTypeRegistry INSTANCE = new AssetTypeRegistry();
@@ -52,6 +53,14 @@ public final class AssetTypeRegistry {
                         AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME,
                         AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD),
                 (name, directory) -> !directory && ImageAssetFormats.isSupportedPath(name)));
+        register(new AssetType(
+                MODEL_ID, 0xFFF0A35E, false, true, AssetPreviewKind.MODEL,
+                EnumSet.allOf(AssetSourceKind.class),
+                EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW,
+                        AssetTypeAction.FAVORITE, AssetTypeAction.COPY, AssetTypeAction.MOVE,
+                        AssetTypeAction.DELETE, AssetTypeAction.RENAME,
+                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD),
+                extensionMatcher(".glb")));
         register(new AssetType(
                 FILE_ID, 0xFF88CCFF, false, false, AssetPreviewKind.NONE,
                 EnumSet.allOf(AssetSourceKind.class),

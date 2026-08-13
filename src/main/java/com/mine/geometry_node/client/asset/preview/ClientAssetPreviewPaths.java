@@ -30,4 +30,10 @@ public final class ClientAssetPreviewPaths {
                 digest.digest(stableServerIdentity.trim().getBytes(StandardCharsets.UTF_8)));
         return root().resolve(AssetPreviewCachePaths.validateCacheKey(key)).normalize();
     }
+
+    public static boolean isServerNamespace(Path path) {
+        String name = path != null && path.getFileName() != null ? path.getFileName().toString() : "";
+        return name.length() == 64 && name.chars().allMatch(character ->
+                character >= '0' && character <= '9' || character >= 'a' && character <= 'f');
+    }
 }

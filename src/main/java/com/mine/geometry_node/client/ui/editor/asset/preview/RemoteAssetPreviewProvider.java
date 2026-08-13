@@ -16,7 +16,8 @@ final class RemoteAssetPreviewProvider implements AssetPreviewProvider {
     public boolean supports(AssetEntry entry) {
         return entry != null && entry.sourceKind() == AssetSourceKind.REMOTE && !entry.isDirectory()
                 && entry.supports(AssetTypeAction.PREVIEW) && entry.size() >= 0L && entry.lastModified() >= 0L
-                && coreKind(entry) != null;
+                && (entry.type().previewKind() == com.mine.geometry_node.client.ui.editor.asset.model.AssetPreviewKind.MODEL
+                || coreKind(entry) != null);
     }
 
     @Override
@@ -24,6 +25,18 @@ final class RemoteAssetPreviewProvider implements AssetPreviewProvider {
         if (!supports(entry)) {
             listener.unavailable();
             return Subscription.NONE;
+        }
+        if (entry.type().previewKind() == com.mine.geometry_node.client.ui.editor.asset.model.AssetPreviewKind.MODEL) {
+            var subscription = com.mine.geometry_node.client.model.asset.ClientModelAssetCacheService.INSTANCE.subscribe(
+                    new com.mine.geometry_node.client.model.asset.RemoteModelAssetRevision(
+                            entry.path(), entry.size(), entry.lastModified()),
+                    new com.mine.geometry_node.client.model.asset.ClientModelAssetCacheService.Listener() {
+                        @Override public void available(com.mine.geometry_node.client.model.asset.MaterializedModelAsset asset) {
+                            listener.available(asset.localBytes().toFile());
+                        }
+                        @Override public void unavailable(String detail) { listener.unavailable(); }
+                    });
+            return subscription::close;
         }
         AssetPreviewRevision revision = AssetPreviewRevision.current(
                 new AssetPreviewIdentity(entry.path(), coreKind(entry)), entry.size(), entry.lastModified());
@@ -56,7 +69,7 @@ final class RemoteAssetPreviewProvider implements AssetPreviewProvider {
         return switch (entry.type().previewKind()) {
             case IMAGE -> com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind.IMAGE;
             case SCHEMATIC -> com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind.SCHEMATIC;
-            case NONE -> null;
+            case NONE, MODEL -> null;
         };
     }
 }

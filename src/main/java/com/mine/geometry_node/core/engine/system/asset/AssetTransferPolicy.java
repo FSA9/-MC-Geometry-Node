@@ -9,6 +9,7 @@ public final class AssetTransferPolicy {
     public static final String GRAPH_TYPE_ID = "graph";
     public static final String SCHEMATIC_TYPE_ID = "schematic";
     public static final String IMAGE_TYPE_ID = "image";
+    public static final String MODEL_TYPE_ID = "model";
 
     private AssetTransferPolicy() {
     }
@@ -19,6 +20,7 @@ public final class AssetTransferPolicy {
         if (lower.endsWith(".json")) return GRAPH_TYPE_ID;
         if (lower.endsWith(".schem") || lower.endsWith(".schematic")) return SCHEMATIC_TYPE_ID;
         if (ImageAssetFormats.isSupportedPath(lower)) return IMAGE_TYPE_ID;
+        if (lower.endsWith(".glb")) return MODEL_TYPE_ID;
         return "";
     }
 

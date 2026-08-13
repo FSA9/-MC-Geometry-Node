@@ -10,6 +10,10 @@ import com.mine.geometry_node.core.network.ClientNetworkReceiverRegistry;
 import com.mine.geometry_node.client.marker.MarkerHudRenderer;
 import com.mine.geometry_node.client.render.ClientVisualManager;
 import com.mine.geometry_node.client.render.image.ClientImageAssetManager;
+import com.mine.geometry_node.client.model.render.ModelWorldRenderer;
+import com.mine.geometry_node.client.model.render.ModelRenderPipelines;
+import com.mine.geometry_node.client.model.runtime.ClientModelRuntime;
+import com.mine.geometry_node.client.model.runtime.ModelResourceReloadListener;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
@@ -35,6 +39,8 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
+import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 
@@ -48,12 +54,15 @@ public class GeometryNodeClient {
         // 注册按键
         modBus.addListener(KeyBindings::register);
         modBus.addListener(this::onRegisterGuiLayers);
+        modBus.addListener(this::onRegisterRenderPipelines);
+        modBus.addListener(this::onAddClientReloadListeners);
 
         // 监听按键
         NeoForge.EVENT_BUS.addListener(this::onClientTick);
 
         // 监听世界渲染
         NeoForge.EVENT_BUS.addListener(this::onRenderLevelStage);
+        NeoForge.EVENT_BUS.addListener(this::onRenderLevelComplete);
         NeoForge.EVENT_BUS.addListener(this::onSubmitCustomGeometry);
         NeoForge.EVENT_BUS.addListener(this::onClientLoggingOut);
         NeoForge.EVENT_BUS.addListener(this::onInteractionKeyMappingTriggered);
@@ -95,6 +104,10 @@ public class GeometryNodeClient {
         SchematicProjectionRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
     }
 
+    private void onRenderLevelComplete(RenderLevelStageEvent.AfterLevel event) {
+        ModelWorldRenderer.render(event.getModelViewMatrix(), Minecraft.getInstance().gameRenderer.getMainCamera());
+    }
+
     private void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
         ClientVisualManager.renderWorld(event.getPoseStack(), event.getSubmitNodeCollector());
         SchematicProjectionRenderer.submitFeatures(event.getPoseStack(), event.getSubmitNodeCollector(), event.getLevelRenderState());
@@ -107,6 +120,7 @@ public class GeometryNodeClient {
         ClientAssetTransferPlanState.reset();
         ClientAssetTransferService.INSTANCE.resetConnection();
         ClientAssetPreviewService.INSTANCE.resetConnection();
+        com.mine.geometry_node.client.model.asset.ClientModelAssetCacheService.INSTANCE.resetConnection();
         EntityTemplatePickerController.reset();
         clearClientRenderState();
     }
@@ -128,6 +142,17 @@ public class GeometryNodeClient {
         ClientImageAssetManager.clear();
         GeometryDebugRenderer.clear();
         SchematicProjectionRenderer.clear();
+        ModelWorldRenderer.clear();
+        ClientModelRuntime.INSTANCE.resetGpuBackend();
+    }
+
+    private void onRegisterRenderPipelines(RegisterRenderPipelinesEvent event) {
+        ModelRenderPipelines.register(event);
+    }
+
+    private void onAddClientReloadListeners(AddClientReloadListenersEvent event) {
+        event.addListener(Identifier.fromNamespaceAndPath(GeometryNode.MODID, "static_models"),
+                new ModelResourceReloadListener());
     }
 
     @SubscribeEvent

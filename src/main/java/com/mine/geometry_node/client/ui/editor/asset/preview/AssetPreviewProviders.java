@@ -18,10 +18,12 @@ public final class AssetPreviewProviders {
     }
 
     public static CompletableFuture<Void> clearCurrentRemoteCache() {
-        return RemoteAssetPreviewProvider.clearCurrentServerCache();
+        return CompletableFuture.allOf(RemoteAssetPreviewProvider.clearCurrentServerCache(),
+                com.mine.geometry_node.client.model.asset.ClientModelAssetCacheService.INSTANCE.clearCurrentServerCache());
     }
 
     public static CompletableFuture<Void> clearAllRemoteCaches() {
-        return RemoteAssetPreviewProvider.clearAllCaches();
+        return CompletableFuture.allOf(RemoteAssetPreviewProvider.clearAllCaches(),
+                com.mine.geometry_node.client.model.asset.ClientModelAssetCacheService.INSTANCE.clearAllCaches());
     }
 }

@@ -66,6 +66,8 @@ public final class AssetPreviewView extends FrameLayout {
         if (mEntry.sourceKind() == AssetSourceKind.LOCAL
                 && mEntry.type().previewKind() == AssetPreviewKind.SCHEMATIC) {
             mResolvedView = new SchematicThumbnailView(getContext(), localSource);
+        } else if (mEntry.type().previewKind() == AssetPreviewKind.MODEL) {
+            mResolvedView = new ModelAssetPreviewView(getContext());
         } else {
             mResolvedView = new ImageThumbnailView(getContext(), localSource);
         }

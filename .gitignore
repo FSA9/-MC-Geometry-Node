@@ -16,6 +16,7 @@ out
 # gradle
 build
 .gradle
+/.gradle-codex/
 
 # other
 eclipse
@@ -28,8 +29,11 @@ repo
 logs
 
 docs/tmp
+docs/model/
+tools/
 
 *.md
+src/main/resources/tmp
 
 .config/
 
