@@ -3,10 +3,10 @@ package com.mine.geometry_node.core.engine.system.model.importer.glb;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mine.geometry_node.core.engine.system.model.api.ModelAssetReference;
+import com.mine.geometry_node.core.engine.system.model.identity.ModelAssetReference;
 import com.mine.geometry_node.core.engine.system.model.domain.*;
 import com.mine.geometry_node.core.engine.system.model.domain.animation.*;
-import com.mine.geometry_node.core.engine.system.model.importer.*;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.*;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -460,7 +460,7 @@ final class GlbModelAssembler {
         if (!attributesJson.has("POSITION")) throw GlbFailures.attribute(location + ".attributes.POSITION", "POSITION is required");
         Map<ModelAttributeSemantic, ModelVertexAttribute> attributes = new LinkedHashMap<>();
         for (String key : attributesJson.keySet()) {
-            ModelAttributeSemantic semantic = ModelAttributeSemantic.parseGltf(key);
+            ModelAttributeSemantic semantic = GlbAttributeSemanticParser.parse(key);
             if (semantic == null) throw GlbFailures.unsupported(location + ".attributes." + key,
                     "custom vertex attributes are not supported");
             if (attributes.put(semantic, decodeAttribute(attributesJson, key, semantic, location)) != null) {

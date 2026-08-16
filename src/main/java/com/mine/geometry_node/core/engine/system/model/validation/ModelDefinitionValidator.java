@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.engine.system.model.domain.animation.ModelAni
 import com.mine.geometry_node.core.engine.system.model.domain.animation.ModelAnimationChannel;
 import com.mine.geometry_node.core.engine.system.model.domain.animation.ModelAnimationPath;
 import com.mine.geometry_node.core.engine.system.model.domain.animation.ModelAnimationSampler;
-import com.mine.geometry_node.core.engine.system.model.importer.*;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.*;
 
 import java.util.HashSet;
 import java.util.List;

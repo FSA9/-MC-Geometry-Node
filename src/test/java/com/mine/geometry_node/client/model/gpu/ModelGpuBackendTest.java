@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.model.gpu;
 
-import com.mine.geometry_node.core.engine.system.model.api.*;
+import com.mine.geometry_node.core.engine.system.model.identity.*;
 import com.mine.geometry_node.core.engine.system.model.domain.*;
 import org.junit.jupiter.api.Test;
 

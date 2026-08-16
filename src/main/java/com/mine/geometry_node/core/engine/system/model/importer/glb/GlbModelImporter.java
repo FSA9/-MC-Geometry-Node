@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.system.model.importer.glb;
 
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.system.model.domain.ModelDefinition;
-import com.mine.geometry_node.core.engine.system.model.importer.*;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.*;
 
 public final class GlbModelImporter implements ModelImporter {
     public static final String ID = "geometry_node:glb";

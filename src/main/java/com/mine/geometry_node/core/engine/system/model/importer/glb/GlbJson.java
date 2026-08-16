@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.model.importer.glb;
 
 import com.google.gson.*;
-import com.mine.geometry_node.core.engine.system.model.importer.ModelImportException;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.ModelImportException;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;

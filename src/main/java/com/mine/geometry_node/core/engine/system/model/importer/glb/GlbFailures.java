@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.engine.system.model.importer.glb;
 
-import com.mine.geometry_node.core.engine.system.model.importer.ModelImportErrorCode;
-import com.mine.geometry_node.core.engine.system.model.importer.ModelImportException;
-import com.mine.geometry_node.core.engine.system.model.importer.ModelImportFailure;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.ModelImportErrorCode;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.ModelImportException;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.ModelImportFailure;
 
 final class GlbFailures {
     private GlbFailures() {

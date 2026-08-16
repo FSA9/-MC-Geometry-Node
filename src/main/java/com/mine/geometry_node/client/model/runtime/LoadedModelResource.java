@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.model.runtime;
 
 import com.mine.geometry_node.client.model.gpu.*;
-import com.mine.geometry_node.core.engine.system.model.api.ModelAssetReference;
+import com.mine.geometry_node.core.engine.system.model.identity.ModelAssetReference;
 import com.mine.geometry_node.core.engine.system.model.domain.ModelDefinition;
 
 import java.util.Objects;

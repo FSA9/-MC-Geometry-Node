@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.model.asset;
 
-import com.mine.geometry_node.core.engine.system.model.api.ModelAssetReference;
+import com.mine.geometry_node.core.engine.system.model.identity.ModelAssetReference;
 
 import java.nio.file.Path;
 import java.util.Objects;

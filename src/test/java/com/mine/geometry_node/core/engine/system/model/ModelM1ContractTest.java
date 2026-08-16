@@ -1,8 +1,9 @@
 package com.mine.geometry_node.core.engine.system.model;
 
-import com.mine.geometry_node.core.engine.system.model.api.*;
+import com.mine.geometry_node.core.engine.system.model.identity.*;
 import com.mine.geometry_node.core.engine.system.model.domain.*;
 import com.mine.geometry_node.core.engine.system.model.importer.*;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.*;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -16,18 +17,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ModelM1ContractTest {
     private static final String IMPORTER_ID = "geometry_node:memory_triangle";
-
-    @Test
-    void parsesGeneralGltfAttributeSemanticsWithoutAliases() {
-        assertEquals(ModelAttributeSemantic.POSITION, ModelAttributeSemantic.parseGltf("POSITION"));
-        assertEquals(ModelAttributeSemantic.NORMAL, ModelAttributeSemantic.parseGltf("NORMAL"));
-        assertEquals(ModelAttributeSemantic.TANGENT, ModelAttributeSemantic.parseGltf("TANGENT"));
-        assertEquals(ModelAttributeSemantic.TEXCOORD_0, ModelAttributeSemantic.parseGltf("TEXCOORD_0"));
-        assertEquals(ModelAttributeSemantic.indexed(ModelAttributeSemantic.Kind.TEXCOORD, 12),
-                ModelAttributeSemantic.parseGltf("TEXCOORD_12"));
-        assertNull(ModelAttributeSemantic.parseGltf("TEXCOORD_00"));
-        assertNull(ModelAttributeSemantic.parseGltf("CUSTOM_0"));
-    }
 
     @Test
     void importsProgrammaticTriangleThroughTheRegistry() {

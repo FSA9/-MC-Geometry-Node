@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.model.importer;
 
 import com.mine.geometry_node.core.engine.system.model.domain.ModelDefinition;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.*;
 import com.mine.geometry_node.core.engine.system.model.validation.ModelDefinitionValidator;
 
 import java.util.ArrayList;

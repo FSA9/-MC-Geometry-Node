@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.model.runtime;
 
-import com.mine.geometry_node.client.model.render.ModelWorldRenderer;
-import com.mine.geometry_node.client.model.render.ModelShaderCompatibility;
-import com.mine.geometry_node.client.model.render.compat.entity.EntityCompatibilityRenderer;
+import com.mine.geometry_node.client.model.render.backend.standalone.StandaloneModelRenderer;
+import com.mine.geometry_node.client.model.render.integration.ModelIntegrationController;
+import com.mine.geometry_node.client.model.render.backend.host.entity.HostNativeRenderer;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 
 import java.util.concurrent.CompletableFuture;
@@ -19,9 +19,9 @@ public final class ModelResourceReloadListener implements PreparableReloadListen
 
     /** Rebuilds only model render bindings; authoritative instances and uploaded geometry remain resident. */
     public static long reloadBindings() {
-        ModelWorldRenderer.clear();
-        EntityCompatibilityRenderer.clear();
-        ModelShaderCompatibility.reset();
+        StandaloneModelRenderer.clear();
+        HostNativeRenderer.clear();
+        ModelIntegrationController.reset();
         return ++reloadGeneration;
     }
 

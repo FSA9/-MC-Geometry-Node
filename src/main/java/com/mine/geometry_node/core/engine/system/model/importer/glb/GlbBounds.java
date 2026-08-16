@@ -6,7 +6,7 @@ final class GlbBounds {
     private GlbBounds() {
     }
 
-    static ModelBounds fromPositions(ModelVertexAttribute positions) throws com.mine.geometry_node.core.engine.system.model.importer.ModelImportException {
+    static ModelBounds fromPositions(ModelVertexAttribute positions) throws com.mine.geometry_node.core.engine.system.model.importer.protocol.ModelImportException {
         java.nio.ByteBuffer data = java.nio.ByteBuffer.wrap(positions.data()).order(java.nio.ByteOrder.LITTLE_ENDIAN);
         Accumulator bounds = new Accumulator();
         for (int i = 0; i < positions.elementCount(); i++) {
@@ -27,7 +27,7 @@ final class GlbBounds {
     }
 
     static ModelBounds transform(ModelBounds bounds, ModelTransform transform)
-            throws com.mine.geometry_node.core.engine.system.model.importer.ModelImportException {
+            throws com.mine.geometry_node.core.engine.system.model.importer.protocol.ModelImportException {
         return transform(bounds, matrix(transform));
     }
 
@@ -61,7 +61,7 @@ final class GlbBounds {
     }
 
     private static ModelBounds transform(ModelBounds bounds, float[] matrix)
-            throws com.mine.geometry_node.core.engine.system.model.importer.ModelImportException {
+            throws com.mine.geometry_node.core.engine.system.model.importer.protocol.ModelImportException {
         Accumulator result = new Accumulator();
         for (int corner = 0; corner < 8; corner++) {
             float x = (corner & 1) == 0 ? bounds.min().x() : bounds.max().x();
@@ -78,7 +78,7 @@ final class GlbBounds {
         private float minX = Float.POSITIVE_INFINITY, minY = Float.POSITIVE_INFINITY, minZ = Float.POSITIVE_INFINITY;
         private float maxX = Float.NEGATIVE_INFINITY, maxY = Float.NEGATIVE_INFINITY, maxZ = Float.NEGATIVE_INFINITY;
 
-        void include(float x, float y, float z) throws com.mine.geometry_node.core.engine.system.model.importer.ModelImportException {
+        void include(float x, float y, float z) throws com.mine.geometry_node.core.engine.system.model.importer.protocol.ModelImportException {
             if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(z)) {
                 throw GlbFailures.attribute("POSITION", "position contains a non-finite value");
             }
@@ -86,7 +86,7 @@ final class GlbBounds {
             maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); maxZ = Math.max(maxZ, z);
         }
 
-        ModelBounds build(String location) throws com.mine.geometry_node.core.engine.system.model.importer.ModelImportException {
+        ModelBounds build(String location) throws com.mine.geometry_node.core.engine.system.model.importer.protocol.ModelImportException {
             if (minX == Float.POSITIVE_INFINITY) throw GlbFailures.invalid(location, "bounds cannot be computed from empty geometry");
             return new ModelBounds(new ModelVector3(minX, minY, minZ), new ModelVector3(maxX, maxY, maxZ));
         }

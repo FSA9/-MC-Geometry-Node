@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.AssetPreviewCacheMaintenance;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.core.engine.system.model.api.*;
+import com.mine.geometry_node.core.engine.system.model.identity.*;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

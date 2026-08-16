@@ -3,9 +3,10 @@ package com.mine.geometry_node.client.model.runtime;
 import com.mine.geometry_node.client.model.gpu.ModelGpuLease;
 import com.mine.geometry_node.client.model.gpu.ModelGpuPreparationService;
 import com.mine.geometry_node.client.model.gpu.ModelGpuRepository;
-import com.mine.geometry_node.core.engine.system.model.api.*;
+import com.mine.geometry_node.core.engine.system.model.identity.*;
 import com.mine.geometry_node.core.engine.system.model.domain.ModelDefinition;
 import com.mine.geometry_node.core.engine.system.model.importer.*;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.*;
 
 import java.nio.file.Files;
 import java.security.MessageDigest;

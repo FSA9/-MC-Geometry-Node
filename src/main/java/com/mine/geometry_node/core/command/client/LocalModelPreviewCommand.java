@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.command.client;
 
 import com.mine.geometry_node.client.model.runtime.*;
-import com.mine.geometry_node.client.model.render.ModelShaderCompatibility;
+import com.mine.geometry_node.client.model.render.integration.ModelIntegrationController;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -159,7 +159,7 @@ public final class LocalModelPreviewCommand {
                 + " draws=" + status.drawCalls() + " loadMs=" + nanosToMs(status.loadNanos())
                 + " renderCpuMs=" + nanosToMs(status.lastRenderCpuNanos())
                 + " gpuMs=" + nanosToMs(status.lastGpuNanos()) + details);
-        var integration = ModelShaderCompatibility.integrationStatus();
+        var integration = ModelIntegrationController.integrationStatus();
         ClientCommandUtils.sendClientMsg("§eModel integration requested=" + integration.requestedMode()
                 + " effective=" + integration.effectiveMode() + " profile=" + integration.profileId()
                 + " fidelity=" + integration.fidelity() + " verification=" + integration.verification()
@@ -167,7 +167,7 @@ public final class LocalModelPreviewCommand {
                 + (integration.semanticLosses().isEmpty() ? "" : " losses=" + integration.semanticLosses())
                 + (integration.runtimeFaults().isEmpty() ? "" : " runtimeFaults=" + integration.runtimeFaults())
                 + (integration.rejectedDraws().isEmpty() ? "" : " rejectedDraws=" + integration.rejectedDraws())
-                + (integration.fallback() == com.mine.geometry_node.client.model.render.compat.ModelIntegrationFallback.NONE
+                + (integration.fallback() == com.mine.geometry_node.client.model.render.integration.ModelIntegrationFallback.NONE
                 ? "" : " fallback=" + integration.fallback() + " detail=" + integration.fallbackDetail()));
         ClientCommandUtils.sendClientMsg("§eModel integration capabilities=" + integration.capabilities());
         ClientCommandUtils.sendClientMsg("§eModel binding reload generation="

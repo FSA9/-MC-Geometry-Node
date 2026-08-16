@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.model.domain;
 
-import com.mine.geometry_node.core.engine.system.model.api.ModelAssetReference;
+import com.mine.geometry_node.core.engine.system.model.identity.ModelAssetReference;
 import com.mine.geometry_node.core.engine.system.model.domain.animation.ModelAnimation;
 
 import java.util.List;

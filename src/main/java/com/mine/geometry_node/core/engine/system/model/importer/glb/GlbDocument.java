@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.system.model.importer.glb;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mine.geometry_node.core.engine.system.model.importer.*;
+import com.mine.geometry_node.core.engine.system.model.importer.protocol.*;
 
 import java.util.ArrayList;
 import java.util.List;
