@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.model.runtime;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.client.model.gpu.ModelGpuLease;
 import com.mine.geometry_node.client.model.gpu.ModelGpuPreparationService;
 import com.mine.geometry_node.client.model.gpu.ModelGpuRepository;
 import com.mine.geometry_node.core.engine.system.model.identity.*;
@@ -38,14 +37,7 @@ public final class LocalModelResourceLoader implements ModelResourceCoordinator.
                                                         ModelResourceCoordinator.Cancellation cancellation) {
         long started = System.nanoTime();
         return CompletableFuture.supplyAsync(() -> readAndImport(request, cancellation), worker)
-                .thenCompose(imported -> {
-                    cancelled(cancellation);
-                    return preparation.prepare(imported.definition()).thenApply(plan -> new Prepared(imported, plan));
-                })
-                .thenCompose(prepared -> {
-                    cancelled(cancellation);
-                    return repository.acquire(prepared.plan()).thenApply(lease -> finish(prepared, lease, started, cancellation));
-                });
+                .thenApply(imported -> finish(imported, started, cancellation));
     }
 
     private Imported readAndImport(LocalModelAssetRequest request, ModelResourceCoordinator.Cancellation cancellation) {
@@ -107,15 +99,12 @@ public final class LocalModelResourceLoader implements ModelResourceCoordinator.
         }
     }
 
-    private static LoadedModelResource finish(Prepared prepared, ModelGpuLease lease, long started,
-                                               ModelResourceCoordinator.Cancellation cancellation) {
-        if (cancellation.isCancelled()) {
-            lease.close();
-            throw new CancellationException("model resource load was cancelled");
-        }
-        return new LoadedModelResource(prepared.imported().definition(), lease,
-                prepared.imported().metadata(),
-                prepared.imported().sourceBytes(), prepared.imported().triangles(), System.nanoTime() - started);
+    private LoadedModelResource finish(Imported imported, long started,
+                                       ModelResourceCoordinator.Cancellation cancellation) {
+        cancelled(cancellation);
+        return new LoadedModelResource(imported.definition(),
+                () -> preparation.prepare(imported.definition()).thenCompose(repository::acquire),
+                imported.metadata(), imported.sourceBytes(), imported.triangles(), System.nanoTime() - started);
     }
 
     private static void cancelled(ModelResourceCoordinator.Cancellation cancellation) {
@@ -124,5 +113,4 @@ public final class LocalModelResourceLoader implements ModelResourceCoordinator.
 
     private record Imported(ModelDefinition definition, StaticModelRenderMetadata metadata,
                             long sourceBytes, long triangles) {}
-    private record Prepared(Imported imported, com.mine.geometry_node.client.model.gpu.ModelGpuUploadPlan plan) {}
 }

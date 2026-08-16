@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.ReadOnlyBufferException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,8 +41,11 @@ class ModelM1ContractTest {
 
         byte[] firstRead = attribute.data();
         firstRead[0] = 77;
+        ByteBuffer readOnly = attribute.readOnlyData();
 
         assertEquals(0, attribute.data()[0]);
+        assertTrue(readOnly.isReadOnly());
+        assertThrows(ReadOnlyBufferException.class, () -> readOnly.put(0, (byte) 1));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.model.render.backend.standalone;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.model.gpu.*;
 import com.mine.geometry_node.client.model.gpu.minecraft.MinecraftModelGpuAccess;
 import com.mine.geometry_node.client.model.gpu.minecraft.MinecraftModelSamplerCache;
@@ -141,7 +142,13 @@ public final class StandaloneModelRenderer {
                                           boolean opaqueTranslucencyFallback) {
         boolean shadowPass = shadowPhase != null;
         LoadedModelResource loaded = instance.resource();
-        ModelGpuResource resource = loaded.gpuResource();
+        ModelGpuResource resource = loaded.standaloneGpuResource().orElse(null);
+        if (resource == null) {
+            loaded.standaloneGpuFailureForReport().ifPresent(failure -> GeometryNode.LOGGER.error(
+                    "Standalone GPU artifact failed for {}: {}", loaded.asset().normalizedPath(),
+                    failure.getMessage(), failure));
+            return 0;
+        }
         ModelInstanceState state = instance.state();
         ModelInstancePlacement placement = state.placement();
         Matrix4f base = instanceMatrix(viewMatrix, placement, camera);

@@ -2,7 +2,8 @@ package com.mine.geometry_node.client.model.gpu;
 
 import com.mine.geometry_node.core.engine.system.model.domain.*;
 
-import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.*;
 
 public final class ModelGpuUploadPlanner {
@@ -11,16 +12,30 @@ public final class ModelGpuUploadPlanner {
         if (images == null || images.size() != definition.images().size()) {
             throw new IllegalArgumentException("decoded image count must match the model definition");
         }
-        Map<ModelVertexLayout, GroupBuilder> groups = new LinkedHashMap<>();
-        Map<PrimitiveKey, PrimitivePlacement> placements = new HashMap<>();
+        Map<PrimitiveKey, AttributeProjection> projections = new HashMap<>();
+        Map<ModelVertexLayout, GroupCapacity> capacities = new LinkedHashMap<>();
         for (int meshIndex = 0; meshIndex < definition.meshes().size(); meshIndex++) {
             List<ModelPrimitive> primitives = definition.meshes().get(meshIndex).primitives();
             for (int primitiveIndex = 0; primitiveIndex < primitives.size(); primitiveIndex++) {
                 ModelPrimitive primitive = primitives.get(primitiveIndex);
                 AttributeProjection projection = gpuLayout(primitive,
                         definition.materials().get(primitive.materialIndex()));
+                projections.put(new PrimitiveKey(meshIndex, primitiveIndex), projection);
+                capacities.merge(projection.layout(), GroupCapacity.of(projection.layout(), primitive), GroupCapacity::add);
+            }
+        }
+
+        Map<ModelVertexLayout, GroupBuilder> groups = new LinkedHashMap<>();
+        Map<PrimitiveKey, PrimitivePlacement> placements = new HashMap<>();
+        for (int meshIndex = 0; meshIndex < definition.meshes().size(); meshIndex++) {
+            List<ModelPrimitive> primitives = definition.meshes().get(meshIndex).primitives();
+            for (int primitiveIndex = 0; primitiveIndex < primitives.size(); primitiveIndex++) {
+                PrimitiveKey key = new PrimitiveKey(meshIndex, primitiveIndex);
+                ModelPrimitive primitive = primitives.get(primitiveIndex);
+                AttributeProjection projection = projections.get(key);
                 ModelVertexLayout layout = projection.layout();
-                GroupBuilder group = groups.computeIfAbsent(layout, ignored -> new GroupBuilder(layout, groups.size()));
+                GroupBuilder group = groups.computeIfAbsent(layout, ignored ->
+                        new GroupBuilder(layout, groups.size(), capacities.get(layout)));
                 placements.put(new PrimitiveKey(meshIndex, primitiveIndex), group.append(primitive, projection));
             }
         }
@@ -89,6 +104,22 @@ public final class ModelGpuUploadPlanner {
                                        Map<ModelAttributeSemantic, ModelAttributeSemantic> sources,
                                        Map<Integer, Integer> physicalUvSlots) {}
 
+    private record GroupCapacity(int vertexBytes, int indexBytes) {
+        private static GroupCapacity of(ModelVertexLayout layout, ModelPrimitive primitive) {
+            int rawStride = layout.elements().stream()
+                    .mapToInt(element -> Math.multiplyExact(element.componentType().byteSize(), element.componentCount()))
+                    .sum();
+            int stride = GroupBuilder.align4(rawStride);
+            return new GroupCapacity(Math.multiplyExact(stride, primitive.vertexCount()),
+                    Math.multiplyExact(Integer.BYTES, primitive.indices().indexCount()));
+        }
+
+        private GroupCapacity add(GroupCapacity other) {
+            return new GroupCapacity(Math.addExact(vertexBytes, other.vertexBytes),
+                    Math.addExact(indexBytes, other.indexBytes));
+        }
+    }
+
     private static AttributeProjection gpuLayout(ModelPrimitive primitive, ModelMaterial material) {
         if (material.normalTexture().texture().textureIndex() >= 0
                 && !primitive.attributes().containsKey(ModelAttributeSemantic.TANGENT)) {
@@ -140,40 +171,47 @@ public final class ModelGpuUploadPlanner {
         private final int groupIndex;
         private final int rawStride;
         private final int stride;
-        private final ByteArrayOutputStream vertices = new ByteArrayOutputStream();
-        private final ByteArrayOutputStream indices = new ByteArrayOutputStream();
+        private final byte[] vertices;
+        private final byte[] indices;
+        private int vertexCursor;
+        private int indexCursor;
         private int vertexCount;
         private int indexCount;
 
-        private GroupBuilder(ModelVertexLayout layout, int groupIndex) {
+        private GroupBuilder(ModelVertexLayout layout, int groupIndex, GroupCapacity capacity) {
             this.layout = layout;
             this.groupIndex = groupIndex;
             this.rawStride = layout.elements().stream()
                     .mapToInt(element -> Math.multiplyExact(element.componentType().byteSize(), element.componentCount()))
                     .sum();
             this.stride = align4(rawStride);
+            this.vertices = new byte[capacity.vertexBytes()];
+            this.indices = new byte[capacity.indexBytes()];
         }
 
         private PrimitivePlacement append(ModelPrimitive primitive, AttributeProjection projection) {
             int vertexBase = vertexCount;
             Map<ModelAttributeSemantic, ModelVertexAttribute> attributes = primitive.attributes();
-            Map<ModelAttributeSemantic, byte[]> attributeData = new HashMap<>();
-            for (ModelVertexAttribute attribute : attributes.values()) attributeData.put(attribute.semantic(), attribute.data());
+            Map<ModelAttributeSemantic, ByteBuffer> attributeData = new HashMap<>();
+            for (ModelVertexAttribute attribute : attributes.values()) {
+                attributeData.put(attribute.semantic(), attribute.readOnlyData().order(ByteOrder.LITTLE_ENDIAN));
+            }
             for (int vertex = 0; vertex < primitive.vertexCount(); vertex++) {
                 for (ModelVertexLayoutElement element : layout.elements()) {
                     ModelAttributeSemantic sourceSemantic = projection.sources().get(element.semantic());
                     ModelVertexAttribute source = attributes.get(sourceSemantic);
                     if (source == null) throw new IllegalArgumentException("primitive does not match its GPU vertex layout");
-                    writeElement(vertices, source, attributeData.get(sourceSemantic), vertex);
+                    vertexCursor = writeElement(vertices, vertexCursor, source,
+                            attributeData.get(sourceSemantic), vertex);
                 }
-                for (int padding = rawStride; padding < stride; padding++) vertices.write(0);
+                vertexCursor += stride - rawStride;
             }
 
             int firstIndex = indexCount;
             for (int i = 0; i < primitive.indices().indexCount(); i++) {
                 long adjusted = Math.addExact(primitive.indices().indexAt(i), Integer.toUnsignedLong(vertexBase));
                 if (adjusted > 0xFFFF_FFFFL) throw new IllegalArgumentException("combined model index exceeds uint32");
-                writeUint32(indices, adjusted);
+                indexCursor = writeUint32(indices, indexCursor, adjusted);
             }
             vertexCount = Math.addExact(vertexCount, primitive.vertexCount());
             indexCount = Math.addExact(indexCount, primitive.indices().indexCount());
@@ -181,19 +219,25 @@ public final class ModelGpuUploadPlanner {
         }
 
         private ModelGpuLayoutGroupPlan build() {
-            return new ModelGpuLayoutGroupPlan(layout, stride, vertexCount, vertices.toByteArray(), indices.toByteArray());
+            if (vertexCursor != vertices.length || indexCursor != indices.length) {
+                throw new IllegalStateException("layout group capacity does not match packed data");
+            }
+            return new ModelGpuLayoutGroupPlan(layout, stride, vertexCount, vertices, indices);
         }
 
-        private static void writeElement(ByteArrayOutputStream output, ModelVertexAttribute source,
-                                         byte[] sourceData, int vertex) {
+        private static int writeElement(byte[] output, int cursor, ModelVertexAttribute source,
+                                        ByteBuffer sourceData, int vertex) {
             int sourceElementSize = Math.multiplyExact(source.componentType().byteSize(), source.componentCount());
             int offset = Math.multiplyExact(vertex, sourceElementSize);
             switch (source.semantic().kind()) {
-                case POSITION, TEXCOORD -> output.write(sourceData, offset, sourceElementSize);
+                case POSITION, TEXCOORD -> {
+                    sourceData.get(offset, output, cursor, sourceElementSize);
+                    cursor += sourceElementSize;
+                }
                 case NORMAL, TANGENT -> {
                     for (int component = 0; component < source.componentCount(); component++) {
                         float value = float32(sourceData, offset + component * 4);
-                        output.write((byte) Math.round(Math.max(-1.0F, Math.min(1.0F, value)) * 127.0F));
+                        output[cursor++] = (byte) Math.round(Math.max(-1.0F, Math.min(1.0F, value)) * 127.0F);
                     }
                 }
                 case COLOR -> {
@@ -201,13 +245,13 @@ public final class ModelGpuUploadPlanner {
                         float value = component < source.componentCount()
                                 ? float32(sourceData, offset + component * 4)
                                 : 1.0F;
-                        output.write(Math.round(Math.max(0.0F, Math.min(1.0F, value)) * 255.0F));
+                        output[cursor++] = (byte) Math.round(Math.max(0.0F, Math.min(1.0F, value)) * 255.0F);
                     }
                 }
                 case JOINTS -> {
                     for (int component = 0; component < 4; component++) {
-                        output.writeBytes(floatBytes(unsignedComponent(sourceData,
-                                offset + component * source.componentType().byteSize(), source.componentType())));
+                        cursor = writeFloat(output, cursor, unsignedComponent(sourceData,
+                                offset + component * source.componentType().byteSize(), source.componentType()));
                     }
                 }
                 case WEIGHTS -> {
@@ -216,32 +260,35 @@ public final class ModelGpuUploadPlanner {
                                 ? float32(sourceData, offset + component * Float.BYTES)
                                 : normalizedUnsignedComponent(sourceData,
                                 offset + component * source.componentType().byteSize(), source.componentType());
-                        output.writeBytes(floatBytes(value));
+                        cursor = writeFloat(output, cursor, value);
                     }
                 }
             }
+            return cursor;
         }
 
-        private static float float32(byte[] data, int offset) {
-            int bits = (data[offset] & 0xFF) | (data[offset + 1] & 0xFF) << 8
-                    | (data[offset + 2] & 0xFF) << 16 | data[offset + 3] << 24;
-            return Float.intBitsToFloat(bits);
+        private static float float32(ByteBuffer data, int offset) {
+            return data.getFloat(offset);
         }
 
-        private static byte[] floatBytes(float value) {
+        private static int writeFloat(byte[] output, int cursor, float value) {
             int bits = Float.floatToRawIntBits(value);
-            return new byte[]{(byte) bits, (byte) (bits >>> 8), (byte) (bits >>> 16), (byte) (bits >>> 24)};
+            output[cursor++] = (byte) bits;
+            output[cursor++] = (byte) (bits >>> 8);
+            output[cursor++] = (byte) (bits >>> 16);
+            output[cursor++] = (byte) (bits >>> 24);
+            return cursor;
         }
 
-        private static long unsignedComponent(byte[] data, int offset, ModelComponentType type) {
+        private static long unsignedComponent(ByteBuffer data, int offset, ModelComponentType type) {
             return switch (type) {
-                case UINT8 -> Byte.toUnsignedLong(data[offset]);
-                case UINT16 -> Integer.toUnsignedLong((data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8));
+                case UINT8 -> Byte.toUnsignedLong(data.get(offset));
+                case UINT16 -> Short.toUnsignedLong(data.getShort(offset));
                 default -> throw new IllegalArgumentException("joint indices must be unsigned integers");
             };
         }
 
-        private static float normalizedUnsignedComponent(byte[] data, int offset, ModelComponentType type) {
+        private static float normalizedUnsignedComponent(ByteBuffer data, int offset, ModelComponentType type) {
             return switch (type) {
                 case UINT8 -> unsignedComponent(data, offset, type) / 255.0F;
                 case UINT16 -> unsignedComponent(data, offset, type) / 65535.0F;
@@ -253,11 +300,12 @@ public final class ModelGpuUploadPlanner {
             return Math.addExact(value, 3) & ~3;
         }
 
-        private static void writeUint32(ByteArrayOutputStream output, long value) {
-            output.write((int) value & 0xFF);
-            output.write((int) (value >>> 8) & 0xFF);
-            output.write((int) (value >>> 16) & 0xFF);
-            output.write((int) (value >>> 24) & 0xFF);
+        private static int writeUint32(byte[] output, int cursor, long value) {
+            output[cursor++] = (byte) value;
+            output[cursor++] = (byte) (value >>> 8);
+            output[cursor++] = (byte) (value >>> 16);
+            output[cursor++] = (byte) (value >>> 24);
+            return cursor;
         }
     }
 }

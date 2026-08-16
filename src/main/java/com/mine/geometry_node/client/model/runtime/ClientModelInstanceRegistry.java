@@ -11,6 +11,8 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
     private final RenderThreadDispatcher renderThread;
     private final Map<ModelInstanceId, Entry> instances = new HashMap<>();
     private long generation;
+    private List<ReadyInstance> cachedReadySnapshot = List.of();
+    private boolean readySnapshotDirty = true;
 
     public ClientModelInstanceRegistry(ModelResourceCoordinator resources, RenderThreadDispatcher renderThread) {
         this.resources = Objects.requireNonNull(resources, "resources");
@@ -35,6 +37,7 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
         token = ++generation;
         lease = resources.acquire(request);
         instances.put(id, new Entry(token, request.path(), state, lease));
+        invalidateReadySnapshot();
         lease.resource().whenComplete((resource, failure) ->
                 renderThread.execute(() -> finish(id, token, resource, failure)));
     }
@@ -46,6 +49,7 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
         Objects.requireNonNull(state, "state");
         if (entry.resource != null && !renderable(entry.resource.metadata(), state.placement())) return false;
         entry.state = state;
+        invalidateReadySnapshot();
         return true;
     }
 
@@ -77,10 +81,15 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
 
     public List<ReadyInstance> readySnapshot() {
         renderThread.assertRenderThread();
-        return instances.entrySet().stream()
-                .filter(item -> item.getValue().resource != null)
-                .map(item -> new ReadyInstance(item.getKey(), item.getValue().state, item.getValue().resource, item.getValue().pose))
-                .sorted(Comparator.comparing(ReadyInstance::id)).toList();
+        if (readySnapshotDirty) {
+            cachedReadySnapshot = instances.entrySet().stream()
+                    .filter(item -> item.getValue().resource != null)
+                    .map(item -> new ReadyInstance(item.getKey(), item.getValue().state,
+                            item.getValue().resource, item.getValue().pose))
+                    .sorted(Comparator.comparing(ReadyInstance::id)).toList();
+            readySnapshotDirty = false;
+        }
+        return cachedReadySnapshot;
     }
 
     public InstanceStatus status(ModelInstanceId id) {
@@ -104,15 +113,53 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
 
     public int size() { renderThread.assertRenderThread(); return instances.size(); }
 
+    public Diagnostics diagnostics() {
+        renderThread.assertRenderThread();
+        int loading = 0, ready = 0, failed = 0, visible = 0;
+        Set<LoadedModelResource> resources = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Entry entry : instances.values()) {
+            switch (entry.loadState) {
+                case LOADING -> loading++;
+                case READY -> {
+                    ready++;
+                    if (entry.state.visible()) visible++;
+                    if (entry.resource != null) resources.add(entry.resource);
+                }
+                case FAILED -> failed++;
+                case CLOSED -> { }
+            }
+        }
+        long sourceBytes = 0, vertices = 0, triangles = 0;
+        for (LoadedModelResource resource : resources) {
+            sourceBytes = saturatedAdd(sourceBytes, resource.sourceBytes());
+            triangles = saturatedAdd(triangles, resource.triangles());
+            for (var mesh : resource.definition().meshes()) {
+                for (var primitive : mesh.primitives()) {
+                    vertices = saturatedAdd(vertices, primitive.vertexCount());
+                }
+            }
+        }
+        return new Diagnostics(instances.size(), loading, ready, failed, visible,
+                resources.size(), sourceBytes, vertices, triangles);
+    }
+
     public void clear() {
         renderThread.assertRenderThread();
         List<Entry> removed = List.copyOf(instances.values());
         instances.clear();
         generation++;
+        invalidateReadySnapshot();
         removed.forEach(entry -> { if (entry.lease != null) entry.lease.close(); });
     }
 
     @Override public void close() { clear(); }
+
+    private static long saturatedAdd(long left, long right) {
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+    }
+
+    public record Diagnostics(int instances, int loading, int ready, int failed, int visible,
+                              int resources, long sourceBytes, long vertices, long triangles) {}
 
     private void publishInspectionFailure(ModelInstanceId id, Path path, ModelInstanceState state, Exception failure) {
         removeLocked(id);
@@ -120,6 +167,7 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
         entry.loadState = ModelLoadState.FAILED;
         entry.failure = rootMessage(failure);
         instances.put(id, entry);
+        invalidateReadySnapshot();
     }
 
     private void finish(ModelInstanceId id, long token, LoadedModelResource resource, Throwable failure) {
@@ -140,6 +188,7 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
                 entry.resource = resource;
                 entry.pose = new ModelInstancePose(resource.definition());
                 entry.loadState = ModelLoadState.READY;
+                invalidateReadySnapshot();
             }
         }
     }
@@ -156,8 +205,13 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
 
     private void removeLocked(ModelInstanceId id) {
         Entry removed = instances.remove(id);
-        if (removed != null && removed.lease != null) removed.lease.close();
+        if (removed != null) {
+            invalidateReadySnapshot();
+            if (removed.lease != null) removed.lease.close();
+        }
     }
+
+    private void invalidateReadySnapshot() { readySnapshotDirty = true; }
 
     private static String rootMessage(Throwable throwable) {
         Throwable root = throwable;

@@ -18,6 +18,7 @@ import com.mine.geometry_node.client.model.render.backend.host.entity.HostEntity
 import com.mine.geometry_node.client.model.render.backend.host.iris.shadow.IrisShadowAdapter;
 import com.mine.geometry_node.client.model.runtime.ClientModelRuntime;
 import com.mine.geometry_node.client.model.runtime.ModelResourceReloadListener;
+import com.mine.geometry_node.client.model.debug.ModelDebugHud;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
@@ -142,6 +143,10 @@ public class GeometryNodeClient {
         event.registerAboveAll(
                 Identifier.fromNamespaceAndPath(GeometryNode.MODID, "markers"),
                 MarkerHudRenderer::render
+        );
+        event.registerAboveAll(
+                Identifier.fromNamespaceAndPath(GeometryNode.MODID, "model_debug"),
+                ModelDebugHud::render
         );
     }
 

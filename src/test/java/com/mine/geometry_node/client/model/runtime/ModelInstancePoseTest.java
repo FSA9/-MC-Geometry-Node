@@ -65,6 +65,21 @@ class ModelInstancePoseTest {
     }
 
     @Test
+    void modelBoundsAreCachedUntilPoseRevisionChanges() {
+        ModelInstancePose pose = new ModelInstancePose(hierarchyDefinition());
+        ModelBounds resting = pose.modelBounds();
+        assertSame(resting, pose.modelBounds());
+
+        pose.select(0);
+        pose.seek(0.5F);
+        ModelBounds animated = pose.modelBounds();
+
+        assertNotSame(resting, animated);
+        assertSame(animated, pose.modelBounds());
+        assertEquals(2.0, animated.min().x(), 1.0E-5);
+    }
+
+    @Test
     void skinPaletteIsMeshLocalAndIndependentPerInstance() {
         ModelDefinition base = definition(List.of(new ModelAnimation("jointMove",
                 List.of(new ModelAnimationSampler(ModelAnimationInterpolation.LINEAR, 3,
@@ -82,9 +97,15 @@ class ModelInstancePoseTest {
         ModelInstancePose resting = new ModelInstancePose(definition);
         animated.select(0); animated.seek(0.5F);
 
-        assertEquals(1.0F, animated.skinPalette(1)[12], 1.0E-5F);
+        float[] animatedPalette = animated.skinPalette(1);
+        assertEquals(1.0F, animatedPalette[12], 1.0E-5F);
+        assertSame(animatedPalette, animated.skinPalette(1));
         assertEquals(0.0F, resting.skinPalette(1)[12], 1.0E-5F);
         assertNotEquals(animated.revision(), resting.revision());
+
+        animated.seek(1.0F);
+        assertNotSame(animatedPalette, animated.skinPalette(1));
+        assertEquals(2.0F, animated.skinPalette(1)[12], 1.0E-5F);
     }
 
     private static ModelAnimation animation(ModelAnimationInterpolation interpolation) {

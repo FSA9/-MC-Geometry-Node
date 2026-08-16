@@ -1,6 +1,11 @@
 package com.mine.geometry_node.client.model.runtime;
 
 import com.mine.geometry_node.core.engine.system.model.domain.*;
+import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
+import org.joml.Quaternionfc;
+import org.joml.Vector3f;
+import org.joml.Vector3fc;
 
 public final class ModelInstanceBounds {
     private ModelInstanceBounds() {}
@@ -26,5 +31,23 @@ public final class ModelInstanceBounds {
             maxX = java.lang.Math.max(maxX, px); maxY = java.lang.Math.max(maxY, py); maxZ = java.lang.Math.max(maxZ, pz);
         }
         return new ModelWorldBounds(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    public static ModelWorldBounds transform(ModelBounds bounds, Matrix4fc nodeWorld,
+                                             double worldX, double worldY, double worldZ,
+                                             Quaternionfc rotation, Vector3fc scale) {
+        Matrix4f transform = new Matrix4f().rotate(rotation).scale(scale).mul(nodeWorld);
+        Vector3f min = new Vector3f(Float.POSITIVE_INFINITY);
+        Vector3f max = new Vector3f(Float.NEGATIVE_INFINITY);
+        for (int corner = 0; corner < 8; corner++) {
+            Vector3f point = transform.transformPosition(new Vector3f(
+                    (float) ((corner & 1) == 0 ? bounds.min().x() : bounds.max().x()),
+                    (float) ((corner & 2) == 0 ? bounds.min().y() : bounds.max().y()),
+                    (float) ((corner & 4) == 0 ? bounds.min().z() : bounds.max().z())));
+            min.min(point);
+            max.max(point);
+        }
+        return new ModelWorldBounds(worldX + min.x, worldY + min.y, worldZ + min.z,
+                worldX + max.x, worldY + max.y, worldZ + max.z);
     }
 }

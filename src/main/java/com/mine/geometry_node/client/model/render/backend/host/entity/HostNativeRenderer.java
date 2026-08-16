@@ -5,7 +5,6 @@ import com.mine.geometry_node.client.model.gpu.DecodedModelImage;
 import com.mine.geometry_node.client.model.gpu.minecraft.NativeImageModelDecoder;
 import com.mine.geometry_node.client.model.render.backend.host.material.*;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
-import com.mine.geometry_node.client.model.render.backend.host.geometry.HostGeometryProjector;
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.IrisLabPbrProjector;
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.LabPbrProjectionEncoder;
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.ModelProjectorCapability;
@@ -20,6 +19,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.resources.Identifier;
@@ -36,12 +36,7 @@ import java.util.*;
 public final class HostNativeRenderer {
     private static final int FULL_BRIGHT = 15728880;
     private static final NativeImageModelDecoder IMAGE_DECODER = new NativeImageModelDecoder();
-    private static final Map<GeometryKey, HostEntityGeometry> GEOMETRY = new HashMap<>();
-    private static final Set<GeometryKey> FAILED_GEOMETRY = new HashSet<>();
-    private static final Map<TextureKey, CompatibilityTexture> TEXTURES = new HashMap<>();
-    private static final Set<TextureKey> FAILED_TEXTURES = new HashSet<>();
-    private static final Set<TextureKey> LOGGED_RUNTIME_TEXTURE_FAILURES = new HashSet<>();
-    private static final Set<String> LOGGED_VERTEX_BUDGET_FAILURES = new HashSet<>();
+    private static final Object VERTEX_BUDGET_DIAGNOSTIC = new Object();
     private static long nextTextureId;
     private static ModelProjectorCapability lastProjectorCapability;
     private static Set<ModelCompatibilityLoss> lastLosses = Set.of();
@@ -54,11 +49,10 @@ public final class HostNativeRenderer {
         ClientModelRuntime runtime = ClientModelRuntime.INSTANCE;
         List<ClientModelInstanceRegistry.ReadyInstance> ready = runtime.instances().readySnapshot();
         if (ready.isEmpty()) {
-            prune(ready);
             lastLosses = Set.of();
             ModelIntegrationController.reportCompatibility(Set.of(), ModelIntegrationVerification.NOT_APPLICABLE,
                     List.of(), Map.of());
-            runtime.recordFrame(0, 0, 0, System.nanoTime() - started, -1);
+            runtime.recordFrame(0, 0, 0, System.nanoTime() - started, -1, 0, 0, 0);
             return;
         }
         IrisLabPbrProjector.Snapshot projectorSnapshot = IrisLabPbrProjector.snapshot(
@@ -71,7 +65,9 @@ public final class HostNativeRenderer {
                 : new IrisEntityTranslucency.Snapshot(false, "POLICY_" + parameters.transparencyPolicy());
         boolean preserveBlend = parameters.preservesBlend(translucency.dedicatedProgram());
         synchronizeCapability(projector);
-        Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
+        net.minecraft.client.Camera mainCamera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        Vec3 camera = mainCamera.position();
+        Frustum frustum = mainCamera.getCullFrustum();
         ModelDimensionId dimension = new ModelDimensionId(Minecraft.getInstance().level.dimension().identifier().toString());
         EnumSet<ModelCompatibilityLoss> frameLosses = EnumSet.noneOf(ModelCompatibilityLoss.class);
         EnumMap<ModelDrawRejection, Integer> frameRejections = new EnumMap<>(ModelDrawRejection.class);
@@ -88,27 +84,43 @@ public final class HostNativeRenderer {
         FrameStatistics statistics = new FrameStatistics();
         HostVertexBudget vertexBudget = new HostVertexBudget();
         List<TranslucentSubmission> translucentSubmissions = new ArrayList<>();
-        prune(ready);
         for (ClientModelInstanceRegistry.ReadyInstance instance : ready) {
             if (!instance.state().visible() || !dimension.equals(instance.state().dimension())) continue;
-            if (instance.state().maxDistance() > 0 && ModelRenderBounds.worldBounds(
-                    instance.pose().modelBounds(), instance.state().placement()).distanceToSqr(camera)
+            net.minecraft.world.phys.AABB bounds = ModelRenderBounds.worldBounds(
+                    instance.pose().modelBounds(), instance.state().placement());
+            if (instance.state().maxDistance() > 0 && bounds.distanceToSqr(camera)
                     > instance.state().maxDistance() * instance.state().maxDistance()) continue;
-            long requiredVertices = vertexBudget.required(instance.resource().definition(),
-                    instance.resource().metadata());
-            if (!vertexBudget.reserve(requiredVertices)) {
+            boolean deforms = !instance.resource().definition().skins().isEmpty();
+            if (!deforms && frustum != null && !frustum.isVisible(bounds)) continue;
+            Optional<HostPreparedArtifact> prepared = instance.resource().existingBackendArtifact(
+                    HostArtifactRepository.KEY);
+            long requiredVertices = prepared.map(artifact -> artifact.drawPlan().requiredVertices())
+                    .orElseGet(() -> HostDrawPlan.requiredVertices(instance.resource().definition(),
+                            instance.resource().metadata()));
+            if (prepared.isEmpty() && !vertexBudget.withinHardLimit(requiredVertices)) {
                 reject(frameRejections, ModelDrawRejection.HOST_VERTEX_BUDGET_EXCEEDED);
                 String asset = instance.resource().asset().cacheIdentity();
-                if (LOGGED_VERTEX_BUDGET_FAILURES.add(asset)) {
+                if (instance.resource().reportDiagnosticOnce(VERTEX_BUDGET_DIAGNOSTIC)) {
                     GeometryNode.LOGGER.warn("Skipping HOST_NATIVE instance {}: requires {} emitted vertices; "
                                     + "per-frame limit is {}", asset, requiredVertices,
                             HostVertexBudget.MAX_VERTICES_PER_FRAME);
                 }
                 continue;
             }
-            submitInstance(root, collector, camera, instance, frameLosses, frameRejections,
+            HostPreparedArtifact artifact = prepared.orElseGet(() -> instance.resource().backendArtifact(
+                    HostArtifactRepository.KEY,
+                    () -> HostArtifactRepository.INSTANCE.acquire(instance.resource().definition(),
+                            instance.resource().metadata())).orElse(null));
+            if (artifact == null) {
+                instance.resource().backendArtifactFailureForReport(HostArtifactRepository.KEY).ifPresent(failure ->
+                        GeometryNode.LOGGER.warn("HOST artifact preparation failed for {}",
+                                instance.resource().asset().cacheIdentity(), failure));
+                runtimeFaults.add("host-artifact-preparation-failed");
+                continue;
+            }
+            submitInstance(root, collector, camera, instance, artifact, frameLosses, frameRejections,
                     runtimeFaults, statistics, projector, preserveBlend,
-                    translucentSubmissions);
+                    translucentSubmissions, frustum, vertexBudget);
         }
         submitTranslucent(root, collector, translucentSubmissions);
         ModelIntegrationVerification verification = frameLosses.remove(ModelCompatibilityLoss.PROJECTOR_HOLDER_PENDING)
@@ -133,18 +145,15 @@ public final class HostNativeRenderer {
         ModelIntegrationController.reportCompatibility(projector.profile(), capabilities, lastLosses,
                 verification, runtimeFaults, frameRejections);
         runtime.recordFrame(statistics.drawCalls, statistics.triangles, statistics.singularTransformSkips,
-                System.nanoTime() - started, -1);
+                System.nanoTime() - started, -1, statistics.candidateDraws,
+                statistics.culledDraws, statistics.submittedVertices);
     }
 
     public static Set<ModelCompatibilityLoss> lastLosses() { return lastLosses; }
 
     public static void clear() {
-        var manager = Minecraft.getInstance().getTextureManager();
-        TEXTURES.values().forEach(texture -> release(manager, texture));
-        TEXTURES.clear(); FAILED_TEXTURES.clear(); LOGGED_RUNTIME_TEXTURE_FAILURES.clear();
-        LOGGED_VERTEX_BUDGET_FAILURES.clear();
-        GEOMETRY.clear(); FAILED_GEOMETRY.clear();
-        nextTextureId = 0; lastProjectorCapability = null; lastLosses = Set.of();
+        HostArtifactRepository.INSTANCE.invalidateBindings();
+        lastProjectorCapability = null; lastLosses = Set.of();
         IrisEntityTranslucency.clear();
     }
 
@@ -157,56 +166,47 @@ public final class HostNativeRenderer {
             lastProjectorCapability = capability;
             return;
         }
-        var manager = Minecraft.getInstance().getTextureManager();
-        TEXTURES.values().forEach(texture -> release(manager, texture));
-        TEXTURES.clear();
-        FAILED_TEXTURES.clear();
-        LOGGED_RUNTIME_TEXTURE_FAILURES.clear();
+        HostArtifactRepository.INSTANCE.invalidateBindings();
         lastProjectorCapability = capability;
-    }
-
-    private static void prune(List<ClientModelInstanceRegistry.ReadyInstance> ready) {
-        Set<String> assets = new HashSet<>();
-        for (ClientModelInstanceRegistry.ReadyInstance instance : ready) {
-            assets.add(instance.resource().asset().cacheIdentity());
-        }
-        GEOMETRY.keySet().removeIf(key -> !assets.contains(key.asset()));
-        FAILED_GEOMETRY.removeIf(key -> !assets.contains(key.asset()));
-        FAILED_TEXTURES.removeIf(key -> !assets.contains(key.asset()));
-        LOGGED_RUNTIME_TEXTURE_FAILURES.removeIf(key -> !assets.contains(key.asset()));
-        LOGGED_VERTEX_BUDGET_FAILURES.removeIf(asset -> !assets.contains(asset));
-        var manager = Minecraft.getInstance().getTextureManager();
-        Iterator<Map.Entry<TextureKey, CompatibilityTexture>> iterator = TEXTURES.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<TextureKey, CompatibilityTexture> entry = iterator.next();
-            if (!assets.contains(entry.getKey().asset())) {
-                release(manager, entry.getValue());
-                iterator.remove();
-            }
-        }
     }
 
     private static void submitInstance(PoseStack root, SubmitNodeCollector collector, Vec3 camera,
                                        ClientModelInstanceRegistry.ReadyInstance instance,
+                                       HostPreparedArtifact artifact,
                                        EnumSet<ModelCompatibilityLoss> losses,
                                        EnumMap<ModelDrawRejection, Integer> rejections,
                                        List<String> runtimeFaults, FrameStatistics statistics,
                                        ModelProjectorCapability projector, boolean preserveBlend,
-                                       List<TranslucentSubmission> translucentSubmissions) {
+                                       List<TranslucentSubmission> translucentSubmissions,
+                                       Frustum frustum, HostVertexBudget vertexBudget) {
         LoadedModelResource loaded = instance.resource();
-        ModelDefinition definition = loaded.definition();
         ModelInstancePlacement placement = instance.state().placement();
-        for (int nodeIndex = 0; nodeIndex < definition.nodes().size(); nodeIndex++) {
-            ModelNode node = definition.nodes().get(nodeIndex);
-            if (node.meshIndex() < 0 || !loaded.metadata().nodeVisible(nodeIndex)
-                    || !instance.state().nodeState().visible(nodeIndex)) continue;
-            ModelMesh mesh = definition.meshes().get(node.meshIndex());
-            for (int primitiveIndex = 0; primitiveIndex < mesh.primitives().size(); primitiveIndex++) {
-                ModelPrimitive primitive = mesh.primitives().get(primitiveIndex);
-                StaticModelMaterial material = loaded.metadata().material(primitive.materialIndex());
+        List<VisibleDraw> visibleDraws = visibleDraws(instance, artifact.drawPlan(), placement, frustum, statistics);
+        if (visibleDraws.isEmpty()) return;
+        long visibleVertices = 0;
+        for (VisibleDraw visible : visibleDraws) {
+            long triangles = visible.draw().triangleCount();
+            visibleVertices = triangles > (Long.MAX_VALUE - visibleVertices) / 4
+                    ? Long.MAX_VALUE : visibleVertices + triangles * 4;
+        }
+        if (!vertexBudget.reserve(visibleVertices)) {
+            reject(rejections, ModelDrawRejection.HOST_VERTEX_BUDGET_EXCEEDED);
+            if (loaded.reportDiagnosticOnce(VERTEX_BUDGET_DIAGNOSTIC)) {
+                GeometryNode.LOGGER.warn("Skipping HOST_NATIVE instance {}: visible draws require {} emitted "
+                                + "vertices; remaining per-frame budget is insufficient",
+                        loaded.asset().cacheIdentity(), visibleVertices);
+            }
+            return;
+        }
+        statistics.submittedVertices += visibleVertices;
+        for (VisibleDraw visible : visibleDraws) {
+                HostDrawPlan.Draw draw = visible.draw();
+                int nodeIndex = draw.nodeIndex();
+                int primitiveIndex = draw.primitiveIndex();
+                if (!instance.state().nodeState().visible(nodeIndex)) continue;
+                StaticModelMaterial material = draw.material();
                 boolean labPbr = projector.auxiliaryEnabled();
-                HostMaterialProjection projection = HostMaterialAnalyzer.analyze(
-                        projector.profile(), material, node.skinIndex() >= 0);
+                HostMaterialProjection projection = draw.projection(projector.profile());
                 losses.addAll(projection.losses());
                 if (material.alphaMode() == ModelAlphaMode.BLEND || placement.alpha() < 0.999F) {
                     losses.add(ModelCompatibilityLoss.BLEND_SHADOW_APPROXIMATED);
@@ -221,40 +221,32 @@ public final class HostNativeRenderer {
                     reject(rejections, ModelDrawRejection.UNSUPPORTED_SKINNING);
                     continue;
                 }
-                StaticModelTexture coordinateSource = coordinateSource(material);
-                GeometryKey key = new GeometryKey(loaded.asset().cacheIdentity(), node.meshIndex(), primitiveIndex,
-                        coordinateSource.texCoord(), coordinateSource.transform());
-                if (FAILED_GEOMETRY.contains(key)) {
+                HostEntityGeometry geometry = draw.geometry();
+                if (geometry == null) {
                     reject(rejections, ModelDrawRejection.GEOMETRY_PROJECTION_FAILED);
-                    continue;
-                }
-                HostEntityGeometry geometry;
-                try {
-                    geometry = GEOMETRY.computeIfAbsent(key, ignored -> HostGeometryProjector.project(primitive, coordinateSource));
-                } catch (RuntimeException exception) {
-                    reject(rejections, ModelDrawRejection.GEOMETRY_PROJECTION_FAILED);
-                    runtimeFaults.add("geometry-projection:" + exception.getClass().getSimpleName());
-                    if (FAILED_GEOMETRY.add(key)) {
-                        GeometryNode.LOGGER.warn("Skipping compatibility draw whose geometry could not be projected: {}",
-                                loaded.asset().cacheIdentity(), exception);
+                    runtimeFaults.add("geometry-projection:" + draw.geometryFailure());
+                    String failureKey = draw.meshIndex() + ":" + primitiveIndex;
+                    if (artifact.loggedGeometryFailures.add(failureKey)) {
+                        GeometryNode.LOGGER.warn("Skipping compatibility draw whose geometry could not be projected: {} {}",
+                                loaded.asset().cacheIdentity(), draw.geometryFailure());
                     }
                     continue;
                 }
-                CompatibilityTexture texture;
+                HostPreparedArtifact.CompatibilityTexture texture;
                 try {
-                    texture = texture(loaded, material, labPbr, opaqueFallback);
+                    texture = texture(artifact, loaded, material, labPbr, opaqueFallback);
                 } catch (TextureProjectionFailure exception) {
-                    TextureKey failed = textureKey(loaded, material, labPbr, opaqueFallback);
+                    HostPreparedArtifact.TextureKey failed = textureKey(material, labPbr, opaqueFallback);
                     if (exception.cacheForAssetLifetime()) {
                         runtimeFaults.add("texture-decode:" + exception.getClass().getSimpleName());
-                        if (FAILED_TEXTURES.add(failed)) {
+                        if (artifact.failedTextures.add(failed)) {
                             GeometryNode.LOGGER.warn("Skipping compatibility draw whose base-color asset is invalid: {}",
                                     loaded.asset().cacheIdentity(), exception);
                         }
                     } else {
                         runtimeFaults.add("texture-projection:" + exception.getClass().getSimpleName());
                         losses.add(ModelCompatibilityLoss.PROJECTOR_RUNTIME_UNAVAILABLE);
-                        if (LOGGED_RUNTIME_TEXTURE_FAILURES.add(failed)) {
+                        if (artifact.loggedRuntimeTextureFailures.add(failed)) {
                             GeometryNode.LOGGER.warn("Compatibility texture runtime projection failed; this generation may retry: {}",
                                     loaded.asset().cacheIdentity(), exception);
                         }
@@ -270,7 +262,7 @@ public final class HostNativeRenderer {
                 Matrix4f transform = new Matrix4f().translate(
                         (float) (placement.position().x - camera.x), (float) (placement.position().y - camera.y),
                         (float) (placement.position().z - camera.z)).rotate(placement.rotation()).scale(placement.scale())
-                        .mul(instance.pose().worldMatrix(nodeIndex));
+                        .mul(visible.nodeWorld());
                 float determinant = transform.determinant3x3();
                 if (!Float.isFinite(determinant) || Math.abs(determinant) <= 1.0E-8F) {
                     reject(rejections, ModelDrawRejection.SINGULAR_TRANSFORM);
@@ -278,8 +270,7 @@ public final class HostNativeRenderer {
                     continue;
                 }
                 boolean mirrored = determinant < 0;
-                Vector3f localCenter = HostGeometryProjector.boundsCenter(primitive.bounds());
-                Vector3f drawPosition = transform.transformPosition(localCenter);
+                Vector3f drawPosition = transform.transformPosition(draw.localCenter());
                 Vector3d worldPosition = new Vector3d(camera.x + drawPosition.x,
                         camera.y + drawPosition.y, camera.z + drawPosition.z);
                 int light = placement.fullBright() ? FULL_BRIGHT : LevelRenderer.getLightCoords(
@@ -300,9 +291,43 @@ public final class HostNativeRenderer {
                             red, green, blue, alpha, light, mirrored);
                 }
                 statistics.drawCalls++;
-                statistics.triangles += geometry.triangleCount();
-            }
+                statistics.triangles += draw.triangleCount();
         }
+    }
+
+    private static List<VisibleDraw> visibleDraws(ClientModelInstanceRegistry.ReadyInstance instance,
+                                                  HostDrawPlan plan, ModelInstancePlacement placement,
+                                                  Frustum frustum, FrameStatistics statistics) {
+        List<VisibleDraw> result = new ArrayList<>();
+        int currentNode = -1;
+        boolean nodeVisible = false;
+        boolean skinned = false;
+        Matrix4f nodeWorld = null;
+        for (HostDrawPlan.Draw draw : plan.draws()) {
+            statistics.candidateDraws++;
+            if (draw.nodeIndex() != currentNode) {
+                currentNode = draw.nodeIndex();
+                nodeVisible = instance.state().nodeState().visible(currentNode);
+                skinned = instance.resource().definition().nodes().get(currentNode).skinIndex() >= 0;
+                nodeWorld = nodeVisible ? instance.pose().worldMatrix(currentNode) : null;
+                if (nodeVisible && !skinned && frustum != null) {
+                    ModelBounds nodeBounds = instance.pose().nodeWorldBounds(currentNode);
+                    nodeVisible = nodeBounds == null
+                            || frustum.isVisible(ModelRenderBounds.worldBounds(nodeBounds, placement));
+                }
+            }
+            if (!nodeVisible) {
+                statistics.culledDraws++;
+                continue;
+            }
+            if (!skinned && frustum != null
+                    && !frustum.isVisible(ModelRenderBounds.worldBounds(draw.localBounds(), nodeWorld, placement))) {
+                statistics.culledDraws++;
+                continue;
+            }
+            result.add(new VisibleDraw(draw, nodeWorld));
+        }
+        return result;
     }
 
     private static void submitTranslucent(PoseStack root, SubmitNodeCollector collector,
@@ -343,13 +368,14 @@ public final class HostNativeRenderer {
         return RenderTypes.entityCutoutCull(texture);
     }
 
-    private static CompatibilityTexture texture(LoadedModelResource loaded, StaticModelMaterial material,
+    private static HostPreparedArtifact.CompatibilityTexture texture(HostPreparedArtifact artifact,
+                                                LoadedModelResource loaded, StaticModelMaterial material,
                                                 boolean labPbr, boolean opaqueFallback) {
-        TextureKey key = textureKey(loaded, material, labPbr, opaqueFallback);
-        if (FAILED_TEXTURES.contains(key)) {
+        HostPreparedArtifact.TextureKey key = textureKey(material, labPbr, opaqueFallback);
+        if (artifact.failedTextures.contains(key)) {
             throw TextureProjectionFailure.asset("compatibility base-color asset previously failed", null);
         }
-        return TEXTURES.computeIfAbsent(key, ignored -> {
+        return artifact.textures.computeIfAbsent(key, ignored -> {
             Identifier id = Identifier.fromNamespaceAndPath(GeometryNode.MODID,
                     "model_compat/texture_" + nextTextureId++);
             IrisLabPbrProjector.LabPbrAlbedoTexture dynamic = null;
@@ -425,7 +451,8 @@ public final class HostNativeRenderer {
                 Minecraft.getInstance().getTextureManager().register(id, dynamic);
                 registered = true;
                 if (key.labPbr() && !defaultMaterialFallback) IrisLabPbrProjector.afterAlbedoRegistration(dynamic);
-                return new CompatibilityTexture(id, dynamic, textureLosses, defaultMaterialFallback);
+                return new HostPreparedArtifact.CompatibilityTexture(id, dynamic, textureLosses,
+                        defaultMaterialFallback);
             } catch (TextureProjectionFailure exception) {
                 if (registered) Minecraft.getInstance().getTextureManager().release(id);
                 else if (dynamic != null) dynamic.close();
@@ -440,9 +467,9 @@ public final class HostNativeRenderer {
         });
     }
 
-    private static TextureKey textureKey(LoadedModelResource loaded, StaticModelMaterial material, boolean labPbr,
-                                         boolean opaqueFallback) {
-        return new TextureKey(loaded.asset().cacheIdentity(), material, labPbr, opaqueFallback);
+    private static HostPreparedArtifact.TextureKey textureKey(StaticModelMaterial material, boolean labPbr,
+                                                              boolean opaqueFallback) {
+        return new HostPreparedArtifact.TextureKey(material, labPbr, opaqueFallback);
     }
 
     private static NativeImage decode(LoadedModelResource loaded, StaticModelTexture texture, List<NativeImage> owned)
@@ -519,7 +546,6 @@ public final class HostNativeRenderer {
         return first != null ? first.getHeight() : second != null ? second.getHeight() : 1;
     }
 
-    private record GeometryKey(String asset, int mesh, int primitive, int uvSet, ModelTextureTransform transform) { }
     private record TranslucentSubmission(HostTransparentOrderKey orderKey,
                                          Matrix4f transform, RenderType renderType,
                                          HostEntityGeometry geometry, float red, float green, float blue, float alpha,
@@ -527,27 +553,14 @@ public final class HostNativeRenderer {
         private static final Comparator<TranslucentSubmission> ORDER =
                 Comparator.comparing(TranslucentSubmission::orderKey);
     }
-    private record TextureKey(String asset, StaticModelMaterial material, boolean labPbr, boolean opaqueFallback) {
-        ModelAlphaMode alphaMode() { return material.alphaMode(); }
-    }
-    private static void release(net.minecraft.client.renderer.texture.TextureManager manager,
-                                CompatibilityTexture texture) {
-        IrisLabPbrProjector.beforeAlbedoRelease(texture.texture());
-        manager.release(texture.identifier());
-    }
-
-    private record CompatibilityTexture(Identifier identifier,
-                                        IrisLabPbrProjector.LabPbrAlbedoTexture texture,
-                                        Set<ModelCompatibilityLoss> losses,
-                                        boolean defaultMaterialFallback) {
-        private CompatibilityTexture {
-            losses = Set.copyOf(losses);
-        }
-    }
+    private record VisibleDraw(HostDrawPlan.Draw draw, Matrix4f nodeWorld) {}
     private static final class FrameStatistics {
         private int drawCalls;
         private long triangles;
         private int singularTransformSkips;
+        private int candidateDraws;
+        private int culledDraws;
+        private long submittedVertices;
     }
 
 }

@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.model.runtime;
 import com.mine.geometry_node.client.model.gpu.ModelGpuPreparationService;
 import com.mine.geometry_node.client.model.gpu.ModelGpuRepository;
 import com.mine.geometry_node.client.model.gpu.minecraft.*;
+import com.mine.geometry_node.client.model.render.backend.host.entity.HostArtifactRepository;
 import com.mine.geometry_node.core.engine.system.model.importer.BuiltinModelImporters;
 import net.minecraft.client.Minecraft;
 
@@ -29,6 +30,9 @@ public final class ClientModelRuntime {
     private long lastGpuNanos;
     private long submittedTriangles;
     private int singularTransformSkips;
+    private int candidateDraws = -1;
+    private int culledDraws = -1;
+    private long submittedVertices = -1;
     private ModelFrameBenchmark benchmark;
 
     private ClientModelRuntime() { rebuild(); }
@@ -52,6 +56,11 @@ public final class ClientModelRuntime {
         return gpuRepository.diagnostics();
     }
 
+    public synchronized FrameDiagnostics frameDiagnostics() {
+        return new FrameDiagnostics(drawCalls, submittedTriangles, singularTransformSkips,
+                lastRenderCpuNanos, lastGpuNanos, candidateDraws, culledDraws, submittedVertices);
+    }
+
     public synchronized void beginBenchmark(String asset, int instances, int warmupFrames, int measuredFrames) {
         benchmark = new ModelFrameBenchmark(asset, instances, warmupFrames, measuredFrames);
     }
@@ -65,6 +74,7 @@ public final class ClientModelRuntime {
     public synchronized void resetGpuBackend() {
         instances.close();
         resources.close();
+        HostArtifactRepository.INSTANCE.close();
         gpuRepository.close();
         rebuild();
         drawCalls = 0;
@@ -72,6 +82,9 @@ public final class ClientModelRuntime {
         lastGpuNanos = 0;
         submittedTriangles = 0;
         singularTransformSkips = 0;
+        candidateDraws = -1;
+        culledDraws = -1;
+        submittedVertices = -1;
         benchmark = null;
     }
 
@@ -86,10 +99,19 @@ public final class ClientModelRuntime {
 
     public synchronized void recordFrame(int drawCalls, long submittedTriangles, int singularTransformSkips,
                                          long cpuNanos, long gpuNanos) {
+        recordFrame(drawCalls, submittedTriangles, singularTransformSkips, cpuNanos, gpuNanos, -1, -1, -1);
+    }
+
+    public synchronized void recordFrame(int drawCalls, long submittedTriangles, int singularTransformSkips,
+                                         long cpuNanos, long gpuNanos,
+                                         int candidateDraws, int culledDraws, long submittedVertices) {
         this.drawCalls = drawCalls;
         this.submittedTriangles = submittedTriangles;
         this.singularTransformSkips = singularTransformSkips;
         this.lastRenderCpuNanos = cpuNanos;
+        this.candidateDraws = candidateDraws;
+        this.culledDraws = culledDraws;
+        this.submittedVertices = submittedVertices;
         if (gpuNanos >= 0) {
             this.lastGpuNanos = gpuNanos;
             if (benchmark != null) benchmark.recordGpu(gpuNanos);
@@ -105,4 +127,8 @@ public final class ClientModelRuntime {
                 workers, BuiltinModelImporters.createRegistry(), preparation, gpuRepository));
         instances = new ClientModelInstanceRegistry(resources, MinecraftRenderThreadDispatcher.INSTANCE);
     }
+
+    public record FrameDiagnostics(int drawCalls, long submittedTriangles, int singularTransformSkips,
+                                   long renderCpuNanos, long gpuNanos,
+                                   int candidateDraws, int culledDraws, long submittedVertices) {}
 }

@@ -34,8 +34,22 @@ class ClientModelInstanceRegistryTest {
 
         List<ClientModelInstanceRegistry.ReadyInstance> ready = render.call(registry::readySnapshot);
         assertEquals(2, ready.size());
+        assertSame(ready, render.call(registry::readySnapshot));
         assertSame(ready.get(0).resource(), ready.get(1).resource());
         assertNotEquals(ready.get(0).state().nodeState().hiddenNodes(), ready.get(1).state().nodeState().hiddenNodes());
+        ClientModelInstanceRegistry.Diagnostics diagnostics = render.call(registry::diagnostics);
+        assertEquals(2, diagnostics.instances());
+        assertEquals(2, diagnostics.ready());
+        assertEquals(2, diagnostics.visible());
+        assertEquals(1, diagnostics.resources());
+        assertEquals(1, diagnostics.sourceBytes());
+        assertEquals(0, diagnostics.vertices());
+        assertEquals(0, diagnostics.triangles());
+
+        render.run(() -> registry.updateState(first, state(Set.of(3))));
+        List<ClientModelInstanceRegistry.ReadyInstance> updated = render.call(registry::readySnapshot);
+        assertNotSame(ready, updated);
+        assertEquals(Set.of(3), updated.get(0).state().nodeState().hiddenNodes());
 
         render.run(() -> registry.remove(first));
         assertFalse(shared.isReleased());

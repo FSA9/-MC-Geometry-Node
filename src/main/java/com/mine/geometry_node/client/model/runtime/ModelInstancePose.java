@@ -19,6 +19,10 @@ public final class ModelInstancePose {
     private final ModelBounds[] worldBounds;
     private final int[] parents;
     private final BitSet dirty;
+    private final BitSet sceneNodes;
+    private final Matrix4f[][] inverseBindMatrices;
+    private final float[][] skinPalettes;
+    private final long[] skinPaletteRevisions;
     private int animationIndex = -1;
     private ModelAnimationPlaybackState playbackState = ModelAnimationPlaybackState.STOPPED;
     private float timeSeconds;
@@ -27,6 +31,8 @@ public final class ModelInstancePose {
     private boolean reverse;
     private long lastTickNanos = Long.MIN_VALUE;
     private long revision;
+    private long modelBoundsRevision = Long.MIN_VALUE;
+    private ModelBounds cachedModelBounds;
 
     public ModelInstancePose(ModelDefinition definition) {
         this.definition = Objects.requireNonNull(definition, "definition");
@@ -38,6 +44,20 @@ public final class ModelInstancePose {
             for (int child : definition.nodes().get(parent).children()) parents[child] = parent;
         }
         dirty = new BitSet(count);
+        sceneNodes = new BitSet(count);
+        for (int root : definition.scenes().get(definition.defaultScene()).rootNodes()) collectSceneNodes(root, sceneNodes);
+        inverseBindMatrices = new Matrix4f[definition.skins().size()][];
+        for (int skinIndex = 0; skinIndex < definition.skins().size(); skinIndex++) {
+            ModelSkin skin = definition.skins().get(skinIndex);
+            inverseBindMatrices[skinIndex] = new Matrix4f[skin.inverseBindMatrices().size()];
+            for (int joint = 0; joint < skin.inverseBindMatrices().size(); joint++) {
+                inverseBindMatrices[skinIndex][joint] =
+                        new Matrix4f().set(skin.inverseBindMatrices().get(joint).elements());
+            }
+        }
+        skinPalettes = new float[count][];
+        skinPaletteRevisions = new long[count];
+        Arrays.fill(skinPaletteRevisions, Long.MIN_VALUE);
         resetPose();
     }
 
@@ -142,15 +162,16 @@ public final class ModelInstancePose {
     }
 
     public ModelBounds modelBounds() {
+        if (modelBoundsRevision == revision) return cachedModelBounds;
         ModelBounds result = null;
-        BitSet sceneNodes = new BitSet(definition.nodes().size());
-        for (int root : definition.scenes().get(definition.defaultScene()).rootNodes()) collectSceneNodes(root, sceneNodes);
         for (int node = sceneNodes.nextSetBit(0); node >= 0; node = sceneNodes.nextSetBit(node + 1)) {
             ModelBounds bounds = nodeWorldBounds(node);
             if (bounds == null) continue;
             result = result == null ? bounds : union(result, bounds);
         }
-        return result == null ? definition.bounds() : result;
+        cachedModelBounds = result == null ? definition.bounds() : result;
+        modelBoundsRevision = revision;
+        return cachedModelBounds;
     }
 
     /** Returns one fixed-size std140 palette in mesh-node local space for the selected skin. */
@@ -158,12 +179,13 @@ public final class ModelInstancePose {
         ModelNode meshNode = definition.nodes().get(meshNodeIndex);
         if (meshNode.skinIndex() < 0) throw new IllegalArgumentException("node does not reference a skin");
         ModelSkin skin = definition.skins().get(meshNode.skinIndex());
+        if (skinPaletteRevisions[meshNodeIndex] == revision) return skinPalettes[meshNodeIndex];
         Matrix4f inverseMesh = worldMatrix(meshNodeIndex).invert();
         float[] palette = new float[ModelSkin.MAX_JOINTS * 16 * 2];
         for (int index = 0; index < ModelSkin.MAX_JOINTS; index++) {
             Matrix4f matrix = index < skin.joints().size()
                     ? new Matrix4f(inverseMesh).mul(worldMatrix(skin.joints().get(index)))
-                    .mul(new Matrix4f().set(skin.inverseBindMatrices().get(index).elements()))
+                    .mul(inverseBindMatrices[meshNode.skinIndex()][index])
                     : new Matrix4f();
             matrix.get(palette, index * 16);
             float determinant = matrix.determinant3x3();
@@ -173,6 +195,8 @@ public final class ModelInstancePose {
             new Matrix4f().set3x3(new Matrix3f(matrix).invert().transpose())
                     .get(palette, ModelSkin.MAX_JOINTS * 16 + index * 16);
         }
+        skinPalettes[meshNodeIndex] = palette;
+        skinPaletteRevisions[meshNodeIndex] = revision;
         return palette;
     }
 
