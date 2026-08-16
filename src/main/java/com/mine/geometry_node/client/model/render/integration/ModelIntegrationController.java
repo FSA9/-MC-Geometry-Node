@@ -173,7 +173,8 @@ public final class ModelIntegrationController {
                 + (next.fallback() == ModelIntegrationFallback.NONE ? "" : " fallback=" + next.fallback());
         if (diagnostic.equals(loggedDiagnostic)) return;
         loggedDiagnostic = diagnostic;
-        if (next.fidelity() == ModelIntegrationStatus.Fidelity.DEGRADED) GeometryNode.LOGGER.warn("{}", diagnostic);
-        else GeometryNode.LOGGER.info("{}", diagnostic);
+        if (!next.runtimeFaults().isEmpty() || !next.rejectedDraws().isEmpty()) {
+            GeometryNode.LOGGER.warn("{}", diagnostic);
+        }
     }
 }

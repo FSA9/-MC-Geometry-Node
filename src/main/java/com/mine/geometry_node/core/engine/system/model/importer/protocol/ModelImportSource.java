@@ -11,7 +11,7 @@ public final class ModelImportSource {
 
     public ModelImportSource(ModelAssetReference asset, byte[] content) {
         if (asset == null || content == null) throw new IllegalArgumentException("import source fields must not be null");
-        if (content.length > ModelImportBudget.DEFAULT.maxSourceBytes()) {
+        if (content.length > ModelImportBudget.HARD_MAX_SOURCE_BYTES) {
             throw new IllegalArgumentException("import source exceeds the hard byte limit");
         }
         if (asset.revision().sourceSize() != content.length) {

@@ -99,6 +99,16 @@ class ModelM1ContractTest {
     }
 
     @Test
+    void localPreviewBudgetIsBoundedButCoversHighComplexityLocalAssets() {
+        ModelImportBudget preview = ModelImportBudget.LOCAL_PREVIEW;
+        assertEquals(512L << 20, preview.maxSourceBytes());
+        assertTrue(preview.maxVertices() >= 6_651_810L);
+        assertTrue(preview.maxIndices() >= 34_203_516L);
+        assertTrue(preview.maxTriangles() >= 11_401_172L);
+        assertTrue(ModelImportBudget.DEFAULT.maxSourceBytes() < preview.maxSourceBytes());
+    }
+
+    @Test
     void observesCancellationBeforeInvokingTheImporter() {
         ModelCancellationSource cancellation = new ModelCancellationSource();
         cancellation.cancel();

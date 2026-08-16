@@ -9,10 +9,19 @@ public record ModelImportBudget(
         int maxAnimations, int maxAnimationChannels,
         long maxAnimationKeyframes, long maxAttributeBytes
 ) {
+    public static final long HARD_MAX_SOURCE_BYTES = 512L << 20;
     public static final ModelImportBudget DEFAULT = new ModelImportBudget(
             128L << 20, 65_536, 262_144, 64, 16_384, 256, 16_384, 65_536,
             5_000_000L, 15_000_000L, 5_000_000L, 4_096, 4_096, 4_096,
             8_192, 128L << 20, 512L << 20, 4_096, 65_536, 10_000_000L, 512L << 20);
+    public static final ModelImportBudget LOCAL_PREVIEW = new ModelImportBudget(
+            HARD_MAX_SOURCE_BYTES, DEFAULT.maxBufferViews(), DEFAULT.maxAccessors(),
+            DEFAULT.maxScenes(), DEFAULT.maxNodes(), DEFAULT.maxNodeDepth(),
+            DEFAULT.maxMeshes(), DEFAULT.maxPrimitives(), 10_000_000L, 40_000_000L,
+            15_000_000L, DEFAULT.maxMaterials(), DEFAULT.maxTextures(), DEFAULT.maxImages(),
+            DEFAULT.maxImageDimension(), DEFAULT.maxEncodedImageBytes(), DEFAULT.maxDecodedImageBytes(),
+            DEFAULT.maxAnimations(), DEFAULT.maxAnimationChannels(), DEFAULT.maxAnimationKeyframes(),
+            DEFAULT.maxAttributeBytes());
 
     public ModelImportBudget {
         if (maxSourceBytes < 1L || maxBufferViews < 1 || maxAccessors < 1

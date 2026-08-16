@@ -5,6 +5,8 @@ import com.mine.geometry_node.client.model.render.backend.standalone.StandaloneM
 import com.mine.geometry_node.client.model.render.backend.standalone.ModelPipelineKey;
 import com.mine.geometry_node.client.model.render.backend.standalone.ModelShadowPhase;
 import com.mine.geometry_node.client.model.render.backend.host.iris.entity.IrisEntityTranslucency;
+import com.mine.geometry_node.client.model.render.integration.NativeRenderParameters;
+import com.mine.geometry_node.client.model.render.integration.NativeTransparencyPolicy;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import org.joml.Matrix4f;
 
@@ -27,7 +29,6 @@ public final class IrisShadowAdapter {
     private static volatile int lastSubmittedDraws;
     private static volatile int lastOpaqueSubmittedDraws;
     private static volatile int lastTranslucentSubmittedDraws;
-    private static boolean translucentHookLogged;
     private static volatile boolean translucentPhaseObserved;
     private static Matrix4f pendingModelView;
     private static Matrix4f pendingProjection;
@@ -54,8 +55,6 @@ public final class IrisShadowAdapter {
                     invoke(proxy, method, args));
             apiClass.getMethod("registerShadowRenderCallback", callbackClass).invoke(api, callback);
             installed = true;
-            GeometryNode.LOGGER.info("Installed Iris HOST_NATIVE shadow caster adapter for {} model pipelines",
-                    pipelines.size());
         } catch (ClassNotFoundException absent) {
             // Iris is optional. A later process restart is required if it is added to the mod set.
             installFailure = "IRIS_ABSENT";
@@ -98,8 +97,10 @@ public final class IrisShadowAdapter {
                     pendingCameraX = (double) args[2];
                     pendingCameraY = (double) args[3];
                     pendingCameraZ = (double) args[4];
-                    pendingOpaqueTranslucencyFallback =
-                            !IrisEntityTranslucency.snapshot().dedicatedProgram();
+                    NativeRenderParameters parameters = NativeRenderParameters.current();
+                    boolean dedicatedProgram = parameters.transparencyPolicy() == NativeTransparencyPolicy.AUTO
+                            && IrisEntityTranslucency.snapshot().dedicatedProgram();
+                    pendingOpaqueTranslucencyFallback = !parameters.preservesBlend(dedicatedProgram);
                     translucentPending = true;
                     IrisShadowTargetResolver.Targets targets = IrisShadowTargetResolver.resolve();
                     acceptGeneration(targets.capabilities());
@@ -138,12 +139,6 @@ public final class IrisShadowAdapter {
                     ModelShadowPhase.TRANSLUCENT, pendingOpaqueTranslucencyFallback);
             translucentFailure = "";
             lastSubmittedDraws = lastOpaqueSubmittedDraws + lastTranslucentSubmittedDraws;
-            if (!translucentHookLogged && lastTranslucentSubmittedDraws > 0) {
-                translucentHookLogged = true;
-                GeometryNode.LOGGER.info(
-                        "Iris HOST_NATIVE translucent shadow phase active: {} draw(s) submitted after shadowtex1 copy",
-                        lastTranslucentSubmittedDraws);
-            }
         } catch (ReflectiveOperationException exception) {
             failTranslucent("SHADOW_TARGET_" + exception.getClass().getSimpleName(), exception);
         } catch (RuntimeException | LinkageError exception) {
@@ -172,8 +167,5 @@ public final class IrisShadowAdapter {
         opaqueFailure = "";
         translucentFailure = "";
         translucentPhaseObserved = false;
-        translucentHookLogged = false;
-        GeometryNode.LOGGER.info("Iris HOST_NATIVE shadow target generation {}: {} color attachment(s), formats={}",
-                next.generation(), next.colorAttachmentCount(), next.colorFormats());
     }
 }

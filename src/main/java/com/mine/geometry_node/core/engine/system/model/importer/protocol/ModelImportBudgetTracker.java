@@ -65,6 +65,7 @@ public final class ModelImportBudgetTracker {
     private static ModelImportException exceeded(ModelBudgetResource resource, String location,
                                                  long actual, long maximum) {
         return new ModelImportException(new ModelImportFailure(ModelImportErrorCode.LIMIT_EXCEEDED,
-                location == null ? resource.name() : location, "model import budget exceeded", actual, maximum));
+                location == null ? resource.name() : location,
+                "model import budget exceeded: " + resource.name(), actual, maximum));
     }
 }

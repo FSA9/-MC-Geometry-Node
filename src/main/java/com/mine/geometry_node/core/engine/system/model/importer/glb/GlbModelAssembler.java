@@ -501,7 +501,9 @@ final class GlbModelAssembler {
         if (!attributes.containsKey(ModelAttributeSemantic.NORMAL)) {
             attributes.put(ModelAttributeSemantic.NORMAL, generateNormals(positions, indices, location));
         }
-        int material = primitive.has("material") ? GlbJson.requiredInt(primitive, "material", location) : defaultMaterial;
+        int authoredMaterial = primitive.has("material")
+                ? GlbJson.requiredInt(primitive, "material", location) : defaultMaterial;
+        int material = resolveMaterial(authoredMaterial, attributes, location);
         if (material >= 0 && material < materials.size()) {
             ModelTextureInfo normalTexture = materials.get(material).normalTexture().texture();
             if (normalTexture.textureIndex() >= 0 && !attributes.containsKey(ModelAttributeSemantic.TANGENT)) {
@@ -517,6 +519,40 @@ final class GlbModelAssembler {
         }
         ModelBounds bounds = GlbBounds.fromPositions(positions);
         return new ModelPrimitive(ModelPrimitiveTopology.TRIANGLES, attributes, indices, material, bounds);
+    }
+
+    private int resolveMaterial(int material, Map<ModelAttributeSemantic, ModelVertexAttribute> attributes,
+                                String location) throws ModelImportException {
+        if (material < 0 || material >= materials.size()) {
+            return fallbackMaterial(location, "material reference " + material + " is out of range");
+        }
+        ModelMaterial candidate = materials.get(material);
+        for (ModelTextureInfo texture : List.of(candidate.baseColorTexture(), candidate.emissiveTexture(),
+                candidate.metallicRoughness().texture(), candidate.normalTexture().texture(),
+                candidate.occlusionTexture().texture())) {
+            if (texture.textureIndex() < 0) continue;
+            ModelAttributeSemantic semantic = ModelAttributeSemantic.indexed(
+                    ModelAttributeSemantic.Kind.TEXCOORD, texture.texCoordSet());
+            if (!attributes.containsKey(semantic)) {
+                return fallbackMaterial(location, "material " + material + " requires missing " + semantic);
+            }
+        }
+        return material;
+    }
+
+    private int fallbackMaterial(String location, String reason) throws ModelImportException {
+        int fallback = ensureDefaultMaterial();
+        session.diagnose(new ModelImportDiagnostic(ModelImportDiagnostic.Severity.WARNING,
+                "MATERIAL_FALLBACK_DEFAULT", location, reason + "; using DEFAULT_MATERIAL"));
+        return fallback;
+    }
+
+    private int ensureDefaultMaterial() throws ModelImportException {
+        if (defaultMaterial >= 0) return defaultMaterial;
+        session.budgetTracker().claim(ModelBudgetResource.MATERIALS, 1, "materials.default");
+        defaultMaterial = materials.size();
+        materials.add(ModelMaterial.defaultMaterial());
+        return defaultMaterial;
     }
 
     private ModelVertexAttribute decodeAttribute(JsonObject attributes, String key, ModelAttributeSemantic semantic,

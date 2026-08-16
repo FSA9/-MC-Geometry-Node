@@ -10,7 +10,9 @@ import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -55,6 +57,8 @@ class GlbModelImporterTest {
         ModelImportResult.Failure limited = assertInstanceOf(ModelImportResult.Failure.class,
                 importResult(glb, new ModelImportContext(constrained, ModelCancellationToken.NONE, null)));
         assertEquals(ModelImportErrorCode.LIMIT_EXCEEDED, limited.failure().code());
+        assertTrue(limited.failure().message().contains("ATTRIBUTE_BYTES"));
+        assertTrue(limited.failure().actualValue() > limited.failure().limitValue());
         assertTrue(limited.failure().location().contains("generatedTangents.workspace"));
     }
 
@@ -354,11 +358,22 @@ class GlbModelImporterTest {
     }
 
     @Test
-    void rejectsTexturedMaterialWithoutTexcoordZero() {
+    void fallsBackToDefaultMaterialWhenTextureCoordinatesAreMissing() {
         byte[] binary = triangleBinary(true, false);
         String body = triangleBody(true, false, binary.length).replace(",\"TEXCOORD_0\":2", "");
-        assertFailure(glb(baseJson(body, binary.length), binary),
-                ModelImportErrorCode.INVALID_ATTRIBUTE, "meshes[0].primitives[0].TEXCOORD_0");
+        List<ModelImportDiagnostic> diagnostics = new ArrayList<>();
+        ModelImportResult.Success result = assertInstanceOf(ModelImportResult.Success.class,
+                importResult(glb(baseJson(body, binary.length), binary), new ModelImportContext(
+                        ModelImportBudget.DEFAULT, ModelCancellationToken.NONE, diagnostics::add)));
+
+        ModelDefinition definition = result.definition();
+        int materialIndex = definition.meshes().getFirst().primitives().getFirst().materialIndex();
+        assertEquals(ModelMaterial.defaultMaterial(), definition.materials().get(materialIndex));
+        assertEquals(1, diagnostics.size());
+        ModelImportDiagnostic diagnostic = diagnostics.getFirst();
+        assertEquals("MATERIAL_FALLBACK_DEFAULT", diagnostic.code());
+        assertEquals("meshes[0].primitives[0]", diagnostic.location());
+        assertTrue(diagnostic.message().contains("TEXCOORD_0"));
     }
 
     @Test
