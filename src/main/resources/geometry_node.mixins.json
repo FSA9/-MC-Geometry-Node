@@ -6,7 +6,8 @@
     "ProjectileHitMixin"
   ],
   "client": [
-    "KeyboardHandlerMixin"
+    "KeyboardHandlerMixin",
+    "IrisShadowRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

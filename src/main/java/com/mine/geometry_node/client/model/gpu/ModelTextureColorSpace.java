@@ -4,5 +4,6 @@ package com.mine.geometry_node.client.model.gpu;
 public enum ModelTextureColorSpace {
     SRGB_COLOR,
     LINEAR_DATA,
-    NORMAL_VECTOR
+    NORMAL_VECTOR,
+    SHADOW_OPACITY
 }

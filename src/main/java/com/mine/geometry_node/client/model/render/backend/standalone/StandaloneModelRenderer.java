@@ -25,6 +25,7 @@ public final class StandaloneModelRenderer {
     private static GpuQuery pendingGpuQuery;
     private static final ModelSkinPaletteArena SKIN_PALETTES = new ModelSkinPaletteArena();
     private static final ModelMaterialUniformArena MATERIALS = new ModelMaterialUniformArena();
+    private static final ModelProjectionUniformArena PROJECTIONS = new ModelProjectionUniformArena();
     private static final MinecraftModelSamplerCache SAMPLERS = new MinecraftModelSamplerCache();
     private static final ModelFallbackTextures FALLBACK_TEXTURES = new ModelFallbackTextures();
 
@@ -38,11 +39,9 @@ public final class StandaloneModelRenderer {
             return;
         }
         long started = System.nanoTime();
-        runtime.instances().removeExpired(started);
-        runtime.instances().tickAnimations(started);
         pollGpuTime(runtime);
-        PreparedFrame frame = prepareDraws(minecraft, modelViewMatrix, camera,
-                runtime.instances().readySnapshot());
+        PreparedFrame frame = prepareDraws(minecraft, modelViewMatrix, camera.position(), camera.getCullFrustum(),
+                runtime.instances().readySnapshot(), null, false);
         List<PreparedDraw> prepared = frame.draws();
         if (prepared.isEmpty()) {
             runtime.recordFrame(0, 0, frame.singularTransformSkips(), System.nanoTime() - started, -1);
@@ -55,20 +54,44 @@ public final class StandaloneModelRenderer {
         GpuTextureView depth = RenderSystem.outputDepthTextureOverride != null
                 ? RenderSystem.outputDepthTextureOverride : target.getDepthTextureView();
         if (color == null || depth == null) return;
+        drawPrepared(prepared, color, depth, null, true);
+        long triangles = prepared.stream().mapToLong(draw -> draw.indexCount() / 3L).sum();
+        runtime.recordFrame(prepared.size(), triangles, frame.singularTransformSkips(),
+                System.nanoTime() - started, -1);
+    }
+
+    /** Called only from Iris' public shadow callback while its shadow targets are bound. */
+    public static int renderShadow(Matrix4fc modelViewMatrix, Matrix4fc projectionMatrix,
+                                   double cameraX, double cameraY, double cameraZ,
+                                   GpuTextureView color, GpuTextureView depth, ModelShadowPhase phase,
+                                   boolean opaqueTranslucencyFallback) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null) return 0;
+        PreparedFrame frame = prepareDraws(minecraft, modelViewMatrix, new Vec3(cameraX, cameraY, cameraZ), null,
+                ClientModelRuntime.INSTANCE.instances().readySnapshot(), phase, opaqueTranslucencyFallback);
+        if (frame.draws().isEmpty()) return 0;
+        drawPrepared(frame.draws(), color, depth, projectionMatrix, false);
+        return frame.draws().size();
+    }
+
+    private static void drawPrepared(List<PreparedDraw> prepared, GpuTextureView color,
+                                     GpuTextureView depth, Matrix4fc projection, boolean measureGpuTime) {
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+        GpuBufferSlice projectionUniform = projection == null ? null : PROJECTIONS.upload(encoder, projection);
         Map<ModelSkinPaletteArena.PaletteKey, float[]> paletteData = new LinkedHashMap<>();
         for (PreparedDraw draw : prepared) {
             if (draw.paletteKey() != null) paletteData.putIfAbsent(draw.paletteKey(), draw.skinPalette());
         }
         Map<ModelSkinPaletteArena.PaletteKey, GpuBufferSlice> palettes = SKIN_PALETTES.upload(encoder, paletteData);
         List<GpuBufferSlice> materials = MATERIALS.upload(encoder, prepared.stream().map(PreparedDraw::material).toList());
-        GpuQuery query = pendingGpuQuery == null ? encoder.timerQueryBegin() : null;
+        GpuQuery query = measureGpuTime && pendingGpuQuery == null ? encoder.timerQueryBegin() : null;
         try (RenderPass pass = encoder.createRenderPass(
                 () -> "GeometryNode model instances", color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
             for (int drawIndex = 0; drawIndex < prepared.size(); drawIndex++) {
                 PreparedDraw draw = prepared.get(drawIndex);
                 pass.setPipeline(draw.pipeline());
                 RenderSystem.bindDefaultUniforms(pass);
+                if (projectionUniform != null) pass.setUniform("Projection", projectionUniform);
                 pass.setUniform("DynamicTransforms", draw.dynamicTransforms());
                 pass.setUniform("ModelMaterial", materials.get(drawIndex));
                 pass.setVertexBuffer(0, draw.vertexBuffer());
@@ -86,18 +109,14 @@ public final class StandaloneModelRenderer {
                 encoder.timerQueryEnd(query);
                 pendingGpuQuery = query;
             }
-            long triangles = prepared.stream().mapToLong(draw -> draw.indexCount() / 3L).sum();
-            runtime.recordFrame(prepared.size(), triangles, frame.singularTransformSkips(),
-                    System.nanoTime() - started, -1);
         }
     }
 
-    private static PreparedFrame prepareDraws(Minecraft minecraft, Matrix4fc viewMatrix,
-                                                    net.minecraft.client.Camera camera,
-                                                    List<ClientModelInstanceRegistry.ReadyInstance> instances) {
+    private static PreparedFrame prepareDraws(Minecraft minecraft, Matrix4fc viewMatrix, Vec3 cameraPos,
+                                               Frustum frustum,
+                                               List<ClientModelInstanceRegistry.ReadyInstance> instances,
+                                               ModelShadowPhase shadowPhase, boolean opaqueTranslucencyFallback) {
         ModelDimensionId dimension = new ModelDimensionId(minecraft.level.dimension().identifier().toString());
-        Vec3 cameraPos = camera.position();
-        Frustum frustum = camera.getCullFrustum();
         List<DrawCandidate> candidates = new ArrayList<>();
         int singularSkips = 0;
         for (ClientModelInstanceRegistry.ReadyInstance instance : instances) {
@@ -107,17 +126,20 @@ public final class StandaloneModelRenderer {
             if (state.maxDistance() > 0 && bounds.distanceToSqr(cameraPos) > state.maxDistance() * state.maxDistance()) continue;
             boolean deforms = !instance.resource().definition().skins().isEmpty();
             if (!deforms && frustum != null && !frustum.isVisible(bounds)) continue;
-            singularSkips += collectCandidates(minecraft, viewMatrix, cameraPos, frustum, instance, candidates);
+            singularSkips += collectCandidates(minecraft, viewMatrix, cameraPos, frustum, instance, candidates,
+                    shadowPhase, opaqueTranslucencyFallback);
         }
         candidates.sort(Comparator.comparing(DrawCandidate::sortKey));
         List<PreparedDraw> prepared = new ArrayList<>(candidates.size());
-        for (DrawCandidate candidate : candidates) prepared.add(candidate.prepare());
+        for (DrawCandidate candidate : candidates) prepared.add(candidate.prepare(shadowPhase != null));
         return new PreparedFrame(List.copyOf(prepared), singularSkips);
     }
 
     private static int collectCandidates(Minecraft minecraft, Matrix4fc viewMatrix, Vec3 camera, Frustum frustum,
                                           ClientModelInstanceRegistry.ReadyInstance instance,
-                                          List<DrawCandidate> output) {
+                                          List<DrawCandidate> output, ModelShadowPhase shadowPhase,
+                                          boolean opaqueTranslucencyFallback) {
+        boolean shadowPass = shadowPhase != null;
         LoadedModelResource loaded = instance.resource();
         ModelGpuResource resource = loaded.gpuResource();
         ModelInstanceState state = instance.state();
@@ -130,6 +152,7 @@ public final class StandaloneModelRenderer {
             ModelGpuDrawRange draw = resource.drawRanges().get(rangeIndex);
             if (!loaded.metadata().nodeVisible(draw.nodeIndex()) || !state.nodeState().visible(draw.nodeIndex())) continue;
             boolean skinned = loaded.definition().nodes().get(draw.nodeIndex()).skinIndex() >= 0;
+            if (shadowPass && skinned) continue;
             ModelBounds nodeBounds = instance.pose().nodeWorldBounds(draw.nodeIndex());
             if (!skinned && nodeBounds != null) {
                 AABB partBounds = ModelRenderBounds.worldBounds(nodeBounds, placement);
@@ -138,6 +161,12 @@ public final class StandaloneModelRenderer {
             }
             ModelGpuLayoutGroup group = resource.layoutGroups().get(draw.layoutGroupIndex());
             StaticModelMaterial material = loaded.metadata().material(draw.materialIndex());
+            ModelAlphaMode effectiveAlphaMode = shadowPass
+                    ? ModelShadowPolicy.effectiveAlphaMode(
+                            material.alphaMode(), placement.alpha(), opaqueTranslucencyFallback)
+                    : material.alphaMode();
+            if (shadowPass && !ModelShadowPolicy.castsShadow(
+                    effectiveAlphaMode, placement.alpha(), opaqueTranslucencyFallback, shadowPhase)) continue;
             Matrix4f nodeWorld = instance.pose().worldMatrix(draw.nodeIndex());
             Matrix4f transform = new Matrix4f(base).mul(nodeWorld);
             Matrix4f modelTransform = new Matrix4f().rotate(placement.rotation()).scale(placement.scale())
@@ -148,8 +177,11 @@ public final class StandaloneModelRenderer {
                 singularSkips++;
                 continue;
             }
+            boolean forceOpaqueAlpha = shadowPass && effectiveAlphaMode == ModelAlphaMode.OPAQUE
+                    && (material.alphaMode() == ModelAlphaMode.BLEND || placement.alpha() < 0.999F);
             ModelDrawContract contract = ModelDrawContract.resolve(
-                    group.layout(), material, placement, light, determinant < 0.0);
+                    group.layout(), material, placement, light, determinant < 0.0,
+                    effectiveAlphaMode, forceOpaqueAlpha);
             ModelPipelineKey pipelineKey = contract.pipeline();
             float depth = pipelineKey.translucent() ? ModelDrawOrdering.viewDepth(draw.localBounds(), transform) : 0.0F;
             DrawSortKey sortKey = new DrawSortKey(pipelineKey.translucent() ? 1 : 0,
@@ -160,6 +192,9 @@ public final class StandaloneModelRenderer {
                     loaded.asset().cacheIdentity(), draw.layoutGroupIndex(), draw.materialIndex(), rangeIndex,
                     instance.id().value());
             GpuTextureView texture = ModelMaterialBindings.baseColor(resource, material, material.baseColorTexture().present());
+            if (shadowPhase == ModelShadowPhase.TRANSLUCENT && material.baseColorTexture().present()) {
+                texture = ModelMaterialBindings.shadowOpacity(resource, material);
+            }
             GpuTextureView emissiveTexture = ModelMaterialBindings.emissive(resource, material, material.emissiveTexture().present());
             GpuTextureView metallicRoughnessTexture = ModelMaterialBindings.metallicRoughness(resource, material);
             GpuTextureView normalTexture = ModelMaterialBindings.normal(resource, material);
@@ -195,6 +230,7 @@ public final class StandaloneModelRenderer {
         }
         SKIN_PALETTES.close();
         MATERIALS.close();
+        PROJECTIONS.close();
         SAMPLERS.close();
         FALLBACK_TEXTURES.close();
     }
@@ -286,9 +322,11 @@ public final class StandaloneModelRenderer {
                                  ModelTextureSampler occlusionSampler, ModelTextureSampler emissiveSampler,
                                  int firstIndex, int indexCount, ModelSkinPaletteArena.PaletteKey paletteKey,
                                  float[] skinPalette) {
-        PreparedDraw prepare() {
+        PreparedDraw prepare(boolean shadowPass) {
             GpuBufferSlice dynamic = ModelDynamicUniformWriter.write(transform, lightDirection, worldLight, fullBright);
-            return new PreparedDraw(StandaloneRenderPipelines.get(pipelineKey), dynamic, vertexBuffer,
+            RenderPipeline pipeline = shadowPass ? StandaloneRenderPipelines.getShadow(pipelineKey)
+                    : StandaloneRenderPipelines.get(pipelineKey);
+            return new PreparedDraw(pipeline, dynamic, vertexBuffer,
                     indexBuffer, orNeutral(texture), orNeutral(metallicRoughnessTexture), orNormal(normalTexture),
                     orNeutral(occlusionTexture), orNeutral(emissiveTexture), material,
                     SAMPLERS.get(baseSampler), SAMPLERS.get(metallicRoughnessSampler), SAMPLERS.get(normalSampler),

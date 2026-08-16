@@ -49,7 +49,11 @@ public final class ModelGpuUploadPlanner {
         List<ModelGpuImagePlan> imagePlans = new ArrayList<>(imageUsage.size());
         for (Map.Entry<ModelGpuTextureKey, Boolean> usage : imageUsage.entrySet()) {
             ModelGpuTextureKey key = usage.getKey();
-            imagePlans.add(new ModelGpuImagePlan(key, ModelImageMipChain.prepare(images.get(key.imageIndex()),
+            DecodedModelImage source = images.get(key.imageIndex());
+            if (key.colorSpace() == ModelTextureColorSpace.SHADOW_OPACITY) {
+                source = ModelShadowOpacityProjection.project(source);
+            }
+            imagePlans.add(new ModelGpuImagePlan(key, ModelImageMipChain.prepare(source,
                     usage.getValue(), key.colorSpace())));
         }
         return new ModelGpuUploadPlan(definition.source(), plans, draws, imagePlans);
@@ -59,6 +63,9 @@ public final class ModelGpuUploadPlanner {
         Map<ModelGpuTextureKey, Boolean> usage = new LinkedHashMap<>();
         for (ModelMaterial material : definition.materials()) {
             claimTexture(definition, usage, material.baseColorTexture(), ModelTextureColorSpace.SRGB_COLOR);
+            if (material.alphaMode() == ModelAlphaMode.BLEND) {
+                claimTexture(definition, usage, material.baseColorTexture(), ModelTextureColorSpace.SHADOW_OPACITY);
+            }
             claimTexture(definition, usage, material.emissiveTexture(), ModelTextureColorSpace.SRGB_COLOR);
             claimTexture(definition, usage, material.metallicRoughness().texture(), ModelTextureColorSpace.LINEAR_DATA);
             claimTexture(definition, usage, material.normalTexture().texture(), ModelTextureColorSpace.NORMAL_VECTOR);

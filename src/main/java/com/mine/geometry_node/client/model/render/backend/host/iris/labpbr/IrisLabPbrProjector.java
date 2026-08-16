@@ -5,6 +5,12 @@ import com.mine.geometry_node.client.model.render.integration.ModelCompatibility
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.ModelProjectorCapability;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.opengl.GlTexture;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.AddressMode;
+import com.mojang.blaze3d.textures.FilterMode;
+import com.mine.geometry_node.core.engine.system.model.domain.ModelTextureFilter;
+import com.mine.geometry_node.core.engine.system.model.domain.ModelTextureSampler;
+import com.mine.geometry_node.core.engine.system.model.domain.ModelTextureWrap;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 
@@ -229,8 +235,12 @@ public final class IrisLabPbrProjector {
         private boolean closed;
         private HolderState holderState = HolderState.REGISTERED;
 
-        public LabPbrAlbedoTexture(NativeImage albedo, NativeImage normal, NativeImage specular) {
+        public LabPbrAlbedoTexture(NativeImage albedo, NativeImage normal, NativeImage specular,
+                                   ModelTextureSampler samplerDescriptor) {
             super(() -> "GeometryNode Iris 1.11 LabPBR albedo", albedo);
+            this.sampler = RenderSystem.getSamplerCache().getSampler(
+                    address(samplerDescriptor.wrapS()), address(samplerDescriptor.wrapT()),
+                    filter(samplerDescriptor.minFilter()), filter(samplerDescriptor.magFilter()), false);
             OwnedDynamicTexture createdNormal = null;
             OwnedDynamicTexture createdSpecular = null;
             try {
@@ -248,6 +258,17 @@ public final class IrisLabPbrProjector {
 
         AbstractTexture normal() { return normal; }
         AbstractTexture specular() { return specular; }
+
+        private static AddressMode address(ModelTextureWrap wrap) {
+            return wrap == ModelTextureWrap.CLAMP_TO_EDGE ? AddressMode.CLAMP_TO_EDGE : AddressMode.REPEAT;
+        }
+
+        private static FilterMode filter(ModelTextureFilter filter) {
+            return switch (filter) {
+                case LINEAR, LINEAR_MIPMAP_NEAREST, LINEAR_MIPMAP_LINEAR -> FilterMode.LINEAR;
+                default -> FilterMode.NEAREST;
+            };
+        }
 
         private void advanceHolderState(boolean queue) {
             if (holderState == HolderState.ATTACHED || holderState == HolderState.FAILED) return;

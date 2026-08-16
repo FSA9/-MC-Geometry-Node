@@ -7,5 +7,6 @@ public enum ModelIntegrationCapability {
     ALPHA_MODES,
     DOUBLE_SIDED,
     SMOOTH_NORMALS,
+    SHADOW_CASTER_SUBMITTED,
     LABPBR_AUXILIARY_TEXTURES
 }

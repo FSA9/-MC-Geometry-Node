@@ -14,6 +14,8 @@ import com.mine.geometry_node.client.model.render.backend.standalone.StandaloneM
 import com.mine.geometry_node.client.model.render.backend.standalone.StandaloneRenderPipelines;
 import com.mine.geometry_node.client.model.render.integration.ModelIntegrationController;
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostNativeRenderer;
+import com.mine.geometry_node.client.model.render.backend.host.entity.HostEntityRenderTypes;
+import com.mine.geometry_node.client.model.render.backend.host.iris.shadow.IrisShadowAdapter;
 import com.mine.geometry_node.client.model.runtime.ClientModelRuntime;
 import com.mine.geometry_node.client.model.runtime.ModelResourceReloadListener;
 import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
@@ -86,6 +88,9 @@ public class GeometryNodeClient {
 
     private void onClientTick(ClientTickEvent.Post event) {
         ModelIntegrationController.captureFrameEnvironment();
+        long nowNanos = System.nanoTime();
+        ClientModelRuntime.INSTANCE.instances().removeExpired(nowNanos);
+        ClientModelRuntime.INSTANCE.instances().tickAnimations(nowNanos);
         while (KeyBindings.OPEN_EDITOR.consumeClick()) {
             icyllis.modernui.mc.MuiModApi.openScreen(new MainUI());
         }
@@ -154,6 +159,8 @@ public class GeometryNodeClient {
 
     private void onRegisterRenderPipelines(RegisterRenderPipelinesEvent event) {
         StandaloneRenderPipelines.register(event);
+        HostEntityRenderTypes.register(event);
+        IrisShadowAdapter.install(StandaloneRenderPipelines.registeredShadowPipelines());
     }
 
     private void onAddClientReloadListeners(AddClientReloadListenersEvent event) {

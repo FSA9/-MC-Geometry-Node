@@ -17,6 +17,7 @@ import java.util.*;
 
 public final class StandaloneRenderPipelines {
     private static final Map<ModelPipelineKey, RenderPipeline> PIPELINES = new HashMap<>();
+    private static final Map<ModelPipelineKey, RenderPipeline> SHADOW_PIPELINES = new HashMap<>();
 
     private StandaloneRenderPipelines() {}
 
@@ -32,9 +33,12 @@ public final class StandaloneRenderPipelines {
                                 boolean skinned = (bits & 4) != 0;
                                 ModelPipelineKey key = new ModelPipelineKey(layout, alphaMode,
                                         doubleSided, mirrored, translucent, skinned);
-                                RenderPipeline pipeline = create(key, bits, uvCount);
+                                RenderPipeline pipeline = create(key, bits, uvCount, false);
                                 PIPELINES.put(key, pipeline);
                                 event.registerPipeline(pipeline);
+                                RenderPipeline shadowPipeline = create(key, bits, uvCount, true);
+                                SHADOW_PIPELINES.put(key, shadowPipeline);
+                                event.registerPipeline(shadowPipeline);
                             }
                         }
                     }
@@ -49,12 +53,27 @@ public final class StandaloneRenderPipelines {
         return pipeline;
     }
 
-    private static RenderPipeline create(ModelPipelineKey key, int bits, int uvCount) {
+    public static RenderPipeline getShadow(ModelPipelineKey key) {
+        RenderPipeline pipeline = SHADOW_PIPELINES.get(key);
+        if (pipeline == null) throw new IllegalStateException("model shadow pipeline was not registered: " + key);
+        return pipeline;
+    }
+
+    public static Map<ModelPipelineKey, RenderPipeline> registeredPipelines() {
+        return Map.copyOf(PIPELINES);
+    }
+
+    public static Map<ModelPipelineKey, RenderPipeline> registeredShadowPipelines() {
+        return Map.copyOf(SHADOW_PIPELINES);
+    }
+
+    private static RenderPipeline create(ModelPipelineKey key, int bits, int uvCount, boolean shadow) {
         String suffix = bits + "_uv" + uvCount + "_" + key.alphaMode().name().toLowerCase(Locale.ROOT)
                 + (key.doubleSided() ? "_double" : "_cull");
         suffix += key.mirrored() ? "_mirrored" : "_normal";
         suffix += key.translucent() ? "_blend_queue" : "_depth_queue";
         suffix += key.skinned() ? "_skinned" : "_rigid";
+        if (shadow) suffix += "_shadow";
         RenderPipeline.Builder builder = RenderPipeline.builder()
                 .withLocation(Identifier.fromNamespaceAndPath(GeometryNode.MODID, "model/native/standalone/" + suffix))
                 .withVertexShader(Identifier.fromNamespaceAndPath(GeometryNode.MODID, "model/native/standalone/static_model"))
@@ -62,11 +81,14 @@ public final class StandaloneRenderPipelines {
                 .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
                 .withUniform("Projection", UniformType.UNIFORM_BUFFER)
                 .withUniform("ModelMaterial", UniformType.UNIFORM_BUFFER)
-                .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, !key.translucent()))
+                .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL,
+                        shadow || !key.translucent()))
                 .withCull(!key.doubleSided() && !key.mirrored())
                 .withVertexFormat(MinecraftModelVertexFormats.create(key.layout()), VertexFormat.Mode.TRIANGLES);
         if (key.skinned()) builder.withShaderDefine("HAS_SKIN").withUniform("SkinPalette", UniformType.UNIFORM_BUFFER);
-        if (key.translucent()) builder.withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT));
+        if (key.translucent() && !shadow) {
+            builder.withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT));
+        }
         if ((bits & 1) != 0) builder.withShaderDefine("HAS_NORMAL");
         if (uvCount > 0) builder.withShaderDefine("HAS_UV");
         for (int uv = 1; uv < uvCount; uv++) builder.withShaderDefine("HAS_UV" + uv);

@@ -7,6 +7,8 @@ import com.mine.geometry_node.client.model.render.backend.host.geometry.HostGeom
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.IrisLabPbrProjector;
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.LabPbrProjectionEncoder;
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.ModelProjectorCapability;
+import com.mine.geometry_node.client.model.render.backend.host.iris.entity.IrisEntityTranslucency;
+import com.mine.geometry_node.client.model.render.backend.host.iris.shadow.IrisShadowAdapter;
 import com.mine.geometry_node.client.model.render.backend.common.ModelRenderBounds;
 import com.mine.geometry_node.client.model.render.integration.*;
 import com.mine.geometry_node.client.model.runtime.*;
@@ -58,8 +60,8 @@ public final class HostNativeRenderer {
         IrisLabPbrProjector.Snapshot projectorSnapshot = IrisLabPbrProjector.snapshot(
                 ModelResourceReloadListener.reloadGeneration());
         ModelProjectorCapability projector = projectorSnapshot.capability();
+        IrisEntityTranslucency.Snapshot translucency = IrisEntityTranslucency.snapshot();
         synchronizeCapability(projector);
-        runtime.instances().tickAnimations(System.nanoTime());
         Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
         ModelDimensionId dimension = new ModelDimensionId(Minecraft.getInstance().level.dimension().identifier().toString());
         EnumSet<ModelCompatibilityLoss> frameLosses = EnumSet.noneOf(ModelCompatibilityLoss.class);
@@ -67,6 +69,12 @@ public final class HostNativeRenderer {
         List<String> runtimeFaults = new ArrayList<>();
         if (projector.runtimeFault()) {
             runtimeFaults.add(projectorSnapshot.diagnostic());
+        }
+        if (!IrisShadowAdapter.failure().isEmpty() && !"IRIS_ABSENT".equals(IrisShadowAdapter.failure())) {
+            runtimeFaults.add("shadow-adapter:" + IrisShadowAdapter.failure());
+        }
+        if (translucency.diagnostic().startsWith("IRIS_TRANSLUCENCY_PROBE_FAILED:")) {
+            runtimeFaults.add("entity-translucency:" + translucency.diagnostic());
         }
         FrameStatistics statistics = new FrameStatistics();
         prune(ready);
@@ -76,7 +84,7 @@ public final class HostNativeRenderer {
                     instance.pose().modelBounds(), instance.state().placement()).distanceToSqr(camera)
                     > instance.state().maxDistance() * instance.state().maxDistance()) continue;
             submitInstance(root, collector, camera, instance, frameLosses, frameRejections,
-                    runtimeFaults, statistics, projector);
+                    runtimeFaults, statistics, projector, translucency.dedicatedProgram());
         }
         ModelIntegrationVerification verification = frameLosses.remove(ModelCompatibilityLoss.PROJECTOR_HOLDER_PENDING)
                 ? ModelIntegrationVerification.PENDING
@@ -93,6 +101,10 @@ public final class HostNativeRenderer {
         if (projector.auxiliaryEnabled()) {
             capabilities.add(ModelIntegrationCapability.LABPBR_AUXILIARY_TEXTURES);
         }
+        if (IrisShadowAdapter.installed() && IrisShadowAdapter.failure().isEmpty()
+                && IrisShadowAdapter.lastSubmittedDraws() > 0) {
+            capabilities.add(ModelIntegrationCapability.SHADOW_CASTER_SUBMITTED);
+        }
         ModelIntegrationController.reportCompatibility(projector.profile(), capabilities, lastLosses,
                 verification, runtimeFaults, frameRejections);
         runtime.recordFrame(statistics.drawCalls, statistics.triangles, statistics.singularTransformSkips,
@@ -107,6 +119,7 @@ public final class HostNativeRenderer {
         TEXTURES.clear(); FAILED_TEXTURES.clear(); LOGGED_RUNTIME_TEXTURE_FAILURES.clear();
         GEOMETRY.clear(); FAILED_GEOMETRY.clear();
         nextTextureId = 0; lastProjectorCapability = null; lastLosses = Set.of();
+        IrisEntityTranslucency.clear();
     }
 
     private static void synchronizeCapability(ModelProjectorCapability capability) {
@@ -151,7 +164,7 @@ public final class HostNativeRenderer {
                                        EnumSet<ModelCompatibilityLoss> losses,
                                        EnumMap<ModelDrawRejection, Integer> rejections,
                                        List<String> runtimeFaults, FrameStatistics statistics,
-                                       ModelProjectorCapability projector) {
+                                       ModelProjectorCapability projector, boolean dedicatedTranslucentProgram) {
         LoadedModelResource loaded = instance.resource();
         ModelDefinition definition = loaded.definition();
         ModelInstancePlacement placement = instance.state().placement();
@@ -167,8 +180,15 @@ public final class HostNativeRenderer {
                 HostMaterialProjection projection = HostMaterialAnalyzer.analyze(
                         projector.profile(), material, node.skinIndex() >= 0);
                 losses.addAll(projection.losses());
+                if (material.alphaMode() == ModelAlphaMode.BLEND || placement.alpha() < 0.999F) {
+                    losses.add(ModelCompatibilityLoss.BLEND_SHADOW_APPROXIMATED);
+                }
                 HostMaterialAnalyzer.addInstanceLosses(material, placement.alpha(),
                         placement.forceDoubleSided(), losses);
+                boolean effectiveTranslucent = material.alphaMode() == ModelAlphaMode.BLEND
+                        || placement.alpha() < 0.999F;
+                boolean opaqueFallback = effectiveTranslucent && !dedicatedTranslucentProgram;
+                if (opaqueFallback) losses.add(ModelCompatibilityLoss.ENTITY_TRANSLUCENCY_FALLBACK_OPAQUE);
                 if (!projection.selectable()) {
                     reject(rejections, ModelDrawRejection.UNSUPPORTED_SKINNING);
                     continue;
@@ -194,9 +214,9 @@ public final class HostNativeRenderer {
                 }
                 CompatibilityTexture texture;
                 try {
-                    texture = texture(loaded, material, labPbr);
+                    texture = texture(loaded, material, labPbr, opaqueFallback);
                 } catch (TextureProjectionFailure exception) {
-                    TextureKey failed = textureKey(loaded, material, labPbr);
+                    TextureKey failed = textureKey(loaded, material, labPbr, opaqueFallback);
                     if (exception.cacheForAssetLifetime()) {
                         runtimeFaults.add("texture-decode:" + exception.getClass().getSimpleName());
                         if (FAILED_TEXTURES.add(failed)) {
@@ -216,7 +236,7 @@ public final class HostNativeRenderer {
                 }
                 mergeTextureLosses(losses, texture.losses());
                 if (labPbr) IrisLabPbrProjector.reportHolderState(texture.texture(), losses);
-                RenderType renderType = renderType(material, placement, texture.identifier());
+                RenderType renderType = renderType(material, placement, texture.identifier(), opaqueFallback);
                 Matrix4f transform = new Matrix4f().translate(
                         (float) (placement.position().x - camera.x), (float) (placement.position().y - camera.y),
                         (float) (placement.position().z - camera.z)).rotate(placement.rotation()).scale(placement.scale())
@@ -239,7 +259,8 @@ public final class HostNativeRenderer {
                             Minecraft.getInstance().level, BlockPos.containing(worldPosition.x, worldPosition.y, worldPosition.z));
                     float red = material.red() * placement.red(), green = material.green() * placement.green();
                     float blue = material.blue() * placement.blue();
-                    float alpha = (material.alphaMode() == ModelAlphaMode.OPAQUE ? 1 : material.alpha()) * placement.alpha();
+                    float alpha = opaqueFallback ? 1
+                            : (material.alphaMode() == ModelAlphaMode.OPAQUE ? 1 : material.alpha()) * placement.alpha();
                     collector.submitCustomGeometry(root, renderType,
                             (pose, vertices) -> geometry.emit(pose, vertices, red, green, blue, alpha, light, mirrored));
                     statistics.drawCalls++;
@@ -252,10 +273,11 @@ public final class HostNativeRenderer {
     }
 
     private static RenderType renderType(StaticModelMaterial material, ModelInstancePlacement placement,
-                                         Identifier texture) {
+                                         Identifier texture, boolean opaqueFallback) {
         boolean doubleSided = material.doubleSided() || placement.forceDoubleSided();
+        if (opaqueFallback) return RenderTypes.entityCutout(texture, false);
         if (material.alphaMode() == ModelAlphaMode.BLEND || placement.alpha() < 0.999F) {
-            return RenderTypes.entityTranslucent(texture, false);
+            return HostEntityRenderTypes.translucent(texture);
         }
         if (material.alphaMode() == ModelAlphaMode.MASK || doubleSided) {
             return RenderTypes.entityCutout(texture, false);
@@ -264,8 +286,8 @@ public final class HostNativeRenderer {
     }
 
     private static CompatibilityTexture texture(LoadedModelResource loaded, StaticModelMaterial material,
-                                                boolean labPbr) {
-        TextureKey key = textureKey(loaded, material, labPbr);
+                                                boolean labPbr, boolean opaqueFallback) {
+        TextureKey key = textureKey(loaded, material, labPbr, opaqueFallback);
         if (FAILED_TEXTURES.contains(key)) {
             throw TextureProjectionFailure.asset("compatibility base-color asset previously failed", null);
         }
@@ -287,7 +309,7 @@ public final class HostNativeRenderer {
                     image.setPixel(0, 0, 0xFFFFFFFF);
                     inputs.add(image);
                 }
-                if (key.alphaMode() == ModelAlphaMode.OPAQUE) {
+                if (key.alphaMode() == ModelAlphaMode.OPAQUE || key.opaqueFallback()) {
                     for (int y = 0; y < image.getHeight(); y++) for (int x = 0; x < image.getWidth(); x++) {
                         image.setPixel(x, y, image.getPixel(x, y) | 0xFF000000);
                     }
@@ -332,7 +354,8 @@ public final class HostNativeRenderer {
                 }
                 // The caller retains failure cleanup until the composite constructor succeeds.
                 // NativeImage.close is idempotent, so partial DynamicTexture construction remains safe.
-                dynamic = new IrisLabPbrProjector.LabPbrAlbedoTexture(image, normal, specular);
+                dynamic = new IrisLabPbrProjector.LabPbrAlbedoTexture(image, normal, specular,
+                        material.baseColorTexture().sampler());
                 inputs.remove(image);
                 inputs.remove(normal);
                 inputs.remove(specular);
@@ -354,8 +377,9 @@ public final class HostNativeRenderer {
         });
     }
 
-    private static TextureKey textureKey(LoadedModelResource loaded, StaticModelMaterial material, boolean labPbr) {
-        return new TextureKey(loaded.asset().cacheIdentity(), material, labPbr);
+    private static TextureKey textureKey(LoadedModelResource loaded, StaticModelMaterial material, boolean labPbr,
+                                         boolean opaqueFallback) {
+        return new TextureKey(loaded.asset().cacheIdentity(), material, labPbr, opaqueFallback);
     }
 
     private static NativeImage decode(LoadedModelResource loaded, StaticModelTexture texture, List<NativeImage> owned)
@@ -422,7 +446,7 @@ public final class HostNativeRenderer {
     }
 
     private record GeometryKey(String asset, int mesh, int primitive, int uvSet, ModelTextureTransform transform) { }
-    private record TextureKey(String asset, StaticModelMaterial material, boolean labPbr) {
+    private record TextureKey(String asset, StaticModelMaterial material, boolean labPbr, boolean opaqueFallback) {
         ModelAlphaMode alphaMode() { return material.alphaMode(); }
     }
     private static void release(net.minecraft.client.renderer.texture.TextureManager manager,

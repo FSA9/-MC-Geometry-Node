@@ -251,6 +251,21 @@ class ModelGpuBackendTest {
     }
 
     @Test
+    void blendBaseColorAddsNeutralShadowOpacityProjection() {
+        ModelDefinition opaque = texturedDefinition(ModelTextureSampler.gltfDefault(), ModelAlphaMode.OPAQUE);
+        ModelDefinition blend = texturedDefinition(ModelTextureSampler.gltfDefault(), ModelAlphaMode.BLEND);
+        byte[] pixels = new byte[8 * 2 * 4];
+        java.util.Arrays.fill(pixels, (byte) 255);
+
+        assertEquals(java.util.Set.of(ModelTextureColorSpace.SRGB_COLOR), new ModelGpuUploadPlanner()
+                .plan(opaque, List.of(new DecodedModelImage(8, 2, pixels))).images().stream()
+                .map(plan -> plan.key().colorSpace()).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(java.util.Set.of(ModelTextureColorSpace.SRGB_COLOR, ModelTextureColorSpace.SHADOW_OPACITY),
+                new ModelGpuUploadPlanner().plan(blend, List.of(new DecodedModelImage(8, 2, pixels))).images().stream()
+                        .map(plan -> plan.key().colorSpace()).collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
     void cancelledQueuedUploadLeavesNoPendingOrLiveDiagnosticResource() {
         FakeDevice device = new FakeDevice();
         QueuedRenderThread render = new QueuedRenderThread();
@@ -324,10 +339,14 @@ class ModelGpuBackendTest {
     }
 
     private static ModelDefinition texturedDefinition(ModelTextureSampler sampler) {
+        return texturedDefinition(sampler, ModelAlphaMode.OPAQUE);
+    }
+
+    private static ModelDefinition texturedDefinition(ModelTextureSampler sampler, ModelAlphaMode alphaMode) {
         ModelDefinition base = oneTexturedTriangleModel();
         ModelTextureInfo info = new ModelTextureInfo(0, ModelTextureTransform.identity());
         ModelMaterial material = new ModelMaterial("textured", 1, 1, 1, 1, info,
-                ModelAlphaMode.OPAQUE, 0.5F, false, 0, 0, 0, ModelTextureInfo.absent());
+                alphaMode, 0.5F, false, 0, 0, 0, ModelTextureInfo.absent());
         return new ModelDefinition(base.source(), base.scenes(), base.defaultScene(), base.nodes(), base.meshes(),
                 List.of(material), List.of(new ModelTexture("texture", 0, sampler)),
                 List.of(new ModelImageSource("image/png", 8, 2, new byte[]{1})),

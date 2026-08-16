@@ -24,12 +24,20 @@ public record ModelDrawContract(ModelPipelineKey pipeline, Vector4f color, Vecto
 
     public static ModelDrawContract resolve(ModelVertexLayout layout, StaticModelMaterial material,
                                             ModelInstancePlacement placement, float worldLight, boolean mirrored) {
-        float alpha = placement.alpha() * (material.alphaMode() == ModelAlphaMode.OPAQUE ? 1.0F : material.alpha());
+        return resolve(layout, material, placement, worldLight, mirrored, material.alphaMode(), false);
+    }
+
+    static ModelDrawContract resolve(ModelVertexLayout layout, StaticModelMaterial material,
+                                     ModelInstancePlacement placement, float worldLight, boolean mirrored,
+                                     ModelAlphaMode effectiveAlphaMode, boolean forceOpaqueAlpha) {
+        float alpha = forceOpaqueAlpha ? 1.0F
+                : placement.alpha() * (effectiveAlphaMode == ModelAlphaMode.OPAQUE ? 1.0F : material.alpha());
         boolean doubleSided = material.doubleSided() || placement.forceDoubleSided();
         boolean skinned = layout.elements().stream()
                 .anyMatch(element -> element.semantic().equals(ModelAttributeSemantic.JOINTS_0));
-        ModelPipelineKey pipeline = new ModelPipelineKey(layout, material.alphaMode(),
-                doubleSided, mirrored, material.alphaMode() == ModelAlphaMode.BLEND || placement.alpha() < 0.999F,
+        ModelPipelineKey pipeline = new ModelPipelineKey(layout, effectiveAlphaMode,
+                doubleSided, mirrored, !forceOpaqueAlpha
+                && (effectiveAlphaMode == ModelAlphaMode.BLEND || placement.alpha() < 0.999F),
                 skinned);
         return new ModelDrawContract(pipeline, new Vector4f(
                 placement.red() * material.red(),

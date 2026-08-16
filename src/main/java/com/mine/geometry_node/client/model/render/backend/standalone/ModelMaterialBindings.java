@@ -19,6 +19,10 @@ final class ModelMaterialBindings {
         return textured ? color(resource, material.emissiveTexture().imageIndex()) : null;
     }
 
+    static GpuTextureView shadowOpacity(ModelGpuResource resource, StaticModelMaterial material) {
+        return data(resource, material.baseColorTexture(), ModelTextureColorSpace.SHADOW_OPACITY);
+    }
+
     static GpuTextureView metallicRoughness(ModelGpuResource resource, StaticModelMaterial material) {
         return data(resource, material.metallicRoughnessTexture(), ModelTextureColorSpace.LINEAR_DATA);
     }
