@@ -2,30 +2,33 @@ package com.mine.geometry_node.client.model.render.backend.host.entity;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.model.gpu.DecodedModelImage;
-import com.mine.geometry_node.client.model.gpu.minecraft.NativeImageModelDecoder;
 import com.mine.geometry_node.client.model.render.backend.host.material.*;
+import com.mine.geometry_node.client.model.render.backend.host.geometry.HostClusterVisibility;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.IrisLabPbrProjector;
-import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.LabPbrProjectionEncoder;
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.ModelProjectorCapability;
 import com.mine.geometry_node.client.model.render.backend.host.iris.entity.IrisEntityTranslucency;
 import com.mine.geometry_node.client.model.render.backend.host.iris.shadow.IrisShadowAdapter;
 import com.mine.geometry_node.client.model.render.backend.common.ModelRenderBounds;
 import com.mine.geometry_node.client.model.render.integration.*;
 import com.mine.geometry_node.client.model.runtime.*;
+import com.mine.geometry_node.client.model.debug.ModelLoadProgressTracker;
 import com.mine.geometry_node.core.engine.system.model.domain.*;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
+import org.joml.Matrix3f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
@@ -35,8 +38,9 @@ import java.util.*;
 /** Minimum-loss projection into Minecraft's standard entity pipeline. */
 public final class HostNativeRenderer {
     private static final int FULL_BRIGHT = 15728880;
-    private static final NativeImageModelDecoder IMAGE_DECODER = new NativeImageModelDecoder();
     private static final Object VERTEX_BUDGET_DIAGNOSTIC = new Object();
+    private static final Map<ModelInstanceId, Integer> IMMEDIATE_DRAW_CURSORS = new HashMap<>();
+    private static int nextInstanceStart;
     private static long nextTextureId;
     private static ModelProjectorCapability lastProjectorCapability;
     private static Set<ModelCompatibilityLoss> lastLosses = Set.of();
@@ -45,10 +49,13 @@ public final class HostNativeRenderer {
 
     public static void submit(PoseStack root, SubmitNodeCollector collector) {
         if (Minecraft.getInstance().level == null) return;
+        HostStaticEntityRenderer.beginFrame();
         long started = System.nanoTime();
         ClientModelRuntime runtime = ClientModelRuntime.INSTANCE;
         List<ClientModelInstanceRegistry.ReadyInstance> ready = runtime.instances().readySnapshot();
         if (ready.isEmpty()) {
+            IMMEDIATE_DRAW_CURSORS.clear();
+            nextInstanceStart = 0;
             lastLosses = Set.of();
             ModelIntegrationController.reportCompatibility(Set.of(), ModelIntegrationVerification.NOT_APPLICABLE,
                     List.of(), Map.of());
@@ -84,7 +91,13 @@ public final class HostNativeRenderer {
         FrameStatistics statistics = new FrameStatistics();
         HostVertexBudget vertexBudget = new HostVertexBudget();
         List<TranslucentSubmission> translucentSubmissions = new ArrayList<>();
-        for (ClientModelInstanceRegistry.ReadyInstance instance : ready) {
+        Set<ModelInstanceId> liveInstanceIds = new HashSet<>();
+        int instanceStart = Math.floorMod(nextInstanceStart, ready.size());
+        nextInstanceStart = (instanceStart + 1) % ready.size();
+        for (int instanceOffset = 0; instanceOffset < ready.size(); instanceOffset++) {
+            ClientModelInstanceRegistry.ReadyInstance instance = ready.get(
+                    (instanceStart + instanceOffset) % ready.size());
+            liveInstanceIds.add(instance.id());
             if (!instance.state().visible() || !dimension.equals(instance.state().dimension())) continue;
             net.minecraft.world.phys.AABB bounds = ModelRenderBounds.worldBounds(
                     instance.pose().modelBounds(), instance.state().placement());
@@ -94,34 +107,36 @@ public final class HostNativeRenderer {
             if (!deforms && frustum != null && !frustum.isVisible(bounds)) continue;
             Optional<HostPreparedArtifact> prepared = instance.resource().existingBackendArtifact(
                     HostArtifactRepository.KEY);
-            long requiredVertices = prepared.map(artifact -> artifact.drawPlan().requiredVertices())
-                    .orElseGet(() -> HostDrawPlan.requiredVertices(instance.resource().definition(),
-                            instance.resource().metadata()));
-            if (prepared.isEmpty() && !vertexBudget.withinHardLimit(requiredVertices)) {
-                reject(frameRejections, ModelDrawRejection.HOST_VERTEX_BUDGET_EXCEEDED);
-                String asset = instance.resource().asset().cacheIdentity();
-                if (instance.resource().reportDiagnosticOnce(VERTEX_BUDGET_DIAGNOSTIC)) {
-                    GeometryNode.LOGGER.warn("Skipping HOST_NATIVE instance {}: requires {} emitted vertices; "
-                                    + "per-frame limit is {}", asset, requiredVertices,
-                            HostVertexBudget.MAX_VERTICES_PER_FRAME);
-                }
-                continue;
-            }
-            HostPreparedArtifact artifact = prepared.orElseGet(() -> instance.resource().backendArtifact(
-                    HostArtifactRepository.KEY,
-                    () -> HostArtifactRepository.INSTANCE.acquire(instance.resource().definition(),
-                            instance.resource().metadata())).orElse(null));
+            String progressKey = instance.resource().asset().normalizedPath();
+            if (prepared.isPresent()) ModelLoadProgressTracker.finish(progressKey);
+            HostPreparedArtifact artifact = prepared.orElseGet(() -> instance.resource().backendArtifactAsync(
+                    HostArtifactRepository.KEY, () -> {
+                        ModelLoadProgressTracker.begin(progressKey);
+                        ModelLoadProgressTracker.update(progressKey, "Preparing HOST", 0.70);
+                        var future = HostArtifactRepository.INSTANCE.acquireAsync(instance.resource().definition(),
+                                instance.resource().metadata(), runtime.modelWorkers(), fraction ->
+                                        ModelLoadProgressTracker.update(progressKey, "Preparing HOST",
+                                                0.70 + fraction * 0.28));
+                        future.whenComplete((lease, failure) -> ModelLoadProgressTracker.finish(progressKey));
+                        return future;
+                    }).orElse(null));
             if (artifact == null) {
-                instance.resource().backendArtifactFailureForReport(HostArtifactRepository.KEY).ifPresent(failure ->
-                        GeometryNode.LOGGER.warn("HOST artifact preparation failed for {}",
-                                instance.resource().asset().cacheIdentity(), failure));
-                runtimeFaults.add("host-artifact-preparation-failed");
+                Optional<RuntimeException> preparationFailure = instance.resource()
+                        .backendArtifactFailureForReport(HostArtifactRepository.KEY);
+                preparationFailure.ifPresent(failure -> GeometryNode.LOGGER.warn(
+                        "HOST artifact preparation failed for {}",
+                        instance.resource().asset().cacheIdentity(), failure));
+                if (preparationFailure.isPresent()) {
+                    ModelLoadProgressTracker.finish(progressKey);
+                    runtimeFaults.add("host-artifact-preparation-failed");
+                }
                 continue;
             }
             submitInstance(root, collector, camera, instance, artifact, frameLosses, frameRejections,
                     runtimeFaults, statistics, projector, preserveBlend,
                     translucentSubmissions, frustum, vertexBudget);
         }
+        IMMEDIATE_DRAW_CURSORS.keySet().retainAll(liveInstanceIds);
         submitTranslucent(root, collector, translucentSubmissions);
         ModelIntegrationVerification verification = frameLosses.remove(ModelCompatibilityLoss.PROJECTOR_HOLDER_PENDING)
                 ? ModelIntegrationVerification.PENDING
@@ -153,6 +168,8 @@ public final class HostNativeRenderer {
 
     public static void clear() {
         HostArtifactRepository.INSTANCE.invalidateBindings();
+        IMMEDIATE_DRAW_CURSORS.clear();
+        nextInstanceStart = 0;
         lastProjectorCapability = null; lastLosses = Set.of();
         IrisEntityTranslucency.clear();
     }
@@ -181,25 +198,32 @@ public final class HostNativeRenderer {
                                        Frustum frustum, HostVertexBudget vertexBudget) {
         LoadedModelResource loaded = instance.resource();
         ModelInstancePlacement placement = instance.state().placement();
-        List<VisibleDraw> visibleDraws = visibleDraws(instance, artifact.drawPlan(), placement, frustum, statistics);
-        if (visibleDraws.isEmpty()) return;
-        long visibleVertices = 0;
-        for (VisibleDraw visible : visibleDraws) {
-            long triangles = visible.draw().triangleCount();
-            visibleVertices = triangles > (Long.MAX_VALUE - visibleVertices) / 4
-                    ? Long.MAX_VALUE : visibleVertices + triangles * 4;
-        }
-        if (!vertexBudget.reserve(visibleVertices)) {
-            reject(rejections, ModelDrawRejection.HOST_VERTEX_BUDGET_EXCEEDED);
-            if (loaded.reportDiagnosticOnce(VERTEX_BUDGET_DIAGNOSTIC)) {
-                GeometryNode.LOGGER.warn("Skipping HOST_NATIVE instance {}: visible draws require {} emitted "
-                                + "vertices; remaining per-frame budget is insufficient",
-                        loaded.asset().cacheIdentity(), visibleVertices);
+        BindingPlan bindingPlan = bindingPlan(artifact.drawPlan(), placement, projector.auxiliaryEnabled(),
+                preserveBlend);
+        if (!artifact.bindingsReady(bindingPlan.request())) {
+            if (bindingPlan.keys().isEmpty()) {
+                if (artifact.beginBindings(bindingPlan.request())) {
+                    artifact.completeBindings(bindingPlan.request(), artifact.bindingGeneration());
+                }
+            }
+            if (artifact.bindingsFailed(bindingPlan.request())) {
+                runtimeFaults.add("host-binding-upload-failed");
+                return;
+            }
+            if (artifact.beginBindings(bindingPlan.request())) {
+                HostBindingUpload work = new HostBindingUpload(artifact, loaded, bindingPlan);
+                if (!ClientModelRuntime.INSTANCE.uploadScheduler().enqueue(work)) work.cancelledByScheduler();
             }
             return;
         }
-        statistics.submittedVertices += visibleVertices;
-        for (VisibleDraw visible : visibleDraws) {
+        List<VisibleDraw> visibleDraws = visibleDraws(instance, artifact.drawPlan(), placement, frustum, statistics);
+        if (visibleDraws.isEmpty()) return;
+        int drawCount = visibleDraws.size();
+        int start = Math.floorMod(IMMEDIATE_DRAW_CURSORS.getOrDefault(instance.id(), 0), drawCount);
+        int firstDeferred = -1;
+        for (int drawOffset = 0; drawOffset < drawCount; drawOffset++) {
+                int visibleIndex = (start + drawOffset) % drawCount;
+                VisibleDraw visible = visibleDraws.get(visibleIndex);
                 HostDrawPlan.Draw draw = visible.draw();
                 int nodeIndex = draw.nodeIndex();
                 int primitiveIndex = draw.primitiveIndex();
@@ -259,10 +283,11 @@ public final class HostNativeRenderer {
                 if (labPbr && !materialFallback) IrisLabPbrProjector.reportHolderState(texture.texture(), losses);
                 RenderType renderType = renderType(material, placement, texture.identifier(),
                         opaqueFallback || materialFallback);
+                Matrix4f bakedTransform = new Matrix4f().rotate(placement.rotation()).scale(placement.scale())
+                        .mul(visible.nodeWorld());
                 Matrix4f transform = new Matrix4f().translate(
                         (float) (placement.position().x - camera.x), (float) (placement.position().y - camera.y),
-                        (float) (placement.position().z - camera.z)).rotate(placement.rotation()).scale(placement.scale())
-                        .mul(visible.nodeWorld());
+                        (float) (placement.position().z - camera.z)).mul(bakedTransform);
                 float determinant = transform.determinant3x3();
                 if (!Float.isFinite(determinant) || Math.abs(determinant) <= 1.0E-8F) {
                     reject(rejections, ModelDrawRejection.SINGULAR_TRANSFORM);
@@ -280,19 +305,65 @@ public final class HostNativeRenderer {
                 float blue = materialFallback ? 1 : material.blue() * placement.blue();
                 float alpha = opaqueFallback || materialFallback ? 1
                         : (material.alphaMode() == ModelAlphaMode.OPAQUE ? 1 : material.alpha()) * placement.alpha();
+                StaticSubmission staticSubmission = trySubmitStatic(instance, artifact, loaded, draw, geometry, texture,
+                        renderType, placement, camera, visible.nodeWorld(), frustum,
+                        bakedTransform, light, mirrored,
+                        red, green, blue, alpha, effectiveTranslucent);
+                if (staticSubmission.status() == StaticSubmissionStatus.CULLED) {
+                    statistics.culledDraws++;
+                    continue;
+                }
+                long drawVertices = saturatedMultiply(draw.triangleCount(), 4);
                 if (effectiveTranslucent && !opaqueFallback && !materialFallback) {
+                    if (!reserveImmediate(vertexBudget, drawVertices, loaded, rejections)) {
+                        if (firstDeferred < 0) firstDeferred = visibleIndex;
+                        continue;
+                    }
                     translucentSubmissions.add(new TranslucentSubmission(
                             new HostTransparentOrderKey(drawPosition.lengthSquared(), loaded.asset().cacheIdentity(),
                                     nodeIndex, primitiveIndex, instance.id().value()),
                             new Matrix4f(transform), renderType, geometry,
                             red, green, blue, alpha, light, mirrored));
-                } else {
+                } else if (staticSubmission.status() != StaticSubmissionStatus.SUBMITTED) {
+                    if (!reserveImmediate(vertexBudget, drawVertices, loaded, rejections)) {
+                        if (firstDeferred < 0) firstDeferred = visibleIndex;
+                        continue;
+                    }
+                    if (staticSubmission.status() == StaticSubmissionStatus.FALLBACK) {
+                        HostStaticEntityRenderer.recordFallback();
+                    }
                     submitGeometry(root, collector, transform, renderType, geometry,
                             red, green, blue, alpha, light, mirrored);
                 }
-                statistics.drawCalls++;
-                statistics.triangles += draw.triangleCount();
+                if (staticSubmission.status() != StaticSubmissionStatus.SUBMITTED) {
+                    statistics.submittedVertices += drawVertices;
+                    HostStaticEntityRenderer.recordImmediate(drawVertices);
+                    statistics.drawCalls++;
+                    statistics.triangles += draw.triangleCount();
+                } else {
+                    statistics.drawCalls += staticSubmission.drawCalls();
+                    statistics.triangles += staticSubmission.triangles();
+                }
         }
+        if (firstDeferred < 0) IMMEDIATE_DRAW_CURSORS.remove(instance.id());
+        else IMMEDIATE_DRAW_CURSORS.put(instance.id(), firstDeferred);
+    }
+
+    private static boolean reserveImmediate(HostVertexBudget budget, long vertices, LoadedModelResource loaded,
+                                            EnumMap<ModelDrawRejection, Integer> rejections) {
+        if (budget.reserve(vertices)) return true;
+        reject(rejections, ModelDrawRejection.HOST_VERTEX_BUDGET_EXCEEDED);
+        HostStaticEntityRenderer.recordDeferredImmediate();
+        if (loaded.reportDiagnosticOnce(VERTEX_BUDGET_DIAGNOSTIC)) {
+            GeometryNode.LOGGER.warn("Deferring HOST_NATIVE immediate draws for {}: a draw requires {} vertices; "
+                            + "frame limit is {}",
+                    loaded.asset().cacheIdentity(), vertices, HostVertexBudget.MAX_VERTICES_PER_FRAME);
+        }
+        return false;
+    }
+
+    private static long saturatedMultiply(long value, long multiplier) {
+        return value < 0 || value > Long.MAX_VALUE / multiplier ? Long.MAX_VALUE : value * multiplier;
     }
 
     private static List<VisibleDraw> visibleDraws(ClientModelInstanceRegistry.ReadyInstance instance,
@@ -355,6 +426,108 @@ public final class HostNativeRenderer {
         }
     }
 
+    private static StaticSubmission trySubmitStatic(ClientModelInstanceRegistry.ReadyInstance instance,
+                                           HostPreparedArtifact artifact, LoadedModelResource loaded,
+                                           HostDrawPlan.Draw draw, HostEntityGeometry geometry,
+                                           HostPreparedArtifact.CompatibilityTexture texture,
+                                           RenderType renderType, ModelInstancePlacement placement, Vec3 camera,
+                                           Matrix4f nodeWorld, Frustum frustum,
+                                           Matrix4f bakedTransform, int light, boolean mirrored,
+                                           float red, float green, float blue, float alpha,
+                                           boolean effectiveTranslucent) {
+        if (effectiveTranslucent || draw.material().alphaMode() == ModelAlphaMode.BLEND
+                || placement.alpha() < 0.999F || instance.pose().animated()
+                || loaded.definition().nodes().get(draw.nodeIndex()).skinIndex() >= 0
+                || !HostStaticEntityRenderer.available()) {
+            return StaticSubmission.ineligible();
+        }
+        VertexFormat format;
+        try {
+            format = renderType.pipeline().getVertexFormat();
+        } catch (RuntimeException failure) {
+            return StaticSubmission.ineligible();
+        }
+        if (format == null || format.getVertexSize() < 1) return StaticSubmission.ineligible();
+        Matrix3f normalTransform;
+        try {
+            normalTransform = new Matrix3f(bakedTransform).invert().transpose();
+        } catch (RuntimeException failure) {
+            return StaticSubmission.ineligible();
+        }
+        long layoutGeneration = ModelResourceReloadListener.reloadGeneration();
+        HostStaticVariantKey key = new HostStaticVariantKey(instance.id(), instance.pose().revision(),
+                bakedTransform, normalTransform, OverlayTexture.NO_OVERLAY, light, mirrored,
+                red, green, blue, alpha, format, layoutGeneration);
+        long generation = artifact.staticGeneration();
+        HostStaticGeometryVariant variant = artifact.staticVariant(geometry, key, generation);
+        HostPackedLightVariantGate gate = artifact.staticVariantGate(geometry, instance.id());
+        int gateToken = key.hashCode();
+        HostPackedLightVariantGate.Decision decision = gate.evaluate(
+                gateToken, variant != null, generation, System.nanoTime());
+        if (decision == HostPackedLightVariantGate.Decision.HIT && variant != null) {
+            HostClusterVisibility.Result visibility;
+            try {
+                visibility = HostClusterVisibility.evaluate(geometry.clusters(), bounds -> frustum == null
+                        || frustum.isVisible(ModelRenderBounds.worldBounds(bounds, nodeWorld, placement)));
+            } catch (RuntimeException failure) {
+                return StaticSubmission.fallback();
+            }
+            if (visibility.fullyCulled()) {
+                HostStaticEntityRenderer.recordCulled(visibility);
+                return StaticSubmission.culled();
+            }
+            HostStaticEntityRenderer.submit(variant, format, renderType, texture, new Vector3f(
+                    (float) (placement.position().x - camera.x),
+                    (float) (placement.position().y - camera.y),
+                    (float) (placement.position().z - camera.z)), visibility);
+            return StaticSubmission.submitted(visibility.submittedTriangles(), visibility.drawCalls());
+        }
+        if (decision != HostPackedLightVariantGate.Decision.BUILD) {
+            if (decision == HostPackedLightVariantGate.Decision.BUILDING) {
+                HostStaticEntityRenderer.recordBuilding();
+            }
+            return StaticSubmission.fallback();
+        }
+
+        HostStaticVariantUpload upload;
+        try {
+            upload = HostStaticVariantUpload.tryCreate(artifact, geometry, key, gate, gateToken, format,
+                    () -> artifact.staticGeneration(generation)
+                            && ModelResourceReloadListener.reloadGeneration() == layoutGeneration
+                            && renderType.pipeline().getVertexFormat() == format,
+                    loaded.asset().cacheIdentity() + ':' + draw.nodeIndex() + ':' + draw.primitiveIndex());
+        } catch (RuntimeException failure) {
+            gate.recordFailure(gateToken, generation);
+            return StaticSubmission.fallback();
+        }
+        if (upload == null) {
+            HostStaticVariantUpload.retire(
+                    artifact.detachStaticVariantForBudget(geometry, key, generation));
+            gate.recordCancelled(gateToken, generation);
+            return StaticSubmission.fallback();
+        }
+        if (!ClientModelRuntime.INSTANCE.uploadScheduler().enqueue(upload)) upload.cancelledByScheduler();
+        else HostStaticEntityRenderer.recordBuilding();
+        return StaticSubmission.fallback();
+    }
+
+    private enum StaticSubmissionStatus { SUBMITTED, CULLED, FALLBACK, INELIGIBLE }
+
+    private record StaticSubmission(StaticSubmissionStatus status, long triangles, int drawCalls) {
+        private static StaticSubmission submitted(long triangles, int drawCalls) {
+            return new StaticSubmission(StaticSubmissionStatus.SUBMITTED, triangles, drawCalls);
+        }
+        private static StaticSubmission culled() {
+            return new StaticSubmission(StaticSubmissionStatus.CULLED, 0, 0);
+        }
+        private static StaticSubmission fallback() {
+            return new StaticSubmission(StaticSubmissionStatus.FALLBACK, 0, 0);
+        }
+        private static StaticSubmission ineligible() {
+            return new StaticSubmission(StaticSubmissionStatus.INELIGIBLE, 0, 0);
+        }
+    }
+
     private static RenderType renderType(StaticModelMaterial material, ModelInstancePlacement placement,
                                          Identifier texture, boolean opaqueFallback) {
         boolean doubleSided = material.doubleSided() || placement.forceDoubleSided();
@@ -386,7 +559,7 @@ public final class HostNativeRenderer {
                 boolean defaultMaterialFallback = false;
                 NativeImage image;
                 try {
-                    image = decode(loaded, material.baseColorTexture(), inputs);
+                    image = decode(artifact, material.baseColorTexture(), inputs);
                 } catch (IOException | RuntimeException assetFailure) {
                     image = null;
                     defaultMaterialFallback = true;
@@ -406,25 +579,26 @@ public final class HostNativeRenderer {
                 }
                 NativeImage normal = null, specular = null;
                 if (key.labPbr() && !defaultMaterialFallback) {
-                    NativeImage mr = auxiliaryInput(loaded, material.metallicRoughnessTexture(), material, inputs,
-                            textureLosses, ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE,
-                            ModelCompatibilityLoss.ROUGHNESS_UNREPRESENTABLE);
-                    NativeImage normalInput = auxiliaryInput(loaded, material.normalTexture(), material, inputs,
-                            textureLosses, ModelCompatibilityLoss.NORMAL_TEXTURE_UNREPRESENTABLE);
-                    NativeImage ao = auxiliaryInput(loaded, material.occlusionTexture(), material, inputs,
-                            textureLosses, ModelCompatibilityLoss.OCCLUSION_TEXTURE_UNREPRESENTABLE);
+                    HostPreparedArtifact.LabPbrImages prepared = artifact.labPbrImages(material);
                     try {
-                        int specWidth = dimension(mr, null), specHeight = dimensionHeight(mr, null);
-                        specular = LabPbrProjectionEncoder.buildSpecular(mr, specWidth, specHeight,
-                                material.metallicFactor(), material.roughnessFactor());
-                        inputs.add(specular);
-                        if (!LabPbrProjectionEncoder.metallicEndpointsOnly(mr, material.metallicFactor())) {
+                        specular = nativeImage(prepared.specular(), inputs);
+                        normal = nativeImage(prepared.normal(), inputs);
+                        if (prepared.metallicRoughnessDecodeFailed()) {
+                            textureLosses.add(ModelCompatibilityLoss.TEXTURE_DECODE_FAILED);
+                            textureLosses.add(ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE);
+                            textureLosses.add(ModelCompatibilityLoss.ROUGHNESS_UNREPRESENTABLE);
+                        }
+                        if (prepared.normalDecodeFailed()) {
+                            textureLosses.add(ModelCompatibilityLoss.TEXTURE_DECODE_FAILED);
+                            textureLosses.add(ModelCompatibilityLoss.NORMAL_TEXTURE_UNREPRESENTABLE);
+                        }
+                        if (prepared.occlusionDecodeFailed()) {
+                            textureLosses.add(ModelCompatibilityLoss.TEXTURE_DECODE_FAILED);
+                            textureLosses.add(ModelCompatibilityLoss.OCCLUSION_TEXTURE_UNREPRESENTABLE);
+                        }
+                        if (!prepared.metallicEndpointsOnly()) {
                             textureLosses.add(ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE);
                         }
-                        int normalWidth = dimension(normalInput, ao), normalHeight = dimensionHeight(normalInput, ao);
-                        normal = LabPbrProjectionEncoder.buildNormal(normalInput, ao, normalWidth, normalHeight,
-                                material.normalScale(), material.occlusionStrength());
-                        if (normal != null) inputs.add(normal);
                     } catch (RuntimeException auxiliaryFailure) {
                         textureLosses.add(ModelCompatibilityLoss.PROJECTOR_RUNTIME_UNAVAILABLE);
                         textureLosses.add(ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE);
@@ -472,11 +646,28 @@ public final class HostNativeRenderer {
         return new HostPreparedArtifact.TextureKey(material, labPbr, opaqueFallback);
     }
 
-    private static NativeImage decode(LoadedModelResource loaded, StaticModelTexture texture, List<NativeImage> owned)
+    private static NativeImage decode(HostPreparedArtifact artifact, StaticModelTexture texture,
+                                      List<NativeImage> owned)
             throws IOException {
         if (!texture.present()) return null;
-        ModelImageSource source = loaded.definition().images().get(texture.imageIndex());
-        DecodedModelImage decoded = IMAGE_DECODER.decode(source);
+        DecodedModelImage decoded = artifact.decodedImage(texture.imageIndex());
+        return nativeImage(decoded, owned);
+    }
+
+    private static BindingPlan bindingPlan(HostDrawPlan drawPlan, ModelInstancePlacement placement,
+                                           boolean labPbr, boolean preserveBlend) {
+        LinkedHashSet<HostPreparedArtifact.TextureKey> keys = new LinkedHashSet<>();
+        for (HostDrawPlan.Draw draw : drawPlan.draws()) {
+            StaticModelMaterial material = draw.material();
+            boolean translucent = material.alphaMode() == ModelAlphaMode.BLEND || placement.alpha() < 0.999F;
+            keys.add(textureKey(material, labPbr, translucent && !preserveBlend));
+        }
+        List<HostPreparedArtifact.TextureKey> ordered = List.copyOf(keys);
+        return new BindingPlan(new HostPreparedArtifact.BindingRequest(keys), ordered);
+    }
+
+    private static NativeImage nativeImage(DecodedModelImage decoded, List<NativeImage> owned) {
+        if (decoded == null) return null;
         NativeImage image = new NativeImage(decoded.width(), decoded.height(), false);
         byte[] rgba = decoded.rgba();
         for (int y = 0; y < decoded.height(); y++) for (int x = 0; x < decoded.width(); x++) {
@@ -489,29 +680,6 @@ public final class HostNativeRenderer {
         }
         owned.add(image);
         return image;
-    }
-
-    private static NativeImage compatibleInput(LoadedModelResource loaded, StaticModelTexture texture,
-                                                StaticModelMaterial material, List<NativeImage> owned) throws IOException {
-        if (!texture.present()) return null;
-        StaticModelTexture coordinates = coordinateSource(material);
-        if (texture.texCoord() != coordinates.texCoord()
-                || !texture.transform().equals(coordinates.transform())
-                || !texture.sampler().equals(coordinates.sampler())) return null;
-        return decode(loaded, texture, owned);
-    }
-
-    private static NativeImage auxiliaryInput(LoadedModelResource loaded, StaticModelTexture texture,
-                                              StaticModelMaterial material, List<NativeImage> owned,
-                                              EnumSet<ModelCompatibilityLoss> losses,
-                                              ModelCompatibilityLoss... roleLosses) {
-        try {
-            return compatibleInput(loaded, texture, material, owned);
-        } catch (IOException | RuntimeException exception) {
-            losses.add(ModelCompatibilityLoss.TEXTURE_DECODE_FAILED);
-            losses.addAll(Arrays.asList(roleLosses));
-            return null;
-        }
     }
 
     private static void mergeTextureLosses(EnumSet<ModelCompatibilityLoss> target,
@@ -528,24 +696,9 @@ public final class HostNativeRenderer {
         target.addAll(textureLosses);
     }
 
-    private static StaticModelTexture coordinateSource(StaticModelMaterial material) {
-        StaticModelTexture[] textures = {material.baseColorTexture(), material.metallicRoughnessTexture(),
-                material.normalTexture(), material.occlusionTexture(), material.emissiveTexture()};
-        for (StaticModelTexture texture : textures) if (texture.present()) return texture;
-        return StaticModelTexture.absent();
-    }
-
-    private static int dimension(NativeImage first, NativeImage second) {
-        return first != null ? first.getWidth() : second != null ? second.getWidth() : 1;
-    }
-
     private static void reject(EnumMap<ModelDrawRejection, Integer> rejections, ModelDrawRejection reason) {
         rejections.merge(reason, 1, Integer::sum);
     }
-    private static int dimensionHeight(NativeImage first, NativeImage second) {
-        return first != null ? first.getHeight() : second != null ? second.getHeight() : 1;
-    }
-
     private record TranslucentSubmission(HostTransparentOrderKey orderKey,
                                          Matrix4f transform, RenderType renderType,
                                          HostEntityGeometry geometry, float red, float green, float blue, float alpha,
@@ -554,6 +707,69 @@ public final class HostNativeRenderer {
                 Comparator.comparing(TranslucentSubmission::orderKey);
     }
     private record VisibleDraw(HostDrawPlan.Draw draw, Matrix4f nodeWorld) {}
+    private record BindingPlan(HostPreparedArtifact.BindingRequest request,
+                               List<HostPreparedArtifact.TextureKey> keys) {}
+
+    private static final class HostBindingUpload implements com.mine.geometry_node.client.model.gpu.ModelUploadScheduler.WorkItem {
+        private final HostPreparedArtifact artifact;
+        private final LoadedModelResource loaded;
+        private final BindingPlan plan;
+        private final long generation;
+        private final List<HostPreparedArtifact.TextureKey> created = new ArrayList<>();
+        private int index;
+
+        private HostBindingUpload(HostPreparedArtifact artifact, LoadedModelResource loaded, BindingPlan plan) {
+            this.artifact = artifact;
+            this.loaded = loaded;
+            this.plan = plan;
+            this.generation = artifact.bindingGeneration();
+        }
+
+        @Override public long nextBytes() {
+            return index < plan.keys().size() ? artifact.bindingBytes(plan.keys().get(index)) : 0;
+        }
+        @Override public int nextObjects() {
+            return index < plan.keys().size() ? artifact.bindingObjects(plan.keys().get(index)) : 0;
+        }
+        @Override public long remainingBytes() {
+            long bytes = 0;
+            for (int pending = index; pending < plan.keys().size(); pending++) {
+                bytes = Math.addExact(bytes, artifact.bindingBytes(plan.keys().get(pending)));
+            }
+            return bytes;
+        }
+        @Override public int remainingObjects() {
+            int objects = 0;
+            for (int pending = index; pending < plan.keys().size(); pending++) {
+                objects = Math.addExact(objects, artifact.bindingObjects(plan.keys().get(pending)));
+            }
+            return objects;
+        }
+        @Override public long stagingBytes() { return 0; }
+        @Override public boolean cancelled() { return !artifact.bindingGeneration(generation); }
+        @Override public boolean runStep() {
+            HostPreparedArtifact.TextureKey key = plan.keys().get(index);
+            boolean existed = artifact.textures.containsKey(key);
+            texture(artifact, loaded, key.material(), key.labPbr(), key.opaqueFallback());
+            if (!existed) created.add(key);
+            return ++index == plan.keys().size();
+        }
+        @Override public void completed() { artifact.completeBindings(plan.request(), generation); }
+        @Override public void cancelledByScheduler() { rollback(false); }
+        @Override public void failed(Throwable failure) {
+            rollback(true);
+            GeometryNode.LOGGER.warn("HOST binding upload failed for {}",
+                    loaded.asset().cacheIdentity(), failure);
+        }
+        private void rollback(boolean failed) {
+            List<HostPreparedArtifact.CompatibilityTexture> bindings = artifact.removeBindings(created);
+            HostPreparedArtifact.releaseBindings(Minecraft.getInstance().getTextureManager(), bindings);
+            if (artifact.bindingGeneration(generation)) {
+                if (failed) artifact.failBindings(plan.request());
+                else artifact.cancelBindings(plan.request());
+            }
+        }
+    }
     private static final class FrameStatistics {
         private int drawCalls;
         private long triangles;

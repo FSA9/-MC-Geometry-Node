@@ -16,6 +16,12 @@ final class TestLoadedModelResourceFactory {
     }
 
     static LoadedModelResource create(Supplier<CompletableFuture<com.mine.geometry_node.client.model.gpu.ModelGpuLease>> leaseFactory) {
+        return create(leaseFactory, () -> {});
+    }
+
+    static LoadedModelResource create(
+            Supplier<CompletableFuture<com.mine.geometry_node.client.model.gpu.ModelGpuLease>> leaseFactory,
+            Runnable cancellation) {
         ModelAssetReference asset = new ModelAssetReference(ModelSourceKind.MEMORY, "test", "model",
                 new ModelAssetRevision(1, 0, ""));
         ModelBounds bounds = new ModelBounds(ModelVector3.ZERO, ModelVector3.ONE);
@@ -26,7 +32,7 @@ final class TestLoadedModelResourceFactory {
         Supplier<CompletableFuture<com.mine.geometry_node.client.model.gpu.ModelGpuLease>> effectiveFactory =
                 leaseFactory != null ? leaseFactory
                         : () -> CompletableFuture.completedFuture(TestModelGpuLeaseFactory.create(asset));
-        return new LoadedModelResource(definition, effectiveFactory,
+        return new LoadedModelResource(definition, effectiveFactory, cancellation,
                 StaticModelRenderMetadata.from(definition), 1, 0, 1);
     }
 }

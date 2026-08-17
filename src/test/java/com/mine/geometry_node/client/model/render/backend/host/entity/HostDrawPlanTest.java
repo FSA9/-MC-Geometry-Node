@@ -46,4 +46,5 @@ class HostDrawPlanTest {
         return new ModelDefinition(asset, List.of(new ModelScene("scene", List.of(0, 1), Optional.of(bounds))), 0,
                 nodes, List.of(mesh), List.of(ModelMaterial.defaultMaterial()), List.of(), List.of(), List.of(), bounds);
     }
+
 }

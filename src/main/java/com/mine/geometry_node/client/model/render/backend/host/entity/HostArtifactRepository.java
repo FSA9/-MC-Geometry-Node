@@ -14,6 +14,9 @@ import java.util.Set;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.DoubleConsumer;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 /** Tracks live HOST artifacts so binding reload and final ownership release are exact. */
 public final class HostArtifactRepository {
@@ -26,6 +29,7 @@ public final class HostArtifactRepository {
     private final Consumer<List<HostPreparedArtifact.CompatibilityTexture>> bindingRetirement;
     private final Consumer<HostPreparedArtifact> artifactRetirement;
     private final Consumer<HostPreparedArtifact> immediateClose;
+    private long generation;
 
     private HostArtifactRepository() {
         this(MinecraftRenderThreadDispatcher.INSTANCE,
@@ -54,6 +58,34 @@ public final class HostArtifactRepository {
         return new BackendArtifactLease<>(artifact, () -> retire(artifact));
     }
 
+    public CompletableFuture<BackendArtifactLease<HostPreparedArtifact>> acquireAsync(
+            ModelDefinition definition, StaticModelRenderMetadata metadata, Executor worker,
+            DoubleConsumer progress) {
+        renderThread.assertRenderThread();
+        long requestedGeneration = generation;
+        CompletableFuture<HostPreparedArtifact> prepared = CompletableFuture.supplyAsync(
+                () -> HostPreparedArtifact.prepare(definition, metadata, progress), worker);
+        return prepared.thenCompose(artifact -> {
+            CompletableFuture<BackendArtifactLease<HostPreparedArtifact>> published = new CompletableFuture<>();
+            renderThread.execute(() -> {
+                try {
+                    if (generation != requestedGeneration) {
+                        immediateClose.accept(artifact);
+                        published.completeExceptionally(new java.util.concurrent.CancellationException(
+                                "HOST artifact repository generation changed"));
+                        return;
+                    }
+                    live.add(artifact);
+                    published.complete(new BackendArtifactLease<>(artifact, () -> retire(artifact)));
+                } catch (RuntimeException failure) {
+                    immediateClose.accept(artifact);
+                    published.completeExceptionally(failure);
+                }
+            });
+            return published;
+        });
+    }
+
     public void invalidateBindings() {
         renderThread.assertRenderThread();
         for (HostPreparedArtifact artifact : live) {
@@ -64,9 +96,11 @@ public final class HostArtifactRepository {
 
     public void close() {
         renderThread.assertRenderThread();
+        generation++;
         HostPreparedArtifact[] artifacts = live.toArray(HostPreparedArtifact[]::new);
         live.clear();
-        for (HostPreparedArtifact artifact : artifacts) immediateClose.accept(artifact);
+        // Published artifacts may own GPU variants; retire them behind the render fence.
+        for (HostPreparedArtifact artifact : artifacts) artifactRetirement.accept(artifact);
     }
 
     int liveCount() { return live.size(); }

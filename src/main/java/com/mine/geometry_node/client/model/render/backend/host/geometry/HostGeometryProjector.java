@@ -18,15 +18,26 @@ public final class HostGeometryProjector {
     }
 
     public static HostEntityGeometry project(ModelPrimitive primitive, StaticModelTexture coordinateSource) {
+        int[] indices = new int[primitive.indices().indexCount()];
+        for (int index = 0; index < indices.length; index++) indices[index] = Math.toIntExact(primitive.indices().indexAt(index));
+        return project(primitive, coordinateSource, indices);
+    }
+
+    public static HostEntityGeometry project(ModelPrimitive primitive, StaticModelTexture coordinateSource,
+                                             int[] indices) {
         ModelVertexAttribute positions = required(primitive, ModelAttributeSemantic.POSITION);
         ModelVertexAttribute normals = primitive.attributes().get(ModelAttributeSemantic.NORMAL);
         ModelVertexAttribute uv = primitive.attributes().get(ModelAttributeSemantic.indexed(
                 ModelAttributeSemantic.Kind.TEXCOORD, coordinateSource.texCoord()));
         ModelVertexAttribute colors = primitive.attributes().get(ModelAttributeSemantic.COLOR_0);
-        float[] output = new float[primitive.indices().indexCount() * 12];
+        if (indices == null || indices.length == 0 || indices.length % 3 != 0) {
+            throw new IllegalArgumentException("HOST projection requires indexed triangles");
+        }
+        float[] output = new float[Math.multiplyExact(indices.length, 12)];
         int cursor = 0;
-        for (int i = 0; i < primitive.indices().indexCount(); i++) {
-            int vertex = Math.toIntExact(primitive.indices().indexAt(i));
+        for (int i = 0; i < indices.length; i++) {
+            int vertex = indices[i];
+            if (vertex < 0 || vertex >= primitive.vertexCount()) throw new IllegalArgumentException("HOST index outside vertex data");
             cursor = copy(output, cursor, positions, vertex, 3, new float[]{0, 0, 0});
             cursor = copy(output, cursor, normals, vertex, 3, new float[]{0, 1, 0});
             float[] selectedUv = uv == null && !coordinateSource.present()

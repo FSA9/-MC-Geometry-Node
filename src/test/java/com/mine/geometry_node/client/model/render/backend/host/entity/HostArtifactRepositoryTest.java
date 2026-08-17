@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -49,6 +50,64 @@ class HostArtifactRepositoryTest {
 
         assertEquals(1, repository.liveCount());
         assertSame(plan, artifact.drawPlan());
+    }
+
+    @Test
+    void asynchronousPreparationPublishesOnlyAfterWorkerCompletion() {
+        FakeRenderThread renderThread = new FakeRenderThread();
+        HostArtifactRepository repository = new HostArtifactRepository(renderThread, ignored -> {},
+                ignored -> {}, ignored -> {});
+        List<Runnable> worker = new ArrayList<>();
+        List<Double> progress = new ArrayList<>();
+        ModelDefinition definition = emptyDefinition();
+
+        CompletableFuture<com.mine.geometry_node.client.model.runtime.BackendArtifactLease<HostPreparedArtifact>> pending =
+                repository.acquireAsync(definition, StaticModelRenderMetadata.from(definition), worker::add,
+                        progress::add);
+
+        assertFalse(pending.isDone());
+        assertEquals(0, repository.liveCount());
+        worker.removeFirst().run();
+        assertTrue(pending.isDone());
+        assertEquals(1, repository.liveCount());
+        assertEquals(1.0, progress.getLast());
+        pending.join().close();
+    }
+
+    @Test
+    void repositoryGenerationChangeRejectsLateAsynchronousArtifact() {
+        FakeRenderThread renderThread = new FakeRenderThread();
+        AtomicInteger closed = new AtomicInteger();
+        HostArtifactRepository repository = new HostArtifactRepository(renderThread, ignored -> {},
+                ignored -> {}, ignored -> closed.incrementAndGet());
+        List<Runnable> worker = new ArrayList<>();
+        ModelDefinition definition = emptyDefinition();
+        var pending = repository.acquireAsync(definition, StaticModelRenderMetadata.from(definition), worker::add,
+                ignored -> {});
+
+        repository.close();
+        worker.removeFirst().run();
+
+        assertTrue(pending.isCompletedExceptionally());
+        assertEquals(0, repository.liveCount());
+        assertEquals(1, closed.get());
+    }
+
+    @Test
+    void repositoryCloseRetiresPublishedArtifactsThroughDeferredPath() {
+        FakeRenderThread renderThread = new FakeRenderThread();
+        AtomicInteger retired = new AtomicInteger();
+        AtomicInteger immediate = new AtomicInteger();
+        HostArtifactRepository repository = new HostArtifactRepository(renderThread, ignored -> {},
+                ignored -> retired.incrementAndGet(), ignored -> immediate.incrementAndGet());
+        ModelDefinition definition = emptyDefinition();
+        repository.acquire(definition, StaticModelRenderMetadata.from(definition));
+
+        repository.close();
+
+        assertEquals(0, repository.liveCount());
+        assertEquals(1, retired.get());
+        assertEquals(0, immediate.get());
     }
 
     private static ModelDefinition emptyDefinition() {

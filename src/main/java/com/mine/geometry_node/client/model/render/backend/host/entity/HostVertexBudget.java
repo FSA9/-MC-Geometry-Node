@@ -6,13 +6,13 @@ final class HostVertexBudget {
 
     private long submitted;
 
-    boolean withinHardLimit(long vertices) {
-        return vertices >= 0 && vertices <= MAX_VERTICES_PER_FRAME;
-    }
-
     boolean reserve(long vertices) {
         if (vertices < 0 || vertices > MAX_VERTICES_PER_FRAME - submitted) return false;
         submitted += vertices;
         return true;
+    }
+
+    long submitted() {
+        return submitted;
     }
 }

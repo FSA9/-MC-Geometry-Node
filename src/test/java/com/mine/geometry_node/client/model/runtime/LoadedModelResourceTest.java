@@ -52,6 +52,20 @@ class LoadedModelResourceTest {
     }
 
     @Test
+    void releaseCancelsGpuPreparationExactlyOnce() {
+        AtomicInteger cancellations = new AtomicInteger();
+        CompletableFuture<ModelGpuLease> pending = new CompletableFuture<>();
+        LoadedModelResource resource = TestLoadedModelResourceFactory.create(() -> pending,
+                cancellations::incrementAndGet);
+        assertTrue(resource.standaloneGpuResource().isEmpty());
+
+        resource.release();
+        resource.release();
+
+        assertEquals(1, cancellations.get());
+    }
+
+    @Test
     void failedGpuPreparationRemainsNonBlockingAndIsNotRetriedPerFrame() {
         AtomicInteger preparations = new AtomicInteger();
         LoadedModelResource resource = TestLoadedModelResourceFactory.create(() -> {
@@ -151,5 +165,21 @@ class LoadedModelResourceTest {
         assertEquals(1, attempts.get());
         assertEquals("prepare failed", resource.backendArtifactFailureForReport(key).orElseThrow().getMessage());
         assertTrue(resource.backendArtifactFailureForReport(key).isEmpty());
+    }
+
+    @Test
+    void asynchronousBackendArtifactIsPublishedAtomicallyAndReleased() {
+        LoadedModelResource resource = TestLoadedModelResourceFactory.create();
+        BackendArtifactKey<Object> key = new BackendArtifactKey<>("async-backend");
+        CompletableFuture<BackendArtifactLease<Object>> pending = new CompletableFuture<>();
+        AtomicInteger releases = new AtomicInteger();
+
+        assertTrue(resource.backendArtifactAsync(key, () -> pending).isEmpty());
+        assertTrue(resource.existingBackendArtifact(key).isEmpty());
+        pending.complete(new BackendArtifactLease<>(new Object(), releases::incrementAndGet));
+
+        assertTrue(resource.existingBackendArtifact(key).isPresent());
+        resource.release();
+        assertEquals(1, releases.get());
     }
 }

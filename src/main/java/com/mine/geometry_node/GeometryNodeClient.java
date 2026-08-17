@@ -15,6 +15,7 @@ import com.mine.geometry_node.client.model.render.backend.standalone.StandaloneR
 import com.mine.geometry_node.client.model.render.integration.ModelIntegrationController;
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostNativeRenderer;
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostEntityRenderTypes;
+import com.mine.geometry_node.client.model.render.backend.host.entity.HostStaticEntityRenderer;
 import com.mine.geometry_node.client.model.render.backend.host.iris.shadow.IrisShadowAdapter;
 import com.mine.geometry_node.client.model.runtime.ClientModelRuntime;
 import com.mine.geometry_node.client.model.runtime.ModelResourceReloadListener;
@@ -67,6 +68,7 @@ public class GeometryNodeClient {
 
         // 监听世界渲染
         NeoForge.EVENT_BUS.addListener(this::onRenderLevelStage);
+        NeoForge.EVENT_BUS.addListener(this::onRenderOpaqueFeatures);
         NeoForge.EVENT_BUS.addListener(this::onSubmitCustomGeometry);
         NeoForge.EVENT_BUS.addListener(this::onClientLoggingOut);
         NeoForge.EVENT_BUS.addListener(this::onInteractionKeyMappingTriggered);
@@ -108,6 +110,7 @@ public class GeometryNodeClient {
     }
 
     private void onRenderLevelStage(RenderLevelStageEvent.AfterTranslucentParticles event) {
+        ClientModelRuntime.INSTANCE.pumpUploads();
         GeometryDebugRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
         SchematicProjectionRenderer.render(event.getPoseStack(), Minecraft.getInstance().gameRenderer.getMainCamera());
         if (!ModelIntegrationController.requiresCompatibilityBackend()) {
@@ -158,6 +161,7 @@ public class GeometryNodeClient {
         SchematicProjectionRenderer.clear();
         StandaloneModelRenderer.clear();
         HostNativeRenderer.clear();
+        HostStaticEntityRenderer.clear();
         ModelIntegrationController.reset();
         ClientModelRuntime.INSTANCE.resetGpuBackend();
     }
@@ -166,6 +170,12 @@ public class GeometryNodeClient {
         StandaloneRenderPipelines.register(event);
         HostEntityRenderTypes.register(event);
         IrisShadowAdapter.install(StandaloneRenderPipelines.registeredShadowPipelines());
+    }
+
+    private void onRenderOpaqueFeatures(RenderLevelStageEvent.AfterOpaqueFeatures event) {
+        if (ModelIntegrationController.requiresCompatibilityBackend()) {
+            HostStaticEntityRenderer.render(event.getModelViewMatrix());
+        }
     }
 
     private void onAddClientReloadListeners(AddClientReloadListenersEvent event) {

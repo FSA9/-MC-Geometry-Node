@@ -16,6 +16,7 @@ public final class LoadedModelResource {
     private final ModelAssetReference asset;
     private final ModelDefinition definition;
     private final Supplier<CompletableFuture<ModelGpuLease>> gpuLeaseFactory;
+    private final Runnable gpuPreparationCancellation;
     private final StaticModelRenderMetadata metadata;
     private final long sourceBytes;
     private final long triangles;
@@ -25,6 +26,8 @@ public final class LoadedModelResource {
     private boolean gpuFailureReported;
     private boolean gpuLeaseClosed;
     private final Map<Object, BackendArtifactLease<?>> backendArtifacts = new IdentityHashMap<>();
+    private final Map<Object, CompletableFuture<? extends BackendArtifactLease<?>>> backendArtifactPreparations =
+            new IdentityHashMap<>();
     private final Map<Object, RuntimeException> backendArtifactFailures = new IdentityHashMap<>();
     private final java.util.Set<Object> reportedBackendArtifactFailures =
             java.util.Collections.newSetFromMap(new IdentityHashMap<>());
@@ -35,9 +38,17 @@ public final class LoadedModelResource {
     LoadedModelResource(ModelDefinition definition, Supplier<CompletableFuture<ModelGpuLease>> gpuLeaseFactory,
                         StaticModelRenderMetadata metadata, long sourceBytes,
                         long triangles, long loadNanos) {
+        this(definition, gpuLeaseFactory, () -> {}, metadata, sourceBytes, triangles, loadNanos);
+    }
+
+    LoadedModelResource(ModelDefinition definition, Supplier<CompletableFuture<ModelGpuLease>> gpuLeaseFactory,
+                        Runnable gpuPreparationCancellation, StaticModelRenderMetadata metadata, long sourceBytes,
+                        long triangles, long loadNanos) {
         this.definition = Objects.requireNonNull(definition, "definition");
         this.asset = definition.source();
         this.gpuLeaseFactory = Objects.requireNonNull(gpuLeaseFactory, "gpuLeaseFactory");
+        this.gpuPreparationCancellation = Objects.requireNonNull(gpuPreparationCancellation,
+                "gpuPreparationCancellation");
         this.metadata = Objects.requireNonNull(metadata, "metadata");
         this.sourceBytes = sourceBytes;
         this.triangles = triangles;
@@ -106,6 +117,60 @@ public final class LoadedModelResource {
         @SuppressWarnings("unchecked") BackendArtifactLease<T> typed = (BackendArtifactLease<T>) lease;
         return Optional.of(typed.artifact());
     }
+    /** Starts one asynchronous backend preparation and atomically exposes only its completed artifact. */
+    public synchronized <T> Optional<T> backendArtifactAsync(
+            BackendArtifactKey<T> backendKey,
+            Supplier<CompletableFuture<BackendArtifactLease<T>>> factory) {
+        CompletableFuture<T> pending = prepareBackendArtifactAsync(backendKey, factory);
+        if (!pending.isDone() || pending.isCompletedExceptionally() || pending.isCancelled()) return Optional.empty();
+        return Optional.ofNullable(pending.getNow(null));
+    }
+
+    /** Completes only after a backend artifact is atomically installed into this resource. */
+    public synchronized <T> CompletableFuture<T> prepareBackendArtifactAsync(
+            BackendArtifactKey<T> backendKey,
+            Supplier<CompletableFuture<BackendArtifactLease<T>>> factory) {
+        if (released) return CompletableFuture.failedFuture(
+                new java.util.concurrent.CancellationException("model resource was released"));
+        Objects.requireNonNull(backendKey, "backendKey");
+        Objects.requireNonNull(factory, "factory");
+        Optional<T> existing = existingBackendArtifact(backendKey);
+        if (existing.isPresent()) return CompletableFuture.completedFuture(existing.get());
+        RuntimeException remembered = backendArtifactFailures.get(backendKey);
+        if (remembered != null) return CompletableFuture.failedFuture(remembered);
+        CompletableFuture<? extends BackendArtifactLease<?>> existingPreparation =
+                backendArtifactPreparations.get(backendKey);
+        if (existingPreparation != null) {
+            @SuppressWarnings("unchecked") CompletableFuture<BackendArtifactLease<T>> typed =
+                    (CompletableFuture<BackendArtifactLease<T>>) existingPreparation;
+            return typed.thenApply(BackendArtifactLease::artifact);
+        }
+        final CompletableFuture<BackendArtifactLease<T>> pending;
+        try {
+            pending = Objects.requireNonNull(factory.get(), "backend artifact future");
+        } catch (RuntimeException failure) {
+            backendArtifactFailures.put(backendKey, failure);
+            return CompletableFuture.failedFuture(failure);
+        }
+        backendArtifactPreparations.put(backendKey, pending);
+        pending.whenComplete((lease, failure) -> {
+            BackendArtifactLease<?> close = null;
+            synchronized (LoadedModelResource.this) {
+                backendArtifactPreparations.remove(backendKey);
+                if (failure != null) {
+                    Throwable root = unwrap(failure);
+                    backendArtifactFailures.put(backendKey, root instanceof RuntimeException runtime
+                            ? runtime : new RuntimeException(root));
+                } else if (released) {
+                    close = lease;
+                } else {
+                    backendArtifacts.put(backendKey, lease);
+                }
+            }
+            if (close != null) close.close();
+        });
+        return pending.thenApply(BackendArtifactLease::artifact);
+    }
     public synchronized boolean reportDiagnosticOnce(Object key) {
         return !released && reportedDiagnostics.add(Objects.requireNonNull(key, "key"));
     }
@@ -133,10 +198,12 @@ public final class LoadedModelResource {
             }
             closeArtifacts = java.util.List.copyOf(backendArtifacts.values());
             backendArtifacts.clear();
+            backendArtifactPreparations.clear();
             backendArtifactFailures.clear();
             reportedBackendArtifactFailures.clear();
             reportedDiagnostics.clear();
         }
+        gpuPreparationCancellation.run();
         if (close != null) close.close();
         closeArtifacts.forEach(BackendArtifactLease::close);
     }

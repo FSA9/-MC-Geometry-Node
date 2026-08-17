@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.model.render.backend.host.entity;
 
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostGeometryProjector;
+import com.mine.geometry_node.client.model.render.backend.host.geometry.HostSpatialClusterPlan;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialAnalyzer;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialProfile;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialProjection;
@@ -12,6 +13,7 @@ import com.mine.geometry_node.core.engine.system.model.domain.*;
 import org.joml.Vector3f;
 
 import java.util.*;
+import java.util.function.DoubleConsumer;
 
 /** Immutable asset-level HOST draw skeleton. Instance and frame state are intentionally excluded. */
 public final class HostDrawPlan {
@@ -26,9 +28,24 @@ public final class HostDrawPlan {
     }
 
     public static HostDrawPlan compile(ModelDefinition definition, StaticModelRenderMetadata metadata) {
+        return compile(definition, metadata, ignored -> {});
+    }
+
+    public static HostDrawPlan compile(ModelDefinition definition, StaticModelRenderMetadata metadata,
+                                       DoubleConsumer progress) {
+        Objects.requireNonNull(progress, "progress");
         Map<GeometryKey, HostEntityGeometry> geometry = new HashMap<>();
         List<Draw> draws = new ArrayList<>();
         long requiredVertices = 0;
+        int primitiveTotal = 0;
+        for (int nodeIndex = 0; nodeIndex < definition.nodes().size(); nodeIndex++) {
+            ModelNode node = definition.nodes().get(nodeIndex);
+            if (node.meshIndex() >= 0 && metadata.nodeVisible(nodeIndex)) {
+                primitiveTotal = Math.addExact(primitiveTotal,
+                        definition.meshes().get(node.meshIndex()).primitives().size());
+            }
+        }
+        int primitiveDone = 0;
         for (int nodeIndex = 0; nodeIndex < definition.nodes().size(); nodeIndex++) {
             ModelNode node = definition.nodes().get(nodeIndex);
             if (node.meshIndex() < 0 || !metadata.nodeVisible(nodeIndex)) continue;
@@ -58,13 +75,39 @@ public final class HostDrawPlan {
                         HostMaterialAnalyzer.analyze(HostMaterialProfile.HOST_NATIVE_LABPBR, material, skinned)));
                 requiredVertices = saturatedAdd(requiredVertices,
                         saturatedMultiply(primitive.triangleCount(), HOST_VERTICES_PER_TRIANGLE));
+                primitiveDone++;
+                progress.accept(primitiveTotal == 0 ? 1.0 : (double) primitiveDone / primitiveTotal);
             }
         }
+        progress.accept(1.0);
         return new HostDrawPlan(draws, requiredVertices);
     }
 
     public List<Draw> draws() { return draws; }
     public long requiredVertices() { return requiredVertices; }
+
+    static long projectedGeometryBytes(ModelDefinition definition, StaticModelRenderMetadata metadata) {
+        Set<GeometryKey> projected = new HashSet<>();
+        long bytes = 0;
+        for (int nodeIndex = 0; nodeIndex < definition.nodes().size(); nodeIndex++) {
+            ModelNode node = definition.nodes().get(nodeIndex);
+            if (node.meshIndex() < 0 || node.skinIndex() >= 0 || !metadata.nodeVisible(nodeIndex)) continue;
+            ModelMesh mesh = definition.meshes().get(node.meshIndex());
+            for (int primitiveIndex = 0; primitiveIndex < mesh.primitives().size(); primitiveIndex++) {
+                ModelPrimitive primitive = mesh.primitives().get(primitiveIndex);
+                StaticModelTexture coordinates = coordinateSource(metadata.material(primitive.materialIndex()));
+                GeometryKey key = new GeometryKey(node.meshIndex(), primitiveIndex, coordinates.texCoord(),
+                        coordinates.transform());
+                if (projected.add(key)) {
+                    bytes = Math.addExact(bytes, Math.multiplyExact((long) primitive.indices().indexCount(),
+                            12L * Float.BYTES));
+                    bytes = Math.addExact(bytes,
+                            HostSpatialClusterPlan.retainedMetadataBytes(Math.toIntExact(primitive.triangleCount())));
+                }
+            }
+        }
+        return bytes;
+    }
 
     /** Cheap preflight used before the first plan is allowed to expand canonical geometry. */
     public static long requiredVertices(ModelDefinition definition, StaticModelRenderMetadata metadata) {
@@ -96,7 +139,6 @@ public final class HostDrawPlan {
     }
 
     private record GeometryKey(int mesh, int primitive, int uvSet, ModelTextureTransform transform) {}
-
     public record Draw(int nodeIndex, int meshIndex, int primitiveIndex, StaticModelMaterial material,
                        StaticModelTexture coordinateSource, HostEntityGeometry geometry, String geometryFailure,
                        ModelBounds localBounds, Vector3f localCenter,

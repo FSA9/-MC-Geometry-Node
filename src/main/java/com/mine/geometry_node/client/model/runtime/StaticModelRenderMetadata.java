@@ -5,6 +5,8 @@ import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.BooleanSupplier;
 
 public final class StaticModelRenderMetadata {
     private final List<Matrix4f> nodeWorldTransforms;
@@ -23,13 +25,20 @@ public final class StaticModelRenderMetadata {
     }
 
     public static StaticModelRenderMetadata from(ModelDefinition definition) {
+        return from(definition, () -> false);
+    }
+
+    static StaticModelRenderMetadata from(ModelDefinition definition, BooleanSupplier cancellation) {
+        Objects.requireNonNull(cancellation, "cancellation");
+        cancelled(cancellation);
         List<Matrix4f> world = new ArrayList<>(definition.nodes().size());
         for (int index = 0; index < definition.nodes().size(); index++) world.add(null);
         for (int root : definition.scenes().get(definition.defaultScene()).rootNodes()) {
-            resolve(definition, root, new Matrix4f(), world);
+            resolve(definition, root, new Matrix4f(), world, cancellation);
         }
         List<StaticModelMaterial> materials = new ArrayList<>(definition.materials().size());
         for (ModelMaterial material : definition.materials()) {
+            cancelled(cancellation);
             materials.add(new StaticModelMaterial(material.red(), material.green(), material.blue(), material.alpha(),
                     texture(definition, material.baseColorTexture()), material.alphaMode(), material.alphaCutoff(),
                     material.doubleSided(), material.emissiveRed(), material.emissiveGreen(), material.emissiveBlue(),
@@ -41,6 +50,7 @@ public final class StaticModelRenderMetadata {
         }
         List<ModelBounds> nodeBounds = new ArrayList<>(definition.nodes().size());
         for (int index = 0; index < definition.nodes().size(); index++) {
+            cancelled(cancellation);
             Matrix4f transform = world.get(index);
             ModelNode node = definition.nodes().get(index);
             nodeBounds.add(transform == null || node.meshIndex() < 0 ? null
@@ -85,11 +95,18 @@ public final class StaticModelRenderMetadata {
                 new ModelVector3((float) maxX, (float) maxY, (float) maxZ));
     }
 
-    private static void resolve(ModelDefinition definition, int index, Matrix4f parent, List<Matrix4f> output) {
+    private static void resolve(ModelDefinition definition, int index, Matrix4f parent, List<Matrix4f> output,
+                                BooleanSupplier cancellation) {
+        cancelled(cancellation);
         if (output.get(index) != null) return;
         Matrix4f world = new Matrix4f(parent).mul(local(definition.nodes().get(index).transform()));
         output.set(index, world);
-        for (int child : definition.nodes().get(index).children()) resolve(definition, child, world, output);
+        for (int child : definition.nodes().get(index).children()) resolve(definition, child, world, output, cancellation);
+    }
+
+    private static void cancelled(BooleanSupplier cancellation) {
+        if (cancellation.getAsBoolean()) throw new java.util.concurrent.CancellationException(
+                "model metadata preparation was cancelled");
     }
 
     private static Matrix4f local(ModelTransform transform) {

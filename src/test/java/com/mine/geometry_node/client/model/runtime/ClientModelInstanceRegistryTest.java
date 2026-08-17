@@ -98,6 +98,29 @@ class ClientModelInstanceRegistryTest {
         });
     }
 
+    @Test
+    void remainsLoadingUntilBackendArtifactCompletes() throws Exception {
+        Path path = Files.write(temporary.resolve("backend-pending.glb"), new byte[]{1});
+        CompletableFuture<LoadedModelResource> loading = new CompletableFuture<>();
+        CompletableFuture<Void> backend = new CompletableFuture<>();
+        QueuedRenderThread render = new QueuedRenderThread();
+        ClientModelInstanceRegistry registry = new ClientModelInstanceRegistry(
+                new ModelResourceCoordinator((request, cancellation) -> loading), render,
+                (resource, ignored) -> backend);
+        ModelInstanceId id = new ModelInstanceId("backend-pending");
+
+        render.run(() -> registry.upsertLocal(id, path, state(Set.of())));
+        loading.complete(TestLoadedModelResourceFactory.create());
+        render.drain();
+
+        assertEquals(ModelLoadState.LOADING, render.call(() -> registry.status(id).state()));
+        assertTrue(render.call(registry::readySnapshot).isEmpty());
+        backend.complete(null);
+        render.drain();
+        assertEquals(ModelLoadState.READY, render.call(() -> registry.status(id).state()));
+        render.run(registry::clear);
+    }
+
     private static ModelInstanceState state(Set<Integer> hidden) {
         return new ModelInstanceState(new ModelDimensionId("minecraft:overworld"), ModelInstancePlacement.at(0, 0, 0),
                 true, 0, 0, new ModelInstanceNodeState(hidden, hidden.hashCode() & 0x7fffffffL));

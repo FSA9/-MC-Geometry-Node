@@ -8,6 +8,8 @@ import java.util.concurrent.CompletableFuture;
 public final class ModelGpuRepository implements AutoCloseable {
     private final ModelGpuDevice device;
     private final RenderThreadDispatcher renderThread;
+    private final ModelUploadScheduler uploadScheduler;
+    private final boolean autoPump;
     private final Map<ModelAssetReference, Entry> entries = new HashMap<>();
     private boolean closed;
     private long uploadAttempts;
@@ -23,8 +25,21 @@ public final class ModelGpuRepository implements AutoCloseable {
     private int liveResources;
 
     public ModelGpuRepository(ModelGpuDevice device, RenderThreadDispatcher renderThread) {
+        this(device, renderThread, new ModelUploadScheduler(renderThread,
+                Long.MAX_VALUE, Integer.MAX_VALUE, Long.MAX_VALUE), true);
+    }
+
+    public ModelGpuRepository(ModelGpuDevice device, RenderThreadDispatcher renderThread,
+                              ModelUploadScheduler uploadScheduler) {
+        this(device, renderThread, uploadScheduler, false);
+    }
+
+    private ModelGpuRepository(ModelGpuDevice device, RenderThreadDispatcher renderThread,
+                               ModelUploadScheduler uploadScheduler, boolean autoPump) {
         this.device = Objects.requireNonNull(device, "device");
         this.renderThread = Objects.requireNonNull(renderThread, "renderThread");
+        this.uploadScheduler = Objects.requireNonNull(uploadScheduler, "uploadScheduler");
+        this.autoPump = autoPump;
     }
 
     public CompletableFuture<ModelGpuLease> acquire(ModelGpuUploadPlan plan) {
@@ -62,67 +77,11 @@ public final class ModelGpuRepository implements AutoCloseable {
 
     private void scheduleUpload(Entry entry, ModelGpuUploadPlan plan) {
         synchronized (this) { uploadAttempts++; pendingUploads++; }
-        renderThread.execute(() -> {
-            synchronized (this) {
-                if (closed || entries.get(entry.source) != entry) {
-                    pendingUploads--;
-                    cancelledUploads++;
-                    entry.resource.completeExceptionally(new IllegalStateException("GPU upload was cancelled"));
-                    return;
-                }
-            }
-            try {
-                ModelGpuResource resource = upload(plan);
-                synchronized (this) {
-                    completedUploads++;
-                    pendingUploads--;
-                    liveResources++;
-                    createdBuffers += resource.bufferCount();
-                    createdTextures += resource.textures().size();
-                    liveBufferBytes += resource.bufferBytes();
-                    liveTextureBytes += resource.textureBytes();
-                }
-                entry.resource.complete(resource);
-            } catch (Throwable throwable) {
-                synchronized (this) {
-                    entries.remove(entry.source, entry);
-                    failedUploads++;
-                    pendingUploads--;
-                }
-                entry.resource.completeExceptionally(throwable);
-            }
-        });
-    }
-
-    private ModelGpuResource upload(ModelGpuUploadPlan plan) {
-        renderThread.assertRenderThread();
-        List<ModelGpuLayoutGroup> groups = new ArrayList<>(plan.layoutGroups().size());
-        List<ModelGpuTexture> textures = new ArrayList<>(plan.images().size());
-        try {
-            for (int index = 0; index < plan.layoutGroups().size(); index++) {
-                ModelGpuLayoutGroupPlan group = plan.layoutGroups().get(index);
-                ModelGpuBuffer vertices = device.createBuffer(label(plan, "vertices", index),
-                        ModelGpuBufferKind.VERTEX, group.vertexData());
-                ModelGpuBuffer indices = null;
-                try {
-                    indices = device.createBuffer(label(plan, "indices", index),
-                            ModelGpuBufferKind.INDEX, group.indexData());
-                    groups.add(new ModelGpuLayoutGroup(group.layout(), group.vertexStride(), group.vertexCount(),
-                            group.indexCount(), vertices, indices));
-                    vertices = null;
-                    indices = null;
-                } finally {
-                    close(vertices);
-                    close(indices);
-                }
-            }
-            for (int index = 0; index < plan.images().size(); index++) {
-                textures.add(device.createTexture(label(plan, "texture", index), plan.images().get(index)));
-            }
-            return new ModelGpuResource(plan.source(), groups, plan.drawRanges(), textures, plan.images());
-        } catch (Throwable throwable) {
-            close(groups, textures);
-            throw throwable;
+        UploadWork work = new UploadWork(entry, plan);
+        if (!uploadScheduler.enqueue(work)) {
+            work.cancelledByScheduler();
+        } else if (autoPump) {
+            renderThread.execute(uploadScheduler::pump);
         }
     }
 
@@ -182,6 +141,148 @@ public final class ModelGpuRepository implements AutoCloseable {
         }
         for (ModelGpuTexture texture : textures) {
             if (texture != null && !texture.isClosed()) texture.close();
+        }
+    }
+
+    private final class UploadWork implements ModelUploadScheduler.WorkItem {
+        private final Entry entry;
+        private final ModelGpuUploadPlan plan;
+        private final List<ModelGpuLayoutGroup> groups;
+        private final List<ModelGpuTexture> textures;
+        private int groupIndex;
+        private int textureIndex;
+        private ModelGpuResource completed;
+
+        private UploadWork(Entry entry, ModelGpuUploadPlan plan) {
+            this.entry = entry;
+            this.plan = plan;
+            groups = new ArrayList<>(plan.layoutGroups().size());
+            textures = new ArrayList<>(plan.images().size());
+        }
+
+        @Override public long nextBytes() {
+            if (groupIndex < plan.layoutGroups().size()) {
+                ModelGpuLayoutGroupPlan group = plan.layoutGroups().get(groupIndex);
+                return Math.addExact(Math.multiplyExact((long) group.vertexStride(), group.vertexCount()),
+                        Math.multiplyExact((long) group.indexCount(), Integer.BYTES));
+            }
+            if (textureIndex < plan.images().size()) {
+                long bytes = 0;
+                for (DecodedModelImage level : plan.images().get(textureIndex).levels()) {
+                    bytes = Math.addExact(bytes, level.byteSize());
+                }
+                return bytes;
+            }
+            return 0;
+        }
+
+        @Override public int nextObjects() {
+            if (groupIndex < plan.layoutGroups().size()) return 2;
+            return textureIndex < plan.images().size() ? 1 : 0;
+        }
+
+        @Override public long remainingBytes() {
+            long bytes = 0;
+            for (int index = groupIndex; index < plan.layoutGroups().size(); index++) {
+                ModelGpuLayoutGroupPlan group = plan.layoutGroups().get(index);
+                bytes = Math.addExact(bytes, Math.addExact(
+                        Math.multiplyExact((long) group.vertexStride(), group.vertexCount()),
+                        Math.multiplyExact((long) group.indexCount(), Integer.BYTES)));
+            }
+            for (int index = textureIndex; index < plan.images().size(); index++) {
+                for (DecodedModelImage level : plan.images().get(index).levels()) {
+                    bytes = Math.addExact(bytes, level.byteSize());
+                }
+            }
+            return bytes;
+        }
+
+        @Override public int remainingObjects() {
+            return (plan.layoutGroups().size() - groupIndex) * 2 + plan.images().size() - textureIndex;
+        }
+
+        @Override public long stagingBytes() {
+            long bytes = 0;
+            for (ModelGpuLayoutGroupPlan group : plan.layoutGroups()) {
+                bytes = Math.addExact(bytes, Math.addExact(
+                        Math.multiplyExact((long) group.vertexStride(), group.vertexCount()),
+                        Math.multiplyExact((long) group.indexCount(), Integer.BYTES)));
+            }
+            for (ModelGpuImagePlan image : plan.images()) {
+                for (DecodedModelImage level : image.levels()) bytes = Math.addExact(bytes, level.byteSize());
+            }
+            return bytes;
+        }
+
+        @Override public boolean cancelled() {
+            synchronized (ModelGpuRepository.this) {
+                return closed || entries.get(entry.source) != entry;
+            }
+        }
+
+        @Override public boolean runStep() {
+            renderThread.assertRenderThread();
+            if (groupIndex < plan.layoutGroups().size()) {
+                ModelGpuLayoutGroupPlan group = plan.layoutGroups().get(groupIndex);
+                ModelGpuBuffer vertices = device.createBuffer(label(plan, "vertices", groupIndex),
+                        ModelGpuBufferKind.VERTEX, group.vertexData());
+                ModelGpuBuffer indices = null;
+                try {
+                    indices = device.createBuffer(label(plan, "indices", groupIndex),
+                            ModelGpuBufferKind.INDEX, group.indexData());
+                    groups.add(new ModelGpuLayoutGroup(group.layout(), group.vertexStride(), group.vertexCount(),
+                            group.indexCount(), vertices, indices));
+                    vertices = null;
+                    indices = null;
+                } finally {
+                    close(vertices);
+                    close(indices);
+                }
+                groupIndex++;
+            } else if (textureIndex < plan.images().size()) {
+                textures.add(device.createTexture(label(plan, "texture", textureIndex),
+                        plan.images().get(textureIndex)));
+                textureIndex++;
+            }
+            if (groupIndex == plan.layoutGroups().size() && textureIndex == plan.images().size()) {
+                completed = new ModelGpuResource(plan.source(), groups, plan.drawRanges(), textures, plan.images());
+                return true;
+            }
+            return false;
+        }
+
+        @Override public void completed() {
+            ModelGpuResource resource = Objects.requireNonNull(completed, "completed GPU resource");
+            synchronized (ModelGpuRepository.this) {
+                completedUploads++;
+                pendingUploads--;
+                liveResources++;
+                createdBuffers += resource.bufferCount();
+                createdTextures += resource.textures().size();
+                liveBufferBytes += resource.bufferBytes();
+                liveTextureBytes += resource.textureBytes();
+            }
+            entry.resource.complete(resource);
+        }
+
+        @Override public void cancelledByScheduler() {
+            close(groups, textures);
+            synchronized (ModelGpuRepository.this) {
+                entries.remove(entry.source, entry);
+                pendingUploads--;
+                cancelledUploads++;
+            }
+            entry.resource.completeExceptionally(new IllegalStateException("GPU upload was cancelled"));
+        }
+
+        @Override public void failed(Throwable failure) {
+            close(groups, textures);
+            synchronized (ModelGpuRepository.this) {
+                entries.remove(entry.source, entry);
+                failedUploads++;
+                pendingUploads--;
+            }
+            entry.resource.completeExceptionally(failure);
         }
     }
 

@@ -10,6 +10,8 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 public final class ModelGpuPreparationService {
     private final Executor workerExecutor;
@@ -27,13 +29,24 @@ public final class ModelGpuPreparationService {
     }
 
     public CompletableFuture<ModelGpuUploadPlan> prepare(ModelDefinition definition) {
-        Objects.requireNonNull(definition, "definition");
-        return CompletableFuture.supplyAsync(() -> planner.plan(definition, decodeImages(definition.images())), workerExecutor);
+        return prepare(definition, () -> false);
     }
 
-    private List<DecodedModelImage> decodeImages(List<ModelImageSource> sources) {
+    public CompletableFuture<ModelGpuUploadPlan> prepare(ModelDefinition definition, BooleanSupplier cancellation) {
+        Objects.requireNonNull(definition, "definition");
+        Objects.requireNonNull(cancellation, "cancellation");
+        return CompletableFuture.supplyAsync(() -> {
+            cancelled(cancellation);
+            List<DecodedModelImage> images = decodeImages(definition.images(), cancellation);
+            cancelled(cancellation);
+            return planner.plan(definition, images, cancellation);
+        }, workerExecutor);
+    }
+
+    private List<DecodedModelImage> decodeImages(List<ModelImageSource> sources, BooleanSupplier cancellation) {
         List<DecodedModelImage> decoded = new ArrayList<>(sources.size());
         for (int index = 0; index < sources.size(); index++) {
+            cancelled(cancellation);
             ModelImageSource source = sources.get(index);
             try {
                 DecodedModelImage image = imageDecoder.decode(source);
@@ -46,5 +59,9 @@ public final class ModelGpuPreparationService {
             }
         }
         return List.copyOf(decoded);
+    }
+
+    static void cancelled(BooleanSupplier cancellation) {
+        if (cancellation.getAsBoolean()) throw new CancellationException("model GPU preparation was cancelled");
     }
 }

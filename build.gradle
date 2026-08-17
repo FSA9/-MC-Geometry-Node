@@ -30,6 +30,8 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
+def lwjglVersion = '3.4.1'
+
 neoForge {
     version = project.neo_version
 
@@ -95,13 +97,12 @@ dependencies {
         exclude group: "it.unimi.dsi", module: "fastutil"
     }
 
-    compileOnly "org.lwjgl:lwjgl-glfw:3.3.3"
-    compileOnly "org.lwjgl:lwjgl-opengl:3.3.3"
-
+    compileOnly "org.lwjgl:lwjgl-glfw:${lwjglVersion}"
+    compileOnly "org.lwjgl:lwjgl-opengl:${lwjglVersion}"
     // Natives
-    runtimeOnly "org.lwjgl:lwjgl:3.3.3:natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-glfw:3.3.3:natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-opengl:3.3.3:natives-windows"
+    runtimeOnly "org.lwjgl:lwjgl:${lwjglVersion}:natives-windows"
+    runtimeOnly "org.lwjgl:lwjgl-glfw:${lwjglVersion}:natives-windows"
+    runtimeOnly "org.lwjgl:lwjgl-opengl:${lwjglVersion}:natives-windows"
 
     implementation "dev.architectury:architectury-neoforge:${architectury_version}"
 

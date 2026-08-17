@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -231,6 +232,22 @@ class ModelGpuBackendTest {
         assertEquals(1, plan.images().size());
         assertEquals(0, plan.images().getFirst().base().rgba()[0],
                 "color linearization must finish before the render-thread upload boundary");
+    }
+
+    @Test
+    void cancelledPreparationDoesNotDecodeOrPublishAPlan() {
+        AtomicInteger decodes = new AtomicInteger();
+        ModelGpuPreparationService service = new ModelGpuPreparationService(Runnable::run, ignored -> {
+            decodes.incrementAndGet();
+            return new DecodedModelImage(1, 1, new byte[]{1, 2, 3, 4});
+        });
+
+        CompletableFuture<ModelGpuUploadPlan> preparation = service.prepare(oneTexturedTriangleModel(), () -> true);
+
+        assertTrue(preparation.isCompletedExceptionally());
+        assertInstanceOf(java.util.concurrent.CancellationException.class,
+                assertThrows(java.util.concurrent.CompletionException.class, preparation::join).getCause());
+        assertEquals(0, decodes.get());
     }
 
     @Test

@@ -1,0 +1,98 @@
+package com.mine.geometry_node.client.model.render.backend.host.entity;
+
+import org.joml.Matrix3f;
+import org.joml.Matrix3fc;
+import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
+
+import java.util.Objects;
+
+/** Exact identity of vertex data baked for one static HOST geometry variant. */
+public final class HostStaticVariantKey {
+    private final Object instanceIdentity;
+    private final long poseRevision;
+    private final Matrix4f poseTransform;
+    private final Matrix3f normalTransform;
+    private final int packedOverlay;
+    private final int packedLight;
+    private final boolean mirrored;
+    private final int redBits;
+    private final int greenBits;
+    private final int blueBits;
+    private final int alphaBits;
+    private final Object layoutIdentity;
+    private final long layoutGeneration;
+
+    public HostStaticVariantKey(Object instanceIdentity, long poseRevision,
+                                Matrix4fc poseTransform, Matrix3fc normalTransform,
+                                int packedOverlay, int packedLight, boolean mirrored,
+                                float red, float green, float blue, float alpha,
+                                Object layoutIdentity, long layoutGeneration) {
+        this.instanceIdentity = Objects.requireNonNull(instanceIdentity, "instanceIdentity");
+        this.poseRevision = poseRevision;
+        this.poseTransform = new Matrix4f(Objects.requireNonNull(poseTransform, "poseTransform"));
+        this.normalTransform = new Matrix3f(Objects.requireNonNull(normalTransform, "normalTransform"));
+        this.packedOverlay = packedOverlay;
+        this.packedLight = packedLight;
+        this.mirrored = mirrored;
+        this.redBits = finiteBits(red, "red");
+        this.greenBits = finiteBits(green, "green");
+        this.blueBits = finiteBits(blue, "blue");
+        this.alphaBits = finiteBits(alpha, "alpha");
+        this.layoutIdentity = Objects.requireNonNull(layoutIdentity, "layoutIdentity");
+        this.layoutGeneration = layoutGeneration;
+    }
+
+    public Object instanceIdentity() { return instanceIdentity; }
+    public long poseRevision() { return poseRevision; }
+    public Matrix4f poseTransform() { return new Matrix4f(poseTransform); }
+    public Matrix3f normalTransform() { return new Matrix3f(normalTransform); }
+    public int packedOverlay() { return packedOverlay; }
+    public int packedLight() { return packedLight; }
+    public boolean mirrored() { return mirrored; }
+    public float red() { return Float.intBitsToFloat(redBits); }
+    public float green() { return Float.intBitsToFloat(greenBits); }
+    public float blue() { return Float.intBitsToFloat(blueBits); }
+    public float alpha() { return Float.intBitsToFloat(alphaBits); }
+    public Object layoutIdentity() { return layoutIdentity; }
+    public long layoutGeneration() { return layoutGeneration; }
+
+    @Override public boolean equals(Object other) {
+        if (this == other) return true;
+        if (!(other instanceof HostStaticVariantKey key)) return false;
+        return instanceIdentity == key.instanceIdentity
+                && poseRevision == key.poseRevision
+                && poseTransform.equals(key.poseTransform)
+                && normalTransform.equals(key.normalTransform)
+                && packedOverlay == key.packedOverlay
+                && packedLight == key.packedLight
+                && mirrored == key.mirrored
+                && redBits == key.redBits
+                && greenBits == key.greenBits
+                && blueBits == key.blueBits
+                && alphaBits == key.alphaBits
+                && layoutIdentity == key.layoutIdentity
+                && layoutGeneration == key.layoutGeneration;
+    }
+
+    @Override public int hashCode() {
+        int result = System.identityHashCode(instanceIdentity);
+        result = 31 * result + Long.hashCode(poseRevision);
+        result = 31 * result + poseTransform.hashCode();
+        result = 31 * result + normalTransform.hashCode();
+        result = 31 * result + packedOverlay;
+        result = 31 * result + packedLight;
+        result = 31 * result + Boolean.hashCode(mirrored);
+        result = 31 * result + redBits;
+        result = 31 * result + greenBits;
+        result = 31 * result + blueBits;
+        result = 31 * result + alphaBits;
+        result = 31 * result + System.identityHashCode(layoutIdentity);
+        return 31 * result + Long.hashCode(layoutGeneration);
+    }
+
+    private static int finiteBits(float value, String name) {
+        if (!Float.isFinite(value)) throw new IllegalArgumentException(name + " must be finite");
+        return Float.floatToIntBits(value);
+    }
+}

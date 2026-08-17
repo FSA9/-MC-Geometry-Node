@@ -6,7 +6,7 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 public final class MinecraftModelGpuBuffer implements ModelGpuBuffer {
     private final GpuBuffer buffer;
 
-    MinecraftModelGpuBuffer(GpuBuffer buffer) {
+    public MinecraftModelGpuBuffer(GpuBuffer buffer) {
         this.buffer = buffer;
     }
 

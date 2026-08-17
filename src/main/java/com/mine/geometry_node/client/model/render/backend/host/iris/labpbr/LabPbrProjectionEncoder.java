@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.model.render.backend.host.iris.labpbr;
 
+import com.mine.geometry_node.client.model.gpu.DecodedModelImage;
 import com.mojang.blaze3d.platform.NativeImage;
 
 /** Pure channel conversion from glTF metallic-roughness material inputs to LabPBR auxiliaries. */
@@ -37,6 +38,17 @@ public final class LabPbrProjectionEncoder {
         return output;
     }
 
+    public static DecodedModelImage buildDecodedSpecular(DecodedModelImage mr, int width, int height,
+                                                         float metallic, float roughness) {
+        byte[] output = new byte[Math.multiplyExact(Math.multiplyExact(width, height), 4)];
+        byte[] mrRgba = mr == null ? null : mr.rgba();
+        for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) {
+            write(output, (y * width + x) * 4,
+                    specular(sample(mr, mrRgba, x, y, width, height, 0xFFFFFFFF), metallic, roughness));
+        }
+        return new DecodedModelImage(width, height, output);
+    }
+
     /** True only when every effective glTF metallic sample is exactly an encodable endpoint. */
     public static boolean metallicEndpointsOnly(NativeImage mr, float metallicFactor) {
         float factor = clamp01(metallicFactor);
@@ -46,6 +58,17 @@ public final class LabPbrProjectionEncoder {
             for (int x = 0; x < mr.getWidth(); x++) {
                 if (!metallicEndpoint(mr.getPixel(x, y), factor)) return false;
             }
+        }
+        return true;
+    }
+
+    public static boolean decodedMetallicEndpointsOnly(DecodedModelImage mr, float metallicFactor) {
+        float factor = clamp01(metallicFactor);
+        if (factor <= ENDPOINT_EPSILON) return true;
+        if (mr == null) return factor >= 1.0F - ENDPOINT_EPSILON;
+        byte[] rgba = mr.rgba();
+        for (int offset = 0; offset < rgba.length; offset += 4) {
+            if (!metallicEndpoint(argb(rgba, offset), factor)) return false;
         }
         return true;
     }
@@ -74,10 +97,42 @@ public final class LabPbrProjectionEncoder {
         return output;
     }
 
+    public static DecodedModelImage buildDecodedNormal(DecodedModelImage normal, DecodedModelImage ao,
+                                                       int width, int height,
+                                                       float normalScale, float aoStrength) {
+        if (normal == null && ao == null) return null;
+        byte[] output = new byte[Math.multiplyExact(Math.multiplyExact(width, height), 4)];
+        byte[] normalRgba = normal == null ? null : normal.rgba();
+        byte[] aoRgba = ao == null ? null : ao.rgba();
+        for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) {
+            write(output, (y * width + x) * 4, normal(
+                    sample(normal, normalRgba, x, y, width, height, 0xFF8080FF),
+                    sample(ao, aoRgba, x, y, width, height, 0xFFFFFFFF), normalScale, aoStrength));
+        }
+        return new DecodedModelImage(width, height, output);
+    }
+
     private static int sample(NativeImage image, int x, int y, int width, int height, int fallback) {
         if (image == null) return fallback;
         return image.getPixel(Math.min(image.getWidth() - 1, x * image.getWidth() / width),
                 Math.min(image.getHeight() - 1, y * image.getHeight() / height));
+    }
+    private static int sample(DecodedModelImage image, byte[] rgba, int x, int y,
+                              int width, int height, int fallback) {
+        if (image == null) return fallback;
+        int sourceX = Math.min(image.width() - 1, x * image.width() / width);
+        int sourceY = Math.min(image.height() - 1, y * image.height() / height);
+        return argb(rgba, (sourceY * image.width() + sourceX) * 4);
+    }
+    private static int argb(byte[] rgba, int offset) {
+        return (rgba[offset + 3] & 255) << 24 | (rgba[offset] & 255) << 16
+                | (rgba[offset + 1] & 255) << 8 | rgba[offset + 2] & 255;
+    }
+    private static void write(byte[] rgba, int offset, int argb) {
+        rgba[offset] = (byte) (argb >>> 16);
+        rgba[offset + 1] = (byte) (argb >>> 8);
+        rgba[offset + 2] = (byte) argb;
+        rgba[offset + 3] = (byte) (argb >>> 24);
     }
     private static float channel(int argb, int shift) { return ((argb >>> shift) & 255) / 255F; }
     private static int byteValue(float value) { return Math.round(clamp01(value) * 255); }

@@ -2,8 +2,10 @@ package com.mine.geometry_node.client.model.runtime;
 
 import com.mine.geometry_node.client.model.gpu.ModelGpuPreparationService;
 import com.mine.geometry_node.client.model.gpu.ModelGpuRepository;
+import com.mine.geometry_node.client.model.gpu.ModelUploadScheduler;
 import com.mine.geometry_node.client.model.gpu.minecraft.*;
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostArtifactRepository;
+import com.mine.geometry_node.client.model.debug.ModelLoadProgressTracker;
 import com.mine.geometry_node.core.engine.system.model.importer.BuiltinModelImporters;
 import net.minecraft.client.Minecraft;
 
@@ -23,6 +25,7 @@ public final class ClientModelRuntime {
         return thread;
     });
     private ModelGpuRepository gpuRepository;
+    private ModelUploadScheduler uploadScheduler;
     private ModelResourceCoordinator resources;
     private ClientModelInstanceRegistry instances;
     private int drawCalls;
@@ -52,6 +55,9 @@ public final class ClientModelRuntime {
 
     public synchronized int resourceCount() { return resources.entryCount(); }
 
+    public ExecutorService modelWorkers() { return workers; }
+    public synchronized ModelUploadScheduler uploadScheduler() { return uploadScheduler; }
+
     public synchronized com.mine.geometry_node.client.model.gpu.ModelGpuRepositoryDiagnostics gpuDiagnostics() {
         return gpuRepository.diagnostics();
     }
@@ -75,7 +81,9 @@ public final class ClientModelRuntime {
         instances.close();
         resources.close();
         HostArtifactRepository.INSTANCE.close();
+        ModelLoadProgressTracker.clear();
         gpuRepository.close();
+        uploadScheduler.close();
         rebuild();
         drawCalls = 0;
         lastRenderCpuNanos = 0;
@@ -102,6 +110,12 @@ public final class ClientModelRuntime {
         recordFrame(drawCalls, submittedTriangles, singularTransformSkips, cpuNanos, gpuNanos, -1, -1, -1);
     }
 
+    public synchronized void pumpUploads() { uploadScheduler.pump(); }
+
+    public synchronized ModelUploadScheduler.Diagnostics uploadDiagnostics() {
+        return uploadScheduler.diagnostics();
+    }
+
     public synchronized void recordFrame(int drawCalls, long submittedTriangles, int singularTransformSkips,
                                          long cpuNanos, long gpuNanos,
                                          int candidateDraws, int culledDraws, long submittedVertices) {
@@ -121,11 +135,22 @@ public final class ClientModelRuntime {
     }
 
     private void rebuild() {
-        gpuRepository = new ModelGpuRepository(new MinecraftModelGpuDevice(), MinecraftRenderThreadDispatcher.INSTANCE);
+        uploadScheduler = new ModelUploadScheduler(MinecraftRenderThreadDispatcher.INSTANCE);
+        gpuRepository = new ModelGpuRepository(new MinecraftModelGpuDevice(),
+                MinecraftRenderThreadDispatcher.INSTANCE, uploadScheduler);
         ModelGpuPreparationService preparation = new ModelGpuPreparationService(workers, new NativeImageModelDecoder());
         resources = new ModelResourceCoordinator(new LocalModelResourceLoader(
                 workers, BuiltinModelImporters.createRegistry(), preparation, gpuRepository));
-        instances = new ClientModelInstanceRegistry(resources, MinecraftRenderThreadDispatcher.INSTANCE);
+        instances = new ClientModelInstanceRegistry(resources, MinecraftRenderThreadDispatcher.INSTANCE,
+                (resource, path) -> {
+                    ModelLoadProgressTracker.update(path, "Preparing HOST", 0.70);
+                    return resource.prepareBackendArtifactAsync(HostArtifactRepository.KEY,
+                                    () -> HostArtifactRepository.INSTANCE.acquireAsync(resource.definition(),
+                                            resource.metadata(), workers, fraction ->
+                                                    ModelLoadProgressTracker.update(path, "Preparing HOST",
+                                                            0.70 + fraction * 0.28)))
+                            .thenApply(ignored -> null);
+                });
     }
 
     public record FrameDiagnostics(int drawCalls, long submittedTriangles, int singularTransformSkips,

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.model.render.backend.host.iris.labpbr;
 
+import com.mine.geometry_node.client.model.gpu.DecodedModelImage;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -57,6 +58,23 @@ class LabPbrProjectionEncoderTest {
     @Test void convertsGltfPositiveYToLabPbrNegativeY() {
         int encoded = LabPbrProjectionEncoder.normal(0xFF80FFFF, 0xFFFFFFFF, 1, 1);
         assertTrue(green(encoded) < 128);
+    }
+
+    @Test void decodedImageProjectionMatchesScalarChannelEncoding() {
+        DecodedModelImage mr = new DecodedModelImage(2, 1,
+                new byte[]{0, (byte) 128, 0, (byte) 255, 0, (byte) 255, (byte) 128, (byte) 255});
+
+        DecodedModelImage projected = LabPbrProjectionEncoder.buildDecodedSpecular(mr, 2, 1, 1, 1);
+        byte[] rgba = projected.rgba();
+
+        assertEquals(LabPbrProjectionEncoder.specular(0xFF008000, 1, 1), argb(rgba, 0));
+        assertEquals(LabPbrProjectionEncoder.specular(0xFF00FF80, 1, 1), argb(rgba, 4));
+        assertFalse(LabPbrProjectionEncoder.decodedMetallicEndpointsOnly(mr, 1));
+    }
+
+    private static int argb(byte[] rgba, int offset) {
+        return (rgba[offset + 3] & 255) << 24 | (rgba[offset] & 255) << 16
+                | (rgba[offset + 1] & 255) << 8 | rgba[offset + 2] & 255;
     }
 
     private static int alpha(int c) { return c >>> 24; }

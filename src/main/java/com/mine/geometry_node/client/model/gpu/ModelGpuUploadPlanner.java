@@ -5,16 +5,24 @@ import com.mine.geometry_node.core.engine.system.model.domain.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 
 public final class ModelGpuUploadPlanner {
     public ModelGpuUploadPlan plan(ModelDefinition definition, List<DecodedModelImage> images) {
+        return plan(definition, images, () -> false);
+    }
+
+    public ModelGpuUploadPlan plan(ModelDefinition definition, List<DecodedModelImage> images,
+                                   BooleanSupplier cancellation) {
         Objects.requireNonNull(definition, "definition");
+        Objects.requireNonNull(cancellation, "cancellation");
         if (images == null || images.size() != definition.images().size()) {
             throw new IllegalArgumentException("decoded image count must match the model definition");
         }
         Map<PrimitiveKey, AttributeProjection> projections = new HashMap<>();
         Map<ModelVertexLayout, GroupCapacity> capacities = new LinkedHashMap<>();
         for (int meshIndex = 0; meshIndex < definition.meshes().size(); meshIndex++) {
+            ModelGpuPreparationService.cancelled(cancellation);
             List<ModelPrimitive> primitives = definition.meshes().get(meshIndex).primitives();
             for (int primitiveIndex = 0; primitiveIndex < primitives.size(); primitiveIndex++) {
                 ModelPrimitive primitive = primitives.get(primitiveIndex);
@@ -28,6 +36,7 @@ public final class ModelGpuUploadPlanner {
         Map<ModelVertexLayout, GroupBuilder> groups = new LinkedHashMap<>();
         Map<PrimitiveKey, PrimitivePlacement> placements = new HashMap<>();
         for (int meshIndex = 0; meshIndex < definition.meshes().size(); meshIndex++) {
+            ModelGpuPreparationService.cancelled(cancellation);
             List<ModelPrimitive> primitives = definition.meshes().get(meshIndex).primitives();
             for (int primitiveIndex = 0; primitiveIndex < primitives.size(); primitiveIndex++) {
                 PrimitiveKey key = new PrimitiveKey(meshIndex, primitiveIndex);
@@ -36,12 +45,13 @@ public final class ModelGpuUploadPlanner {
                 ModelVertexLayout layout = projection.layout();
                 GroupBuilder group = groups.computeIfAbsent(layout, ignored ->
                         new GroupBuilder(layout, groups.size(), capacities.get(layout)));
-                placements.put(new PrimitiveKey(meshIndex, primitiveIndex), group.append(primitive, projection));
+                placements.put(new PrimitiveKey(meshIndex, primitiveIndex), group.append(primitive, projection, cancellation));
             }
         }
 
         List<ModelGpuDrawRange> draws = new ArrayList<>();
         for (int nodeIndex = 0; nodeIndex < definition.nodes().size(); nodeIndex++) {
+            ModelGpuPreparationService.cancelled(cancellation);
             int meshIndex = definition.nodes().get(nodeIndex).meshIndex();
             if (meshIndex < 0) continue;
             List<ModelPrimitive> primitives = definition.meshes().get(meshIndex).primitives();
@@ -63,6 +73,7 @@ public final class ModelGpuUploadPlanner {
         Map<ModelGpuTextureKey, Boolean> imageUsage = imageUsage(definition);
         List<ModelGpuImagePlan> imagePlans = new ArrayList<>(imageUsage.size());
         for (Map.Entry<ModelGpuTextureKey, Boolean> usage : imageUsage.entrySet()) {
+            ModelGpuPreparationService.cancelled(cancellation);
             ModelGpuTextureKey key = usage.getKey();
             DecodedModelImage source = images.get(key.imageIndex());
             if (key.colorSpace() == ModelTextureColorSpace.SHADOW_OPACITY) {
@@ -189,7 +200,8 @@ public final class ModelGpuUploadPlanner {
             this.indices = new byte[capacity.indexBytes()];
         }
 
-        private PrimitivePlacement append(ModelPrimitive primitive, AttributeProjection projection) {
+        private PrimitivePlacement append(ModelPrimitive primitive, AttributeProjection projection,
+                                          BooleanSupplier cancellation) {
             int vertexBase = vertexCount;
             Map<ModelAttributeSemantic, ModelVertexAttribute> attributes = primitive.attributes();
             Map<ModelAttributeSemantic, ByteBuffer> attributeData = new HashMap<>();
@@ -197,6 +209,7 @@ public final class ModelGpuUploadPlanner {
                 attributeData.put(attribute.semantic(), attribute.readOnlyData().order(ByteOrder.LITTLE_ENDIAN));
             }
             for (int vertex = 0; vertex < primitive.vertexCount(); vertex++) {
+                if ((vertex & 0x3FFF) == 0) ModelGpuPreparationService.cancelled(cancellation);
                 for (ModelVertexLayoutElement element : layout.elements()) {
                     ModelAttributeSemantic sourceSemantic = projection.sources().get(element.semantic());
                     ModelVertexAttribute source = attributes.get(sourceSemantic);
@@ -209,6 +222,7 @@ public final class ModelGpuUploadPlanner {
 
             int firstIndex = indexCount;
             for (int i = 0; i < primitive.indices().indexCount(); i++) {
+                if ((i & 0x3FFF) == 0) ModelGpuPreparationService.cancelled(cancellation);
                 long adjusted = Math.addExact(primitive.indices().indexAt(i), Integer.toUnsignedLong(vertexBase));
                 if (adjusted > 0xFFFF_FFFFL) throw new IllegalArgumentException("combined model index exceeds uint32");
                 indexCursor = writeUint32(indices, indexCursor, adjusted);

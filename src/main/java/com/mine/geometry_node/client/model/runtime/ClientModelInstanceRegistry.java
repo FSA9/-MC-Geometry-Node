@@ -2,21 +2,31 @@ package com.mine.geometry_node.client.model.runtime;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.model.gpu.RenderThreadDispatcher;
+import com.mine.geometry_node.client.model.debug.ModelLoadProgressTracker;
+import com.mine.geometry_node.core.engine.system.model.domain.ModelDefinition;
 
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 public final class ClientModelInstanceRegistry implements AutoCloseable {
     private final ModelResourceCoordinator resources;
     private final RenderThreadDispatcher renderThread;
+    private final BackendPreparation backendPreparation;
     private final Map<ModelInstanceId, Entry> instances = new HashMap<>();
     private long generation;
     private List<ReadyInstance> cachedReadySnapshot = List.of();
     private boolean readySnapshotDirty = true;
 
     public ClientModelInstanceRegistry(ModelResourceCoordinator resources, RenderThreadDispatcher renderThread) {
+        this(resources, renderThread, (resource, path) -> CompletableFuture.completedFuture(null));
+    }
+
+    public ClientModelInstanceRegistry(ModelResourceCoordinator resources, RenderThreadDispatcher renderThread,
+                                       BackendPreparation backendPreparation) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.renderThread = Objects.requireNonNull(renderThread, "renderThread");
+        this.backendPreparation = Objects.requireNonNull(backendPreparation, "backendPreparation");
     }
 
     public void upsertLocal(ModelInstanceId id, Path path, ModelInstanceState state) {
@@ -24,6 +34,7 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(path, "path");
         Objects.requireNonNull(state, "state");
+        ModelLoadProgressTracker.begin(path);
         final LocalModelAssetRequest request;
         try {
             request = LocalModelAssetRequest.inspect(path);
@@ -143,6 +154,28 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
                 resources.size(), sourceBytes, vertices, triangles);
     }
 
+    /** Geometry eligible for the current dimension before distance/frustum culling. */
+    public SceneGeometry sceneGeometry(ModelDimensionId dimension) {
+        renderThread.assertRenderThread();
+        long vertices = 0, triangles = 0;
+        for (Entry entry : instances.values()) {
+            if (entry.resource == null || entry.loadState != ModelLoadState.READY
+                    || !entry.state.visible() || !entry.state.dimension().equals(dimension)) continue;
+            ModelDefinition definition = entry.resource.definition();
+            StaticModelRenderMetadata metadata = entry.resource.metadata();
+            for (int nodeIndex = 0; nodeIndex < definition.nodes().size(); nodeIndex++) {
+                var node = definition.nodes().get(nodeIndex);
+                if (node.meshIndex() < 0 || !metadata.nodeVisible(nodeIndex)
+                        || !entry.state.nodeState().visible(nodeIndex)) continue;
+                for (var primitive : definition.meshes().get(node.meshIndex()).primitives()) {
+                    vertices = saturatedAdd(vertices, primitive.vertexCount());
+                    triangles = saturatedAdd(triangles, primitive.triangleCount());
+                }
+            }
+        }
+        return new SceneGeometry(vertices, triangles);
+    }
+
     public void clear() {
         renderThread.assertRenderThread();
         List<Entry> removed = List.copyOf(instances.values());
@@ -160,8 +193,10 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
 
     public record Diagnostics(int instances, int loading, int ready, int failed, int visible,
                               int resources, long sourceBytes, long vertices, long triangles) {}
+    public record SceneGeometry(long vertices, long triangles) {}
 
     private void publishInspectionFailure(ModelInstanceId id, Path path, ModelInstanceState state, Exception failure) {
+        ModelLoadProgressTracker.finish(path);
         removeLocked(id);
         Entry entry = new Entry(++generation, path.toAbsolutePath().normalize(), state, null);
         entry.loadState = ModelLoadState.FAILED;
@@ -175,22 +210,49 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
         Entry entry = instances.get(id);
         if (entry == null || entry.token != token) return;
         if (failure != null) {
+            ModelLoadProgressTracker.finish(entry.path);
             entry.loadState = ModelLoadState.FAILED;
             entry.failure = rootMessage(failure);
             GeometryNode.LOGGER.error("Model instance {} failed to load {}: {}", id.value(), entry.path, entry.failure);
         } else {
             if (!renderable(resource.metadata(), entry.state.placement())) {
+                ModelLoadProgressTracker.finish(entry.path);
                 entry.loadState = ModelLoadState.FAILED;
                 entry.failure = "instance and node transforms compose to a singular render transform";
                 entry.lease.close();
                 GeometryNode.LOGGER.error("Model instance {} rejected {}: {}", id.value(), entry.path, entry.failure);
             } else {
-                entry.resource = resource;
-                entry.pose = new ModelInstancePose(resource.definition());
-                entry.loadState = ModelLoadState.READY;
-                invalidateReadySnapshot();
+                final CompletableFuture<Void> preparation;
+                try {
+                    preparation = Objects.requireNonNull(backendPreparation.prepare(resource, entry.path),
+                            "backend preparation future");
+                } catch (RuntimeException preparationFailure) {
+                    finishBackend(id, token, resource, preparationFailure);
+                    return;
+                }
+                preparation.whenComplete((ignored, preparationFailure) ->
+                        renderThread.execute(() -> finishBackend(id, token, resource, preparationFailure)));
             }
         }
+    }
+
+    private void finishBackend(ModelInstanceId id, long token, LoadedModelResource resource, Throwable failure) {
+        renderThread.assertRenderThread();
+        Entry entry = instances.get(id);
+        if (entry == null || entry.token != token) return;
+        ModelLoadProgressTracker.finish(entry.path);
+        if (failure != null) {
+            entry.loadState = ModelLoadState.FAILED;
+            entry.failure = rootMessage(failure);
+            entry.lease.close();
+            GeometryNode.LOGGER.error("Model instance {} failed to prepare HOST artifact for {}: {}",
+                    id.value(), entry.path, entry.failure);
+            return;
+        }
+        entry.resource = resource;
+        entry.pose = new ModelInstancePose(resource.definition());
+        entry.loadState = ModelLoadState.READY;
+        invalidateReadySnapshot();
     }
 
     private static boolean renderable(StaticModelRenderMetadata metadata, ModelInstancePlacement placement) {
@@ -206,6 +268,7 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
     private void removeLocked(ModelInstanceId id) {
         Entry removed = instances.remove(id);
         if (removed != null) {
+            ModelLoadProgressTracker.finish(removed.path);
             invalidateReadySnapshot();
             if (removed.lease != null) removed.lease.close();
         }
@@ -230,6 +293,11 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
     public record ReadyInstance(ModelInstanceId id, ModelInstanceState state, LoadedModelResource resource,
                                 ModelInstancePose pose) {}
     public record InstanceStatus(ModelLoadState state, Path path, String failure, LoadedModelResource resource) {}
+
+    @FunctionalInterface
+    public interface BackendPreparation {
+        CompletableFuture<Void> prepare(LoadedModelResource resource, Path path);
+    }
 
     private static final class Entry {
         private final long token;
