@@ -43,7 +43,7 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
                                              HostStaticVariantKey key, HostPackedLightVariantGate gate,
                                              int gateToken,
                                              VertexFormat format, BooleanSupplier layoutValid, String label) {
-        int triangles = Math.toIntExact(geometry.triangleCount());
+        int triangles = geometry.staticTriangleCount();
         int vertices = Math.multiplyExact(triangles, 4);
         int bytes = Math.multiplyExact(vertices, format.getVertexSize());
         HostStaticVariantBudget.Reservation reservation = artifact.reserveStaticVariant(bytes);

@@ -99,10 +99,17 @@ dependencies {
 
     compileOnly "org.lwjgl:lwjgl-glfw:${lwjglVersion}"
     compileOnly "org.lwjgl:lwjgl-opengl:${lwjglVersion}"
+    jarJar(implementation("org.lwjgl:lwjgl-meshoptimizer:${lwjglVersion}"))
     // Natives
     runtimeOnly "org.lwjgl:lwjgl:${lwjglVersion}:natives-windows"
     runtimeOnly "org.lwjgl:lwjgl-glfw:${lwjglVersion}:natives-windows"
     runtimeOnly "org.lwjgl:lwjgl-opengl:${lwjglVersion}:natives-windows"
+    jarJar(runtimeOnly("org.lwjgl:lwjgl-meshoptimizer:${lwjglVersion}:natives-windows"))
+    jarJar(runtimeOnly("org.lwjgl:lwjgl-meshoptimizer:${lwjglVersion}:natives-windows-arm64"))
+    jarJar(runtimeOnly("org.lwjgl:lwjgl-meshoptimizer:${lwjglVersion}:natives-linux"))
+    jarJar(runtimeOnly("org.lwjgl:lwjgl-meshoptimizer:${lwjglVersion}:natives-linux-arm64"))
+    jarJar(runtimeOnly("org.lwjgl:lwjgl-meshoptimizer:${lwjglVersion}:natives-macos"))
+    jarJar(runtimeOnly("org.lwjgl:lwjgl-meshoptimizer:${lwjglVersion}:natives-macos-arm64"))
 
     implementation "dev.architectury:architectury-neoforge:${architectury_version}"
 
@@ -111,6 +118,9 @@ dependencies {
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
     testRuntimeOnly "com.google.code.gson:gson:2.11.0"
     testImplementation "org.joml:joml:1.10.8"
+    testImplementation "org.lwjgl:lwjgl-meshoptimizer:${lwjglVersion}"
+    testRuntimeOnly "org.lwjgl:lwjgl-meshoptimizer:${lwjglVersion}:natives-windows"
+    testRuntimeOnly "org.lwjgl:lwjgl-meshoptimizer:${lwjglVersion}:natives-linux"
 }
 
 tasks.named('test', Test).configure {

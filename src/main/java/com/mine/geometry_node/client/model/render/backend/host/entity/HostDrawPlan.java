@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.model.render.backend.host.entity;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostGeometryProjector;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostSpatialClusterPlan;
+import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodPlan;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialAnalyzer;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialProfile;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialProjection;
@@ -21,10 +22,12 @@ public final class HostDrawPlan {
 
     private final List<Draw> draws;
     private final long requiredVertices;
+    private final double[] modelLodErrors;
 
     private HostDrawPlan(List<Draw> draws, long requiredVertices) {
         this.draws = List.copyOf(draws);
         this.requiredVertices = requiredVertices;
+        this.modelLodErrors = modelLodErrors(draws);
     }
 
     public static HostDrawPlan compile(ModelDefinition definition, StaticModelRenderMetadata metadata) {
@@ -85,6 +88,30 @@ public final class HostDrawPlan {
 
     public List<Draw> draws() { return draws; }
     public long requiredVertices() { return requiredVertices; }
+    public double[] modelLodErrors() { return Arrays.copyOf(modelLodErrors, modelLodErrors.length); }
+
+    private static double[] modelLodErrors(List<Draw> draws) {
+        double[] result = new double[4];
+        Set<HostEntityGeometry> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Draw draw : draws) {
+            HostEntityGeometry geometry = draw.geometry();
+            if (geometry == null || !visited.add(geometry)) continue;
+            double extent = boundsExtent(draw.localBounds());
+            if (!(extent > 0.0) || !Double.isFinite(extent)) continue;
+            for (int level = 1; level < result.length; level++) {
+                result[level] = Math.max(result[level],
+                        geometry.lod().level(level).objectError() / extent);
+            }
+        }
+        return result;
+    }
+
+    private static double boundsExtent(ModelBounds bounds) {
+        double x = bounds.max().x() - bounds.min().x();
+        double y = bounds.max().y() - bounds.min().y();
+        double z = bounds.max().z() - bounds.min().z();
+        return Math.sqrt(x * x + y * y + z * z);
+    }
 
     static long projectedGeometryBytes(ModelDefinition definition, StaticModelRenderMetadata metadata) {
         Set<GeometryKey> projected = new HashSet<>();
@@ -103,6 +130,8 @@ public final class HostDrawPlan {
                             12L * Float.BYTES));
                     bytes = Math.addExact(bytes,
                             HostSpatialClusterPlan.retainedMetadataBytes(Math.toIntExact(primitive.triangleCount())));
+                    bytes = Math.addExact(bytes,
+                            HostModelLodPlan.estimatedProxyBytes(primitive.triangleCount()));
                 }
             }
         }

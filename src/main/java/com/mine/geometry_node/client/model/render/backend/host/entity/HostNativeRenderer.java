@@ -9,6 +9,8 @@ import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.IrisL
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.ModelProjectorCapability;
 import com.mine.geometry_node.client.model.render.backend.host.iris.entity.IrisEntityTranslucency;
 import com.mine.geometry_node.client.model.render.backend.host.iris.shadow.IrisShadowAdapter;
+import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodPlan;
+import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodSelector;
 import com.mine.geometry_node.client.model.render.backend.common.ModelRenderBounds;
 import com.mine.geometry_node.client.model.render.integration.*;
 import com.mine.geometry_node.client.model.runtime.*;
@@ -40,6 +42,7 @@ public final class HostNativeRenderer {
     private static final int FULL_BRIGHT = 15728880;
     private static final Object VERTEX_BUDGET_DIAGNOSTIC = new Object();
     private static final Map<ModelInstanceId, Integer> IMMEDIATE_DRAW_CURSORS = new HashMap<>();
+    private static final Map<ModelInstanceId, Integer> MODEL_LOD_LEVELS = new HashMap<>();
     private static int nextInstanceStart;
     private static long nextTextureId;
     private static ModelProjectorCapability lastProjectorCapability;
@@ -55,6 +58,7 @@ public final class HostNativeRenderer {
         List<ClientModelInstanceRegistry.ReadyInstance> ready = runtime.instances().readySnapshot();
         if (ready.isEmpty()) {
             IMMEDIATE_DRAW_CURSORS.clear();
+            MODEL_LOD_LEVELS.clear();
             nextInstanceStart = 0;
             lastLosses = Set.of();
             ModelIntegrationController.reportCompatibility(Set.of(), ModelIntegrationVerification.NOT_APPLICABLE,
@@ -132,11 +136,23 @@ public final class HostNativeRenderer {
                 }
                 continue;
             }
-            submitInstance(root, collector, camera, instance, artifact, frameLosses, frameRejections,
+            double extentX = bounds.maxX - bounds.minX;
+            double extentY = bounds.maxY - bounds.minY;
+            double extentZ = bounds.maxZ - bounds.minZ;
+            double worldExtent = Math.sqrt(extentX * extentX + extentY * extentY + extentZ * extentZ);
+            int requestedLod = HostModelLodSelector.select(
+                    bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY, bounds.maxZ,
+                    camera.x, camera.y, camera.z, mainCamera.getFov(),
+                    Minecraft.getInstance().getWindow().getHeight(), worldExtent,
+                    artifact.drawPlan().modelLodErrors(), MODEL_LOD_LEVELS.getOrDefault(instance.id(), -1));
+            MODEL_LOD_LEVELS.put(instance.id(), requestedLod);
+            submitInstance(root, collector, camera, instance, artifact, requestedLod,
+                    frameLosses, frameRejections,
                     runtimeFaults, statistics, projector, preserveBlend,
                     translucentSubmissions, frustum, vertexBudget);
         }
         IMMEDIATE_DRAW_CURSORS.keySet().retainAll(liveInstanceIds);
+        MODEL_LOD_LEVELS.keySet().retainAll(liveInstanceIds);
         submitTranslucent(root, collector, translucentSubmissions);
         ModelIntegrationVerification verification = frameLosses.remove(ModelCompatibilityLoss.PROJECTOR_HOLDER_PENDING)
                 ? ModelIntegrationVerification.PENDING
@@ -190,6 +206,7 @@ public final class HostNativeRenderer {
     private static void submitInstance(PoseStack root, SubmitNodeCollector collector, Vec3 camera,
                                        ClientModelInstanceRegistry.ReadyInstance instance,
                                        HostPreparedArtifact artifact,
+                                       int requestedLod,
                                        EnumSet<ModelCompatibilityLoss> losses,
                                        EnumMap<ModelDrawRejection, Integer> rejections,
                                        List<String> runtimeFaults, FrameStatistics statistics,
@@ -308,7 +325,7 @@ public final class HostNativeRenderer {
                 StaticSubmission staticSubmission = trySubmitStatic(instance, artifact, loaded, draw, geometry, texture,
                         renderType, placement, camera, visible.nodeWorld(), frustum,
                         bakedTransform, light, mirrored,
-                        red, green, blue, alpha, effectiveTranslucent);
+                        red, green, blue, alpha, effectiveTranslucent, requestedLod);
                 if (staticSubmission.status() == StaticSubmissionStatus.CULLED) {
                     statistics.culledDraws++;
                     continue;
@@ -434,7 +451,7 @@ public final class HostNativeRenderer {
                                            Matrix4f nodeWorld, Frustum frustum,
                                            Matrix4f bakedTransform, int light, boolean mirrored,
                                            float red, float green, float blue, float alpha,
-                                           boolean effectiveTranslucent) {
+                                           boolean effectiveTranslucent, int requestedLod) {
         if (effectiveTranslucent || draw.material().alphaMode() == ModelAlphaMode.BLEND
                 || placement.alpha() < 0.999F || instance.pose().animated()
                 || loaded.definition().nodes().get(draw.nodeIndex()).skinIndex() >= 0
@@ -467,8 +484,13 @@ public final class HostNativeRenderer {
         if (decision == HostPackedLightVariantGate.Decision.HIT && variant != null) {
             HostClusterVisibility.Result visibility;
             try {
-                visibility = HostClusterVisibility.evaluate(geometry.clusters(), bounds -> frustum == null
-                        || frustum.isVisible(ModelRenderBounds.worldBounds(bounds, nodeWorld, placement)));
+                HostModelLodPlan.Level level = geometry.lod().level(requestedLod);
+                HostStaticEntityRenderer.recordModelLod(geometry, requestedLod, level.generatedLevel());
+                visibility = level.generatedLevel() == 0
+                        ? HostClusterVisibility.evaluate(geometry.clusters(), bounds -> frustum == null
+                                || frustum.isVisible(ModelRenderBounds.worldBounds(bounds, nodeWorld, placement)))
+                        : HostClusterVisibility.fullRange(new HostClusterVisibility.TriangleRange(
+                                level.firstTriangle(), level.triangleCount()));
             } catch (RuntimeException failure) {
                 return StaticSubmission.fallback();
             }

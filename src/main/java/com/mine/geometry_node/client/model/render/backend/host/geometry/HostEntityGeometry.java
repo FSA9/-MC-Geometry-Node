@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.model.render.backend.host.geometry;
 
+import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodPlan;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -13,10 +14,18 @@ import java.util.Arrays;
 public final class HostEntityGeometry {
     private final float[] vertices;
     private final HostSpatialClusterPlan clusters;
+    private final HostModelLodPlan lod;
 
     HostEntityGeometry(float[] vertices) {
+        this(vertices, null, 0);
+    }
+
+    HostEntityGeometry(float[] vertices, int[] canonicalIndices, int canonicalVertexCount) {
         this.vertices = Arrays.copyOf(vertices, vertices.length);
         this.clusters = HostSpatialClusterPlan.build(this.vertices);
+        this.lod = canonicalIndices == null
+                ? HostModelLodPlan.build(this.vertices)
+                : HostModelLodPlan.build(this.vertices, canonicalIndices, canonicalVertexCount);
     }
 
     public long triangleCount() {
@@ -24,6 +33,8 @@ public final class HostEntityGeometry {
     }
 
     public HostSpatialClusterPlan clusters() { return clusters; }
+    public HostModelLodPlan lod() { return lod; }
+    public int staticTriangleCount() { return lod.staticTriangleCount(); }
 
     float[] staticVertexData() {
         return Arrays.copyOf(vertices, vertices.length);
@@ -49,6 +60,61 @@ public final class HostEntityGeometry {
                 firstTriangle, triangleCount, true);
     }
 
+    public void emitStaticRange(Matrix4fc pose, Matrix3fc normal, VertexConsumer out,
+                                float red, float green, float blue, float alpha,
+                                int light, boolean mirrored, int firstTriangle, int triangleCount) {
+        int available = staticTriangleCount();
+        if (firstTriangle < 0 || triangleCount < 0 || firstTriangle > available - triangleCount) {
+            throw new IndexOutOfBoundsException("HOST static triangle range is outside the geometry");
+        }
+        Vector3f transformedNormal = new Vector3f();
+        int sourceTriangles = Math.toIntExact(this.triangleCount());
+        for (int staticTriangle = firstTriangle; staticTriangle < firstTriangle + triangleCount; staticTriangle++) {
+            float[] stream;
+            int triangle;
+            if (staticTriangle < sourceTriangles) {
+                stream = vertices;
+                triangle = clusters.sourceTriangle(staticTriangle);
+            } else {
+                stream = null;
+                triangle = staticTriangle - sourceTriangles;
+            }
+            int first = triangle * 3;
+            int second = mirrored ? first + 2 : first + 1;
+            int third = mirrored ? first + 1 : first + 2;
+            if (stream == null) {
+                emitProxyVertex(pose, normal, transformedNormal, out, first, red, green, blue, alpha, light);
+                emitProxyVertex(pose, normal, transformedNormal, out, second, red, green, blue, alpha, light);
+                emitProxyVertex(pose, normal, transformedNormal, out, third, red, green, blue, alpha, light);
+                emitProxyVertex(pose, normal, transformedNormal, out, third, red, green, blue, alpha, light);
+            } else {
+                emitVertex(stream, pose, normal, transformedNormal, out, first, red, green, blue, alpha, light);
+                emitVertex(stream, pose, normal, transformedNormal, out, second, red, green, blue, alpha, light);
+                emitVertex(stream, pose, normal, transformedNormal, out, third, red, green, blue, alpha, light);
+                emitVertex(stream, pose, normal, transformedNormal, out, third, red, green, blue, alpha, light);
+            }
+        }
+    }
+
+    private void emitProxyVertex(Matrix4fc pose, Matrix3fc normal, Vector3f transformedNormal,
+                                 VertexConsumer out, int sourceVertex,
+                                 float red, float green, float blue, float alpha, int light) {
+        int index = sourceVertex * 12;
+        normal.transform(lod.proxyComponent(index + 3), lod.proxyComponent(index + 4),
+                lod.proxyComponent(index + 5), transformedNormal);
+        float lengthSquared = transformedNormal.lengthSquared();
+        if (!Float.isFinite(lengthSquared) || lengthSquared <= 1.0E-12F) {
+            throw new IllegalArgumentException("HOST transformed normal must be finite and non-zero");
+        }
+        transformedNormal.mul((float) (1.0 / Math.sqrt(lengthSquared)));
+        out.addVertex(pose, lod.proxyComponent(index), lod.proxyComponent(index + 1), lod.proxyComponent(index + 2))
+                .setColor(lod.proxyComponent(index + 8) * red, lod.proxyComponent(index + 9) * green,
+                        lod.proxyComponent(index + 10) * blue, lod.proxyComponent(index + 11) * alpha)
+                .setUv(lod.proxyComponent(index + 6), lod.proxyComponent(index + 7))
+                .setOverlay(OverlayTexture.NO_OVERLAY).setLight(light)
+                .setNormal(transformedNormal.x, transformedNormal.y, transformedNormal.z);
+    }
+
     private void emitRange(Matrix4fc pose, Matrix3fc normal, VertexConsumer out,
                            float red, float green, float blue, float alpha,
                            int light, boolean mirrored, int firstTriangle, int triangleCount,
@@ -65,27 +131,28 @@ public final class HostEntityGeometry {
             int second = mirrored ? first + 2 : first + 1;
             int third = mirrored ? first + 1 : first + 2;
             // Entity RenderTypes assemble quads; the duplicate produces a degenerate second triangle.
-            emitVertex(pose, normal, transformedNormal, out, first, red, green, blue, alpha, light);
-            emitVertex(pose, normal, transformedNormal, out, second, red, green, blue, alpha, light);
-            emitVertex(pose, normal, transformedNormal, out, third, red, green, blue, alpha, light);
-            emitVertex(pose, normal, transformedNormal, out, third, red, green, blue, alpha, light);
+            emitVertex(vertices, pose, normal, transformedNormal, out, first, red, green, blue, alpha, light);
+            emitVertex(vertices, pose, normal, transformedNormal, out, second, red, green, blue, alpha, light);
+            emitVertex(vertices, pose, normal, transformedNormal, out, third, red, green, blue, alpha, light);
+            emitVertex(vertices, pose, normal, transformedNormal, out, third, red, green, blue, alpha, light);
         }
     }
 
-    private void emitVertex(Matrix4fc pose, Matrix3fc normal, Vector3f transformedNormal,
+    private static void emitVertex(float[] stream, Matrix4fc pose, Matrix3fc normal,
+                            Vector3f transformedNormal,
                             VertexConsumer out, int sourceVertex,
                             float red, float green, float blue, float alpha, int light) {
         int index = sourceVertex * 12;
-        normal.transform(vertices[index + 3], vertices[index + 4], vertices[index + 5], transformedNormal);
+        normal.transform(stream[index + 3], stream[index + 4], stream[index + 5], transformedNormal);
         float lengthSquared = transformedNormal.lengthSquared();
         if (!Float.isFinite(lengthSquared) || lengthSquared <= 1.0E-12F) {
             throw new IllegalArgumentException("HOST transformed normal must be finite and non-zero");
         }
         transformedNormal.mul((float) (1.0 / Math.sqrt(lengthSquared)));
-        out.addVertex(pose, vertices[index], vertices[index + 1], vertices[index + 2])
-                .setColor(vertices[index + 8] * red, vertices[index + 9] * green,
-                        vertices[index + 10] * blue, vertices[index + 11] * alpha)
-                .setUv(vertices[index + 6], vertices[index + 7]).setOverlay(OverlayTexture.NO_OVERLAY)
+        out.addVertex(pose, stream[index], stream[index + 1], stream[index + 2])
+                .setColor(stream[index + 8] * red, stream[index + 9] * green,
+                        stream[index + 10] * blue, stream[index + 11] * alpha)
+                .setUv(stream[index + 6], stream[index + 7]).setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(light).setNormal(transformedNormal.x, transformedNormal.y, transformedNormal.z);
     }
 }

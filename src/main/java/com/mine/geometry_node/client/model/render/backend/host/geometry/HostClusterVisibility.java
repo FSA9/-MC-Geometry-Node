@@ -18,6 +18,11 @@ public final class HostClusterVisibility {
         return evaluate(plan, visible, DEFAULT_MAX_RANGES);
     }
 
+    public static Result fullRange(TriangleRange range) {
+        Objects.requireNonNull(range, "range");
+        return new Result(List.of(range), 0, 0, 0, 0, range.triangleCount(), false);
+    }
+
     static Result evaluate(HostSpatialClusterPlan plan, Predicate<ModelBounds> visible, int maxRanges) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(visible, "visible");

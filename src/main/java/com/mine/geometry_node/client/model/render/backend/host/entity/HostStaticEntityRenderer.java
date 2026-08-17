@@ -3,6 +3,8 @@ package com.mine.geometry_node.client.model.render.backend.host.entity;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.model.gpu.minecraft.MinecraftModelGpuAccess;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostClusterVisibility;
+import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
+import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodPlan;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderTarget;
@@ -19,13 +21,18 @@ import org.joml.Vector3f;
 import org.joml.Vector4f;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
+import java.util.Set;
 
 /** Direct opaque/cutout HOST pass for fully prepared static entity variants. */
 public final class HostStaticEntityRenderer {
     private static final List<Command> COMMANDS = new ArrayList<>();
+    private static final Set<HostEntityGeometry> LOD_AVAILABILITY_RECORDED =
+            Collections.newSetFromMap(new IdentityHashMap<>());
     private static boolean loggedLayoutMismatch;
     private static int staticDraws;
     private static int staticGpuDrawCalls;
@@ -35,6 +42,12 @@ public final class HostStaticEntityRenderer {
     private static int visibleClusters;
     private static int culledClusters;
     private static int rangeLimitFallbacks;
+    private static final int[] requestedLod = new int[4];
+    private static final int[] actualLod = new int[4];
+    private static final int[] availableLod = new int[4];
+    private static long lodSourceTriangles, lodLevel1Triangles, lodLevel2Triangles, lodLevel3Triangles;
+    private static long lodEligibleVertices, lodLockedVertices, lodBuildNanos;
+    private static int lodBuildFailures;
     private static int buildingDraws;
     private static int fallbackDraws;
     private static int deferredImmediateDraws;
@@ -49,6 +62,13 @@ public final class HostStaticEntityRenderer {
         staticGpuDrawCalls = 0;
         staticSubmittedTriangles = 0;
         clusterNodesTested = candidateClusters = visibleClusters = culledClusters = rangeLimitFallbacks = 0;
+        LOD_AVAILABILITY_RECORDED.clear();
+        java.util.Arrays.fill(requestedLod, 0);
+        java.util.Arrays.fill(actualLod, 0);
+        java.util.Arrays.fill(availableLod, 0);
+        lodSourceTriangles = lodLevel1Triangles = lodLevel2Triangles = lodLevel3Triangles = 0;
+        lodEligibleVertices = lodLockedVertices = lodBuildNanos = 0;
+        lodBuildFailures = 0;
         buildingDraws = 0;
         fallbackDraws = 0;
         deferredImmediateDraws = 0;
@@ -71,6 +91,23 @@ public final class HostStaticEntityRenderer {
     static void recordDeferredImmediate() { deferredImmediateDraws++; }
     static boolean available() { return !runtimeFailed; }
 
+    static void recordModelLod(HostEntityGeometry geometry, int requested, int actual) {
+        requestedLod[Math.clamp(requested, 0, 3)]++;
+        actualLod[Math.clamp(actual, 0, 3)]++;
+        if (!LOD_AVAILABILITY_RECORDED.add(geometry)) return;
+        HostModelLodPlan.Statistics statistics = geometry.lod().statistics();
+        int maximum = geometry.lod().level(3).generatedLevel();
+        availableLod[Math.clamp(maximum, 0, 3)]++;
+        lodSourceTriangles += statistics.sourceTriangles();
+        lodLevel1Triangles += statistics.level1Triangles();
+        lodLevel2Triangles += statistics.level2Triangles();
+        lodLevel3Triangles += statistics.level3Triangles();
+        lodEligibleVertices += statistics.eligibleVertices();
+        lodLockedVertices += statistics.lockedVertices();
+        lodBuildNanos += statistics.buildNanos();
+        if (statistics.stopReason() == HostModelLodPlan.StopReason.BUILD_FAILURE) lodBuildFailures++;
+    }
+
     private static void recordVisibility(HostClusterVisibility.Result visibility) {
         clusterNodesTested += visibility.nodesTested();
         candidateClusters += visibility.candidateLeaves();
@@ -82,6 +119,12 @@ public final class HostStaticEntityRenderer {
     public static Diagnostics diagnostics() {
         return new Diagnostics(staticDraws, staticGpuDrawCalls, staticSubmittedTriangles,
                 clusterNodesTested, candidateClusters, visibleClusters, culledClusters, rangeLimitFallbacks,
+                requestedLod[0], requestedLod[1], requestedLod[2], requestedLod[3],
+                actualLod[0], actualLod[1], actualLod[2], actualLod[3],
+                availableLod[0], availableLod[1], availableLod[2], availableLod[3],
+                LOD_AVAILABILITY_RECORDED.size(), lodSourceTriangles, lodLevel1Triangles,
+                lodLevel2Triangles, lodLevel3Triangles, lodEligibleVertices, lodLockedVertices,
+                lodBuildFailures, lodBuildNanos,
                 buildingDraws, fallbackDraws, deferredImmediateDraws, immediateVertices,
                 HostVertexBudget.MAX_VERTICES_PER_FRAME, HostStaticVariantBudget.INSTANCE.reservedBytes());
     }
@@ -107,6 +150,13 @@ public final class HostStaticEntityRenderer {
         staticDraws = staticGpuDrawCalls = buildingDraws = fallbackDraws = deferredImmediateDraws = 0;
         staticSubmittedTriangles = 0;
         clusterNodesTested = candidateClusters = visibleClusters = culledClusters = rangeLimitFallbacks = 0;
+        LOD_AVAILABILITY_RECORDED.clear();
+        java.util.Arrays.fill(requestedLod, 0);
+        java.util.Arrays.fill(actualLod, 0);
+        java.util.Arrays.fill(availableLod, 0);
+        lodSourceTriangles = lodLevel1Triangles = lodLevel2Triangles = lodLevel3Triangles = 0;
+        lodEligibleVertices = lodLockedVertices = lodBuildNanos = 0;
+        lodBuildFailures = 0;
         immediateVertices = 0;
         runtimeFailed = false;
     }
@@ -179,7 +229,18 @@ public final class HostStaticEntityRenderer {
     public record Diagnostics(int staticDraws, int staticGpuDrawCalls, long staticSubmittedTriangles,
                               int clusterNodesTested, int candidateClusters, int visibleClusters,
                               int culledClusters, int rangeLimitFallbacks,
+                              int requestedLod0, int requestedLod1, int requestedLod2, int requestedLod3,
+                              int actualLod0, int actualLod1, int actualLod2, int actualLod3,
+                              int availableLod0, int availableLod1, int availableLod2, int availableLod3,
+                              int lodGeometries, long lodSourceTriangles, long lodLevel1Triangles,
+                              long lodLevel2Triangles, long lodLevel3Triangles,
+                              long lodEligibleVertices, long lodLockedVertices,
+                              int lodBuildFailures, long lodBuildNanos,
                               int buildingDraws, int fallbackDraws,
                               int deferredImmediateDraws, long immediateVertices, long immediateVertexLimit,
-                              long bufferBytes) {}
+                              long bufferBytes) {
+        public double lodLockedRatio() {
+            return lodEligibleVertices == 0 ? 0.0 : (double) lodLockedVertices / lodEligibleVertices;
+        }
+    }
 }

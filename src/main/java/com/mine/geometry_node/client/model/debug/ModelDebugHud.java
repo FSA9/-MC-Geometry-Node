@@ -64,6 +64,25 @@ public final class ModelDebugHud {
                 : "Culling  draws " + frame.culledDraws() + '/' + frame.candidateDraws()
                 + "  clusters " + hostStatic.culledClusters() + '/' + hostStatic.candidateClusters();
         lines.add(new HudLine(culling, 0xFF78D6C6));
+        if (hostStatic.lodGeometries() > 0) {
+            lines.add(new HudLine("Model LOD requested  " + hostStatic.requestedLod0() + '/'
+                    + hostStatic.requestedLod1() + '/' + hostStatic.requestedLod2() + '/'
+                    + hostStatic.requestedLod3(), 0xFFFFC857));
+            lines.add(new HudLine("Model LOD actual  " + hostStatic.actualLod0() + '/'
+                    + hostStatic.actualLod1() + '/' + hostStatic.actualLod2() + '/'
+                    + hostStatic.actualLod3(), 0xFFD7B8FF));
+            lines.add(new HudLine("Model LOD available  " + hostStatic.availableLod0() + '/'
+                    + hostStatic.availableLod1() + '/' + hostStatic.availableLod2() + '/'
+                    + hostStatic.availableLod3(), 0xFFD7B8FF));
+            lines.add(new HudLine("Model LOD tris  " + number(hostStatic.lodSourceTriangles()) + '/'
+                    + number(hostStatic.lodLevel1Triangles()) + '/'
+                    + number(hostStatic.lodLevel2Triangles()) + '/'
+                    + number(hostStatic.lodLevel3Triangles()), 0xFFC9A7E8));
+            lines.add(new HudLine(String.format(Locale.ROOT,
+                    "Model LOD build  locked %.1f%%  fail %d  %.1f ms",
+                    hostStatic.lodLockedRatio() * 100.0, hostStatic.lodBuildFailures(),
+                    hostStatic.lodBuildNanos() / 1_000_000.0), 0xFFC9A7E8));
+        }
         lines.add(new HudLine("GPU  " + bytes(trackedGpuBytes) + "  buffers "
                 + bytes(gpu.liveBufferBytes()) + "  textures " + bytes(gpu.liveTextureBytes()), 0xFF78AFFF));
         if (hostStatic.fallbackDraws() > 0 || hostStatic.deferredImmediateDraws() > 0

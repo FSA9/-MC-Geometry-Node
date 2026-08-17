@@ -50,7 +50,7 @@ public final class HostGeometryProjector {
             cursor = copy(output, cursor, colors, vertex, 4, new float[]{1, 1, 1, 1});
         }
         if (normals == null) generateFaceNormals(output);
-        return new HostEntityGeometry(output);
+        return new HostEntityGeometry(output, indices, primitive.vertexCount());
     }
 
     private static float[] syntheticTriangleUv(int triangleVertex) {

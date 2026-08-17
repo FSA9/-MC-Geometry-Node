@@ -27,7 +27,7 @@ public final class HostEntityMeshChunkBuilder {
         int estimated = Math.multiplyExact(Math.multiplyExact(triangleCount, 4), requestedFormat.getVertexSize());
         try (ByteBufferBuilder storage = new ByteBufferBuilder(Math.max(estimated, 1))) {
             BufferBuilder builder = new BufferBuilder(storage, VertexFormat.Mode.QUADS, requestedFormat);
-            geometry.emitOrderedRange(pose, normal, builder, red, green, blue, alpha, packedLight, mirrored,
+            geometry.emitStaticRange(pose, normal, builder, red, green, blue, alpha, packedLight, mirrored,
                     firstTriangle, triangleCount);
             try (MeshData mesh = builder.buildOrThrow()) {
                 MeshData.DrawState state = mesh.drawState();
