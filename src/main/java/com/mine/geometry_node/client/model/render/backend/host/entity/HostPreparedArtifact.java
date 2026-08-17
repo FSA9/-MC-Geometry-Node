@@ -175,22 +175,7 @@ public final class HostPreparedArtifact {
 
     List<HostStaticGeometryVariant> detachStaticVariantForBudget(
             HostEntityGeometry requestedGeometry, HostStaticVariantKey requestedKey, long generation) {
-        List<HostStaticGeometryVariant> local = detachLeastRecentlyUsedStaticVariant(
-                requestedGeometry, requestedKey, generation);
-        if (!local.isEmpty() || !staticGeneration(generation)) return local;
-        Iterator<Map.Entry<HostEntityGeometry, LinkedHashMap<HostStaticVariantKey, HostStaticGeometryVariant>>>
-                geometries = staticVariants.entrySet().iterator();
-        while (geometries.hasNext()) {
-            Map.Entry<HostEntityGeometry, LinkedHashMap<HostStaticVariantKey, HostStaticGeometryVariant>> entry =
-                    geometries.next();
-            if (entry.getKey() == requestedGeometry || entry.getValue().isEmpty()) continue;
-            Iterator<HostStaticGeometryVariant> variants = entry.getValue().values().iterator();
-            HostStaticGeometryVariant detached = variants.next();
-            variants.remove();
-            if (entry.getValue().isEmpty()) geometries.remove();
-            return List.of(detached);
-        }
-        return List.of();
+        return detachLeastRecentlyUsedStaticVariant(requestedGeometry, requestedKey, generation);
     }
 
     StaticVariantPublication publishStaticVariant(HostEntityGeometry geometry, HostStaticVariantKey key,

@@ -28,26 +28,28 @@ class HostPreparedArtifactStaticVariantTest {
         Matrix4f pose = new Matrix4f().scale(2, 1, 1);
         Matrix3f normal = new Matrix3f().scaling(0.5F, 1, 1);
         HostStaticVariantKey base = new HostStaticVariantKey(instance, 7, pose, normal,
-                0, 0x00f000f0, false, 1, 1, 1, 1, layout, 3);
+                0, 0x00f000f0, false, 1, 1, 1, 1, 0, 3, layout, 3);
 
         assertEquals(base, new HostStaticVariantKey(instance, 7, pose, normal,
-                0, 0x00f000f0, false, 1, 1, 1, 1, layout, 3));
+                0, 0x00f000f0, false, 1, 1, 1, 1, 0, 3, layout, 3));
         assertNotEquals(base, new HostStaticVariantKey(new Object(), 7, pose, normal,
-                0, 0x00f000f0, false, 1, 1, 1, 1, layout, 3));
+                0, 0x00f000f0, false, 1, 1, 1, 1, 0, 3, layout, 3));
         assertNotEquals(base, new HostStaticVariantKey(instance, 8, pose, normal,
-                0, 0x00f000f0, false, 1, 1, 1, 1, layout, 3));
+                0, 0x00f000f0, false, 1, 1, 1, 1, 0, 3, layout, 3));
         assertNotEquals(base, new HostStaticVariantKey(instance, 7, new Matrix4f(pose).translate(1, 0, 0), normal,
-                0, 0x00f000f0, false, 1, 1, 1, 1, layout, 3));
+                0, 0x00f000f0, false, 1, 1, 1, 1, 0, 3, layout, 3));
         assertNotEquals(base, new HostStaticVariantKey(instance, 7, pose, normal,
-                0, 0, false, 1, 1, 1, 1, layout, 3));
+                0, 0, false, 1, 1, 1, 1, 0, 3, layout, 3));
         assertNotEquals(base, new HostStaticVariantKey(instance, 7, pose, normal,
-                1, 0x00f000f0, false, 1, 1, 1, 1, layout, 3));
+                1, 0x00f000f0, false, 1, 1, 1, 1, 0, 3, layout, 3));
         assertNotEquals(base, new HostStaticVariantKey(instance, 7, pose, normal,
-                0, 0x00f000f0, true, 1, 1, 1, 1, layout, 3));
+                0, 0x00f000f0, true, 1, 1, 1, 1, 0, 3, layout, 3));
         assertNotEquals(base, new HostStaticVariantKey(instance, 7, pose, normal,
-                0, 0x00f000f0, false, 0.5F, 1, 1, 1, layout, 3));
+                0, 0x00f000f0, false, 0.5F, 1, 1, 1, 0, 3, layout, 3));
         assertNotEquals(base, new HostStaticVariantKey(instance, 7, pose, normal,
-                0, 0x00f000f0, false, 1, 1, 1, 1, new Object(), 3));
+                0, 0x00f000f0, false, 1, 1, 1, 1, 0, 3, new Object(), 3));
+        assertNotEquals(base, new HostStaticVariantKey(instance, 7, pose, normal,
+                0, 0x00f000f0, false, 1, 1, 1, 1, 3, 2, layout, 3));
     }
 
     @Test
@@ -156,7 +158,7 @@ class HostPreparedArtifactStaticVariantTest {
     }
 
     @Test
-    void budgetRetryCanRetireVariantFromAnotherLodGeometry() {
+    void budgetRetryDoesNotRetireAnotherGeometryAndCreateARebuildCycle() {
         HostPreparedArtifact artifact = artifact();
         HostEntityGeometry residentGeometry = geometry();
         HostEntityGeometry requestedGeometry = geometry();
@@ -173,9 +175,8 @@ class HostPreparedArtifactStaticVariantTest {
         List<HostStaticGeometryVariant> detached = artifact.detachStaticVariantForBudget(
                 requestedGeometry, requestedKey, generation);
 
-        assertEquals(List.of(resident), detached);
-        assertNull(artifact.staticVariant(residentGeometry, residentKey, generation));
-        detached.forEach(HostStaticGeometryVariant::close);
+        assertTrue(detached.isEmpty());
+        assertSame(resident, artifact.staticVariant(residentGeometry, residentKey, generation));
         artifact.closeStaticVariants();
     }
 
@@ -192,7 +193,7 @@ class HostPreparedArtifactStaticVariantTest {
 
     private static HostStaticVariantKey key(Object instance, Object layout, long revision) {
         return new HostStaticVariantKey(instance, revision, new Matrix4f(), new Matrix3f(),
-                0, (int) revision, false, 1, 1, 1, 1, layout, 1);
+                0, (int) revision, false, 1, 1, 1, 1, 0, 1, layout, 1);
     }
 
     private static HostEntityGeometry geometry() {

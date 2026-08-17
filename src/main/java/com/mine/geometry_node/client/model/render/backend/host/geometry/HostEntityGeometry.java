@@ -96,6 +96,35 @@ public final class HostEntityGeometry {
         }
     }
 
+    public void emitStaticTriangleRange(Matrix4fc pose, Matrix3fc normal, VertexConsumer out,
+                                        float red, float green, float blue, float alpha,
+                                        int light, boolean mirrored, int firstTriangle, int triangleCount) {
+        int available = staticTriangleCount();
+        if (firstTriangle < 0 || triangleCount < 0 || firstTriangle > available - triangleCount) {
+            throw new IndexOutOfBoundsException("HOST static triangle range is outside the geometry");
+        }
+        Vector3f transformedNormal = new Vector3f();
+        int sourceTriangles = Math.toIntExact(this.triangleCount());
+        for (int staticTriangle = firstTriangle; staticTriangle < firstTriangle + triangleCount; staticTriangle++) {
+            boolean source = staticTriangle < sourceTriangles;
+            int triangle = source
+                    ? clusters.sourceTriangle(staticTriangle)
+                    : staticTriangle - sourceTriangles;
+            int first = triangle * 3;
+            int second = mirrored ? first + 2 : first + 1;
+            int third = mirrored ? first + 1 : first + 2;
+            if (source) {
+                emitVertex(vertices, pose, normal, transformedNormal, out, first, red, green, blue, alpha, light);
+                emitVertex(vertices, pose, normal, transformedNormal, out, second, red, green, blue, alpha, light);
+                emitVertex(vertices, pose, normal, transformedNormal, out, third, red, green, blue, alpha, light);
+            } else {
+                emitProxyVertex(pose, normal, transformedNormal, out, first, red, green, blue, alpha, light);
+                emitProxyVertex(pose, normal, transformedNormal, out, second, red, green, blue, alpha, light);
+                emitProxyVertex(pose, normal, transformedNormal, out, third, red, green, blue, alpha, light);
+            }
+        }
+    }
+
     private void emitProxyVertex(Matrix4fc pose, Matrix3fc normal, Vector3f transformedNormal,
                                  VertexConsumer out, int sourceVertex,
                                  float red, float green, float blue, float alpha, int light) {

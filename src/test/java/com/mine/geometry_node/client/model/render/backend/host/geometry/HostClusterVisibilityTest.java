@@ -18,7 +18,7 @@ class HostClusterVisibilityTest {
         assertEquals(8, result.submittedTriangles());
         assertEquals(0, result.candidateLeaves());
         assertEquals(0, result.ranges().getFirst().firstIndex());
-        assertEquals(48, result.ranges().getFirst().indexCount());
+        assertEquals(24, result.ranges().getFirst().indexCount());
     }
 
     @Test

@@ -20,6 +20,8 @@ public final class HostStaticVariantKey {
     private final int greenBits;
     private final int blueBits;
     private final int alphaBits;
+    private final int firstTriangle;
+    private final int triangleCount;
     private final Object layoutIdentity;
     private final long layoutGeneration;
 
@@ -27,6 +29,7 @@ public final class HostStaticVariantKey {
                                 Matrix4fc poseTransform, Matrix3fc normalTransform,
                                 int packedOverlay, int packedLight, boolean mirrored,
                                 float red, float green, float blue, float alpha,
+                                int firstTriangle, int triangleCount,
                                 Object layoutIdentity, long layoutGeneration) {
         this.instanceIdentity = Objects.requireNonNull(instanceIdentity, "instanceIdentity");
         this.poseRevision = poseRevision;
@@ -39,6 +42,11 @@ public final class HostStaticVariantKey {
         this.greenBits = finiteBits(green, "green");
         this.blueBits = finiteBits(blue, "blue");
         this.alphaBits = finiteBits(alpha, "alpha");
+        if (firstTriangle < 0 || triangleCount < 1) {
+            throw new IllegalArgumentException("static triangle range must be non-empty");
+        }
+        this.firstTriangle = firstTriangle;
+        this.triangleCount = triangleCount;
         this.layoutIdentity = Objects.requireNonNull(layoutIdentity, "layoutIdentity");
         this.layoutGeneration = layoutGeneration;
     }
@@ -54,6 +62,8 @@ public final class HostStaticVariantKey {
     public float green() { return Float.intBitsToFloat(greenBits); }
     public float blue() { return Float.intBitsToFloat(blueBits); }
     public float alpha() { return Float.intBitsToFloat(alphaBits); }
+    public int firstTriangle() { return firstTriangle; }
+    public int triangleCount() { return triangleCount; }
     public Object layoutIdentity() { return layoutIdentity; }
     public long layoutGeneration() { return layoutGeneration; }
 
@@ -71,6 +81,8 @@ public final class HostStaticVariantKey {
                 && greenBits == key.greenBits
                 && blueBits == key.blueBits
                 && alphaBits == key.alphaBits
+                && firstTriangle == key.firstTriangle
+                && triangleCount == key.triangleCount
                 && layoutIdentity == key.layoutIdentity
                 && layoutGeneration == key.layoutGeneration;
     }
@@ -87,6 +99,8 @@ public final class HostStaticVariantKey {
         result = 31 * result + greenBits;
         result = 31 * result + blueBits;
         result = 31 * result + alphaBits;
+        result = 31 * result + firstTriangle;
+        result = 31 * result + triangleCount;
         result = 31 * result + System.identityHashCode(layoutIdentity);
         return 31 * result + Long.hashCode(layoutGeneration);
     }

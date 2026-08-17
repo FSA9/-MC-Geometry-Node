@@ -85,9 +85,10 @@ public final class ModelDebugHud {
         }
         lines.add(new HudLine("GPU  " + bytes(trackedGpuBytes) + "  buffers "
                 + bytes(gpu.liveBufferBytes()) + "  textures " + bytes(gpu.liveTextureBytes()), 0xFF78AFFF));
-        if (hostStatic.fallbackDraws() > 0 || hostStatic.deferredImmediateDraws() > 0
+        if (hostStatic.buildingDraws() > 0 || hostStatic.fallbackDraws() > 0 || hostStatic.deferredImmediateDraws() > 0
                 || hostStatic.rangeLimitFallbacks() > 0) {
-            lines.add(new HudLine("Fallback  immediate " + hostStatic.fallbackDraws()
+            lines.add(new HudLine("Static  building " + hostStatic.buildingDraws()
+                    + "  fallback " + hostStatic.fallbackDraws()
                     + "  deferred " + hostStatic.deferredImmediateDraws()
                     + "  ranges " + hostStatic.rangeLimitFallbacks(), 0xFFFFA24A));
         }

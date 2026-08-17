@@ -6,8 +6,8 @@ import java.util.Objects;
 
 /** Byte and variant limits for optional static HOST geometry caches. */
 public final class HostStaticVariantBudget {
-    public static final long PER_ARTIFACT_BYTES = 64L << 20;
-    public static final long GLOBAL_BYTES = 256L << 20;
+    public static final long PER_ARTIFACT_BYTES = 256L << 20;
+    public static final long GLOBAL_BYTES = 512L << 20;
     public static final int MAX_VARIANTS_PER_GEOMETRY = 4;
     public static final HostStaticVariantBudget INSTANCE =
             new HostStaticVariantBudget(PER_ARTIFACT_BYTES, GLOBAL_BYTES);

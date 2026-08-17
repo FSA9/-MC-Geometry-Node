@@ -181,15 +181,15 @@ public final class HostStaticEntityRenderer {
         if (color == null) throw new IllegalStateException("static HOST render target has no color attachment");
 
         int maxEndTriangle = 0;
-        int availableTriangles = command.variant().vertexCount() / 4;
+        int availableTriangles = command.variant().vertexCount() / 3;
         for (HostClusterVisibility.TriangleRange range : command.ranges()) {
             if (range.endTriangle() > availableTriangles) {
                 throw new IllegalArgumentException("static HOST range exceeds variant geometry");
             }
             maxEndTriangle = Math.max(maxEndTriangle, range.endTriangle());
         }
-        int requiredIndices = Math.multiplyExact(maxEndTriangle, 6);
-        RenderSystem.AutoStorageIndexBuffer sequential = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
+        int requiredIndices = Math.multiplyExact(maxEndTriangle, 3);
+        RenderSystem.AutoStorageIndexBuffer sequential = RenderSystem.getSequentialBuffer(VertexFormat.Mode.TRIANGLES);
         GpuBuffer indices = sequential.getBuffer(requiredIndices);
         if (indices == null || indices.isClosed()) {
             throw new IllegalStateException("static HOST sequential index buffer is unavailable");
@@ -210,7 +210,8 @@ public final class HostStaticEntityRenderer {
             pass.bindTexture("Sampler2", minecraft.gameRenderer.lightmap(),
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
             for (HostClusterVisibility.TriangleRange range : command.ranges()) {
-                pass.drawIndexed(0, range.firstIndex(), range.indexCount(), 1);
+                pass.drawIndexed(0, Math.multiplyExact(range.firstTriangle(), 3),
+                        Math.multiplyExact(range.triangleCount(), 3), 1);
                 staticGpuDrawCalls++;
                 staticSubmittedTriangles += range.triangleCount();
             }

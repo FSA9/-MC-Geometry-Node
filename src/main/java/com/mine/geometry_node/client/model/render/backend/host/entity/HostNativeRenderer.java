@@ -471,10 +471,16 @@ public final class HostNativeRenderer {
         } catch (RuntimeException failure) {
             return StaticSubmission.ineligible();
         }
+        HostModelLodPlan.Level level;
+        try {
+            level = geometry.lod().level(requestedLod);
+        } catch (RuntimeException failure) {
+            return StaticSubmission.fallback();
+        }
         long layoutGeneration = ModelResourceReloadListener.reloadGeneration();
         HostStaticVariantKey key = new HostStaticVariantKey(instance.id(), instance.pose().revision(),
                 bakedTransform, normalTransform, OverlayTexture.NO_OVERLAY, light, mirrored,
-                red, green, blue, alpha, format, layoutGeneration);
+                red, green, blue, alpha, level.firstTriangle(), level.triangleCount(), format, layoutGeneration);
         long generation = artifact.staticGeneration();
         HostStaticGeometryVariant variant = artifact.staticVariant(geometry, key, generation);
         HostPackedLightVariantGate gate = artifact.staticVariantGate(geometry, instance.id());
@@ -484,13 +490,12 @@ public final class HostNativeRenderer {
         if (decision == HostPackedLightVariantGate.Decision.HIT && variant != null) {
             HostClusterVisibility.Result visibility;
             try {
-                HostModelLodPlan.Level level = geometry.lod().level(requestedLod);
                 HostStaticEntityRenderer.recordModelLod(geometry, requestedLod, level.generatedLevel());
                 visibility = level.generatedLevel() == 0
                         ? HostClusterVisibility.evaluate(geometry.clusters(), bounds -> frustum == null
                                 || frustum.isVisible(ModelRenderBounds.worldBounds(bounds, nodeWorld, placement)))
                         : HostClusterVisibility.fullRange(new HostClusterVisibility.TriangleRange(
-                                level.firstTriangle(), level.triangleCount()));
+                                0, level.triangleCount()));
             } catch (RuntimeException failure) {
                 return StaticSubmission.fallback();
             }
@@ -523,9 +528,26 @@ public final class HostNativeRenderer {
             return StaticSubmission.fallback();
         }
         if (upload == null) {
-            HostStaticVariantUpload.retire(
-                    artifact.detachStaticVariantForBudget(geometry, key, generation));
-            gate.recordCancelled(gateToken, generation);
+            List<HostStaticGeometryVariant> retired = artifact.detachStaticVariantForBudget(
+                    geometry, key, generation);
+            HostStaticVariantUpload.retire(retired);
+            if (retired.isEmpty()) {
+                gate.recordFailure(gateToken, generation);
+                String diagnosticKey = "static-budget:" + draw.nodeIndex() + ':' + draw.primitiveIndex();
+                if (artifact.loggedGeometryFailures.add(diagnosticKey)) {
+                    long requiredBytes = Math.multiplyExact(
+                            Math.multiplyExact((long) level.triangleCount(), 3L), format.getVertexSize());
+                    GeometryNode.LOGGER.warn("Static HOST budget rejected {} node={} primitive={}: required={} "
+                                    + "artifact-resident={} global-resident={} limits={}/{}",
+                            loaded.asset().cacheIdentity(), draw.nodeIndex(), draw.primitiveIndex(), requiredBytes,
+                            HostStaticVariantBudget.INSTANCE.artifactBytes(artifact),
+                            HostStaticVariantBudget.INSTANCE.reservedBytes(),
+                            HostStaticVariantBudget.PER_ARTIFACT_BYTES,
+                            HostStaticVariantBudget.GLOBAL_BYTES);
+                }
+            } else {
+                gate.recordCancelled(gateToken, generation);
+            }
             return StaticSubmission.fallback();
         }
         if (!ClientModelRuntime.INSTANCE.uploadScheduler().enqueue(upload)) upload.cancelledByScheduler();

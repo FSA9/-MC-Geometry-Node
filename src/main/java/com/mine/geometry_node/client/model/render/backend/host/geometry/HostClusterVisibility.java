@@ -94,8 +94,8 @@ public final class HostClusterVisibility {
         }
 
         public int endTriangle() { return Math.addExact(firstTriangle, triangleCount); }
-        public int firstIndex() { return Math.multiplyExact(firstTriangle, 6); }
-        public int indexCount() { return Math.multiplyExact(triangleCount, 6); }
+        public int firstIndex() { return Math.multiplyExact(firstTriangle, 3); }
+        public int indexCount() { return Math.multiplyExact(triangleCount, 3); }
     }
 
     public record Result(List<TriangleRange> ranges, int nodesTested, int candidateLeaves,

@@ -43,8 +43,8 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
                                              HostStaticVariantKey key, HostPackedLightVariantGate gate,
                                              int gateToken,
                                              VertexFormat format, BooleanSupplier layoutValid, String label) {
-        int triangles = geometry.staticTriangleCount();
-        int vertices = Math.multiplyExact(triangles, 4);
+        int triangles = key.triangleCount();
+        int vertices = Math.multiplyExact(triangles, 3);
         int bytes = Math.multiplyExact(vertices, format.getVertexSize());
         HostStaticVariantBudget.Reservation reservation = artifact.reserveStaticVariant(bytes);
         return reservation == null ? null : new HostStaticVariantUpload(artifact, geometry, key, gate, gateToken,
@@ -69,20 +69,20 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
         this.reservation = Objects.requireNonNull(reservation, "reservation");
         this.triangleCount = triangleCount;
         this.vertexCount = vertexCount;
-        this.indexCount = Math.multiplyExact(triangleCount, 6);
+        this.indexCount = Math.multiplyExact(triangleCount, 3);
         this.byteSize = byteSize;
     }
 
     @Override public long nextBytes() {
         if (buffer == null) return 0;
         int triangles = Math.min(TRIANGLES_PER_STEP, triangleCount - builtTriangles);
-        return Math.multiplyExact(Math.multiplyExact((long) triangles, 4L), format.getVertexSize());
+        return Math.multiplyExact(Math.multiplyExact((long) triangles, 3L), format.getVertexSize());
     }
 
     @Override public int nextObjects() { return buffer == null ? 1 : 0; }
 
     @Override public long remainingBytes() {
-        return Math.multiplyExact(Math.multiplyExact((long) (triangleCount - builtTriangles), 4L),
+        return Math.multiplyExact(Math.multiplyExact((long) (triangleCount - builtTriangles), 3L),
                 format.getVertexSize());
     }
 
@@ -104,9 +104,10 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
         }
         int triangles = Math.min(TRIANGLES_PER_STEP, triangleCount - builtTriangles);
         HostEntityMeshChunkBuilder.BuiltChunk chunk = HostEntityMeshChunkBuilder.build(
-                geometry, builtTriangles, triangles, key.poseTransform(), key.normalTransform(), format,
+                geometry, Math.addExact(key.firstTriangle(), builtTriangles), triangles,
+                key.poseTransform(), key.normalTransform(), format,
                 key.red(), key.green(), key.blue(), key.alpha(), key.packedLight(), key.mirrored());
-        int offset = Math.multiplyExact(Math.multiplyExact(builtTriangles, 4), format.getVertexSize());
+        int offset = Math.multiplyExact(Math.multiplyExact(builtTriangles, 3), format.getVertexSize());
         byte[] data = chunk.vertexData();
         RenderSystem.getDevice().createCommandEncoder().writeToBuffer(
                 MinecraftModelGpuAccess.buffer(buffer).slice(offset, data.length), direct(data));

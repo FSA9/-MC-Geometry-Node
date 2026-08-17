@@ -24,18 +24,18 @@ public final class HostEntityMeshChunkBuilder {
         Objects.requireNonNull(normal, "normal");
         Objects.requireNonNull(requestedFormat, "requestedFormat");
         if (triangleCount < 1) throw new IllegalArgumentException("mesh chunk must contain triangles");
-        int estimated = Math.multiplyExact(Math.multiplyExact(triangleCount, 4), requestedFormat.getVertexSize());
+        int estimated = Math.multiplyExact(Math.multiplyExact(triangleCount, 3), requestedFormat.getVertexSize());
         try (ByteBufferBuilder storage = new ByteBufferBuilder(Math.max(estimated, 1))) {
-            BufferBuilder builder = new BufferBuilder(storage, VertexFormat.Mode.QUADS, requestedFormat);
-            geometry.emitStaticRange(pose, normal, builder, red, green, blue, alpha, packedLight, mirrored,
+            BufferBuilder builder = new BufferBuilder(storage, VertexFormat.Mode.TRIANGLES, requestedFormat);
+            geometry.emitStaticTriangleRange(pose, normal, builder, red, green, blue, alpha, packedLight, mirrored,
                     firstTriangle, triangleCount);
             try (MeshData mesh = builder.buildOrThrow()) {
                 MeshData.DrawState state = mesh.drawState();
-                if (state.format() != requestedFormat || state.mode() != VertexFormat.Mode.QUADS) {
+                if (state.format() != requestedFormat || state.mode() != VertexFormat.Mode.TRIANGLES) {
                     throw new IllegalStateException("active entity vertex layout changed while building static chunk");
                 }
-                int expectedVertices = Math.multiplyExact(triangleCount, 4);
-                int expectedIndices = Math.multiplyExact(triangleCount, 6);
+                int expectedVertices = Math.multiplyExact(triangleCount, 3);
+                int expectedIndices = expectedVertices;
                 ByteBuffer vertices = mesh.vertexBuffer();
                 int expectedBytes = Math.multiplyExact(expectedVertices, requestedFormat.getVertexSize());
                 if (state.vertexCount() != expectedVertices || state.indexCount() != expectedIndices
