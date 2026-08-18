@@ -17,6 +17,7 @@ public final class HostLocalLightRepository implements AutoCloseable {
     private final Retirement retirement;
     private final Map<ModelInstanceId, Entry> entries = new HashMap<>();
     private long generation;
+    private boolean closed;
     private long published, staleCompletions, cancelled, transientFailures, terminalUnsupported, budgetRejected;
     private int retiringFields;
     private long retiringBytes;
@@ -28,6 +29,7 @@ public final class HostLocalLightRepository implements AutoCloseable {
 
     public Target beginTarget(HostLightFieldIdentity identity) {
         renderThread.assertRenderThread();
+        if (closed) throw new IllegalStateException("local light repository is closed");
         Entry entry = entries.computeIfAbsent(identity.instanceId(), ignored -> new Entry());
         cancelTarget(entry);
         Target target = new Target(++generation, identity, new AtomicBoolean());
@@ -102,6 +104,8 @@ public final class HostLocalLightRepository implements AutoCloseable {
     /** World unload/reset invalidates all generations and releases every instance-owned field. */
     @Override public void close() {
         renderThread.assertRenderThread();
+        if (closed) return;
+        closed = true;
         generation++;
         var values = entries.values().toArray(Entry[]::new);
         entries.clear();

@@ -69,6 +69,7 @@ public final class ClientModelRuntime {
 
     public synchronized HostLocalLightRepository localLights() { return localLights; }
     public synchronized HostLightingExecutor lightingExecutor() { return lightingExecutor; }
+    public synchronized long lightingSession() { return lightingExecutor.session(); }
     public synchronized HostLightingMemoryBudget lightingMemory() { return lightingMemory; }
     public synchronized HostWorldLightCaptureBudget lightCaptureBudget() { return lightCaptureBudget; }
     public synchronized HostLocalLightDiagnostics localLightDiagnostics() { return localLights.diagnostics(); }
@@ -93,8 +94,8 @@ public final class ClientModelRuntime {
     public synchronized void cancelBenchmark() { benchmark = null; }
 
     public synchronized void resetGpuBackend() {
-        instances.close();
         lightingExecutor.close();
+        instances.close();
         resources.close();
         HostArtifactRepository.INSTANCE.close();
         ModelLoadProgressTracker.clear();

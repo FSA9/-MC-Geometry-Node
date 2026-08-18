@@ -113,6 +113,33 @@ class HostLocalLightRepositoryTest {
         }
     }
 
+    @Test
+    void closedRepositoryAndReplacementRejectOldSessionCompletion() {
+        ModelInstanceId id = new ModelInstanceId("session");
+        HostLightFieldIdentity identity = identity(id, 1, 1);
+        List<TestField> oldRetired = new ArrayList<>();
+        HostLocalLightRepository oldRepository = repository(oldRetired);
+        HostLocalLightRepository.Target oldTarget = oldRepository.beginTarget(identity);
+        oldRepository.close();
+
+        TestField lateOldField = new TestField(identity, 11);
+        assertFalse(oldRepository.publish(oldTarget, lateOldField));
+        assertTrue(lateOldField.closed);
+        assertThrows(IllegalStateException.class, () -> oldRepository.beginTarget(identity));
+
+        List<TestField> replacementRetired = new ArrayList<>();
+        HostLocalLightRepository replacement = repository(replacementRetired);
+        HostLocalLightRepository.Target currentTarget = replacement.beginTarget(identity);
+        TestField crossSessionField = new TestField(identity, 13);
+        assertFalse(replacement.publish(oldTarget, crossSessionField));
+        assertTrue(crossSessionField.closed);
+        assertNull(replacement.active(id));
+
+        TestField currentField = new TestField(identity, 17);
+        assertTrue(replacement.publish(currentTarget, currentField));
+        assertSame(currentField, replacement.active(id));
+    }
+
     private static HostLocalLightRepository repository(List<TestField> retired) {
         return new HostLocalLightRepository(new CurrentThread(), (field, completion) -> {
             TestField test = (TestField) field;

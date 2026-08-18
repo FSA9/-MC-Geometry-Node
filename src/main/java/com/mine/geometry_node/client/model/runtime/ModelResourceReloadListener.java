@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.model.runtime;
 import com.mine.geometry_node.client.model.render.backend.standalone.StandaloneModelRenderer;
 import com.mine.geometry_node.client.model.render.integration.ModelIntegrationController;
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostNativeRenderer;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingEnvironment;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 
 import java.util.concurrent.CompletableFuture;
@@ -22,7 +23,9 @@ public final class ModelResourceReloadListener implements PreparableReloadListen
         StandaloneModelRenderer.clear();
         HostNativeRenderer.clear();
         ModelIntegrationController.reset();
-        return ++reloadGeneration;
+        long generation = ++reloadGeneration;
+        HostLightingEnvironment.invalidate(generation);
+        return generation;
     }
 
     public static long reloadGeneration() { return reloadGeneration; }

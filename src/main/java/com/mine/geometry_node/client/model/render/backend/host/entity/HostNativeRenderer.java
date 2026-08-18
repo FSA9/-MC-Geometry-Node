@@ -9,6 +9,8 @@ import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.IrisL
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.ModelProjectorCapability;
 import com.mine.geometry_node.client.model.render.backend.host.iris.entity.IrisEntityTranslucency;
 import com.mine.geometry_node.client.model.render.backend.host.iris.shadow.IrisShadowAdapter;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingEnvironment;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingEnvironmentSnapshot;
 import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodPlan;
 import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightBinding;
 import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodSelector;
@@ -67,13 +69,13 @@ public final class HostNativeRenderer {
             runtime.recordFrame(0, 0, 0, System.nanoTime() - started, -1, 0, 0, 0);
             return;
         }
-        IrisLabPbrProjector.Snapshot projectorSnapshot = IrisLabPbrProjector.snapshot(
-                ModelResourceReloadListener.reloadGeneration());
+        HostLightingEnvironmentSnapshot lightingEnvironment = HostLightingEnvironment.snapshot();
+        IrisLabPbrProjector.Snapshot projectorSnapshot = lightingEnvironment.projector();
         ModelProjectorCapability projector = projectorSnapshot.capability();
         NativeRenderParameters parameters = NativeRenderParameters.current();
         IrisEntityTranslucency.Snapshot translucency = parameters.transparencyPolicy()
                 == NativeTransparencyPolicy.AUTO
-                ? IrisEntityTranslucency.snapshot()
+                ? lightingEnvironment.translucency()
                 : new IrisEntityTranslucency.Snapshot(false, "POLICY_" + parameters.transparencyPolicy());
         boolean preserveBlend = parameters.preservesBlend(translucency.dedicatedProgram());
         synchronizeCapability(projector);
@@ -87,8 +89,10 @@ public final class HostNativeRenderer {
         if (projector.runtimeFault()) {
             runtimeFaults.add(projectorSnapshot.diagnostic());
         }
-        if (!IrisShadowAdapter.failure().isEmpty() && !"IRIS_ABSENT".equals(IrisShadowAdapter.failure())) {
-            runtimeFaults.add("shadow-adapter:" + IrisShadowAdapter.failure());
+        String shadowFailure = lightingEnvironment.shadow().failure();
+        if (!shadowFailure.isEmpty() && !"IRIS_ABSENT".equals(shadowFailure)
+                && !"LIGHTING_ENVIRONMENT_INVALIDATED".equals(shadowFailure)) {
+            runtimeFaults.add("shadow-adapter:" + shadowFailure);
         }
         if (translucency.diagnostic().startsWith("IRIS_TRANSLUCENCY_PROBE_FAILED:")) {
             runtimeFaults.add("entity-translucency:" + translucency.diagnostic());
@@ -175,8 +179,8 @@ public final class HostNativeRenderer {
         if (projector.auxiliaryEnabled()) {
             capabilities.add(ModelIntegrationCapability.LABPBR_AUXILIARY_TEXTURES);
         }
-        if (IrisShadowAdapter.installed() && IrisShadowAdapter.failure().isEmpty()
-                && IrisShadowAdapter.lastSubmittedDraws() > 0) {
+        if (lightingEnvironment.shadow().installed() && lightingEnvironment.shadow().failure().isEmpty()
+                && lightingEnvironment.shadow().submittedDraws() > 0) {
             capabilities.add(ModelIntegrationCapability.SHADOW_CASTER_SUBMITTED);
         }
         ModelIntegrationController.reportCompatibility(projector.profile(), capabilities, lastLosses,
@@ -194,6 +198,7 @@ public final class HostNativeRenderer {
         nextInstanceStart = 0;
         lastProjectorCapability = null; lastLosses = Set.of();
         IrisEntityTranslucency.clear();
+        IrisShadowAdapter.invalidateEnvironment();
     }
 
     private static void synchronizeCapability(ModelProjectorCapability capability) {

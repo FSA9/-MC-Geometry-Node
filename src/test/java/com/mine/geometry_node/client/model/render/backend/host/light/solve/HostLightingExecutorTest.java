@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.model.runtime.ModelInstanceId;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -43,5 +44,71 @@ class HostLightingExecutorTest {
             release.countDown();
             assertEquals(1, executor.diagnostics().rejected());
         }
+    }
+
+    @Test
+    void failureIsReportedWithoutRetainingThrowable() throws Exception {
+        try (HostLightingExecutor executor = new HostLightingExecutor("test-light", 1, 1)) {
+            ModelInstanceId instanceId = new ModelInstanceId("failed");
+            CountDownLatch ran = new CountDownLatch(1);
+            executor.submit(instanceId, 7, ticket -> {
+                ran.countDown();
+                throw new IllegalStateException("solve failed");
+            });
+
+            assertTrue(ran.await(5, TimeUnit.SECONDS));
+            HostLightingExecutor.Diagnostics diagnostics = awaitFailure(executor);
+            assertNotNull(diagnostics.lastFailure());
+            HostLightingExecutor.Failure failure = diagnostics.lastFailure();
+            assertEquals(instanceId, failure.instanceId());
+            assertEquals(executor.session(), failure.session());
+            assertEquals(7, failure.generation());
+            assertEquals(IllegalStateException.class.getName(), failure.type());
+            assertEquals("solve failed", failure.message());
+        }
+    }
+
+    @Test
+    void closeInvalidatesTicketsAndSeparatesReplacementSession() throws Exception {
+        HostLightingExecutor oldExecutor = new HostLightingExecutor("test-light", 1, 1);
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        HostLightingExecutor.Ticket oldTicket = oldExecutor.submit(new ModelInstanceId("old"), 3, ticket -> {
+            started.countDown();
+            while (ticket.sessionActive()) {
+                try {
+                    if (release.await(10, TimeUnit.MILLISECONDS)) return;
+                } catch (InterruptedException ignored) {
+                    // Deliberately continue until the session contract becomes inactive.
+                }
+            }
+        });
+        assertTrue(started.await(5, TimeUnit.SECONDS));
+
+        oldExecutor.close();
+        assertTrue(oldExecutor.closed());
+        assertTrue(oldTicket.cancelled());
+        assertFalse(oldTicket.sessionActive());
+        assertThrows(RejectedExecutionException.class,
+                () -> oldExecutor.submit(new ModelInstanceId("late"), 4, ticket -> {}));
+
+        try (HostLightingExecutor replacement = new HostLightingExecutor("test-light", 1, 1)) {
+            assertNotEquals(oldTicket.session(), replacement.session());
+            assertFalse(oldTicket.sessionActive());
+        } finally {
+            release.countDown();
+        }
+    }
+
+    private static HostLightingExecutor.Diagnostics awaitFailure(HostLightingExecutor executor)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        HostLightingExecutor.Diagnostics diagnostics;
+        do {
+            diagnostics = executor.diagnostics();
+            if (diagnostics.failed() > 0) return diagnostics;
+            Thread.sleep(5);
+        } while (System.nanoTime() < deadline);
+        return diagnostics;
     }
 }

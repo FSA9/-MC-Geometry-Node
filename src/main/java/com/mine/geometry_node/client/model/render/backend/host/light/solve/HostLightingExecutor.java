@@ -10,11 +10,18 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Dedicated bounded executor that coalesces queued and running work by model instance. */
 public final class HostLightingExecutor implements AutoCloseable {
+    private static final int MAX_FAILURE_MESSAGE_LENGTH = 512;
+    private static final AtomicLong SESSION_IDS = new AtomicLong();
+
+    private final long session = nextSession();
     private final ThreadPoolExecutor executor;
     private final ConcurrentHashMap<ModelInstanceId, Task> latest = new ConcurrentHashMap<>();
+    private final AtomicBoolean closed = new AtomicBoolean();
+    private final AtomicReference<Failure> lastFailure = new AtomicReference<>();
     private final AtomicLong submitted = new AtomicLong(), completed = new AtomicLong();
     private final AtomicLong cancelled = new AtomicLong(), rejected = new AtomicLong(), failed = new AtomicLong();
 
@@ -34,11 +41,18 @@ public final class HostLightingExecutor implements AutoCloseable {
         Objects.requireNonNull(instanceId, "instanceId");
         Objects.requireNonNull(work, "work");
         if (generation < 0) throw new IllegalArgumentException("generation must not be negative");
+        rejectIfClosed();
         Task task = new Task(instanceId, generation, work);
         Task previous = latest.put(instanceId, task);
         if (previous != null && previous.cancel()) {
             executor.remove(previous);
             cancelled.incrementAndGet();
+        }
+        if (closed.get()) {
+            latest.remove(instanceId, task);
+            task.cancel();
+            rejected.incrementAndGet();
+            throw new RejectedExecutionException("lighting executor session " + session + " is closed");
         }
         try {
             executor.execute(task);
@@ -71,30 +85,49 @@ public final class HostLightingExecutor implements AutoCloseable {
 
     public Diagnostics diagnostics() {
         return new Diagnostics(submitted.get(), completed.get(), cancelled.get(), rejected.get(), failed.get(),
-                executor.getActiveCount(), executor.getQueue().size(), latest.size());
+                executor.getActiveCount(), executor.getQueue().size(), latest.size(), session, closed.get(),
+                lastFailure.get());
     }
 
     @Override public void close() {
+        if (!closed.compareAndSet(false, true)) return;
         cancelAll();
         for (Runnable queued : executor.shutdownNow()) {
             if (queued instanceof Task task && task.cancel()) cancelled.incrementAndGet();
         }
     }
 
+    public long session() { return session; }
+    public boolean closed() { return closed.get(); }
+
     @FunctionalInterface
     public interface Work { void run(Ticket ticket) throws Exception; }
 
     public interface Ticket {
         ModelInstanceId instanceId();
+        long session();
         long generation();
         boolean cancelled();
+        boolean sessionActive();
         default void checkCancelled() {
-            if (cancelled()) throw new java.util.concurrent.CancellationException("lighting work was cancelled");
+            if (!sessionActive()) {
+                throw new java.util.concurrent.CancellationException("lighting work session is no longer active");
+            }
         }
     }
 
     public record Diagnostics(long submitted, long completed, long cancelled, long rejected, long failed,
-                              int active, int queued, int trackedInstances) {}
+                              int active, int queued, int trackedInstances, long session, boolean closed,
+                              Failure lastFailure) {}
+
+    /** A bounded diagnostic value: it deliberately retains no Throwable or stack trace. */
+    public record Failure(ModelInstanceId instanceId, long session, long generation, String type, String message) {
+        public Failure {
+            Objects.requireNonNull(instanceId, "instanceId");
+            Objects.requireNonNull(type, "type");
+            Objects.requireNonNull(message, "message");
+        }
+    }
 
     private final class Task implements Runnable, Ticket {
         private final ModelInstanceId instanceId;
@@ -115,15 +148,41 @@ public final class HostLightingExecutor implements AutoCloseable {
             } catch (java.util.concurrent.CancellationException ignored) {
                 // Cancellation is an expected ownership transition, not a solve failure.
             } catch (Exception exception) {
-                if (!cancelled()) failed.incrementAndGet();
+                if (!cancelled()) {
+                    lastFailure.set(failure(instanceId, generation, exception));
+                    failed.incrementAndGet();
+                }
             } finally {
                 latest.remove(instanceId, this);
             }
         }
 
         @Override public ModelInstanceId instanceId() { return instanceId; }
+        @Override public long session() { return session; }
         @Override public long generation() { return generation; }
         @Override public boolean cancelled() { return cancelled.get(); }
+        @Override public boolean sessionActive() { return !closed.get() && !cancelled(); }
         private boolean cancel() { return cancelled.compareAndSet(false, true); }
+    }
+
+    private void rejectIfClosed() {
+        if (!closed.get()) return;
+        rejected.incrementAndGet();
+        throw new RejectedExecutionException("lighting executor session " + session + " is closed");
+    }
+
+    private Failure failure(ModelInstanceId instanceId, long generation, Exception exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) message = "(no message)";
+        if (message.length() > MAX_FAILURE_MESSAGE_LENGTH) {
+            message = message.substring(0, MAX_FAILURE_MESSAGE_LENGTH);
+        }
+        return new Failure(instanceId, session, generation, exception.getClass().getName(), message);
+    }
+
+    private static long nextSession() {
+        long next = SESSION_IDS.incrementAndGet();
+        if (next <= 0) throw new IllegalStateException("lighting executor session id exhausted");
+        return next;
     }
 }

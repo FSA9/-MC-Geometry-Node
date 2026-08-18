@@ -17,6 +17,7 @@ import com.mine.geometry_node.client.model.render.backend.host.entity.HostNative
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostEntityRenderTypes;
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostStaticEntityRenderer;
 import com.mine.geometry_node.client.model.render.backend.host.iris.shadow.IrisShadowAdapter;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingEnvironment;
 import com.mine.geometry_node.client.model.runtime.ClientModelRuntime;
 import com.mine.geometry_node.client.model.runtime.ModelResourceReloadListener;
 import com.mine.geometry_node.client.model.debug.ModelDebugHud;
@@ -91,6 +92,7 @@ public class GeometryNodeClient {
 
     private void onClientTick(ClientTickEvent.Post event) {
         ModelIntegrationController.captureFrameEnvironment();
+        HostLightingEnvironment.captureFrameEnvironment();
         long nowNanos = System.nanoTime();
         ClientModelRuntime.INSTANCE.instances().removeExpired(nowNanos);
         ClientModelRuntime.INSTANCE.instances().tickAnimations(nowNanos);
@@ -163,6 +165,7 @@ public class GeometryNodeClient {
         HostNativeRenderer.clear();
         HostStaticEntityRenderer.clear();
         ModelIntegrationController.reset();
+        HostLightingEnvironment.invalidate(ModelResourceReloadListener.reloadGeneration());
         ClientModelRuntime.INSTANCE.resetGpuBackend();
     }
 

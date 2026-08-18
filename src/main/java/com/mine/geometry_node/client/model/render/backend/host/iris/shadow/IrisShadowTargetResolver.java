@@ -113,6 +113,12 @@ final class IrisShadowTargetResolver {
         capabilities = null;
     }
 
+    static void clear() {
+        RenderSystem.assertOnRenderThread();
+        closeViews();
+        generation++;
+    }
+
     record Targets(GpuTextureView color, GpuTextureView depth, IrisShadowCapabilities capabilities) {}
 
     /** Non-owning wrapper; Iris retains ownership of the external texture id. */

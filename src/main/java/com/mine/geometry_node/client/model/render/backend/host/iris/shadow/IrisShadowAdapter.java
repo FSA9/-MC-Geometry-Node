@@ -70,6 +70,23 @@ public final class IrisShadowAdapter {
     public static int lastTranslucentSubmittedDraws() { return lastTranslucentSubmittedDraws; }
     public static IrisShadowCapabilities capabilities() { return capabilities; }
     public static boolean translucentPhaseObserved() { return translucentPhaseObserved; }
+
+    /** Invalidates pipeline-owned evidence while retaining the process-wide callback registration. */
+    public static synchronized void invalidateEnvironment() {
+        capabilities = null;
+        activeGeneration = -1;
+        opaqueFailure = "";
+        translucentFailure = "";
+        lastSubmittedDraws = 0;
+        lastOpaqueSubmittedDraws = 0;
+        lastTranslucentSubmittedDraws = 0;
+        translucentPhaseObserved = false;
+        pendingModelView = null;
+        pendingProjection = null;
+        translucentPending = false;
+        pendingOpaqueTranslucencyFallback = false;
+        IrisShadowTargetResolver.clear();
+    }
     public static String failure() {
         if (!installFailure.isEmpty()) return installFailure;
         if (!opaqueFailure.isEmpty()) return "OPAQUE_" + opaqueFailure;
