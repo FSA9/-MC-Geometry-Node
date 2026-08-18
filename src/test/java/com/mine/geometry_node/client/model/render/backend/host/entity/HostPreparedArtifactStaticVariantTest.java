@@ -83,6 +83,81 @@ class HostPreparedArtifactStaticVariantTest {
     }
 
     @Test
+    void variantLimitIsIndependentForEachInstanceOfSharedGeometry() {
+        HostPreparedArtifact artifact = artifact();
+        HostEntityGeometry geometry = geometry();
+        Object layout = new Object();
+        long generation = artifact.staticGeneration();
+        HostStaticVariantKey[] keys = new HostStaticVariantKey[5];
+        HostStaticGeometryVariant[] variants = new HostStaticGeometryVariant[5];
+
+        for (int index = 0; index < keys.length; index++) {
+            keys[index] = key(new Object(), layout, 1);
+            variants[index] = variant(artifact, 8);
+            HostPreparedArtifact.StaticVariantPublication publication =
+                    artifact.publishStaticVariant(geometry, keys[index], generation, variants[index]);
+            assertTrue(publication.published());
+            assertTrue(publication.retired().isEmpty());
+        }
+
+        for (int index = 0; index < keys.length; index++) {
+            assertSame(variants[index], artifact.staticVariant(geometry, keys[index], generation));
+        }
+        artifact.closeStaticVariants();
+    }
+
+    @Test
+    void coldInstanceIsDetachedAsAWholeWithoutTouchingVisibleInstance() {
+        HostPreparedArtifact artifact = artifact();
+        HostEntityGeometry firstGeometry = geometry();
+        HostEntityGeometry secondGeometry = geometry();
+        Object layout = new Object();
+        Object cold = new Object();
+        Object visible = new Object();
+        long generation = artifact.staticGeneration();
+        HostStaticVariantKey coldFirstKey = key(cold, layout, 1);
+        HostStaticVariantKey coldSecondKey = key(cold, layout, 2);
+        HostStaticVariantKey visibleKey = key(visible, layout, 1);
+        HostStaticGeometryVariant coldFirst = variant(artifact, 8);
+        HostStaticGeometryVariant coldSecond = variant(artifact, 8);
+        HostStaticGeometryVariant visibleVariant = variant(artifact, 8);
+        artifact.publishStaticVariant(firstGeometry, coldFirstKey, generation, coldFirst);
+        artifact.publishStaticVariant(secondGeometry, coldSecondKey, generation, coldSecond);
+        artifact.publishStaticVariant(firstGeometry, visibleKey, generation, visibleVariant);
+        artifact.touchStaticInstance(cold, 10);
+        artifact.touchStaticInstance(visible, 1_000);
+
+        HostPreparedArtifact.ColdStaticInstance candidate = artifact.oldestColdStaticInstance(1_100, 500);
+        assertNotNull(candidate);
+        assertSame(cold, candidate.instanceIdentity());
+        List<HostStaticGeometryVariant> detached = artifact.detachStaticVariantsForInstance(cold);
+
+        assertEquals(2, detached.size());
+        assertNull(artifact.staticVariant(firstGeometry, coldFirstKey, generation));
+        assertNull(artifact.staticVariant(secondGeometry, coldSecondKey, generation));
+        assertSame(visibleVariant, artifact.staticVariant(firstGeometry, visibleKey, generation));
+        detached.forEach(HostStaticGeometryVariant::close);
+        artifact.closeStaticVariants();
+    }
+
+    @Test
+    void buildingInstanceIsNotAColdEvictionCandidate() {
+        HostPreparedArtifact artifact = artifact();
+        HostEntityGeometry geometry = geometry();
+        Object instance = new Object();
+        Object layout = new Object();
+        HostStaticVariantKey key = key(instance, layout, 1);
+        HostStaticGeometryVariant variant = variant(artifact, 8);
+        artifact.publishStaticVariant(geometry, key, artifact.staticGeneration(), variant);
+        HostPackedLightVariantGate gate = artifact.staticVariantGate(geometry, instance);
+        assertEquals(HostPackedLightVariantGate.Decision.WAIT, gate.evaluate(1, false, 1, 0));
+        assertEquals(HostPackedLightVariantGate.Decision.BUILD, gate.evaluate(1, false, 1, 500_000_000L));
+
+        assertNull(artifact.oldestColdStaticInstance(10_000_000_000L, 1));
+        artifact.closeStaticVariants();
+    }
+
+    @Test
     void staleAndDuplicatePublicationReturnUnownedCandidateForFencedRetirement() {
         HostPreparedArtifact artifact = artifact();
         HostEntityGeometry geometry = geometry();
@@ -126,6 +201,30 @@ class HostPreparedArtifactStaticVariantTest {
 
         assertEquals(1, vertices.closeCount);
         assertEquals(1, indices.closeCount);
+        assertEquals(before, HostStaticVariantBudget.INSTANCE.artifactBytes(artifact));
+        artifact.closeStaticVariants();
+    }
+
+    @Test
+    void batchRetirementContinuesAfterOneBufferCloseFails() {
+        HostPreparedArtifact artifact = artifact();
+        long before = HostStaticVariantBudget.INSTANCE.artifactBytes(artifact);
+        HostStaticVariantBudget.Reservation failingReservation = artifact.reserveStaticVariant(1);
+        HostStaticVariantBudget.Reservation healthyReservation = artifact.reserveStaticVariant(1);
+        assertNotNull(failingReservation);
+        assertNotNull(healthyReservation);
+        HostStaticGeometryVariant failing = new HostStaticGeometryVariant(
+                new ThrowingBuffer(), null, 1, 1, failingReservation);
+        FakeBuffer healthyBuffer = new FakeBuffer(1);
+        HostStaticGeometryVariant healthy = new HostStaticGeometryVariant(
+                healthyBuffer, null, 1, 1, healthyReservation);
+
+        assertThrows(IllegalStateException.class,
+                () -> HostStaticVariantUpload.closeAll(List.of(failing, healthy)));
+
+        assertTrue(failing.isClosed());
+        assertTrue(healthy.isClosed());
+        assertEquals(1, healthyBuffer.closeCount);
         assertEquals(before, HostStaticVariantBudget.INSTANCE.artifactBytes(artifact));
         artifact.closeStaticVariants();
     }
@@ -180,6 +279,236 @@ class HostPreparedArtifactStaticVariantTest {
         artifact.closeStaticVariants();
     }
 
+    @Test
+    void initialWorkingSetPublishesOnlyAfterEveryVariantIsReady() {
+        HostPreparedArtifact artifact = artifact();
+        HostEntityGeometry firstGeometry = geometry();
+        HostEntityGeometry secondGeometry = geometry();
+        Object instance = new Object();
+        Object layout = new Object();
+        HostStaticVariantKey firstKey = key(instance, layout, 1);
+        HostStaticVariantKey secondKey = key(instance, layout, 2);
+        HostStaticVariantBudget.BatchReservation batch =
+                HostStaticVariantBudget.INSTANCE.tryReserveBatch(artifact, List.of(8L, 8L));
+        assertNotNull(batch);
+        artifact.waitForInitialStaticWorkset(instance);
+        List<HostPreparedArtifact.InitialStaticRequirement> requirements = List.of(
+                requirement(1, 1, firstGeometry, firstKey, 8),
+                requirement(2, 1, secondGeometry, secondKey, 8));
+        artifact.beginInitialStaticWorkset(instance, requirements, batch);
+
+        HostStaticGeometryVariant first = initialVariant(artifact, instance, requirements.get(0));
+        HostPreparedArtifact.StaticVariantPublication firstPublication = artifact.publishStaticVariant(
+                requirements.get(0).slot(), firstGeometry, firstKey, artifact.staticGeneration(), first);
+
+        assertTrue(firstPublication.published());
+        assertFalse(firstPublication.activated());
+        assertNull(artifact.staticVariant(firstGeometry, firstKey, artifact.staticGeneration()));
+        assertEquals(HostPreparedArtifact.InitialWorksetStatus.BUILDING,
+                artifact.initialStaticWorksetStatus(instance));
+
+        HostStaticGeometryVariant second = initialVariant(artifact, instance, requirements.get(1));
+        HostPreparedArtifact.StaticVariantPublication secondPublication = artifact.publishStaticVariant(
+                requirements.get(1).slot(), secondGeometry, secondKey, artifact.staticGeneration(), second);
+
+        assertTrue(secondPublication.activated());
+        assertSame(first, artifact.staticVariant(firstGeometry, firstKey, artifact.staticGeneration()));
+        assertSame(second, artifact.staticVariant(secondGeometry, secondKey, artifact.staticGeneration()));
+        assertEquals(HostPreparedArtifact.InitialWorksetStatus.READY,
+                artifact.initialStaticWorksetStatus(instance));
+        artifact.closeStaticVariants();
+    }
+
+    @Test
+    void failedInitialWorkingSetRetiresStagedVariantsAndUnclaimedReservation() {
+        HostPreparedArtifact artifact = artifact();
+        HostEntityGeometry geometry = geometry();
+        Object instance = new Object();
+        HostStaticVariantKey key = key(instance, new Object(), 1);
+        long before = HostStaticVariantBudget.INSTANCE.artifactBytes(artifact);
+        HostStaticVariantBudget.BatchReservation batch =
+                HostStaticVariantBudget.INSTANCE.tryReserveBatch(artifact, List.of(8L, 8L));
+        assertNotNull(batch);
+        artifact.waitForInitialStaticWorkset(instance);
+        List<HostPreparedArtifact.InitialStaticRequirement> requirements = List.of(
+                requirement(1, 1, geometry, key, 8),
+                requirement(2, 1, geometry, key(instance, new Object(), 2), 8));
+        artifact.beginInitialStaticWorkset(instance, requirements, batch);
+        HostStaticGeometryVariant staged = initialVariant(artifact, instance, requirements.get(0));
+        assertFalse(artifact.publishStaticVariant(requirements.get(0).slot(),
+                geometry, key, artifact.staticGeneration(), staged).activated());
+
+        List<HostStaticGeometryVariant> retired = artifact.failInitialStaticWorkset(instance);
+
+        assertEquals(List.of(staged), retired);
+        assertNull(artifact.staticVariant(geometry, key, artifact.staticGeneration()));
+        assertEquals(HostPreparedArtifact.InitialWorksetStatus.FAILED,
+                artifact.initialStaticWorksetStatus(instance));
+        assertEquals(before + 8, HostStaticVariantBudget.INSTANCE.artifactBytes(artifact),
+                "only the staged variant remains charged until fenced retirement");
+        retired.forEach(HostStaticGeometryVariant::close);
+        assertEquals(before, HostStaticVariantBudget.INSTANCE.artifactBytes(artifact));
+        artifact.closeStaticVariants();
+    }
+
+    @Test
+    void distinctDrawSlotsCanShareTheSameGeometryAndExactKey() {
+        HostPreparedArtifact artifact = artifact();
+        HostEntityGeometry geometry = geometry();
+        Object instance = new Object();
+        HostStaticVariantKey key = key(instance, new Object(), 1);
+        List<HostPreparedArtifact.InitialStaticRequirement> requirements = List.of(
+                requirement(1, 1, geometry, key, 8),
+                requirement(2, 1, geometry, key, 8));
+        HostStaticVariantBudget.BatchReservation batch =
+                HostStaticVariantBudget.INSTANCE.tryReserveBatch(artifact, List.of(8L));
+        assertNotNull(batch);
+        artifact.waitForInitialStaticWorkset(instance);
+        artifact.beginInitialStaticWorkset(instance, requirements, batch);
+        HostStaticGeometryVariant first = initialVariant(artifact, instance, requirements.get(0));
+
+        HostPreparedArtifact.StaticVariantPublication publication = artifact.publishStaticVariant(
+                requirements.get(0).slot(), geometry, key, artifact.staticGeneration(), first);
+
+        assertTrue(publication.activated());
+        assertSame(first, artifact.staticVariant(geometry, key, artifact.staticGeneration()));
+        assertTrue(publication.retired().isEmpty());
+        assertTrue(artifact.initialStaticWorksetMatches(instance, requirements)
+                || artifact.initialStaticWorksetStatus(instance) == HostPreparedArtifact.InitialWorksetStatus.READY);
+        artifact.closeStaticVariants();
+    }
+
+    @Test
+    void changedFrozenPlanRestartsWithoutPublishingOrLeakingTheBatch() {
+        HostPreparedArtifact artifact = artifact();
+        HostEntityGeometry geometry = geometry();
+        Object instance = new Object();
+        long before = HostStaticVariantBudget.INSTANCE.artifactBytes(artifact);
+        HostPreparedArtifact.InitialStaticRequirement original =
+                requirement(1, 1, geometry, key(instance, new Object(), 1), 8);
+        HostPreparedArtifact.InitialStaticRequirement changed =
+                requirement(1, 1, geometry, key(instance, new Object(), 2), 8);
+        HostStaticVariantBudget.BatchReservation batch =
+                HostStaticVariantBudget.INSTANCE.tryReserveBatch(artifact, List.of(8L, 8L));
+        assertNotNull(batch);
+        HostPreparedArtifact.InitialStaticRequirement second =
+                requirement(2, 1, geometry, key(instance, new Object(), 3), 8);
+        artifact.waitForInitialStaticWorkset(instance);
+        artifact.beginInitialStaticWorkset(instance, List.of(original, second), batch);
+        HostPackedLightVariantGate gate = artifact.staticVariantGate(geometry, instance);
+        int gateToken = original.key().hashCode();
+        long generation = artifact.staticGeneration();
+        assertEquals(HostPackedLightVariantGate.Decision.WAIT,
+                gate.evaluate(gateToken, false, generation, 0));
+        assertEquals(HostPackedLightVariantGate.Decision.BUILD,
+                gate.evaluate(gateToken, false, generation, 500_000_000L));
+        HostStaticGeometryVariant staged = initialVariant(artifact, instance, original);
+        assertFalse(artifact.publishStaticVariant(original.slot(), geometry, original.key(),
+                artifact.staticGeneration(), staged).activated());
+
+        assertTrue(artifact.initialStaticWorksetMatches(instance, List.of(original, second)));
+        assertFalse(artifact.initialStaticWorksetMatches(instance, List.of(changed, second)));
+        List<HostStaticGeometryVariant> retired = artifact.restartInitialStaticWorkset(instance);
+
+        assertEquals(List.of(staged), retired);
+        assertEquals(HostPreparedArtifact.InitialWorksetStatus.EMPTY,
+                artifact.initialStaticWorksetStatus(instance));
+        HostPackedLightVariantGate restartedGate = artifact.staticVariantGate(geometry, instance);
+        assertNotSame(gate, restartedGate);
+        assertEquals(HostPackedLightVariantGate.Decision.WAIT,
+                restartedGate.evaluate(gateToken, false, generation, 500_000_001L));
+        assertEquals(before + 8, HostStaticVariantBudget.INSTANCE.artifactBytes(artifact));
+        retired.forEach(HostStaticGeometryVariant::close);
+        assertEquals(before, HostStaticVariantBudget.INSTANCE.artifactBytes(artifact));
+        artifact.closeStaticVariants();
+    }
+
+    @Test
+    void replacementPublishesNewWorksetAtomicallyAndPromotesAfterOldRetirement() {
+        HostPreparedArtifact artifact = artifact();
+        HostEntityGeometry geometry = geometry();
+        Object instance = new Object();
+        HostPreparedArtifact.InitialStaticRequirement oldRequirement =
+                requirement(1, 1, geometry, key(instance, new Object(), 1), 8);
+        HostStaticVariantBudget.BatchReservation initial =
+                HostStaticVariantBudget.INSTANCE.tryReserveBatch(artifact, List.of(8L));
+        assertNotNull(initial);
+        artifact.waitForInitialStaticWorkset(instance);
+        artifact.beginInitialStaticWorkset(instance, List.of(oldRequirement), initial);
+        HostStaticGeometryVariant oldVariant = initialVariant(artifact, instance, oldRequirement);
+        assertTrue(artifact.publishStaticVariant(oldRequirement.slot(), geometry, oldRequirement.key(),
+                artifact.staticGeneration(), oldVariant).activated());
+
+        HostPreparedArtifact.InitialStaticRequirement replacementRequirement =
+                requirement(1, 1, geometry, key(instance, new Object(), 2), 8);
+        HostStaticVariantBudget.BatchReservation replacement =
+                HostStaticVariantBudget.INSTANCE.tryReserveReplacementBatch(
+                        artifact, List.of(8L), artifact.activeStaticWorksetBytes(instance));
+        assertNotNull(replacement);
+        artifact.beginStaticWorksetReplacement(instance, List.of(replacementRequirement), replacement);
+        HostStaticGeometryVariant newVariant = initialVariant(artifact, instance, replacementRequirement);
+
+        assertSame(oldVariant, artifact.staticVariant(geometry, oldRequirement.key(),
+                artifact.staticGeneration()));
+        assertNull(artifact.staticVariant(geometry, replacementRequirement.key(),
+                artifact.staticGeneration()));
+        HostPreparedArtifact.StaticVariantPublication publication = artifact.publishStaticVariant(
+                replacementRequirement.slot(), geometry, replacementRequirement.key(),
+                artifact.staticGeneration(), newVariant);
+
+        assertTrue(publication.activated());
+        assertNull(artifact.staticVariant(geometry, oldRequirement.key(), artifact.staticGeneration()));
+        assertSame(newVariant, artifact.staticVariant(
+                geometry, replacementRequirement.key(), artifact.staticGeneration()));
+        assertEquals(List.of(oldVariant), publication.retired());
+        publication.retired().forEach(HostStaticGeometryVariant::close);
+        publication.retirementComplete().run();
+        assertTrue(artifact.activeStaticWorksetMatches(instance, List.of(replacementRequirement)));
+        artifact.closeStaticVariants();
+    }
+
+    @Test
+    void failedReplacementKeepsOldWorksetAndReleasesNewBatch() {
+        HostPreparedArtifact artifact = artifact();
+        HostEntityGeometry geometry = geometry();
+        Object instance = new Object();
+        HostPreparedArtifact.InitialStaticRequirement oldRequirement =
+                requirement(1, 1, geometry, key(instance, new Object(), 1), 8);
+        HostStaticVariantBudget.BatchReservation initial =
+                HostStaticVariantBudget.INSTANCE.tryReserveBatch(artifact, List.of(8L));
+        assertNotNull(initial);
+        artifact.waitForInitialStaticWorkset(instance);
+        artifact.beginInitialStaticWorkset(instance, List.of(oldRequirement), initial);
+        HostStaticGeometryVariant oldVariant = initialVariant(artifact, instance, oldRequirement);
+        artifact.publishStaticVariant(oldRequirement.slot(), geometry, oldRequirement.key(),
+                artifact.staticGeneration(), oldVariant);
+        HostPreparedArtifact.InitialStaticRequirement replacementRequirement =
+                requirement(1, 1, geometry, key(instance, new Object(), 2), 8);
+        HostEntityGeometry secondGeometry = geometry();
+        HostPreparedArtifact.InitialStaticRequirement secondRequirement =
+                requirement(2, 1, secondGeometry, key(instance, new Object(), 3), 8);
+        HostStaticVariantBudget.BatchReservation replacement =
+                HostStaticVariantBudget.INSTANCE.tryReserveReplacementBatch(
+                        artifact, List.of(8L, 8L), artifact.activeStaticWorksetBytes(instance));
+        assertNotNull(replacement);
+        artifact.beginStaticWorksetReplacement(instance,
+                List.of(replacementRequirement, secondRequirement), replacement);
+        HostStaticGeometryVariant staged = initialVariant(artifact, instance, replacementRequirement);
+        assertFalse(artifact.publishStaticVariant(replacementRequirement.slot(), geometry,
+                replacementRequirement.key(), artifact.staticGeneration(), staged).activated());
+
+        List<HostStaticGeometryVariant> retired = artifact.failInitialStaticWorkset(instance);
+
+        assertEquals(List.of(staged), retired);
+        assertSame(oldVariant, artifact.staticVariant(geometry, oldRequirement.key(),
+                artifact.staticGeneration()));
+        assertEquals(HostPreparedArtifact.InitialWorksetStatus.READY,
+                artifact.initialStaticWorksetStatus(instance));
+        retired.forEach(HostStaticGeometryVariant::close);
+        assertTrue(artifact.activeStaticWorksetMatches(instance, List.of(oldRequirement)));
+        artifact.closeStaticVariants();
+    }
+
     private static HostPreparedArtifact artifact() {
         ModelDefinition definition = emptyDefinition();
         return HostPreparedArtifact.prepare(definition, StaticModelRenderMetadata.from(definition));
@@ -189,6 +518,21 @@ class HostPreparedArtifactStaticVariantTest {
         HostStaticVariantBudget.Reservation reservation = artifact.reserveStaticVariant(bytes);
         assertNotNull(reservation);
         return new HostStaticGeometryVariant(new FakeBuffer(bytes), null, 4, 6, reservation);
+    }
+
+    private static HostStaticGeometryVariant initialVariant(HostPreparedArtifact artifact, Object instance,
+                                                            HostPreparedArtifact.InitialStaticRequirement required) {
+        HostStaticVariantBudget.Reservation reservation = artifact.claimInitialStaticVariant(
+                instance, required.slot(), required.geometry(), required.key(), required.bytes());
+        assertNotNull(reservation);
+        return new HostStaticGeometryVariant(new FakeBuffer(Math.toIntExact(required.bytes())),
+                null, 4, 6, reservation);
+    }
+
+    private static HostPreparedArtifact.InitialStaticRequirement requirement(
+            int node, int primitive, HostEntityGeometry geometry, HostStaticVariantKey key, long bytes) {
+        return new HostPreparedArtifact.InitialStaticRequirement(
+                new HostPreparedArtifact.StaticDrawSlot(node, primitive), geometry, key, bytes);
     }
 
     private static HostStaticVariantKey key(Object instance, Object layout, long revision) {
@@ -229,5 +573,15 @@ class HostPreparedArtifactStaticVariantTest {
         @Override public int byteSize() { return bytes; }
         @Override public boolean isClosed() { return closeCount > 0; }
         @Override public void close() { closeCount++; }
+    }
+
+    private static final class ThrowingBuffer implements ModelGpuBuffer {
+        private boolean closed;
+        @Override public int byteSize() { return 1; }
+        @Override public boolean isClosed() { return closed; }
+        @Override public void close() {
+            closed = true;
+            throw new IllegalStateException("expected close failure");
+        }
     }
 }

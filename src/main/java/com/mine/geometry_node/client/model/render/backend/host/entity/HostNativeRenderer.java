@@ -96,6 +96,7 @@ public final class HostNativeRenderer {
         HostVertexBudget vertexBudget = new HostVertexBudget();
         List<TranslucentSubmission> translucentSubmissions = new ArrayList<>();
         Set<ModelInstanceId> liveInstanceIds = new HashSet<>();
+        Set<ModelInstanceId> initialAdmissionCandidates = new HashSet<>();
         int instanceStart = Math.floorMod(nextInstanceStart, ready.size());
         nextInstanceStart = (instanceStart + 1) % ready.size();
         for (int instanceOffset = 0; instanceOffset < ready.size(); instanceOffset++) {
@@ -136,6 +137,7 @@ public final class HostNativeRenderer {
                 }
                 continue;
             }
+            HostArtifactRepository.INSTANCE.touchStatic(artifact, instance.id(), System.nanoTime());
             double extentX = bounds.maxX - bounds.minX;
             double extentY = bounds.maxY - bounds.minY;
             double extentZ = bounds.maxZ - bounds.minZ;
@@ -146,6 +148,7 @@ public final class HostNativeRenderer {
                     Minecraft.getInstance().getWindow().getHeight(), worldExtent,
                     artifact.drawPlan().modelLodErrors(), MODEL_LOD_LEVELS.getOrDefault(instance.id(), -1));
             MODEL_LOD_LEVELS.put(instance.id(), requestedLod);
+            initialAdmissionCandidates.add(instance.id());
             submitInstance(root, collector, camera, instance, artifact, requestedLod,
                     frameLosses, frameRejections,
                     runtimeFaults, statistics, projector, preserveBlend,
@@ -153,7 +156,9 @@ public final class HostNativeRenderer {
         }
         IMMEDIATE_DRAW_CURSORS.keySet().retainAll(liveInstanceIds);
         MODEL_LOD_LEVELS.keySet().retainAll(liveInstanceIds);
+        HostArtifactRepository.INSTANCE.retainInitialStaticAdmissions(initialAdmissionCandidates);
         submitTranslucent(root, collector, translucentSubmissions);
+        HostArtifactRepository.INSTANCE.maintainStaticCache(System.nanoTime());
         ModelIntegrationVerification verification = frameLosses.remove(ModelCompatibilityLoss.PROJECTOR_HOLDER_PENDING)
                 ? ModelIntegrationVerification.PENDING
                 : projector.verification();
@@ -228,13 +233,89 @@ public final class HostNativeRenderer {
                 return;
             }
             if (artifact.beginBindings(bindingPlan.request())) {
-                HostBindingUpload work = new HostBindingUpload(artifact, loaded, bindingPlan);
-                if (!ClientModelRuntime.INSTANCE.uploadScheduler().enqueue(work)) work.cancelledByScheduler();
+                HostBindingUpload work = HostBindingUpload.tryCreate(artifact, loaded, bindingPlan);
+                if (work == null) {
+                    artifact.cancelBindings(bindingPlan.request());
+                    runtimeFaults.add("host-binding-budget-waiting");
+                } else if (!ClientModelRuntime.INSTANCE.uploadScheduler().enqueue(work)) {
+                    work.cancelledByScheduler();
+                }
             }
             return;
         }
-        List<VisibleDraw> visibleDraws = visibleDraws(instance, artifact.drawPlan(), placement, frustum, statistics);
-        if (visibleDraws.isEmpty()) return;
+        List<HostPreparedArtifact.InitialStaticRequirement> initialWorkset = initialStaticWorkset(
+                instance, artifact, loaded, placement, projector, requestedLod);
+        HostPreparedArtifact.InitialWorksetStatus initialStatus =
+                artifact.initialStaticWorksetStatus(instance.id());
+        if (initialWorkset.isEmpty() && initialStatus == HostPreparedArtifact.InitialWorksetStatus.READY
+                && artifact.activeStaticWorksetBytes(instance.id()) > 0) {
+            HostStaticVariantUpload.retire(artifact.detachStaticVariantsForInstance(instance.id()));
+            initialStatus = HostPreparedArtifact.InitialWorksetStatus.EMPTY;
+        }
+        if ((initialStatus == HostPreparedArtifact.InitialWorksetStatus.BUILDING
+                || initialStatus == HostPreparedArtifact.InitialWorksetStatus.REPLACING)
+                && !artifact.initialStaticWorksetMatches(instance.id(), initialWorkset)) {
+            HostStaticVariantUpload.retire(artifact.restartInitialStaticWorkset(instance.id()));
+            initialStatus = artifact.initialStaticWorksetStatus(instance.id());
+        }
+        if (!initialWorkset.isEmpty() && (initialStatus == HostPreparedArtifact.InitialWorksetStatus.EMPTY
+                || initialStatus == HostPreparedArtifact.InitialWorksetStatus.WAITING)) {
+            initialStatus = HostArtifactRepository.INSTANCE.requestInitialStaticWorkset(
+                    artifact, instance.id(), initialWorkset, System.nanoTime());
+        } else if (!initialWorkset.isEmpty()
+                && initialStatus == HostPreparedArtifact.InitialWorksetStatus.READY
+                && !artifact.activeStaticWorksetMatches(instance.id(), initialWorkset)) {
+            initialStatus = HostArtifactRepository.INSTANCE.requestStaticWorksetReplacement(
+                    artifact, instance.id(), initialWorkset);
+        } else if (initialWorkset.isEmpty()
+                && initialStatus == HostPreparedArtifact.InitialWorksetStatus.EMPTY) {
+            initialStatus = HostPreparedArtifact.InitialWorksetStatus.READY;
+        }
+        if (initialStatus == HostPreparedArtifact.InitialWorksetStatus.WAITING
+                || initialStatus == HostPreparedArtifact.InitialWorksetStatus.FAILED) {
+            runtimeFaults.add(initialStatus == HostPreparedArtifact.InitialWorksetStatus.FAILED
+                    ? "static-instance-working-set-oversize" : "static-instance-working-set-waiting");
+            if (initialStatus == HostPreparedArtifact.InitialWorksetStatus.FAILED) {
+                String diagnosticKey = "static-workset-oversize:" + instance.id().value();
+                if (artifact.loggedGeometryFailures.add(diagnosticKey)) {
+                    HostStaticCacheMetrics.INSTANCE.recordBudgetReject();
+                    long required = initialWorkset.stream().mapToLong(
+                            HostPreparedArtifact.InitialStaticRequirement::bytes).sum();
+                    GeometryNode.LOGGER.warn("Skipping HOST_NATIVE instance {}: complete initial static working "
+                                    + "set requires {} bytes in {} variants; steady limits are {}/{}",
+                            instance.id().value(), required, initialWorkset.size(),
+                            HostStaticVariantBudget.PER_ARTIFACT_BYTES, HostStaticVariantBudget.GLOBAL_BYTES);
+                }
+            } else {
+                String diagnosticKey = "static-workset-waiting:" + instance.id().value();
+                if (artifact.loggedGeometryFailures.add(diagnosticKey)) {
+                    HostStaticCacheMetrics.INSTANCE.recordBudgetWait();
+                    long required = initialWorkset.stream().mapToLong(
+                            HostPreparedArtifact.InitialStaticRequirement::bytes).sum();
+                    GeometryNode.LOGGER.warn("Deferring HOST_NATIVE instance {}: complete initial static working "
+                                    + "set requires {} bytes in {} variants, but steady cache capacity is not "
+                                    + "currently available; the instance stays hidden until admitted",
+                            instance.id().value(), required, initialWorkset.size());
+                }
+            }
+            return;
+        }
+        boolean warmingInitialWorkset = initialStatus == HostPreparedArtifact.InitialWorksetStatus.BUILDING
+                || initialStatus == HostPreparedArtifact.InitialWorksetStatus.REPLACING;
+        boolean preserveActiveWorkset = initialStatus == HostPreparedArtifact.InitialWorksetStatus.REPLACING
+                || initialStatus == HostPreparedArtifact.InitialWorksetStatus.READY
+                && !initialWorkset.isEmpty()
+                && !artifact.activeStaticWorksetMatches(instance.id(), initialWorkset);
+        if (preserveActiveWorkset && initialStatus != HostPreparedArtifact.InitialWorksetStatus.REPLACING) {
+            submitActiveWorkset(artifact, instance, placement, camera, statistics);
+            return;
+        }
+        List<VisibleDraw> visibleDraws = visibleDraws(instance, artifact.drawPlan(), placement,
+                warmingInitialWorkset ? null : frustum, warmingInitialWorkset, statistics);
+        if (visibleDraws.isEmpty()) {
+            if (preserveActiveWorkset) submitActiveWorkset(artifact, instance, placement, camera, statistics);
+            return;
+        }
         int drawCount = visibleDraws.size();
         int start = Math.floorMod(IMMEDIATE_DRAW_CURSORS.getOrDefault(instance.id(), 0), drawCount);
         int firstDeferred = -1;
@@ -244,7 +325,12 @@ public final class HostNativeRenderer {
                 HostDrawPlan.Draw draw = visible.draw();
                 int nodeIndex = draw.nodeIndex();
                 int primitiveIndex = draw.primitiveIndex();
-                if (!instance.state().nodeState().visible(nodeIndex)) continue;
+                HostPreparedArtifact.StaticDrawSlot drawSlot =
+                        new HostPreparedArtifact.StaticDrawSlot(nodeIndex, primitiveIndex);
+                HostPreparedArtifact.InitialStaticRequirement frozenRequirement = warmingInitialWorkset
+                        ? artifact.initialStaticRequirement(instance.id(), drawSlot) : null;
+                if (warmingInitialWorkset && frozenRequirement == null) continue;
+                if (!warmingInitialWorkset && !instance.state().nodeState().visible(nodeIndex)) continue;
                 StaticModelMaterial material = draw.material();
                 boolean labPbr = projector.auxiliaryEnabled();
                 HostMaterialProjection projection = draw.projection(projector.profile());
@@ -325,7 +411,9 @@ public final class HostNativeRenderer {
                 StaticSubmission staticSubmission = trySubmitStatic(instance, artifact, loaded, draw, geometry, texture,
                         renderType, placement, camera, visible.nodeWorld(), frustum,
                         bakedTransform, light, mirrored,
-                        red, green, blue, alpha, effectiveTranslucent, requestedLod);
+                        red, green, blue, alpha, effectiveTranslucent, requestedLod,
+                        frozenRequirement);
+                if (warmingInitialWorkset) continue;
                 if (staticSubmission.status() == StaticSubmissionStatus.CULLED) {
                     statistics.culledDraws++;
                     continue;
@@ -364,6 +452,112 @@ public final class HostNativeRenderer {
         }
         if (firstDeferred < 0) IMMEDIATE_DRAW_CURSORS.remove(instance.id());
         else IMMEDIATE_DRAW_CURSORS.put(instance.id(), firstDeferred);
+        if (preserveActiveWorkset) submitActiveWorkset(artifact, instance, placement, camera, statistics);
+    }
+
+    private static List<HostPreparedArtifact.InitialStaticRequirement> initialStaticWorkset(
+            ClientModelInstanceRegistry.ReadyInstance instance, HostPreparedArtifact artifact,
+            LoadedModelResource loaded, ModelInstancePlacement placement,
+            ModelProjectorCapability projector, int requestedLod) {
+        if (instance.pose().animated() || !HostStaticEntityRenderer.available()) return List.of();
+        List<HostPreparedArtifact.InitialStaticRequirement> requirements = new ArrayList<>();
+        boolean labPbr = projector.auxiliaryEnabled();
+        long layoutGeneration = ModelResourceReloadListener.reloadGeneration();
+        for (HostDrawPlan.Draw draw : artifact.drawPlan().draws()) {
+            if (!instance.state().nodeState().visible(draw.nodeIndex()) || draw.geometry() == null
+                    || !draw.projection(projector.profile()).selectable()
+                    || loaded.definition().nodes().get(draw.nodeIndex()).skinIndex() >= 0) continue;
+            boolean effectiveTranslucent = draw.material().alphaMode() == ModelAlphaMode.BLEND
+                    || placement.alpha() < 0.999F;
+            if (effectiveTranslucent) continue;
+            Matrix4f bakedTransform = new Matrix4f().rotate(placement.rotation()).scale(placement.scale())
+                    .mul(instance.pose().worldMatrix(draw.nodeIndex()));
+            float determinant = bakedTransform.determinant3x3();
+            if (!Float.isFinite(determinant) || Math.abs(determinant) <= 1.0E-8F) continue;
+            HostPreparedArtifact.CompatibilityTexture texture;
+            try {
+                texture = texture(artifact, loaded, draw.material(), labPbr, false);
+            } catch (TextureProjectionFailure failure) {
+                continue;
+            }
+            RenderType renderType = renderType(draw.material(), placement, texture.identifier(),
+                    texture.defaultMaterialFallback());
+            VertexFormat format;
+            try {
+                format = renderType.pipeline().getVertexFormat();
+            } catch (RuntimeException failure) {
+                continue;
+            }
+            if (format == null || format.getVertexSize() < 1) continue;
+            HostModelLodPlan.Level level;
+            Matrix3f normalTransform;
+            try {
+                level = draw.geometry().lod().level(requestedLod);
+                normalTransform = new Matrix3f(bakedTransform).invert().transpose();
+            } catch (RuntimeException failure) {
+                continue;
+            }
+            boolean mirrored = determinant < 0;
+            Vector3f drawPosition = bakedTransform.transformPosition(draw.localCenter(), new Vector3f());
+            Vector3d worldPosition = new Vector3d(placement.position().x + drawPosition.x,
+                    placement.position().y + drawPosition.y, placement.position().z + drawPosition.z);
+            int light = placement.fullBright() ? FULL_BRIGHT : LevelRenderer.getLightCoords(
+                    Minecraft.getInstance().level,
+                    BlockPos.containing(worldPosition.x, worldPosition.y, worldPosition.z));
+            boolean materialFallback = texture.defaultMaterialFallback();
+            float red = materialFallback ? 1 : draw.material().red() * placement.red();
+            float green = materialFallback ? 1 : draw.material().green() * placement.green();
+            float blue = materialFallback ? 1 : draw.material().blue() * placement.blue();
+            float alpha = materialFallback ? 1
+                    : (draw.material().alphaMode() == ModelAlphaMode.OPAQUE
+                    ? 1 : draw.material().alpha()) * placement.alpha();
+            HostStaticVariantKey key = new HostStaticVariantKey(instance.id(), instance.pose().revision(),
+                    bakedTransform, normalTransform, OverlayTexture.NO_OVERLAY, light, mirrored,
+                    red, green, blue, alpha, level.firstTriangle(), level.triangleCount(),
+                    format, layoutGeneration);
+            long bytes = Math.multiplyExact(Math.multiplyExact((long) level.triangleCount(), 3L),
+                    format.getVertexSize());
+            requirements.add(new HostPreparedArtifact.InitialStaticRequirement(
+                    new HostPreparedArtifact.StaticDrawSlot(draw.nodeIndex(), draw.primitiveIndex()),
+                    draw.geometry(), key, bytes, renderType, texture));
+        }
+        return List.copyOf(requirements);
+    }
+
+    private static void submitActiveWorkset(HostPreparedArtifact artifact,
+                                            ClientModelInstanceRegistry.ReadyInstance instance,
+                                            ModelInstancePlacement placement, Vec3 camera,
+                                            FrameStatistics statistics) {
+        List<ActiveStaticSubmission> submissions = new ArrayList<>();
+        long generation = artifact.staticGeneration();
+        for (HostDrawPlan.Draw draw : artifact.drawPlan().draws()) {
+            HostPreparedArtifact.InitialStaticRequirement required = artifact.activeStaticRequirement(
+                    instance.id(), new HostPreparedArtifact.StaticDrawSlot(
+                            draw.nodeIndex(), draw.primitiveIndex()));
+            if (required == null) continue;
+            HostStaticGeometryVariant variant = artifact.staticVariant(
+                    required.geometry(), required.key(), generation);
+            if (variant == null || !(required.key().layoutIdentity() instanceof VertexFormat format)
+                    || !(required.renderType() instanceof RenderType renderType)
+                    || !(required.texture() instanceof HostPreparedArtifact.CompatibilityTexture texture)) {
+                return;
+            }
+            submissions.add(new ActiveStaticSubmission(required, variant, format, renderType, texture));
+        }
+        Vector3f translation = new Vector3f(
+                (float) (placement.position().x - camera.x),
+                (float) (placement.position().y - camera.y),
+                (float) (placement.position().z - camera.z));
+        for (ActiveStaticSubmission submission : submissions) {
+            HostPreparedArtifact.InitialStaticRequirement required = submission.required();
+            int triangles = required.key().triangleCount();
+            HostClusterVisibility.Result visibility = HostClusterVisibility.fullRange(
+                    new HostClusterVisibility.TriangleRange(0, triangles));
+            HostStaticEntityRenderer.submit(submission.variant(), submission.format(), submission.renderType(),
+                    submission.texture(), translation, visibility);
+            statistics.drawCalls++;
+            statistics.triangles += triangles;
+        }
     }
 
     private static boolean reserveImmediate(HostVertexBudget budget, long vertices, LoadedModelResource loaded,
@@ -385,7 +579,8 @@ public final class HostNativeRenderer {
 
     private static List<VisibleDraw> visibleDraws(ClientModelInstanceRegistry.ReadyInstance instance,
                                                   HostDrawPlan plan, ModelInstancePlacement placement,
-                                                  Frustum frustum, FrameStatistics statistics) {
+                                                  Frustum frustum, boolean ignoreNodeVisibility,
+                                                  FrameStatistics statistics) {
         List<VisibleDraw> result = new ArrayList<>();
         int currentNode = -1;
         boolean nodeVisible = false;
@@ -395,7 +590,7 @@ public final class HostNativeRenderer {
             statistics.candidateDraws++;
             if (draw.nodeIndex() != currentNode) {
                 currentNode = draw.nodeIndex();
-                nodeVisible = instance.state().nodeState().visible(currentNode);
+                nodeVisible = ignoreNodeVisibility || instance.state().nodeState().visible(currentNode);
                 skinned = instance.resource().definition().nodes().get(currentNode).skinIndex() >= 0;
                 nodeWorld = nodeVisible ? instance.pose().worldMatrix(currentNode) : null;
                 if (nodeVisible && !skinned && frustum != null) {
@@ -451,9 +646,11 @@ public final class HostNativeRenderer {
                                            Matrix4f nodeWorld, Frustum frustum,
                                            Matrix4f bakedTransform, int light, boolean mirrored,
                                            float red, float green, float blue, float alpha,
-                                           boolean effectiveTranslucent, int requestedLod) {
-        if (effectiveTranslucent || draw.material().alphaMode() == ModelAlphaMode.BLEND
-                || placement.alpha() < 0.999F || instance.pose().animated()
+                                           boolean effectiveTranslucent, int requestedLod,
+                                           HostPreparedArtifact.InitialStaticRequirement frozenRequirement) {
+        if (frozenRequirement == null && (effectiveTranslucent
+                || draw.material().alphaMode() == ModelAlphaMode.BLEND
+                || placement.alpha() < 0.999F || instance.pose().animated())
                 || loaded.definition().nodes().get(draw.nodeIndex()).skinIndex() >= 0
                 || !HostStaticEntityRenderer.available()) {
             return StaticSubmission.ineligible();
@@ -467,7 +664,9 @@ public final class HostNativeRenderer {
         if (format == null || format.getVertexSize() < 1) return StaticSubmission.ineligible();
         Matrix3f normalTransform;
         try {
-            normalTransform = new Matrix3f(bakedTransform).invert().transpose();
+            normalTransform = frozenRequirement == null
+                    ? new Matrix3f(bakedTransform).invert().transpose()
+                    : frozenRequirement.key().normalTransform();
         } catch (RuntimeException failure) {
             return StaticSubmission.ineligible();
         }
@@ -478,11 +677,17 @@ public final class HostNativeRenderer {
             return StaticSubmission.fallback();
         }
         long layoutGeneration = ModelResourceReloadListener.reloadGeneration();
-        HostStaticVariantKey key = new HostStaticVariantKey(instance.id(), instance.pose().revision(),
-                bakedTransform, normalTransform, OverlayTexture.NO_OVERLAY, light, mirrored,
-                red, green, blue, alpha, level.firstTriangle(), level.triangleCount(), format, layoutGeneration);
+        HostPreparedArtifact.StaticDrawSlot drawSlot = new HostPreparedArtifact.StaticDrawSlot(
+                draw.nodeIndex(), draw.primitiveIndex());
+        HostStaticVariantKey key = frozenRequirement == null
+                ? new HostStaticVariantKey(instance.id(), instance.pose().revision(),
+                        bakedTransform, normalTransform, OverlayTexture.NO_OVERLAY, light, mirrored,
+                        red, green, blue, alpha, level.firstTriangle(), level.triangleCount(), format, layoutGeneration)
+                : frozenRequirement.key();
         long generation = artifact.staticGeneration();
         HostStaticGeometryVariant variant = artifact.staticVariant(geometry, key, generation);
+        if (variant == null) HostStaticCacheMetrics.INSTANCE.recordMiss();
+        else HostStaticCacheMetrics.INSTANCE.recordHit();
         HostPackedLightVariantGate gate = artifact.staticVariantGate(geometry, instance.id());
         int gateToken = key.hashCode();
         HostPackedLightVariantGate.Decision decision = gate.evaluate(
@@ -518,7 +723,7 @@ public final class HostNativeRenderer {
 
         HostStaticVariantUpload upload;
         try {
-            upload = HostStaticVariantUpload.tryCreate(artifact, geometry, key, gate, gateToken, format,
+            upload = HostStaticVariantUpload.tryCreate(artifact, geometry, drawSlot, key, gate, gateToken, format,
                     () -> artifact.staticGeneration(generation)
                             && ModelResourceReloadListener.reloadGeneration() == layoutGeneration
                             && renderType.pipeline().getVertexFormat() == format,
@@ -528,15 +733,35 @@ public final class HostNativeRenderer {
             return StaticSubmission.fallback();
         }
         if (upload == null) {
+            if (artifact.initialStaticWorksetBuilding(instance.id())) {
+                HostStaticVariantUpload.retire(artifact.failInitialStaticWorkset(instance.id()));
+                gate.recordFailure(gateToken, generation);
+                String diagnosticKey = "initial-static-workset-mismatch:" + instance.id().value();
+                if (artifact.loggedGeometryFailures.add(diagnosticKey)) {
+                    GeometryNode.LOGGER.error("Initial static working-set reservation did not match the actual "
+                                    + "upload for {} node={} primitive={}; the instance remains hidden",
+                            loaded.asset().cacheIdentity(), draw.nodeIndex(), draw.primitiveIndex());
+                }
+                return StaticSubmission.fallback();
+            }
             List<HostStaticGeometryVariant> retired = artifact.detachStaticVariantForBudget(
                     geometry, key, generation);
             HostStaticVariantUpload.retire(retired);
             if (retired.isEmpty()) {
-                gate.recordFailure(gateToken, generation);
+                long requiredBytes = Math.multiplyExact(
+                        Math.multiplyExact((long) level.triangleCount(), 3L), format.getVertexSize());
+                if (requiredBytes > HostStaticVariantBudget.PER_ARTIFACT_BYTES
+                        || requiredBytes > HostStaticVariantBudget.GLOBAL_BYTES) {
+                    HostStaticCacheMetrics.INSTANCE.recordBudgetReject();
+                    gate.recordFailure(gateToken, generation);
+                } else {
+                    HostStaticCacheMetrics.INSTANCE.recordBudgetWait();
+                    long nowNanos = System.nanoTime();
+                    HostArtifactRepository.INSTANCE.requestStaticCapacity(artifact, nowNanos);
+                    gate.recordBudgetWait(gateToken, generation, nowNanos);
+                }
                 String diagnosticKey = "static-budget:" + draw.nodeIndex() + ':' + draw.primitiveIndex();
                 if (artifact.loggedGeometryFailures.add(diagnosticKey)) {
-                    long requiredBytes = Math.multiplyExact(
-                            Math.multiplyExact((long) level.triangleCount(), 3L), format.getVertexSize());
                     GeometryNode.LOGGER.warn("Static HOST budget rejected {} node={} primitive={}: required={} "
                                     + "artifact-resident={} global-resident={} limits={}/{}",
                             loaded.asset().cacheIdentity(), draw.nodeIndex(), draw.primitiveIndex(), requiredBytes,
@@ -551,7 +776,10 @@ public final class HostNativeRenderer {
             return StaticSubmission.fallback();
         }
         if (!ClientModelRuntime.INSTANCE.uploadScheduler().enqueue(upload)) upload.cancelledByScheduler();
-        else HostStaticEntityRenderer.recordBuilding();
+        else {
+            HostStaticCacheMetrics.INSTANCE.recordBuildStarted();
+            HostStaticEntityRenderer.recordBuilding();
+        }
         return StaticSubmission.fallback();
     }
 
@@ -572,6 +800,11 @@ public final class HostNativeRenderer {
         }
     }
 
+    private record ActiveStaticSubmission(HostPreparedArtifact.InitialStaticRequirement required,
+                                          HostStaticGeometryVariant variant, VertexFormat format,
+                                          RenderType renderType,
+                                          HostPreparedArtifact.CompatibilityTexture texture) {}
+
     private static RenderType renderType(StaticModelMaterial material, ModelInstancePlacement placement,
                                          Identifier texture, boolean opaqueFallback) {
         boolean doubleSided = material.doubleSided() || placement.forceDoubleSided();
@@ -588,9 +821,21 @@ public final class HostNativeRenderer {
     private static HostPreparedArtifact.CompatibilityTexture texture(HostPreparedArtifact artifact,
                                                 LoadedModelResource loaded, StaticModelMaterial material,
                                                 boolean labPbr, boolean opaqueFallback) {
+        return texture(artifact, loaded, material, labPbr, opaqueFallback, null);
+    }
+
+    private static HostPreparedArtifact.CompatibilityTexture texture(HostPreparedArtifact artifact,
+                                                LoadedModelResource loaded, StaticModelMaterial material,
+                                                boolean labPbr, boolean opaqueFallback,
+                                                HostTextureBindingBudget.Reservation reservation) {
         HostPreparedArtifact.TextureKey key = textureKey(material, labPbr, opaqueFallback);
         if (artifact.failedTextures.contains(key)) {
             throw TextureProjectionFailure.asset("compatibility base-color asset previously failed", null);
+        }
+        HostPreparedArtifact.CompatibilityTexture existing = artifact.textures.get(key);
+        if (existing != null) return existing;
+        if (reservation == null) {
+            throw new IllegalStateException("missing HOST texture binding reservation");
         }
         return artifact.textures.computeIfAbsent(key, ignored -> {
             Identifier id = Identifier.fromNamespaceAndPath(GeometryNode.MODID,
@@ -661,6 +906,16 @@ public final class HostNativeRenderer {
                 }
                 // The caller retains failure cleanup until the composite constructor succeeds.
                 // NativeImage.close is idempotent, so partial DynamicTexture construction remains safe.
+                long residentBytes = imageBytes(image);
+                int residentObjects = 1;
+                if (normal != null) {
+                    residentBytes = Math.addExact(residentBytes, imageBytes(normal));
+                    residentObjects++;
+                }
+                if (specular != null) {
+                    residentBytes = Math.addExact(residentBytes, imageBytes(specular));
+                    residentObjects++;
+                }
                 dynamic = new IrisLabPbrProjector.LabPbrAlbedoTexture(image, normal, specular,
                         material.baseColorTexture().sampler());
                 inputs.remove(image);
@@ -669,15 +924,18 @@ public final class HostNativeRenderer {
                 Minecraft.getInstance().getTextureManager().register(id, dynamic);
                 registered = true;
                 if (key.labPbr() && !defaultMaterialFallback) IrisLabPbrProjector.afterAlbedoRegistration(dynamic);
+                reservation.markResident();
                 return new HostPreparedArtifact.CompatibilityTexture(id, dynamic, textureLosses,
-                        defaultMaterialFallback);
+                        defaultMaterialFallback, residentBytes, residentObjects, reservation);
             } catch (TextureProjectionFailure exception) {
                 if (registered) Minecraft.getInstance().getTextureManager().release(id);
                 else if (dynamic != null) dynamic.close();
+                reservation.close();
                 throw exception;
             } catch (RuntimeException exception) {
                 if (registered) Minecraft.getInstance().getTextureManager().release(id);
                 else if (dynamic != null) dynamic.close();
+                reservation.close();
                 throw TextureProjectionFailure.runtime("compatibility texture host operation failed", exception);
             } finally {
                 inputs.forEach(NativeImage::close);
@@ -696,6 +954,10 @@ public final class HostNativeRenderer {
         if (!texture.present()) return null;
         DecodedModelImage decoded = artifact.decodedImage(texture.imageIndex());
         return nativeImage(decoded, owned);
+    }
+
+    private static long imageBytes(NativeImage image) {
+        return Math.multiplyExact(Math.multiplyExact((long) image.getWidth(), image.getHeight()), 4L);
     }
 
     private static BindingPlan bindingPlan(HostDrawPlan drawPlan, ModelInstancePlacement placement,
@@ -759,14 +1021,32 @@ public final class HostNativeRenderer {
         private final LoadedModelResource loaded;
         private final BindingPlan plan;
         private final long generation;
+        private final HostTextureBindingBudget.BatchReservation reservation;
         private final List<HostPreparedArtifact.TextureKey> created = new ArrayList<>();
         private int index;
 
-        private HostBindingUpload(HostPreparedArtifact artifact, LoadedModelResource loaded, BindingPlan plan) {
+        private static HostBindingUpload tryCreate(HostPreparedArtifact artifact, LoadedModelResource loaded,
+                                                   BindingPlan plan) {
+            List<HostTextureBindingBudget.Footprint> missing = new ArrayList<>();
+            for (HostPreparedArtifact.TextureKey key : plan.keys()) {
+                if (!artifact.textures.containsKey(key)) {
+                    missing.add(new HostTextureBindingBudget.Footprint(
+                            artifact.bindingBytes(key), artifact.bindingObjects(key)));
+                }
+            }
+            if (missing.isEmpty()) return new HostBindingUpload(artifact, loaded, plan, null);
+            HostTextureBindingBudget.BatchReservation reservation =
+                    HostTextureBindingBudget.INSTANCE.tryReserveBatch(artifact, missing);
+            return reservation == null ? null : new HostBindingUpload(artifact, loaded, plan, reservation);
+        }
+
+        private HostBindingUpload(HostPreparedArtifact artifact, LoadedModelResource loaded, BindingPlan plan,
+                                  HostTextureBindingBudget.BatchReservation reservation) {
             this.artifact = artifact;
             this.loaded = loaded;
             this.plan = plan;
             this.generation = artifact.bindingGeneration();
+            this.reservation = reservation;
         }
 
         @Override public long nextBytes() {
@@ -794,11 +1074,21 @@ public final class HostNativeRenderer {
         @Override public boolean runStep() {
             HostPreparedArtifact.TextureKey key = plan.keys().get(index);
             boolean existed = artifact.textures.containsKey(key);
-            texture(artifact, loaded, key.material(), key.labPbr(), key.opaqueFallback());
+            HostTextureBindingBudget.Reservation claimed = null;
+            if (!existed) {
+                HostTextureBindingBudget.Footprint footprint = new HostTextureBindingBudget.Footprint(
+                        artifact.bindingBytes(key), artifact.bindingObjects(key));
+                claimed = Objects.requireNonNull(reservation, "HOST binding batch reservation").claim(footprint);
+                if (claimed == null) throw new IllegalStateException("HOST binding reservation did not match plan");
+            }
+            texture(artifact, loaded, key.material(), key.labPbr(), key.opaqueFallback(), claimed);
             if (!existed) created.add(key);
             return ++index == plan.keys().size();
         }
-        @Override public void completed() { artifact.completeBindings(plan.request(), generation); }
+        @Override public void completed() {
+            if (reservation != null) reservation.close();
+            artifact.completeBindings(plan.request(), generation);
+        }
         @Override public void cancelledByScheduler() { rollback(false); }
         @Override public void failed(Throwable failure) {
             rollback(true);
@@ -808,6 +1098,7 @@ public final class HostNativeRenderer {
         private void rollback(boolean failed) {
             List<HostPreparedArtifact.CompatibilityTexture> bindings = artifact.removeBindings(created);
             HostPreparedArtifact.releaseBindings(Minecraft.getInstance().getTextureManager(), bindings);
+            if (reservation != null) reservation.close();
             if (artifact.bindingGeneration(generation)) {
                 if (failed) artifact.failBindings(plan.request());
                 else artifact.cancelBindings(plan.request());

@@ -107,6 +107,17 @@ class HostPackedLightVariantGateTest {
         assertEquals(BUILD, gate.evaluate(3, false, 1, millis(530)));
     }
 
+    @Test
+    void budgetWaitRetriesAfterBoundedBackoffWithoutBecomingPermanentFailure() {
+        HostPackedLightVariantGate gate = new HostPackedLightVariantGate();
+        gate.evaluate(15, false, 7, 0);
+        assertEquals(BUILD, gate.evaluate(15, false, 7, millis(500)));
+        gate.recordBudgetWait(15, 7, millis(500));
+
+        assertEquals(BUDGET_WAIT, gate.evaluate(15, false, 7, millis(749)));
+        assertEquals(BUILD, gate.evaluate(15, false, 7, millis(750)));
+    }
+
     private static HostPackedLightVariantGate cooldownGate() {
         HostPackedLightVariantGate gate = new HostPackedLightVariantGate();
         gate.evaluate(1, false, 1, 0);

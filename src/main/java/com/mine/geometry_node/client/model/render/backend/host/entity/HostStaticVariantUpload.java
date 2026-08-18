@@ -23,6 +23,7 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
 
     private final HostPreparedArtifact artifact;
     private final HostEntityGeometry geometry;
+    private final HostPreparedArtifact.StaticDrawSlot drawSlot;
     private final HostStaticVariantKey key;
     private final HostPackedLightVariantGate gate;
     private final int gateToken;
@@ -30,6 +31,7 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
     private final VertexFormat format;
     private final BooleanSupplier layoutValid;
     private final HostStaticVariantBudget.Reservation reservation;
+    private final boolean initialWorkset;
     private final int triangleCount;
     private final int vertexCount;
     private final int indexCount;
@@ -40,25 +42,32 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
     private boolean ownershipTransferred;
 
     static HostStaticVariantUpload tryCreate(HostPreparedArtifact artifact, HostEntityGeometry geometry,
+                                             HostPreparedArtifact.StaticDrawSlot drawSlot,
                                              HostStaticVariantKey key, HostPackedLightVariantGate gate,
                                              int gateToken,
                                              VertexFormat format, BooleanSupplier layoutValid, String label) {
         int triangles = key.triangleCount();
         int vertices = Math.multiplyExact(triangles, 3);
         int bytes = Math.multiplyExact(vertices, format.getVertexSize());
-        HostStaticVariantBudget.Reservation reservation = artifact.reserveStaticVariant(bytes);
+        boolean initialWorkset = artifact.initialStaticWorksetBuilding(key.instanceIdentity());
+        HostStaticVariantBudget.Reservation reservation = initialWorkset
+                ? artifact.claimInitialStaticVariant(key.instanceIdentity(), drawSlot, geometry, key, bytes)
+                : artifact.reserveStaticVariant(bytes);
         return reservation == null ? null : new HostStaticVariantUpload(artifact, geometry, key, gate, gateToken,
-                format, layoutValid, label, reservation, triangles, vertices, bytes);
+                drawSlot, format, layoutValid, label, reservation, initialWorkset, triangles, vertices, bytes);
     }
 
     private HostStaticVariantUpload(HostPreparedArtifact artifact, HostEntityGeometry geometry,
                                     HostStaticVariantKey key, HostPackedLightVariantGate gate,
                                     int gateToken,
+                                    HostPreparedArtifact.StaticDrawSlot drawSlot,
                                     VertexFormat format, BooleanSupplier layoutValid, String label,
                                     HostStaticVariantBudget.Reservation reservation,
+                                    boolean initialWorkset,
                                     int triangleCount, int vertexCount, int byteSize) {
         this.artifact = Objects.requireNonNull(artifact, "artifact");
         this.geometry = Objects.requireNonNull(geometry, "geometry");
+        this.drawSlot = drawSlot;
         this.key = Objects.requireNonNull(key, "key");
         this.gate = Objects.requireNonNull(gate, "gate");
         this.gateToken = gateToken;
@@ -67,6 +76,7 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
         this.layoutValid = Objects.requireNonNull(layoutValid, "layoutValid");
         this.label = Objects.requireNonNull(label, "label");
         this.reservation = Objects.requireNonNull(reservation, "reservation");
+        this.initialWorkset = initialWorkset;
         this.triangleCount = triangleCount;
         this.vertexCount = vertexCount;
         this.indexCount = Math.multiplyExact(triangleCount, 3);
@@ -91,7 +101,8 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
     @Override public long stagingBytes() { return nextBytes(); }
 
     @Override public boolean cancelled() {
-        return !artifact.staticGeneration(generation) || !layoutValid.getAsBoolean();
+        return !artifact.staticGeneration(generation) || !layoutValid.getAsBoolean()
+                || initialWorkset && !artifact.initialStaticWorksetBuilding(key.instanceIdentity());
     }
 
     @Override public boolean runStep() {
@@ -100,6 +111,7 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
             GpuBuffer gpu = RenderSystem.getDevice().createBuffer(() -> label,
                     GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, byteSize);
             buffer = new MinecraftModelGpuBuffer(gpu);
+            reservation.markResident();
             return false;
         }
         int triangles = Math.min(TRIANGLES_PER_STEP, triangleCount - builtTriangles);
@@ -122,37 +134,77 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
         ownershipTransferred = true;
         HostPreparedArtifact.StaticVariantPublication publication;
         try {
-            publication = artifact.publishStaticVariant(geometry, key, generation, variant);
+            publication = artifact.publishStaticVariant(drawSlot, geometry, key, generation, variant);
         } catch (RuntimeException | Error failure) {
             variant.close();
             throw failure;
         }
-        retire(publication.retired());
-        if (publication.published()) gate.recordSuccess(gateToken, generation);
-        else gate.recordCancelled(gateToken, generation);
+        retire(publication.retired(), publication.retirementComplete());
+        if (publication.activated()) gate.recordSuccess(gateToken, generation);
+        else if (!publication.published()) gate.recordCancelled(gateToken, generation);
+        HostStaticCacheMetrics.INSTANCE.recordBuildCompleted();
     }
 
     @Override public void cancelledByScheduler() {
         releaseOwned();
+        failInitialWorkset();
         gate.recordCancelled(gateToken, generation);
     }
 
     @Override public void failed(Throwable failure) {
         releaseOwned();
+        failInitialWorkset();
         gate.recordFailure(gateToken, generation);
+        HostStaticCacheMetrics.INSTANCE.recordBuildFailed();
         GeometryNode.LOGGER.warn("Static HOST variant build failed for {}", label, failure);
     }
 
     private void releaseOwned() {
         if (ownershipTransferred) return;
-        if (buffer != null) buffer.close();
-        reservation.close();
-        ownershipTransferred = true;
+        try {
+            if (buffer != null) buffer.close();
+        } finally {
+            reservation.close();
+            ownershipTransferred = true;
+        }
     }
 
     static void retire(List<HostStaticGeometryVariant> variants) {
-        if (variants.isEmpty()) return;
-        RenderSystem.queueFencedTask(() -> variants.forEach(HostStaticGeometryVariant::close));
+        retire(variants, () -> {});
+    }
+
+    static void retire(List<HostStaticGeometryVariant> variants, Runnable completion) {
+        if (variants.isEmpty()) {
+            completion.run();
+            return;
+        }
+        long bytes = 0;
+        for (HostStaticGeometryVariant variant : variants) bytes = Math.addExact(bytes, variant.byteSize());
+        HostStaticCacheMetrics.INSTANCE.recordRetired(variants.size(), bytes);
+        RenderSystem.queueFencedTask(() -> {
+            try {
+                closeAll(variants);
+            } finally {
+                completion.run();
+            }
+        });
+    }
+
+    private void failInitialWorkset() {
+        if (!initialWorkset) return;
+        retire(artifact.failInitialStaticWorkset(key.instanceIdentity()));
+    }
+
+    static void closeAll(List<HostStaticGeometryVariant> variants) {
+        RuntimeException firstFailure = null;
+        for (HostStaticGeometryVariant variant : variants) {
+            try {
+                variant.close();
+            } catch (RuntimeException failure) {
+                if (firstFailure == null) firstFailure = failure;
+            }
+        }
+        if (firstFailure != null) throw firstFailure;
     }
 
     private static ByteBuffer direct(byte[] data) {

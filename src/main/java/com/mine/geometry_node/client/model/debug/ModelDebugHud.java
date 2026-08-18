@@ -2,6 +2,9 @@ package com.mine.geometry_node.client.model.debug;
 
 import com.mine.geometry_node.client.model.render.integration.ModelIntegrationController;
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostStaticEntityRenderer;
+import com.mine.geometry_node.client.model.render.backend.host.entity.HostStaticVariantBudget;
+import com.mine.geometry_node.client.model.render.backend.host.entity.HostPreparationMemoryBudget;
+import com.mine.geometry_node.client.model.render.backend.host.entity.HostArtifactRepository;
 import com.mine.geometry_node.client.model.runtime.ClientModelRuntime;
 import com.mine.geometry_node.client.model.runtime.ModelDimensionId;
 import net.minecraft.client.DeltaTracker;
@@ -48,6 +51,9 @@ public final class ModelDebugHud {
         var gpu = runtime.gpuDiagnostics();
         var integration = ModelIntegrationController.integrationStatus();
         var hostStatic = HostStaticEntityRenderer.diagnostics();
+        var staticMemory = HostStaticVariantBudget.INSTANCE.diagnostics();
+        var hostCpu = HostPreparationMemoryBudget.INSTANCE.diagnostics();
+        var hostArtifacts = HostArtifactRepository.INSTANCE.diagnostics();
         long trackedGpuBytes = saturatedAdd(gpu.liveBufferBytes(), gpu.liveTextureBytes());
         List<HudLine> lines = new java.util.ArrayList<>();
         lines.add(new HudLine("GeometryNode  " + integration.effectiveMode() + " / "
@@ -83,8 +89,16 @@ public final class ModelDebugHud {
                     hostStatic.lodLockedRatio() * 100.0, hostStatic.lodBuildFailures(),
                     hostStatic.lodBuildNanos() / 1_000_000.0), 0xFFC9A7E8));
         }
-        lines.add(new HudLine("GPU  " + bytes(trackedGpuBytes) + "  buffers "
+        lines.add(new HudLine("GPU tracked  " + bytes(trackedGpuBytes) + "  buffers "
                 + bytes(gpu.liveBufferBytes()) + "  textures " + bytes(gpu.liveTextureBytes()), 0xFF78AFFF));
+        lines.add(new HudLine("HOST CPU  " + bytes(hostCpu.reservedBytes()) + '/'
+                + bytes(hostCpu.limitBytes()) + "  artifacts " + hostCpu.artifacts(), 0xFFB7C9A8));
+        lines.add(new HudLine("HOST textures  " + bytes(hostArtifacts.textureBytes())
+                + "  objects " + hostArtifacts.textureObjects(), 0xFF91C7E8));
+        lines.add(new HudLine("Static  resident " + bytes(staticMemory.residentBytes())
+                + "  reserved " + bytes(staticMemory.reservedBytes())
+                + "  steady cap " + bytes(HostStaticVariantBudget.GLOBAL_BYTES)
+                + "  variants " + staticMemory.variants(), 0xFF9AB8FF));
         if (hostStatic.buildingDraws() > 0 || hostStatic.fallbackDraws() > 0 || hostStatic.deferredImmediateDraws() > 0
                 || hostStatic.rangeLimitFallbacks() > 0) {
             lines.add(new HudLine("Static  building " + hostStatic.buildingDraws()

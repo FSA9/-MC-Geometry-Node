@@ -12,10 +12,12 @@ public final class HostPackedLightVariantGate {
     public static final int CHANGES_BEFORE_COOLDOWN = 3;
     public static final long COOLDOWN_NANOS = Duration.ofSeconds(5).toNanos();
     public static final long RECOVERY_STABLE_NANOS = Duration.ofSeconds(1).toNanos();
+    public static final long BUDGET_RETRY_NANOS = Duration.ofMillis(250).toNanos();
 
     private final ArrayDeque<Long> changes = new ArrayDeque<>();
     private final Map<Integer, Long> failedGenerations = new HashMap<>();
     private final Map<Integer, Long> buildingGenerations = new HashMap<>();
+    private final Map<Integer, BudgetWait> budgetWaits = new HashMap<>();
     private Integer candidate;
     private long candidateSinceNanos;
     private long cooldownUntilNanos;
@@ -26,10 +28,18 @@ public final class HostPackedLightVariantGate {
         requireNonNegative("nowNanos", nowNanos);
         if (variantExists) {
             buildingGenerations.remove(packedLight);
+            budgetWaits.remove(packedLight);
             candidate = null;
             return Decision.HIT;
         }
         if (failedGenerations.getOrDefault(packedLight, -1L) == generation) return Decision.FAILED;
+        BudgetWait budgetWait = budgetWaits.get(packedLight);
+        if (budgetWait != null) {
+            if (budgetWait.generation() == generation && nowNanos < budgetWait.retryAtNanos()) {
+                return Decision.BUDGET_WAIT;
+            }
+            budgetWaits.remove(packedLight);
+        }
         Long buildingGeneration = buildingGenerations.get(packedLight);
         if (buildingGeneration != null) {
             if (buildingGeneration == generation) return Decision.BUILDING;
@@ -66,12 +76,14 @@ public final class HostPackedLightVariantGate {
         requireNonNegative("generation", generation);
         buildingGenerations.remove(packedLight);
         failedGenerations.put(packedLight, generation);
+        budgetWaits.remove(packedLight);
     }
 
     public void recordSuccess(int packedLight, long generation) {
         requireNonNegative("generation", generation);
         buildingGenerations.remove(packedLight, generation);
         failedGenerations.remove(packedLight, generation);
+        budgetWaits.remove(packedLight);
     }
 
     public void recordCancelled(int packedLight, long generation) {
@@ -79,14 +91,25 @@ public final class HostPackedLightVariantGate {
         buildingGenerations.remove(packedLight, generation);
     }
 
+    public void recordBudgetWait(int packedLight, long generation, long nowNanos) {
+        requireNonNegative("generation", generation);
+        requireNonNegative("nowNanos", nowNanos);
+        buildingGenerations.remove(packedLight, generation);
+        budgetWaits.put(packedLight, new BudgetWait(generation, saturatedAdd(nowNanos, BUDGET_RETRY_NANOS)));
+    }
+
     public void clearFailures() {
         failedGenerations.clear();
+        budgetWaits.clear();
     }
+
+    boolean building() { return !buildingGenerations.isEmpty(); }
 
     public void clear() {
         changes.clear();
         failedGenerations.clear();
         buildingGenerations.clear();
+        budgetWaits.clear();
         candidate = null;
         candidateSinceNanos = 0L;
         cooldownUntilNanos = 0L;
@@ -129,6 +152,9 @@ public final class HostPackedLightVariantGate {
         BUILDING,
         WAIT,
         COOLDOWN,
-        FAILED
+        FAILED,
+        BUDGET_WAIT
     }
+
+    private record BudgetWait(long generation, long retryAtNanos) {}
 }
