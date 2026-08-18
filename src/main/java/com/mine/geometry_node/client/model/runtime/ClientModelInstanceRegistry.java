@@ -13,20 +13,27 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
     private final ModelResourceCoordinator resources;
     private final RenderThreadDispatcher renderThread;
     private final BackendPreparation backendPreparation;
+    private final InstanceLifecycle instanceLifecycle;
     private final Map<ModelInstanceId, Entry> instances = new HashMap<>();
     private long generation;
     private List<ReadyInstance> cachedReadySnapshot = List.of();
     private boolean readySnapshotDirty = true;
 
     public ClientModelInstanceRegistry(ModelResourceCoordinator resources, RenderThreadDispatcher renderThread) {
-        this(resources, renderThread, (resource, path) -> CompletableFuture.completedFuture(null));
+        this(resources, renderThread, (resource, path) -> CompletableFuture.completedFuture(null), InstanceLifecycle.NONE);
     }
 
     public ClientModelInstanceRegistry(ModelResourceCoordinator resources, RenderThreadDispatcher renderThread,
                                        BackendPreparation backendPreparation) {
+        this(resources, renderThread, backendPreparation, InstanceLifecycle.NONE);
+    }
+
+    public ClientModelInstanceRegistry(ModelResourceCoordinator resources, RenderThreadDispatcher renderThread,
+                                       BackendPreparation backendPreparation, InstanceLifecycle instanceLifecycle) {
         this.resources = Objects.requireNonNull(resources, "resources");
         this.renderThread = Objects.requireNonNull(renderThread, "renderThread");
         this.backendPreparation = Objects.requireNonNull(backendPreparation, "backendPreparation");
+        this.instanceLifecycle = Objects.requireNonNull(instanceLifecycle, "instanceLifecycle");
     }
 
     public void upsertLocal(ModelInstanceId id, Path path, ModelInstanceState state) {
@@ -59,7 +66,11 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
         if (entry == null) return false;
         Objects.requireNonNull(state, "state");
         if (entry.resource != null && !renderable(entry.resource.metadata(), state.placement())) return false;
+        ModelInstanceState previous = entry.state;
         entry.state = state;
+        if (!previous.placement().equals(state.placement()) || !previous.dimension().equals(state.dimension())) {
+            instanceLifecycle.changed(id, previous, state);
+        }
         invalidateReadySnapshot();
         return true;
     }
@@ -182,6 +193,7 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
         instances.clear();
         generation++;
         invalidateReadySnapshot();
+        instanceLifecycle.cleared();
         removed.forEach(entry -> { if (entry.lease != null) entry.lease.close(); });
     }
 
@@ -268,6 +280,7 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
     private void removeLocked(ModelInstanceId id) {
         Entry removed = instances.remove(id);
         if (removed != null) {
+            instanceLifecycle.removed(id);
             ModelLoadProgressTracker.finish(removed.path);
             invalidateReadySnapshot();
             if (removed.lease != null) removed.lease.close();
@@ -297,6 +310,14 @@ public final class ClientModelInstanceRegistry implements AutoCloseable {
     @FunctionalInterface
     public interface BackendPreparation {
         CompletableFuture<Void> prepare(LoadedModelResource resource, Path path);
+    }
+
+    public interface InstanceLifecycle {
+        InstanceLifecycle NONE = new InstanceLifecycle() {};
+
+        default void removed(ModelInstanceId id) {}
+        default void changed(ModelInstanceId id, ModelInstanceState previous, ModelInstanceState current) {}
+        default void cleared() {}
     }
 
     private static final class Entry {

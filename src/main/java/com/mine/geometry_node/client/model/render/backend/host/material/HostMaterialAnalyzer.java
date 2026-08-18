@@ -83,17 +83,12 @@ public final class HostMaterialAnalyzer {
     }
 
     private static boolean compatibleRole(StaticModelMaterial material, StaticModelTexture role) {
-        StaticModelTexture selected = coordinateSource(material);
-        return role.texCoord() == selected.texCoord()
-                && role.transform().equals(selected.transform())
-                && role.sampler().equals(selected.sampler());
+        return HostMaterialProjectionPolicy.compatibleCoordinates(role,
+                HostMaterialProjectionPolicy.renderCoordinateSource(material));
     }
 
     private static StaticModelTexture coordinateSource(StaticModelMaterial material) {
-        return material.baseColorTexture().present() ? material.baseColorTexture()
-                : material.metallicRoughnessTexture().present() ? material.metallicRoughnessTexture()
-                : material.normalTexture().present() ? material.normalTexture()
-                : material.occlusionTexture().present() ? material.occlusionTexture() : material.emissiveTexture();
+        return HostMaterialProjectionPolicy.renderCoordinateSource(material);
     }
 
     private static boolean supportsEntitySampler(com.mine.geometry_node.core.engine.system.model.domain.ModelTextureSampler sampler) {

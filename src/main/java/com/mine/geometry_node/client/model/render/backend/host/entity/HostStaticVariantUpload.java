@@ -7,6 +7,7 @@ import com.mine.geometry_node.client.model.gpu.minecraft.MinecraftModelGpuAccess
 import com.mine.geometry_node.client.model.gpu.minecraft.MinecraftModelGpuBuffer;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityMeshChunkBuilder;
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightBinding;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -25,8 +26,9 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
     private final HostEntityGeometry geometry;
     private final HostPreparedArtifact.StaticDrawSlot drawSlot;
     private final HostStaticVariantKey key;
-    private final HostPackedLightVariantGate gate;
-    private final int gateToken;
+    private final HostLightBinding lightBinding;
+    private final HostStaticVariantAdmissionGate gate;
+    private final HostStaticAdmissionKey admissionKey;
     private final long generation;
     private final VertexFormat format;
     private final BooleanSupplier layoutValid;
@@ -43,8 +45,9 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
 
     static HostStaticVariantUpload tryCreate(HostPreparedArtifact artifact, HostEntityGeometry geometry,
                                              HostPreparedArtifact.StaticDrawSlot drawSlot,
-                                             HostStaticVariantKey key, HostPackedLightVariantGate gate,
-                                             int gateToken,
+                                             HostStaticVariantKey key, HostStaticVariantAdmissionGate gate,
+                                             HostStaticAdmissionKey admissionKey,
+                                             HostLightBinding lightBinding,
                                              VertexFormat format, BooleanSupplier layoutValid, String label) {
         int triangles = key.triangleCount();
         int vertices = Math.multiplyExact(triangles, 3);
@@ -53,13 +56,15 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
         HostStaticVariantBudget.Reservation reservation = initialWorkset
                 ? artifact.claimInitialStaticVariant(key.instanceIdentity(), drawSlot, geometry, key, bytes)
                 : artifact.reserveStaticVariant(bytes);
-        return reservation == null ? null : new HostStaticVariantUpload(artifact, geometry, key, gate, gateToken,
+        return reservation == null ? null : new HostStaticVariantUpload(artifact, geometry, key, gate, admissionKey,
+                lightBinding,
                 drawSlot, format, layoutValid, label, reservation, initialWorkset, triangles, vertices, bytes);
     }
 
     private HostStaticVariantUpload(HostPreparedArtifact artifact, HostEntityGeometry geometry,
-                                    HostStaticVariantKey key, HostPackedLightVariantGate gate,
-                                    int gateToken,
+                                    HostStaticVariantKey key, HostStaticVariantAdmissionGate gate,
+                                    HostStaticAdmissionKey admissionKey,
+                                    HostLightBinding lightBinding,
                                     HostPreparedArtifact.StaticDrawSlot drawSlot,
                                     VertexFormat format, BooleanSupplier layoutValid, String label,
                                     HostStaticVariantBudget.Reservation reservation,
@@ -69,8 +74,12 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
         this.geometry = Objects.requireNonNull(geometry, "geometry");
         this.drawSlot = drawSlot;
         this.key = Objects.requireNonNull(key, "key");
+        this.lightBinding = Objects.requireNonNull(lightBinding, "lightBinding");
+        if (!key.lightIdentity().equals(lightBinding.identity())) {
+            throw new IllegalArgumentException("light binding identity does not match static key");
+        }
         this.gate = Objects.requireNonNull(gate, "gate");
-        this.gateToken = gateToken;
+        this.admissionKey = Objects.requireNonNull(admissionKey, "admissionKey");
         this.generation = artifact.staticGeneration();
         this.format = Objects.requireNonNull(format, "format");
         this.layoutValid = Objects.requireNonNull(layoutValid, "layoutValid");
@@ -118,7 +127,7 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
         HostEntityMeshChunkBuilder.BuiltChunk chunk = HostEntityMeshChunkBuilder.build(
                 geometry, Math.addExact(key.firstTriangle(), builtTriangles), triangles,
                 key.poseTransform(), key.normalTransform(), format,
-                key.red(), key.green(), key.blue(), key.alpha(), key.packedLight(), key.mirrored());
+                key.red(), key.green(), key.blue(), key.alpha(), lightBinding, key.mirrored());
         int offset = Math.multiplyExact(Math.multiplyExact(builtTriangles, 3), format.getVertexSize());
         byte[] data = chunk.vertexData();
         RenderSystem.getDevice().createCommandEncoder().writeToBuffer(
@@ -140,21 +149,21 @@ final class HostStaticVariantUpload implements ModelUploadScheduler.WorkItem {
             throw failure;
         }
         retire(publication.retired(), publication.retirementComplete());
-        if (publication.activated()) gate.recordSuccess(gateToken, generation);
-        else if (!publication.published()) gate.recordCancelled(gateToken, generation);
+        if (publication.activated()) gate.recordSuccess(admissionKey, generation);
+        else if (!publication.published()) gate.recordCancelled(admissionKey, generation);
         HostStaticCacheMetrics.INSTANCE.recordBuildCompleted();
     }
 
     @Override public void cancelledByScheduler() {
         releaseOwned();
         failInitialWorkset();
-        gate.recordCancelled(gateToken, generation);
+        gate.recordCancelled(admissionKey, generation);
     }
 
     @Override public void failed(Throwable failure) {
         releaseOwned();
         failInitialWorkset();
-        gate.recordFailure(gateToken, generation);
+        gate.recordFailure(admissionKey, generation);
         HostStaticCacheMetrics.INSTANCE.recordBuildFailed();
         GeometryNode.LOGGER.warn("Static HOST variant build failed for {}", label, failure);
     }

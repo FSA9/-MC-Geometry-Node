@@ -1,16 +1,20 @@
 package com.mine.geometry_node.client.model.render.backend.host.entity;
 
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
+import com.mine.geometry_node.client.model.render.backend.host.geometry.HostCanonicalPrimitive;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostGeometryProjector;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostSpatialClusterPlan;
 import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodPlan;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialAnalyzer;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialProfile;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialProjection;
+import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialProjectionPolicy;
+import com.mine.geometry_node.client.model.render.backend.host.material.HostOcclusionClass;
 import com.mine.geometry_node.client.model.runtime.StaticModelMaterial;
 import com.mine.geometry_node.client.model.runtime.StaticModelRenderMetadata;
 import com.mine.geometry_node.client.model.runtime.StaticModelTexture;
 import com.mine.geometry_node.core.engine.system.model.domain.*;
+import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.util.*;
@@ -21,11 +25,13 @@ public final class HostDrawPlan {
     private static final long HOST_VERTICES_PER_TRIANGLE = 4L;
 
     private final List<Draw> draws;
+    private final List<HostCanonicalPrimitive> canonicalPrimitives;
     private final long requiredVertices;
     private final double[] modelLodErrors;
 
     private HostDrawPlan(List<Draw> draws, long requiredVertices) {
         this.draws = List.copyOf(draws);
+        this.canonicalPrimitives = draws.stream().map(Draw::canonicalPrimitive).distinct().toList();
         this.requiredVertices = requiredVertices;
         this.modelLodErrors = modelLodErrors(draws);
     }
@@ -38,6 +44,7 @@ public final class HostDrawPlan {
                                        DoubleConsumer progress) {
         Objects.requireNonNull(progress, "progress");
         Map<GeometryKey, HostEntityGeometry> geometry = new HashMap<>();
+        Map<PrimitiveKey, HostCanonicalPrimitive> canonical = new HashMap<>();
         List<Draw> draws = new ArrayList<>();
         long requiredVertices = 0;
         int primitiveTotal = 0;
@@ -56,7 +63,24 @@ public final class HostDrawPlan {
             for (int primitiveIndex = 0; primitiveIndex < mesh.primitives().size(); primitiveIndex++) {
                 ModelPrimitive primitive = mesh.primitives().get(primitiveIndex);
                 StaticModelMaterial material = metadata.material(primitive.materialIndex());
-                StaticModelTexture coordinates = coordinateSource(material);
+                StaticModelTexture coordinates = HostMaterialProjectionPolicy.renderCoordinateSource(material);
+                PrimitiveKey primitiveKey = new PrimitiveKey(node.meshIndex(), primitiveIndex);
+                HostCanonicalPrimitive canonicalPrimitive = canonical.get(primitiveKey);
+                if (canonicalPrimitive == null) {
+                    canonicalPrimitive = HostCanonicalPrimitive.from(node.meshIndex(), primitiveIndex, primitive,
+                            canonicalOccurrences(definition, metadata, node.meshIndex()));
+                    canonical.put(primitiveKey, canonicalPrimitive);
+                }
+                HostCanonicalPrimitive.NodeOccurrence canonicalOccurrence = null;
+                for (HostCanonicalPrimitive.NodeOccurrence occurrence : canonicalPrimitive.nodeOccurrences()) {
+                    if (occurrence.nodeIndex() == nodeIndex) {
+                        canonicalOccurrence = occurrence;
+                        break;
+                    }
+                }
+                if (canonicalOccurrence == null) {
+                    throw new IllegalStateException("canonical node occurrence is missing");
+                }
                 GeometryKey key = new GeometryKey(node.meshIndex(), primitiveIndex, coordinates.texCoord(),
                         coordinates.transform());
                 HostEntityGeometry projected = null;
@@ -64,14 +88,19 @@ public final class HostDrawPlan {
                 boolean skinned = node.skinIndex() >= 0;
                 if (!skinned) {
                     try {
+                        HostCanonicalPrimitive projectionSource = canonicalPrimitive;
                         projected = geometry.computeIfAbsent(key,
-                                ignored -> HostGeometryProjector.project(primitive, coordinates));
+                                ignored -> HostGeometryProjector.project(projectionSource, coordinates));
                     } catch (RuntimeException failure) {
                         geometryFailure = failure.getClass().getSimpleName() + ": "
                                 + Objects.toString(failure.getMessage(), "geometry projection failed");
                     }
                 }
-                draws.add(new Draw(nodeIndex, node.meshIndex(), primitiveIndex, material, coordinates, projected,
+                draws.add(new Draw(nodeIndex, node.meshIndex(), primitiveIndex, canonicalPrimitive,
+                        canonicalOccurrence,
+                        material, coordinates,
+                        HostMaterialProjectionPolicy.occlusionAlphaSource(material),
+                        HostMaterialProjectionPolicy.occlusionClass(material), projected,
                         geometryFailure, primitive.bounds(), HostGeometryProjector.boundsCenter(primitive.bounds()),
                         primitive.triangleCount(),
                         HostMaterialAnalyzer.analyze(HostMaterialProfile.HOST_NATIVE_ENTITY, material, skinned),
@@ -87,6 +116,7 @@ public final class HostDrawPlan {
     }
 
     public List<Draw> draws() { return draws; }
+    public List<HostCanonicalPrimitive> canonicalPrimitives() { return canonicalPrimitives; }
     public long requiredVertices() { return requiredVertices; }
     public double[] modelLodErrors() { return Arrays.copyOf(modelLodErrors, modelLodErrors.length); }
 
@@ -115,14 +145,20 @@ public final class HostDrawPlan {
 
     static long projectedGeometryBytes(ModelDefinition definition, StaticModelRenderMetadata metadata) {
         Set<GeometryKey> projected = new HashSet<>();
+        Set<PrimitiveKey> canonical = new HashSet<>();
         long bytes = 0;
         for (int nodeIndex = 0; nodeIndex < definition.nodes().size(); nodeIndex++) {
             ModelNode node = definition.nodes().get(nodeIndex);
-            if (node.meshIndex() < 0 || node.skinIndex() >= 0 || !metadata.nodeVisible(nodeIndex)) continue;
+            if (node.meshIndex() < 0 || !metadata.nodeVisible(nodeIndex)) continue;
             ModelMesh mesh = definition.meshes().get(node.meshIndex());
             for (int primitiveIndex = 0; primitiveIndex < mesh.primitives().size(); primitiveIndex++) {
                 ModelPrimitive primitive = mesh.primitives().get(primitiveIndex);
-                StaticModelTexture coordinates = coordinateSource(metadata.material(primitive.materialIndex()));
+                if (canonical.add(new PrimitiveKey(node.meshIndex(), primitiveIndex))) {
+                    bytes = Math.addExact(bytes, HostCanonicalPrimitive.estimatedBytes(primitive));
+                }
+                if (node.skinIndex() >= 0) continue;
+                StaticModelTexture coordinates = HostMaterialProjectionPolicy.renderCoordinateSource(
+                        metadata.material(primitive.materialIndex()));
                 GeometryKey key = new GeometryKey(node.meshIndex(), primitiveIndex, coordinates.texCoord(),
                         coordinates.transform());
                 if (projected.add(key)) {
@@ -152,13 +188,6 @@ public final class HostDrawPlan {
         return required;
     }
 
-    private static StaticModelTexture coordinateSource(StaticModelMaterial material) {
-        StaticModelTexture[] textures = {material.baseColorTexture(), material.metallicRoughnessTexture(),
-                material.normalTexture(), material.occlusionTexture(), material.emissiveTexture()};
-        for (StaticModelTexture texture : textures) if (texture.present()) return texture;
-        return StaticModelTexture.absent();
-    }
-
     private static long saturatedAdd(long left, long right) {
         return left > Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
     }
@@ -167,9 +196,26 @@ public final class HostDrawPlan {
         return left > Long.MAX_VALUE / right ? Long.MAX_VALUE : left * right;
     }
 
+    private static List<HostCanonicalPrimitive.NodeOccurrence> canonicalOccurrences(
+            ModelDefinition definition, StaticModelRenderMetadata metadata, int meshIndex) {
+        List<HostCanonicalPrimitive.NodeOccurrence> result = new ArrayList<>();
+        for (int nodeIndex = 0; nodeIndex < definition.nodes().size(); nodeIndex++) {
+            ModelNode node = definition.nodes().get(nodeIndex);
+            if (node.meshIndex() != meshIndex || !metadata.nodeVisible(nodeIndex)) continue;
+            result.add(new HostCanonicalPrimitive.NodeOccurrence(nodeIndex, node.skinIndex(),
+                    metadata.nodeWorldTransform(nodeIndex), metadata.nodeWorldBounds(nodeIndex)));
+        }
+        return List.copyOf(result);
+    }
+
     private record GeometryKey(int mesh, int primitive, int uvSet, ModelTextureTransform transform) {}
-    public record Draw(int nodeIndex, int meshIndex, int primitiveIndex, StaticModelMaterial material,
-                       StaticModelTexture coordinateSource, HostEntityGeometry geometry, String geometryFailure,
+    private record PrimitiveKey(int mesh, int primitive) {}
+    public record Draw(int nodeIndex, int meshIndex, int primitiveIndex,
+                       HostCanonicalPrimitive canonicalPrimitive,
+                       HostCanonicalPrimitive.NodeOccurrence canonicalOccurrence,
+                       StaticModelMaterial material,
+                       StaticModelTexture coordinateSource, StaticModelTexture occlusionAlphaSource,
+                       HostOcclusionClass occlusionClass, HostEntityGeometry geometry, String geometryFailure,
                        ModelBounds localBounds, Vector3f localCenter,
                        long triangleCount, HostMaterialProjection entityProjection,
                        HostMaterialProjection labPbrProjection) {
@@ -177,6 +223,8 @@ public final class HostDrawPlan {
             localCenter = new Vector3f(localCenter);
         }
 
+        public Matrix4f modelTransform() { return canonicalOccurrence.modelTransform(); }
+        public ModelBounds modelBounds() { return canonicalOccurrence.modelBounds(); }
         @Override public Vector3f localCenter() { return new Vector3f(localCenter); }
 
         public HostMaterialProjection projection(HostMaterialProfile profile) {

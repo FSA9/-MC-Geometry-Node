@@ -121,6 +121,33 @@ class ClientModelInstanceRegistryTest {
         render.run(registry::clear);
     }
 
+    @Test
+    void notifiesDerivedInstanceResourcesOnMovementRemovalAndClear() throws Exception {
+        Path path = Files.write(temporary.resolve("lifecycle.glb"), new byte[]{1});
+        QueuedRenderThread render = new QueuedRenderThread();
+        List<String> events = new ArrayList<>();
+        ClientModelInstanceRegistry.InstanceLifecycle lifecycle = new ClientModelInstanceRegistry.InstanceLifecycle() {
+            @Override public void removed(ModelInstanceId id) { events.add("removed:" + id.value()); }
+            @Override public void changed(ModelInstanceId id, ModelInstanceState previous, ModelInstanceState current) {
+                events.add("changed:" + id.value());
+            }
+            @Override public void cleared() { events.add("cleared"); }
+        };
+        ClientModelInstanceRegistry registry = new ClientModelInstanceRegistry(
+                new ModelResourceCoordinator((request, cancellation) -> new CompletableFuture<>()), render,
+                (resource, ignored) -> CompletableFuture.completedFuture(null), lifecycle);
+        ModelInstanceId id = new ModelInstanceId("light-lifecycle");
+
+        render.run(() -> registry.upsertLocal(id, path, state(Set.of())));
+        render.run(() -> registry.updateState(id, new ModelInstanceState(
+                new ModelDimensionId("minecraft:the_nether"), ModelInstancePlacement.at(1, 0, 0),
+                true, 0, 0, ModelInstanceNodeState.IDENTITY)));
+        render.run(() -> registry.remove(id));
+        render.run(registry::clear);
+
+        assertEquals(List.of("changed:light-lifecycle", "removed:light-lifecycle", "cleared"), events);
+    }
+
     private static ModelInstanceState state(Set<Integer> hidden) {
         return new ModelInstanceState(new ModelDimensionId("minecraft:overworld"), ModelInstancePlacement.at(0, 0, 0),
                 true, 0, 0, new ModelInstanceNodeState(hidden, hidden.hashCode() & 0x7fffffffL));

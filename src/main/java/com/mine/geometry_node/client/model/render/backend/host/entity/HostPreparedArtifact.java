@@ -4,6 +4,8 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.IrisLabPbrProjector;
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.LabPbrProjectionEncoder;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightBinding;
+import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialProjectionPolicy;
 import com.mine.geometry_node.client.model.gpu.DecodedModelImage;
 import com.mine.geometry_node.client.model.gpu.minecraft.NativeImageModelDecoder;
 import com.mine.geometry_node.client.model.render.integration.ModelCompatibilityLoss;
@@ -18,12 +20,9 @@ import net.minecraft.resources.Identifier;
 import java.util.*;
 import java.util.function.DoubleConsumer;
 
-/** Asset-owned HOST plan plus render-thread-owned binding variants. */
+/** Render-thread-owned bindings and static variants around an immutable prepared asset. */
 public final class HostPreparedArtifact {
-    private final HostDrawPlan drawPlan;
-    private final Map<Integer, DecodedModelImage> decodedImages;
-    private final Map<Integer, String> imageFailures;
-    private final Map<StaticModelMaterial, LabPbrImages> labPbrImages;
+    private final HostPreparedAsset preparedAsset;
     private final HostPreparationMemoryBudget.Reservation memoryReservation;
     final Map<TextureKey, CompatibilityTexture> textures = new HashMap<>();
     final Set<TextureKey> failedTextures = new HashSet<>();
@@ -35,7 +34,7 @@ public final class HostPreparedArtifact {
     private final Map<HostEntityGeometry,
             IdentityHashMap<Object, LinkedHashMap<HostStaticVariantKey, HostStaticGeometryVariant>>>
             staticVariants = new IdentityHashMap<>();
-    private final Map<HostEntityGeometry, IdentityHashMap<Object, HostPackedLightVariantGate>>
+    private final Map<HostEntityGeometry, IdentityHashMap<Object, HostStaticVariantAdmissionGate>>
             staticVariantGates = new IdentityHashMap<>();
     private final IdentityHashMap<Object, Long> staticInstanceLastUsedNanos = new IdentityHashMap<>();
     private final IdentityHashMap<Object, InitialStaticWorkset> initialStaticWorksets = new IdentityHashMap<>();
@@ -47,10 +46,7 @@ public final class HostPreparedArtifact {
                          Map<Integer, String> imageFailures,
                          Map<StaticModelMaterial, LabPbrImages> labPbrImages,
                          HostPreparationMemoryBudget.Reservation memoryReservation) {
-        this.drawPlan = Objects.requireNonNull(drawPlan, "drawPlan");
-        this.decodedImages = Map.copyOf(decodedImages);
-        this.imageFailures = Map.copyOf(imageFailures);
-        this.labPbrImages = Map.copyOf(labPbrImages);
+        this.preparedAsset = new HostPreparedAsset(drawPlan, decodedImages, imageFailures, labPbrImages);
         this.memoryReservation = Objects.requireNonNull(memoryReservation, "memoryReservation");
     }
 
@@ -81,7 +77,7 @@ public final class HostPreparedArtifact {
             for (int index = 0; index < definition.materials().size(); index++) {
                 StaticModelMaterial material = metadata.material(index);
                 if (!labPbr.containsKey(material)) {
-                    StaticModelTexture coordinate = coordinateSource(material);
+                    StaticModelTexture coordinate = HostMaterialProjectionPolicy.renderCoordinateSource(material);
                     DecodedModelImage mr = compatible(material.metallicRoughnessTexture(), coordinate, decoded);
                     DecodedModelImage normal = compatible(material.normalTexture(), coordinate, decoded);
                     DecodedModelImage ao = compatible(material.occlusionTexture(), coordinate, decoded);
@@ -108,16 +104,16 @@ public final class HostPreparedArtifact {
         }
     }
 
-    public HostDrawPlan drawPlan() { return drawPlan; }
+    public HostPreparedAsset preparedAsset() { return preparedAsset; }
+
+    public HostDrawPlan drawPlan() { return preparedAsset.drawPlan(); }
 
     DecodedModelImage decodedImage(int index) throws java.io.IOException {
-        DecodedModelImage image = decodedImages.get(index);
-        if (image != null) return image;
-        throw new java.io.IOException(imageFailures.getOrDefault(index, "model image was not decoded"));
+        return preparedAsset.decodedImage(index);
     }
 
     LabPbrImages labPbrImages(StaticModelMaterial material) {
-        return Objects.requireNonNull(labPbrImages.get(material), "prepared LabPBR material");
+        return preparedAsset.labPbrImages(material);
     }
 
     boolean bindingsReady(BindingRequest request) { return readyBindings.contains(request); }
@@ -141,11 +137,11 @@ public final class HostPreparedArtifact {
     long staticGeneration() { return staticGeneration; }
     boolean staticGeneration(long generation) { return !closed && staticGeneration == generation; }
 
-    HostPackedLightVariantGate staticVariantGate(HostEntityGeometry geometry, Object instanceIdentity) {
+    HostStaticVariantAdmissionGate staticVariantGate(HostEntityGeometry geometry, Object instanceIdentity) {
         return staticVariantGates.computeIfAbsent(Objects.requireNonNull(geometry, "geometry"),
                         ignored -> new IdentityHashMap<>())
                 .computeIfAbsent(Objects.requireNonNull(instanceIdentity, "instanceIdentity"),
-                        ignored -> new HostPackedLightVariantGate());
+                        ignored -> new HostStaticVariantAdmissionGate());
     }
 
     HostStaticVariantBudget.Reservation reserveStaticVariant(long bytes) {
@@ -348,10 +344,10 @@ public final class HostPreparedArtifact {
     }
 
     private void clearStaticVariantGatesForInstance(Object instanceIdentity) {
-        for (Iterator<IdentityHashMap<Object, HostPackedLightVariantGate>> gates =
+        for (Iterator<IdentityHashMap<Object, HostStaticVariantAdmissionGate>> gates =
                 staticVariantGates.values().iterator(); gates.hasNext();) {
-            IdentityHashMap<Object, HostPackedLightVariantGate> instances = gates.next();
-            HostPackedLightVariantGate removed = instances.remove(instanceIdentity);
+            IdentityHashMap<Object, HostStaticVariantAdmissionGate> instances = gates.next();
+            HostStaticVariantAdmissionGate removed = instances.remove(instanceIdentity);
             if (removed != null) removed.clear();
             if (instances.isEmpty()) gates.remove();
         }
@@ -397,10 +393,10 @@ public final class HostPreparedArtifact {
             if (removed != null) detached.addAll(removed.values());
             if (instances.isEmpty()) geometry.remove();
         }
-        for (Iterator<IdentityHashMap<Object, HostPackedLightVariantGate>> gates =
+        for (Iterator<IdentityHashMap<Object, HostStaticVariantAdmissionGate>> gates =
                 staticVariantGates.values().iterator(); gates.hasNext();) {
-            IdentityHashMap<Object, HostPackedLightVariantGate> instances = gates.next();
-            HostPackedLightVariantGate removed = instances.remove(instanceIdentity);
+            IdentityHashMap<Object, HostStaticVariantAdmissionGate> instances = gates.next();
+            HostStaticVariantAdmissionGate removed = instances.remove(instanceIdentity);
             if (removed != null) removed.clear();
             if (instances.isEmpty()) gates.remove();
         }
@@ -410,8 +406,8 @@ public final class HostPreparedArtifact {
 
     private boolean staticInstanceBuilding(Object instanceIdentity) {
         if (initialStaticWorksetBuilding(instanceIdentity)) return true;
-        for (IdentityHashMap<Object, HostPackedLightVariantGate> gates : staticVariantGates.values()) {
-            HostPackedLightVariantGate gate = gates.get(instanceIdentity);
+        for (IdentityHashMap<Object, HostStaticVariantAdmissionGate> gates : staticVariantGates.values()) {
+            HostStaticVariantAdmissionGate gate = gates.get(instanceIdentity);
             if (gate != null && gate.building()) return true;
         }
         return false;
@@ -518,7 +514,8 @@ public final class HostPreparedArtifact {
 
     long bindingBytes(TextureKey key) {
         long bytes = key.material().baseColorTexture().present()
-                ? decodedImages.getOrDefault(key.material().baseColorTexture().imageIndex(), FALLBACK_IMAGE).byteSize()
+                ? Objects.requireNonNullElse(preparedAsset.decodedImageOrNull(
+                        key.material().baseColorTexture().imageIndex()), FALLBACK_IMAGE).byteSize()
                 : FALLBACK_IMAGE.byteSize();
         if (key.labPbr()) {
             LabPbrImages prepared = labPbrImages(key.material());
@@ -565,16 +562,7 @@ public final class HostPreparedArtifact {
     }
 
     private static boolean compatibleCoordinates(StaticModelTexture texture, StaticModelTexture coordinate) {
-        return texture.present() && texture.texCoord() == coordinate.texCoord()
-                && texture.transform().equals(coordinate.transform())
-                && texture.sampler().equals(coordinate.sampler());
-    }
-
-    private static StaticModelTexture coordinateSource(StaticModelMaterial material) {
-        StaticModelTexture[] textures = {material.baseColorTexture(), material.metallicRoughnessTexture(),
-                material.normalTexture(), material.occlusionTexture(), material.emissiveTexture()};
-        for (StaticModelTexture texture : textures) if (texture.present()) return texture;
-        return StaticModelTexture.absent();
+        return HostMaterialProjectionPolicy.compatibleCoordinates(texture, coordinate);
     }
 
     List<CompatibilityTexture> detachBindings() {
@@ -618,7 +606,7 @@ public final class HostPreparedArtifact {
         for (int index = 0; index < definition.materials().size(); index++) {
             StaticModelMaterial material = metadata.material(index);
             if (!uniqueMaterials.add(material)) continue;
-            StaticModelTexture coordinate = coordinateSource(material);
+            StaticModelTexture coordinate = HostMaterialProjectionPolicy.renderCoordinateSource(material);
             StaticModelTexture mr = material.metallicRoughnessTexture();
             long specularBytes = compatibleCoordinates(mr, coordinate)
                     ? sourceImageBytes(definition, mr) : 4L;
@@ -679,17 +667,26 @@ public final class HostPreparedArtifact {
     record StaticDrawSlot(int nodeIndex, int primitiveIndex) {}
 
     record InitialStaticRequirement(StaticDrawSlot slot, HostEntityGeometry geometry,
-                                    HostStaticVariantKey key, long bytes,
+                                    HostStaticVariantKey key, HostLightBinding lightBinding, long bytes,
                                     Object renderType, Object texture) {
         InitialStaticRequirement(StaticDrawSlot slot, HostEntityGeometry geometry,
                                  HostStaticVariantKey key, long bytes) {
-            this(slot, geometry, key, bytes, null, null);
+            this(slot, geometry, key, scalarBinding(key), bytes, null, null);
         }
         InitialStaticRequirement {
             Objects.requireNonNull(slot, "slot");
             Objects.requireNonNull(geometry, "geometry");
             Objects.requireNonNull(key, "key");
+            Objects.requireNonNull(lightBinding, "lightBinding");
+            if (!key.lightIdentity().equals(lightBinding.identity())) {
+                throw new IllegalArgumentException("light binding identity does not match static key");
+            }
             if (bytes < 1) throw new IllegalArgumentException("initial static requirement bytes must be positive");
+        }
+
+        private static HostLightBinding scalarBinding(HostStaticVariantKey key) {
+            return key.lightIdentity().mode() == HostLightBinding.Mode.FULL_BRIGHT
+                    ? HostLightBinding.fullBright() : HostLightBinding.constant(key.packedLight());
         }
     }
 

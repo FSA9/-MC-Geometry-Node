@@ -149,9 +149,11 @@ class HostPreparedArtifactStaticVariantTest {
         HostStaticVariantKey key = key(instance, layout, 1);
         HostStaticGeometryVariant variant = variant(artifact, 8);
         artifact.publishStaticVariant(geometry, key, artifact.staticGeneration(), variant);
-        HostPackedLightVariantGate gate = artifact.staticVariantGate(geometry, instance);
-        assertEquals(HostPackedLightVariantGate.Decision.WAIT, gate.evaluate(1, false, 1, 0));
-        assertEquals(HostPackedLightVariantGate.Decision.BUILD, gate.evaluate(1, false, 1, 500_000_000L));
+        HostStaticVariantAdmissionGate gate = artifact.staticVariantGate(geometry, instance);
+        HostStaticAdmissionKey admissionKey = key(instance, new Object(), 1).admissionKey();
+        assertEquals(HostStaticVariantAdmissionGate.Decision.WAIT, gate.evaluate(admissionKey, false, 1, 0));
+        assertEquals(HostStaticVariantAdmissionGate.Decision.BUILD,
+                gate.evaluate(admissionKey, false, 1, 500_000_000L));
 
         assertNull(artifact.oldestColdStaticInstance(10_000_000_000L, 1));
         artifact.closeStaticVariants();
@@ -395,13 +397,13 @@ class HostPreparedArtifactStaticVariantTest {
                 requirement(2, 1, geometry, key(instance, new Object(), 3), 8);
         artifact.waitForInitialStaticWorkset(instance);
         artifact.beginInitialStaticWorkset(instance, List.of(original, second), batch);
-        HostPackedLightVariantGate gate = artifact.staticVariantGate(geometry, instance);
-        int gateToken = original.key().hashCode();
+        HostStaticVariantAdmissionGate gate = artifact.staticVariantGate(geometry, instance);
+        HostStaticAdmissionKey admissionKey = original.key().admissionKey();
         long generation = artifact.staticGeneration();
-        assertEquals(HostPackedLightVariantGate.Decision.WAIT,
-                gate.evaluate(gateToken, false, generation, 0));
-        assertEquals(HostPackedLightVariantGate.Decision.BUILD,
-                gate.evaluate(gateToken, false, generation, 500_000_000L));
+        assertEquals(HostStaticVariantAdmissionGate.Decision.WAIT,
+                gate.evaluate(admissionKey, false, generation, 0));
+        assertEquals(HostStaticVariantAdmissionGate.Decision.BUILD,
+                gate.evaluate(admissionKey, false, generation, 500_000_000L));
         HostStaticGeometryVariant staged = initialVariant(artifact, instance, original);
         assertFalse(artifact.publishStaticVariant(original.slot(), geometry, original.key(),
                 artifact.staticGeneration(), staged).activated());
@@ -413,10 +415,10 @@ class HostPreparedArtifactStaticVariantTest {
         assertEquals(List.of(staged), retired);
         assertEquals(HostPreparedArtifact.InitialWorksetStatus.EMPTY,
                 artifact.initialStaticWorksetStatus(instance));
-        HostPackedLightVariantGate restartedGate = artifact.staticVariantGate(geometry, instance);
+        HostStaticVariantAdmissionGate restartedGate = artifact.staticVariantGate(geometry, instance);
         assertNotSame(gate, restartedGate);
-        assertEquals(HostPackedLightVariantGate.Decision.WAIT,
-                restartedGate.evaluate(gateToken, false, generation, 500_000_001L));
+        assertEquals(HostStaticVariantAdmissionGate.Decision.WAIT,
+                restartedGate.evaluate(admissionKey, false, generation, 500_000_001L));
         assertEquals(before + 8, HostStaticVariantBudget.INSTANCE.artifactBytes(artifact));
         retired.forEach(HostStaticGeometryVariant::close);
         assertEquals(before, HostStaticVariantBudget.INSTANCE.artifactBytes(artifact));

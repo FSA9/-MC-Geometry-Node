@@ -53,11 +53,14 @@ class HostArtifactRepositoryTest {
         var lease = repository.acquire(definition, StaticModelRenderMetadata.from(definition));
         HostPreparedArtifact artifact = lease.artifact();
         HostDrawPlan plan = artifact.drawPlan();
+        HostPreparedAsset asset = artifact.preparedAsset();
 
         repository.invalidateBindings();
 
         assertEquals(1, repository.liveCount());
         assertSame(plan, artifact.drawPlan());
+        assertSame(plan, asset.drawPlan());
+        assertSame(asset, artifact.preparedAsset());
     }
 
     @Test

@@ -89,7 +89,7 @@ class HostMaterialAnalyzerTest {
         assertTrue(result.selectable());
         assertTrue(result.losses().contains(ModelCompatibilityLoss.NORMAL_TEXTURE_APPROXIMATED));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.ROUGHNESS_APPROXIMATED));
-        assertTrue(result.losses().contains(ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE));
+        assertFalse(result.losses().contains(ModelCompatibilityLoss.METALLIC_UNREPRESENTABLE));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.OCCLUSION_TEXTURE_UNREPRESENTABLE));
         assertTrue(result.losses().contains(ModelCompatibilityLoss.INDEPENDENT_UV_UNREPRESENTABLE));
         assertFalse(result.losses().contains(ModelCompatibilityLoss.LABPBR_SHADERPACK_CONSUMPTION_UNVERIFIED));

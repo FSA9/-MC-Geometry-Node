@@ -1,13 +1,15 @@
 package com.mine.geometry_node.client.model.render.backend.host.geometry;
 
 import com.mine.geometry_node.client.model.runtime.StaticModelTexture;
-import com.mine.geometry_node.core.engine.system.model.domain.*;
-
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import com.mine.geometry_node.core.engine.system.model.domain.ModelAttributeSemantic;
+import com.mine.geometry_node.core.engine.system.model.domain.ModelBounds;
+import com.mine.geometry_node.core.engine.system.model.domain.ModelPrimitive;
+import com.mine.geometry_node.core.engine.system.model.domain.ModelTextureTransform;
 import org.joml.Vector3f;
 
-/** Projects canonical indexed geometry into the host entity vertex contract. */
+import java.util.Objects;
+
+/** Projects immutable canonical indexed geometry into the host entity vertex contract. */
 public final class HostGeometryProjector {
     private HostGeometryProjector() {}
 
@@ -18,30 +20,30 @@ public final class HostGeometryProjector {
     }
 
     public static HostEntityGeometry project(ModelPrimitive primitive, StaticModelTexture coordinateSource) {
-        int[] indices = new int[primitive.indices().indexCount()];
-        for (int index = 0; index < indices.length; index++) indices[index] = Math.toIntExact(primitive.indices().indexAt(index));
-        return project(primitive, coordinateSource, indices);
+        return project(HostCanonicalPrimitive.from(0, 0, primitive), coordinateSource);
     }
 
-    public static HostEntityGeometry project(ModelPrimitive primitive, StaticModelTexture coordinateSource,
-                                             int[] indices) {
-        ModelVertexAttribute positions = required(primitive, ModelAttributeSemantic.POSITION);
-        ModelVertexAttribute normals = primitive.attributes().get(ModelAttributeSemantic.NORMAL);
-        ModelVertexAttribute uv = primitive.attributes().get(ModelAttributeSemantic.indexed(
+    public static HostEntityGeometry project(HostCanonicalPrimitive primitive,
+                                             StaticModelTexture coordinateSource) {
+        Objects.requireNonNull(primitive, "primitive");
+        Objects.requireNonNull(coordinateSource, "coordinateSource");
+        HostCanonicalPrimitive.Attribute positions = required(primitive, ModelAttributeSemantic.POSITION);
+        HostCanonicalPrimitive.Attribute normals = primitive.attribute(ModelAttributeSemantic.NORMAL);
+        HostCanonicalPrimitive.Attribute uv = primitive.attribute(ModelAttributeSemantic.indexed(
                 ModelAttributeSemantic.Kind.TEXCOORD, coordinateSource.texCoord()));
-        ModelVertexAttribute colors = primitive.attributes().get(ModelAttributeSemantic.COLOR_0);
-        if (indices == null || indices.length == 0 || indices.length % 3 != 0) {
+        HostCanonicalPrimitive.Attribute colors = primitive.attribute(ModelAttributeSemantic.COLOR_0);
+        int[] indices = primitive.projectionIndices();
+        if (indices.length == 0 || indices.length % 3 != 0) {
             throw new IllegalArgumentException("HOST projection requires indexed triangles");
         }
         float[] output = new float[Math.multiplyExact(indices.length, 12)];
         int cursor = 0;
-        for (int i = 0; i < indices.length; i++) {
-            int vertex = indices[i];
-            if (vertex < 0 || vertex >= primitive.vertexCount()) throw new IllegalArgumentException("HOST index outside vertex data");
+        for (int occurrence = 0; occurrence < indices.length; occurrence++) {
+            int vertex = indices[occurrence];
             cursor = copy(output, cursor, positions, vertex, 3, new float[]{0, 0, 0});
             cursor = copy(output, cursor, normals, vertex, 3, new float[]{0, 1, 0});
             float[] selectedUv = uv == null && !coordinateSource.present()
-                    ? syntheticTriangleUv(i % 3) : values(uv, vertex, 2, new float[]{0, 0});
+                    ? syntheticTriangleUv(occurrence % 3) : values(uv, vertex, 2, new float[]{0, 0});
             ModelTextureTransform transform = coordinateSource.transform();
             float x = selectedUv[0] * transform.scaleX(), y = selectedUv[1] * transform.scaleY();
             float cosine = (float) Math.cos(transform.rotation()), sine = (float) Math.sin(transform.rotation());
@@ -51,6 +53,29 @@ public final class HostGeometryProjector {
         }
         if (normals == null) generateFaceNormals(output);
         return new HostEntityGeometry(output, indices, primitive.vertexCount());
+    }
+
+    private static HostCanonicalPrimitive.Attribute required(HostCanonicalPrimitive primitive,
+                                                             ModelAttributeSemantic semantic) {
+        HostCanonicalPrimitive.Attribute value = primitive.attribute(semantic);
+        if (value == null) throw new IllegalStateException("validated primitive lacks " + semantic);
+        return value;
+    }
+
+    private static int copy(float[] target, int cursor, HostCanonicalPrimitive.Attribute source, int element,
+                            int components, float[] fallback) {
+        for (float value : values(source, element, components, fallback)) target[cursor++] = value;
+        return cursor;
+    }
+
+    private static float[] values(HostCanonicalPrimitive.Attribute attribute, int element,
+                                  int count, float[] fallback) {
+        if (attribute == null) return fallback.clone();
+        float[] result = fallback.clone();
+        for (int component = 0; component < Math.min(count, attribute.componentCount()); component++) {
+            result[component] = attribute.component(element, component);
+        }
+        return result;
     }
 
     private static float[] syntheticTriangleUv(int triangleVertex) {
@@ -78,41 +103,5 @@ public final class HostGeometryProjector {
                 vertices[offset + 3] = nx; vertices[offset + 4] = ny; vertices[offset + 5] = nz;
             }
         }
-    }
-
-    private static ModelVertexAttribute required(ModelPrimitive primitive, ModelAttributeSemantic semantic) {
-        ModelVertexAttribute value = primitive.attributes().get(semantic);
-        if (value == null) throw new IllegalStateException("validated primitive lacks " + semantic);
-        return value;
-    }
-
-    private static int copy(float[] target, int cursor, ModelVertexAttribute source, int element,
-                            int components, float[] fallback) {
-        for (float value : values(source, element, components, fallback)) target[cursor++] = value;
-        return cursor;
-    }
-
-    private static float[] values(ModelVertexAttribute attribute, int element, int count, float[] fallback) {
-        if (attribute == null) return fallback.clone();
-        ByteBuffer data = attribute.readOnlyData().order(ByteOrder.LITTLE_ENDIAN);
-        int stride = attribute.componentType().byteSize() * attribute.componentCount();
-        float[] result = fallback.clone();
-        for (int component = 0; component < Math.min(count, attribute.componentCount()); component++) {
-            int offset = element * stride + component * attribute.componentType().byteSize();
-            result[component] = component(data, offset, attribute.componentType(), attribute.normalized());
-        }
-        return result;
-    }
-
-    private static float component(ByteBuffer data, int offset, ModelComponentType type, boolean normalized) {
-        return switch (type) {
-            case FLOAT32 -> data.getFloat(offset);
-            case UINT8 -> normalized ? Byte.toUnsignedInt(data.get(offset)) / 255F : Byte.toUnsignedInt(data.get(offset));
-            case INT8 -> normalized ? Math.max(data.get(offset) / 127F, -1F) : data.get(offset);
-            case UINT16 -> normalized ? Short.toUnsignedInt(data.getShort(offset)) / 65535F : Short.toUnsignedInt(data.getShort(offset));
-            case INT16 -> normalized ? Math.max(data.getShort(offset) / 32767F, -1F) : data.getShort(offset);
-            case UINT32 -> normalized ? Integer.toUnsignedLong(data.getInt(offset)) / 4294967295F
-                    : Integer.toUnsignedLong(data.getInt(offset));
-        };
     }
 }

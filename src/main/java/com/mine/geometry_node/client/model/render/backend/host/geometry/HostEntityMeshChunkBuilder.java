@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.model.render.backend.host.geometry;
 
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightBinding;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
@@ -19,15 +20,24 @@ public final class HostEntityMeshChunkBuilder {
                                    Matrix4fc pose, Matrix3fc normal, VertexFormat requestedFormat,
                                    float red, float green, float blue, float alpha,
                                    int packedLight, boolean mirrored) {
+        return build(geometry, firstTriangle, triangleCount, pose, normal, requestedFormat,
+                red, green, blue, alpha, HostLightBinding.constant(packedLight), mirrored);
+    }
+
+    public static BuiltChunk build(HostEntityGeometry geometry, int firstTriangle, int triangleCount,
+                                   Matrix4fc pose, Matrix3fc normal, VertexFormat requestedFormat,
+                                   float red, float green, float blue, float alpha,
+                                   HostLightBinding lightBinding, boolean mirrored) {
         Objects.requireNonNull(geometry, "geometry");
         Objects.requireNonNull(pose, "pose");
         Objects.requireNonNull(normal, "normal");
         Objects.requireNonNull(requestedFormat, "requestedFormat");
+        Objects.requireNonNull(lightBinding, "lightBinding");
         if (triangleCount < 1) throw new IllegalArgumentException("mesh chunk must contain triangles");
         int estimated = Math.multiplyExact(Math.multiplyExact(triangleCount, 3), requestedFormat.getVertexSize());
         try (ByteBufferBuilder storage = new ByteBufferBuilder(Math.max(estimated, 1))) {
             BufferBuilder builder = new BufferBuilder(storage, VertexFormat.Mode.TRIANGLES, requestedFormat);
-            geometry.emitStaticTriangleRange(pose, normal, builder, red, green, blue, alpha, packedLight, mirrored,
+            geometry.emitStaticTriangleRange(pose, normal, builder, red, green, blue, alpha, lightBinding, mirrored,
                     firstTriangle, triangleCount);
             try (MeshData mesh = builder.buildOrThrow()) {
                 MeshData.DrawState state = mesh.drawState();

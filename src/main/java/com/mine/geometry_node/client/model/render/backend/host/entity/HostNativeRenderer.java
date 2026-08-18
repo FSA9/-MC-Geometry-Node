@@ -10,6 +10,7 @@ import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.Model
 import com.mine.geometry_node.client.model.render.backend.host.iris.entity.IrisEntityTranslucency;
 import com.mine.geometry_node.client.model.render.backend.host.iris.shadow.IrisShadowAdapter;
 import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodPlan;
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightBinding;
 import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodSelector;
 import com.mine.geometry_node.client.model.render.backend.common.ModelRenderBounds;
 import com.mine.geometry_node.client.model.render.integration.*;
@@ -386,32 +387,27 @@ public final class HostNativeRenderer {
                 if (labPbr && !materialFallback) IrisLabPbrProjector.reportHolderState(texture.texture(), losses);
                 RenderType renderType = renderType(material, placement, texture.identifier(),
                         opaqueFallback || materialFallback);
-                Matrix4f bakedTransform = new Matrix4f().rotate(placement.rotation()).scale(placement.scale())
-                        .mul(visible.nodeWorld());
-                Matrix4f transform = new Matrix4f().translate(
-                        (float) (placement.position().x - camera.x), (float) (placement.position().y - camera.y),
-                        (float) (placement.position().z - camera.z)).mul(bakedTransform);
-                float determinant = transform.determinant3x3();
-                if (!Float.isFinite(determinant) || Math.abs(determinant) <= 1.0E-8F) {
+                Optional<HostResolvedDraw> resolvedResult = HostDrawFrameResolver.resolve(
+                        draw, placement, visible.nodeWorld(), camera.x, camera.y, camera.z,
+                        requestedLod, preserveBlend, materialFallback,
+                        world -> LevelRenderer.getLightCoords(Minecraft.getInstance().level,
+                                BlockPos.containing(world.x, world.y, world.z)));
+                if (resolvedResult.isEmpty()) {
                     reject(rejections, ModelDrawRejection.SINGULAR_TRANSFORM);
                     statistics.singularTransformSkips++;
                     continue;
                 }
-                boolean mirrored = determinant < 0;
-                Vector3f drawPosition = transform.transformPosition(draw.localCenter());
-                Vector3d worldPosition = new Vector3d(camera.x + drawPosition.x,
-                        camera.y + drawPosition.y, camera.z + drawPosition.z);
-                int light = placement.fullBright() ? FULL_BRIGHT : LevelRenderer.getLightCoords(
-                        Minecraft.getInstance().level, BlockPos.containing(worldPosition.x, worldPosition.y, worldPosition.z));
-                float red = materialFallback ? 1 : material.red() * placement.red();
-                float green = materialFallback ? 1 : material.green() * placement.green();
-                float blue = materialFallback ? 1 : material.blue() * placement.blue();
-                float alpha = opaqueFallback || materialFallback ? 1
-                        : (material.alphaMode() == ModelAlphaMode.OPAQUE ? 1 : material.alpha()) * placement.alpha();
+                HostResolvedDraw resolved = resolvedResult.get();
+                Matrix4f bakedTransform = resolved.transform().baked();
+                Matrix4f transform = resolved.transform().cameraRelative();
+                boolean mirrored = resolved.transform().mirrored();
+                float red = resolved.red();
+                float green = resolved.green();
+                float blue = resolved.blue();
+                float alpha = resolved.alpha();
                 StaticSubmission staticSubmission = trySubmitStatic(instance, artifact, loaded, draw, geometry, texture,
                         renderType, placement, camera, visible.nodeWorld(), frustum,
-                        bakedTransform, light, mirrored,
-                        red, green, blue, alpha, effectiveTranslucent, requestedLod,
+                        resolved, effectiveTranslucent, requestedLod,
                         frozenRequirement);
                 if (warmingInitialWorkset) continue;
                 if (staticSubmission.status() == StaticSubmissionStatus.CULLED) {
@@ -424,11 +420,12 @@ public final class HostNativeRenderer {
                         if (firstDeferred < 0) firstDeferred = visibleIndex;
                         continue;
                     }
+                    Vector3d drawPosition = resolved.transform().worldCenter().sub(camera.x, camera.y, camera.z);
                     translucentSubmissions.add(new TranslucentSubmission(
-                            new HostTransparentOrderKey(drawPosition.lengthSquared(), loaded.asset().cacheIdentity(),
+                            new HostTransparentOrderKey((float) drawPosition.lengthSquared(), loaded.asset().cacheIdentity(),
                                     nodeIndex, primitiveIndex, instance.id().value()),
                             new Matrix4f(transform), renderType, geometry,
-                            red, green, blue, alpha, light, mirrored));
+                            red, green, blue, alpha, resolved.lightBinding(), mirrored));
                 } else if (staticSubmission.status() != StaticSubmissionStatus.SUBMITTED) {
                     if (!reserveImmediate(vertexBudget, drawVertices, loaded, rejections)) {
                         if (firstDeferred < 0) firstDeferred = visibleIndex;
@@ -438,7 +435,7 @@ public final class HostNativeRenderer {
                         HostStaticEntityRenderer.recordFallback();
                     }
                     submitGeometry(root, collector, transform, renderType, geometry,
-                            red, green, blue, alpha, light, mirrored);
+                            red, green, blue, alpha, resolved.lightBinding(), mirrored);
                 }
                 if (staticSubmission.status() != StaticSubmissionStatus.SUBMITTED) {
                     statistics.submittedVertices += drawVertices;
@@ -470,10 +467,6 @@ public final class HostNativeRenderer {
             boolean effectiveTranslucent = draw.material().alphaMode() == ModelAlphaMode.BLEND
                     || placement.alpha() < 0.999F;
             if (effectiveTranslucent) continue;
-            Matrix4f bakedTransform = new Matrix4f().rotate(placement.rotation()).scale(placement.scale())
-                    .mul(instance.pose().worldMatrix(draw.nodeIndex()));
-            float determinant = bakedTransform.determinant3x3();
-            if (!Float.isFinite(determinant) || Math.abs(determinant) <= 1.0E-8F) continue;
             HostPreparedArtifact.CompatibilityTexture texture;
             try {
                 texture = texture(artifact, loaded, draw.material(), labPbr, false);
@@ -489,37 +482,21 @@ public final class HostNativeRenderer {
                 continue;
             }
             if (format == null || format.getVertexSize() < 1) continue;
-            HostModelLodPlan.Level level;
-            Matrix3f normalTransform;
-            try {
-                level = draw.geometry().lod().level(requestedLod);
-                normalTransform = new Matrix3f(bakedTransform).invert().transpose();
-            } catch (RuntimeException failure) {
-                continue;
-            }
-            boolean mirrored = determinant < 0;
-            Vector3f drawPosition = bakedTransform.transformPosition(draw.localCenter(), new Vector3f());
-            Vector3d worldPosition = new Vector3d(placement.position().x + drawPosition.x,
-                    placement.position().y + drawPosition.y, placement.position().z + drawPosition.z);
-            int light = placement.fullBright() ? FULL_BRIGHT : LevelRenderer.getLightCoords(
-                    Minecraft.getInstance().level,
-                    BlockPos.containing(worldPosition.x, worldPosition.y, worldPosition.z));
             boolean materialFallback = texture.defaultMaterialFallback();
-            float red = materialFallback ? 1 : draw.material().red() * placement.red();
-            float green = materialFallback ? 1 : draw.material().green() * placement.green();
-            float blue = materialFallback ? 1 : draw.material().blue() * placement.blue();
-            float alpha = materialFallback ? 1
-                    : (draw.material().alphaMode() == ModelAlphaMode.OPAQUE
-                    ? 1 : draw.material().alpha()) * placement.alpha();
-            HostStaticVariantKey key = new HostStaticVariantKey(instance.id(), instance.pose().revision(),
-                    bakedTransform, normalTransform, OverlayTexture.NO_OVERLAY, light, mirrored,
-                    red, green, blue, alpha, level.firstTriangle(), level.triangleCount(),
-                    format, layoutGeneration);
-            long bytes = Math.multiplyExact(Math.multiplyExact((long) level.triangleCount(), 3L),
+            Optional<HostResolvedDraw> resolvedResult = HostDrawFrameResolver.resolve(
+                    draw, placement, instance.pose().worldMatrix(draw.nodeIndex()), 0, 0, 0,
+                    requestedLod, true, materialFallback,
+                    world -> LevelRenderer.getLightCoords(Minecraft.getInstance().level,
+                            BlockPos.containing(world.x, world.y, world.z)));
+            if (resolvedResult.isEmpty()) continue;
+            HostResolvedDraw resolved = resolvedResult.get();
+            HostStaticVariantKey key = resolved.staticVariantKey(instance.id(), instance.pose().revision(),
+                    OverlayTexture.NO_OVERLAY, format, layoutGeneration);
+            long bytes = Math.multiplyExact(Math.multiplyExact((long) resolved.lod().triangleCount(), 3L),
                     format.getVertexSize());
             requirements.add(new HostPreparedArtifact.InitialStaticRequirement(
                     new HostPreparedArtifact.StaticDrawSlot(draw.nodeIndex(), draw.primitiveIndex()),
-                    draw.geometry(), key, bytes, renderType, texture));
+                    draw.geometry(), key, resolved.lightBinding(), bytes, renderType, texture));
         }
         return List.copyOf(requirements);
     }
@@ -620,19 +597,21 @@ public final class HostNativeRenderer {
             TranslucentSubmission submission = submissions.get(index);
             submitGeometry(root, collector.order(index + 1), submission.transform(), submission.renderType(),
                     submission.geometry(), submission.red(), submission.green(), submission.blue(), submission.alpha(),
-                    submission.light(), submission.mirrored());
+                    submission.lightBinding(), submission.mirrored());
         }
     }
 
     private static void submitGeometry(PoseStack root,
                                        net.minecraft.client.renderer.OrderedSubmitNodeCollector collector,
                                        Matrix4f transform, RenderType renderType, HostEntityGeometry geometry,
-                                       float red, float green, float blue, float alpha, int light, boolean mirrored) {
+                                       float red, float green, float blue, float alpha,
+                                       HostLightBinding lightBinding, boolean mirrored) {
         root.pushPose();
         try {
             root.mulPose(transform);
             collector.submitCustomGeometry(root, renderType,
-                    (pose, vertices) -> geometry.emit(pose, vertices, red, green, blue, alpha, light, mirrored));
+                    (pose, vertices) -> geometry.emit(
+                            pose, vertices, red, green, blue, alpha, lightBinding, mirrored));
         } finally {
             root.popPose();
         }
@@ -644,8 +623,7 @@ public final class HostNativeRenderer {
                                            HostPreparedArtifact.CompatibilityTexture texture,
                                            RenderType renderType, ModelInstancePlacement placement, Vec3 camera,
                                            Matrix4f nodeWorld, Frustum frustum,
-                                           Matrix4f bakedTransform, int light, boolean mirrored,
-                                           float red, float green, float blue, float alpha,
+                                           HostResolvedDraw resolved,
                                            boolean effectiveTranslucent, int requestedLod,
                                            HostPreparedArtifact.InitialStaticRequirement frozenRequirement) {
         if (frozenRequirement == null && (effectiveTranslucent
@@ -662,17 +640,9 @@ public final class HostNativeRenderer {
             return StaticSubmission.ineligible();
         }
         if (format == null || format.getVertexSize() < 1) return StaticSubmission.ineligible();
-        Matrix3f normalTransform;
-        try {
-            normalTransform = frozenRequirement == null
-                    ? new Matrix3f(bakedTransform).invert().transpose()
-                    : frozenRequirement.key().normalTransform();
-        } catch (RuntimeException failure) {
-            return StaticSubmission.ineligible();
-        }
         HostModelLodPlan.Level level;
         try {
-            level = geometry.lod().level(requestedLod);
+            level = frozenRequirement == null ? resolved.lod() : geometry.lod().level(requestedLod);
         } catch (RuntimeException failure) {
             return StaticSubmission.fallback();
         }
@@ -680,19 +650,18 @@ public final class HostNativeRenderer {
         HostPreparedArtifact.StaticDrawSlot drawSlot = new HostPreparedArtifact.StaticDrawSlot(
                 draw.nodeIndex(), draw.primitiveIndex());
         HostStaticVariantKey key = frozenRequirement == null
-                ? new HostStaticVariantKey(instance.id(), instance.pose().revision(),
-                        bakedTransform, normalTransform, OverlayTexture.NO_OVERLAY, light, mirrored,
-                        red, green, blue, alpha, level.firstTriangle(), level.triangleCount(), format, layoutGeneration)
+                ? resolved.staticVariantKey(instance.id(), instance.pose().revision(),
+                        OverlayTexture.NO_OVERLAY, format, layoutGeneration)
                 : frozenRequirement.key();
         long generation = artifact.staticGeneration();
         HostStaticGeometryVariant variant = artifact.staticVariant(geometry, key, generation);
         if (variant == null) HostStaticCacheMetrics.INSTANCE.recordMiss();
         else HostStaticCacheMetrics.INSTANCE.recordHit();
-        HostPackedLightVariantGate gate = artifact.staticVariantGate(geometry, instance.id());
-        int gateToken = key.hashCode();
-        HostPackedLightVariantGate.Decision decision = gate.evaluate(
-                gateToken, variant != null, generation, System.nanoTime());
-        if (decision == HostPackedLightVariantGate.Decision.HIT && variant != null) {
+        HostStaticVariantAdmissionGate gate = artifact.staticVariantGate(geometry, instance.id());
+        HostStaticAdmissionKey admissionKey = key.admissionKey();
+        HostStaticVariantAdmissionGate.Decision decision = gate.evaluate(
+                admissionKey, variant != null, generation, System.nanoTime());
+        if (decision == HostStaticVariantAdmissionGate.Decision.HIT && variant != null) {
             HostClusterVisibility.Result visibility;
             try {
                 HostStaticEntityRenderer.recordModelLod(geometry, requestedLod, level.generatedLevel());
@@ -714,8 +683,8 @@ public final class HostNativeRenderer {
                     (float) (placement.position().z - camera.z)), visibility);
             return StaticSubmission.submitted(visibility.submittedTriangles(), visibility.drawCalls());
         }
-        if (decision != HostPackedLightVariantGate.Decision.BUILD) {
-            if (decision == HostPackedLightVariantGate.Decision.BUILDING) {
+        if (decision != HostStaticVariantAdmissionGate.Decision.BUILD) {
+            if (decision == HostStaticVariantAdmissionGate.Decision.BUILDING) {
                 HostStaticEntityRenderer.recordBuilding();
             }
             return StaticSubmission.fallback();
@@ -723,19 +692,22 @@ public final class HostNativeRenderer {
 
         HostStaticVariantUpload upload;
         try {
-            upload = HostStaticVariantUpload.tryCreate(artifact, geometry, drawSlot, key, gate, gateToken, format,
+            HostLightBinding uploadLight = frozenRequirement == null
+                    ? resolved.lightBinding() : frozenRequirement.lightBinding();
+            upload = HostStaticVariantUpload.tryCreate(artifact, geometry, drawSlot, key, gate, admissionKey,
+                    uploadLight, format,
                     () -> artifact.staticGeneration(generation)
                             && ModelResourceReloadListener.reloadGeneration() == layoutGeneration
                             && renderType.pipeline().getVertexFormat() == format,
                     loaded.asset().cacheIdentity() + ':' + draw.nodeIndex() + ':' + draw.primitiveIndex());
         } catch (RuntimeException failure) {
-            gate.recordFailure(gateToken, generation);
+            gate.recordFailure(admissionKey, generation);
             return StaticSubmission.fallback();
         }
         if (upload == null) {
             if (artifact.initialStaticWorksetBuilding(instance.id())) {
                 HostStaticVariantUpload.retire(artifact.failInitialStaticWorkset(instance.id()));
-                gate.recordFailure(gateToken, generation);
+                gate.recordFailure(admissionKey, generation);
                 String diagnosticKey = "initial-static-workset-mismatch:" + instance.id().value();
                 if (artifact.loggedGeometryFailures.add(diagnosticKey)) {
                     GeometryNode.LOGGER.error("Initial static working-set reservation did not match the actual "
@@ -753,12 +725,12 @@ public final class HostNativeRenderer {
                 if (requiredBytes > HostStaticVariantBudget.PER_ARTIFACT_BYTES
                         || requiredBytes > HostStaticVariantBudget.GLOBAL_BYTES) {
                     HostStaticCacheMetrics.INSTANCE.recordBudgetReject();
-                    gate.recordFailure(gateToken, generation);
+                    gate.recordFailure(admissionKey, generation);
                 } else {
                     HostStaticCacheMetrics.INSTANCE.recordBudgetWait();
                     long nowNanos = System.nanoTime();
                     HostArtifactRepository.INSTANCE.requestStaticCapacity(artifact, nowNanos);
-                    gate.recordBudgetWait(gateToken, generation, nowNanos);
+                    gate.recordBudgetWait(admissionKey, generation, nowNanos);
                 }
                 String diagnosticKey = "static-budget:" + draw.nodeIndex() + ':' + draw.primitiveIndex();
                 if (artifact.loggedGeometryFailures.add(diagnosticKey)) {
@@ -771,7 +743,7 @@ public final class HostNativeRenderer {
                             HostStaticVariantBudget.GLOBAL_BYTES);
                 }
             } else {
-                gate.recordCancelled(gateToken, generation);
+                gate.recordCancelled(admissionKey, generation);
             }
             return StaticSubmission.fallback();
         }
@@ -1008,7 +980,7 @@ public final class HostNativeRenderer {
     private record TranslucentSubmission(HostTransparentOrderKey orderKey,
                                          Matrix4f transform, RenderType renderType,
                                          HostEntityGeometry geometry, float red, float green, float blue, float alpha,
-                                         int light, boolean mirrored) {
+                                         HostLightBinding lightBinding, boolean mirrored) {
         private static final Comparator<TranslucentSubmission> ORDER =
                 Comparator.comparing(TranslucentSubmission::orderKey);
     }
