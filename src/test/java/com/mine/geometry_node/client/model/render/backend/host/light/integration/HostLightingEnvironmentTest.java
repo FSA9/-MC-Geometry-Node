@@ -6,6 +6,8 @@ import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.Model
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -61,6 +63,24 @@ class HostLightingEnvironmentTest {
     }
 
     @Test
+    void diagnosticTextChangesDoNotAdvanceCapabilityGeneration() {
+        HostLightingEnvironmentSnapshot before = HostLightingEnvironment.acceptObservation(
+                45, 13, true,
+                new IrisLabPbrProjector.Snapshot(45, ModelProjectorCapability.UNVERIFIED, "diagnostic-a"),
+                new IrisEntityTranslucency.Snapshot(false, "diagnostic-a"),
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "failure-a", 0, false));
+        HostLightingEnvironmentSnapshot after = HostLightingEnvironment.acceptObservation(
+                45, 13, true,
+                new IrisLabPbrProjector.Snapshot(45, ModelProjectorCapability.UNVERIFIED, "diagnostic-b"),
+                new IrisEntityTranslucency.Snapshot(false, "diagnostic-b"),
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "failure-b", 0, false));
+
+        assertEquals(before.generation(), after.generation());
+        assertEquals("diagnostic-b", after.projector().diagnostic());
+        assertEquals("failure-b", after.shadow().failure());
+    }
+
+    @Test
     void hostRequirementChangeAdvancesCapabilityGeneration() {
         IrisLabPbrProjector.Snapshot projector = new IrisLabPbrProjector.Snapshot(
                 50, ModelProjectorCapability.INACTIVE, "test");
@@ -74,5 +94,17 @@ class HostLightingEnvironmentTest {
 
         assertTrue(required.generation() > inactive.generation());
         assertTrue(required.hostNativeRequired());
+    }
+
+    @Test
+    void inactiveHostDropsAllPrivateShadowEvidence() {
+        HostLightingEnvironmentSnapshot.ShadowEvidence inactive =
+                HostLightingEnvironment.shadowEvidence(false);
+
+        assertFalse(inactive.installed());
+        assertNull(inactive.capabilities());
+        assertEquals("", inactive.failure());
+        assertEquals(0, inactive.submittedDraws());
+        assertFalse(inactive.translucentPhaseObserved());
     }
 }

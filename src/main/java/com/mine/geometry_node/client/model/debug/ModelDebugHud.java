@@ -5,6 +5,13 @@ import com.mine.geometry_node.client.model.render.backend.host.entity.HostStatic
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostStaticVariantBudget;
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostPreparationMemoryBudget;
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostArtifactRepository;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingCapability;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingCapabilityState;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingDomain;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingOwner;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingPolicy;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingPolicySnapshot;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostPackLightingRole;
 import com.mine.geometry_node.client.model.runtime.ClientModelRuntime;
 import com.mine.geometry_node.client.model.runtime.ModelDimensionId;
 import net.minecraft.client.DeltaTracker;
@@ -95,6 +102,25 @@ public final class ModelDebugHud {
                 + bytes(hostCpu.limitBytes()) + "  artifacts " + hostCpu.artifacts(), 0xFFB7C9A8));
         lines.add(new HudLine("HOST textures  " + bytes(hostArtifacts.textureBytes())
                 + "  objects " + hostArtifacts.textureObjects(), 0xFF91C7E8));
+        var lighting = HostLightingPolicy.snapshot();
+        lines.add(new HudLine("Light owner  S=" + owner(lighting.decision(HostLightingDomain.SUN_SKY).effectiveOwner())
+                + " P=" + owner(lighting.decision(HostLightingDomain.PLACED_BLOCK).effectiveOwner())
+                + " H=" + owner(lighting.decision(HostLightingDomain.HELD_DYNAMIC).effectiveOwner())
+                + " E=" + owner(lighting.decision(HostLightingDomain.MODEL_EMISSIVE).effectiveOwner()),
+                0xFF72D6A0));
+        lines.add(new HudLine("Pack roles  S=" + roles(lighting, HostLightingDomain.SUN_SKY)
+                + " P=" + roles(lighting, HostLightingDomain.PLACED_BLOCK)
+                + " H=" + roles(lighting, HostLightingDomain.HELD_DYNAMIC)
+                + " E=" + roles(lighting, HostLightingDomain.MODEL_EMISSIVE), 0xFFFFC857));
+        lines.add(new HudLine("Light base  entity "
+                + state(lighting.capability(HostLightingCapability.ENTITY_VERTEX_INPUT).state())
+                + "  pbr " + state(lighting.capability(HostLightingCapability.LABPBR_ATTACHMENTS).state())
+                + "  shadow " + state(lighting.capability(HostLightingCapability.SUN_SHADOW_REPLAY).state())
+                + "  host " + state(lighting.capability(HostLightingCapability.HOST_PLACED_BLOCK_UV2).state())
+                + '/' + state(lighting.capability(HostLightingCapability.HOST_HELD_DYNAMIC_UV2).state())
+                + '/' + state(lighting.capability(HostLightingCapability.HOST_MODEL_EMISSIVE_UV2).state())
+                + "  gen " + lighting.generation(),
+                0xFFB8C0C8));
         lines.add(new HudLine("Static  resident " + bytes(staticMemory.residentBytes())
                 + "  reserved " + bytes(staticMemory.reservedBytes())
                 + "  steady cap " + bytes(HostStaticVariantBudget.GLOBAL_BYTES)
@@ -223,6 +249,34 @@ public final class ModelDebugHud {
             unit++;
         } while (amount >= 1024.0 && unit < units.length - 1);
         return String.format(Locale.ROOT, "%.1f %s", amount, units[unit]);
+    }
+
+    private static String owner(HostLightingOwner owner) {
+        return switch (owner) {
+            case ENTITY_NATIVE -> "EN";
+            case PACK_NATIVE -> "PACK";
+            case HOST_UV2 -> "HOST";
+            case CONSTANT -> "CONST";
+            case EXTERNAL_CONFLICT -> "EXT!";
+        };
+    }
+
+    private static String state(HostLightingCapabilityState state) {
+        return switch (state) {
+            case AVAILABLE -> "ok";
+            case UNAVAILABLE -> "off";
+            case UNVERIFIED -> "?";
+            case CONFLICT -> "!";
+        };
+    }
+
+    private static String roles(HostLightingPolicySnapshot lighting, HostLightingDomain domain) {
+        String value = "r" + state(lighting.packDomain(domain).role(HostPackLightingRole.RECEIVER).state())
+                + "/c" + state(lighting.packDomain(domain).role(HostPackLightingRole.OCCLUDER_CASTER).state());
+        if (domain == HostLightingDomain.MODEL_EMISSIVE) {
+            value += "/e" + state(lighting.packDomain(domain).role(HostPackLightingRole.SOURCE_EMITTER).state());
+        }
+        return value;
     }
 
     private static long saturatedAdd(long left, long right) {

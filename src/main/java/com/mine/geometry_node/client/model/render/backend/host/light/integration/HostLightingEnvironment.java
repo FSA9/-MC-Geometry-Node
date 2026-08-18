@@ -28,8 +28,11 @@ public final class HostLightingEnvironment {
         IrisEntityTranslucency.Snapshot translucency = hostNativeRequired
                 ? IrisEntityTranslucency.snapshot()
                 : new IrisEntityTranslucency.Snapshot(false, "HOST_NATIVE_INACTIVE");
-        return acceptObservation(reloadGeneration, integrationGeneration, hostNativeRequired,
+        HostLightingEnvironmentSnapshot environment = acceptObservation(
+                reloadGeneration, integrationGeneration, hostNativeRequired,
                 projector, translucency, shadowEvidence(hostNativeRequired));
+        HostLightingPolicy.capture(environment);
+        return environment;
     }
 
     static synchronized HostLightingEnvironmentSnapshot acceptObservation(
@@ -60,12 +63,13 @@ public final class HostLightingEnvironment {
         }
         current = unavailable(++generation, resourceReloadGeneration,
                 ModelIntegrationController.integrationStatus().generation());
+        HostLightingPolicy.capture(current);
     }
 
-    private static HostLightingEnvironmentSnapshot.ShadowEvidence shadowEvidence(boolean hostNativeRequired) {
+    static HostLightingEnvironmentSnapshot.ShadowEvidence shadowEvidence(boolean hostNativeRequired) {
         if (!hostNativeRequired) {
             return new HostLightingEnvironmentSnapshot.ShadowEvidence(
-                    IrisShadowAdapter.installed(), null, "", 0, false);
+                    false, null, "", 0, false);
         }
         return new HostLightingEnvironmentSnapshot.ShadowEvidence(
                 IrisShadowAdapter.installed(), IrisShadowAdapter.capabilities(), IrisShadowAdapter.failure(),
@@ -77,11 +81,18 @@ public final class HostLightingEnvironment {
         return left.resourceReloadGeneration() == right.resourceReloadGeneration()
                 && left.integrationGeneration() == right.integrationGeneration()
                 && left.hostNativeRequired() == right.hostNativeRequired()
-                && left.projector().equals(right.projector())
-                && left.translucency().equals(right.translucency())
+                && left.projector().capability() == right.projector().capability()
+                && left.translucency().dedicatedProgram() == right.translucency().dedicatedProgram()
                 && left.shadow().installed() == right.shadow().installed()
                 && Objects.equals(left.shadow().capabilities(), right.shadow().capabilities())
-                && left.shadow().failure().equals(right.shadow().failure());
+                && failureClass(left.shadow().failure()).equals(failureClass(right.shadow().failure()));
+    }
+
+    private static String failureClass(String failure) {
+        if (failure == null || failure.isEmpty()) return "NONE";
+        if ("IRIS_ABSENT".equals(failure)) return "IRIS_ABSENT";
+        if ("LIGHTING_ENVIRONMENT_INVALIDATED".equals(failure)) return "INVALIDATED";
+        return "RUNTIME_FAILURE";
     }
 
     private static HostLightingEnvironmentSnapshot unavailable(long environmentGeneration,
