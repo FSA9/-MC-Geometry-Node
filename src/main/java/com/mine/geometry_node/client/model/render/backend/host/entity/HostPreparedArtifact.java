@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.IrisL
 import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.LabPbrProjectionEncoder;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
 import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightBinding;
+import com.mine.geometry_node.client.model.render.backend.host.light.asset.HostPreparedLightingAsset;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialProjectionPolicy;
 import com.mine.geometry_node.client.model.gpu.DecodedModelImage;
 import com.mine.geometry_node.client.model.gpu.minecraft.NativeImageModelDecoder;
@@ -45,8 +46,10 @@ public final class HostPreparedArtifact {
     HostPreparedArtifact(HostDrawPlan drawPlan, Map<Integer, DecodedModelImage> decodedImages,
                          Map<Integer, String> imageFailures,
                          Map<StaticModelMaterial, LabPbrImages> labPbrImages,
+                         HostPreparedLightingAsset lightingAsset,
                          HostPreparationMemoryBudget.Reservation memoryReservation) {
-        this.preparedAsset = new HostPreparedAsset(drawPlan, decodedImages, imageFailures, labPbrImages);
+        this.preparedAsset = new HostPreparedAsset(drawPlan, decodedImages, imageFailures, labPbrImages,
+                lightingAsset);
         this.memoryReservation = Objects.requireNonNull(memoryReservation, "memoryReservation");
     }
 
@@ -58,9 +61,16 @@ public final class HostPreparedArtifact {
                                                DoubleConsumer progress) {
         HostPreparationMemoryBudget.Reservation memory = HostPreparationMemoryBudget.INSTANCE.reserve(
                 estimatedAdditionalBytes(definition, metadata));
+        HostPreparedLightingAsset lighting = null;
         try {
             HostDrawPlan plan = HostDrawPlan.compile(
-                    definition, metadata, value -> progress.accept(value * 0.70));
+                    definition, metadata, value -> progress.accept(value * 0.65));
+            lighting = HostPreparedLightingAsset.prepare(plan.canonicalPrimitives(), metadata::material);
+            if (!lighting.ready()) {
+                GeometryNode.LOGGER.warn("HOST lighting geometry fallback asset={} status={} detail={}",
+                        definition.source(), lighting.status(), lighting.detail());
+            }
+            progress.accept(0.75);
             Map<Integer, DecodedModelImage> decoded = new HashMap<>();
             Map<Integer, String> failures = new HashMap<>();
             NativeImageModelDecoder decoder = new NativeImageModelDecoder();
@@ -71,7 +81,7 @@ public final class HostPreparedArtifact {
                     failures.put(index, failure.getClass().getSimpleName() + ": "
                             + Objects.toString(failure.getMessage(), "image decode failed"));
                 }
-                progress.accept(0.70 + 0.15 * (index + 1.0) / definition.images().size());
+                progress.accept(0.75 + 0.10 * (index + 1.0) / definition.images().size());
             }
             Map<StaticModelMaterial, LabPbrImages> labPbr = new HashMap<>();
             for (int index = 0; index < definition.materials().size(); index++) {
@@ -97,8 +107,9 @@ public final class HostPreparedArtifact {
                 progress.accept(0.85 + 0.15 * (index + 1.0) / definition.materials().size());
             }
             progress.accept(1.0);
-            return new HostPreparedArtifact(plan, decoded, failures, labPbr, memory);
+            return new HostPreparedArtifact(plan, decoded, failures, labPbr, lighting, memory);
         } catch (RuntimeException | Error failure) {
+            if (lighting != null) lighting.close();
             memory.close();
             throw failure;
         }
@@ -590,7 +601,11 @@ public final class HostPreparedArtifact {
                 detachedStatic.forEach(HostStaticGeometryVariant::close);
             }
         } finally {
-            memoryReservation.close();
+            try {
+                preparedAsset.close();
+            } finally {
+                memoryReservation.close();
+            }
         }
     }
 

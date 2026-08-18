@@ -12,6 +12,7 @@ import com.mine.geometry_node.client.model.render.backend.host.light.integration
 import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingPolicy;
 import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingPolicySnapshot;
 import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostPackLightingRole;
+import com.mine.geometry_node.client.model.render.backend.host.light.asset.HostLightingAssetBudget;
 import com.mine.geometry_node.client.model.runtime.ClientModelRuntime;
 import com.mine.geometry_node.client.model.runtime.ModelDimensionId;
 import net.minecraft.client.DeltaTracker;
@@ -61,6 +62,7 @@ public final class ModelDebugHud {
         var staticMemory = HostStaticVariantBudget.INSTANCE.diagnostics();
         var hostCpu = HostPreparationMemoryBudget.INSTANCE.diagnostics();
         var hostArtifacts = HostArtifactRepository.INSTANCE.diagnostics();
+        var lightingGeometryMemory = HostLightingAssetBudget.INSTANCE.diagnostics();
         long trackedGpuBytes = saturatedAdd(gpu.liveBufferBytes(), gpu.liveTextureBytes());
         List<HudLine> lines = new java.util.ArrayList<>();
         lines.add(new HudLine("GeometryNode  " + integration.effectiveMode() + " / "
@@ -121,6 +123,13 @@ public final class ModelDebugHud {
                 + '/' + state(lighting.capability(HostLightingCapability.HOST_MODEL_EMISSIVE_UV2).state())
                 + "  gen " + lighting.generation(),
                 0xFFB8C0C8));
+        lines.add(new HudLine("Light geometry  ready " + hostArtifacts.lightingReady() + '/'
+                + hostArtifacts.artifacts() + "  fallback " + hostArtifacts.lightingFallback()
+                + "  surfaces " + hostArtifacts.lightingSurfaces()
+                + "  blockers " + number(hostArtifacts.lightingOpaqueTriangles())
+                + "  voxels " + number(hostArtifacts.lightingOccupiedVoxels())
+                + "  mem " + bytes(lightingGeometryMemory.residentBytes()),
+                hostArtifacts.lightingFallback() == 0 ? 0xFF78D6C6 : 0xFFFFA24A));
         lines.add(new HudLine("Static  resident " + bytes(staticMemory.residentBytes())
                 + "  reserved " + bytes(staticMemory.reservedBytes())
                 + "  steady cap " + bytes(HostStaticVariantBudget.GLOBAL_BYTES)

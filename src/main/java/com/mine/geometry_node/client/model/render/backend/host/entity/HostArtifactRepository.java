@@ -144,11 +144,28 @@ public final class HostArtifactRepository {
         renderThread.assertRenderThread();
         long textureBytes = 0;
         int textureObjects = 0;
+        int lightingReady = 0;
+        int lightingFallback = 0;
+        int lightingSurfaces = 0;
+        long lightingOpaqueTriangles = 0;
+        int lightingOccupiedVoxels = 0;
         for (HostPreparedArtifact artifact : live) {
             textureBytes = Math.addExact(textureBytes, artifact.bindingResidentBytes());
             textureObjects = Math.addExact(textureObjects, artifact.bindingResidentObjects());
+            var lighting = artifact.preparedAsset().lightingAsset();
+            if (lighting.ready()) {
+                lightingReady++;
+                lightingSurfaces = Math.addExact(lightingSurfaces, lighting.diagnostics().surfaces());
+                lightingOpaqueTriangles = Math.addExact(lightingOpaqueTriangles,
+                        lighting.diagnostics().opaqueTriangles());
+                lightingOccupiedVoxels = Math.addExact(lightingOccupiedVoxels,
+                        lighting.diagnostics().occupiedVoxels());
+            } else {
+                lightingFallback++;
+            }
         }
-        return new Diagnostics(live.size(), textureBytes, textureObjects);
+        return new Diagnostics(live.size(), textureBytes, textureObjects, lightingReady, lightingFallback,
+                lightingSurfaces, lightingOpaqueTriangles, lightingOccupiedVoxels);
     }
 
     public void touchStatic(HostPreparedArtifact artifact, Object instanceIdentity, long nowNanos) {
@@ -284,7 +301,9 @@ public final class HostArtifactRepository {
         return true;
     }
 
-    public record Diagnostics(int artifacts, long textureBytes, int textureObjects) {}
+    public record Diagnostics(int artifacts, long textureBytes, int textureObjects,
+                              int lightingReady, int lightingFallback, int lightingSurfaces,
+                              long lightingOpaqueTriangles, int lightingOccupiedVoxels) {}
 
     @FunctionalInterface
     interface StaticVariantRetirement {
