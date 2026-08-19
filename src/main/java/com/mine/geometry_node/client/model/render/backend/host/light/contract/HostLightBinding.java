@@ -15,7 +15,12 @@ public sealed interface HostLightBinding
     }
 
     static HostLightBinding field(HostLightFieldId id, HostVertexLightView samples) {
-        return new Field(id, samples);
+        return new Field(id, 0, samples);
+    }
+
+    static HostLightBinding field(HostLightFieldId id, int preservedPackedLight,
+                                  HostVertexLightView samples) {
+        return new Field(id, preservedPackedLight, samples);
     }
 
     static HostLightBinding fullBright() {
@@ -45,15 +50,17 @@ public sealed interface HostLightBinding
 
     final class Field implements HostLightBinding {
         private final HostLightFieldId id;
+        private final int preservedPackedLight;
         private final HostVertexLightView samples;
 
-        private Field(HostLightFieldId id, HostVertexLightView samples) {
+        private Field(HostLightFieldId id, int preservedPackedLight, HostVertexLightView samples) {
             this.id = Objects.requireNonNull(id, "id");
+            this.preservedPackedLight = preservedPackedLight;
             this.samples = Objects.requireNonNull(samples, "samples");
         }
 
         @Override public Identity identity() {
-            return new Identity(Mode.FIELD, 0, id);
+            return new Identity(Mode.FIELD, preservedPackedLight, id);
         }
 
         @Override public int packedLight(int vertexOccurrence) {

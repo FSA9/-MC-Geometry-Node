@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.model.render.backend.host.light.instance;
 import com.mine.geometry_node.client.model.gpu.RenderThreadDispatcher;
 import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightFieldIdentity;
 import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLocalLightField;
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostScalarLightField;
 import com.mine.geometry_node.client.model.runtime.ModelDimensionId;
 import com.mine.geometry_node.client.model.runtime.ModelInstanceId;
 import org.junit.jupiter.api.Test;
@@ -140,6 +141,39 @@ class HostLocalLightRepositoryTest {
         TestField currentField = new TestField(identity, 17);
         assertTrue(replacement.publish(currentTarget, currentField));
         assertSame(currentField, replacement.active(id));
+    }
+
+    @Test
+    void identicalPeriodicFieldKeepsStableIdentityButPlacementChangeDoesNotDeduplicate() {
+        List<HostLocalLightField> retired = new ArrayList<>();
+        HostLocalLightRepository repository = new HostLocalLightRepository(new CurrentThread(),
+                (field, completion) -> {
+                    retired.add(field);
+                    field.close();
+                    completion.run();
+                });
+        ModelInstanceId id = new ModelInstanceId("stable-field");
+        HostLightFieldIdentity firstIdentity = new HostLightFieldIdentity(id, "asset", 1,
+                new ModelDimensionId("minecraft:overworld"), 1, 10, 1);
+        HostScalarLightField first = new HostScalarLightField(firstIdentity, new int[]{0x00A00070}, null);
+        assertTrue(repository.publish(repository.beginTarget(firstIdentity), first));
+
+        HostLightFieldIdentity periodicIdentity = new HostLightFieldIdentity(id, "asset", 1,
+                new ModelDimensionId("minecraft:overworld"), 2, 20, 1);
+        HostScalarLightField periodic = new HostScalarLightField(periodicIdentity, new int[]{0x00A00070}, null);
+        assertTrue(repository.publish(repository.beginTarget(periodicIdentity), periodic));
+        assertSame(first, repository.active(id));
+        assertEquals(firstIdentity, repository.activeIdentity(id));
+        assertEquals(List.of(periodic), retired);
+        assertEquals(1, repository.diagnostics().published());
+
+        HostLightFieldIdentity movedIdentity = identity(id, 2, 3);
+        HostScalarLightField moved = new HostScalarLightField(movedIdentity, new int[]{0x00A00070}, null);
+        assertTrue(repository.publish(repository.beginTarget(movedIdentity), moved));
+        assertSame(moved, repository.active(id));
+        assertEquals(movedIdentity, repository.activeIdentity(id));
+        assertEquals(List.of(periodic, first), retired);
+        assertEquals(2, repository.diagnostics().published());
     }
 
     private static HostLocalLightRepository repository(List<TestField> retired) {

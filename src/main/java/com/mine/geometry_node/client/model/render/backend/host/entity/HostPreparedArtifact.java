@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.model.render.backend.host.iris.labpbr.LabPb
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
 import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightBinding;
 import com.mine.geometry_node.client.model.render.backend.host.light.asset.HostPreparedLightingAsset;
+import com.mine.geometry_node.client.model.render.backend.host.light.project.HostLightProjectionPlan;
 import com.mine.geometry_node.client.model.render.backend.host.material.HostMaterialProjectionPolicy;
 import com.mine.geometry_node.client.model.gpu.DecodedModelImage;
 import com.mine.geometry_node.client.model.gpu.minecraft.NativeImageModelDecoder;
@@ -47,9 +48,10 @@ public final class HostPreparedArtifact {
                          Map<Integer, String> imageFailures,
                          Map<StaticModelMaterial, LabPbrImages> labPbrImages,
                          HostPreparedLightingAsset lightingAsset,
+                         HostLightProjectionPlan lightProjectionPlan,
                          HostPreparationMemoryBudget.Reservation memoryReservation) {
         this.preparedAsset = new HostPreparedAsset(drawPlan, decodedImages, imageFailures, labPbrImages,
-                lightingAsset);
+                lightingAsset, lightProjectionPlan);
         this.memoryReservation = Objects.requireNonNull(memoryReservation, "memoryReservation");
     }
 
@@ -70,6 +72,7 @@ public final class HostPreparedArtifact {
                 GeometryNode.LOGGER.warn("HOST lighting geometry fallback asset={} status={} detail={}",
                         definition.source(), lighting.status(), lighting.detail());
             }
+            HostLightProjectionPlan lightProjection = HostLightProjectionPlan.build(plan, lighting);
             progress.accept(0.75);
             Map<Integer, DecodedModelImage> decoded = new HashMap<>();
             Map<Integer, String> failures = new HashMap<>();
@@ -107,7 +110,7 @@ public final class HostPreparedArtifact {
                 progress.accept(0.85 + 0.15 * (index + 1.0) / definition.materials().size());
             }
             progress.accept(1.0);
-            return new HostPreparedArtifact(plan, decoded, failures, labPbr, lighting, memory);
+            return new HostPreparedArtifact(plan, decoded, failures, labPbr, lighting, lightProjection, memory);
         } catch (RuntimeException | Error failure) {
             if (lighting != null) lighting.close();
             memory.close();
@@ -311,6 +314,15 @@ public final class HostPreparedArtifact {
         return workset != null && (workset.status == InitialWorksetStatus.BUILDING
                 || workset.status == InitialWorksetStatus.REPLACING)
                 && workset.requirements.equals(InitialStaticWorkset.index(requirements));
+    }
+
+    boolean initialStaticWorksetStructureMatches(Object instanceIdentity,
+                                                 List<InitialStaticRequirement> requirements) {
+        InitialStaticWorkset workset = initialStaticWorksets.get(instanceIdentity);
+        return workset != null && (workset.status == InitialWorksetStatus.BUILDING
+                || workset.status == InitialWorksetStatus.REPLACING)
+                && InitialStaticWorkset.sameStructure(
+                        workset.requirements, InitialStaticWorkset.index(requirements));
     }
 
     List<HostStaticGeometryVariant> restartInitialStaticWorkset(Object instanceIdentity) {
@@ -748,6 +760,20 @@ public final class HostPreparedArtifact {
                 unique.putIfAbsent(new StaticVariantIdentity(requirement.geometry(), requirement.key()), requirement);
             }
             return unique;
+        }
+        static boolean sameStructure(Map<StaticDrawSlot, InitialStaticRequirement> left,
+                                     Map<StaticDrawSlot, InitialStaticRequirement> right) {
+            if (!left.keySet().equals(right.keySet())) return false;
+            for (Map.Entry<StaticDrawSlot, InitialStaticRequirement> entry : left.entrySet()) {
+                InitialStaticRequirement first = entry.getValue();
+                InitialStaticRequirement second = right.get(entry.getKey());
+                if (first.geometry() != second.geometry()
+                        || first.bytes() != second.bytes()
+                        || first.renderType() != second.renderType()
+                        || first.texture() != second.texture()
+                        || !first.key().sameStructure(second.key())) return false;
+            }
+            return true;
         }
         static InitialStaticWorkset failed() {
             return new InitialStaticWorkset(Map.of(), null, InitialWorksetStatus.FAILED);

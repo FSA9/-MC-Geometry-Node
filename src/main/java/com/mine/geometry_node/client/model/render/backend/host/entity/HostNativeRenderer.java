@@ -13,6 +13,10 @@ import com.mine.geometry_node.client.model.render.backend.host.light.integration
 import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingEnvironmentSnapshot;
 import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodPlan;
 import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightBinding;
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostScalarLightField;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingDomain;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingOwner;
+import com.mine.geometry_node.client.model.render.backend.host.light.integration.HostLightingPolicy;
 import com.mine.geometry_node.client.model.render.backend.host.lod.HostModelLodSelector;
 import com.mine.geometry_node.client.model.render.backend.common.ModelRenderBounds;
 import com.mine.geometry_node.client.model.render.integration.*;
@@ -249,10 +253,12 @@ public final class HostNativeRenderer {
             }
             return;
         }
-        List<HostPreparedArtifact.InitialStaticRequirement> initialWorkset = initialStaticWorkset(
-                instance, artifact, loaded, placement, projector, requestedLod);
         HostPreparedArtifact.InitialWorksetStatus initialStatus =
                 artifact.initialStaticWorksetStatus(instance.id());
+        boolean fieldReplacement = initialStatus == HostPreparedArtifact.InitialWorksetStatus.READY
+                || initialStatus == HostPreparedArtifact.InitialWorksetStatus.REPLACING;
+        List<HostPreparedArtifact.InitialStaticRequirement> initialWorkset = initialStaticWorkset(
+                instance, artifact, loaded, placement, projector, requestedLod, fieldReplacement);
         if (initialWorkset.isEmpty() && initialStatus == HostPreparedArtifact.InitialWorksetStatus.READY
                 && artifact.activeStaticWorksetBytes(instance.id()) > 0) {
             HostStaticVariantUpload.retire(artifact.detachStaticVariantsForInstance(instance.id()));
@@ -260,7 +266,7 @@ public final class HostNativeRenderer {
         }
         if ((initialStatus == HostPreparedArtifact.InitialWorksetStatus.BUILDING
                 || initialStatus == HostPreparedArtifact.InitialWorksetStatus.REPLACING)
-                && !artifact.initialStaticWorksetMatches(instance.id(), initialWorkset)) {
+                && !artifact.initialStaticWorksetStructureMatches(instance.id(), initialWorkset)) {
             HostStaticVariantUpload.retire(artifact.restartInitialStaticWorkset(instance.id()));
             initialStatus = artifact.initialStaticWorksetStatus(instance.id());
         }
@@ -395,6 +401,7 @@ public final class HostNativeRenderer {
                 Optional<HostResolvedDraw> resolvedResult = HostDrawFrameResolver.resolve(
                         draw, placement, visible.nodeWorld(), camera.x, camera.y, camera.z,
                         requestedLod, preserveBlend, materialFallback,
+                        fallback -> lightBinding(instance, artifact, draw, fallback),
                         world -> LevelRenderer.getLightCoords(Minecraft.getInstance().level,
                                 BlockPos.containing(world.x, world.y, world.z)));
                 if (resolvedResult.isEmpty()) {
@@ -460,7 +467,7 @@ public final class HostNativeRenderer {
     private static List<HostPreparedArtifact.InitialStaticRequirement> initialStaticWorkset(
             ClientModelInstanceRegistry.ReadyInstance instance, HostPreparedArtifact artifact,
             LoadedModelResource loaded, ModelInstancePlacement placement,
-            ModelProjectorCapability projector, int requestedLod) {
+            ModelProjectorCapability projector, int requestedLod, boolean allowField) {
         if (instance.pose().animated() || !HostStaticEntityRenderer.available()) return List.of();
         List<HostPreparedArtifact.InitialStaticRequirement> requirements = new ArrayList<>();
         boolean labPbr = projector.auxiliaryEnabled();
@@ -491,6 +498,9 @@ public final class HostNativeRenderer {
             Optional<HostResolvedDraw> resolvedResult = HostDrawFrameResolver.resolve(
                     draw, placement, instance.pose().worldMatrix(draw.nodeIndex()), 0, 0, 0,
                     requestedLod, true, materialFallback,
+                    fallback -> allowField
+                            ? lightBinding(instance, artifact, draw, fallback)
+                            : HostLightBinding.constant(fallback),
                     world -> LevelRenderer.getLightCoords(Minecraft.getInstance().level,
                             BlockPos.containing(world.x, world.y, world.z)));
             if (resolvedResult.isEmpty()) continue;
@@ -504,6 +514,23 @@ public final class HostNativeRenderer {
                     draw.geometry(), key, resolved.lightBinding(), bytes, renderType, texture));
         }
         return List.copyOf(requirements);
+    }
+
+    private static HostLightBinding lightBinding(ClientModelInstanceRegistry.ReadyInstance instance,
+                                                 HostPreparedArtifact artifact,
+                                                 HostDrawPlan.Draw draw,
+                                                 int fallbackPackedLight) {
+        if (HostLightingPolicy.snapshot().decision(HostLightingDomain.PLACED_BLOCK).effectiveOwner()
+                != HostLightingOwner.HOST_UV2) {
+            return HostLightBinding.constant(fallbackPackedLight);
+        }
+        ClientModelRuntime runtime = ClientModelRuntime.INSTANCE;
+        var active = runtime.localLights().active(instance.id());
+        if (!(active instanceof HostScalarLightField scalar)
+                || !runtime.localLightCompatible(instance, scalar.identity())) {
+            return HostLightBinding.constant(fallbackPackedLight);
+        }
+        return artifact.preparedAsset().lightProjectionPlan().binding(draw, scalar, fallbackPackedLight);
     }
 
     private static void submitActiveWorkset(HostPreparedArtifact artifact,

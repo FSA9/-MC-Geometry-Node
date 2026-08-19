@@ -22,8 +22,11 @@ final class HostLightingArbitrator {
                 classifyPackDomains(environment, descriptor, capabilities);
 
         put(capabilities, HostLightingCapability.HOST_PLACED_BLOCK_UV2,
-                HostLightingCapabilityState.UNAVAILABLE, HostLightingEvidenceSource.NONE,
-                "F3B_F4_NOT_IMPLEMENTED");
+                environment.hostNativeRequired() ? HostLightingCapabilityState.AVAILABLE
+                        : HostLightingCapabilityState.UNAVAILABLE,
+                environment.hostNativeRequired() ? HostLightingEvidenceSource.HOST_IMPLEMENTATION
+                        : HostLightingEvidenceSource.NONE,
+                environment.hostNativeRequired() ? "F4_RENDER_BINDING_AVAILABLE" : "HOST_RENDERER_INACTIVE");
         put(capabilities, HostLightingCapability.HOST_HELD_DYNAMIC_UV2,
                 HostLightingCapabilityState.UNAVAILABLE, HostLightingEvidenceSource.NONE,
                 "F7_NOT_IMPLEMENTED");

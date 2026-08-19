@@ -80,6 +80,21 @@ public final class HostLocalLightingRuntime {
                 started, completed, rejected, unsupported);
     }
 
+    public boolean compatible(ClientModelInstanceRegistry.ReadyInstance instance,
+                              HostLightFieldIdentity identity) {
+        Objects.requireNonNull(instance, "instance");
+        Objects.requireNonNull(identity, "identity");
+        InstanceState state = states.get(instance.id());
+        return state != null
+                && state.signature().resource() == instance.resource()
+                && state.signature().placement().equals(instance.state().placement())
+                && state.signature().dimension().equals(instance.state().dimension())
+                && state.placementRevision() == identity.placementRevision()
+                && identity.assetKey().equals(instance.resource().asset().toString())
+                && identity.dimension().equals(instance.state().dimension())
+                && identity.instanceId().equals(instance.id());
+    }
+
     private void startNext(ClientLevel level, List<ClientModelInstanceRegistry.ReadyInstance> ready,
                            ModelDimensionId dimension, long tick) {
         for (ClientModelInstanceRegistry.ReadyInstance instance : ready) {
@@ -91,7 +106,8 @@ public final class HostLocalLightingRuntime {
                 unsupported++;
                 continue;
             }
-            InstanceSignature signature = new InstanceSignature(instance.resource(), instance.state().placement());
+            InstanceSignature signature = new InstanceSignature(
+                    instance.resource(), instance.state().placement(), dimension);
             InstanceState state = states.get(instance.id());
             if (state == null || !state.signature().equals(signature)) {
                 long placementRevision = state == null ? 1 : state.placementRevision() + 1;
@@ -195,7 +211,8 @@ public final class HostLocalLightingRuntime {
     private record ActiveCapture(ModelInstanceId instanceId, LoadedModelResource resource,
                                  ModelInstancePlacement placement, HostPreparedLightingAsset lighting,
                                  long placementRevision, HostWorldLightCaptureTask task) {}
-    private record InstanceSignature(LoadedModelResource resource, ModelInstancePlacement placement) {}
+    private record InstanceSignature(LoadedModelResource resource, ModelInstancePlacement placement,
+                                     ModelDimensionId dimension) {}
     private record InstanceState(InstanceSignature signature, long placementRevision, long lastSubmittedTick) {
         private InstanceState withLastSubmittedTick(long tick) {
             return new InstanceState(signature, placementRevision, tick);

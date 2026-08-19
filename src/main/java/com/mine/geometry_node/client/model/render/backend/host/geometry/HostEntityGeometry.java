@@ -35,6 +35,7 @@ public final class HostEntityGeometry {
 
     public HostSpatialClusterPlan clusters() { return clusters; }
     public HostModelLodPlan lod() { return lod; }
+    public int sourceTriangleCount() { return Math.toIntExact(triangleCount()); }
     public int staticTriangleCount() { return lod.staticTriangleCount(); }
 
     float[] staticVertexData() {

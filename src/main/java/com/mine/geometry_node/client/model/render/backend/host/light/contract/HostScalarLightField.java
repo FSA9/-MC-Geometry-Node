@@ -36,6 +36,9 @@ public final class HostScalarLightField implements HostLocalLightField {
         return new HostScalarLightSample((value >>> 4) & 15, (value >>> 20) & 15);
     }
     public HostVertexLightView probeView() { return this::packedLight; }
+    public boolean sameSamples(HostScalarLightField other) {
+        return other != null && Arrays.equals(packed, other.packed);
+    }
     @Override public void close() { if (reservation != null) reservation.close(); }
 
     private static int[] pack(HostScalarLightSample[] samples) {

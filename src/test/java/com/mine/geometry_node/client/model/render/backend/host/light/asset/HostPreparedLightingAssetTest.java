@@ -48,6 +48,8 @@ class HostPreparedLightingAssetTest {
             assertNotEquals(asset.surfaces().get(0).identity(), asset.surfaces().get(1).identity());
             assertEquals(2, asset.receiverProbes().size());
             assertEquals(2, asset.receiverProbes().sourceTriangles());
+            assertEquals(0, asset.receiverProbes().surfaceIndex(0));
+            assertEquals(1, asset.receiverProbes().surfaceIndex(1));
         }
     }
 

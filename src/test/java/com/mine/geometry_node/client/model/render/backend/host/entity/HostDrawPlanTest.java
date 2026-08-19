@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.model.render.backend.host.entity;
 
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightBinding;
+import com.mine.geometry_node.client.model.runtime.ModelInstancePlacement;
 import com.mine.geometry_node.client.model.runtime.StaticModelRenderMetadata;
 import com.mine.geometry_node.core.engine.system.model.domain.*;
 import com.mine.geometry_node.core.engine.system.model.identity.*;
@@ -40,6 +42,20 @@ class HostDrawPlanTest {
         assertEquals(0, plan.draws().get(0).localCenter().z());
         assertEquals(plan.requiredVertices(), HostDrawPlan.requiredVertices(
                 definition, StaticModelRenderMetadata.from(definition)));
+    }
+
+    @Test
+    void fullBrightBypassesFieldSelectionAtTheSharedResolverBoundary() {
+        HostDrawPlan.Draw draw = HostDrawPlan.compile(definition(),
+                StaticModelRenderMetadata.from(definition())).draws().getFirst();
+
+        HostResolvedDraw resolved = HostDrawFrameResolver.resolve(draw,
+                ModelInstancePlacement.previewAt(0, 0, 0), draw.modelTransform(),
+                0, 0, 0, 0, true, false,
+                ignored -> fail("FULL_BRIGHT must not request a local FIELD"), ignored -> 0).orElseThrow();
+
+        assertEquals(HostLightBinding.Mode.FULL_BRIGHT, resolved.lightBinding().identity().mode());
+        assertEquals(HostLightBinding.FULL_BRIGHT_PACKED, resolved.lightBinding().packedLight(0));
     }
 
     private static ModelDefinition definition() {

@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.model.gpu.ModelGpuRepository;
 import com.mine.geometry_node.client.model.gpu.ModelUploadScheduler;
 import com.mine.geometry_node.client.model.gpu.minecraft.*;
 import com.mine.geometry_node.client.model.render.backend.host.entity.HostArtifactRepository;
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightFieldIdentity;
 import com.mine.geometry_node.client.model.render.backend.host.light.diagnostics.HostLocalLightDiagnostics;
 import com.mine.geometry_node.client.model.render.backend.host.light.capture.HostWorldLightCaptureBudget;
 import com.mine.geometry_node.client.model.render.backend.host.light.instance.HostLocalLightRepository;
@@ -80,6 +81,10 @@ public final class ClientModelRuntime {
     public synchronized HostWorldLightCaptureBudget lightCaptureBudget() { return lightCaptureBudget; }
     public synchronized HostLightingSolveCoordinator lightingCoordinator() { return lightingCoordinator; }
     public synchronized HostLocalLightDiagnostics localLightDiagnostics() { return localLights.diagnostics(); }
+    public synchronized boolean localLightCompatible(ClientModelInstanceRegistry.ReadyInstance instance,
+                                                     HostLightFieldIdentity identity) {
+        return localLightingRuntime.compatible(instance, identity);
+    }
     public synchronized HostLocalLightingRuntime.Diagnostics localLightingRuntimeDiagnostics() {
         return localLightingRuntime.diagnostics();
     }

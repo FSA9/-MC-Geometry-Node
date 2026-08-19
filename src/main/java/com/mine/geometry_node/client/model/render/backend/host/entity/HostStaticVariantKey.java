@@ -86,15 +86,13 @@ public final class HostStaticVariantKey {
     public Object layoutIdentity() { return layoutIdentity; }
     public long layoutGeneration() { return layoutGeneration; }
 
-    @Override public boolean equals(Object other) {
-        if (this == other) return true;
-        if (!(other instanceof HostStaticVariantKey key)) return false;
-        return instanceIdentity == key.instanceIdentity
+    boolean sameStructure(HostStaticVariantKey key) {
+        return key != null
+                && instanceIdentity == key.instanceIdentity
                 && poseRevision == key.poseRevision
                 && poseTransform.equals(key.poseTransform)
                 && normalTransform.equals(key.normalTransform)
                 && packedOverlay == key.packedOverlay
-                && lightIdentity.equals(key.lightIdentity)
                 && mirrored == key.mirrored
                 && redBits == key.redBits
                 && greenBits == key.greenBits
@@ -104,6 +102,12 @@ public final class HostStaticVariantKey {
                 && triangleCount == key.triangleCount
                 && layoutIdentity == key.layoutIdentity
                 && layoutGeneration == key.layoutGeneration;
+    }
+
+    @Override public boolean equals(Object other) {
+        if (this == other) return true;
+        if (!(other instanceof HostStaticVariantKey key)) return false;
+        return sameStructure(key) && lightIdentity.equals(key.lightIdentity);
     }
 
     @Override public int hashCode() {

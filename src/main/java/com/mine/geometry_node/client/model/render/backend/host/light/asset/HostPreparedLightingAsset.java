@@ -181,9 +181,11 @@ public final class HostPreparedLightingAsset implements AutoCloseable {
     private static long estimatedBytes(List<HostCanonicalPrimitive> primitives,
                                        IntFunction<StaticModelMaterial> materials,
                                        HostLightingGeometryParameters parameters) {
-        long surfaceBytes = 0, opaqueTriangles = 0;
+        long surfaceBytes = 0, totalTriangles = 0, opaqueTriangles = 0;
         for (HostCanonicalPrimitive primitive : primitives) {
             long occurrences = primitive.nodeOccurrences().size();
+            totalTriangles = Math.addExact(totalTriangles,
+                    Math.multiplyExact(occurrences, primitive.triangleCount()));
             long perOccurrence = Math.addExact(Math.multiplyExact((long) primitive.vertexCount(), 6L * Float.BYTES),
                     Math.multiplyExact((long) primitive.occurrenceCount(),
                             Integer.BYTES + Float.BYTES));
@@ -197,9 +199,14 @@ public final class HostPreparedLightingAsset implements AutoCloseable {
         }
         long bvhUpperBound = Math.multiplyExact(opaqueTriangles, 32L);
         long voxelUpperBound = Math.addExact((parameters.maximumVoxelCells() + 7L) / 8L, 1024L);
-        long probeUpperBound = Math.multiplyExact((long) parameters.maximumReceiverProbes(), 6L * Float.BYTES);
+        long retainedProbes = Math.min(totalTriangles, (long) parameters.maximumReceiverProbes());
+        long probeUpperBound = Math.multiplyExact(retainedProbes,
+                6L * Float.BYTES + 2L * Integer.BYTES);
+        long proxyTriangles = Math.addExact(Math.multiplyExact(totalTriangles, 130L), 99L) / 100L;
+        long projectedOccurrences = Math.multiplyExact(Math.addExact(totalTriangles, proxyTriangles), 3L);
+        long projectionUpperBound = Math.multiplyExact(projectedOccurrences, Integer.BYTES);
         return Math.addExact(Math.addExact(Math.addExact(surfaceBytes, bvhUpperBound), voxelUpperBound),
-                probeUpperBound);
+                Math.addExact(probeUpperBound, projectionUpperBound));
     }
 
     private static HostPreparedLightingAsset unavailable(Status status, String detail) {

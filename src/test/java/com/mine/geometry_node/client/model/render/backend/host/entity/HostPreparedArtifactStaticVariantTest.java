@@ -3,6 +3,8 @@ package com.mine.geometry_node.client.model.render.backend.host.entity;
 import com.mine.geometry_node.client.model.gpu.ModelGpuBuffer;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostEntityGeometry;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostGeometryProjector;
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightBinding;
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightFieldId;
 import com.mine.geometry_node.client.model.runtime.StaticModelRenderMetadata;
 import com.mine.geometry_node.client.model.runtime.StaticModelTexture;
 import com.mine.geometry_node.core.engine.system.model.domain.*;
@@ -422,6 +424,44 @@ class HostPreparedArtifactStaticVariantTest {
         assertEquals(before + 8, HostStaticVariantBudget.INSTANCE.artifactBytes(artifact));
         retired.forEach(HostStaticGeometryVariant::close);
         assertEquals(before, HostStaticVariantBudget.INSTANCE.artifactBytes(artifact));
+        artifact.closeStaticVariants();
+    }
+
+    @Test
+    void fieldRevisionDoesNotInterruptACompleteStaticTransaction() {
+        HostPreparedArtifact artifact = artifact();
+        HostEntityGeometry geometry = geometry();
+        Object instance = new Object();
+        Object layout = new Object();
+        Object renderType = new Object();
+        Object texture = new Object();
+        HostLightBinding firstLight = HostLightBinding.field(
+                new HostLightFieldId("field", 1), ignored -> 0x00100010);
+        HostLightBinding newerLight = HostLightBinding.field(
+                new HostLightFieldId("field", 2), ignored -> 0x00200020);
+        HostStaticVariantKey firstKey = new HostStaticVariantKey(instance, 1,
+                new Matrix4f(), new Matrix3f(), 0, firstLight, false,
+                1, 1, 1, 1, 0, 1, layout, 1);
+        HostStaticVariantKey newerKey = new HostStaticVariantKey(instance, 1,
+                new Matrix4f(), new Matrix3f(), 0, newerLight, false,
+                1, 1, 1, 1, 0, 1, layout, 1);
+        HostPreparedArtifact.InitialStaticRequirement first =
+                new HostPreparedArtifact.InitialStaticRequirement(
+                        new HostPreparedArtifact.StaticDrawSlot(1, 1), geometry,
+                        firstKey, firstLight, 8, renderType, texture);
+        HostPreparedArtifact.InitialStaticRequirement newer =
+                new HostPreparedArtifact.InitialStaticRequirement(
+                        new HostPreparedArtifact.StaticDrawSlot(1, 1), geometry,
+                        newerKey, newerLight, 8, renderType, texture);
+        HostStaticVariantBudget.BatchReservation batch =
+                HostStaticVariantBudget.INSTANCE.tryReserveBatch(artifact, List.of(8L));
+        assertNotNull(batch);
+        artifact.waitForInitialStaticWorkset(instance);
+        artifact.beginInitialStaticWorkset(instance, List.of(first), batch);
+
+        assertFalse(artifact.initialStaticWorksetMatches(instance, List.of(newer)));
+        assertTrue(artifact.initialStaticWorksetStructureMatches(instance, List.of(newer)));
+
         artifact.closeStaticVariants();
     }
 

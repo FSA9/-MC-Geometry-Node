@@ -9,6 +9,7 @@ import org.joml.Vector3d;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.IntFunction;
 import java.util.function.ToIntFunction;
 
 /** Authoritative pure resolver for frame-dependent HOST draw values. */
@@ -23,9 +24,23 @@ public final class HostDrawFrameResolver {
                                                      boolean preserveBlend,
                                                      boolean materialFallback,
                                                      ToIntFunction<Vector3d> packedLightAt) {
+        return resolve(draw, placement, nodeWorld, cameraX, cameraY, cameraZ, requestedLod,
+                preserveBlend, materialFallback, HostLightBinding::constant, packedLightAt);
+    }
+
+    public static Optional<HostResolvedDraw> resolve(HostDrawPlan.Draw draw,
+                                                     ModelInstancePlacement placement,
+                                                     Matrix4fc nodeWorld,
+                                                     double cameraX, double cameraY, double cameraZ,
+                                                     int requestedLod,
+                                                     boolean preserveBlend,
+                                                     boolean materialFallback,
+                                                     IntFunction<HostLightBinding> lightBindingAt,
+                                                     ToIntFunction<Vector3d> packedLightAt) {
         Objects.requireNonNull(draw, "draw");
         Objects.requireNonNull(placement, "placement");
         Objects.requireNonNull(nodeWorld, "nodeWorld");
+        Objects.requireNonNull(lightBindingAt, "lightBindingAt");
         Objects.requireNonNull(packedLightAt, "packedLightAt");
         if (draw.geometry() == null) return Optional.empty();
         Optional<HostDrawTransform> transform = HostDrawTransform.resolve(
@@ -36,9 +51,13 @@ public final class HostDrawFrameResolver {
         boolean effectiveTranslucent = material.alphaMode() == ModelAlphaMode.BLEND
                 || placement.alpha() < 0.999F;
         boolean opaqueFallback = effectiveTranslucent && !preserveBlend;
-        HostLightBinding light = placement.fullBright()
-                ? HostLightBinding.fullBright()
-                : HostLightBinding.constant(packedLightAt.applyAsInt(transform.get().worldCenter()));
+        HostLightBinding light;
+        if (placement.fullBright()) {
+            light = HostLightBinding.fullBright();
+        } else {
+            int fallback = packedLightAt.applyAsInt(transform.get().worldCenter());
+            light = Objects.requireNonNull(lightBindingAt.apply(fallback), "resolved light binding");
+        }
         float red = materialFallback ? 1 : material.red() * placement.red();
         float green = materialFallback ? 1 : material.green() * placement.green();
         float blue = materialFallback ? 1 : material.blue() * placement.blue();

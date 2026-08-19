@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.model.render.backend.host.light.instance;
 import com.mine.geometry_node.client.model.gpu.RenderThreadDispatcher;
 import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLightFieldIdentity;
 import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostLocalLightField;
+import com.mine.geometry_node.client.model.render.backend.host.light.contract.HostScalarLightField;
 import com.mine.geometry_node.client.model.render.backend.host.light.diagnostics.HostLocalLightDiagnostics;
 import com.mine.geometry_node.client.model.runtime.ModelInstanceId;
 
@@ -58,6 +59,13 @@ public final class HostLocalLightRepository implements AutoCloseable {
         }
         entry.target = null;
         HostLocalLightField previous = entry.active;
+        if (previous instanceof HostScalarLightField active
+                && field instanceof HostScalarLightField replacement
+                && active.identity().sameProjectionDomain(replacement.identity())
+                && active.sameSamples(replacement)) {
+            retire(field);
+            return true;
+        }
         entry.active = field;
         entry.identity = target.identity();
         published++;

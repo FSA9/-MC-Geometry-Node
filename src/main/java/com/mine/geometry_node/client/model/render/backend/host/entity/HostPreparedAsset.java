@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.model.render.backend.host.entity;
 import com.mine.geometry_node.client.model.gpu.DecodedModelImage;
 import com.mine.geometry_node.client.model.render.backend.host.geometry.HostCanonicalPrimitive;
 import com.mine.geometry_node.client.model.render.backend.host.light.asset.HostPreparedLightingAsset;
+import com.mine.geometry_node.client.model.render.backend.host.light.project.HostLightProjectionPlan;
 import com.mine.geometry_node.client.model.runtime.StaticModelMaterial;
 
 import java.io.IOException;
@@ -17,21 +18,25 @@ public final class HostPreparedAsset implements AutoCloseable {
     private final Map<Integer, String> imageFailures;
     private final Map<StaticModelMaterial, HostPreparedArtifact.LabPbrImages> labPbrImages;
     private final HostPreparedLightingAsset lightingAsset;
+    private final HostLightProjectionPlan lightProjectionPlan;
 
     HostPreparedAsset(HostDrawPlan drawPlan, Map<Integer, DecodedModelImage> decodedImages,
                       Map<Integer, String> imageFailures,
                       Map<StaticModelMaterial, HostPreparedArtifact.LabPbrImages> labPbrImages,
-                      HostPreparedLightingAsset lightingAsset) {
+                      HostPreparedLightingAsset lightingAsset,
+                      HostLightProjectionPlan lightProjectionPlan) {
         this.drawPlan = Objects.requireNonNull(drawPlan, "drawPlan");
         this.decodedImages = Map.copyOf(decodedImages);
         this.imageFailures = Map.copyOf(imageFailures);
         this.labPbrImages = Map.copyOf(labPbrImages);
         this.lightingAsset = Objects.requireNonNull(lightingAsset, "lightingAsset");
+        this.lightProjectionPlan = Objects.requireNonNull(lightProjectionPlan, "lightProjectionPlan");
     }
 
     public HostDrawPlan drawPlan() { return drawPlan; }
     public List<HostCanonicalPrimitive> canonicalPrimitives() { return drawPlan.canonicalPrimitives(); }
     public HostPreparedLightingAsset lightingAsset() { return lightingAsset; }
+    public HostLightProjectionPlan lightProjectionPlan() { return lightProjectionPlan; }
 
     public DecodedModelImage decodedImage(int index) throws IOException {
         DecodedModelImage image = decodedImages.get(index);

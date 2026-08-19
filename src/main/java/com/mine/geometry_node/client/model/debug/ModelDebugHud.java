@@ -130,8 +130,11 @@ public final class ModelDebugHud {
                 + "  surfaces " + hostArtifacts.lightingSurfaces()
                 + "  blockers " + number(hostArtifacts.lightingOpaqueTriangles())
                 + "  voxels " + number(hostArtifacts.lightingOccupiedVoxels())
+                + "  project " + hostArtifacts.projectionReady() + '/' + hostArtifacts.artifacts()
+                + " draws " + hostArtifacts.projectedDraws()
                 + "  mem " + bytes(lightingGeometryMemory.residentBytes()),
-                hostArtifacts.lightingFallback() == 0 ? 0xFF78D6C6 : 0xFFFFA24A));
+                hostArtifacts.lightingFallback() == 0 && hostArtifacts.projectionFallback() == 0
+                        ? 0xFF78D6C6 : 0xFFFFA24A));
         lines.add(new HudLine("HOST UV2  active " + localLight.activeFields() + "  target "
                 + localLight.targetFields() + "  retiring " + localLight.retiringFields()
                 + "  published " + localLight.published() + "  stale " + localLight.staleCompletions(),

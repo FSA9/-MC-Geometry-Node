@@ -24,4 +24,20 @@ public record HostLightFieldIdentity(ModelInstanceId instanceId, String assetKey
             throw new IllegalArgumentException("revisions must not be negative");
         }
     }
+
+    public HostLightFieldId fieldId() {
+        String content = instanceId.value() + "/" + assetKey + "/p" + placementRevision
+                + "/d" + dimension.value() + "/s" + sourceRevision + "/a" + algorithmGeneration;
+        return new HostLightFieldId(content, worldRevision);
+    }
+
+    /** True when equal sample bytes produce the same render projection despite capture/source revisions. */
+    public boolean sameProjectionDomain(HostLightFieldIdentity other) {
+        return other != null
+                && instanceId.equals(other.instanceId)
+                && assetKey.equals(other.assetKey)
+                && placementRevision == other.placementRevision
+                && dimension.equals(other.dimension)
+                && algorithmGeneration == other.algorithmGeneration;
+    }
 }

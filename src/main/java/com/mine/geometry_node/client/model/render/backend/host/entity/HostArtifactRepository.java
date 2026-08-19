@@ -149,6 +149,9 @@ public final class HostArtifactRepository {
         int lightingSurfaces = 0;
         long lightingOpaqueTriangles = 0;
         int lightingOccupiedVoxels = 0;
+        int projectionReady = 0;
+        int projectionFallback = 0;
+        int projectedDraws = 0;
         for (HostPreparedArtifact artifact : live) {
             textureBytes = Math.addExact(textureBytes, artifact.bindingResidentBytes());
             textureObjects = Math.addExact(textureObjects, artifact.bindingResidentObjects());
@@ -163,9 +166,17 @@ public final class HostArtifactRepository {
             } else {
                 lightingFallback++;
             }
+            var projection = artifact.preparedAsset().lightProjectionPlan();
+            if (projection.ready()) {
+                projectionReady++;
+                projectedDraws = Math.addExact(projectedDraws, projection.projectedDraws());
+            } else {
+                projectionFallback++;
+            }
         }
         return new Diagnostics(live.size(), textureBytes, textureObjects, lightingReady, lightingFallback,
-                lightingSurfaces, lightingOpaqueTriangles, lightingOccupiedVoxels);
+                lightingSurfaces, lightingOpaqueTriangles, lightingOccupiedVoxels,
+                projectionReady, projectionFallback, projectedDraws);
     }
 
     public void touchStatic(HostPreparedArtifact artifact, Object instanceIdentity, long nowNanos) {
@@ -303,7 +314,8 @@ public final class HostArtifactRepository {
 
     public record Diagnostics(int artifacts, long textureBytes, int textureObjects,
                               int lightingReady, int lightingFallback, int lightingSurfaces,
-                              long lightingOpaqueTriangles, int lightingOccupiedVoxels) {}
+                              long lightingOpaqueTriangles, int lightingOccupiedVoxels,
+                              int projectionReady, int projectionFallback, int projectedDraws) {}
 
     @FunctionalInterface
     interface StaticVariantRetirement {

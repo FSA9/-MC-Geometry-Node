@@ -26,7 +26,7 @@ class HostLightingPolicyTest {
     }
 
     @Test
-    void noShaderpackUsesEntitySunAndDoesNotClaimUnimplementedHostUv2() {
+    void noShaderpackUsesEntitySunAndDoesNotClaimInactiveHostUv2() {
         HostLightingPolicySnapshot snapshot = HostLightingPolicy.capture(environment(1, 10, 20, false, 0));
 
         assertEquals(HostLightingDomain.values().length, snapshot.decisions().size());
@@ -84,7 +84,7 @@ class HostLightingPolicyTest {
 
         assertEquals(HostLightingOwner.PACK_NATIVE,
                 snapshot.decision(HostLightingDomain.SUN_SKY).effectiveOwner());
-        assertEquals(HostLightingOwner.CONSTANT,
+        assertEquals(HostLightingOwner.HOST_UV2,
                 snapshot.decision(HostLightingDomain.PLACED_BLOCK).effectiveOwner());
         assertEquals(HostLightingCapabilityState.UNAVAILABLE,
                 snapshot.capability(HostLightingCapability.PACK_PLACED_BLOCK).state());
@@ -130,7 +130,7 @@ class HostLightingPolicyTest {
         assertTrue(casterOnly.generation() > receiverOnly.generation());
         assertEquals(HostLightingCapabilityState.UNAVAILABLE,
                 casterOnly.capability(HostLightingCapability.PACK_PLACED_BLOCK).state());
-        assertEquals(HostLightingOwner.CONSTANT,
+        assertEquals(HostLightingOwner.HOST_UV2,
                 casterOnly.decision(HostLightingDomain.PLACED_BLOCK).effectiveOwner());
         assertEquals(HostLightingCapabilityState.AVAILABLE,
                 casterOnly.packDomain(HostLightingDomain.PLACED_BLOCK)
@@ -252,8 +252,8 @@ class HostLightingPolicyTest {
         assertThrows(IllegalArgumentException.class, () -> withDecision(valid, HostLightingDomain.PLACED_BLOCK,
                 new HostLightingOwnerDecision(HostLightingDomain.PLACED_BLOCK,
                         HostLightingOwner.PACK_NATIVE, HostLightingOwner.PACK_NATIVE, "invalid")));
-        assertThrows(IllegalArgumentException.class, () -> withDecision(valid, HostLightingDomain.PLACED_BLOCK,
-                new HostLightingOwnerDecision(HostLightingDomain.PLACED_BLOCK,
+        assertThrows(IllegalArgumentException.class, () -> withDecision(valid, HostLightingDomain.HELD_DYNAMIC,
+                new HostLightingOwnerDecision(HostLightingDomain.HELD_DYNAMIC,
                         HostLightingOwner.HOST_UV2, HostLightingOwner.HOST_UV2, "invalid")));
         assertThrows(IllegalArgumentException.class, () -> withDecision(valid, HostLightingDomain.HELD_DYNAMIC,
                 new HostLightingOwnerDecision(HostLightingDomain.HELD_DYNAMIC,
