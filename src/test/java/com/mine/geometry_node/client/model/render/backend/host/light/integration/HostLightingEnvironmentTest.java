@@ -18,7 +18,7 @@ class HostLightingEnvironmentTest {
                 17, ModelProjectorCapability.UNVERIFIED, "test");
         IrisEntityTranslucency.Snapshot translucency = new IrisEntityTranslucency.Snapshot(false, "test");
         HostLightingEnvironmentSnapshot.ShadowEvidence shadow =
-                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", 3, false);
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", false, 3, false);
 
         HostLightingEnvironmentSnapshot first = HostLightingEnvironment.acceptObservation(
                 17, 4, true, projector, translucency, shadow);
@@ -33,7 +33,7 @@ class HostLightingEnvironmentTest {
     void changedEvidenceAdvancesEnvironmentGenerationOnce() {
         IrisEntityTranslucency.Snapshot translucency = new IrisEntityTranslucency.Snapshot(false, "test");
         HostLightingEnvironmentSnapshot.ShadowEvidence shadow =
-                new HostLightingEnvironmentSnapshot.ShadowEvidence(false, null, "IRIS_ABSENT", 0, false);
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(false, null, "IRIS_ABSENT", false, 0, false);
         HostLightingEnvironmentSnapshot before = HostLightingEnvironment.acceptObservation(
                 30, 8, false, new IrisLabPbrProjector.Snapshot(30, ModelProjectorCapability.ABSENT, "test"),
                 translucency, shadow);
@@ -52,14 +52,33 @@ class HostLightingEnvironmentTest {
         IrisEntityTranslucency.Snapshot translucency = new IrisEntityTranslucency.Snapshot(false, "test");
         HostLightingEnvironmentSnapshot before = HostLightingEnvironment.acceptObservation(
                 40, 12, true, projector, translucency,
-                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", 1, false));
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", true, 1, false));
         HostLightingEnvironmentSnapshot after = HostLightingEnvironment.acceptObservation(
                 40, 12, true, projector, translucency,
-                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", 19, true));
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", true, 19, true));
 
         assertEquals(before.generation(), after.generation());
         assertEquals(19, after.shadow().submittedDraws());
         assertTrue(after.shadow().translucentPhaseObserved());
+    }
+
+    @Test
+    void firstVerifiedShadowReplayAdvancesGenerationOnlyOnce() {
+        IrisLabPbrProjector.Snapshot projector = new IrisLabPbrProjector.Snapshot(
+                41, ModelProjectorCapability.UNVERIFIED, "test");
+        IrisEntityTranslucency.Snapshot translucency = new IrisEntityTranslucency.Snapshot(false, "test");
+        HostLightingEnvironmentSnapshot before = HostLightingEnvironment.acceptObservation(
+                41, 12, true, projector, translucency,
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", false, 0, false));
+        HostLightingEnvironmentSnapshot verified = HostLightingEnvironment.acceptObservation(
+                41, 12, true, projector, translucency,
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", true, 7, false));
+        HostLightingEnvironmentSnapshot later = HostLightingEnvironment.acceptObservation(
+                41, 12, true, projector, translucency,
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", true, 19, true));
+
+        assertTrue(verified.generation() > before.generation());
+        assertEquals(verified.generation(), later.generation());
     }
 
     @Test
@@ -68,12 +87,12 @@ class HostLightingEnvironmentTest {
                 45, 13, true,
                 new IrisLabPbrProjector.Snapshot(45, ModelProjectorCapability.UNVERIFIED, "diagnostic-a"),
                 new IrisEntityTranslucency.Snapshot(false, "diagnostic-a"),
-                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "failure-a", 0, false));
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "failure-a", false, 0, false));
         HostLightingEnvironmentSnapshot after = HostLightingEnvironment.acceptObservation(
                 45, 13, true,
                 new IrisLabPbrProjector.Snapshot(45, ModelProjectorCapability.UNVERIFIED, "diagnostic-b"),
                 new IrisEntityTranslucency.Snapshot(false, "diagnostic-b"),
-                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "failure-b", 0, false));
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "failure-b", false, 0, false));
 
         assertEquals(before.generation(), after.generation());
         assertEquals("diagnostic-b", after.projector().diagnostic());
@@ -86,7 +105,7 @@ class HostLightingEnvironmentTest {
                 50, ModelProjectorCapability.INACTIVE, "test");
         IrisEntityTranslucency.Snapshot translucency = new IrisEntityTranslucency.Snapshot(false, "test");
         HostLightingEnvironmentSnapshot.ShadowEvidence shadow =
-                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", 0, false);
+                new HostLightingEnvironmentSnapshot.ShadowEvidence(true, null, "", false, 0, false);
         HostLightingEnvironmentSnapshot inactive = HostLightingEnvironment.acceptObservation(
                 50, 20, false, projector, translucency, shadow);
         HostLightingEnvironmentSnapshot required = HostLightingEnvironment.acceptObservation(

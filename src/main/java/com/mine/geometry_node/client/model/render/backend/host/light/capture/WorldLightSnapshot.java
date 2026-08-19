@@ -45,6 +45,29 @@ public final class WorldLightSnapshot {
     public int skyLight(int x, int y, int z) { return unsigned(skyLight[index(x, y, z)]); }
     public int emission(int x, int y, int z) { return unsigned(emission[index(x, y, z)]); }
     public int opacity(int x, int y, int z) { return unsigned(opacity[index(x, y, z)]); }
+    public boolean containsWorld(double x, double y, double z) {
+        int xCell = worldCell(x), yCell = worldCell(y), zCell = worldCell(z);
+        return xCell >= minX && yCell >= minY && zCell >= minZ
+                && xCell < minX + sizeX && yCell < minY + sizeY && zCell < minZ + sizeZ;
+    }
+
+    public int blockLightAtWorld(double x, double y, double z) {
+        return blockLight(localCell(x, minX), localCell(y, minY), localCell(z, minZ));
+    }
+
+    public int skyLightAtWorld(double x, double y, double z) {
+        return skyLight(localCell(x, minX), localCell(y, minY), localCell(z, minZ));
+    }
+
+    public int localX(double worldX) { return localCell(worldX, minX); }
+    public int localY(double worldY) { return localCell(worldY, minY); }
+    public int localZ(double worldZ) { return localCell(worldZ, minZ); }
+
+    private static int localCell(double value, int origin) { return worldCell(value) - origin; }
+    private static int worldCell(double value) {
+        if (!Double.isFinite(value)) throw new IllegalArgumentException("coordinate must be finite");
+        return (int) Math.floor(value);
+    }
 
     private int index(int x, int y, int z) {
         if (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ) {

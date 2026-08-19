@@ -23,10 +23,11 @@ public record HostLightingEnvironmentSnapshot(long generation,
         Objects.requireNonNull(shadow, "shadow");
     }
 
-    /** Structural shadow-adapter evidence. This does not prove shaderpack receiver or voxel support. */
+    /** Shadow replay evidence. A verified replay proves callback submission, not pack receiver or voxel support. */
     public record ShadowEvidence(boolean installed,
                                  IrisShadowCapabilities capabilities,
                                  String failure,
+                                 boolean replayVerified,
                                  int submittedDraws,
                                  boolean translucentPhaseObserved) {
         public ShadowEvidence {

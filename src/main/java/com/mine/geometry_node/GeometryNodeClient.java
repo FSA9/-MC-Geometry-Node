@@ -96,6 +96,9 @@ public class GeometryNodeClient {
         long nowNanos = System.nanoTime();
         ClientModelRuntime.INSTANCE.instances().removeExpired(nowNanos);
         ClientModelRuntime.INSTANCE.instances().tickAnimations(nowNanos);
+        if (Minecraft.getInstance().level != null) {
+            ClientModelRuntime.INSTANCE.tickLighting(Minecraft.getInstance().level);
+        }
         while (KeyBindings.OPEN_EDITOR.consumeClick()) {
             icyllis.modernui.mc.MuiModApi.openScreen(new MainUI());
         }

@@ -59,8 +59,10 @@ class HostLocalLightRepositoryTest {
         TestField active = new TestField(identity(id, 1, 1), 12);
         repository.publish(repository.beginTarget(identity(id, 1, 1)), active);
         HostLocalLightRepository.Target failure = repository.beginTarget(identity(id, 1, 2));
+        assertTrue(repository.targeting(id));
 
         assertTrue(repository.fail(failure, HostLocalLightRepository.FailureKind.BUDGET_REJECTED));
+        assertFalse(repository.targeting(id));
         assertSame(active, repository.active(id));
         HostLocalLightRepository.Target removed = repository.beginTarget(identity(id, 1, 3));
         repository.remove(id);

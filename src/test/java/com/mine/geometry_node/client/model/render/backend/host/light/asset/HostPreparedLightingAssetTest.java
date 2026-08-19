@@ -46,6 +46,26 @@ class HostPreparedLightingAssetTest {
             assertEquals(0F, asset.surfaces().get(0).position(0, 0));
             assertEquals(5F, asset.surfaces().get(1).position(0, 0));
             assertNotEquals(asset.surfaces().get(0).identity(), asset.surfaces().get(1).identity());
+            assertEquals(2, asset.receiverProbes().size());
+            assertEquals(2, asset.receiverProbes().sourceTriangles());
+        }
+    }
+
+    @Test
+    void receiverProbeSelectionIsBoundedAndDeterministic() {
+        HostCanonicalPrimitive primitive = primitive(
+                new float[]{0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0, 0, 2, 1, 0}, null,
+                new int[]{0, 1, 2, 1, 3, 4}, List.of(occurrence(0, -1, new Matrix4f())));
+        HostLightingGeometryParameters bounded = new HostLightingGeometryParameters(
+                2, 32, 262_144, 1_000_000, 1.0e-18F, 1.0e-5F, 1);
+        try (HostPreparedLightingAsset asset = HostPreparedLightingAsset.prepare(List.of(primitive),
+                ignored -> material(ModelAlphaMode.OPAQUE), bounded,
+                new HostLightingAssetBudget(1 << 20, 1 << 20))) {
+            assertTrue(asset.ready(), asset.detail());
+            assertEquals(2, asset.receiverProbes().sourceTriangles());
+            assertEquals(1, asset.receiverProbes().size());
+            assertTrue(asset.receiverProbes().sampled());
+            assertEquals(1F / 3F, asset.receiverProbes().position(0, 0), 1.0e-6F);
         }
     }
 

@@ -100,6 +100,29 @@ class HostLightingExecutorTest {
         }
     }
 
+    @Test
+    void queuedReplacementReportsAbandonedOwnershipExactlyOnce() throws Exception {
+        try (HostLightingExecutor executor = new HostLightingExecutor("test-light", 1, 2)) {
+            CountDownLatch blockerStarted = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            CountDownLatch abandoned = new CountDownLatch(1);
+            CountDownLatch replacementRan = new CountDownLatch(1);
+            executor.submit(new ModelInstanceId("blocker"), 1, ticket -> {
+                blockerStarted.countDown();
+                release.await(5, TimeUnit.SECONDS);
+            });
+            assertTrue(blockerStarted.await(5, TimeUnit.SECONDS));
+            ModelInstanceId target = new ModelInstanceId("target");
+            executor.submit(target, 1, ticket -> fail("replaced work must not run"), abandoned::countDown);
+            executor.submit(target, 2, ticket -> replacementRan.countDown());
+
+            assertTrue(abandoned.await(5, TimeUnit.SECONDS));
+            release.countDown();
+            assertTrue(replacementRan.await(5, TimeUnit.SECONDS));
+            assertEquals(0, abandoned.getCount());
+        }
+    }
+
     private static HostLightingExecutor.Diagnostics awaitFailure(HostLightingExecutor executor)
             throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);

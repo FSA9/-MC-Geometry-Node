@@ -30,6 +30,7 @@ public final class IrisShadowAdapter {
     private static volatile int lastOpaqueSubmittedDraws;
     private static volatile int lastTranslucentSubmittedDraws;
     private static volatile boolean translucentPhaseObserved;
+    private static volatile boolean replayVerified;
     private static Matrix4f pendingModelView;
     private static Matrix4f pendingProjection;
     private static double pendingCameraX, pendingCameraY, pendingCameraZ;
@@ -70,6 +71,7 @@ public final class IrisShadowAdapter {
     public static int lastTranslucentSubmittedDraws() { return lastTranslucentSubmittedDraws; }
     public static IrisShadowCapabilities capabilities() { return capabilities; }
     public static boolean translucentPhaseObserved() { return translucentPhaseObserved; }
+    public static boolean replayVerified() { return replayVerified; }
 
     /** Invalidates pipeline-owned evidence while retaining the process-wide callback registration. */
     public static synchronized void invalidateEnvironment() {
@@ -81,6 +83,7 @@ public final class IrisShadowAdapter {
         lastOpaqueSubmittedDraws = 0;
         lastTranslucentSubmittedDraws = 0;
         translucentPhaseObserved = false;
+        replayVerified = false;
         pendingModelView = null;
         pendingProjection = null;
         translucentPending = false;
@@ -126,6 +129,7 @@ public final class IrisShadowAdapter {
                             ModelShadowPhase.OPAQUE, pendingOpaqueTranslucencyFallback);
                     opaqueFailure = "";
                     lastSubmittedDraws = lastOpaqueSubmittedDraws;
+                    replayVerified |= lastSubmittedDraws > 0;
                 } catch (ReflectiveOperationException exception) {
                     translucentPending = false;
                     failOpaque("TARGET_" + exception.getClass().getSimpleName(), exception);
@@ -156,6 +160,7 @@ public final class IrisShadowAdapter {
                     ModelShadowPhase.TRANSLUCENT, pendingOpaqueTranslucencyFallback);
             translucentFailure = "";
             lastSubmittedDraws = lastOpaqueSubmittedDraws + lastTranslucentSubmittedDraws;
+            replayVerified |= lastSubmittedDraws > 0;
         } catch (ReflectiveOperationException exception) {
             failTranslucent("SHADOW_TARGET_" + exception.getClass().getSimpleName(), exception);
         } catch (RuntimeException | LinkageError exception) {
@@ -184,5 +189,6 @@ public final class IrisShadowAdapter {
         opaqueFailure = "";
         translucentFailure = "";
         translucentPhaseObserved = false;
+        replayVerified = false;
     }
 }

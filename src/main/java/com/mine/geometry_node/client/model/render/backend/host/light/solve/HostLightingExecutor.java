@@ -38,11 +38,16 @@ public final class HostLightingExecutor implements AutoCloseable {
     }
 
     public Ticket submit(ModelInstanceId instanceId, long generation, Work work) {
+        return submit(instanceId, generation, work, () -> {});
+    }
+
+    public Ticket submit(ModelInstanceId instanceId, long generation, Work work, Runnable abandoned) {
         Objects.requireNonNull(instanceId, "instanceId");
         Objects.requireNonNull(work, "work");
+        Objects.requireNonNull(abandoned, "abandoned");
         if (generation < 0) throw new IllegalArgumentException("generation must not be negative");
         rejectIfClosed();
-        Task task = new Task(instanceId, generation, work);
+        Task task = new Task(instanceId, generation, work, abandoned);
         Task previous = latest.put(instanceId, task);
         if (previous != null && previous.cancel()) {
             executor.remove(previous);
@@ -133,17 +138,23 @@ public final class HostLightingExecutor implements AutoCloseable {
         private final ModelInstanceId instanceId;
         private final long generation;
         private final Work work;
+        private final Runnable abandoned;
         private final AtomicBoolean cancelled = new AtomicBoolean();
+        private final AtomicBoolean started = new AtomicBoolean();
+        private final AtomicBoolean abandonmentReported = new AtomicBoolean();
 
-        private Task(ModelInstanceId instanceId, long generation, Work work) {
+        private Task(ModelInstanceId instanceId, long generation, Work work, Runnable abandoned) {
             this.instanceId = instanceId;
             this.generation = generation;
             this.work = work;
+            this.abandoned = abandoned;
         }
 
         @Override public void run() {
+            started.set(true);
             try {
-                if (!cancelled()) work.run(this);
+                if (cancelled()) reportAbandoned();
+                else work.run(this);
                 if (!cancelled()) completed.incrementAndGet();
             } catch (java.util.concurrent.CancellationException ignored) {
                 // Cancellation is an expected ownership transition, not a solve failure.
@@ -162,7 +173,15 @@ public final class HostLightingExecutor implements AutoCloseable {
         @Override public long generation() { return generation; }
         @Override public boolean cancelled() { return cancelled.get(); }
         @Override public boolean sessionActive() { return !closed.get() && !cancelled(); }
-        private boolean cancel() { return cancelled.compareAndSet(false, true); }
+        private boolean cancel() {
+            if (!cancelled.compareAndSet(false, true)) return false;
+            if (!started.get()) reportAbandoned();
+            return true;
+        }
+
+        private void reportAbandoned() {
+            if (abandonmentReported.compareAndSet(false, true)) abandoned.run();
+        }
     }
 
     private void rejectIfClosed() {

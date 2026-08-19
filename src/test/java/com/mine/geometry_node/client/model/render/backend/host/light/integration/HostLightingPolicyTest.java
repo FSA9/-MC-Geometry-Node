@@ -40,15 +40,35 @@ class HostLightingPolicyTest {
     }
 
     @Test
-    void structuralIrisEvidenceNeverSelectsPackNative() {
-        HostLightingPolicySnapshot snapshot = HostLightingPolicy.capture(environment(2, 11, 21, true, 8));
+    void verifiedStandardShadowReplayDoesNotClaimPackNative() {
+        HostLightingEnvironmentSnapshot evidence = environment(2, 11, 21, true, 8);
+        HostLightingEnvironmentSnapshot observed = HostLightingEnvironment.acceptObservation(
+                evidence.resourceReloadGeneration(), evidence.integrationGeneration(), true,
+                evidence.projector(), evidence.translucency(), evidence.shadow());
+        HostLightingPolicySnapshot snapshot = HostLightingPolicy.capture(observed);
+
+        assertEquals(HostLightingCapabilityState.AVAILABLE,
+                snapshot.capability(HostLightingCapability.SUN_SHADOW_REPLAY).state());
+        for (HostLightingDomain domain : HostLightingDomain.values()) {
+            assertEquals(HostLightingCapabilityState.UNAVAILABLE,
+                    snapshot.capability(HostLightingCapability.packCapability(domain)).state());
+            assertNotEquals(HostLightingOwner.PACK_NATIVE, snapshot.decision(domain).effectiveOwner());
+        }
+    }
+
+    @Test
+    void structuralShadowRemainsUnverifiedWhileMissingPackAdapterIsUnavailable() {
+        HostLightingEnvironmentSnapshot evidence = environment(3, 11, 21, true, 0);
+        HostLightingEnvironmentSnapshot observed = HostLightingEnvironment.acceptObservation(
+                evidence.resourceReloadGeneration(), evidence.integrationGeneration(), true,
+                evidence.projector(), evidence.translucency(), evidence.shadow());
+        HostLightingPolicySnapshot snapshot = HostLightingPolicy.capture(observed);
 
         assertEquals(HostLightingCapabilityState.UNVERIFIED,
                 snapshot.capability(HostLightingCapability.SUN_SHADOW_REPLAY).state());
         for (HostLightingDomain domain : HostLightingDomain.values()) {
-            assertEquals(HostLightingCapabilityState.UNVERIFIED,
+            assertEquals(HostLightingCapabilityState.UNAVAILABLE,
                     snapshot.capability(HostLightingCapability.packCapability(domain)).state());
-            assertNotEquals(HostLightingOwner.PACK_NATIVE, snapshot.decision(domain).effectiveOwner());
         }
     }
 
@@ -201,7 +221,7 @@ class HostLightingPolicyTest {
                 new EnumMap<>(HostLightingCapability.class);
         capabilities.putAll(valid.capabilities());
         capabilities.put(HostLightingCapability.PACK_SUN_SKY, new HostLightingCapabilityEvidence(
-                HostLightingCapability.PACK_SUN_SKY, HostLightingCapabilityState.UNAVAILABLE,
+                HostLightingCapability.PACK_SUN_SKY, HostLightingCapabilityState.UNVERIFIED,
                 HostLightingEvidenceSource.NONE, "forged aggregate"));
         assertThrows(IllegalArgumentException.class, () -> new HostLightingPolicySnapshot(
                 valid.generation(), valid.environmentGeneration(), valid.resourceReloadGeneration(),
@@ -268,7 +288,7 @@ class HostLightingPolicyTest {
                 new IrisEntityTranslucency.Snapshot(false, "fixture"),
                 new HostLightingEnvironmentSnapshot.ShadowEvidence(hostRequired,
                         hostRequired ? new IrisShadowCapabilities(1, 1, List.of("RGBA8"), true) : null,
-                        "", submittedDraws, submittedDraws > 0));
+                        "", submittedDraws > 0, submittedDraws, submittedDraws > 0));
     }
 
     private static HostPackLightingDescriptor descriptor(String id,

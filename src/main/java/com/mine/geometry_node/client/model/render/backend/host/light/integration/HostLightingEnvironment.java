@@ -69,11 +69,12 @@ public final class HostLightingEnvironment {
     static HostLightingEnvironmentSnapshot.ShadowEvidence shadowEvidence(boolean hostNativeRequired) {
         if (!hostNativeRequired) {
             return new HostLightingEnvironmentSnapshot.ShadowEvidence(
-                    false, null, "", 0, false);
+                    false, null, "", false, 0, false);
         }
         return new HostLightingEnvironmentSnapshot.ShadowEvidence(
                 IrisShadowAdapter.installed(), IrisShadowAdapter.capabilities(), IrisShadowAdapter.failure(),
-                IrisShadowAdapter.lastSubmittedDraws(), IrisShadowAdapter.translucentPhaseObserved());
+                IrisShadowAdapter.replayVerified(), IrisShadowAdapter.lastSubmittedDraws(),
+                IrisShadowAdapter.translucentPhaseObserved());
     }
 
     private static boolean sameCapabilities(HostLightingEnvironmentSnapshot left,
@@ -85,6 +86,7 @@ public final class HostLightingEnvironment {
                 && left.translucency().dedicatedProgram() == right.translucency().dedicatedProgram()
                 && left.shadow().installed() == right.shadow().installed()
                 && Objects.equals(left.shadow().capabilities(), right.shadow().capabilities())
+                && left.shadow().replayVerified() == right.shadow().replayVerified()
                 && failureClass(left.shadow().failure()).equals(failureClass(right.shadow().failure()));
     }
 
@@ -104,6 +106,6 @@ public final class HostLightingEnvironment {
                         "LIGHTING_ENVIRONMENT_INVALIDATED"),
                 new IrisEntityTranslucency.Snapshot(false, "LIGHTING_ENVIRONMENT_INVALIDATED"),
                 new HostLightingEnvironmentSnapshot.ShadowEvidence(
-                        false, null, "LIGHTING_ENVIRONMENT_INVALIDATED", 0, false));
+                        false, null, "LIGHTING_ENVIRONMENT_INVALIDATED", false, 0, false));
     }
 }

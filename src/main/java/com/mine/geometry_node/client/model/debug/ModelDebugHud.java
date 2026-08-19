@@ -105,6 +105,8 @@ public final class ModelDebugHud {
         lines.add(new HudLine("HOST textures  " + bytes(hostArtifacts.textureBytes())
                 + "  objects " + hostArtifacts.textureObjects(), 0xFF91C7E8));
         var lighting = HostLightingPolicy.snapshot();
+        var localLight = runtime.localLightDiagnostics();
+        var localLightRuntime = runtime.localLightingRuntimeDiagnostics();
         lines.add(new HudLine("Light owner  S=" + owner(lighting.decision(HostLightingDomain.SUN_SKY).effectiveOwner())
                 + " P=" + owner(lighting.decision(HostLightingDomain.PLACED_BLOCK).effectiveOwner())
                 + " H=" + owner(lighting.decision(HostLightingDomain.HELD_DYNAMIC).effectiveOwner())
@@ -130,6 +132,15 @@ public final class ModelDebugHud {
                 + "  voxels " + number(hostArtifacts.lightingOccupiedVoxels())
                 + "  mem " + bytes(lightingGeometryMemory.residentBytes()),
                 hostArtifacts.lightingFallback() == 0 ? 0xFF78D6C6 : 0xFFFFA24A));
+        lines.add(new HudLine("HOST UV2  active " + localLight.activeFields() + "  target "
+                + localLight.targetFields() + "  retiring " + localLight.retiringFields()
+                + "  published " + localLight.published() + "  stale " + localLight.staleCompletions(),
+                0xFF78D6C6));
+        lines.add(new HudLine("HOST capture  " + number(localLightRuntime.capturedCells()) + '/'
+                + number(localLightRuntime.captureCells()) + "  done " + localLightRuntime.completed()
+                + "  reject " + (localLightRuntime.rejected() + localLight.budgetRejected())
+                + "  cancelled " + localLight.cancelled(),
+                0xFFFFC857));
         lines.add(new HudLine("Static  resident " + bytes(staticMemory.residentBytes())
                 + "  reserved " + bytes(staticMemory.reservedBytes())
                 + "  steady cap " + bytes(HostStaticVariantBudget.GLOBAL_BYTES)

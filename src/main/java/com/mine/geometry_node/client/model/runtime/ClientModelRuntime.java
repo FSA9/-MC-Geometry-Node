@@ -10,6 +10,9 @@ import com.mine.geometry_node.client.model.render.backend.host.light.capture.Hos
 import com.mine.geometry_node.client.model.render.backend.host.light.instance.HostLocalLightRepository;
 import com.mine.geometry_node.client.model.render.backend.host.light.solve.HostLightingExecutor;
 import com.mine.geometry_node.client.model.render.backend.host.light.solve.HostLightingMemoryBudget;
+import com.mine.geometry_node.client.model.render.backend.host.light.solve.HostLightingSolveCoordinator;
+import com.mine.geometry_node.client.model.render.backend.host.light.solve.HostUv2LightingSolver;
+import com.mine.geometry_node.client.model.render.backend.host.light.runtime.HostLocalLightingRuntime;
 import com.mine.geometry_node.client.model.debug.ModelLoadProgressTracker;
 import com.mine.geometry_node.core.engine.system.model.importer.BuiltinModelImporters;
 import net.minecraft.client.Minecraft;
@@ -37,6 +40,9 @@ public final class ClientModelRuntime {
     private HostLightingExecutor lightingExecutor;
     private HostLightingMemoryBudget lightingMemory;
     private HostWorldLightCaptureBudget lightCaptureBudget;
+    private HostLightingSolveCoordinator lightingCoordinator;
+    private HostLocalLightingRuntime localLightingRuntime;
+    private long lightingTick;
     private int drawCalls;
     private long lastRenderCpuNanos;
     private long lastGpuNanos;
@@ -72,7 +78,15 @@ public final class ClientModelRuntime {
     public synchronized long lightingSession() { return lightingExecutor.session(); }
     public synchronized HostLightingMemoryBudget lightingMemory() { return lightingMemory; }
     public synchronized HostWorldLightCaptureBudget lightCaptureBudget() { return lightCaptureBudget; }
+    public synchronized HostLightingSolveCoordinator lightingCoordinator() { return lightingCoordinator; }
     public synchronized HostLocalLightDiagnostics localLightDiagnostics() { return localLights.diagnostics(); }
+    public synchronized HostLocalLightingRuntime.Diagnostics localLightingRuntimeDiagnostics() {
+        return localLightingRuntime.diagnostics();
+    }
+
+    public synchronized void tickLighting(net.minecraft.client.multiplayer.ClientLevel level) {
+        localLightingRuntime.tick(Objects.requireNonNull(level, "level"), instances.readySnapshot(), ++lightingTick);
+    }
 
     public synchronized com.mine.geometry_node.client.model.gpu.ModelGpuRepositoryDiagnostics gpuDiagnostics() {
         return gpuRepository.diagnostics();
@@ -94,6 +108,7 @@ public final class ClientModelRuntime {
     public synchronized void cancelBenchmark() { benchmark = null; }
 
     public synchronized void resetGpuBackend() {
+        localLightingRuntime.clear();
         lightingExecutor.close();
         instances.close();
         resources.close();
@@ -160,6 +175,11 @@ public final class ClientModelRuntime {
         lightingExecutor = new HostLightingExecutor("geometry-node-local-light", 2, 64);
         lightingMemory = new HostLightingMemoryBudget(32L << 20, 64L << 20, 96L << 20);
         lightCaptureBudget = new HostWorldLightCaptureBudget(32_768);
+        lightingCoordinator = new HostLightingSolveCoordinator(MinecraftRenderThreadDispatcher.INSTANCE,
+                localLights, lightingExecutor, lightingMemory,
+                new HostUv2LightingSolver(HostUv2LightingSolver.Parameters.defaults()));
+        localLightingRuntime = new HostLocalLightingRuntime(lightCaptureBudget, lightingCoordinator);
+        lightingTick = 0;
         uploadScheduler = new ModelUploadScheduler(MinecraftRenderThreadDispatcher.INSTANCE);
         gpuRepository = new ModelGpuRepository(new MinecraftModelGpuDevice(),
                 MinecraftRenderThreadDispatcher.INSTANCE, uploadScheduler);
@@ -177,15 +197,18 @@ public final class ClientModelRuntime {
                             .thenApply(ignored -> null);
                 }, new ClientModelInstanceRegistry.InstanceLifecycle() {
                     @Override public void removed(ModelInstanceId id) {
+                        localLightingRuntime.remove(id);
                         localLights.remove(id);
                         lightingExecutor.cancel(id);
                     }
                     @Override public void changed(ModelInstanceId id, ModelInstanceState previous,
                                                   ModelInstanceState current) {
+                        localLightingRuntime.remove(id);
                         localLights.remove(id);
                         lightingExecutor.cancel(id);
                     }
                     @Override public void cleared() {
+                        localLightingRuntime.clear();
                         localLights.close();
                         lightingExecutor.cancelAll();
                     }

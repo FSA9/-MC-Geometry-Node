@@ -21,17 +21,20 @@ public final class HostPreparedLightingAsset implements AutoCloseable {
     private final List<HostLightingSurface> surfaces;
     private final HostTriangleBvh bvh;
     private final HostConservativeVoxelGrid voxelGrid;
+    private final HostReceiverProbeSet receiverProbes;
     private final Diagnostics diagnostics;
     private final HostLightingAssetBudget.Reservation reservation;
 
     private HostPreparedLightingAsset(Status status, String detail, List<HostLightingSurface> surfaces,
                                       HostTriangleBvh bvh, HostConservativeVoxelGrid voxelGrid,
+                                      HostReceiverProbeSet receiverProbes,
                                       Diagnostics diagnostics, HostLightingAssetBudget.Reservation reservation) {
         this.status = status;
         this.detail = detail;
         this.surfaces = List.copyOf(surfaces);
         this.bvh = bvh;
         this.voxelGrid = voxelGrid;
+        this.receiverProbes = receiverProbes;
         this.diagnostics = diagnostics;
         this.reservation = reservation;
     }
@@ -83,15 +86,17 @@ public final class HostPreparedLightingAsset implements AutoCloseable {
             }
             HostTriangleBvh bvh = HostTriangleBvh.build(surfaces, parameters);
             HostConservativeVoxelGrid voxel = HostConservativeVoxelGrid.build(surfaces, parameters);
+            HostReceiverProbeSet probes = HostReceiverProbeSet.build(surfaces, parameters.maximumReceiverProbes());
             long retained = surfaces.stream().mapToLong(HostLightingSurface::retainedBytes).sum();
             retained = Math.addExact(retained, bvh.retainedBytes());
             retained = Math.addExact(retained, voxel.retainedBytes());
+            retained = Math.addExact(retained, probes.retainedBytes());
             int vertices = surfaces.stream().mapToInt(HostLightingSurface::vertexCount).sum();
             int triangles = surfaces.stream().mapToInt(HostLightingSurface::triangleCount).sum();
             Diagnostics diagnostics = new Diagnostics(surfaces.size(), vertices, triangles, degenerate,
                     bvh.triangleCount(), bvh.nodeCount(), voxel.occupiedCells(), voxel.triangleBoxTests(),
                     retained, reservation.bytes());
-            return new HostPreparedLightingAsset(Status.READY, "", surfaces, bvh, voxel,
+            return new HostPreparedLightingAsset(Status.READY, "", surfaces, bvh, voxel, probes,
                     diagnostics, reservation);
         } catch (RuntimeException failure) {
             reservation.close();
@@ -192,11 +197,13 @@ public final class HostPreparedLightingAsset implements AutoCloseable {
         }
         long bvhUpperBound = Math.multiplyExact(opaqueTriangles, 32L);
         long voxelUpperBound = Math.addExact((parameters.maximumVoxelCells() + 7L) / 8L, 1024L);
-        return Math.addExact(Math.addExact(surfaceBytes, bvhUpperBound), voxelUpperBound);
+        long probeUpperBound = Math.multiplyExact((long) parameters.maximumReceiverProbes(), 6L * Float.BYTES);
+        return Math.addExact(Math.addExact(Math.addExact(surfaceBytes, bvhUpperBound), voxelUpperBound),
+                probeUpperBound);
     }
 
     private static HostPreparedLightingAsset unavailable(Status status, String detail) {
-        return new HostPreparedLightingAsset(status, detail, List.of(), null, null,
+        return new HostPreparedLightingAsset(status, detail, List.of(), null, null, null,
                 new Diagnostics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), null);
     }
 
@@ -207,6 +214,9 @@ public final class HostPreparedLightingAsset implements AutoCloseable {
     public HostTriangleBvh bvh() { return Objects.requireNonNull(bvh, "lighting BVH is unavailable"); }
     public HostConservativeVoxelGrid voxelGrid() {
         return Objects.requireNonNull(voxelGrid, "lighting voxel grid is unavailable");
+    }
+    public HostReceiverProbeSet receiverProbes() {
+        return Objects.requireNonNull(receiverProbes, "lighting receiver probes are unavailable");
     }
     public Diagnostics diagnostics() { return diagnostics; }
 

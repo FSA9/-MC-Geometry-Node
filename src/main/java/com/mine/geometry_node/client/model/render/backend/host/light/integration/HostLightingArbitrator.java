@@ -64,12 +64,17 @@ final class HostLightingArbitrator {
         HostLightingEnvironmentSnapshot.ShadowEvidence shadow = environment.shadow();
         boolean structurallyObserved = environment.hostNativeRequired() && shadow.installed()
                 && shadow.capabilities() != null && shadow.failure().isEmpty();
+        boolean verified = structurallyObserved && shadow.replayVerified();
         put(capabilities, HostLightingCapability.SUN_SHADOW_REPLAY,
-                structurallyObserved ? HostLightingCapabilityState.UNVERIFIED
+                verified ? HostLightingCapabilityState.AVAILABLE
+                        : structurallyObserved ? HostLightingCapabilityState.UNVERIFIED
                         : HostLightingCapabilityState.UNAVAILABLE,
-                structurallyObserved ? HostLightingEvidenceSource.STRUCTURAL_OBSERVATION
+                verified ? HostLightingEvidenceSource.PUBLIC_RUNTIME_API
+                        : structurallyObserved ? HostLightingEvidenceSource.STRUCTURAL_OBSERVATION
                         : HostLightingEvidenceSource.NONE,
-                structurallyObserved ? "STRUCTURAL_CALLBACK_AND_TARGET_ONLY" : "NO_STABLE_SHADOW_EVIDENCE");
+                verified ? "PUBLIC_CALLBACK_DRAW_VERIFIED"
+                        : structurallyObserved ? "STRUCTURAL_CALLBACK_AND_TARGET_ONLY"
+                        : "NO_STABLE_SHADOW_EVIDENCE");
     }
 
     private static EnumMap<HostLightingDomain, HostPackDomainEvidence> classifyPackDomains(
@@ -85,8 +90,8 @@ final class HostLightingArbitrator {
                 evidence = uniformDomain(domain, HostLightingCapabilityState.UNAVAILABLE,
                         HostLightingEvidenceSource.NONE, "NO_ACTIVE_SHADERPACK");
             } else if (descriptor == null) {
-                evidence = uniformDomain(domain, HostLightingCapabilityState.UNVERIFIED,
-                        HostLightingEvidenceSource.NONE, "NO_VERIFIED_DESCRIPTOR");
+                evidence = uniformDomain(domain, HostLightingCapabilityState.UNAVAILABLE,
+                        HostLightingEvidenceSource.NONE, "NO_PACK_NATIVE_ADAPTER_CONTRACT");
             } else if (!descriptor.matches(environment)) {
                 evidence = uniformDomain(domain, HostLightingCapabilityState.UNVERIFIED,
                         HostLightingEvidenceSource.NONE, "STALE_DESCRIPTOR");

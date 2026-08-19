@@ -93,6 +93,12 @@ public final class HostLocalLightRepository implements AutoCloseable {
         return entry == null ? null : entry.identity;
     }
 
+    public boolean targeting(ModelInstanceId instanceId) {
+        renderThread.assertRenderThread();
+        Entry entry = entries.get(Objects.requireNonNull(instanceId, "instanceId"));
+        return entry != null && entry.target != null;
+    }
+
     public void remove(ModelInstanceId instanceId) {
         renderThread.assertRenderThread();
         Entry entry = entries.remove(instanceId);
