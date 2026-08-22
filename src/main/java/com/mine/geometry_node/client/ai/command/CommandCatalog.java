@@ -23,6 +23,7 @@ public final class CommandCatalog {
         registry.register(addNode());
         registry.register(delete());
         registry.register(connect());
+        QueryCommandCatalog.registerInto(registry);
         registry.register(help(registry));
         return registry;
     }

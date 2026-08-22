@@ -9,8 +9,8 @@ import com.mine.geometry_node.client.ui.viewport.node.UIHints.InlineActionButton
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.UIHintValueBinder;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.port.PortOptionResolver;
 import com.mine.geometry_node.core.node.port.PortRow;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -28,7 +28,6 @@ import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -66,37 +65,14 @@ public class SelectHintRenderer implements UIHintRenderer {
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
         // 1. 获取选项列表
-        List<String> resolvedOptions = new ArrayList<>();
-        Map<String, String> optionLabels = new HashMap<>();
-        if (row.hintParams() != null) {
-            String[] staticOptions = (String[]) row.hintParams().get(PortMetaKeys.OPTIONS);
-            if (staticOptions != null && staticOptions.length > 0) {
-                resolvedOptions.addAll(List.of(staticOptions));
-                String[] labelKeys = (String[]) row.hintParams().get(PortMetaKeys.OPTION_LABELS);
-                if (labelKeys != null) {
-                    int count = Math.min(staticOptions.length, labelKeys.length);
-                    for (int i = 0; i < count; i++) {
-                        String labelKey = labelKeys[i];
-                        if (labelKey != null && !labelKey.isBlank()) {
-                            optionLabels.put(staticOptions[i], net.minecraft.network.chat.Component
-                                    .translatable(labelKey).getString());
-                        }
-                    }
-                }
-            } else {
-                String dynamicRegistryId = (String) row.hintParams().get(PortMetaKeys.DYNAMIC_REGISTRY_ID);
-                if (dynamicRegistryId != null) {
-                    var mc = net.minecraft.client.Minecraft.getInstance();
-                    if (mc.level != null) {
-                        resolvedOptions.addAll(RegistryDataManager.getDynamicOptions(dynamicRegistryId, mc.level.registryAccess()));
-                        for (Map.Entry<String, String> entry : RegistryDataManager.getDynamicOptionLabelKeys(dynamicRegistryId).entrySet()) {
-                            optionLabels.put(entry.getKey(), net.minecraft.network.chat.Component
-                                    .translatable(entry.getValue()).getString());
-                        }
-                    }
-                }
-            }
-        }
+        var minecraft = net.minecraft.client.Minecraft.getInstance();
+        PortOptionResolver.Resolution resolution = PortOptionResolver.resolve(row,
+                minecraft.level == null ? null : minecraft.level.registryAccess(),
+                key -> net.minecraft.network.chat.Component.translatable(key).getString());
+        List<String> resolvedOptions = resolution.options().stream().map(PortOptionResolver.Option::id).toList();
+        Map<String, String> optionLabels = resolution.options().stream().collect(java.util.stream.Collectors.toMap(
+                PortOptionResolver.Option::id, PortOptionResolver.Option::label, (first, ignored) -> first,
+                java.util.LinkedHashMap::new));
 
         // 2. 统一使用 leftPort 的 ID 作为数据存储的 Key
         String portId = row.leftPort() != null ? row.leftPort().id() : "";

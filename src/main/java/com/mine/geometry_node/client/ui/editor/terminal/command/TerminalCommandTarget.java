@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.editor.terminal.command;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.command.GraphCommandTarget;
+import com.mine.geometry_node.client.ai.command.GraphQueryTarget;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdAddNode;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdConnect;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveNodes;
@@ -21,7 +22,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 /** Adapts the editor session to the runtime-neutral graph command target. */
-public record TerminalCommandTarget(GraphSession session) implements GraphCommandTarget {
+public record TerminalCommandTarget(GraphSession session) implements GraphCommandTarget, GraphQueryTarget {
     @Override public boolean hasGraph() { return session != null; }
 
     @Override
@@ -114,6 +115,45 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
         result.addProperty("input_port_id", inputPortId);
         return CommandResult.success("PORTS_CONNECTED", String.format(Locale.ROOT,
                 "连线成功 | %s[%s] -> %s[%s]", outputNodeId, outputPortId, inputNodeId, inputPortId), result);
+    }
+
+    @Override
+    public CommandResult searchNodeTypes(String query, int offset, int limit) {
+        return queries().searchNodeTypes(query, offset, limit);
+    }
+
+    @Override
+    public CommandResult searchGraphNodes(String query, int offset, int limit) {
+        return queries().searchGraphNodes(query, offset, limit);
+    }
+
+    @Override
+    public CommandResult getNodeDetails(String nodeId) {
+        return queries().getNodeDetails(nodeId);
+    }
+
+    @Override
+    public CommandResult getNodeConnections(String nodeId, String direction, int depth, int offset, int limit) {
+        return queries().getNodeConnections(nodeId, direction, depth, offset, limit);
+    }
+
+    @Override
+    public CommandResult getGraphContext(String focusNodeId, int depth, int offset, int limit) {
+        return queries().getGraphContext(focusNodeId, depth, offset, limit);
+    }
+
+    @Override
+    public CommandResult validateGraph(int offset, int limit) {
+        return queries().validateGraph(offset, limit);
+    }
+
+    @Override
+    public CommandResult getPortOptions(String nodeId, String portId, String query, int offset, int limit) {
+        return queries().getPortOptions(nodeId, portId, query, offset, limit);
+    }
+
+    private TerminalGraphQueryService queries() {
+        return new TerminalGraphQueryService(session);
     }
 
     private static CommandResult graphRequired() {

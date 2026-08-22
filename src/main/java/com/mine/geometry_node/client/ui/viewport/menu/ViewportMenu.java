@@ -1,8 +1,5 @@
 package com.mine.geometry_node.client.ui.viewport.menu;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
@@ -25,17 +22,9 @@ import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
 
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Stack;
 
 public class ViewportMenu extends FrameLayout {
-    private static final String NODE_TRANSLATION_PREFIX = "geometry_node.node.";
-    private static final Map<String, String> ENGLISH_NODE_NAMES = loadEnglishNodeNames();
     private static final int MENU_WIDTH_DP = 220;
     private static final int MENU_PADDING_DP = 8;
     private static final int MENU_EDGE_MARGIN_DP = 6;
@@ -231,119 +220,22 @@ public class ViewportMenu extends FrameLayout {
     private void performSearch(String query) {
         if (query.trim().isEmpty()) { renderCurrentFolder(); return; }
         mListContainer.removeAllViews();
-        String q = normalizeSearchText(query);
-        String compactQuery = compactSearchText(q);
-        int matches = 0;
-
-        for (NodeDef def : NodeRegistry.INSTANCE.getAllDefinitions()) {
-            String name = def.displayName().getString();
-            String englishName = englishNodeName(def.typeId());
-            if (matchesSearch(q, compactQuery, name, englishName, def.typeId())) {
-                matches++;
-                addClickItem(name, COLOR_NODE_TEXT, v -> {
-                    performAction(ViewportActionId.ADD_NODE, ViewportActionRequest.builder()
-                            .screen(mMenuX, mMenuY)
-                            .typeId(def.typeId())
-                            .build());
-                    post(this::dismiss);
-                });
-            }
+        NodeSearchService.Page results = NodeSearchService.search(
+                NodeRegistry.INSTANCE.getAllDefinitions(), query, 0, NodeRegistry.INSTANCE.getAllDefinitions().size());
+        for (NodeSearchService.Match match : results.items()) {
+            NodeDef def = match.definition();
+            addClickItem(match.displayName(), COLOR_NODE_TEXT, v -> {
+                performAction(ViewportActionId.ADD_NODE, ViewportActionRequest.builder()
+                        .screen(mMenuX, mMenuY)
+                        .typeId(def.typeId())
+                        .build());
+                post(this::dismiss);
+            });
         }
-        if (matches == 0) addEmptyItem("未找到匹配节点");
+        if (results.total() == 0) addEmptyItem("未找到匹配节点");
 
         updateScrollHeight();
         relayoutIfAttached();
-    }
-
-    private static boolean matchesSearch(String query, String compactQuery, String... candidates) {
-        for (String candidate : candidates) {
-            String normalizedCandidate = normalizeSearchText(candidate);
-            if (normalizedCandidate.contains(query)) {
-                return true;
-            }
-            if (!compactQuery.isEmpty() && compactSearchText(normalizedCandidate).contains(compactQuery)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String englishNodeName(String typeId) {
-        String localTypeId = localTypeId(typeId);
-        String exact = ENGLISH_NODE_NAMES.get(localTypeId);
-        if (exact != null && !exact.isBlank()) {
-            return exact;
-        }
-
-        String bestMatch = null;
-        int bestExtraLength = Integer.MAX_VALUE;
-        for (Map.Entry<String, String> entry : ENGLISH_NODE_NAMES.entrySet()) {
-            String translatedTypeId = entry.getKey();
-            if (translatedTypeId.endsWith(localTypeId) || localTypeId.endsWith(translatedTypeId)) {
-                int extraLength = Math.abs(translatedTypeId.length() - localTypeId.length());
-                if (extraLength < bestExtraLength) {
-                    bestExtraLength = extraLength;
-                    bestMatch = entry.getValue();
-                }
-            }
-        }
-        return bestMatch != null && !bestMatch.isBlank()
-                ? bestMatch
-                : humanizeTypeId(localTypeId);
-    }
-
-    private static String localTypeId(String typeId) {
-        if (typeId == null) return "";
-        int separator = typeId.indexOf(':');
-        return separator >= 0 ? typeId.substring(separator + 1) : typeId;
-    }
-
-    private static String humanizeTypeId(String typeId) {
-        StringBuilder result = new StringBuilder(typeId.length());
-        boolean capitalizeNext = true;
-        for (int i = 0; i < typeId.length(); i++) {
-            char c = typeId.charAt(i);
-            if (c == '_' || c == '-' || c == '.') {
-                if (!result.isEmpty() && result.charAt(result.length() - 1) != ' ') {
-                    result.append(' ');
-                }
-                capitalizeNext = true;
-                continue;
-            }
-            result.append(capitalizeNext ? Character.toUpperCase(c) : c);
-            capitalizeNext = false;
-        }
-        return result.toString();
-    }
-
-    private static String normalizeSearchText(String value) {
-        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private static String compactSearchText(String value) {
-        if (value == null || value.isEmpty()) return "";
-        StringBuilder result = new StringBuilder(value.length());
-        value.codePoints().filter(Character::isLetterOrDigit).forEach(result::appendCodePoint);
-        return result.toString();
-    }
-
-    private static Map<String, String> loadEnglishNodeNames() {
-        try (InputStream stream = ViewportMenu.class.getResourceAsStream("/assets/geometry_node/lang/en_us.json")) {
-            if (stream == null) return Map.of();
-            JsonObject root = JsonParser.parseReader(new InputStreamReader(stream, StandardCharsets.UTF_8)).getAsJsonObject();
-            Map<String, String> names = new HashMap<>();
-            for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
-                if (!entry.getKey().startsWith(NODE_TRANSLATION_PREFIX)
-                        || !entry.getValue().isJsonPrimitive()
-                        || !entry.getValue().getAsJsonPrimitive().isString()) {
-                    continue;
-                }
-                names.put(entry.getKey().substring(NODE_TRANSLATION_PREFIX.length()), entry.getValue().getAsString());
-            }
-            return Map.copyOf(names);
-        } catch (Exception ignored) {
-            return Map.of();
-        }
     }
 
     private void addClickItem(String text, int color, View.OnClickListener listener) {
