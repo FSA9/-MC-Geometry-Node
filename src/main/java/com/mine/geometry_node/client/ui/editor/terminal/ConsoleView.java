@@ -1,9 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.client.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.node.NodeRegistry;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.resources.TypedValue;
@@ -18,7 +18,6 @@ import icyllis.modernui.widget.TextView;
 import icyllis.modernui.view.View;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.LogCallback {
@@ -29,8 +28,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
 
     // 补全列表容器与状态
     private final LinearLayout mSuggestionContainer;
-    private static final List<String> KNOWN_COMMANDS = Arrays.asList("addnode", "delete", "connect", "clear");
-    private final List<String> mCurrentSuggestions = new ArrayList<>();
+    private final List<CommandRegistry.Suggestion> mCurrentSuggestions = new ArrayList<>();
     private int mSuggestionIndex = -1;
 
     // 历史记录状态
@@ -144,15 +142,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
 
     private boolean handleTabKey() {
         if (mSuggestionContainer.getVisibility() == View.VISIBLE && mSuggestionIndex >= 0 && mSuggestionIndex < mCurrentSuggestions.size()) {
-            String selected = mCurrentSuggestions.get(mSuggestionIndex);
-            String currentInput = mInputBox.getText().toString();
-
-            String newText;
-            if (currentInput.toLowerCase().startsWith("addnode ") && currentInput.indexOf(' ') == currentInput.lastIndexOf(' ')) {
-                newText = "addnode " + selected + " ";
-            } else {
-                newText = selected + " ";
-            }
+            String newText = mCurrentSuggestions.get(mSuggestionIndex).completedInput();
 
             mInputBox.setText(newText);
             mInputBox.setSelection(newText.length());
@@ -179,27 +169,8 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
             return;
         }
 
-        String lowerInput = input.toLowerCase();
-
-        // 场景 A: 用户输入了 "addnode "，正在输入节点类型的参数
-        if (lowerInput.startsWith("addnode ") && input.indexOf(' ') == input.lastIndexOf(' ')) {
-            String typePrefix = input.substring(input.indexOf(' ') + 1).toLowerCase();
-
-            // 从注册表中获取所有注册的 typeId，并根据前缀进行模糊匹配
-            for (String typeId : NodeRegistry.INSTANCE.getAllTypeIds()) {
-                if (typeId.toLowerCase().contains(typePrefix)) {
-                    mCurrentSuggestions.add(typeId);
-                }
-            }
-        }
-        // 场景 B: 用户正在输入主指令，且没有敲击空格
-        else if (!input.contains(" ")) {
-            for (String cmd : KNOWN_COMMANDS) {
-                if (cmd.startsWith(lowerInput)) {
-                    mCurrentSuggestions.add(cmd);
-                }
-            }
-        }
+        GraphSession activeSession = DocumentManager.INSTANCE.getActiveSession();
+        mCurrentSuggestions.addAll(ConsoleCommandRegistry.suggestions(input, activeSession));
 
         if (mCurrentSuggestions.isEmpty()) {
             mSuggestionContainer.setVisibility(View.GONE);
@@ -215,11 +186,13 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         Context context = getContext();
 
         // 为了防止补全列表过长溢出屏幕，最多显示 8 个候选项
-        int displayLimit = Math.min(mCurrentSuggestions.size(), 8);
+        int startIndex = Math.max(0, mSuggestionIndex - 7);
+        int endIndex = Math.min(mCurrentSuggestions.size(), startIndex + 8);
 
-        for (int i = 0; i < displayLimit; i++) {
+        for (int i = startIndex; i < endIndex; i++) {
             boolean isSelected = (i == mSuggestionIndex);
-            TextView tv = UIUtils.createLockedTextView(context, mCurrentSuggestions.get(i), 13f, isSelected ? 0xFFFFFFFF : 0xFFCCCCCC);
+            TextView tv = UIUtils.createLockedTextView(context, mCurrentSuggestions.get(i).displayText(), 13f,
+                    isSelected ? 0xFFFFFFFF : 0xFFCCCCCC);
             tv.setPadding(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(24), UIUtils.dp2pxInt(6));
 
             if (isSelected) {
@@ -229,7 +202,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         }
 
         // 提示还有更多项
-        if (mCurrentSuggestions.size() > displayLimit) {
+        if (mCurrentSuggestions.size() > 8) {
             TextView moreTv = UIUtils.createLockedTextView(context, "... 更多匹配项", 11f, 0xFF888888);
             moreTv.setPadding(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(4), UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(4));
             mSuggestionContainer.addView(moreTv);
