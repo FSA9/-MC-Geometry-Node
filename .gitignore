@@ -35,5 +35,8 @@ docs/tmp
 
 !README.md
 !docs/README_CN.md
+!docs/terminal/ai-agent-terminal-roadmap.md
 docs/model/
+docs/terminal/
 tools/
+src/test/

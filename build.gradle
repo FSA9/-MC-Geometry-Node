@@ -78,6 +78,8 @@ neoForge {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 dependencies {
+    testImplementation "org.junit.jupiter:junit-jupiter:5.14.2"
+
     implementation "icyllis.modernui:ModernUI-NeoForge:${modernui_neoforge_version}"
 
     implementation("icyllis.modernui:ModernUI-Markflow:${modernui_markflow_version}") {
@@ -143,6 +145,10 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
 }
 
 idea {
