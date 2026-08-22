@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.events.entity;
 
+import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.nodes.events.BaseEventNode;
@@ -15,17 +16,30 @@ public class OnProjectileHit extends BaseEventNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node.on_projectile_hit"))
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.PROJECTILE, "projectile")
+                        .output(StandardPorts.SOURCE_ENTITY, "source_entity")
+                        .output(StandardPorts.HIT_ENTITY, "hit_entity")
+                        .output(StandardPorts.VECTOR, "impact_velocity")
+                        .output(StandardPorts.XYZ, "hit_position")
+                        .output(StandardPorts.HIT_NORMAL, "hit_normal")
+                        .output(StandardPorts.PREVIOUS_POS, "previous_position")
+                        .output(StandardPorts.BLOCK_STATE, "block_state")
+                        .build())
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 投掷物本身 (如雪球、箭)
-                .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.PROJECTILE.toOutput(), UIHint.DEFAULT, null, null))
                 // 投掷物的发射者
                 .addRow(new PortRow(null, StandardPorts.SOURCE_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 // 击中的实体 (如果是击中方块，此项为 null)
-                .addRow(new PortRow(null, StandardPorts.TRIGGER_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.HIT_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 // 碰撞瞬间的投掷物运动矢量
                 .addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.DEFAULT, null, null))
                 // 击中位置的精准坐标
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.HIT_NORMAL.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.PREVIOUS_POS.toOutput(), UIHint.DEFAULT, null, null))
                 // 击中的方块状态 (如果是击中实体，此项为 null)
                 .addRow(new PortRow(null, StandardPorts.BLOCK_STATE.toOutput(), UIHint.DEFAULT, null, null))
                 .build();

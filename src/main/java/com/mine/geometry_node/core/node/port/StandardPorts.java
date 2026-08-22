@@ -141,6 +141,8 @@ public enum StandardPorts {
 
     // Entity
     ENTITY("entity", PortType.ENTITY),
+    PROJECTILE("projectile", PortType.ENTITY),
+    HIT_ENTITY("hit_entity", PortType.ENTITY),
     PLAYER("player", PortType.ENTITY),
     BUYER("buyer", PortType.ENTITY),
     SELLER("seller", PortType.ENTITY),
@@ -187,6 +189,8 @@ public enum StandardPorts {
     // XYZ
     XYZ("xyz", PortType.XYZ),
     HIT_POS("hit_pos", PortType.XYZ),
+    HIT_NORMAL("hit_normal", PortType.XYZ),
+    PREVIOUS_POS("previous_pos", PortType.XYZ),
     START_POS("start_pos", PortType.XYZ),
     END_POS("end_pos", PortType.XYZ),
     CENTER("center", PortType.XYZ),

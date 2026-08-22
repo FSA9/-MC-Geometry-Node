@@ -35,3 +35,5 @@ docs/tmp
 
 !README.md
 !docs/README_CN.md
+docs/model/
+tools/
