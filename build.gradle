@@ -80,6 +80,22 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter:5.14.2"
 
+    jarJar(implementation("org.jetbrains.pty4j:pty4j:${pty4j_version}") {
+        exclude group: "net.java.dev.jna"
+        exclude group: "org.jetbrains", module: "annotations"
+        exclude group: "org.slf4j", module: "slf4j-api"
+    }) {
+        version {
+            strictly "[${pty4j_version}]"
+            prefer pty4j_version
+        }
+    }
+    jarJar(implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.21")) {
+        version { strictly "[2.1.21]"; prefer "2.1.21" }
+    }
+    // Minecraft already supplies JNA 5.17 at runtime; compile against that exact host ABI.
+    compileOnly "net.java.dev.jna:jna-platform:5.17.0"
+
     implementation "icyllis.modernui:ModernUI-NeoForge:${modernui_neoforge_version}"
 
     implementation("icyllis.modernui:ModernUI-Markflow:${modernui_markflow_version}") {

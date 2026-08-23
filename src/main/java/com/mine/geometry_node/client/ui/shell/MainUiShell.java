@@ -80,10 +80,13 @@ public final class MainUiShell extends FrameLayout {
         }
         destroyed = true;
 
-        services.close();
-        clearLayer(transientLayer);
-        clearLayer(modalLayer);
-        areaRoot.persistNow();
+        try {
+            services.close();
+            clearLayer(transientLayer);
+            clearLayer(modalLayer);
+        } finally {
+            areaRoot.close();
+        }
     }
 
     private static FrameLayout.LayoutParams matchParentLayoutParams() {

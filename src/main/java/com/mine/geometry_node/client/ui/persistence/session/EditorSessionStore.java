@@ -10,7 +10,9 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Set;
+import java.util.UUID;
 
 public final class EditorSessionStore {
     public static final EditorSessionStore INSTANCE = new EditorSessionStore();
@@ -20,6 +22,8 @@ public final class EditorSessionStore {
     private static final int MAX_LEAVES = 32;
     private static final int MAX_TERMINAL_TABS = 32;
     private static final int MAX_PATH_LENGTH = 4096;
+    private static final int MAX_TERMINAL_TITLE_LENGTH = 80;
+    private static final int MAX_TERMINAL_PROFILE_ID_LENGTH = 128;
     private static final Set<String> EDITOR_TYPES = Set.of(
             "GRAPH_EDITOR", "ASSET_BROWSER", "TERMINAL", "PERFORMANCE", "GAME_VIEWPORT");
 
@@ -106,11 +110,64 @@ public final class EditorSessionStore {
         if (state.terminal == null) {
             state.terminal = new EditorSessionState.TerminalState();
         }
-        state.terminal.tabCount = Math.max(1, Math.min(MAX_TERMINAL_TABS, state.terminal.tabCount));
+        sanitizeTerminal(state.terminal);
         state.terminal.activeTab = Math.max(0, Math.min(state.terminal.tabCount - 1, state.terminal.activeTab));
         state.first = null;
         state.second = null;
         return state;
+    }
+
+    private static void sanitizeTerminal(EditorSessionState.TerminalState terminal) {
+        if (terminal.tabs == null) {
+            terminal.tabs = new ArrayList<>();
+        }
+        if (terminal.tabs.size() > MAX_TERMINAL_TABS) {
+            terminal.tabs = new ArrayList<>(terminal.tabs.subList(0, MAX_TERMINAL_TABS));
+        }
+        if (terminal.tabs.isEmpty()) {
+            int count = Math.max(1, Math.min(MAX_TERMINAL_TABS, terminal.tabCount));
+            for (int i = 0; i < count; i++) {
+                terminal.tabs.add(defaultTerminalTab(i + 1));
+            }
+        }
+        for (int i = 0; i < terminal.tabs.size(); i++) {
+            EditorSessionState.TerminalTabState tab = terminal.tabs.get(i);
+            if (tab == null) {
+                tab = defaultTerminalTab(i + 1);
+                terminal.tabs.set(i, tab);
+            }
+            tab.id = sanitizeUuid(tab.id);
+            tab.title = sanitizeText(tab.title, "Terminal " + (i + 1), MAX_TERMINAL_TITLE_LENGTH);
+            tab.mode = "SHELL".equals(tab.mode) || "AGENT".equals(tab.mode) ? tab.mode : "COMMAND";
+            tab.profileId = sanitizeText(tab.profileId, "", MAX_TERMINAL_PROFILE_ID_LENGTH);
+        }
+        terminal.tabCount = terminal.tabs.size();
+    }
+
+    private static EditorSessionState.TerminalTabState defaultTerminalTab(int number) {
+        EditorSessionState.TerminalTabState tab = new EditorSessionState.TerminalTabState();
+        tab.id = UUID.randomUUID().toString();
+        tab.title = "Terminal " + number;
+        return tab;
+    }
+
+    private static String sanitizeUuid(String value) {
+        try {
+            return UUID.fromString(value).toString();
+        } catch (RuntimeException ignored) {
+            return UUID.randomUUID().toString();
+        }
+    }
+
+    private static String sanitizeText(String value, String fallback, int maxLength) {
+        if (value == null) {
+            return fallback;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return fallback;
+        }
+        return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
     }
 
     private static String sanitizePath(String path) {

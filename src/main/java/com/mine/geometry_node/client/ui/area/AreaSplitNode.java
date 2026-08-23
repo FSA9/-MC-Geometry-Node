@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.area;
 
+import com.mine.geometry_node.GeometryNode;
+
 final class AreaSplitNode extends AreaNode {
     private static final float MIN_RATIO = 0.12f;
     private static final float MAX_RATIO = 0.88f;
@@ -74,11 +76,18 @@ final class AreaSplitNode extends AreaNode {
 
     @Override
     void dispose() {
-        if (mFirst != null) {
-            mFirst.dispose();
+        disposeChild(mFirst);
+        disposeChild(mSecond);
+    }
+
+    private static void disposeChild(AreaNode child) {
+        if (child == null) {
+            return;
         }
-        if (mSecond != null) {
-            mSecond.dispose();
+        try {
+            child.dispose();
+        } catch (RuntimeException error) {
+            GeometryNode.LOGGER.error("Failed to dispose a child area", error);
         }
     }
 

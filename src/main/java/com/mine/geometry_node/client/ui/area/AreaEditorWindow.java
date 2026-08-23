@@ -11,4 +11,8 @@ public interface AreaEditorWindow {
     void onShow();
 
     void onHide();
+
+    default void onDispose() {
+        onHide();
+    }
 }

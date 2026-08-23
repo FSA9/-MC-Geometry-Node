@@ -21,6 +21,8 @@ public final class AreaLayoutRoot extends FrameLayout {
     private AreaLeafNode mDragSourceNode;
     private AreaLeafView mDragTargetView;
     private final Runnable mSaveRunnable = this::persistNow;
+    private boolean mClosing;
+    private boolean mClosed;
 
     public AreaLayoutRoot(Context context) {
         super(context);
@@ -37,6 +39,28 @@ public final class AreaLayoutRoot extends FrameLayout {
 
     AreaEditorRegistry editorRegistry() {
         return mEditorRegistry;
+    }
+
+    public void close() {
+        if (mClosing || mClosed) {
+            return;
+        }
+        mClosing = true;
+        removeCallbacks(mSaveRunnable);
+        try {
+            if (mRootNode != null) {
+                mRootNode.dispose();
+            }
+        } finally {
+            try {
+                persistNow();
+            } finally {
+                mClosed = true;
+                mClosing = false;
+                mNodeViews.clear();
+                removeAllViews();
+            }
+        }
     }
 
     View createNodeView(AreaNode node) {
@@ -158,11 +182,17 @@ public final class AreaLayoutRoot extends FrameLayout {
     }
 
     void requestSessionSave() {
+        if (mClosing || mClosed) {
+            return;
+        }
         removeCallbacks(mSaveRunnable);
         postDelayed(mSaveRunnable, SAVE_DELAY_MS);
     }
 
     public void persistNow() {
+        if (mClosed) {
+            return;
+        }
         removeCallbacks(mSaveRunnable);
         EditorSessionState state = new EditorSessionState();
         state.layout = snapshotNode(mRootNode);

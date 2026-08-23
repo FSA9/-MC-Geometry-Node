@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.area;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import icyllis.modernui.core.Context;
 
@@ -74,12 +75,20 @@ final class AreaLeafNode extends AreaNode {
 
     @Override
     void dispose() {
-        for (AreaEditorWindow window : mWindows.values()) {
-            if (window != null) {
-                window.onHide();
+        try {
+            for (AreaEditorWindow window : mWindows.values()) {
+                if (window == null) {
+                    continue;
+                }
+                try {
+                    window.onDispose();
+                } catch (RuntimeException error) {
+                    GeometryNode.LOGGER.error("Failed to dispose an area editor window", error);
+                }
             }
+        } finally {
+            mWindows.clear();
         }
-        mWindows.clear();
     }
 
     private static EditorSessionState.AreaState createSessionState(AreaEditorType editorType) {

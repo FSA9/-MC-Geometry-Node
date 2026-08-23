@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.ui.persistence.session;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public final class EditorSessionState {
     public static final int CURRENT_VERSION = 1;
 
@@ -32,5 +35,13 @@ public final class EditorSessionState {
     public static final class TerminalState {
         public int tabCount = 1;
         public int activeTab = 0;
+        public List<TerminalTabState> tabs = new ArrayList<>();
+    }
+
+    public static final class TerminalTabState {
+        public String id = "";
+        public String title = "";
+        public String mode = "COMMAND";
+        public String profileId = "";
     }
 }
