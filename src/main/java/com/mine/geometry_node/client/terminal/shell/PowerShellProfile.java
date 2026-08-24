@@ -20,6 +20,11 @@ public final class PowerShellProfile {
     private PowerShellProfile() {}
 
     public static ProcessLaunchSpec create(TerminalSize size) throws IOException {
+        return create(size, Map.of());
+    }
+
+    public static ProcessLaunchSpec create(TerminalSize size, Map<String, String> environmentOverrides)
+            throws IOException {
         if (!isWindows()) {
             throw new IOException("PowerShell SHELL is currently supported on Windows only");
         }
@@ -38,8 +43,8 @@ public final class PowerShellProfile {
             argv.add("-NoLogo");
             argv.add("-NoProfile");
         }
-
         Map<String, String> environment = copyValidEnvironment(System.getenv());
+        if (environmentOverrides != null) environment.putAll(environmentOverrides);
         environment.put("TERM", "xterm-256color");
         environment.put("COLORTERM", "truecolor");
         environment.put("TERM_PROGRAM", "GeometryNode");

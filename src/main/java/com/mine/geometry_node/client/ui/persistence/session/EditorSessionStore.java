@@ -138,7 +138,7 @@ public final class EditorSessionStore {
             }
             tab.id = sanitizeUuid(tab.id);
             tab.title = sanitizeText(tab.title, "Terminal " + (i + 1), MAX_TERMINAL_TITLE_LENGTH);
-            tab.mode = "SHELL".equals(tab.mode) || "AGENT".equals(tab.mode) ? tab.mode : "COMMAND";
+            tab.mode = "SHELL".equals(tab.mode) ? tab.mode : "COMMAND";
             tab.profileId = sanitizeText(tab.profileId, "", MAX_TERMINAL_PROFILE_ID_LENGTH);
         }
         terminal.tabCount = terminal.tabs.size();

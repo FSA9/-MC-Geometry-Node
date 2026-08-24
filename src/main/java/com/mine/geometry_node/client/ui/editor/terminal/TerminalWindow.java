@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.client.agent.mcp.McpPowerShellRun;
+import com.mine.geometry_node.client.ai.command.CommandCatalog;
 import com.mine.geometry_node.client.terminal.TerminalSession;
 import com.mine.geometry_node.client.terminal.TerminalMode;
 import com.mine.geometry_node.client.terminal.TerminalSize;
@@ -9,12 +11,17 @@ import com.mine.geometry_node.client.terminal.pty.pty4j.Pty4jProcessFactory;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
+import com.mine.geometry_node.client.ui.editor.terminal.command.BoundGraphQueryTarget;
+import com.mine.geometry_node.client.ui.editor.terminal.command.MinecraftClientMcpGateway;
+import com.mine.geometry_node.client.ui.session.DocumentManager;
+import com.mine.geometry_node.client.ui.session.GraphSession;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
+import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import java.util.ArrayList;
@@ -65,7 +72,12 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mShellMode.setOnClickListener(ignored -> switchMode(TerminalMode.SHELL));
         mModeBar.addView(mCommandMode, new LayoutParams(UIUtils.dp2pxInt(92), ViewGroup.LayoutParams.MATCH_PARENT));
         mModeBar.addView(mShellMode, new LayoutParams(UIUtils.dp2pxInt(108), ViewGroup.LayoutParams.MATCH_PARENT));
-        addView(mModeBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
+        HorizontalScrollView modeScroller = new HorizontalScrollView(context);
+        modeScroller.setFillViewport(true);
+        modeScroller.setHorizontalScrollBarEnabled(false);
+        modeScroller.addView(mModeBar, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        addView(modeScroller, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
 
         mContainer = new FrameLayout(context);
         addView(mContainer, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -175,8 +187,11 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
                 new TerminalSize(80, 24), new Pty4jProcessFactory());
         TerminalSession session = new TerminalSession(id, title, mode, profileId, coordinator);
         coordinator.bind(session);
-        return new TerminalTab(session, new ConsoleView(getContext()),
-                new ShellTerminalView(getContext(), coordinator));
+        ShellTerminalView[] viewHolder = new ShellTerminalView[1];
+        ShellTerminalView shellView = new ShellTerminalView(getContext(), coordinator,
+                (size, generation) -> startMcpPowerShell(coordinator, viewHolder[0], size, generation));
+        viewHolder[0] = shellView;
+        return new TerminalTab(session, new ConsoleView(getContext()), shellView);
     }
 
     private void captureSessionState() {
@@ -218,7 +233,10 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         if (mCurrentIndex < 0) return;
         TerminalTab tab = mTabs.get(mCurrentIndex);
         if (tab.session.mode() == mode) return;
-        if (tab.session.state().hasActiveBackend()) return;
+        if (tab.session.state().hasActiveBackend() || tab.shellView.isStartPending()) {
+            tab.shellView.reportError("请先停止当前终端会话，再切换模式");
+            return;
+        }
         tab.session.setMode(mode);
         if (mode == TerminalMode.SHELL) tab.session.setProfileId(PowerShellProfile.ID);
         switchToTab(mCurrentIndex);
@@ -227,6 +245,37 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     private void updateModeBar(TerminalMode mode) {
         styleModeButton(mCommandMode, mode == TerminalMode.COMMAND);
         styleModeButton(mShellMode, mode == TerminalMode.SHELL);
+    }
+
+    private static void startMcpPowerShell(ShellTerminalCoordinator coordinator,
+                                           ShellTerminalView view, TerminalSize size, long generation) {
+        GraphSession graphSession = DocumentManager.INSTANCE.getActiveSession();
+        if (graphSession == null) {
+            view.reportError("请先打开一个蓝图，再启动 PowerShell");
+            return;
+        }
+        var boundGraph = graphSession.editorContext.getCurrentGraph();
+        var target = new BoundGraphQueryTarget(graphSession, boundGraph);
+        var gateway = new MinecraftClientMcpGateway(CommandCatalog.registry(), target);
+        Thread.ofVirtual().name("geometry-node-mcp-powershell-start").start(() -> {
+            McpPowerShellRun run = null;
+            try {
+                run = McpPowerShellRun.start(CommandCatalog.registry(), gateway,
+                        view::onTrustedToolEvent, size);
+                if (!view.acceptsShellStart(generation)) {
+                    run.close();
+                    return;
+                }
+                coordinator.startManaged(run.launchSpec(), run);
+                if (!view.acceptsShellStart(generation)) coordinator.stop();
+            } catch (Exception failure) {
+                if (run != null) run.close();
+                if (!view.acceptsShellStart(generation)) return;
+                String message = failure.getMessage();
+                view.reportError(message == null || message.isBlank()
+                        ? failure.getClass().getSimpleName() : message);
+            }
+        });
     }
 
     private static TextView modeButton(Context context, String text) {
@@ -257,10 +306,10 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
             this.shellView = shellView;
         }
 
-        private View activeView() { return session.mode() == TerminalMode.SHELL ? shellView : commandView; }
+        private View activeView() { return session.mode() == TerminalMode.COMMAND ? commandView : shellView; }
 
         private void requestInputFocus() {
-            if (session.mode() == TerminalMode.SHELL) shellView.requestInputFocus();
+            if (session.mode() != TerminalMode.COMMAND) shellView.requestInputFocus();
             else commandView.requestInputFocus();
         }
 
@@ -270,4 +319,5 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
             session.close();
         }
     }
+
 }

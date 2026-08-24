@@ -38,10 +38,14 @@ final class TerminalGraphQueryService {
     private static final int DETAILS_COLLECTION_LIMIT = 200;
     private static final int VALUE_TEXT_LIMIT = 4096;
 
-    private final GraphSession session;
+    private final NodeGraph graph;
 
     TerminalGraphQueryService(GraphSession session) {
-        this.session = session;
+        this(session == null ? null : session.editorContext.getCurrentGraph());
+    }
+
+    TerminalGraphQueryService(NodeGraph graph) {
+        this.graph = graph;
     }
 
     CommandResult searchNodeTypes(String query, int offset, int limit) {
@@ -212,7 +216,7 @@ final class TerminalGraphQueryService {
     }
 
     private GraphReadSnapshot snapshot() {
-        return GraphReadSnapshot.capture(session.editorContext.getCurrentGraph());
+        return GraphReadSnapshot.capture(graph);
     }
 
     private static boolean matchesNode(String nodeId, NodeData node, String query) {

@@ -70,6 +70,20 @@ public final class TerminalInputEncoder {
         throw new IllegalArgumentException("Unsupported control character: " + character);
     }
 
+    public static byte[] mouseWheel(boolean up, int column, int row, boolean sgrMode) {
+        int normalizedColumn = Math.max(1, column);
+        int normalizedRow = Math.max(1, row);
+        int button = up ? 64 : 65;
+        if (sgrMode) {
+            return ("\u001b[<" + button + ";" + normalizedColumn + ";" + normalizedRow + "M")
+                    .getBytes(StandardCharsets.US_ASCII);
+        }
+        int legacyColumn = Math.min(223, normalizedColumn);
+        int legacyRow = Math.min(223, normalizedRow);
+        return new byte[]{0x1B, '[', 'M', (byte) (button + 32),
+                (byte) (legacyColumn + 32), (byte) (legacyRow + 32)};
+    }
+
     private static String cursor(char suffix, boolean application) {
         return application ? "\u001bO" + suffix : "\u001b[" + suffix;
     }

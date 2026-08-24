@@ -10,7 +10,9 @@ public record TerminalSnapshot(
         int cursorColumn,
         boolean cursorVisible,
         boolean bracketedPaste,
-        boolean applicationCursorKeys) {
+        boolean applicationCursorKeys,
+        boolean mouseTracking,
+        boolean sgrMouseMode) {
     public TerminalSnapshot {
         lines = lines.stream().map(List::copyOf).toList();
     }

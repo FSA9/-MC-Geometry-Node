@@ -44,6 +44,8 @@ public final class VtTerminalEmulator {
     private boolean autoWrap = true;
     private boolean applicationCursorKeys;
     private boolean bracketedPaste;
+    private int mouseTrackingModes;
+    private boolean sgrMouseMode;
     private boolean alternateScreen;
     private int utf8CodePoint;
     private int utf8Remaining;
@@ -156,7 +158,7 @@ public final class VtTerminalEmulator {
         for (TerminalCell[] line : screen) lines.add(List.of(copyLine(line)));
         int cursorLine = (alternateScreen ? 0 : scrollback.size()) + cursorRow;
         return new TerminalSnapshot(size.columns(), size.rows(), lines, cursorLine, cursorColumn,
-                cursorVisible, bracketedPaste, applicationCursorKeys);
+                cursorVisible, bracketedPaste, applicationCursorKeys, mouseTrackingModes != 0, sgrMouseMode);
     }
 
     public synchronized byte[] drainReplies() {
@@ -178,7 +180,8 @@ public final class VtTerminalEmulator {
         scrollTop = 0;
         scrollBottom = size.rows() - 1;
         cursorVisible = autoWrap = true;
-        applicationCursorKeys = bracketedPaste = alternateScreen = wrapPending = false;
+        applicationCursorKeys = bracketedPaste = sgrMouseMode = alternateScreen = wrapPending = false;
+        mouseTrackingModes = 0;
         parserState = ParserState.GROUND;
         utf8CodePoint = utf8Remaining = utf8Minimum = 0;
     }
@@ -498,11 +501,19 @@ public final class VtTerminalEmulator {
                     case 7 -> autoWrap = enabled;
                     case 25 -> cursorVisible = enabled;
                     case 47, 1047, 1049 -> setAlternateScreen(enabled);
+                    case 1000, 1002, 1003 -> setMouseTrackingMode(value, enabled);
+                    case 1006 -> sgrMouseMode = enabled;
                     case 2004 -> bracketedPaste = enabled;
                     default -> { }
                 }
             }
         }
+    }
+
+    private void setMouseTrackingMode(int mode, boolean enabled) {
+        int bit = 1 << (mode - 1000);
+        if (enabled) mouseTrackingModes |= bit;
+        else mouseTrackingModes &= ~bit;
     }
 
     private void setAlternateScreen(boolean enabled) {

@@ -16,7 +16,8 @@ final class ConfigSanitizer {
 
     static boolean looksLikeConfig(JsonObject root) {
         return root != null && (root.has("assetBrowser") || root.has("viewport") || root.has("node")
-                || root.has("networkTransfer") || root.has("previewCache") || root.has("keyBindings"));
+                || root.has("networkTransfer") || root.has("previewCache") || root.has("terminal")
+                || root.has("keyBindings"));
     }
 
     static Result fromJson(JsonObject root) {
@@ -187,6 +188,9 @@ final class ConfigSanitizer {
             changed |= readPreviewCache(previewCache, config.previewCache, defaults.previewCache);
         }
 
+        // P4 no longer persists CLI launch commands; rewrite legacy terminal settings away.
+        if (root.has("terminal")) changed = true;
+
         changed |= ConfigRegistry.INSTANCE.normalize(config);
         return new Result(config, changed);
     }
@@ -281,7 +285,6 @@ final class ConfigSanitizer {
             config.previewCache = defaults.previewCache;
             changed = true;
         }
-
         changed |= ConfigRegistry.INSTANCE.normalize(config);
         return new Result(config, changed);
     }

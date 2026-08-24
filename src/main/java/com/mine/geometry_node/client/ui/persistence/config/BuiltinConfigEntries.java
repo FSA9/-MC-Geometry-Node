@@ -107,7 +107,6 @@ public final class BuiltinConfigEntries {
             .settingsVisibility(ConfigEntry.SettingsVisibility.VISIBLE)
             .normalize(BuiltinConfigEntries::normalizePreviewLocation)
             .build();
-
     public static final ConfigEntry<String> GLOBAL_UNDO = key("keyBindings.global.undo", SHORTCUT_GLOBAL, 100, KeyScope.GLOBAL,
             config -> config.keyBindings.global.undo, (config, value) -> config.keyBindings.global.undo = value);
     public static final ConfigEntry<String> GLOBAL_REDO = key("keyBindings.global.redo", SHORTCUT_GLOBAL, 200, KeyScope.GLOBAL,

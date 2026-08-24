@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.terminal.shell;
 
 import com.mine.geometry_node.client.terminal.ProcessLaunchSpec;
+import com.mine.geometry_node.client.terminal.ResourceOwnedTerminalBackend;
 import com.mine.geometry_node.client.terminal.TerminalExit;
 import com.mine.geometry_node.client.terminal.TerminalRunState;
 import com.mine.geometry_node.client.terminal.TerminalSession;
@@ -58,18 +59,16 @@ public final class ShellTerminalCoordinator implements TerminalSessionListener {
 
     public TerminalSnapshot snapshot() { return emulator.snapshot(); }
 
-    public void startPowerShell(TerminalSize size) {
-        Thread.ofVirtual().name("geometry-node-powershell-start").start(() -> {
-            try {
-                ProcessLaunchSpec spec = PowerShellProfile.create(size);
-                start(processFactory, spec);
-            } catch (IOException | RuntimeException error) {
-                observer.onError(safeMessage(error));
-            }
-        });
+    public void start(PtyProcessFactory factory, ProcessLaunchSpec spec) throws IOException {
+        startBackend(new PtyTerminalBackend(factory, spec));
     }
 
-    public void start(PtyProcessFactory factory, ProcessLaunchSpec spec) throws IOException {
+    public void startManaged(ProcessLaunchSpec spec, AutoCloseable runResource) throws IOException {
+        Objects.requireNonNull(runResource, "runResource");
+        startBackend(new ResourceOwnedTerminalBackend(new PtyTerminalBackend(processFactory, spec), runResource));
+    }
+
+    private void startBackend(com.mine.geometry_node.client.terminal.TerminalBackend backend) throws IOException {
         long newRunEpoch;
         synchronized (nativeOperationLock) {
             TerminalSession targetSession = requireSession();
@@ -84,7 +83,12 @@ public final class ShellTerminalCoordinator implements TerminalSessionListener {
             }
             emulator.reset();
             observer.onScreenChanged();
-            targetSession.start(new PtyTerminalBackend(factory, spec));
+            try {
+                targetSession.start(backend);
+            } catch (IOException | RuntimeException failure) {
+                backend.close();
+                throw failure;
+            }
             synchronized (resizeLock) {
                 pendingNativeResize.set(new PendingResize(newRunEpoch, currentSize));
             }
@@ -100,6 +104,13 @@ public final class ShellTerminalCoordinator implements TerminalSessionListener {
     }
 
     public void sendControl(char character) { write(TerminalInputEncoder.control(character)); }
+
+    public boolean sendMouseWheel(boolean up, int column, int row) {
+        TerminalSnapshot snapshot = emulator.snapshot();
+        if (!snapshot.mouseTracking()) return false;
+        write(TerminalInputEncoder.mouseWheel(up, column, row, snapshot.sgrMouseMode()));
+        return true;
+    }
 
     public void paste(String text) {
         try {

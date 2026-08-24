@@ -9,6 +9,7 @@ import com.mine.geometry_node.client.terminal.emulator.TerminalStyle;
 import com.mine.geometry_node.client.terminal.input.TerminalKey;
 import com.mine.geometry_node.client.terminal.shell.ShellTerminalCoordinator;
 import com.mine.geometry_node.client.terminal.shell.ShellTerminalObserver;
+import com.mine.geometry_node.client.agent.mcp.McpToolEvent;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -35,6 +36,7 @@ import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** ModernUI renderer/input surface for one interactive PTY-backed SHELL tab. */
 public final class ShellTerminalView extends LinearLayout implements ShellTerminalObserver {
@@ -48,22 +50,38 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private final EditText inputSink;
     private final TextView statusView;
     private final TextView actionView;
+    private final TextView trustedEventView;
     private final float cellWidthPx;
     private final int cellHeightPx;
     private final AtomicBoolean refreshQueued = new AtomicBoolean();
     private final AtomicBoolean dirty = new AtomicBoolean();
+    private final AtomicLong startupGeneration = new AtomicLong();
 
     private volatile TerminalRunState displayedState = TerminalRunState.IDLE;
     private volatile String pendingError = "";
     private volatile TerminalSize pendingSize = new TerminalSize(80, 24);
     private TerminalSize appliedSize = new TerminalSize(80, 24);
     private boolean changingInput;
+    private boolean followOutput = true;
+    private boolean hasGuiScrollback;
     private volatile boolean startRequested;
     private volatile boolean disposed;
+    private final ShellStartAction shellStartAction;
+
+    @FunctionalInterface
+    public interface ShellStartAction {
+        void start(TerminalSize size, long generation);
+    }
 
     public ShellTerminalView(Context context, ShellTerminalCoordinator coordinator) {
+        this(context, coordinator, null);
+    }
+
+    public ShellTerminalView(Context context, ShellTerminalCoordinator coordinator,
+                             ShellStartAction shellStartAction) {
         super(context);
         this.coordinator = coordinator;
+        this.shellStartAction = shellStartAction;
         coordinator.setObserver(this);
         setOrientation(VERTICAL);
         setBackground(colorDrawable(TerminalStyle.DEFAULT_BACKGROUND));
@@ -83,6 +101,14 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
                 ViewGroup.LayoutParams.MATCH_PARENT));
         addView(statusBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(STATUS_HEIGHT_DP)));
 
+        trustedEventView = UIUtils.createLockedTextView(context, "MCP  starts with PowerShell", 11f, 0xFFB5CEA8);
+        trustedEventView.setGravity(Gravity.CENTER_VERTICAL);
+        trustedEventView.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(8), 0);
+        trustedEventView.setBackground(colorDrawable(0xFF173A2A));
+        trustedEventView.setVisibility(View.VISIBLE);
+        addView(trustedEventView, new LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(STATUS_HEIGHT_DP)));
+
         FrameLayout terminalSurface = new FrameLayout(context);
         scrollView = new ScrollView(context);
         scrollView.setFillViewport(true);
@@ -98,6 +124,10 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         screenView.setHorizontallyScrolling(true);
         cellWidthPx = Math.max(1f, screenView.getPaint().measureTextRun("M", 0, 1, false, null));
         screenView.setTextIsSelectable(true);
+        terminalSurface.setOnGenericMotionListener(this::handleTerminalScroll);
+        scrollView.setOnGenericMotionListener(this::handleTerminalScroll);
+        screenView.setOnGenericMotionListener(this::handleTerminalScroll);
+        setOnGenericMotionListener(this::handleTerminalScroll);
         scrollView.addView(screenView, new ScrollView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         terminalSurface.addView(scrollView, new FrameLayout.LayoutParams(
@@ -126,10 +156,35 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
 
     public void ensureStarted() {
         if (disposed || startRequested || displayedState.hasActiveBackend()) return;
+        followOutput = true;
         startRequested = true;
         pendingError = "";
-        coordinator.startPowerShell(pendingSize);
+        if (shellStartAction == null) {
+            reportError("PowerShell starter is unavailable");
+            return;
+        }
+        shellStartAction.start(pendingSize, startupGeneration.incrementAndGet());
         requestRefresh();
+    }
+
+    public void reportError(String message) { onError(message); }
+
+    public boolean isStartPending() {
+        return startRequested && !displayedState.hasActiveBackend();
+    }
+
+    public boolean acceptsShellStart(long generation) {
+        return !disposed && startRequested && startupGeneration.get() == generation;
+    }
+
+    public void onTrustedToolEvent(McpToolEvent event) {
+        if (disposed || event == null) return;
+        post(() -> {
+            if (disposed) return;
+            String code = event.code().isBlank() ? "" : "  " + event.code();
+            trustedEventView.setText("MCP  " + event.toolName() + "  " + event.state() + code);
+            trustedEventView.setTextColor(event.state() == McpToolEvent.State.FAILED ? 0xFFF48771 : 0xFFB5CEA8);
+        });
     }
 
     public void requestInputFocus() {
@@ -149,7 +204,8 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
         super.onSizeChanged(width, height, oldWidth, oldHeight);
         int usableWidth = Math.max(1, width - UIUtils.dp2pxInt(16));
-        int usableHeight = Math.max(1, height - UIUtils.dp2pxInt(STATUS_HEIGHT_DP + 12));
+        int statusHeight = STATUS_HEIGHT_DP * 2;
+        int usableHeight = Math.max(1, height - UIUtils.dp2pxInt(statusHeight + 12));
         int columns = Math.max(2, (int) (usableWidth / cellWidthPx));
         int rows = Math.max(1, usableHeight / cellHeightPx);
         pendingSize = new TerminalSize(columns, rows);
@@ -163,9 +219,20 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         displayedState = state;
         if (state == TerminalRunState.RUNNING) {
             startRequested = true;
+            post(() -> {
+                if (!disposed) {
+                    trustedEventView.setText("MCP  http://127.0.0.1:37654/mcp");
+                    trustedEventView.setTextColor(0xFFB5CEA8);
+                }
+            });
             post(this::requestInputFocus);
         }
-        if (state == TerminalRunState.EXITED || state == TerminalRunState.FAILED) startRequested = false;
+        if (state == TerminalRunState.EXITED || state == TerminalRunState.FAILED) {
+            startRequested = false;
+            post(() -> {
+                if (!disposed) trustedEventView.setText("MCP  stopped");
+            });
+        }
         requestRefresh();
     }
 
@@ -204,8 +271,8 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
 
     private void renderSnapshot(TerminalSnapshot snapshot) {
         boolean retainInputFocus = inputSink.isFocused();
-        boolean followBottom = scrollView.getScrollY() + scrollView.getHeight()
-                >= Math.max(0, screenView.getHeight() - UIUtils.dp2pxInt(CELL_HEIGHT_DP * 2));
+        boolean followBottom = followOutput;
+        hasGuiScrollback = snapshot.lines().size() > snapshot.rows();
         SpannableStringBuilder text = new SpannableStringBuilder();
         int cursorStart = -1;
         for (int lineIndex = 0; lineIndex < snapshot.lines().size(); lineIndex++) {
@@ -234,8 +301,9 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         }
         screenView.setText(text);
         if (followBottom) {
-            scrollView.post(() -> scrollView.scrollTo(0,
-                    Math.max(0, screenView.getHeight() - scrollView.getHeight())));
+            scrollView.post(() -> {
+                if (!disposed && followOutput) scrollView.scrollTo(0, maxScrollY());
+            });
         }
         if (retainInputFocus) inputSink.post(() -> {
             if (!disposed) inputSink.requestFocus();
@@ -271,19 +339,63 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     }
 
     private boolean refocusInputAfterTouch(View view, MotionEvent event) {
-        if (event.getActionMasked() == MotionEvent.ACTION_UP) requestInputFocus();
+        if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+            followOutput = isNearBottom();
+            requestInputFocus();
+        }
         return false;
     }
 
+    private boolean handleTerminalScroll(View view, MotionEvent event) {
+        if (event.getAction() != MotionEvent.ACTION_SCROLL) return false;
+        float amount = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
+        if (amount == 0.0f) return false;
+
+        int maxScroll = maxScrollY();
+        if (hasGuiScrollback && maxScroll > 0) {
+            int distance = Math.max(cellHeightPx, Math.round(Math.abs(amount) * cellHeightPx * 3.0f));
+            int direction = amount > 0.0f ? -1 : 1;
+            int target = Math.max(0, Math.min(maxScroll, scrollView.getScrollY() + direction * distance));
+            scrollView.scrollTo(0, target);
+            followOutput = target >= maxScroll - cellHeightPx;
+        } else if (displayedState.hasActiveBackend()) {
+            boolean up = amount > 0.0f;
+            int column = Math.max(1, Math.min(pendingSize.columns(),
+                    1 + Math.round((event.getX() - UIUtils.dp2px(8f)) / cellWidthPx)));
+            int row = Math.max(1, Math.min(pendingSize.rows(),
+                    1 + Math.round((event.getY() - UIUtils.dp2px(6f)) / cellHeightPx)));
+            if (!coordinator.sendMouseWheel(up, column, row)) {
+                coordinator.sendKey(up ? TerminalKey.PAGE_UP : TerminalKey.PAGE_DOWN);
+            }
+        }
+        return true;
+    }
+
+    private int maxScrollY() {
+        return Math.max(0, screenView.getHeight() - scrollView.getHeight());
+    }
+
+    private boolean isNearBottom() {
+        return scrollView.getScrollY() >= maxScrollY() - cellHeightPx;
+    }
+
     private void toggleProcess() {
-        if (displayedState.hasActiveBackend()) coordinator.stop();
-        else ensureStarted();
+        if (displayedState.hasActiveBackend()) {
+            coordinator.stop();
+        } else if (startRequested) {
+            startupGeneration.incrementAndGet();
+            startRequested = false;
+            pendingError = "启动已取消";
+            requestRefresh();
+        } else {
+            ensureStarted();
+        }
     }
 
     private void updateStatus() {
         String detail = pendingError.isBlank() ? displayedState.name() : pendingError;
         statusView.setText("PowerShell  " + detail);
-        actionView.setText(displayedState.hasActiveBackend() ? "Stop" : "Start");
+        actionView.setText(displayedState.hasActiveBackend() ? "Stop" : startRequested ? "Cancel" : "Start");
         statusView.setTextColor(pendingError.isBlank() ? 0xFFAAAAAA : 0xFFF48771);
     }
 
