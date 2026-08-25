@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.ai.command.CommandInvocationContext;
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.command.CommandSpec;
 
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -195,7 +196,7 @@ public final class McpRequestDispatcher implements AutoCloseable {
             activeCalls.remove(requestKey);
         }
         String text = commandResult.toJson().toString();
-        if (text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_RESULT_BYTES) {
+        if (exceedsResultLimit(text)) {
             return protocolError(id, -32003, "Resource result exceeds the MCP size limit");
         }
         if (!commandResult.ok()) return protocolError(id, -32002, commandResult.message());
@@ -255,7 +256,7 @@ public final class McpRequestDispatcher implements AutoCloseable {
             activeCalls.remove(requestKey);
         }
         JsonObject mapped = McpResultMapper.map(commandResult);
-        if (mapped.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_RESULT_BYTES) {
+        if (exceedsResultLimit(mapped.toString())) {
             commandResult = CommandResult.failure("RESULT_TOO_LARGE", "工具结果超过 MCP 大小上限，请缩小分页范围");
             mapped = McpResultMapper.map(commandResult);
         }
@@ -311,6 +312,10 @@ public final class McpRequestDispatcher implements AutoCloseable {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
+    private static boolean exceedsResultLimit(String value) {
+        return value.getBytes(StandardCharsets.UTF_8).length > MAX_RESULT_BYTES;
+    }
+
     private static boolean isJsonRpcMessage(JsonObject request) {
         return request != null && "2.0".equals(string(request.get("jsonrpc")))
                 && hasOnly(request, "jsonrpc", "id", "method", "params") && validId(request);
@@ -324,8 +329,13 @@ public final class McpRequestDispatcher implements AutoCloseable {
     }
 
     private static boolean hasOnly(JsonObject object, String... allowed) {
-        Set<String> names = Set.of(allowed);
-        return object.keySet().stream().allMatch(names::contains);
+        keys: for (String key : object.keySet()) {
+            for (String name : allowed) {
+                if (name.equals(key)) continue keys;
+            }
+            return false;
+        }
+        return true;
     }
 
     private static JsonObject object(JsonElement value) {

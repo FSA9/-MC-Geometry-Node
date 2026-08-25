@@ -16,10 +16,9 @@ public final class TerminalInputEncoder {
 
     public static byte[] paste(String text, boolean bracketedPaste) {
         Objects.requireNonNull(text, "text");
+        if (text.length() > MAX_PASTE_BYTES) throw pasteTooLarge();
         byte[] content = text.getBytes(StandardCharsets.UTF_8);
-        if (content.length > MAX_PASTE_BYTES) {
-            throw new IllegalArgumentException("Paste exceeds " + MAX_PASTE_BYTES + " UTF-8 bytes");
-        }
+        if (content.length > MAX_PASTE_BYTES) throw pasteTooLarge();
         if (!bracketedPaste) return content;
         byte[] prefix = "\u001b[200~".getBytes(StandardCharsets.US_ASCII);
         byte[] suffix = "\u001b[201~".getBytes(StandardCharsets.US_ASCII);
@@ -28,6 +27,10 @@ public final class TerminalInputEncoder {
         System.arraycopy(content, 0, result, prefix.length, content.length);
         System.arraycopy(suffix, 0, result, prefix.length + content.length, suffix.length);
         return result;
+    }
+
+    private static IllegalArgumentException pasteTooLarge() {
+        return new IllegalArgumentException("Paste exceeds " + MAX_PASTE_BYTES + " UTF-8 bytes");
     }
 
     public static byte[] key(TerminalKey key, boolean applicationCursorKeys) {

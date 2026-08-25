@@ -13,6 +13,7 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.nodes.quest.CreateQuestCondition;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -25,14 +26,12 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
     private boolean mListening;
 
     public GraphSessionPropertiesTarget(GraphSession session) {
-        mSession = session;
+        mSession = Objects.requireNonNull(session, "session");
     }
 
     @Override
     public CompletionStage<GraphPropertiesSnapshot> load() {
-        NodeGraph graph = mSession != null && mSession.editorContext != null
-                ? mSession.editorContext.getGraph()
-                : null;
+        NodeGraph graph = mSession.editorContext.getGraph();
         if (graph == null) return CompletableFuture.completedFuture(null);
         return CompletableFuture.completedFuture(new GraphPropertiesSnapshot(
                 mSession.tabName,
@@ -46,7 +45,7 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
     @Override
     public CompletionStage<Void> save(String graphTypeId, String comment, List<String> tags,
                                       QuestDefinition questDefinition) {
-        if (mSession == null || mSession.editorContext == null || mSession.editorContext.getGraph() == null) {
+        if (mSession.editorContext.getGraph() == null) {
             return CompletableFuture.completedFuture(null);
         }
         mSession.editorContext.getCommandManager().execute(new CmdSetGraphMetadata(
@@ -65,7 +64,7 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
             mListening = false;
         }
         mChangeListener = listener;
-        if (listener != null && mSession != null && mSession.editorContext != null) {
+        if (listener != null) {
             mSession.editorContext.addListener(this);
             mListening = true;
         }

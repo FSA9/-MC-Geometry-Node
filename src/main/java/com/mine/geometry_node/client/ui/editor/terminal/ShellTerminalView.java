@@ -61,6 +61,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private final TextView trustedEventView;
     private final float cellWidthPx;
     private final int cellHeightPx;
+    private final float selectionDragThresholdPx;
     private final AtomicBoolean refreshQueued = new AtomicBoolean();
     private final AtomicBoolean dirty = new AtomicBoolean();
     private final AtomicBoolean renderInFlight = new AtomicBoolean();
@@ -83,6 +84,9 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private long scrollInteractionRevision;
     private long lastRenderedRevision = Long.MIN_VALUE;
     private long failedRenderRevision = Long.MIN_VALUE;
+    private String displayedStatusText = "";
+    private String displayedActionText = "";
+    private int displayedStatusColor;
     private volatile boolean startRequested;
     private volatile boolean disposed;
     private final ShellStartAction shellStartAction;
@@ -139,6 +143,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         screenView.setPadding(UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(6));
         screenView.setIncludeFontPadding(false);
         cellHeightPx = UIUtils.dp2pxInt(CELL_HEIGHT_DP);
+        selectionDragThresholdPx = UIUtils.dp2px(3f);
         screenView.setLineHeight(cellHeightPx);
         screenView.setHorizontallyScrolling(true);
         cellWidthPx = Math.max(1f, screenView.getPaint().measureTextRun("M", 0, 1, false, null));
@@ -309,7 +314,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
             long revision = coordinator.screenRevision();
             if (revision != lastRenderedRevision && revision != failedRenderRevision
                     && !selectingText && !hasTextSelection()) {
-                scheduleBackgroundRender();
+                scheduleBackgroundRender(revision);
             }
             updateStatus();
         } finally {
@@ -336,9 +341,8 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         coordinator.resize(size);
     }
 
-    private void scheduleBackgroundRender() {
+    private void scheduleBackgroundRender(long requestedRevision) {
         if (!renderInFlight.compareAndSet(false, true)) return;
-        long requestedRevision = coordinator.screenRevision();
         Thread.ofVirtual().name("geometry-node-terminal-render").start(() -> {
             try {
                 RenderedSnapshot rendered = buildRenderedSnapshot(coordinator.snapshot());
@@ -375,13 +379,15 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
 
     private static RenderedSnapshot buildRenderedSnapshot(TerminalSnapshot snapshot) {
         SpannableStringBuilder text = new SpannableStringBuilder();
+        List<List<TerminalCell>> lines = snapshot.lines();
+        int cursorLine = snapshot.cursorLine();
+        int cursorColumn = snapshot.cursorColumn();
         int cursorStart = -1;
-        for (int lineIndex = 0; lineIndex < snapshot.lines().size(); lineIndex++) {
-            var line = snapshot.lines().get(lineIndex);
+        for (int lineIndex = 0; lineIndex < lines.size(); lineIndex++) {
+            List<TerminalCell> line = lines.get(lineIndex);
             TerminalStyle runStyle = null;
             int runStart = text.length();
-            int renderColumns = renderColumnCount(line, lineIndex == snapshot.cursorLine()
-                    ? snapshot.cursorColumn() : -1);
+            int renderColumns = renderColumnCount(line, lineIndex == cursorLine ? cursorColumn : -1);
             for (int column = 0; column < renderColumns; column++) {
                 TerminalCell cell = line.get(column);
                 if (cell.width() == 0) continue;
@@ -390,13 +396,13 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
                     runStart = text.length();
                 }
                 runStyle = cell.style();
-                if (lineIndex == snapshot.cursorLine() && column == snapshot.cursorColumn()) {
+                if (lineIndex == cursorLine && column == cursorColumn) {
                     cursorStart = text.length();
                 }
                 text.append(cell.text().isEmpty() ? " " : cell.text());
             }
             if (runStyle != null) applyStyle(text, runStart, text.length(), runStyle);
-            if (lineIndex + 1 < snapshot.lines().size()) text.append('\n');
+            if (lineIndex + 1 < lines.size()) text.append('\n');
         }
         if (snapshot.cursorVisible() && cursorStart >= 0 && cursorStart < text.length()) {
             text.setSpan(new BackgroundColorSpan(0xFFD4D4D4), cursorStart, cursorStart + 1,
@@ -404,7 +410,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
             text.setSpan(new ForegroundColorSpan(0xFF1E1E1E), cursorStart, cursorStart + 1,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
-        return new RenderedSnapshot(snapshot.revision(), snapshot.rows(), snapshot.lines().size(), text);
+        return new RenderedSnapshot(snapshot.revision(), snapshot.rows(), lines.size(), text);
     }
 
     private void applyRenderedSnapshot(RenderedSnapshot rendered) {
@@ -477,9 +483,8 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
             }
             case MotionEvent.ACTION_MOVE -> {
                 scheduleSelectionRelease();
-                float threshold = UIUtils.dp2px(3f);
-                if (Math.abs(event.getX() - selectionStartX) >= threshold
-                        || Math.abs(event.getY() - selectionStartY) >= threshold) {
+                if (Math.abs(event.getX() - selectionStartX) >= selectionDragThresholdPx
+                        || Math.abs(event.getY() - selectionStartY) >= selectionDragThresholdPx) {
                     selectionDragged = true;
                     followOutput = false;
                 }
@@ -589,9 +594,21 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
 
     private void updateStatus() {
         String detail = pendingError.isBlank() ? displayedState.name() : pendingError;
-        statusView.setText("PowerShell  " + detail);
-        actionView.setText(displayedState.hasActiveBackend() ? "Stop" : startRequested ? "Cancel" : "Start");
-        statusView.setTextColor(pendingError.isBlank() ? 0xFFAAAAAA : 0xFFF48771);
+        String statusText = "PowerShell  " + detail;
+        String actionText = displayedState.hasActiveBackend() ? "Stop" : startRequested ? "Cancel" : "Start";
+        int statusColor = pendingError.isBlank() ? 0xFFAAAAAA : 0xFFF48771;
+        if (!statusText.equals(displayedStatusText)) {
+            displayedStatusText = statusText;
+            statusView.setText(statusText);
+        }
+        if (!actionText.equals(displayedActionText)) {
+            displayedActionText = actionText;
+            actionView.setText(actionText);
+        }
+        if (statusColor != displayedStatusColor) {
+            displayedStatusColor = statusColor;
+            statusView.setTextColor(statusColor);
+        }
     }
 
     private static boolean isSpecialKey(int keyCode) { return mapKey(keyCode) != null; }

@@ -19,6 +19,7 @@ public final class CommandRegistry {
 
     private final Map<String, CommandSpec> commands = new LinkedHashMap<>();
     private final Map<String, CommandSpec> lookup = new LinkedHashMap<>();
+    private final List<ToolContract.ToolSpec> modelTools = new ArrayList<>();
 
     public synchronized void register(CommandSpec spec) {
         Objects.requireNonNull(spec, "spec");
@@ -28,8 +29,11 @@ public final class CommandRegistry {
         for (String name : names) {
             if (lookup.containsKey(name)) throw new IllegalArgumentException("command name or alias already registered: " + name);
         }
+        ToolContract.ToolSpec modelTool = spec.exposure() == CommandSpec.Exposure.MODEL_VISIBLE
+                ? spec.toToolSpec() : null;
         commands.put(spec.name(), spec);
         for (String name : names) lookup.put(name, spec);
+        if (modelTool != null) modelTools.add(modelTool);
     }
 
     public synchronized Optional<CommandSpec> find(String name) {
@@ -40,10 +44,7 @@ public final class CommandRegistry {
     public synchronized List<CommandSpec> commands() { return List.copyOf(commands.values()); }
 
     public synchronized List<ToolContract.ToolSpec> modelTools() {
-        return commands.values().stream()
-                .filter(spec -> spec.exposure() == CommandSpec.Exposure.MODEL_VISIBLE)
-                .map(CommandSpec::toToolSpec)
-                .toList();
+        return List.copyOf(modelTools);
     }
 
     public CommandResult execute(CommandSpec spec, JsonObject arguments, CommandInvocationContext context) {
@@ -99,13 +100,13 @@ public final class CommandRegistry {
         return normalized;
     }
 
-    public synchronized List<Suggestion> suggest(String input, CommandInvocationContext context) {
+    public List<Suggestion> suggest(String input, CommandInvocationContext context) {
         String line = input == null ? "" : input;
         CliCommandParser.PartialLine partial = CliCommandParser.parsePartial(line);
         List<String> tokens = partial.tokens();
         if (tokens.isEmpty() || (tokens.size() == 1 && !partial.trailingSeparator())) {
             String prefix = tokens.isEmpty() ? "" : tokens.getFirst().toLowerCase(Locale.ROOT);
-            return lookup.keySet().stream().filter(name -> name.startsWith(prefix)).distinct()
+            return lookupNames().stream().filter(name -> name.startsWith(prefix)).distinct()
                     .map(name -> new Suggestion(name, name + " ")).toList();
         }
 
@@ -123,6 +124,10 @@ public final class CommandRegistry {
                 .filter(value -> value.toLowerCase(Locale.ROOT).contains(prefix.toLowerCase(Locale.ROOT)))
                 .sorted(String.CASE_INSENSITIVE_ORDER).distinct()
                 .map(value -> new Suggestion(value, before + quoteIfNeeded(value) + " ")).toList();
+    }
+
+    private synchronized List<String> lookupNames() {
+        return List.copyOf(lookup.keySet());
     }
 
     private static JsonObject parseCompletedArguments(CommandSpec spec, List<String> tokens, int argumentIndex) {

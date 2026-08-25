@@ -31,6 +31,8 @@ public final class ToolContract {
         }
 
         public JsonElement inputSchema() { return definition.inputSchema(); }
+        public String name() { return definition.name(); }
+        public String description() { return definition.description(); }
     }
 
     public static AuthorizationDecision authorize(PermissionMode mode, ToolSpec tool) {

@@ -153,8 +153,6 @@ public final class ResizableDivider extends FrameLayout {
 
         firstParams.weight = nextFirst;
         secondParams.weight = totalWeight - nextFirst;
-        firstView.setLayoutParams(firstParams);
-        secondView.setLayoutParams(secondParams);
         parent.requestLayout();
     }
 

@@ -31,6 +31,7 @@ public final class McpHttpServer implements AutoCloseable {
     public static final String TOKEN_ENVIRONMENT = "GEOMETRY_NODE_MCP_TOKEN";
     public static final String URL_ENVIRONMENT = "GEOMETRY_NODE_MCP_URL";
     private static final Gson GSON = new Gson();
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final Object HOST_LOCK = new Object();
     private static SharedHost sharedHost;
 
@@ -96,7 +97,7 @@ public final class McpHttpServer implements AutoCloseable {
 
         private void register(String token, McpRequestDispatcher dispatcher) {
             if (closed.get()) throw new IllegalStateException("MCP host is closed");
-            if (bindings.putIfAbsent(token, new Binding(dispatcher)) != null) {
+            if (bindings.putIfAbsent(token, new Binding(token, dispatcher)) != null) {
                 throw new IllegalStateException("MCP token collision");
             }
         }
@@ -164,9 +165,9 @@ public final class McpHttpServer implements AutoCloseable {
             String authorization = header(exchange, "Authorization");
             if (authorization == null || !authorization.startsWith("Bearer ")) return null;
             byte[] candidate = authorization.substring(7).getBytes(StandardCharsets.UTF_8);
-            for (var entry : bindings.entrySet()) {
-                if (MessageDigest.isEqual(candidate, entry.getKey().getBytes(StandardCharsets.UTF_8))) {
-                    return entry.getValue();
+            for (Binding binding : bindings.values()) {
+                if (MessageDigest.isEqual(candidate, binding.tokenBytes)) {
+                    return binding;
                 }
             }
             return null;
@@ -189,6 +190,7 @@ public final class McpHttpServer implements AutoCloseable {
         JsonObject request;
         try {
             request = GSON.fromJson(new String(body, StandardCharsets.UTF_8), JsonObject.class);
+            if (request == null) throw new JsonParseException("request must be a JSON object");
         } catch (JsonParseException | IllegalStateException malformed) {
             sendJson(exchange, 400, jsonRpcError(-32700, "Parse error"), "");
             return;
@@ -242,7 +244,7 @@ public final class McpHttpServer implements AutoCloseable {
 
     private static byte[] readBounded(InputStream input) throws IOException, RequestTooLargeException {
         byte[] buffer = new byte[8 * 1024];
-        java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+        java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream(buffer.length);
         int read;
         while ((read = input.read(buffer)) >= 0) {
             if (read == 0) continue;
@@ -289,15 +291,17 @@ public final class McpHttpServer implements AutoCloseable {
 
     private static String randomSecret(int bytes) {
         byte[] value = new byte[bytes];
-        new SecureRandom().nextBytes(value);
+        SECURE_RANDOM.nextBytes(value);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(value);
     }
 
     private static final class Binding {
+        private final byte[] tokenBytes;
         private final McpRequestDispatcher dispatcher;
         private final Semaphore requests = new Semaphore(8);
 
-        private Binding(McpRequestDispatcher dispatcher) {
+        private Binding(String token, McpRequestDispatcher dispatcher) {
+            this.tokenBytes = token.getBytes(StandardCharsets.UTF_8);
             this.dispatcher = dispatcher;
         }
     }

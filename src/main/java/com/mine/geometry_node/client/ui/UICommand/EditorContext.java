@@ -6,11 +6,12 @@ import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
-import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
+import com.mine.geometry_node.core.node.group.GroupNodeTypes;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * 编辑器全局上下文
@@ -43,16 +44,16 @@ public class EditorContext {
     public boolean isInsideGroupScope() { return mCurrentGroupNode != null; }
     public CommandManager getCommandManager() { return mCommandManager; }
     public GraphController getGraphController() { return mGraphController; }
-    public List<EditorListener> getListeners() { return mListeners; }
-
     public boolean enterGroupScope(NodeData groupNode) {
         if (groupNode == null || !groupNode.isGroupNode()) {
             return false;
         }
 
-        String before = GraphJsonIO.toJson(mGraph);
+        boolean boundariesMissing = groupNode.subNodes == null
+                || !groupNode.subNodes.containsKey(GroupNodeTypes.GROUP_IN_ID)
+                || !groupNode.subNodes.containsKey(GroupNodeTypes.GROUP_OUT_ID);
         GroupNodeFactory.ensureBoundaryNodes(groupNode);
-        if (!before.equals(GraphJsonIO.toJson(mGraph))) {
+        if (boundariesMissing) {
             mCommandManager.recordExternalMutation();
         }
         mCurrentGroupNode = groupNode;
@@ -127,39 +128,40 @@ public class EditorContext {
     // --- 触发事件的方法 (由 Controller 调用) ---
 
     public void notifyNodeAdded(NodeData node) {
-        for (EditorListener l : mListeners) l.onNodeAdded(node);
+        notifyListeners("adding node", listener -> listener.onNodeAdded(node));
     }
 
     public void notifyNodeRemoved(String nodeId) {
-        for (EditorListener l : mListeners) l.onNodeRemoved(nodeId);
+        notifyListeners("removing node", listener -> listener.onNodeRemoved(nodeId));
     }
 
     public void notifySelectionChanged(List<String> selectedIds) {
-        for (EditorListener l : mListeners) l.onSelectionChanged(selectedIds);
+        List<String> snapshot = selectedIds == null ? List.of() : List.copyOf(selectedIds);
+        notifyListeners("changing selection", listener -> listener.onSelectionChanged(snapshot));
     }
 
     public void notifyNodeMoved(String nodeId, float x, float y) {
-        for (EditorListener l : mListeners) l.onNodeMoved(nodeId, x, y);
+        notifyListeners("moving node", listener -> listener.onNodeMoved(nodeId, x, y));
     }
 
     public void notifyConnectionAdded(String outN, String outP, String inN, String inP) {
-        for (EditorListener l : mListeners) l.onConnectionAdded(outN, outP, inN, inP);
+        notifyListeners("adding connection", listener -> listener.onConnectionAdded(outN, outP, inN, inP));
     }
 
     public void notifyConnectionRemoved(String outN, String outP, String inN, String inP) {
-        for (EditorListener l : mListeners) l.onConnectionRemoved(outN, outP, inN, inP);
+        notifyListeners("removing connection", listener -> listener.onConnectionRemoved(outN, outP, inN, inP));
     }
 
     public void notifyNodeStructureChanged(NodeData node) {
-        for (EditorListener l : mListeners) l.onNodeStructureChanged(node);
+        notifyListeners("changing node structure", listener -> listener.onNodeStructureChanged(node));
     }
 
     public void notifyGraphMetadataChanged() {
-        for (EditorListener l : mListeners) l.onGraphMetadataChanged();
+        notifyListeners("changing graph metadata", EditorListener::onGraphMetadataChanged);
     }
 
     public void notifyGraphConnectionsRebuildRequested() {
-        for (EditorListener l : mListeners) l.onGraphConnectionsRebuildRequested();
+        notifyListeners("rebuilding graph connections", EditorListener::onGraphConnectionsRebuildRequested);
     }
 
     public void replaceGraphState(NodeGraph replacement) {
@@ -173,14 +175,7 @@ public class EditorContext {
         mGraph.nodes = replacement.nodes;
         mGraph.frames = replacement.frames;
         restoreScope(groupPath);
-        for (EditorListener listener : List.copyOf(mListeners)) {
-            try {
-                listener.onGraphReloaded();
-            } catch (RuntimeException failure) {
-                GeometryNode.LOGGER.error("Editor listener failed while reloading graph: listener={}",
-                        listener.getClass().getName(), failure);
-            }
-        }
+        notifyListeners("reloading graph", EditorListener::onGraphReloaded);
     }
 
     private List<String> currentGroupPath() {
@@ -208,10 +203,40 @@ public class EditorContext {
     }
 
     public void notifyExecutionConnectionAdded(String outN, String outP, String inN, String inP) {
-        for (EditorListener l : mListeners) l.onExecutionConnectionAdded(outN, outP, inN, inP);
+        notifyListeners("adding execution connection",
+                listener -> listener.onExecutionConnectionAdded(outN, outP, inN, inP));
     }
 
     public void notifyExecutionConnectionRemoved(String outN, String outP, String inN, String inP) {
-        for (EditorListener l : mListeners) l.onExecutionConnectionRemoved(outN, outP, inN, inP);
+        notifyListeners("removing execution connection",
+                listener -> listener.onExecutionConnectionRemoved(outN, outP, inN, inP));
+    }
+
+    public void notifyFrameAdded(FrameData frame) {
+        notifyListeners("adding frame", listener -> listener.onFrameAdded(frame));
+    }
+
+    public void notifyFrameRemoved(String frameId) {
+        notifyListeners("removing frame", listener -> listener.onFrameRemoved(frameId));
+    }
+
+    public void notifyFrameBoundsUpdated(String frameId, float x, float y, float width, float height) {
+        notifyListeners("updating frame bounds",
+                listener -> listener.onFrameBoundsUpdated(frameId, x, y, width, height));
+    }
+
+    public void notifyFrameTitleChanged(String frameId, String title) {
+        notifyListeners("changing frame title", listener -> listener.onFrameTitleChanged(frameId, title));
+    }
+
+    private void notifyListeners(String event, Consumer<EditorListener> notification) {
+        for (EditorListener listener : List.copyOf(mListeners)) {
+            try {
+                notification.accept(listener);
+            } catch (RuntimeException failure) {
+                GeometryNode.LOGGER.error("Editor listener failed while {}: listener={}",
+                        event, listener.getClass().getName(), failure);
+            }
+        }
     }
 }

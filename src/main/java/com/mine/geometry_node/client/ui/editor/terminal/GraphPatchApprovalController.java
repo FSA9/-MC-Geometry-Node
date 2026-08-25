@@ -82,9 +82,8 @@ final class GraphPatchApprovalController implements GraphPatchApprovalPresenter,
             created = new PendingApproval(summary.approvalId(), decision, handle);
             pending = created;
             PendingApproval mountedApproval = created;
-            GraphPatchApprovalDialog mountedDialog = dialog;
             decision.whenComplete((outcome, failure) ->
-                    mountedDialog.post(() -> finish(mountedApproval, outcome, failure)));
+                    scheduleFinish(mountedApproval, outcome, failure));
             GeometryNode.LOGGER.info("Graph approval shown: approval={}, run={}, modalCount={}",
                     summary.approvalId(), runId, layerManager.modalCount());
         } catch (RuntimeException failure) {
@@ -110,14 +109,18 @@ final class GraphPatchApprovalController implements GraphPatchApprovalPresenter,
         pending = null;
         if (active != null) {
             active.decision.complete(ApprovalOutcome.CANCELLED);
-            active.handle.requestClose(OverlayCloseReason.PROGRAMMATIC);
+            if (active.handle.isOpen()) {
+                active.handle.requestClose(OverlayCloseReason.PROGRAMMATIC);
+            }
         }
         layerManager = null;
     }
 
     private void finish(PendingApproval approval, ApprovalOutcome outcome, Throwable failure) {
         if (pending == approval) pending = null;
-        approval.handle.requestClose(OverlayCloseReason.PROGRAMMATIC);
+        if (approval.handle.isOpen()) {
+            approval.handle.requestClose(OverlayCloseReason.PROGRAMMATIC);
+        }
         Runnable restore = focusRestorer;
         if (restore != null) {
             try {
@@ -137,6 +140,21 @@ final class GraphPatchApprovalController implements GraphPatchApprovalPresenter,
             GeometryNode.LOGGER.info("Graph approval completed: approval={}, run={}, outcome={}, modalCount={}",
                     approval.approvalId, runId, outcome,
                     layerManager == null ? -1 : layerManager.modalCount());
+        }
+    }
+
+    private void scheduleFinish(PendingApproval approval, ApprovalOutcome outcome, Throwable failure) {
+        Runnable finishTask = () -> finish(approval, outcome, failure);
+        try {
+            if (Core.isOnUiThread()) {
+                finishTask.run();
+            } else if (!Core.getUiHandlerAsync().post(finishTask)) {
+                GeometryNode.LOGGER.warn("Graph approval finish queue unavailable: approval={}, run={}",
+                        approval.approvalId, runId);
+            }
+        } catch (RuntimeException schedulingFailure) {
+            GeometryNode.LOGGER.warn("Failed to schedule graph approval finish: approval={}, run={}",
+                    approval.approvalId, runId, schedulingFailure);
         }
     }
 

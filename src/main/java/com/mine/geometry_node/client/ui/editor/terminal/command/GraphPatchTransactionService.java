@@ -54,11 +54,13 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /** P5 dry-run, approval, revision revalidation and one-command commit pipeline. */
 public final class GraphPatchTransactionService {
     private static final Duration APPROVAL_TIMEOUT = Duration.ofMinutes(5);
+    private static final Duration UI_HANDOFF_TIMEOUT = Duration.ofSeconds(30);
     private static final int MAX_IDEMPOTENCY_KEYS = 1_024;
     private static final Gson GSON = new Gson();
 
@@ -81,23 +83,21 @@ public final class GraphPatchTransactionService {
         cancellation = cancellation == null ? CommandInvocationContext.CancellationToken.NONE : cancellation;
         try {
             String requestedHash = sha256(GraphPatchCodec.toJson(patch));
-            synchronized (completed) {
-                CompletedPatch previous = completed.get(patch.idempotencyKey());
-                if (previous != null) {
-                    return previous.patchHash.equals(requestedHash)
-                            ? previous.result
-                            : CommandResult.failure("IDEMPOTENCY_CONFLICT", "idempotency_key 已用于不同 GraphPatch");
-                }
-                if (completed.size() >= MAX_IDEMPOTENCY_KEYS) {
-                    return CommandResult.failure("IDEMPOTENCY_LIMIT_REACHED",
-                            "当前 PowerShell Run 的 GraphPatch 幂等键已达到上限，请重启 Run");
-                }
+            CompletedPatch previous = completed.get(patch.idempotencyKey());
+            if (previous != null) {
+                return previous.patchHash.equals(requestedHash)
+                        ? previous.result
+                        : CommandResult.failure("IDEMPOTENCY_CONFLICT", "idempotency_key 已用于不同 GraphPatch");
             }
-            PlanSnapshot snapshot = onUi(() -> capturePlanSnapshot(patch)).get();
-            PlannedPatch plan = plan(patch, snapshot);
+            if (completed.size() >= MAX_IDEMPOTENCY_KEYS) {
+                return CommandResult.failure("IDEMPOTENCY_LIMIT_REACHED",
+                        "当前 PowerShell Run 的 GraphPatch 幂等键已达到上限，请重启 Run");
+            }
+            PlanSnapshot snapshot = awaitUi(onUi(() -> capturePlanSnapshot(patch)), cancellation);
+            PlannedPatch plan = plan(patch, requestedHash, snapshot);
             if (cancellation.isCancelled()) return CommandResult.failure("CANCELLED", "GraphPatch 在审批前已取消");
             CompletionStage<GraphPatchApprovalPresenter.ApprovalOutcome> decision =
-                    onUi(() -> approvalPresenter.requestApproval(plan.summary)).get();
+                    awaitUi(onUi(() -> approvalPresenter.requestApproval(plan.summary)), cancellation);
             ApprovalDecision approved = awaitDecision(decision.toCompletableFuture(), cancellation);
             if (approved == ApprovalDecision.CANCELLED) return CommandResult.failure("CANCELLED", "GraphPatch 在审批期间被取消");
             if (approved == ApprovalDecision.TIMED_OUT) return CommandResult.failure("APPROVAL_TIMEOUT", "GraphPatch 原生审批已超时");
@@ -106,11 +106,9 @@ public final class GraphPatchTransactionService {
             if (approved == ApprovalDecision.UI_UNAVAILABLE) return CommandResult.failure("APPROVAL_UI_UNAVAILABLE", "无法显示 GraphPatch 原生审批窗口");
             if (approved == ApprovalDecision.ALREADY_PENDING) return CommandResult.failure("APPROVAL_ALREADY_PENDING", "当前 Terminal Run 已有 GraphPatch 等待审批");
             CommandInvocationContext.CancellationToken commitCancellation = cancellation;
-            CommandResult result = onUi(() -> commit(plan, commitCancellation)).get();
+            CommandResult result = awaitUi(onUi(() -> commit(plan, commitCancellation)), cancellation);
             if (result.ok()) {
-                synchronized (completed) {
-                    completed.put(patch.idempotencyKey(), new CompletedPatch(plan.patchHash, result));
-                }
+                completed.put(patch.idempotencyKey(), new CompletedPatch(plan.patchHash, result));
             }
             return result;
         } catch (PatchFailure failure) {
@@ -134,7 +132,7 @@ public final class GraphPatchTransactionService {
         return new PlanSnapshot(canonicalGraphJson(session.editorContext.getGraph()), registryAccess());
     }
 
-    private PlannedPatch plan(GraphPatch patch, PlanSnapshot snapshot) {
+    private PlannedPatch plan(GraphPatch patch, String patchHash, PlanSnapshot snapshot) {
         if (patch.approvalId() != null) throw fail("APPROVAL_ID_FORBIDDEN", "approval_id 由 GeometryNode 生成，调用方不得提供");
         List<GraphPatchContractValidator.Diagnostic> contract = GraphPatchContractValidator.validate(patch);
         if (!contract.isEmpty()) throw fail(contract.getFirst().code(), contract.getFirst().message());
@@ -164,7 +162,6 @@ public final class GraphPatchTransactionService {
         } catch (RuntimeException failure) {
             throw fail("GRAPH_COMPILE_FAILED", "GraphPatch dry-run 编译失败: " + safeMessage(failure));
         }
-        String patchHash = sha256(GraphPatchCodec.toJson(patch));
         String approvalId = UUID.randomUUID().toString();
         List<String> actualDiff = graphDiff(beforeJson, afterJson);
         actualDiff.add("Undo 历史: 批准后本次事务成为新的历史基线，较早的 Undo/Redo 记录将清空");
@@ -267,8 +264,7 @@ public final class GraphPatchTransactionService {
         }
         if (cancellation.isCancelled()) throw fail("CANCELLED", "GraphPatch 在提交前被取消");
         String changeId = UUID.randomUUID().toString();
-        session.editorContext.getCommandManager().clearHistory();
-        boolean executed = session.editorContext.getCommandManager().execute(new CmdReplaceGraphState(
+        boolean executed = session.editorContext.getCommandManager().executeAsNewBaseline(new CmdReplaceGraphState(
                 session.editorContext, plan.beforeJson, plan.afterJson, changeId));
         if (!executed) throw fail("PATCH_NO_CHANGES", "GraphPatch 提交未产生变化");
         GeometryNode.LOGGER.info("Graph patch committed: approval={}, change={}, revision={}, operations={}",
@@ -454,24 +450,39 @@ public final class GraphPatchTransactionService {
         }
     }
 
-    private static <T> CompletableFuture<T> onUi(Supplier<T> action) {
-        CompletableFuture<T> result = new CompletableFuture<>();
-        Runnable task = () -> {
-            try { result.complete(action.get()); }
-            catch (Throwable failure) { result.completeExceptionally(failure); }
-        };
+    private static <T> UiHandoff<T> onUi(Supplier<T> action) {
+        UiHandoff<T> handoff = new UiHandoff<>();
+        Runnable task = () -> handoff.run(action);
         if (Core.isOnUiThread()) {
             task.run();
         } else {
             try {
                 if (!Core.getUiHandlerAsync().post(task)) {
-                    result.completeExceptionally(new IllegalStateException("ModernUI queue is unavailable"));
+                    handoff.failPending(new IllegalStateException("ModernUI queue is unavailable"));
                 }
             } catch (RuntimeException failure) {
-                result.completeExceptionally(failure);
+                handoff.failPending(failure);
             }
         }
-        return result;
+        return handoff;
+    }
+
+    private static <T> T awaitUi(UiHandoff<T> handoff,
+                                 CommandInvocationContext.CancellationToken cancellation)
+            throws InterruptedException, ExecutionException {
+        long deadline = System.nanoTime() + UI_HANDOFF_TIMEOUT.toNanos();
+        while (true) {
+            if (cancellation.isCancelled() && handoff.cancelPending()) {
+                throw fail("CANCELLED", "GraphPatch 等待编辑器 UI 时已取消");
+            }
+            try {
+                return handoff.future.get(100, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException ignored) {
+            }
+            if (System.nanoTime() >= deadline && handoff.cancelPending()) {
+                throw fail("UI_UNAVAILABLE", "编辑器 UI 响应超时");
+            }
+        }
     }
 
     private static RegistryAccess registryAccess() {
@@ -559,6 +570,33 @@ public final class GraphPatchTransactionService {
                                 GraphPatchApprovalPresenter.ApprovalSummary summary) {}
     private record PlanSnapshot(String beforeJson, RegistryAccess registryAccess) {}
     private record CompletedPatch(String patchHash, CommandResult result) {}
+    private enum UiHandoffState { PENDING, RUNNING, COMPLETED, CANCELLED }
+    private static final class UiHandoff<T> {
+        private final CompletableFuture<T> future = new CompletableFuture<>();
+        private final AtomicReference<UiHandoffState> state = new AtomicReference<>(UiHandoffState.PENDING);
+
+        private void run(Supplier<T> action) {
+            if (!state.compareAndSet(UiHandoffState.PENDING, UiHandoffState.RUNNING)) return;
+            try {
+                future.complete(action.get());
+            } catch (Throwable failure) {
+                future.completeExceptionally(failure);
+            } finally {
+                state.set(UiHandoffState.COMPLETED);
+            }
+        }
+
+        private boolean cancelPending() {
+            if (!state.compareAndSet(UiHandoffState.PENDING, UiHandoffState.CANCELLED)) return false;
+            future.cancel(false);
+            return true;
+        }
+
+        private void failPending(Throwable failure) {
+            if (!state.compareAndSet(UiHandoffState.PENDING, UiHandoffState.COMPLETED)) return;
+            future.completeExceptionally(failure);
+        }
+    }
     private enum ApprovalDecision {
         APPROVED, REJECTED, DISMISSED, CANCELLED, TIMED_OUT, UI_UNAVAILABLE, ALREADY_PENDING
     }

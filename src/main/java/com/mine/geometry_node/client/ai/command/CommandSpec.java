@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /** Single source for CLI metadata, validation, completion, handlers, and model tool projection. */
 public record CommandSpec(
@@ -29,6 +30,8 @@ public record CommandSpec(
         Exposure exposure,
         CommandHandler handler
 ) {
+    private static final Pattern NAME_PATTERN = Pattern.compile("[a-z][a-z0-9_]{0,63}");
+
     public enum Exposure { MODEL_VISIBLE, CLI_ONLY }
 
     @FunctionalInterface
@@ -50,9 +53,10 @@ public record CommandSpec(
         exposure = Objects.requireNonNull(exposure, "exposure");
         handler = Objects.requireNonNull(handler, "handler");
 
-        requireValidSchema(buildInputSchema(arguments), "input");
+        JsonObject inputSchema = buildInputSchema(arguments);
+        requireValidSchema(inputSchema, "input");
         requireValidSchema(outputSchema, "output");
-        new ToolContract.ToolSpec(toolDefinition(name, description, buildInputSchema(arguments)), effect, riskLevel);
+        new ToolContract.ToolSpec(toolDefinition(name, description, inputSchema), effect, riskLevel);
     }
 
     @Override public JsonObject outputSchema() { return outputSchema.deepCopy(); }
@@ -111,7 +115,7 @@ public record CommandSpec(
     static String normalizeName(String name) {
         if (name == null) throw new IllegalArgumentException("command name cannot be null");
         String normalized = name.toLowerCase(Locale.ROOT);
-        if (!normalized.matches("[a-z][a-z0-9_]{0,63}")) throw new IllegalArgumentException("invalid command name: " + name);
+        if (!NAME_PATTERN.matcher(normalized).matches()) throw new IllegalArgumentException("invalid command name: " + name);
         return normalized;
     }
 

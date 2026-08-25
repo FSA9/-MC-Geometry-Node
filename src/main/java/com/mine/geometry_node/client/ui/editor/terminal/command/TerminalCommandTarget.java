@@ -169,7 +169,7 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
     }
 
     private TerminalGraphQueryService queries() {
-        return new TerminalGraphQueryService(session);
+        return new TerminalGraphQueryService(session.editorContext.getCurrentGraph());
     }
 
     private static CommandResult graphRequired() {

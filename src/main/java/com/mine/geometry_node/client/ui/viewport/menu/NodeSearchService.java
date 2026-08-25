@@ -36,7 +36,11 @@ public final class NodeSearchService {
     public static Page search(Collection<NodeDef> definitions, String query, int offset, int limit) {
         String normalizedQuery = normalize(query);
         String compactQuery = compact(normalizedQuery);
-        List<Match> matches = new ArrayList<>();
+        int requestedOffset = Math.max(0, offset);
+        int safeLimit = Math.max(0, limit);
+        long requestedEnd = (long) requestedOffset + safeLimit;
+        List<Match> pageItems = new ArrayList<>(Math.min(safeLimit, 64));
+        int total = 0;
         if (definitions != null) {
             for (NodeDef definition : definitions) {
                 if (definition == null) continue;
@@ -45,15 +49,14 @@ public final class NodeSearchService {
                 String comment = NodeCommentTextBuilder.build(definition);
                 if (normalizedQuery.isEmpty() || matchesNormalized(normalizedQuery, compactQuery,
                         displayName, englishName, definition.typeId(), comment)) {
-                    matches.add(new Match(definition, displayName, englishName, comment));
+                    if (total >= requestedOffset && total < requestedEnd) {
+                        pageItems.add(new Match(definition, displayName, englishName, comment));
+                    }
+                    total++;
                 }
             }
         }
-        int requestedOffset = Math.max(0, offset);
-        int safeOffset = Math.min(requestedOffset, matches.size());
-        int safeLimit = Math.max(0, limit);
-        int end = (int) Math.min(matches.size(), (long) safeOffset + safeLimit);
-        return new Page(matches.subList(safeOffset, end), requestedOffset, safeLimit, matches.size());
+        return new Page(pageItems, requestedOffset, safeLimit, total);
     }
 
     public static boolean matches(String query, String... candidates) {

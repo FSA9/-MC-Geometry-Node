@@ -212,13 +212,16 @@ public final class GraphPatchCodec {
         if (!parent.has(name)) return Map.of();
         JsonObject source = object(parent, name);
         Map<String, JsonElement> values = new LinkedHashMap<>();
-        for (String key : source.keySet()) values.put(key, source.get(key));
+        for (Map.Entry<String, JsonElement> entry : source.entrySet()) {
+            values.put(entry.getKey(), entry.getValue());
+        }
         return values;
     }
 
     private static JsonElement required(JsonObject object, String name) {
-        if (!object.has(name) || object.get(name).isJsonNull()) throw new JsonParseException("missing field: " + name);
-        return object.get(name);
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) throw new JsonParseException("missing field: " + name);
+        return value;
     }
 
     private static JsonObject object(JsonObject parent, String name) {
@@ -234,7 +237,7 @@ public final class GraphPatchCodec {
     }
 
     private static JsonElement optional(JsonObject object, String name) {
-        return object.has(name) ? object.get(name) : null;
+        return object.get(name);
     }
 
     private static String string(JsonObject object, String name) {
@@ -244,8 +247,12 @@ public final class GraphPatchCodec {
     }
 
     private static String optionalString(JsonObject object, String name) {
-        if (!object.has(name) || object.get(name).isJsonNull()) return null;
-        return string(object, name);
+        JsonElement value = object.get(name);
+        if (value == null || value.isJsonNull()) return null;
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+            throw new JsonParseException(name + " must be a string");
+        }
+        return value.getAsString();
     }
 
     private static double number(JsonObject object, String name) {
@@ -275,7 +282,11 @@ public final class GraphPatchCodec {
     }
 
     private static void requireOnly(JsonObject object, String... allowed) {
-        List<String> names = List.of(allowed);
-        for (String key : object.keySet()) if (!names.contains(key)) throw new JsonParseException("unknown field: " + key);
+        keys: for (String key : object.keySet()) {
+            for (String name : allowed) {
+                if (name.equals(key)) continue keys;
+            }
+            throw new JsonParseException("unknown field: " + key);
+        }
     }
 }

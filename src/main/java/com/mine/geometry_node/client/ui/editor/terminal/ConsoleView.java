@@ -21,6 +21,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.LogCallback {
+    private static final int MAX_VISIBLE_SUGGESTIONS = 8;
+    private static final int VIEW_FOCUS_DOWN = 130;
 
     private final LinearLayout mLogContainer;
     private final EditText mInputBox;
@@ -28,7 +30,10 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
 
     // 补全列表容器与状态
     private final LinearLayout mSuggestionContainer;
+    private final List<TextView> mSuggestionViews = new ArrayList<>(MAX_VISIBLE_SUGGESTIONS);
+    private final TextView mMoreSuggestionsView;
     private final List<CommandRegistry.Suggestion> mCurrentSuggestions = new ArrayList<>();
+    private boolean mLogScrollQueued;
     private int mSuggestionIndex = -1;
 
     // 历史记录状态
@@ -80,6 +85,19 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         suggLp.bottomMargin = UIUtils.dp2pxInt(32f);
         suggLp.leftMargin = UIUtils.dp2pxInt(80f);
         addView(mSuggestionContainer, suggLp);
+        for (int i = 0; i < MAX_VISIBLE_SUGGESTIONS; i++) {
+            TextView suggestionView = UIUtils.createLockedTextView(context, "", 13f, 0xFFCCCCCC);
+            suggestionView.setPadding(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(6),
+                    UIUtils.dp2pxInt(24), UIUtils.dp2pxInt(6));
+            suggestionView.setVisibility(View.GONE);
+            mSuggestionViews.add(suggestionView);
+            mSuggestionContainer.addView(suggestionView);
+        }
+        mMoreSuggestionsView = UIUtils.createLockedTextView(context, "... 更多匹配项", 11f, 0xFF888888);
+        mMoreSuggestionsView.setPadding(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(4),
+                UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(4));
+        mMoreSuggestionsView.setVisibility(View.GONE);
+        mSuggestionContainer.addView(mMoreSuggestionsView);
 
         // 3. 事件监听
         mInputBox.setOnKeyListener((v, keyCode, event) -> {
@@ -182,31 +200,26 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
     }
 
     private void renderSuggestions() {
-        mSuggestionContainer.removeAllViews();
-        Context context = getContext();
-
         // 为了防止补全列表过长溢出屏幕，最多显示 8 个候选项
-        int startIndex = Math.max(0, mSuggestionIndex - 7);
-        int endIndex = Math.min(mCurrentSuggestions.size(), startIndex + 8);
+        int startIndex = Math.max(0, mSuggestionIndex - (MAX_VISIBLE_SUGGESTIONS - 1));
+        int endIndex = Math.min(mCurrentSuggestions.size(), startIndex + MAX_VISIBLE_SUGGESTIONS);
 
-        for (int i = startIndex; i < endIndex; i++) {
-            boolean isSelected = (i == mSuggestionIndex);
-            TextView tv = UIUtils.createLockedTextView(context, mCurrentSuggestions.get(i).displayText(), 13f,
-                    isSelected ? 0xFFFFFFFF : 0xFFCCCCCC);
-            tv.setPadding(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(24), UIUtils.dp2pxInt(6));
-
-            if (isSelected) {
-                tv.setBackground(createColorDrawable(0xFF0055AA));
+        for (int viewIndex = 0; viewIndex < MAX_VISIBLE_SUGGESTIONS; viewIndex++) {
+            TextView suggestionView = mSuggestionViews.get(viewIndex);
+            int i = startIndex + viewIndex;
+            if (i >= endIndex) {
+                suggestionView.setVisibility(View.GONE);
+                continue;
             }
-            mSuggestionContainer.addView(tv);
+            boolean isSelected = (i == mSuggestionIndex);
+            suggestionView.setText(mCurrentSuggestions.get(i).displayText());
+            suggestionView.setTextColor(isSelected ? 0xFFFFFFFF : 0xFFCCCCCC);
+            suggestionView.setBackground(isSelected ? createColorDrawable(0xFF0055AA) : null);
+            suggestionView.setVisibility(View.VISIBLE);
         }
 
-        // 提示还有更多项
-        if (mCurrentSuggestions.size() > 8) {
-            TextView moreTv = UIUtils.createLockedTextView(context, "... 更多匹配项", 11f, 0xFF888888);
-            moreTv.setPadding(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(4), UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(4));
-            mSuggestionContainer.addView(moreTv);
-        }
+        mMoreSuggestionsView.setVisibility(
+                mCurrentSuggestions.size() > MAX_VISIBLE_SUGGESTIONS ? View.VISIBLE : View.GONE);
     }
 
     // --- 执行与日志输出 ---
@@ -235,7 +248,13 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         tv.setTextIsSelectable(true);
 
         mLogContainer.addView(tv);
-        mScrollView.post(() -> mScrollView.fullScroll(View_FOCUS_DOWN));
+        if (!mLogScrollQueued) {
+            mLogScrollQueued = true;
+            mScrollView.post(() -> {
+                mLogScrollQueued = false;
+                mScrollView.fullScroll(VIEW_FOCUS_DOWN);
+            });
+        }
     }
 
     @Override
@@ -252,6 +271,4 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         drawable.setColor(color);
         return drawable;
     }
-
-    private static final int View_FOCUS_DOWN = 130;
 }

@@ -19,12 +19,12 @@ public class CmdChangeParent implements ICommand {
 
     public CmdChangeParent(GraphController controller, List<String> elementIds, boolean isNode, String newParentFrameId) {
         this.mController = controller;
-        this.mElementIds = elementIds;
+        this.mElementIds = List.copyOf(elementIds);
         this.mIsNode = isNode;
         this.mNewParentFrameId = newParentFrameId;
 
         // 记录修改前的 parentFrame
-        for (String id : elementIds) {
+        for (String id : mElementIds) {
             if (isNode) {
                 NodeData node = controller.getContext().getCurrentGraph().getNode(id);
                 if (node != null) mOldParents.put(id, node.parentFrame);

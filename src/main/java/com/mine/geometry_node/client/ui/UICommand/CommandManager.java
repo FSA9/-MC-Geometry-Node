@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.UICommand;
 
+import com.mine.geometry_node.GeometryNode;
+
 import java.util.LinkedList;
 import java.util.Objects;
 import java.util.UUID;
@@ -37,9 +39,10 @@ public class CommandManager {
         if (command == null || !command.canExecute()) {
             return false;
         }
+        requireRevisionCapacity();
+        HistoryEntry entry = new HistoryEntry(command, changeId(command));
         command.execute();
 
-        HistoryEntry entry = new HistoryEntry(command, changeId(command));
         mUndoStack.push(entry);
 
         if (mUndoStack.size() > MAX_HISTORY_STEPS) {
@@ -51,10 +54,30 @@ public class CommandManager {
         return true;
     }
 
+    /**
+     * Executes a command and, only after it succeeds, replaces older undo/redo history with it.
+     */
+    public boolean executeAsNewBaseline(ICommand command) {
+        if (command == null || !command.canExecute()) {
+            return false;
+        }
+        requireRevisionCapacity();
+        HistoryEntry entry = new HistoryEntry(command, changeId(command));
+        command.execute();
+
+        mUndoStack.clear();
+        mRedoStack.clear();
+        mUndoStack.push(entry);
+        recordMutation(entry.changeId());
+        return true;
+    }
+
     public void undo() {
         if (!mUndoStack.isEmpty()) {
-            HistoryEntry entry = mUndoStack.pop();
+            requireRevisionCapacity();
+            HistoryEntry entry = mUndoStack.peek();
             entry.command().undo();
+            mUndoStack.pop();
             mRedoStack.push(entry);
             recordMutation(entry.changeId());
         }
@@ -66,8 +89,9 @@ public class CommandManager {
             if (!entry.command().canExecute()) {
                 return;
             }
-            mRedoStack.pop();
+            requireRevisionCapacity();
             entry.command().execute();
+            mRedoStack.pop();
             mUndoStack.push(entry);
             recordMutation(entry.changeId());
         }
@@ -80,23 +104,31 @@ public class CommandManager {
 
     /** Records a mutation performed by legacy initialization code that has no reversible command. */
     public void recordExternalMutation() {
+        requireRevisionCapacity();
         mRedoStack.clear();
         recordMutation(UUID.randomUUID().toString());
     }
 
     private void markAsDirty() {
         if (mDirtyListener != null) {
-            mDirtyListener.run();
+            try {
+                mDirtyListener.run();
+            } catch (RuntimeException failure) {
+                GeometryNode.LOGGER.error("Command dirty listener failed", failure);
+            }
         }
     }
 
     private void recordMutation(String changeId) {
-        if (mRevision == Long.MAX_VALUE) {
-            throw new IllegalStateException("graph revision overflow");
-        }
         mRevision++;
         mLastChangeId = Objects.requireNonNullElse(changeId, "");
         markAsDirty();
+    }
+
+    private void requireRevisionCapacity() {
+        if (mRevision == Long.MAX_VALUE) {
+            throw new IllegalStateException("graph revision overflow");
+        }
     }
 
     private static String changeId(ICommand command) {

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ai.command;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -56,8 +57,15 @@ public record CommandResult(
         json.addProperty("code", code);
         json.addProperty("message", message);
         json.add("data", data());
-        json.add("diagnostics", com.google.gson.JsonParser.parseString(
-                new com.google.gson.Gson().toJson(diagnostics)));
+        JsonArray diagnosticArray = new JsonArray();
+        for (Diagnostic diagnostic : diagnostics) {
+            JsonObject value = new JsonObject();
+            value.addProperty("code", diagnostic.code());
+            value.addProperty("message", diagnostic.message());
+            if (diagnostic.path() != null) value.addProperty("path", diagnostic.path());
+            diagnosticArray.add(value);
+        }
+        json.add("diagnostics", diagnosticArray);
         if (revision != null) json.addProperty("revision", revision);
         if (changeId != null) json.addProperty("change_id", changeId);
         return json;

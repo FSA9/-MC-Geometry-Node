@@ -138,6 +138,22 @@ public class NodeData {
         return portConfig;
     }
 
+    /** Restores collection and coordinate invariants after document deserialization. */
+    public void restoreDocumentDefaults() {
+        if (uiPos == null || uiPos.length < 2) {
+            float[] restoredPosition = new float[2];
+            if (uiPos != null) {
+                System.arraycopy(uiPos, 0, restoredPosition, 0, uiPos.length);
+            }
+            uiPos = restoredPosition;
+        }
+        if (inputs == null) inputs = new HashMap<>();
+        if (execOutputs == null) execOutputs = new HashMap<>();
+        if (outputs == null) outputs = new HashMap<>();
+        if (connectedInputs == null) connectedInputs = new HashSet<>();
+        ensurePortConfig();
+    }
+
     public Map<String, PortConfig> getPortConfigMap(String category) {
         PortsConfig config = ensurePortConfig();
         return switch (category) {
@@ -187,8 +203,9 @@ public class NodeData {
         if (list != null) {
             // 对象字段匹配
             list.removeIf(link ->
-                    link.targetNodeId().equals(targetId) &&
-                            link.targetPortName().equals(targetInPort)
+                    link != null
+                            && Objects.equals(link.targetNodeId(), targetId)
+                            && Objects.equals(link.targetPortName(), targetInPort)
             );
 
             if (list.isEmpty()) {

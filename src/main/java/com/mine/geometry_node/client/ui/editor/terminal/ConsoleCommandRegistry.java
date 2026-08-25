@@ -14,10 +14,7 @@ public final class ConsoleCommandRegistry {
 
     private ConsoleCommandRegistry() {}
 
-    public interface LogCallback {
-        void onLog(String text, int color);
-        void onClear();
-    }
+    public interface LogCallback extends ConsoleCommandAdapter.Output {}
 
     public static void executeLine(String line, GraphSession session, LogCallback logger) {
         ADAPTER.executeLine(line, session, logger);

@@ -1,8 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.terminal.command;
 
+import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
+import com.mine.geometry_node.core.node.nodes.NodeDef;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -24,17 +26,22 @@ final class GraphReadSnapshot {
 
     private final NodeGraph graph;
     private final Map<String, NodeData> nodes;
+    private final Map<String, NodeDef> definitions;
     private final List<Edge> edges;
     private final Map<String, List<Edge>> outgoing;
     private final Map<String, List<Edge>> incoming;
+    private final Map<String, List<Edge>> direct;
 
-    private GraphReadSnapshot(NodeGraph graph, Map<String, NodeData> nodes, List<Edge> edges,
-                              Map<String, List<Edge>> outgoing, Map<String, List<Edge>> incoming) {
+    private GraphReadSnapshot(NodeGraph graph, Map<String, NodeData> nodes, Map<String, NodeDef> definitions,
+                              List<Edge> edges, Map<String, List<Edge>> outgoing,
+                              Map<String, List<Edge>> incoming, Map<String, List<Edge>> direct) {
         this.graph = graph;
-        this.nodes = Collections.unmodifiableMap(new LinkedHashMap<>(nodes));
+        this.nodes = Collections.unmodifiableMap(nodes);
+        this.definitions = Collections.unmodifiableMap(definitions);
         this.edges = List.copyOf(edges);
-        this.outgoing = copyIndex(outgoing);
-        this.incoming = copyIndex(incoming);
+        this.outgoing = freezeIndex(outgoing);
+        this.incoming = freezeIndex(incoming);
+        this.direct = freezeIndex(direct);
     }
 
     static GraphReadSnapshot capture(NodeGraph graph) {
@@ -63,11 +70,21 @@ final class GraphReadSnapshot {
         edges.sort(Edge.ORDER);
         Map<String, List<Edge>> outgoing = new LinkedHashMap<>();
         Map<String, List<Edge>> incoming = new LinkedHashMap<>();
+        Map<String, LinkedHashSet<Edge>> directSets = new LinkedHashMap<>();
         for (Edge edge : edges) {
             outgoing.computeIfAbsent(edge.outputNodeId(), ignored -> new ArrayList<>()).add(edge);
             incoming.computeIfAbsent(edge.inputNodeId(), ignored -> new ArrayList<>()).add(edge);
+            directSets.computeIfAbsent(edge.outputNodeId(), ignored -> new LinkedHashSet<>()).add(edge);
+            directSets.computeIfAbsent(edge.inputNodeId(), ignored -> new LinkedHashSet<>()).add(edge);
         }
-        return new GraphReadSnapshot(graph, nodes, edges, outgoing, incoming);
+        Map<String, List<Edge>> direct = new LinkedHashMap<>();
+        directSets.forEach((nodeId, nodeEdges) -> direct.put(nodeId, List.copyOf(nodeEdges)));
+        Map<String, NodeDef> definitions = new LinkedHashMap<>();
+        nodes.forEach((nodeId, node) -> {
+            NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+            if (definition != null) definitions.put(nodeId, definition);
+        });
+        return new GraphReadSnapshot(graph, nodes, definitions, edges, outgoing, incoming, direct);
     }
 
     NodeGraph graph() { return graph; }
@@ -76,11 +93,15 @@ final class GraphReadSnapshot {
 
     NodeData node(String nodeId) { return nodes.get(nodeId); }
 
+    NodeDef definition(String nodeId) { return definitions.get(nodeId); }
+
     List<Edge> edges() { return edges; }
 
     List<Edge> outgoing(String nodeId) { return outgoing.getOrDefault(nodeId, List.of()); }
 
     List<Edge> incoming(String nodeId) { return incoming.getOrDefault(nodeId, List.of()); }
+
+    List<Edge> direct(String nodeId) { return direct.getOrDefault(nodeId, List.of()); }
 
     Set<String> neighborhood(String nodeId, int depth) {
         if (!nodes.containsKey(nodeId)) return Set.of();
@@ -113,10 +134,9 @@ final class GraphReadSnapshot {
         edges.add(new Edge(kind, sourceId, sourcePort, targetNode, targetPort));
     }
 
-    private static Map<String, List<Edge>> copyIndex(Map<String, List<Edge>> source) {
-        Map<String, List<Edge>> copy = new LinkedHashMap<>();
-        source.forEach((key, value) -> copy.put(key, List.copyOf(value)));
-        return Collections.unmodifiableMap(copy);
+    private static Map<String, List<Edge>> freezeIndex(Map<String, List<Edge>> source) {
+        source.replaceAll((key, value) -> List.copyOf(value));
+        return Collections.unmodifiableMap(source);
     }
 
     private record NodeDepth(String nodeId, int depth) {}

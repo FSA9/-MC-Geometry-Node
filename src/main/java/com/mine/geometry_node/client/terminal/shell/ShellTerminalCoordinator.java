@@ -162,16 +162,20 @@ public final class ShellTerminalCoordinator implements TerminalSessionListener {
     }
 
     private void enqueueInput(PendingInput input) {
+        boolean rejected;
         synchronized (inputQueueLock) {
             PendingInput last = pendingInput.peekLast();
             if (input.interrupt() && last != null && last.interrupt() && last.runEpoch() == input.runEpoch()) return;
-            if (pendingInput.size() >= MAX_PENDING_INPUT_ITEMS
-                    || input.byteCount() > MAX_PENDING_INPUT_BYTES - pendingInputBytes) {
-                observer.onError("Terminal input queue is full");
-                return;
+            rejected = pendingInput.size() >= MAX_PENDING_INPUT_ITEMS
+                    || input.byteCount() > MAX_PENDING_INPUT_BYTES - pendingInputBytes;
+            if (!rejected) {
+                pendingInput.addLast(input);
+                pendingInputBytes += input.byteCount();
             }
-            pendingInput.addLast(input);
-            pendingInputBytes += input.byteCount();
+        }
+        if (rejected) {
+            observer.onError("Terminal input queue is full");
+            return;
         }
         scheduleInputWorker();
     }
@@ -270,7 +274,6 @@ public final class ShellTerminalCoordinator implements TerminalSessionListener {
             return new PendingInput(runEpoch, new byte[0], true);
         }
 
-        @Override public byte[] bytes() { return bytes.clone(); }
         private int byteCount() { return bytes.length; }
     }
 }

@@ -65,17 +65,28 @@ public final class GraphJsonIO {
                 : "";
         g.quest = QuestDefinition.fromJson(root.get("quest"));
 
-        JsonObject nodesObj = root.getAsJsonObject("nodes");
-        for (String id : nodesObj.keySet()) {
-            NodeData n = GSON.fromJson(nodesObj.get(id), NodeData.class);
-            restoreNodeTree(n, id, null);
-            g.nodes.put(id, n);
+        JsonElement nodesElement = root.get("nodes");
+        if (nodesElement != null && !nodesElement.isJsonNull()) {
+            if (!nodesElement.isJsonObject()) {
+                throw new JsonParseException("nodes must be an object");
+            }
+            JsonObject nodesObj = nodesElement.getAsJsonObject();
+            for (String id : nodesObj.keySet()) {
+                NodeData n = GSON.fromJson(nodesObj.get(id), NodeData.class);
+                restoreNodeTree(n, id, null);
+                if (n != null) g.nodes.put(id, n);
+            }
         }
 
-        if (root.has("frames")) {
-            JsonObject framesObj = root.getAsJsonObject("frames");
+        JsonElement framesElement = root.get("frames");
+        if (framesElement != null && !framesElement.isJsonNull()) {
+            if (!framesElement.isJsonObject()) {
+                throw new JsonParseException("frames must be an object");
+            }
+            JsonObject framesObj = framesElement.getAsJsonObject();
             for (String id : framesObj.keySet()) {
                 FrameData f = GSON.fromJson(framesObj.get(id), FrameData.class);
+                if (f == null) continue;
                 f.id = id;
                 g.frames.put(id, f);
             }
@@ -90,7 +101,7 @@ public final class GraphJsonIO {
         if (node == null) return;
         node.id = id;
         node.parentGroupNode = parentGroupNode;
-        node.ensurePortConfig();
+        node.restoreDocumentDefaults();
 
         if (node.subNodes == null) return;
         for (Map.Entry<String, NodeData> entry : node.subNodes.entrySet()) {
@@ -114,6 +125,7 @@ public final class GraphJsonIO {
                 for (List<Connection> connections : outNode.outputs.values()) {
                     if (connections == null) continue;
                     for (Connection link : connections) {
+                        if (link == null || !link.isValid()) continue;
                         NodeData targetNode = scopeIndex.get(link.targetNodeId());
                         if (targetNode != null) targetNode.setInputConnected(link.targetPortName(), true);
                     }

@@ -12,12 +12,18 @@ public record ProviderCapabilities(int protocolVersion, Map<Capability, Support>
     public ProviderCapabilities {
         protocolVersion = AiProtocol.requireVersion(protocolVersion);
         EnumMap<Capability, Support> normalized = new EnumMap<>(Capability.class);
-        normalized.putAll(Objects.requireNonNull(values, "values"));
+        Objects.requireNonNull(values, "values").forEach((capability, support) ->
+                normalized.put(Objects.requireNonNull(capability, "capability"),
+                        Objects.requireNonNull(support, "support")));
         for (Capability capability : Capability.values()) normalized.putIfAbsent(capability, Support.UNKNOWN);
         values = Map.copyOf(normalized);
     }
 
     public Support support(Capability capability) {
         return values.get(Objects.requireNonNull(capability, "capability"));
+    }
+
+    public boolean isSupported(Capability capability) {
+        return support(capability) == Support.SUPPORTED;
     }
 }

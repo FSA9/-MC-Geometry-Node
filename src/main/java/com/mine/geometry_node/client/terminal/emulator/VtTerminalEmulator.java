@@ -51,6 +51,7 @@ public final class VtTerminalEmulator {
     private int utf8Remaining;
     private int utf8Minimum;
     private long revision;
+    private TerminalSnapshot cachedSnapshot;
 
     public VtTerminalEmulator(TerminalSize initialSize) {
         size = initialSize;
@@ -96,7 +97,7 @@ public final class VtTerminalEmulator {
 
     private void reflowPrimary(TerminalSize newSize) {
         List<TerminalCell[]> source = new ArrayList<>(scrollback.size() + screen.length);
-        for (TerminalCell[] line : scrollback) source.add(copyLine(line));
+        source.addAll(scrollback);
         source.addAll(Arrays.asList(screen));
         int oldCursorLine = scrollback.size() + cursorRow;
         int sourceEnd = source.size();
@@ -162,15 +163,19 @@ public final class VtTerminalEmulator {
     }
 
     public synchronized TerminalSnapshot snapshot() {
+        if (cachedSnapshot != null && cachedSnapshot.revision() == revision) {
+            return cachedSnapshot;
+        }
         List<List<TerminalCell>> lines = new ArrayList<>(scrollback.size() + size.rows());
         if (!alternateScreen) {
             for (TerminalCell[] line : scrollback) lines.add(List.of(copyLine(line)));
         }
         for (TerminalCell[] line : screen) lines.add(List.of(copyLine(line)));
         int cursorLine = (alternateScreen ? 0 : scrollback.size()) + cursorRow;
-        return new TerminalSnapshot(revision, size.columns(), size.rows(), lines, cursorLine, cursorColumn,
+        cachedSnapshot = new TerminalSnapshot(revision, size.columns(), size.rows(), lines, cursorLine, cursorColumn,
                 cursorVisible, bracketedPaste, applicationCursorKeys, mouseTrackingModes != 0, sgrMouseMode,
                 alternateScreen);
+        return cachedSnapshot;
     }
 
     public synchronized long revision() { return revision; }
@@ -409,22 +414,25 @@ public final class VtTerminalEmulator {
 
     private void scrollUp(int count) {
         count = clamp(count, 1, scrollBottom - scrollTop + 1);
-        for (int n = 0; n < count; n++) {
-            TerminalCell[] removed = screen[scrollTop];
-            // Inline TUIs such as Codex insert committed history through a top-anchored
-            // subregion. Alternate-screen content must remain isolated from primary history.
-            if (!alternateScreen && scrollTop == 0) addScrollback(removed);
-            System.arraycopy(screen, scrollTop + 1, screen, scrollTop, scrollBottom - scrollTop);
-            screen[scrollBottom] = blankLine();
+        // Inline TUIs such as Codex insert committed history through a top-anchored
+        // subregion. Alternate-screen content must remain isolated from primary history.
+        if (!alternateScreen && scrollTop == 0) {
+            for (int row = scrollTop; row < scrollTop + count; row++) addScrollback(screen[row]);
         }
+        int retainedRows = scrollBottom - scrollTop + 1 - count;
+        if (retainedRows > 0) {
+            System.arraycopy(screen, scrollTop + count, screen, scrollTop, retainedRows);
+        }
+        for (int row = scrollBottom - count + 1; row <= scrollBottom; row++) screen[row] = blankLine();
     }
 
     private void scrollDown(int count) {
         count = clamp(count, 1, scrollBottom - scrollTop + 1);
-        for (int n = 0; n < count; n++) {
-            System.arraycopy(screen, scrollTop, screen, scrollTop + 1, scrollBottom - scrollTop);
-            screen[scrollTop] = blankLine();
+        int retainedRows = scrollBottom - scrollTop + 1 - count;
+        if (retainedRows > 0) {
+            System.arraycopy(screen, scrollTop, screen, scrollTop + count, retainedRows);
         }
+        for (int row = scrollTop; row < scrollTop + count; row++) screen[row] = blankLine();
     }
 
     private void eraseDisplay(int mode) {
@@ -515,7 +523,10 @@ public final class VtTerminalEmulator {
                 if (value == 38) foreground = color; else background = color;
             }
         }
-        style = new TerminalStyle(foreground, background, bold, underline, inverse);
+        if (foreground != style.foreground() || background != style.background()
+                || bold != style.bold() || underline != style.underline() || inverse != style.inverse()) {
+            style = new TerminalStyle(foreground, background, bold, underline, inverse);
+        }
     }
 
     private void setModes(int[] values, boolean privateMode, boolean enabled) {
@@ -666,15 +677,33 @@ public final class VtTerminalEmulator {
 
     private static int[] parseParameters(String raw) {
         int intermediate = raw.indexOf(' ');
-        if (intermediate >= 0) raw = raw.substring(0, intermediate);
-        if (raw.isEmpty()) return new int[0];
-        String[] parts = raw.split(";", -1);
-        int[] values = new int[Math.min(parts.length, 32)];
-        for (int i = 0; i < values.length; i++) {
-            try { values[i] = parts[i].isEmpty() ? -1 : Math.min(65_535, Integer.parseInt(parts[i])); }
-            catch (NumberFormatException ignored) { values[i] = -1; }
+        int end = intermediate >= 0 ? intermediate : raw.length();
+        if (end == 0) return new int[0];
+        int count = 1;
+        for (int index = 0; index < end && count < 32; index++) {
+            if (raw.charAt(index) == ';') count++;
+        }
+        int[] values = new int[count];
+        int partStart = 0;
+        for (int part = 0; part < count; part++) {
+            int partEnd = partStart;
+            while (partEnd < end && raw.charAt(partEnd) != ';') partEnd++;
+            values[part] = parseParameter(raw, partStart, partEnd);
+            partStart = partEnd + 1;
         }
         return values;
+    }
+
+    private static int parseParameter(String raw, int start, int end) {
+        if (start >= end) return -1;
+        long value = 0;
+        for (int index = start; index < end; index++) {
+            char character = raw.charAt(index);
+            if (character < '0' || character > '9') return -1;
+            value = value * 10 + character - '0';
+            if (value > Integer.MAX_VALUE) return -1;
+        }
+        return (int) Math.min(65_535, value);
     }
 
     private static int parameter(int[] values, int index, int fallback) {

@@ -61,9 +61,6 @@ public final class PtyTerminalBackend implements TerminalBackend {
                 return;
             }
             emitStarted();
-            if (lifecycle.get() != Lifecycle.RUNNING) {
-                return;
-            }
             Thread.ofVirtual().name("geometry-node-pty-output").start(this::readOutput);
             exitCode.whenComplete((code, error) -> {
                 if (error != null) {
@@ -116,7 +113,10 @@ public final class PtyTerminalBackend implements TerminalBackend {
 
     @Override
     public void interrupt() throws IOException {
-        requireRunning().interrupt();
+        PtyProcessHandle current = requireRunning();
+        synchronized (inputLock) {
+            current.interrupt();
+        }
     }
 
     @Override

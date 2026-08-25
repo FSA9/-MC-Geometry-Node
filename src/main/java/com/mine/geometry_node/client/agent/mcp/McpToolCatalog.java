@@ -6,8 +6,8 @@ import com.mine.geometry_node.client.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ai.command.CommandSpec;
 import com.mine.geometry_node.client.ai.protocol.ToolContract;
 
-import java.util.LinkedHashMap;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,6 +18,8 @@ public final class McpToolCatalog {
     private static final int MAX_TOOLS = 128;
 
     private final Map<String, CommandSpec> tools;
+    private final List<CommandSpec> commands;
+    private final JsonArray json;
 
     public McpToolCatalog(CommandRegistry registry) {
         Objects.requireNonNull(registry, "registry");
@@ -35,17 +37,23 @@ public final class McpToolCatalog {
             selected.put(command.name(), command);
         }
         tools = Collections.unmodifiableMap(new LinkedHashMap<>(selected));
+        commands = List.copyOf(tools.values());
+        json = projectTools(commands);
     }
 
-    public List<CommandSpec> commands() { return List.copyOf(tools.values()); }
+    public List<CommandSpec> commands() { return commands; }
 
     public Optional<CommandSpec> find(String name) {
         return name == null ? Optional.empty() : Optional.ofNullable(tools.get(name));
     }
 
     public JsonArray toJson() {
+        return json.deepCopy();
+    }
+
+    private static JsonArray projectTools(List<CommandSpec> commands) {
         JsonArray result = new JsonArray();
-        for (CommandSpec command : tools.values()) {
+        for (CommandSpec command : commands) {
             JsonObject tool = new JsonObject();
             tool.addProperty("name", command.name());
             tool.addProperty("description", command.description());

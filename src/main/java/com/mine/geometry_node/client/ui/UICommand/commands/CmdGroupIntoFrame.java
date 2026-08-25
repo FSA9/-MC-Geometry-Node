@@ -18,14 +18,14 @@ public class CmdGroupIntoFrame implements ICommand {
 
     public CmdGroupIntoFrame(GraphController controller, List<String> selectedNodeIds) {
         this.mController = controller;
-        this.mNodeIds = selectedNodeIds;
+        this.mNodeIds = List.copyOf(selectedNodeIds);
 
         // 生成一个新的图框 (位置无所谓，随后会被自动重算覆盖)
         this.mNewFrame = new FrameData(UUID.randomUUID().toString(), 0, 0);
         this.mNewFrame.title = "New Frame";
 
         // 记录这些节点原来的 parentFrame，方便撤销
-        for (String id : selectedNodeIds) {
+        for (String id : mNodeIds) {
             NodeData node = controller.getContext().getCurrentGraph().getNode(id);
             if (node != null) {
                 mOldParents.put(id, node.parentFrame);

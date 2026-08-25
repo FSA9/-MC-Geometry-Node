@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ai.graph;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
@@ -41,29 +42,33 @@ public final class InputValueCodec {
     }
 
     private static long exactLong(JsonElement value) {
-        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) throw new IllegalArgumentException("integer value required");
+        JsonPrimitive primitive = primitive(value, "integer value required");
+        if (!primitive.isNumber()) throw new IllegalArgumentException("integer value required");
         try {
-            return value.getAsBigDecimal().longValueExact();
+            return primitive.getAsBigDecimal().longValueExact();
         } catch (ArithmeticException | NumberFormatException failure) {
             throw new IllegalArgumentException("exact integer value required");
         }
     }
 
     private static float finiteFloat(JsonElement value) {
-        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) throw new IllegalArgumentException("number value required");
-        float number = value.getAsFloat();
+        JsonPrimitive primitive = primitive(value, "number value required");
+        if (!primitive.isNumber()) throw new IllegalArgumentException("number value required");
+        float number = primitive.getAsFloat();
         if (!Float.isFinite(number)) throw new IllegalArgumentException("finite float value required");
         return number;
     }
 
     private static boolean requireBoolean(JsonElement value) {
-        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean()) throw new IllegalArgumentException("boolean value required");
-        return value.getAsBoolean();
+        JsonPrimitive primitive = primitive(value, "boolean value required");
+        if (!primitive.isBoolean()) throw new IllegalArgumentException("boolean value required");
+        return primitive.getAsBoolean();
     }
 
     private static String requireString(JsonElement value) {
-        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) throw new IllegalArgumentException("string value required");
-        return value.getAsString();
+        JsonPrimitive primitive = primitive(value, "string value required");
+        if (!primitive.isString()) throw new IllegalArgumentException("string value required");
+        return primitive.getAsString();
     }
 
     private static List<Float> vector(JsonElement value) {
@@ -75,10 +80,15 @@ public final class InputValueCodec {
     }
 
     private static Object primitive(JsonElement value) {
-        if (!value.isJsonPrimitive()) throw new IllegalArgumentException("ANY GraphPatch values are limited to JSON primitives");
-        if (value.getAsJsonPrimitive().isBoolean()) return value.getAsBoolean();
-        if (value.getAsJsonPrimitive().isString()) return value.getAsString();
+        JsonPrimitive primitive = primitive(value, "ANY GraphPatch values are limited to JSON primitives");
+        if (primitive.isBoolean()) return primitive.getAsBoolean();
+        if (primitive.isString()) return primitive.getAsString();
         throw new IllegalArgumentException("numeric ANY values are not writable without an explicit storage type");
+    }
+
+    private static JsonPrimitive primitive(JsonElement value, String message) {
+        if (!value.isJsonPrimitive()) throw new IllegalArgumentException(message);
+        return value.getAsJsonPrimitive();
     }
 
     private static void validateNumericBounds(PortRow row, Object decoded) {

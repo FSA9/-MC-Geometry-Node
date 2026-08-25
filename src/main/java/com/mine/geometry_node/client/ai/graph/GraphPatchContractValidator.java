@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ai.graph;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -13,7 +14,7 @@ public final class GraphPatchContractValidator {
     public static List<Diagnostic> validate(GraphPatch patch) {
         Set<String> nodeAliases = new HashSet<>();
         Set<String> frameAliases = new HashSet<>();
-        java.util.ArrayList<Diagnostic> diagnostics = new java.util.ArrayList<>();
+        List<Diagnostic> diagnostics = new ArrayList<>();
         for (int index = 0; index < patch.operations().size(); index++) {
             GraphPatch.Operation operation = patch.operations().get(index);
             validateReferences(operation, nodeAliases, frameAliases, index, diagnostics);
@@ -30,33 +31,43 @@ public final class GraphPatchContractValidator {
     private static void validateReferences(GraphPatch.Operation operation, Set<String> nodeAliases,
                                            Set<String> frameAliases, int index,
                                            List<Diagnostic> diagnostics) {
-        for (GraphPatch.NodeRef ref : references(operation)) {
-            if (ref.alias() != null && !nodeAliases.contains(ref.alias())) {
-                diagnostics.add(new Diagnostic(index, "patch.unknown_alias", "alias must be declared by an earlier operation: " + ref.alias()));
+        switch (operation) {
+            case GraphPatch.RemoveNode value -> validateNodeRef(value.node(), nodeAliases, index, diagnostics);
+            case GraphPatch.MoveNode value -> validateNodeRef(value.node(), nodeAliases, index, diagnostics);
+            case GraphPatch.Connect value -> {
+                validateNodeRef(value.from().node(), nodeAliases, index, diagnostics);
+                validateNodeRef(value.to().node(), nodeAliases, index, diagnostics);
             }
-        }
-        if (operation instanceof GraphPatch.SetFrameProperty value
-                && value.frame().alias() != null && !frameAliases.contains(value.frame().alias())) {
-            diagnostics.add(new Diagnostic(index, "patch.unknown_frame_alias",
-                    "frame alias must be declared by an earlier operation: " + value.frame().alias()));
+            case GraphPatch.Disconnect value -> {
+                validateNodeRef(value.from().node(), nodeAliases, index, diagnostics);
+                validateNodeRef(value.to().node(), nodeAliases, index, diagnostics);
+            }
+            case GraphPatch.SetPortValue value -> validateNodeRef(value.port().node(), nodeAliases, index, diagnostics);
+            case GraphPatch.SetSelectValue value -> validateNodeRef(value.port().node(), nodeAliases, index, diagnostics);
+            case GraphPatch.SetNodeProperty value -> validateNodeRef(value.node(), nodeAliases, index, diagnostics);
+            case GraphPatch.SetFrameProperty value -> validateFrameRef(value.frame(), frameAliases, index, diagnostics);
+            case GraphPatch.AddDynamicBranch value -> validateNodeRef(value.node(), nodeAliases, index, diagnostics);
+            case GraphPatch.RemoveDynamicBranch value -> validateNodeRef(value.node(), nodeAliases, index, diagnostics);
+            case GraphPatch.AddGroupVirtualPort value -> validateNodeRef(value.node(), nodeAliases, index, diagnostics);
+            case GraphPatch.RemoveGroupVirtualPort value -> validateNodeRef(value.node(), nodeAliases, index, diagnostics);
+            case GraphPatch.RenamePort value -> validateNodeRef(value.node(), nodeAliases, index, diagnostics);
+            default -> { }
         }
     }
 
-    private static List<GraphPatch.NodeRef> references(GraphPatch.Operation operation) {
-        return switch (operation) {
-            case GraphPatch.RemoveNode value -> List.of(value.node());
-            case GraphPatch.MoveNode value -> List.of(value.node());
-            case GraphPatch.Connect value -> List.of(value.from().node(), value.to().node());
-            case GraphPatch.Disconnect value -> List.of(value.from().node(), value.to().node());
-            case GraphPatch.SetPortValue value -> List.of(value.port().node());
-            case GraphPatch.SetSelectValue value -> List.of(value.port().node());
-            case GraphPatch.SetNodeProperty value -> List.of(value.node());
-            case GraphPatch.AddDynamicBranch value -> List.of(value.node());
-            case GraphPatch.RemoveDynamicBranch value -> List.of(value.node());
-            case GraphPatch.AddGroupVirtualPort value -> List.of(value.node());
-            case GraphPatch.RemoveGroupVirtualPort value -> List.of(value.node());
-            case GraphPatch.RenamePort value -> List.of(value.node());
-            default -> List.of();
-        };
+    private static void validateNodeRef(GraphPatch.NodeRef ref, Set<String> aliases, int index,
+                                        List<Diagnostic> diagnostics) {
+        if (ref.alias() != null && !aliases.contains(ref.alias())) {
+            diagnostics.add(new Diagnostic(index, "patch.unknown_alias",
+                    "alias must be declared by an earlier operation: " + ref.alias()));
+        }
+    }
+
+    private static void validateFrameRef(GraphPatch.FrameRef ref, Set<String> aliases, int index,
+                                         List<Diagnostic> diagnostics) {
+        if (ref.alias() != null && !aliases.contains(ref.alias())) {
+            diagnostics.add(new Diagnostic(index, "patch.unknown_frame_alias",
+                    "frame alias must be declared by an earlier operation: " + ref.alias()));
+        }
     }
 }

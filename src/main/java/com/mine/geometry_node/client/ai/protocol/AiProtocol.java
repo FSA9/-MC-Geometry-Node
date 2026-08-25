@@ -6,10 +6,12 @@ import com.google.gson.JsonNull;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /** Provider-neutral wire contracts used by chat and agent implementations. */
 public final class AiProtocol {
     public static final int VERSION = 1;
+    private static final Pattern TOOL_NAME_PATTERN = Pattern.compile("[A-Za-z0-9_]{1,64}");
 
     private AiProtocol() {}
 
@@ -201,7 +203,7 @@ public final class AiProtocol {
 
     static String requireToolName(String name) {
         name = requireNonBlank(name, "name");
-        if (!name.matches("[A-Za-z0-9_]{1,64}")) throw new IllegalArgumentException("invalid tool name: " + name);
+        if (!TOOL_NAME_PATTERN.matcher(name).matches()) throw new IllegalArgumentException("invalid tool name: " + name);
         return name;
     }
 

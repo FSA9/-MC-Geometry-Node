@@ -5,7 +5,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.graph.PortEditCapabilityResolver;
-import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.viewport.menu.NodeSearchService;
 import com.mine.geometry_node.client.ui.viewport.node.comment.NodeCommentTextBuilder;
 import com.mine.geometry_node.core.node.NodeComment;
@@ -27,7 +26,6 @@ import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -43,10 +41,6 @@ final class TerminalGraphQueryService {
     private static final int VALUE_TEXT_LIMIT = 4096;
 
     private final NodeGraph graph;
-
-    TerminalGraphQueryService(GraphSession session) {
-        this(session == null ? null : session.editorContext.getCurrentGraph());
-    }
 
     TerminalGraphQueryService(NodeGraph graph) {
         this.graph = graph;
@@ -147,14 +141,14 @@ final class TerminalGraphQueryService {
                                    String connectionState, int offset, int limit) {
         GraphReadSnapshot snapshot = snapshot();
         List<Map.Entry<String, NodeData>> matches = snapshot.nodes().entrySet().stream()
-                .filter(entry -> matchesNode(entry.getKey(), entry.getValue(), query))
-                .filter(entry -> matchesTypeAndCategory(entry.getValue(), typeId, category))
+                .filter(entry -> matchesNode(entry.getKey(), entry.getValue(), snapshot.definition(entry.getKey()), query))
+                .filter(entry -> matchesTypeAndCategory(entry.getValue(), snapshot.definition(entry.getKey()), typeId, category))
                 .filter(entry -> matchesComment(entry.getValue(), commentFilter))
                 .filter(entry -> matchesConnectionState(snapshot, entry.getKey(), connectionState)).toList();
         PageSlice<Map.Entry<String, NodeData>> page = page(matches, offset, limit);
         JsonArray items = new JsonArray();
         for (Map.Entry<String, NodeData> entry : page.items()) {
-            JsonObject item = nodeSummary(entry.getKey(), entry.getValue());
+            JsonObject item = nodeSummary(entry.getKey(), entry.getValue(), snapshot.definition(entry.getKey()));
             item.addProperty("incoming_count", snapshot.incoming(entry.getKey()).size());
             item.addProperty("outgoing_count", snapshot.outgoing(entry.getKey()).size());
             items.add(item);
@@ -170,7 +164,8 @@ final class TerminalGraphQueryService {
     CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
         GraphReadSnapshot snapshot = snapshot();
         List<Map.Entry<String, NodeData>> matchingNodes = snapshot.nodes().entrySet().stream()
-                .filter(entry -> matchesTypeAndCategory(entry.getValue(), typeId, category)).toList();
+                .filter(entry -> matchesTypeAndCategory(entry.getValue(), snapshot.definition(entry.getKey()),
+                        typeId, category)).toList();
         Set<String> matchingIds = matchingNodes.stream().map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
         long flowConnections = snapshot.edges().stream().filter(edge -> edge.kind().equals("flow")).count();
         long dataConnections = snapshot.edges().size() - flowConnections;
@@ -183,7 +178,8 @@ final class TerminalGraphQueryService {
         Map<String, Integer> counts = new java.util.TreeMap<>();
         if (!"none".equals(groupBy)) {
             for (Map.Entry<String, NodeData> entry : matchingNodes) {
-                String key = "type".equals(groupBy) ? text(entry.getValue().type) : nodeCategory(entry.getValue());
+                String key = "type".equals(groupBy) ? text(entry.getValue().type)
+                        : nodeCategory(snapshot.definition(entry.getKey()));
                 counts.merge(key, 1, Integer::sum);
             }
         }
@@ -219,29 +215,30 @@ final class TerminalGraphQueryService {
         GraphReadSnapshot snapshot = snapshot();
         NodeData node = snapshot.node(nodeId);
         if (node == null) return missingNode(nodeId);
-        NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+        NodeDef definition = snapshot.definition(nodeId);
 
         JsonObject data = new JsonObject();
-        data.add("node", nodeSummary(nodeId, node));
+        data.add("node", nodeSummary(nodeId, node, definition));
         data.addProperty("definition_comment", NodeCommentTextBuilder.build(definition));
         JsonArray ports = new JsonArray();
+        Set<String> connectedInputs = snapshot.incoming(nodeId).stream()
+                .map(GraphReadSnapshot.Edge::inputPortId).collect(java.util.stream.Collectors.toSet());
+        Set<String> connectedOutputs = snapshot.outgoing(nodeId).stream()
+                .map(GraphReadSnapshot.Edge::outputPortId).collect(java.util.stream.Collectors.toSet());
         if (definition != null) {
             for (PortRow row : definition.rows()) {
                 if (ports.size() >= DETAILS_COLLECTION_LIMIT) break;
                 if (row.leftPort() != null) {
-                    ports.add(portDetails(nodeId, node, definition, row, row.leftPort(), "input", snapshot));
+                    ports.add(portDetails(node, definition, row, row.leftPort(), "input", connectedInputs));
                 }
                 if (ports.size() >= DETAILS_COLLECTION_LIMIT) break;
                 if (row.rightPort() != null) {
-                    ports.add(portDetails(nodeId, node, definition, row, row.rightPort(), "output", snapshot));
+                    ports.add(portDetails(node, definition, row, row.rightPort(), "output", connectedOutputs));
                 }
             }
         }
         data.add("ports", ports);
-        List<GraphReadSnapshot.Edge> directEdges = new ArrayList<>(snapshot.incoming(nodeId));
-        directEdges.addAll(snapshot.outgoing(nodeId));
-        directEdges = directEdges.stream().distinct().sorted(GraphReadSnapshot.Edge.ORDER).toList();
-        JsonArray connections = edgeArray(limit(directEdges, DETAILS_COLLECTION_LIMIT));
+        JsonArray connections = edgeArray(limit(snapshot.direct(nodeId), DETAILS_COLLECTION_LIMIT));
         data.add("connections", connections);
         return CommandResult.success("NODE_DETAILS", "已读取节点 " + nodeId, data);
     }
@@ -251,9 +248,7 @@ final class TerminalGraphQueryService {
         if (snapshot.node(nodeId) == null) return missingNode(nodeId);
         List<GraphReadSnapshot.Edge> candidates;
         if (depth <= 1) {
-            candidates = new ArrayList<>(snapshot.incoming(nodeId));
-            candidates.addAll(snapshot.outgoing(nodeId));
-            candidates = candidates.stream().distinct().sorted(GraphReadSnapshot.Edge.ORDER).toList();
+            candidates = snapshot.direct(nodeId);
         } else {
             candidates = snapshot.inducedEdges(snapshot.neighborhood(nodeId, depth));
         }
@@ -278,7 +273,9 @@ final class TerminalGraphQueryService {
         PageSlice<String> page = page(candidateIds, offset, limit);
         Set<String> returnedIds = new LinkedHashSet<>(page.items());
         JsonArray nodes = new JsonArray();
-        for (String nodeId : page.items()) nodes.add(nodeSummary(nodeId, snapshot.node(nodeId)));
+        for (String nodeId : page.items()) {
+            nodes.add(nodeSummary(nodeId, snapshot.node(nodeId), snapshot.definition(nodeId)));
+        }
         List<GraphReadSnapshot.Edge> visibleEdges = limit(snapshot.inducedEdges(returnedIds), DETAILS_COLLECTION_LIMIT);
 
         NodeGraph graph = snapshot.graph();
@@ -320,7 +317,7 @@ final class TerminalGraphQueryService {
         GraphReadSnapshot snapshot = snapshot();
         NodeData node = snapshot.node(nodeId);
         if (node == null) return missingNode(nodeId);
-        NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+        NodeDef definition = snapshot.definition(nodeId);
         PortRow row = findInputRow(definition, portId);
         if (row == null) return CommandResult.failure("PORT_NOT_FOUND", "节点不存在输入端口: " + portId);
         if (row.uiHint() != UIHint.SELECT) {
@@ -358,15 +355,15 @@ final class TerminalGraphQueryService {
         return GraphReadSnapshot.capture(graph);
     }
 
-    private static boolean matchesNode(String nodeId, NodeData node, String query) {
-        NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+    private static boolean matchesNode(String nodeId, NodeData node, NodeDef definition, String query) {
         return NodeSearchService.matches(query, nodeId, node.type, node.customName, node.comment,
                 definition == null ? "" : definition.displayName().getString(), NodeCommentTextBuilder.build(definition));
     }
 
-    private static boolean matchesTypeAndCategory(NodeData node, String typeId, String category) {
+    private static boolean matchesTypeAndCategory(NodeData node, NodeDef definition,
+                                                  String typeId, String category) {
         if (!typeId.isEmpty() && !typeId.equals(text(node.type))) return false;
-        return category.isEmpty() || category.equals(nodeCategory(node));
+        return category.isEmpty() || category.equals(nodeCategory(definition));
     }
 
     private static boolean matchesComment(NodeData node, String filter) {
@@ -386,13 +383,11 @@ final class TerminalGraphQueryService {
         };
     }
 
-    private static String nodeCategory(NodeData node) {
-        NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+    private static String nodeCategory(NodeDef definition) {
         return definition == null ? "" : definition.category().name().toLowerCase(Locale.ROOT);
     }
 
-    private static JsonObject nodeSummary(String nodeId, NodeData node) {
-        NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+    private static JsonObject nodeSummary(String nodeId, NodeData node, NodeDef definition) {
         JsonObject result = new JsonObject();
         result.addProperty("node_id", nodeId);
         result.addProperty("type_id", text(node.type));
@@ -404,15 +399,12 @@ final class TerminalGraphQueryService {
         return result;
     }
 
-    private static JsonObject portDetails(String nodeId, NodeData node, NodeDef definition, PortRow row, PortDef port,
-                                          String direction, GraphReadSnapshot snapshot) {
+    private static JsonObject portDetails(NodeData node, NodeDef definition, PortRow row, PortDef port,
+                                          String direction, Set<String> connectedPortIds) {
         boolean input = direction.equals("input");
         boolean hasStored = input && node.inputs != null && node.inputs.containsKey(port.id());
         Object stored = hasStored ? node.inputs.get(port.id()) : null;
         Object effective = hasStored ? stored : port.defaultValue();
-        boolean connected = input
-                ? snapshot.incoming(nodeId).stream().anyMatch(edge -> edge.inputPortId().equals(port.id()))
-                : snapshot.outgoing(nodeId).stream().anyMatch(edge -> edge.outputPortId().equals(port.id()));
         JsonObject result = new JsonObject();
         result.addProperty("port_id", port.id());
         result.addProperty("direction", direction);
@@ -421,7 +413,7 @@ final class TerminalGraphQueryService {
                 port.displayName().getString()));
         result.addProperty("ui_hint", row.uiHint() == null ? "default" : row.uiHint().name().toLowerCase(Locale.ROOT));
         result.addProperty("hidden", port.hidePin());
-        result.addProperty("connected", connected);
+        result.addProperty("connected", connectedPortIds.contains(port.id()));
         result.addProperty("has_stored_value", hasStored);
         result.addProperty("stored_value_json", hasStored ? valueJson(stored) : "");
         result.addProperty("default_value_json", valueJson(port.defaultValue()));
@@ -527,7 +519,9 @@ final class TerminalGraphQueryService {
 
     private static List<ValidationDiagnostic> validate(GraphReadSnapshot snapshot) {
         List<ValidationDiagnostic> diagnostics = new ArrayList<>();
-        Map<String, NodeDef> definitions = new HashMap<>();
+        Map<String, PortTypes> portTypesByNode = new LinkedHashMap<>();
+        snapshot.nodes().forEach((nodeId, node) ->
+                portTypesByNode.put(nodeId, PortTypes.from(snapshot.definition(nodeId))));
         if (snapshot.graph().nodes != null) {
             for (Map.Entry<String, NodeData> entry : snapshot.graph().nodes.entrySet()) {
                 if (entry.getKey() == null || entry.getKey().isBlank()) {
@@ -541,8 +535,7 @@ final class TerminalGraphQueryService {
         for (Map.Entry<String, NodeData> entry : snapshot.nodes().entrySet()) {
             String nodeId = entry.getKey();
             NodeData node = entry.getValue();
-            NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
-            definitions.put(nodeId, definition);
+            NodeDef definition = snapshot.definition(nodeId);
             if (node.type == null || node.type.isBlank()) {
                 diagnostics.add(error("NODE_TYPE_MISSING", "节点缺少 type_id", nodeId, ""));
             } else if (definition == null) {
@@ -552,7 +545,7 @@ final class TerminalGraphQueryService {
                 diagnostics.add(warning("NODE_ID_MISMATCH", "节点内部 ID 与图索引 ID 不一致", nodeId, ""));
             }
             if (definition != null && node.inputs != null) {
-                Set<String> inputIds = portTypes(definition, true).keySet();
+                Set<String> inputIds = portTypesByNode.get(nodeId).inputs().keySet();
                 for (String storedPort : node.inputs.keySet()) {
                     if (!inputIds.contains(storedPort)) {
                         diagnostics.add(warning("STORED_INPUT_UNKNOWN", "存储值引用了不存在的输入端口", nodeId, storedPort));
@@ -564,14 +557,14 @@ final class TerminalGraphQueryService {
 
         Set<String> inbound = new HashSet<>();
         for (GraphReadSnapshot.Edge edge : snapshot.edges()) {
-            NodeDef outputDefinition = definitions.get(edge.outputNodeId());
-            NodeDef inputDefinition = definitions.get(edge.inputNodeId());
             if (!snapshot.nodes().containsKey(edge.inputNodeId())) {
                 diagnostics.add(error("CONNECTION_TARGET_NODE_MISSING", "连接目标节点不存在", edge.outputNodeId(), edge.outputPortId()));
                 continue;
             }
-            PortType outputType = portTypes(outputDefinition, false).get(edge.outputPortId());
-            PortType inputType = portTypes(inputDefinition, true).get(edge.inputPortId());
+            PortType outputType = portTypesByNode.getOrDefault(edge.outputNodeId(), PortTypes.EMPTY)
+                    .outputs().get(edge.outputPortId());
+            PortType inputType = portTypesByNode.getOrDefault(edge.inputNodeId(), PortTypes.EMPTY)
+                    .inputs().get(edge.inputPortId());
             if (outputType == null) {
                 diagnostics.add(error("CONNECTION_OUTPUT_PORT_MISSING", "连接源端口不存在", edge.outputNodeId(), edge.outputPortId()));
             }
@@ -614,16 +607,6 @@ final class TerminalGraphQueryService {
                 }
             });
         }
-    }
-
-    private static Map<String, PortType> portTypes(NodeDef definition, boolean input) {
-        if (definition == null) return Map.of();
-        Map<String, PortType> ports = new LinkedHashMap<>();
-        for (PortRow row : definition.rows()) {
-            PortDef port = input ? row.leftPort() : row.rightPort();
-            if (port != null) ports.put(port.id(), port.type());
-        }
-        return ports;
     }
 
     private static CommandResult missingNode(String nodeId) {
@@ -709,6 +692,22 @@ final class TerminalGraphQueryService {
     private record PageSlice<T>(List<T> items, int offset, int limit, int total) {
         private PageSlice {
             items = List.copyOf(items);
+        }
+    }
+
+    private record PortTypes(Map<String, PortType> inputs, Map<String, PortType> outputs) {
+        private static final PortTypes EMPTY = new PortTypes(Map.of(), Map.of());
+
+        private static PortTypes from(NodeDef definition) {
+            if (definition == null) return EMPTY;
+            Map<String, PortType> inputs = new LinkedHashMap<>();
+            Map<String, PortType> outputs = new LinkedHashMap<>();
+            for (PortRow row : definition.rows()) {
+                if (row.leftPort() != null) inputs.put(row.leftPort().id(), row.leftPort().type());
+                if (row.rightPort() != null) outputs.put(row.rightPort().id(), row.rightPort().type());
+            }
+            return new PortTypes(java.util.Collections.unmodifiableMap(inputs),
+                    java.util.Collections.unmodifiableMap(outputs));
         }
     }
 

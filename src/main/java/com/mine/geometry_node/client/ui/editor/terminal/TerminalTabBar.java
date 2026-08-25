@@ -28,6 +28,7 @@ public class TerminalTabBar extends LinearLayout {
     private int mSelectedIndex = -1;
     private TabListener mListener;
     private final float mTouchSlop;
+    private final int[] mScreenLocation = new int[2];
 
     // 拖拽指示器
     private int mIndicatorX = -1;
@@ -107,9 +108,8 @@ public class TerminalTabBar extends LinearLayout {
                         tabLayout.setAlpha(0.4f);
                     }
                     if (isDragging[0]) {
-                        int[] loc = new int[2];
-                        getLocationOnScreen(loc);
-                        float dropX = event.getRawX() - loc[0];
+                        getLocationOnScreen(mScreenLocation);
+                        float dropX = event.getRawX() - mScreenLocation[0];
                         updateIndicatorPosition(dropX);
                     }
                     break;
@@ -143,9 +143,8 @@ public class TerminalTabBar extends LinearLayout {
     }
 
     private void calculateAndMoveTab(float rawX, int currentIndex) {
-        int[] loc = new int[2];
-        getLocationOnScreen(loc);
-        float dropX = rawX - loc[0];
+        getLocationOnScreen(mScreenLocation);
+        float dropX = rawX - mScreenLocation[0];
 
         int targetIdx = getChildCount() - 1;
         for (int i = 0; i < getChildCount() - 1; i++) {

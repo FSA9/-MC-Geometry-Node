@@ -14,16 +14,18 @@ import java.util.Map;
 
 public class RegistryDataManager {
 
+    private RegistryDataManager() {}
+
     // 静态类型
 
     // --- 懒加载缓存 ---
-    private static List<String> BLOCK_CACHE = null;  // 方块
-    private static List<String> ITEM_CACHE = null;  // 物品
-    private static List<String> ENTITY_TYPE_CACHE = null;  // 实体类型
-    private static List<String> EFFECT_CACHE = null;  // 效果
-    private static List<String> SOUND_CACHE = null;  // 音效
-    private static List<String> PARTICLE_CACHE = null;
-    private static List<String> MENU_CACHE = null;
+    private static volatile List<String> BLOCK_CACHE = null;  // 方块
+    private static volatile List<String> ITEM_CACHE = null;  // 物品
+    private static volatile List<String> ENTITY_TYPE_CACHE = null;  // 实体类型
+    private static volatile List<String> EFFECT_CACHE = null;  // 效果
+    private static volatile List<String> SOUND_CACHE = null;  // 音效
+    private static volatile List<String> PARTICLE_CACHE = null;
+    private static volatile List<String> MENU_CACHE = null;
 
     public static List<String> getAllBlocks() {
         if (BLOCK_CACHE == null) {

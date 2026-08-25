@@ -7,6 +7,8 @@ import com.mine.geometry_node.client.ai.protocol.ToolSchemaValidator;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /** One positional CLI argument and one property in the generated tool schema. */
 public record CommandArgumentSpec(
@@ -17,6 +19,9 @@ public record CommandArgumentSpec(
         JsonObject schema,
         CompletionProvider completionProvider
 ) {
+    private static final Pattern NAME_PATTERN = Pattern.compile("[a-z][a-z0-9_]{0,63}");
+    private static final Set<String> CLI_SCALAR_TYPES = Set.of("string", "number", "integer", "boolean");
+
     @FunctionalInterface
     public interface CompletionProvider {
         CompletionProvider NONE = (prefix, parsedArguments, context) -> List.of();
@@ -32,7 +37,7 @@ public record CommandArgumentSpec(
             throw new IllegalArgumentException("argument schema requires a scalar type");
         }
         String type = schema.get("type").getAsString();
-        if (!List.of("string", "number", "integer", "boolean").contains(type)) {
+        if (!CLI_SCALAR_TYPES.contains(type)) {
             throw new IllegalArgumentException("unsupported CLI argument type: " + type);
         }
         if (required && defaultValue != null) throw new IllegalArgumentException("required argument cannot have a default");
@@ -44,7 +49,7 @@ public record CommandArgumentSpec(
     @Override public JsonObject schema() { return schema.deepCopy(); }
 
     private static String requireName(String value) {
-        if (value == null || !value.matches("[a-z][a-z0-9_]{0,63}")) {
+        if (value == null || !NAME_PATTERN.matcher(value).matches()) {
             throw new IllegalArgumentException("invalid argument name: " + value);
         }
         return value;

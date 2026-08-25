@@ -52,12 +52,13 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
         return withScope(queries().getGraphContext(focusNodeId, depth, offset, limit));
     }
     private CommandResult withScope(CommandResult result) {
+        long responseRevision = revision();
         JsonObject data = result.data();
         data.addProperty("session_id", sessionId());
         data.addProperty("scope_id", scopeId());
-        data.addProperty("revision", revision());
+        data.addProperty("revision", responseRevision);
         return new CommandResult(result.ok(), result.code(), result.message(), data, result.diagnostics(),
-                revision(), result.changeId(), result.clientAction());
+                responseRevision, result.changeId(), result.clientAction());
     }
     @Override public CommandResult validateGraph(int offset, int limit) { return queries().validateGraph(offset, limit); }
     @Override public CommandResult getPortOptions(String nodeId, String portId, String query, int offset, int limit) {

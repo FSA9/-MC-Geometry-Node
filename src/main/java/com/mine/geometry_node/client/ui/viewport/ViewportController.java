@@ -47,6 +47,7 @@ public class ViewportController implements EditorContext.EditorListener,
 
     public void bindSession(GraphSession session) {
         saveCurrentSessionState();
+        pruneClosedSessionStates();
 
         this.mCurrentSession = session;
 
@@ -134,6 +135,12 @@ public class ViewportController implements EditorContext.EditorListener,
 
     private ViewportSessionState sessionState(GraphSession session) {
         return mSessionStates.computeIfAbsent(session, ViewportSessionState::fromSession);
+    }
+
+    private void pruneClosedSessionStates() {
+        Set<GraphSession> openSessions = Collections.newSetFromMap(new IdentityHashMap<>());
+        openSessions.addAll(DocumentManager.INSTANCE.getSessions());
+        mSessionStates.keySet().removeIf(cached -> !openSessions.contains(cached));
     }
 
     private void syncSelectionToCurrentState() {
@@ -513,15 +520,17 @@ public class ViewportController implements EditorContext.EditorListener,
 
         // Include child frames inside selected frames.
         if (!mEditorContext.isInsideGroupScope()) {
-            boolean addedNew = true;
-            while (addedNew) {
-                addedNew = false;
-                if (mainGraph.frames != null) {
-                    for (FrameData f : mainGraph.frames.values()) {
-                        if (f.parentFrame != null && copiedFrameIds.contains(f.parentFrame) && !copiedFrameIds.contains(f.id)) {
-                            copiedFrameIds.add(f.id);
-                            addedNew = true;
-                        }
+            if (mainGraph.frames != null) {
+                Map<String, List<String>> childFrames = new HashMap<>();
+                for (FrameData frame : mainGraph.frames.values()) {
+                    if (frame != null && frame.id != null && frame.parentFrame != null) {
+                        childFrames.computeIfAbsent(frame.parentFrame, ignored -> new ArrayList<>()).add(frame.id);
+                    }
+                }
+                ArrayDeque<String> pendingFrames = new ArrayDeque<>(copiedFrameIds);
+                while (!pendingFrames.isEmpty()) {
+                    for (String childId : childFrames.getOrDefault(pendingFrames.removeFirst(), List.of())) {
+                        if (copiedFrameIds.add(childId)) pendingFrames.addLast(childId);
                     }
                 }
             }

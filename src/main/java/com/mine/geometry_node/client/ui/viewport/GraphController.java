@@ -950,17 +950,13 @@ public class GraphController {
     public void addFrame(FrameData frame) {
         if (mContext.isInsideGroupScope()) return;
         mContext.getGraph().addFrame(frame);
-        for (EditorContext.EditorListener l : mContext.getListeners()) {
-            l.onFrameAdded(frame);
-        }
+        mContext.notifyFrameAdded(frame);
     }
 
     public void removeFrame(String frameId) {
         if (mContext.isInsideGroupScope()) return;
         mContext.getGraph().removeFrame(frameId);
-        for (EditorContext.EditorListener l : mContext.getListeners()) {
-            l.onFrameRemoved(frameId);
-        }
+        mContext.notifyFrameRemoved(frameId);
     }
 
     /**
@@ -995,6 +991,11 @@ public class GraphController {
      * Recomputes a frame's auto bounds from committed graph data.
      */
     public void updateFrameBounds(String frameId) {
+        updateFrameBounds(frameId, new HashSet<>());
+    }
+
+    private void updateFrameBounds(String frameId, Set<String> visitedFrameIds) {
+        if (frameId == null || !visitedFrameIds.add(frameId)) return;
         FrameData frame = mContext.getGraph().getFrame(frameId);
         if (frame == null) return;
 
@@ -1015,13 +1016,12 @@ public class GraphController {
         }
 
         // 4. 通知 UI 层重绘该框
-        for (EditorContext.EditorListener l : mContext.getListeners()) {
-            l.onFrameBoundsUpdated(frameId, frame.uiPos[0], frame.uiPos[1], frame.uiSize[0], frame.uiSize[1]);
-        }
+        mContext.notifyFrameBoundsUpdated(
+                frameId, frame.uiPos[0], frame.uiPos[1], frame.uiSize[0], frame.uiSize[1]);
 
         // 5. 递归：如果当前图框本身也被包在另一个图框里，大图框也要跟着变大
         if (frame.parentFrame != null) {
-            updateFrameBounds(frame.parentFrame);
+            updateFrameBounds(frame.parentFrame, visitedFrameIds);
         }
     }
 
@@ -1032,9 +1032,7 @@ public class GraphController {
             frame.color = color;
 
             // 通知 UI 层
-            for (EditorContext.EditorListener l : mContext.getListeners()) {
-                l.onFrameTitleChanged(frameId, title); // 也可以顺便把改色逻辑放进去，UIFrame接到后重绘即可
-            }
+            mContext.notifyFrameTitleChanged(frameId, title);
         }
     }
 
@@ -1047,9 +1045,8 @@ public class GraphController {
             frame.setPosition(x, y);
 
             // 通知 UI 层该框位置已改变
-            for (EditorContext.EditorListener l : mContext.getListeners()) {
-                l.onFrameBoundsUpdated(frameId, frame.uiPos[0], frame.uiPos[1], frame.uiSize[0], frame.uiSize[1]);
-            }
+            mContext.notifyFrameBoundsUpdated(
+                    frameId, frame.uiPos[0], frame.uiPos[1], frame.uiSize[0], frame.uiSize[1]);
 
             // 联动：如果这个空框自己是被包在一个大图框里的，它移动了，外层大图框也得跟着重算
             if (frame.parentFrame != null) {

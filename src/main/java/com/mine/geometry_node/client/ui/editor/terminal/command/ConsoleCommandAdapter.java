@@ -4,10 +4,10 @@ import com.mine.geometry_node.client.ai.command.CliCommandParser;
 import com.mine.geometry_node.client.ai.command.CommandInvocationContext;
 import com.mine.geometry_node.client.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ai.command.CommandResult;
-import com.mine.geometry_node.client.ui.editor.terminal.ConsoleCommandRegistry;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 
 import java.util.List;
+import java.util.Objects;
 
 /** Converts CLI text and structured results to the legacy terminal presentation API. */
 public final class ConsoleCommandAdapter {
@@ -16,29 +16,35 @@ public final class ConsoleCommandAdapter {
 
     private final CommandRegistry registry;
 
-    public ConsoleCommandAdapter(CommandRegistry registry) {
-        this.registry = registry;
+    public interface Output {
+        void onLog(String text, int color);
+        void onClear();
     }
 
-    public void executeLine(String line, GraphSession session, ConsoleCommandRegistry.LogCallback logger) {
+    public ConsoleCommandAdapter(CommandRegistry registry) {
+        this.registry = Objects.requireNonNull(registry, "registry");
+    }
+
+    public void executeLine(String line, GraphSession session, Output output) {
         if (line == null || line.trim().isEmpty()) return;
+        Objects.requireNonNull(output, "output");
         CommandInvocationContext context = context(session);
         final CliCommandParser.ParsedInvocation invocation;
         try {
             invocation = CliCommandParser.parse(line, registry);
         } catch (CliCommandParser.ParseException exception) {
             String prefix = exception.code().equals("CLI_UNKNOWN_COMMAND") ? "语法错误: " : "";
-            logger.onLog("[Error] " + prefix + exception.getMessage(), ERROR_COLOR);
+            output.onLog("[Error] " + prefix + exception.getMessage(), ERROR_COLOR);
             return;
         }
 
         CommandResult result = registry.execute(invocation.spec(), invocation.arguments(), context);
         if (result.clientAction() == CommandResult.ClientAction.CLEAR_OUTPUT) {
-            logger.onClear();
+            output.onClear();
             return;
         }
         if (!result.message().isEmpty()) {
-            logger.onLog((result.ok() ? "[Success] " : "[Error] ") + result.message(),
+            output.onLog((result.ok() ? "[Success] " : "[Error] ") + result.message(),
                     result.ok() ? SUCCESS_COLOR : ERROR_COLOR);
         }
     }
