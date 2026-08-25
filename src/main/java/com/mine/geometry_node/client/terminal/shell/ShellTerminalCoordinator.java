@@ -59,6 +59,8 @@ public final class ShellTerminalCoordinator implements TerminalSessionListener {
 
     public TerminalSnapshot snapshot() { return emulator.snapshot(); }
 
+    public long screenRevision() { return emulator.revision(); }
+
     public void start(PtyProcessFactory factory, ProcessLaunchSpec spec) throws IOException {
         startBackend(new PtyTerminalBackend(factory, spec));
     }
@@ -99,22 +101,20 @@ public final class ShellTerminalCoordinator implements TerminalSessionListener {
     public void sendText(String text) { write(TerminalInputEncoder.text(text)); }
 
     public void sendKey(TerminalKey key) {
-        TerminalSnapshot snapshot = emulator.snapshot();
-        write(TerminalInputEncoder.key(key, snapshot.applicationCursorKeys()));
+        write(TerminalInputEncoder.key(key, emulator.applicationCursorKeys()));
     }
 
     public void sendControl(char character) { write(TerminalInputEncoder.control(character)); }
 
     public boolean sendMouseWheel(boolean up, int column, int row) {
-        TerminalSnapshot snapshot = emulator.snapshot();
-        if (!snapshot.mouseTracking()) return false;
-        write(TerminalInputEncoder.mouseWheel(up, column, row, snapshot.sgrMouseMode()));
+        if (!emulator.mouseTracking()) return false;
+        write(TerminalInputEncoder.mouseWheel(up, column, row, emulator.sgrMouseMode()));
         return true;
     }
 
     public void paste(String text) {
         try {
-            write(TerminalInputEncoder.paste(text, emulator.snapshot().bracketedPaste()));
+            write(TerminalInputEncoder.paste(text, emulator.bracketedPaste()));
         } catch (IllegalArgumentException error) {
             observer.onError(safeMessage(error));
         }

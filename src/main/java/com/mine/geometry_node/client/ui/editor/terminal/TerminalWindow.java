@@ -12,7 +12,10 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ui.editor.terminal.command.BoundGraphQueryTarget;
+import com.mine.geometry_node.client.ui.editor.terminal.command.BoundGraphScope;
 import com.mine.geometry_node.client.ui.editor.terminal.command.MinecraftClientMcpGateway;
+import com.mine.geometry_node.client.ui.shell.MainUiServices;
+import com.mine.geometry_node.client.ui.shell.layer.MainUiLayerManager;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import icyllis.modernui.core.Context;
@@ -42,6 +45,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     private final EditorSessionState.TerminalState mSessionState;
     private final Runnable mSessionChanged;
     private boolean mInitializing;
+    private MainUiLayerManager mLayerManager;
 
     public TerminalWindow(Context context) {
         this(context, new EditorSessionState.TerminalState(), null);
@@ -161,8 +165,19 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     }
 
     @Override public View getView() { return this; }
-    @Override public void onShow() { if (mCurrentIndex >= 0) mTabs.get(mCurrentIndex).requestInputFocus(); }
-    @Override public void onHide() { captureSessionState(); }
+    @Override
+    public void onShow() {
+        mLayerManager = MainUiServices.require(this).layerManager();
+        for (TerminalTab tab : mTabs) tab.approvals.bind(mLayerManager);
+        if (mCurrentIndex >= 0) mTabs.get(mCurrentIndex).requestInputFocus();
+    }
+    @Override
+    public void onHide() {
+        captureSessionState();
+        if (mCurrentIndex >= 0 && mCurrentIndex < mTabs.size()) {
+            mTabs.get(mCurrentIndex).shellView.releaseUiInteraction();
+        }
+    }
 
     @Override
     public void onDispose() {
@@ -172,6 +187,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         }
         mTabs.clear();
         mContainer.removeAllViews();
+        mLayerManager = null;
     }
 
     private TerminalTab createTerminalTab(EditorSessionState.TerminalTabState saved) {
@@ -187,11 +203,17 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
                 new TerminalSize(80, 24), new Pty4jProcessFactory());
         TerminalSession session = new TerminalSession(id, title, mode, profileId, coordinator);
         coordinator.bind(session);
+        GraphPatchApprovalController approvals = new GraphPatchApprovalController(getContext(), id.toString());
+        if (mLayerManager != null) approvals.bind(mLayerManager);
         ShellTerminalView[] viewHolder = new ShellTerminalView[1];
         ShellTerminalView shellView = new ShellTerminalView(getContext(), coordinator,
-                (size, generation) -> startMcpPowerShell(coordinator, viewHolder[0], size, generation));
+                (size, generation) -> startMcpPowerShell(
+                        coordinator, viewHolder[0], approvals, size, generation));
         viewHolder[0] = shellView;
-        return new TerminalTab(session, new ConsoleView(getContext()), shellView);
+        approvals.setFocusRestorer(() -> {
+            if (shellView.isAttachedToWindow()) shellView.requestInputFocus();
+        });
+        return new TerminalTab(session, new ConsoleView(getContext()), shellView, approvals);
     }
 
     private void captureSessionState() {
@@ -248,14 +270,15 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     }
 
     private static void startMcpPowerShell(ShellTerminalCoordinator coordinator,
-                                           ShellTerminalView view, TerminalSize size, long generation) {
+                                           ShellTerminalView view, GraphPatchApprovalController approvals,
+                                           TerminalSize size, long generation) {
         GraphSession graphSession = DocumentManager.INSTANCE.getActiveSession();
         if (graphSession == null) {
             view.reportError("请先打开一个蓝图，再启动 PowerShell");
             return;
         }
-        var boundGraph = graphSession.editorContext.getCurrentGraph();
-        var target = new BoundGraphQueryTarget(graphSession, boundGraph);
+        var scope = BoundGraphScope.capture(graphSession.editorContext);
+        var target = new BoundGraphQueryTarget(graphSession, scope, approvals);
         var gateway = new MinecraftClientMcpGateway(CommandCatalog.registry(), target);
         Thread.ofVirtual().name("geometry-node-mcp-powershell-start").start(() -> {
             McpPowerShellRun run = null;
@@ -299,11 +322,14 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         private final TerminalSession session;
         private final ConsoleView commandView;
         private final ShellTerminalView shellView;
+        private final GraphPatchApprovalController approvals;
 
-        private TerminalTab(TerminalSession session, ConsoleView commandView, ShellTerminalView shellView) {
+        private TerminalTab(TerminalSession session, ConsoleView commandView, ShellTerminalView shellView,
+                            GraphPatchApprovalController approvals) {
             this.session = session;
             this.commandView = commandView;
             this.shellView = shellView;
+            this.approvals = approvals;
         }
 
         private View activeView() { return session.mode() == TerminalMode.COMMAND ? commandView : shellView; }
@@ -315,6 +341,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
 
         @Override
         public void close() {
+            approvals.close();
             shellView.dispose();
             session.close();
         }

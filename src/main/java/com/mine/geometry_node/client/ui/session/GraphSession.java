@@ -6,8 +6,10 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class GraphSession implements AutoCloseable {
+    private final UUID mSessionId = UUID.randomUUID();
     private final GraphFileReference mFileReference;
     public String tabName;
     public boolean isDirty = false;
@@ -39,6 +41,15 @@ public class GraphSession implements AutoCloseable {
 
     public GraphFileReference fileReference() {
         return mFileReference;
+    }
+
+    /** Runtime-only identity. It is never persisted and cannot authorize a reopened document. */
+    public UUID sessionId() {
+        return mSessionId;
+    }
+
+    public long revision() {
+        return editorContext.getCommandManager().revision();
     }
 
     public Path filePath() {

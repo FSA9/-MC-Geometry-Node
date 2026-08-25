@@ -106,6 +106,11 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
         notifyChanged();
     }
 
+    @Override
+    public void onGraphReloaded() {
+        notifyChanged();
+    }
+
     private static boolean isQuestConditionNode(NodeData nodeData) {
         if (nodeData == null || nodeData.type == null) return false;
         if (CreateQuestCondition.TYPE_ID.equals(nodeData.type)) return true;

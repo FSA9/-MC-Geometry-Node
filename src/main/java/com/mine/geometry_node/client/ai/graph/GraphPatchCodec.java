@@ -46,9 +46,13 @@ public final class GraphPatchCodec {
     public static GraphPatch fromJsonTree(JsonObject root) {
         requireOnly(root, "protocol_version", "session_id", "scope_id", "expected_revision",
                 "idempotency_key", "approval_id", "operations");
-        JsonArray array = required(root, "operations").getAsJsonArray();
+        JsonArray array = array(root, "operations");
         List<GraphPatch.Operation> operations = new ArrayList<>(array.size());
-        for (JsonElement element : array) operations.add(readOperation(element.getAsJsonObject()));
+        for (int index = 0; index < array.size(); index++) {
+            JsonElement element = array.get(index);
+            if (!element.isJsonObject()) throw new JsonParseException("operations[" + index + "] must be an object");
+            operations.add(readOperation(element.getAsJsonObject()));
+        }
         return new GraphPatch(
                 integer(root, "protocol_version"),
                 new GraphPatch.SessionRef(string(root, "session_id")),
@@ -167,7 +171,7 @@ public final class GraphPatchCodec {
     }
 
     private static GraphPatch.NodeRef node(JsonObject parent, String name) {
-        JsonObject json = required(parent, name).getAsJsonObject();
+        JsonObject json = object(parent, name);
         requireOnly(json, "id", "alias");
         return new GraphPatch.NodeRef(optionalString(json, "id"), optionalString(json, "alias"));
     }
@@ -183,13 +187,13 @@ public final class GraphPatchCodec {
     }
 
     private static GraphPatch.FrameRef frame(JsonObject parent, String name) {
-        JsonObject json = required(parent, name).getAsJsonObject();
+        JsonObject json = object(parent, name);
         requireOnly(json, "id", "alias");
         return new GraphPatch.FrameRef(optionalString(json, "id"), optionalString(json, "alias"));
     }
 
     private static GraphPatch.PortRef port(JsonObject parent, String name) {
-        JsonObject json = required(parent, name).getAsJsonObject();
+        JsonObject json = object(parent, name);
         requireOnly(json, "node", "port_id");
         return new GraphPatch.PortRef(node(json, "node"), string(json, "port_id"));
     }
@@ -199,14 +203,14 @@ public final class GraphPatchCodec {
     }
 
     private static GraphPatch.Position position(JsonObject parent, String name) {
-        JsonObject json = required(parent, name).getAsJsonObject();
+        JsonObject json = object(parent, name);
         requireOnly(json, "x", "y");
         return new GraphPatch.Position(number(json, "x"), number(json, "y"));
     }
 
     private static Map<String, JsonElement> jsonMap(JsonObject parent, String name) {
         if (!parent.has(name)) return Map.of();
-        JsonObject source = parent.getAsJsonObject(name);
+        JsonObject source = object(parent, name);
         Map<String, JsonElement> values = new LinkedHashMap<>();
         for (String key : source.keySet()) values.put(key, source.get(key));
         return values;
@@ -215,6 +219,18 @@ public final class GraphPatchCodec {
     private static JsonElement required(JsonObject object, String name) {
         if (!object.has(name) || object.get(name).isJsonNull()) throw new JsonParseException("missing field: " + name);
         return object.get(name);
+    }
+
+    private static JsonObject object(JsonObject parent, String name) {
+        JsonElement value = required(parent, name);
+        if (!value.isJsonObject()) throw new JsonParseException(name + " must be an object");
+        return value.getAsJsonObject();
+    }
+
+    private static JsonArray array(JsonObject parent, String name) {
+        JsonElement value = required(parent, name);
+        if (!value.isJsonArray()) throw new JsonParseException(name + " must be an array");
+        return value.getAsJsonArray();
     }
 
     private static JsonElement optional(JsonObject object, String name) {

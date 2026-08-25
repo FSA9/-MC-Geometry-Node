@@ -4,16 +4,20 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.ai.command.CommandResult;
+import com.mine.geometry_node.client.ai.graph.PortEditCapabilityResolver;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.viewport.menu.NodeSearchService;
 import com.mine.geometry_node.client.ui.viewport.node.comment.NodeCommentTextBuilder;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortOptionResolver;
+import com.mine.geometry_node.core.node.port.PortOptionContext;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.UIHint;
@@ -65,15 +69,150 @@ final class TerminalGraphQueryService {
         return CommandResult.success("NODE_TYPES_FOUND", "找到 " + page.total() + " 个匹配的节点类型", data);
     }
 
-    CommandResult searchGraphNodes(String query, int offset, int limit) {
+    CommandResult getNodeTypeDetails(String typeId) {
+        NodeDef definition = NodeRegistry.INSTANCE.getDefaultDefinition(typeId);
+        if (definition == null) return missingNodeType(typeId);
+
+        JsonArray ports = new JsonArray();
+        int portCount = 0;
+        boolean declaresDynamicPorts = false;
+        for (PortRow row : definition.rows()) {
+            if (isDynamic(row)) declaresDynamicPorts = true;
+            if (row.leftPort() != null) {
+                portCount++;
+                if (ports.size() < DETAILS_COLLECTION_LIMIT) {
+                    ports.add(nodeTypePortDetails(definition, row, row.leftPort(), "input"));
+                }
+            }
+            if (row.rightPort() != null) {
+                portCount++;
+                if (ports.size() < DETAILS_COLLECTION_LIMIT) {
+                    ports.add(nodeTypePortDetails(definition, row, row.rightPort(), "output"));
+                }
+            }
+        }
+        JsonObject dynamicLimits = new JsonObject();
+        addOptionalInt(dynamicLimits, "min_inputs", definition.getMeta(SchemaKeys.MIN_DYNAMIC_INPUT).orElse(null));
+        addOptionalInt(dynamicLimits, "max_inputs", definition.getMeta(SchemaKeys.MAX_DYNAMIC_INPUT).orElse(null));
+        addOptionalInt(dynamicLimits, "min_outputs", definition.getMeta(SchemaKeys.MIN_DYNAMIC_OUTPUT).orElse(null));
+        addOptionalInt(dynamicLimits, "max_outputs", definition.getMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT).orElse(null));
+        declaresDynamicPorts |= dynamicLimits.size() > 0;
+
+        JsonObject data = new JsonObject();
+        data.addProperty("type_id", definition.typeId());
+        data.addProperty("display_name", definition.displayName().getString());
+        data.addProperty("category", definition.category().name().toLowerCase(Locale.ROOT));
+        data.addProperty("definition_comment", NodeCommentTextBuilder.build(definition));
+        data.addProperty("definition_mode", "default");
+        data.addProperty("declares_dynamic_ports", declaresDynamicPorts);
+        data.addProperty("port_count", portCount);
+        data.addProperty("ports_truncated", portCount > ports.size());
+        data.add("dynamic_limits", dynamicLimits);
+        data.add("ports", ports);
+        return CommandResult.success("NODE_TYPE_DETAILS", "已读取节点类型默认定义 " + typeId, data);
+    }
+
+    CommandResult getNodeTypePortOptions(String typeId, String portId, String query, int offset, int limit) {
+        NodeDef definition = NodeRegistry.INSTANCE.getDefaultDefinition(typeId);
+        if (definition == null) return missingNodeType(typeId);
+        PortRow row = findInputRow(definition, portId);
+        if (row == null) return CommandResult.failure("PORT_NOT_FOUND", "节点类型不存在输入端口: " + portId);
+        if (row.uiHint() != UIHint.SELECT) {
+            return CommandResult.failure("PORT_OPTIONS_UNSUPPORTED", "指定节点类型端口不是 SELECT 下拉端口");
+        }
+        PortOptionResolver.Resolution resolution = resolveOptions(row);
+        List<PortOptionResolver.Option> matches = resolution.options().stream()
+                .filter(option -> NodeSearchService.matches(query, option.id(), option.label())).toList();
+        PageSlice<PortOptionResolver.Option> page = page(matches, offset, limit);
+        JsonArray items = new JsonArray();
+        for (PortOptionResolver.Option option : page.items()) {
+            JsonObject item = new JsonObject();
+            item.addProperty("id", option.id());
+            item.addProperty("label", option.label());
+            items.add(item);
+        }
+        JsonObject data = new JsonObject();
+        data.addProperty("type_id", typeId);
+        data.addProperty("port_id", portId);
+        data.addProperty("source", resolution.source().name().toLowerCase(Locale.ROOT));
+        data.addProperty("registry_id", resolution.registryId());
+        data.addProperty("available", resolution.available());
+        data.addProperty("option_context_token", PortOptionContext.token(resolution));
+        data.add("items", items);
+        data.add("page", pageJson(page.offset(), page.limit(), page.total(), page.items().size()));
+        return CommandResult.success("NODE_TYPE_PORT_OPTIONS", "已读取节点类型端口选项", data);
+    }
+
+    CommandResult searchGraphNodes(String query, String typeId, String category, String commentFilter,
+                                   String connectionState, int offset, int limit) {
         GraphReadSnapshot snapshot = snapshot();
         List<Map.Entry<String, NodeData>> matches = snapshot.nodes().entrySet().stream()
-                .filter(entry -> matchesNode(entry.getKey(), entry.getValue(), query)).toList();
+                .filter(entry -> matchesNode(entry.getKey(), entry.getValue(), query))
+                .filter(entry -> matchesTypeAndCategory(entry.getValue(), typeId, category))
+                .filter(entry -> matchesComment(entry.getValue(), commentFilter))
+                .filter(entry -> matchesConnectionState(snapshot, entry.getKey(), connectionState)).toList();
         PageSlice<Map.Entry<String, NodeData>> page = page(matches, offset, limit);
         JsonArray items = new JsonArray();
-        for (Map.Entry<String, NodeData> entry : page.items()) items.add(nodeSummary(entry.getKey(), entry.getValue()));
+        for (Map.Entry<String, NodeData> entry : page.items()) {
+            JsonObject item = nodeSummary(entry.getKey(), entry.getValue());
+            item.addProperty("incoming_count", snapshot.incoming(entry.getKey()).size());
+            item.addProperty("outgoing_count", snapshot.outgoing(entry.getKey()).size());
+            items.add(item);
+        }
         JsonObject data = pagedData("query", query, items, page.offset(), page.limit(), page.total());
+        data.addProperty("type_id", typeId);
+        data.addProperty("category", category);
+        data.addProperty("comment_filter", commentFilter);
+        data.addProperty("connection_state", connectionState);
         return CommandResult.success("GRAPH_NODES_FOUND", "在蓝图中找到 " + page.total() + " 个匹配节点", data);
+    }
+
+    CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
+        GraphReadSnapshot snapshot = snapshot();
+        List<Map.Entry<String, NodeData>> matchingNodes = snapshot.nodes().entrySet().stream()
+                .filter(entry -> matchesTypeAndCategory(entry.getValue(), typeId, category)).toList();
+        Set<String> matchingIds = matchingNodes.stream().map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
+        long flowConnections = snapshot.edges().stream().filter(edge -> edge.kind().equals("flow")).count();
+        long dataConnections = snapshot.edges().size() - flowConnections;
+        long inducedConnections = snapshot.edges().stream()
+                .filter(edge -> matchingIds.contains(edge.outputNodeId()) && matchingIds.contains(edge.inputNodeId())).count();
+        long commentedNodes = matchingNodes.stream().filter(entry -> hasText(entry.getValue().comment)).count();
+        long unconnectedNodes = matchingNodes.stream().filter(entry -> snapshot.incoming(entry.getKey()).isEmpty()
+                && snapshot.outgoing(entry.getKey()).isEmpty()).count();
+
+        Map<String, Integer> counts = new java.util.TreeMap<>();
+        if (!"none".equals(groupBy)) {
+            for (Map.Entry<String, NodeData> entry : matchingNodes) {
+                String key = "type".equals(groupBy) ? text(entry.getValue().type) : nodeCategory(entry.getValue());
+                counts.merge(key, 1, Integer::sum);
+            }
+        }
+        PageSlice<Map.Entry<String, Integer>> groupsPage = page(List.copyOf(counts.entrySet()), offset, limit);
+        JsonArray groups = new JsonArray();
+        for (Map.Entry<String, Integer> entry : groupsPage.items()) {
+            JsonObject item = new JsonObject();
+            item.addProperty("key", entry.getKey());
+            item.addProperty("count", entry.getValue());
+            groups.add(item);
+        }
+
+        NodeGraph current = snapshot.graph();
+        JsonObject data = new JsonObject();
+        data.addProperty("filter_type_id", typeId);
+        data.addProperty("filter_category", category);
+        data.addProperty("group_by", groupBy);
+        data.addProperty("total_node_count", snapshot.nodes().size());
+        data.addProperty("node_count", matchingNodes.size());
+        data.addProperty("total_connection_count", snapshot.edges().size());
+        data.addProperty("flow_connection_count", flowConnections);
+        data.addProperty("data_connection_count", dataConnections);
+        data.addProperty("induced_connection_count", inducedConnections);
+        data.addProperty("frame_count", current == null || current.frames == null ? 0 : current.frames.size());
+        data.addProperty("commented_node_count", commentedNodes);
+        data.addProperty("unconnected_node_count", unconnectedNodes);
+        data.add("groups", groups);
+        data.add("page", pageJson(groupsPage.offset(), groupsPage.limit(), groupsPage.total(), groupsPage.items().size()));
+        return CommandResult.success("GRAPH_STATS", "已读取蓝图统计", data);
     }
 
     CommandResult getNodeDetails(String nodeId) {
@@ -187,8 +326,7 @@ final class TerminalGraphQueryService {
         if (row.uiHint() != UIHint.SELECT) {
             return CommandResult.failure("PORT_OPTIONS_UNSUPPORTED", "指定端口不是 SELECT 下拉端口");
         }
-        PortOptionResolver.Resolution resolution = PortOptionResolver.resolve(row, registryAccess(),
-                key -> Component.translatable(key).getString());
+        PortOptionResolver.Resolution resolution = resolveOptions(row);
         Object selectedRaw = node.inputs != null && node.inputs.containsKey(portId)
                 ? node.inputs.get(portId) : row.leftPort().defaultValue();
         String selected = selectedRaw == null ? "" : selectedRaw.toString();
@@ -210,6 +348,7 @@ final class TerminalGraphQueryService {
         data.addProperty("registry_id", resolution.registryId());
         data.addProperty("available", resolution.available());
         data.addProperty("selected_value", selected);
+        data.addProperty("option_context_token", PortOptionContext.token(resolution));
         data.add("items", items);
         data.add("page", pageJson(page.offset(), page.limit(), page.total(), page.items().size()));
         return CommandResult.success("PORT_OPTIONS", "已读取端口选项", data);
@@ -223,6 +362,33 @@ final class TerminalGraphQueryService {
         NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
         return NodeSearchService.matches(query, nodeId, node.type, node.customName, node.comment,
                 definition == null ? "" : definition.displayName().getString(), NodeCommentTextBuilder.build(definition));
+    }
+
+    private static boolean matchesTypeAndCategory(NodeData node, String typeId, String category) {
+        if (!typeId.isEmpty() && !typeId.equals(text(node.type))) return false;
+        return category.isEmpty() || category.equals(nodeCategory(node));
+    }
+
+    private static boolean matchesComment(NodeData node, String filter) {
+        return switch (filter) {
+            case "with" -> hasText(node.comment);
+            case "without" -> !hasText(node.comment);
+            default -> true;
+        };
+    }
+
+    private static boolean matchesConnectionState(GraphReadSnapshot snapshot, String nodeId, String state) {
+        boolean connected = !snapshot.incoming(nodeId).isEmpty() || !snapshot.outgoing(nodeId).isEmpty();
+        return switch (state) {
+            case "connected" -> connected;
+            case "unconnected" -> !connected;
+            default -> true;
+        };
+    }
+
+    private static String nodeCategory(NodeData node) {
+        NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+        return definition == null ? "" : definition.category().name().toLowerCase(Locale.ROOT);
     }
 
     private static JsonObject nodeSummary(String nodeId, NodeData node) {
@@ -262,6 +428,58 @@ final class TerminalGraphQueryService {
         result.addProperty("effective_value_json", valueJson(effective));
         result.addProperty("comment", portComment(definition, port.id(), input));
         return result;
+    }
+
+    private static JsonObject nodeTypePortDetails(NodeDef definition, PortRow row, PortDef port, String direction) {
+        boolean input = "input".equals(direction);
+        PortOptionResolver.Resolution resolution = input && row.uiHint() == UIHint.SELECT
+                ? resolveOptions(row)
+                : new PortOptionResolver.Resolution(PortOptionResolver.Source.NONE, "", false, List.of());
+        PortEditCapabilityResolver.Capability capability;
+        if (!input) {
+            capability = new PortEditCapabilityResolver.Capability(false, "output ports are not directly writable");
+        } else if (row.uiHint() == UIHint.SELECT) {
+            boolean writable = resolution.available() && !resolution.options().isEmpty();
+            capability = new PortEditCapabilityResolver.Capability(writable,
+                    writable ? "" : "select options are unavailable or empty");
+        } else {
+            capability = PortEditCapabilityResolver.resolve(row);
+        }
+        JsonObject options = new JsonObject();
+        options.addProperty("source", resolution.source().name().toLowerCase(Locale.ROOT));
+        options.addProperty("registry_id", resolution.registryId());
+        options.addProperty("available", resolution.available());
+        options.addProperty("total", resolution.options().size());
+
+        JsonObject result = new JsonObject();
+        result.addProperty("port_id", port.id());
+        result.addProperty("direction", direction);
+        result.addProperty("type", port.type() == null ? "any" : port.type().name().toLowerCase(Locale.ROOT));
+        result.addProperty("display_name", port.displayName().getString());
+        result.addProperty("ui_hint", row.uiHint() == null ? "default" : row.uiHint().name().toLowerCase(Locale.ROOT));
+        result.addProperty("hidden", port.hidePin());
+        result.addProperty("default_value_json", valueJson(port.defaultValue()));
+        result.addProperty("comment", portComment(definition, port.id(), input));
+        result.addProperty("dynamic", isDynamic(row));
+        result.addProperty("writable", capability.writable());
+        result.addProperty("write_operation", capability.writable()
+                ? row.uiHint() == UIHint.SELECT ? "set_select_value" : "set_port_value" : "");
+        result.addProperty("write_restriction", capability.reason());
+        result.add("options", options);
+        return result;
+    }
+
+    private static boolean isDynamic(PortRow row) {
+        return row != null && row.hintParams() != null
+                && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC));
+    }
+
+    private static PortOptionResolver.Resolution resolveOptions(PortRow row) {
+        return PortOptionResolver.resolve(row, registryAccess(), key -> Component.translatable(key).getString());
+    }
+
+    private static void addOptionalInt(JsonObject target, String name, Integer value) {
+        if (value != null) target.addProperty(name, value);
     }
 
     private static String effectivePortName(NodeData node, String category, PortDef port, String fallback) {
@@ -412,6 +630,10 @@ final class TerminalGraphQueryService {
         return CommandResult.failure("NODE_NOT_FOUND", "当前蓝图不存在节点: " + nodeId);
     }
 
+    private static CommandResult missingNodeType(String typeId) {
+        return CommandResult.failure("NODE_TYPE_NOT_FOUND", "注册表不存在节点类型: " + typeId);
+    }
+
     private static JsonArray edgeArray(List<GraphReadSnapshot.Edge> edges) {
         JsonArray array = new JsonArray();
         for (GraphReadSnapshot.Edge edge : edges) {
@@ -466,6 +688,8 @@ final class TerminalGraphQueryService {
     }
 
     private static String text(String value) { return value == null ? "" : value; }
+
+    private static boolean hasText(String value) { return value != null && !value.isBlank(); }
 
     private static double finite(float value) { return Float.isFinite(value) ? value : 0.0; }
 

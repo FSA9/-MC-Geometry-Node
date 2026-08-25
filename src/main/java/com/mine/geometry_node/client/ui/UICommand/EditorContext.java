@@ -1,10 +1,12 @@
 package com.mine.geometry_node.client.ui.UICommand;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.ui.viewport.GraphController;
 import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
+import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -48,7 +50,11 @@ public class EditorContext {
             return false;
         }
 
+        String before = GraphJsonIO.toJson(mGraph);
         GroupNodeFactory.ensureBoundaryNodes(groupNode);
+        if (!before.equals(GraphJsonIO.toJson(mGraph))) {
+            mCommandManager.recordExternalMutation();
+        }
         mCurrentGroupNode = groupNode;
         mCurrentGraph = createGroupScopeGraph(groupNode);
         return true;
@@ -103,6 +109,7 @@ public class EditorContext {
         default void onNodeStructureChanged(NodeData nodeData) {}
         default void onGraphMetadataChanged() {}
         default void onGraphConnectionsRebuildRequested() {}
+        default void onGraphReloaded() {}
         default void onFrameAdded(FrameData frame) {}
         default void onFrameRemoved(String frameId) {}
         default void onFrameBoundsUpdated(String frameId, float x, float y, float w, float h) {}
@@ -153,6 +160,51 @@ public class EditorContext {
 
     public void notifyGraphConnectionsRebuildRequested() {
         for (EditorListener l : mListeners) l.onGraphConnectionsRebuildRequested();
+    }
+
+    public void replaceGraphState(NodeGraph replacement) {
+        if (replacement == null) throw new IllegalArgumentException("replacement graph cannot be null");
+        List<String> groupPath = currentGroupPath();
+        mGraph.graphKind = replacement.graphKind;
+        mGraph.tags = replacement.tags;
+        mGraph.comment = replacement.comment;
+        mGraph.quest = replacement.quest;
+        mGraph.version = replacement.version;
+        mGraph.nodes = replacement.nodes;
+        mGraph.frames = replacement.frames;
+        restoreScope(groupPath);
+        for (EditorListener listener : List.copyOf(mListeners)) {
+            try {
+                listener.onGraphReloaded();
+            } catch (RuntimeException failure) {
+                GeometryNode.LOGGER.error("Editor listener failed while reloading graph: listener={}",
+                        listener.getClass().getName(), failure);
+            }
+        }
+    }
+
+    private List<String> currentGroupPath() {
+        ArrayList<String> reversed = new ArrayList<>();
+        for (NodeData node = mCurrentGroupNode; node != null; node = node.parentGroupNode) {
+            reversed.add(node.id);
+        }
+        java.util.Collections.reverse(reversed);
+        return List.copyOf(reversed);
+    }
+
+    private void restoreScope(List<String> groupPath) {
+        NodeData group = null;
+        java.util.Map<String, NodeData> nodes = mGraph.nodes;
+        for (String id : groupPath) {
+            group = nodes == null ? null : nodes.get(id);
+            if (group == null || !group.isGroupNode()) {
+                group = null;
+                break;
+            }
+            nodes = group.ensureSubNodes();
+        }
+        mCurrentGroupNode = group;
+        mCurrentGraph = group == null ? mGraph : createGroupScopeGraph(group);
     }
 
     public void notifyExecutionConnectionAdded(String outN, String outP, String inN, String inP) {

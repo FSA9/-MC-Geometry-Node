@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.shell.layer.modal.ModalOptions;
 import com.mine.geometry_node.client.ui.shell.layer.ephemeral.TransientOptions;
 import com.mine.geometry_node.client.ui.shell.layer.ephemeral.TransientOverlay;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.core.Core;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
@@ -49,6 +50,7 @@ public final class MainUiLayerManager implements AutoCloseable {
     }
 
     public OverlayHandle showTransient(TransientOverlay overlay, TransientOptions options) {
+        Core.checkUiThread();
         ensureOpen();
         Objects.requireNonNull(overlay, "overlay");
         Objects.requireNonNull(options, "options");
@@ -72,6 +74,7 @@ public final class MainUiLayerManager implements AutoCloseable {
     }
 
     public OverlayHandle showModal(MainUiModal modal, ModalOptions options) {
+        Core.checkUiThread();
         ensureOpen();
         Objects.requireNonNull(modal, "modal");
         Objects.requireNonNull(options, "options");
@@ -162,14 +165,26 @@ public final class MainUiLayerManager implements AutoCloseable {
         }
         entry.container = container;
         entry.content = content;
-        container.addView(content, Objects.requireNonNull(
-                overlay.createLayoutParams(host), "overlay layout params"));
-        host.addView(container, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-        mounted.put(overlay, entry);
-        return entry;
+        try {
+            container.addView(content, Objects.requireNonNull(
+                    overlay.createLayoutParams(host), "overlay layout params"));
+            host.addView(container, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+            ));
+            mounted.put(overlay, entry);
+            return entry;
+        } catch (RuntimeException failure) {
+            entry.open = false;
+            mounted.remove(overlay);
+            try {
+                if (container.getParent() == host) host.removeView(container);
+                if (content.getParent() == container) container.removeView(content);
+            } catch (RuntimeException cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
     }
 
     private void notifyShown(Entry entry) {
@@ -206,6 +221,7 @@ public final class MainUiLayerManager implements AutoCloseable {
         if (entry.container.getParent() == entry.host) {
             entry.host.removeView(entry.container);
         }
+        repairEmptyModalHost();
         updateHostVisibility(entry.host);
         notifyClosed(entry, reason);
         restoreFocusAfterClose(entry);
@@ -244,7 +260,7 @@ public final class MainUiLayerManager implements AutoCloseable {
             }
             return;
         }
-        if (entry.returnFocusTarget != null) {
+        if (entry.returnFocusTarget != null && entry.returnFocusTarget.isAttachedToWindow()) {
             entry.returnFocusTarget.requestFocus();
         }
     }
@@ -274,6 +290,13 @@ public final class MainUiLayerManager implements AutoCloseable {
 
     private void updateHostVisibility(MainUiLayerHost host) {
         host.setVisibility(host.getChildCount() == 0 ? View.GONE : View.VISIBLE);
+    }
+
+    private void repairEmptyModalHost() {
+        if (!modalStack.isEmpty() || modalHost.getChildCount() == 0) return;
+        GeometryNode.LOGGER.error("Modal stack is empty but the modal host still has {} child views; clearing stale input layer",
+                modalHost.getChildCount());
+        modalHost.removeAllViews();
     }
 
     private void ensureNotMounted(MainUiOverlay overlay) {

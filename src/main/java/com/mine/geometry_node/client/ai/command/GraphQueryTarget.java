@@ -4,7 +4,14 @@ package com.mine.geometry_node.client.ai.command;
 public interface GraphQueryTarget extends CommandInvocationContext.CommandTarget {
     CommandResult searchNodeTypes(String query, int offset, int limit);
 
-    CommandResult searchGraphNodes(String query, int offset, int limit);
+    CommandResult getNodeTypeDetails(String typeId);
+
+    CommandResult getNodeTypePortOptions(String typeId, String portId, String query, int offset, int limit);
+
+    CommandResult searchGraphNodes(String query, String typeId, String category, String commentFilter,
+                                   String connectionState, int offset, int limit);
+
+    CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit);
 
     CommandResult getNodeDetails(String nodeId);
 

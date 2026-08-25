@@ -24,6 +24,7 @@ public final class CommandCatalog {
         registry.register(delete());
         registry.register(connect());
         QueryCommandCatalog.registerInto(registry);
+        registry.register(applyGraphPatch());
         registry.register(help(registry));
         return registry;
     }
@@ -94,6 +95,46 @@ public final class CommandCatalog {
                 CommandSpec.objectSchema(output, "commands"), ToolContract.CommandEffect.READ_ONLY,
                 ToolContract.RiskLevel.READ_ONLY, false, CommandSpec.Exposure.CLI_ONLY,
                 (context, values) -> executeHelp(registry, values));
+    }
+
+    private static CommandSpec applyGraphPatch() {
+        JsonObject patchSchema = stringSchema(2);
+        patchSchema.addProperty("maxLength", 262_144);
+        List<CommandArgumentSpec> arguments = List.of(argument("patch_json",
+                "GraphPatch v1 JSON；session_id、scope_id、expected_revision 必须来自当前图上下文",
+                true, null, patchSchema, null));
+        JsonObject output = CommandSpec.objectSchema(properties(
+                property("approval_id", stringSchema(1)), property("patch_hash", stringSchema(64)),
+                property("change_id", stringSchema(1)), property("revision", integerSchema(0)),
+                property("operation_count", integerSchema(1))),
+                "approval_id", "patch_hash", "change_id", "revision", "operation_count");
+        return new CommandSpec("apply_graph_patch", 1, List.of(),
+                "提交 GraphPatch v1 JSON 字符串。根字段: protocol_version=1, session_id, scope_id, "
+                        + "expected_revision, idempotency_key, operations。当前支持 add_node(alias,type_id,position,properties={}), "
+                        + "move_node(node,position), set_port_value(port,value,expected_old_value), "
+                        + "set_select_value(port,option_id,expected_old_value,option_context_token), "
+                        + "connect(from,to)。position 必须是 {x:number,y:number}；node 使用 {id:string} 或此前 "
+                        + "add_node 的 {alias:string}；port 使用 {node:{id|alias},port_id:string}。connect.from 必须是输出端口，"
+                        + "connect.to 必须是输入端口；不要猜端口 ID。"
+                        + "session/scope/revision 来自 get_graph_stats 或 get_graph_context；创建前 SELECT token 来自 "
+                        + "get_node_type_port_options，已有实例 token 来自 get_port_options。"
+                        + "服务端先 dry-run，GeometryNode 原生 Diff 批准后原子提交为一次 Undo；不要提供 approval_id",
+                "apply_graph_patch <patch_json>", arguments, output,
+                ToolContract.CommandEffect.GRAPH_WRITE, ToolContract.RiskLevel.REVERSIBLE_EDIT,
+                true, true, CommandSpec.Exposure.MODEL_VISIBLE, (context, values) -> {
+                    if (!(context.target() instanceof GraphPatchCommandTarget target)) {
+                        return CommandResult.failure("GRAPH_PATCH_UNAVAILABLE", "当前目标不支持 GraphPatch 事务");
+                    }
+                    try {
+                        String patchJson = values.get("patch_json").getAsString();
+                        com.mine.geometry_node.client.ai.graph.GraphPatchJsonLimits.validate(patchJson);
+                        var patch = com.mine.geometry_node.client.ai.graph.GraphPatchCodec.fromJson(
+                                patchJson);
+                        return target.applyGraphPatch(patch, context.cancellation());
+                    } catch (com.google.gson.JsonParseException | IllegalArgumentException failure) {
+                        return CommandResult.failure("GRAPH_PATCH_INVALID", "GraphPatch JSON 无效: " + failure.getMessage());
+                    }
+                });
     }
 
     private static CommandResult executeAddNode(CommandInvocationContext context, JsonObject arguments) {
@@ -197,6 +238,11 @@ public final class CommandCatalog {
     }
 
     private static JsonObject numberSchema() { return CommandSpec.scalarSchema("number"); }
+    private static JsonObject integerSchema(int minimum) {
+        JsonObject schema = CommandSpec.scalarSchema("integer");
+        schema.addProperty("minimum", minimum);
+        return schema;
+    }
     private static JsonObject emptySchema() { return CommandSpec.objectSchema(new JsonObject()); }
 
     private static java.util.Map.Entry<String, JsonObject> property(String name, JsonObject schema) {

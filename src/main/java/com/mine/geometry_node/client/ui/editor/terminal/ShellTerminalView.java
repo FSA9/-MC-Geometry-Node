@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.terminal.TerminalExit;
 import com.mine.geometry_node.client.terminal.TerminalRunState;
 import com.mine.geometry_node.client.terminal.TerminalSize;
@@ -15,6 +16,8 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.text.Editable;
+import icyllis.modernui.text.Selection;
+import icyllis.modernui.text.Spannable;
 import icyllis.modernui.text.SpannableStringBuilder;
 import icyllis.modernui.text.Spanned;
 import icyllis.modernui.text.TextWatcher;
@@ -35,6 +38,7 @@ import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -42,10 +46,14 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ShellTerminalView extends LinearLayout implements ShellTerminalObserver {
     private static final float CELL_HEIGHT_DP = 17f;
     private static final int STATUS_HEIGHT_DP = 24;
-    private static final long RENDER_INTERVAL_MILLIS = 50;
+    private static final long RENDER_INTERVAL_MILLIS = 100;
+    private static final long RESIZE_SETTLE_MILLIS = 120;
+    private static final long SELECTION_STALE_MILLIS = 5_000;
+    private static final long SELECTION_HOLD_MILLIS = 10_000;
+    private static final int WHEEL_LINES = 3;
 
     private final ShellTerminalCoordinator coordinator;
-    private final ScrollView scrollView;
+    private final TerminalScrollView scrollView;
     private final TextView screenView;
     private final EditText inputSink;
     private final TextView statusView;
@@ -55,7 +63,11 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private final int cellHeightPx;
     private final AtomicBoolean refreshQueued = new AtomicBoolean();
     private final AtomicBoolean dirty = new AtomicBoolean();
+    private final AtomicBoolean renderInFlight = new AtomicBoolean();
     private final AtomicLong startupGeneration = new AtomicLong();
+    private final Runnable refreshTask = this::drainRefresh;
+    private final Runnable resizeTask = this::applyPendingResize;
+    private final Runnable selectionReleaseTask = this::releaseStaleSelection;
 
     private volatile TerminalRunState displayedState = TerminalRunState.IDLE;
     private volatile String pendingError = "";
@@ -64,6 +76,13 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private boolean changingInput;
     private boolean followOutput = true;
     private boolean hasGuiScrollback;
+    private boolean selectingText;
+    private boolean selectionDragged;
+    private float selectionStartX;
+    private float selectionStartY;
+    private long scrollInteractionRevision;
+    private long lastRenderedRevision = Long.MIN_VALUE;
+    private long failedRenderRevision = Long.MIN_VALUE;
     private volatile boolean startRequested;
     private volatile boolean disposed;
     private final ShellStartAction shellStartAction;
@@ -110,7 +129,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
                 ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(STATUS_HEIGHT_DP)));
 
         FrameLayout terminalSurface = new FrameLayout(context);
-        scrollView = new ScrollView(context);
+        scrollView = new TerminalScrollView(context);
         scrollView.setFillViewport(true);
         screenView = new TextView(context);
         screenView.setTypeface(Typeface.MONOSPACED);
@@ -145,17 +164,16 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         FrameLayout.LayoutParams inputParams = new FrameLayout.LayoutParams(1, 1);
         inputParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
         terminalSurface.addView(inputSink, inputParams);
-        terminalSurface.setOnTouchListener(this::refocusInputAfterTouch);
-        scrollView.setOnTouchListener(this::refocusInputAfterTouch);
-        screenView.setOnTouchListener(this::refocusInputAfterTouch);
+        screenView.setOnTouchListener(this::handleTerminalTouch);
         addView(terminalSurface, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        renderSnapshot(coordinator.snapshot());
+        applyRenderedSnapshot(buildRenderedSnapshot(coordinator.snapshot()));
         updateStatus();
     }
 
     public void ensureStarted() {
         if (disposed || startRequested || displayedState.hasActiveBackend()) return;
+        applyTerminalSize(pendingSize);
         followOutput = true;
         startRequested = true;
         pendingError = "";
@@ -196,19 +214,45 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     }
 
     public void dispose() {
+        if (disposed) return;
         disposed = true;
+        startupGeneration.incrementAndGet();
+        removeCallbacks(refreshTask);
+        removeCallbacks(resizeTask);
+        removeCallbacks(selectionReleaseTask);
+        releaseUiInteraction();
+        screenView.setTextIsSelectable(false);
         coordinator.dispose();
+    }
+
+    public void releaseUiInteraction() {
+        removeCallbacks(selectionReleaseTask);
+        selectingText = false;
+        selectionDragged = false;
+        cancelPendingInputEvents();
+        scrollView.cancelPendingInputEvents();
+        screenView.cancelPendingInputEvents();
+        inputSink.cancelPendingInputEvents();
+        if (screenView.getText() instanceof Spannable text) Selection.removeSelection(text);
+        screenView.clearFocus();
+        inputSink.clearFocus();
+        if (!disposed) requestRefresh();
     }
 
     @Override
     protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
         super.onSizeChanged(width, height, oldWidth, oldHeight);
+        removeCallbacks(selectionReleaseTask);
+        selectingText = false;
+        selectionDragged = false;
+        if (screenView.getText() instanceof Spannable text) Selection.removeSelection(text);
         int usableWidth = Math.max(1, width - UIUtils.dp2pxInt(16));
         int statusHeight = STATUS_HEIGHT_DP * 2;
         int usableHeight = Math.max(1, height - UIUtils.dp2pxInt(statusHeight + 12));
         int columns = Math.max(2, (int) (usableWidth / cellWidthPx));
-        int rows = Math.max(1, usableHeight / cellHeightPx);
+        int rows = Math.max(2, usableHeight / cellHeightPx);
         pendingSize = new TerminalSize(columns, rows);
+        if (displayedState.hasActiveBackend()) scheduleSettledResize();
         requestRefresh();
     }
 
@@ -219,9 +263,10 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         displayedState = state;
         if (state == TerminalRunState.RUNNING) {
             startRequested = true;
+            scheduleSettledResize();
             post(() -> {
                 if (!disposed) {
-                    trustedEventView.setText("MCP  http://127.0.0.1:37654/mcp");
+                    trustedEventView.setText("MCP server ready  |  waiting for tool call");
                     trustedEventView.setTextColor(0xFFB5CEA8);
                 }
             });
@@ -252,34 +297,92 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private void requestRefresh() {
         if (disposed) return;
         dirty.set(true);
-        if (refreshQueued.compareAndSet(false, true)) postDelayed(this::drainRefresh, RENDER_INTERVAL_MILLIS);
+        if (refreshQueued.compareAndSet(false, true)) postDelayed(refreshTask, RENDER_INTERVAL_MILLIS);
     }
 
     private void drainRefresh() {
         if (disposed) return;
         dirty.set(false);
-        TerminalSize targetSize = pendingSize;
-        if (!targetSize.equals(appliedSize)) {
-            appliedSize = targetSize;
-            coordinator.resize(targetSize);
+        try {
+            TerminalSize targetSize = pendingSize;
+            if (!displayedState.hasActiveBackend()) applyTerminalSize(targetSize);
+            long revision = coordinator.screenRevision();
+            if (revision != lastRenderedRevision && revision != failedRenderRevision
+                    && !selectingText && !hasTextSelection()) {
+                scheduleBackgroundRender();
+            }
+            updateStatus();
+        } finally {
+            refreshQueued.set(false);
+            if (dirty.get()) requestRefresh();
         }
-        renderSnapshot(coordinator.snapshot());
-        updateStatus();
-        refreshQueued.set(false);
-        if (dirty.get()) requestRefresh();
     }
 
-    private void renderSnapshot(TerminalSnapshot snapshot) {
-        boolean retainInputFocus = inputSink.isFocused();
-        boolean followBottom = followOutput;
-        hasGuiScrollback = snapshot.lines().size() > snapshot.rows();
+    private void scheduleSettledResize() {
+        if (disposed) return;
+        removeCallbacks(resizeTask);
+        postDelayed(resizeTask, RESIZE_SETTLE_MILLIS);
+    }
+
+    private void applyPendingResize() {
+        if (disposed) return;
+        applyTerminalSize(pendingSize);
+        requestRefresh();
+    }
+
+    private void applyTerminalSize(TerminalSize size) {
+        if (size.equals(appliedSize)) return;
+        appliedSize = size;
+        coordinator.resize(size);
+    }
+
+    private void scheduleBackgroundRender() {
+        if (!renderInFlight.compareAndSet(false, true)) return;
+        long requestedRevision = coordinator.screenRevision();
+        Thread.ofVirtual().name("geometry-node-terminal-render").start(() -> {
+            try {
+                RenderedSnapshot rendered = buildRenderedSnapshot(coordinator.snapshot());
+                post(() -> finishBackgroundRender(rendered, null, requestedRevision));
+            } catch (RuntimeException failure) {
+                post(() -> finishBackgroundRender(null, failure, requestedRevision));
+            }
+        });
+    }
+
+    private void finishBackgroundRender(RenderedSnapshot rendered, RuntimeException failure,
+                                        long requestedRevision) {
+        try {
+            if (disposed) return;
+            if (failure != null) {
+                GeometryNode.LOGGER.error("Failed to render terminal snapshot", failure);
+                pendingError = "终端画面渲染失败";
+                failedRenderRevision = requestedRevision;
+                return;
+            }
+            if (!selectingText && !hasTextSelection()
+                    && rendered != null && rendered.revision() > lastRenderedRevision) {
+                failedRenderRevision = Long.MIN_VALUE;
+                applyRenderedSnapshot(rendered);
+            }
+        } finally {
+            renderInFlight.set(false);
+            long revision = coordinator.screenRevision();
+            if (!disposed && revision != lastRenderedRevision && revision != failedRenderRevision) {
+                requestRefresh();
+            }
+        }
+    }
+
+    private static RenderedSnapshot buildRenderedSnapshot(TerminalSnapshot snapshot) {
         SpannableStringBuilder text = new SpannableStringBuilder();
         int cursorStart = -1;
         for (int lineIndex = 0; lineIndex < snapshot.lines().size(); lineIndex++) {
             var line = snapshot.lines().get(lineIndex);
             TerminalStyle runStyle = null;
             int runStart = text.length();
-            for (int column = 0; column < line.size(); column++) {
+            int renderColumns = renderColumnCount(line, lineIndex == snapshot.cursorLine()
+                    ? snapshot.cursorColumn() : -1);
+            for (int column = 0; column < renderColumns; column++) {
                 TerminalCell cell = line.get(column);
                 if (cell.width() == 0) continue;
                 if (runStyle != null && !runStyle.equals(cell.style())) {
@@ -287,7 +390,9 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
                     runStart = text.length();
                 }
                 runStyle = cell.style();
-                if (lineIndex == snapshot.cursorLine() && column == snapshot.cursorColumn()) cursorStart = text.length();
+                if (lineIndex == snapshot.cursorLine() && column == snapshot.cursorColumn()) {
+                    cursorStart = text.length();
+                }
                 text.append(cell.text().isEmpty() ? " " : cell.text());
             }
             if (runStyle != null) applyStyle(text, runStart, text.length(), runStyle);
@@ -299,12 +404,19 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
             text.setSpan(new ForegroundColorSpan(0xFF1E1E1E), cursorStart, cursorStart + 1,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
-        screenView.setText(text);
-        if (followBottom) {
-            scrollView.post(() -> {
-                if (!disposed && followOutput) scrollView.scrollTo(0, maxScrollY());
-            });
-        }
+        return new RenderedSnapshot(snapshot.revision(), snapshot.rows(), snapshot.lines().size(), text);
+    }
+
+    private void applyRenderedSnapshot(RenderedSnapshot rendered) {
+        if (selectingText || hasTextSelection()) return;
+        boolean retainInputFocus = inputSink.isFocused();
+        boolean followBottom = followOutput;
+        int retainedScrollY = scrollView.getScrollY();
+        long restoreRevision = scrollInteractionRevision;
+        hasGuiScrollback = rendered.lineCount() > rendered.rows();
+        scrollView.prepareContentChange(followBottom, retainedScrollY, restoreRevision);
+        screenView.setText(rendered.text());
+        lastRenderedRevision = rendered.revision();
         if (retainInputFocus) inputSink.post(() -> {
             if (!disposed) inputSink.requestFocus();
         });
@@ -319,6 +431,22 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         }
         if (style.bold()) text.setSpan(new StyleSpan(Typeface.BOLD), start, end, flags);
         if (style.underline()) text.setSpan(new UnderlineSpan(), start, end, flags);
+    }
+
+    private static int renderColumnCount(List<TerminalCell> line, int cursorColumn) {
+        int last = Math.min(cursorColumn, line.size() - 1);
+        for (int column = line.size() - 1; column >= 0; column--) {
+            TerminalCell cell = line.get(column);
+            if (cell.width() != 0 && (!cell.text().equals(" ") || !cell.style().equals(TerminalStyle.DEFAULT))) {
+                last = Math.max(last, column);
+                break;
+            }
+        }
+        return last + 1;
+    }
+
+    private record RenderedSnapshot(long revision, int rows, int lineCount,
+                                    SpannableStringBuilder text) {
     }
 
     private boolean handleKey(int keyCode, KeyEvent event) {
@@ -338,18 +466,71 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         return true;
     }
 
-    private boolean refocusInputAfterTouch(View view, MotionEvent event) {
-        if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-            followOutput = isNearBottom();
-            requestInputFocus();
+    private boolean handleTerminalTouch(View view, MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN -> {
+                selectingText = true;
+                selectionDragged = false;
+                selectionStartX = event.getX();
+                selectionStartY = event.getY();
+                scheduleSelectionRelease();
+            }
+            case MotionEvent.ACTION_MOVE -> {
+                scheduleSelectionRelease();
+                float threshold = UIUtils.dp2px(3f);
+                if (Math.abs(event.getX() - selectionStartX) >= threshold
+                        || Math.abs(event.getY() - selectionStartY) >= threshold) {
+                    selectionDragged = true;
+                    followOutput = false;
+                }
+            }
+            case MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(selectionReleaseTask);
+                boolean wasSelecting = selectionDragged;
+                selectingText = false;
+                screenView.post(() -> {
+                    if (disposed) return;
+                    if (wasSelecting || hasTextSelection()) {
+                        removeCallbacks(selectionReleaseTask);
+                        postDelayed(selectionReleaseTask, SELECTION_HOLD_MILLIS);
+                        return;
+                    }
+                    followOutput = true;
+                    scrollInteractionRevision++;
+                    scrollView.scrollTo(0, maxScrollY());
+                    requestInputFocus();
+                    requestRefresh();
+                });
+            }
+            default -> { }
         }
         return false;
+    }
+
+    private void scheduleSelectionRelease() {
+        removeCallbacks(selectionReleaseTask);
+        postDelayed(selectionReleaseTask, SELECTION_STALE_MILLIS);
+    }
+
+    private void releaseStaleSelection() {
+        if (disposed) return;
+        selectingText = false;
+        selectionDragged = false;
+        if (screenView.getText() instanceof Spannable text) Selection.removeSelection(text);
+        followOutput = isNearBottom();
+        requestRefresh();
+    }
+
+    private boolean hasTextSelection() {
+        return screenView.getSelectionStart() >= 0
+                && screenView.getSelectionStart() != screenView.getSelectionEnd();
     }
 
     private boolean handleTerminalScroll(View view, MotionEvent event) {
         if (event.getAction() != MotionEvent.ACTION_SCROLL) return false;
         float amount = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
         if (amount == 0.0f) return false;
+        scrollInteractionRevision++;
 
         int maxScroll = maxScrollY();
         if (hasGuiScrollback && maxScroll > 0) {
@@ -365,10 +546,24 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
             int row = Math.max(1, Math.min(pendingSize.rows(),
                     1 + Math.round((event.getY() - UIUtils.dp2px(6f)) / cellHeightPx)));
             if (!coordinator.sendMouseWheel(up, column, row)) {
-                coordinator.sendKey(up ? TerminalKey.PAGE_UP : TerminalKey.PAGE_DOWN);
+                TerminalSnapshot snapshot = coordinator.snapshot();
+                if (snapshot.alternateScreen()) {
+                    for (int line = 0; line < WHEEL_LINES; line++) {
+                        coordinator.sendKey(up ? TerminalKey.UP : TerminalKey.DOWN);
+                    }
+                }
             }
         }
         return true;
+    }
+
+    private void restoreScrollAfterLayout(boolean followedBeforeRender, int retainedScrollY, long restoreRevision) {
+        if (disposed || scrollInteractionRevision != restoreRevision) return;
+        if (followedBeforeRender && followOutput) {
+            scrollView.scrollTo(0, maxScrollY());
+        } else if (!followOutput) {
+            scrollView.scrollTo(0, Math.min(retainedScrollY, maxScrollY()));
+        }
     }
 
     private int maxScrollY() {
@@ -439,6 +634,73 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         return drawable;
     }
 
+    private final class TerminalScrollView extends ScrollView {
+        private boolean contentChangePending;
+        private boolean applyingLayoutScroll;
+        private boolean pointerScrollGesture;
+        private boolean followedBeforeContentChange;
+        private int retainedScrollY;
+        private long retainedInteractionRevision;
+
+        private TerminalScrollView(Context context) {
+            super(context);
+        }
+
+        private void prepareContentChange(boolean followedBeforeRender, int scrollY,
+                                          long interactionRevision) {
+            contentChangePending = true;
+            followedBeforeContentChange = followedBeforeRender;
+            retainedScrollY = scrollY;
+            retainedInteractionRevision = interactionRevision;
+        }
+
+        @Override
+        protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+            boolean restorePending = contentChangePending;
+            boolean restoreBottom = restorePending ? followedBeforeContentChange : followOutput;
+            int restoreScrollY = restorePending ? retainedScrollY : getScrollY();
+            long restoreRevision = restorePending
+                    ? retainedInteractionRevision
+                    : scrollInteractionRevision;
+
+            applyingLayoutScroll = true;
+            try {
+                super.onLayout(changed, left, top, right, bottom);
+                if (!disposed && scrollInteractionRevision == restoreRevision) {
+                    restoreScrollAfterLayout(restoreBottom, restoreScrollY, restoreRevision);
+                }
+            } finally {
+                contentChangePending = false;
+                applyingLayoutScroll = false;
+            }
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
+                pointerScrollGesture = true;
+            }
+            boolean handled = super.onTouchEvent(event);
+            if ((action == MotionEvent.ACTION_DOWN && !handled)
+                    || action == MotionEvent.ACTION_UP
+                    || action == MotionEvent.ACTION_CANCEL) {
+                pointerScrollGesture = false;
+            }
+            return handled;
+        }
+
+        @Override
+        protected void onScrollChanged(int horizontal, int vertical,
+                                       int oldHorizontal, int oldVertical) {
+            super.onScrollChanged(horizontal, vertical, oldHorizontal, oldVertical);
+            if (disposed || applyingLayoutScroll || vertical == oldVertical
+                    || (contentChangePending && !pointerScrollGesture)) return;
+            scrollInteractionRevision++;
+            followOutput = isNearBottom();
+        }
+    }
+
     private final class InputCommitWatcher implements TextWatcher {
         @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
         @Override public void onTextChanged(CharSequence text, int start, int before, int count) {}
@@ -450,6 +712,9 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
             changingInput = true;
             text.clear();
             changingInput = false;
+            followOutput = true;
+            scrollInteractionRevision++;
+            scrollView.scrollTo(0, maxScrollY());
             coordinator.sendText(committed);
         }
 

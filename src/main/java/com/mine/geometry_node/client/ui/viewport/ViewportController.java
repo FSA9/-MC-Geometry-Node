@@ -633,6 +633,14 @@ public class ViewportController implements EditorContext.EditorListener,
     }
 
     @Override public void onGraphConnectionsRebuildRequested() { rebuildVisualConnections(); }
+    @Override public void onGraphReloaded() {
+        mViewport.clearSelection();
+        mViewport.prepareLayers();
+        rebuildScopeVisuals(mEditorContext.getCurrentGraph());
+        rebuildVisualConnections();
+        mViewport.updateTransform();
+        mViewport.invalidate();
+    }
     @Override public void onExecutionConnectionAdded(String outN, String outP, String inN, String inP) { rebuildVisualConnections(); }
     @Override public void onExecutionConnectionRemoved(String outN, String outP, String inN, String inP) { rebuildVisualConnections(); }
     @Override public void onSelectionChanged(List<String> selectedNodeIds) {

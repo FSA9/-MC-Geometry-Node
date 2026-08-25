@@ -17,7 +17,10 @@ final class QueryCommandCatalog {
 
     static void registerInto(CommandRegistry registry) {
         registry.register(searchNodes());
+        registry.register(getNodeTypeDetails());
+        registry.register(getNodeTypePortOptions());
         registry.register(searchGraphNodes());
+        registry.register(getGraphStats());
         registry.register(getNodeDetails());
         registry.register(getNodeConnections());
         registry.register(getGraphContext());
@@ -33,14 +36,72 @@ final class QueryCommandCatalog {
     }
 
     private static CommandSpec searchGraphNodes() {
-        return querySpec("search_graph_nodes", "在当前蓝图中搜索节点实例", "search_graph_nodes [关键词] [offset] [limit]",
-                List.of(queryArgument(), offsetArgument(), limitArgument()), graphNodeSearchOutput(), true,
-                (target, values) -> target.searchGraphNodes(text(values, "query"), integer(values, "offset"),
-                        integer(values, "limit")));
+        List<CommandArgumentSpec> arguments = List.of(
+                queryArgument(),
+                argument("type_id", "可选的精确节点类型 ID", false, new JsonPrimitive(""), stringSchema(0)),
+                argument("category", "可选的精确节点分类", false, new JsonPrimitive(""),
+                        enumStringSchema("", "event", "flow_control", "action", "dialogue", "quest", "math",
+                                "logic", "data", "variable", "custom")),
+                argument("comment_filter", "Comment 过滤: any/with/without", false, new JsonPrimitive("any"),
+                        enumStringSchema("any", "with", "without")),
+                argument("connection_state", "连接状态: any/connected/unconnected", false,
+                        new JsonPrimitive("any"), enumStringSchema("any", "connected", "unconnected")),
+                offsetArgument(), limitArgument()
+        );
+        return querySpec("search_graph_nodes", "按关键词、精确类型、分类、Comment 或连接状态查找当前图中的节点实例",
+                "search_graph_nodes [关键词] [type_id] [category] [any|with|without] "
+                        + "[any|connected|unconnected] [offset] [limit]",
+                arguments, graphNodeSearchOutput(), true,
+                (target, values) -> target.searchGraphNodes(text(values, "query"), text(values, "type_id"),
+                        text(values, "category"), text(values, "comment_filter"),
+                        text(values, "connection_state"), integer(values, "offset"), integer(values, "limit")));
+    }
+
+    private static CommandSpec getNodeTypeDetails() {
+        List<CommandArgumentSpec> arguments = List.of(
+                argument("type_id", "已注册节点类型 ID", true, null, stringSchema(1))
+        );
+        return querySpec("get_node_type_details",
+                "创建节点前查询已注册节点类型的默认端口、Comment、写入能力和选项来源；动态端口创建后再查询实例详情",
+                "get_node_type_details <type_id>", arguments, nodeTypeDetailsOutput(), false,
+                (target, values) -> target.getNodeTypeDetails(text(values, "type_id")));
+    }
+
+    private static CommandSpec getNodeTypePortOptions() {
+        List<CommandArgumentSpec> arguments = List.of(
+                argument("type_id", "已注册节点类型 ID", true, null, stringSchema(1)),
+                argument("port_id", "默认定义中的 SELECT 输入端口 ID", true, null, stringSchema(1)),
+                queryArgument(), offsetArgument(), limitArgument()
+        );
+        return querySpec("get_node_type_port_options",
+                "创建节点前查询指定类型 SELECT 端口的方块、物品、实体或其他合法选项，返回稳定 option ID 和上下文 token",
+                "get_node_type_port_options <type_id> <port_id> [关键词] [offset] [limit]",
+                arguments, nodeTypePortOptionsOutput(), false,
+                (target, values) -> target.getNodeTypePortOptions(text(values, "type_id"), text(values, "port_id"),
+                        text(values, "query"), integer(values, "offset"), integer(values, "limit")));
+    }
+
+    private static CommandSpec getGraphStats() {
+        List<CommandArgumentSpec> arguments = List.of(
+                argument("type_id", "可选的精确节点类型 ID 过滤", false, new JsonPrimitive(""), stringSchema(0)),
+                argument("category", "可选的精确节点分类过滤", false, new JsonPrimitive(""),
+                        enumStringSchema("", "event", "flow_control", "action", "dialogue", "quest", "math",
+                                "logic", "data", "variable", "custom")),
+                argument("group_by", "聚合维度: none/type/category", false, new JsonPrimitive("none"),
+                        enumStringSchema("none", "type", "category")),
+                offsetArgument(), limitArgument()
+        );
+        return querySpec("get_graph_stats",
+                "轻量查询当前图的节点数量、连接数量、Frame 数量、Comment 数量、孤立节点以及按类型或分类统计；不返回整图内容",
+                "get_graph_stats [type_id] [category] [none|type|category] [offset] [limit]",
+                arguments, graphStatsOutput(), true,
+                (target, values) -> target.getGraphStats(text(values, "type_id"), text(values, "category"),
+                        text(values, "group_by"), integer(values, "offset"), integer(values, "limit")));
     }
 
     private static CommandSpec getNodeDetails() {
-        return querySpec("get_node_details", "查询指定节点、端口、Comment 与端口值", "get_node_details <节点ID>",
+        return querySpec("get_node_details", "当用户询问指定节点的信息、端口、Comment 或端口值时调用",
+                "get_node_details <节点ID>",
                 List.of(nodeIdArgument()), nodeDetailsOutput(), true,
                 (target, values) -> target.getNodeDetails(text(values, "node_id")));
     }
@@ -58,7 +119,7 @@ final class QueryCommandCatalog {
                 argument("depth", "局部邻域深度，1 到 4", false, new JsonPrimitive(1), integerSchema(1, 4)),
                 offsetArgument(), limitArgument()
         );
-        return querySpec("get_node_connections", "查询指定节点的双向连接与局部邻域",
+        return querySpec("get_node_connections", "当用户询问指定节点连接了哪些节点或局部邻域时调用",
                 "get_node_connections <节点ID> [all|incoming|outgoing] [depth] [offset] [limit]",
                 arguments, connectionOutput(), true,
                 (target, values) -> target.getNodeConnections(text(values, "node_id"), text(values, "direction"),
@@ -73,7 +134,7 @@ final class QueryCommandCatalog {
                         new JsonPrimitive(1), integerSchema(0, 4)),
                 offsetArgument(), limitArgument()
         );
-        return querySpec("get_graph_context", "查询当前蓝图概况、节点和连接",
+        return querySpec("get_graph_context", "当用户需要当前图的节点内容、连接内容或指定节点局部上下文时调用；纯统计改用 get_graph_stats",
                 "get_graph_context [中心节点ID] [depth] [offset] [limit]", arguments, graphContextOutput(), true,
                 (target, values) -> target.getGraphContext(text(values, "focus_node_id"), integer(values, "depth"),
                         integer(values, "offset"), integer(values, "limit")));
@@ -160,8 +221,85 @@ final class QueryCommandCatalog {
     }
 
     private static JsonObject graphNodeSearchOutput() {
-        JsonObject item = nodeSummarySchema();
-        return pagedOutput("query", item);
+        JsonObject item = object(properties(
+                property("node_id", stringSchema(0)), property("type_id", stringSchema(0)),
+                property("display_name", stringSchema(0)), property("custom_name", stringSchema(0)),
+                property("comment", stringSchema(0)), property("x", numberSchema()), property("y", numberSchema()),
+                property("incoming_count", integerSchema(0, null)),
+                property("outgoing_count", integerSchema(0, null))
+        ), "node_id", "type_id", "display_name", "custom_name", "comment", "x", "y",
+                "incoming_count", "outgoing_count");
+        return object(properties(
+                property("query", stringSchema(0)), property("type_id", stringSchema(0)),
+                property("category", stringSchema(0)), property("comment_filter", stringSchema(1)),
+                property("connection_state", stringSchema(1)),
+                property("items", arraySchema(item, 0, MAX_LIMIT)), property("page", pageSchema())
+        ), "query", "type_id", "category", "comment_filter", "connection_state", "items", "page");
+    }
+
+    private static JsonObject nodeTypeDetailsOutput() {
+        JsonObject options = object(properties(
+                property("source", stringSchema(1)), property("registry_id", stringSchema(0)),
+                property("available", booleanSchema()), property("total", integerSchema(0, null))
+        ), "source", "registry_id", "available", "total");
+        JsonObject port = object(properties(
+                property("port_id", stringSchema(1)), property("direction", stringSchema(1)),
+                property("type", stringSchema(1)), property("display_name", stringSchema(0)),
+                property("ui_hint", stringSchema(1)), property("hidden", booleanSchema()),
+                property("default_value_json", stringSchema(0)), property("comment", stringSchema(0)),
+                property("dynamic", booleanSchema()), property("writable", booleanSchema()),
+                property("write_operation", stringSchema(0)), property("write_restriction", stringSchema(0)),
+                property("options", options)
+        ), "port_id", "direction", "type", "display_name", "ui_hint", "hidden", "default_value_json",
+                "comment", "dynamic", "writable", "write_operation", "write_restriction", "options");
+        JsonObject dynamicLimits = object(properties(
+                property("min_inputs", integerSchema(0, null)), property("max_inputs", integerSchema(0, null)),
+                property("min_outputs", integerSchema(0, null)), property("max_outputs", integerSchema(0, null))
+        ));
+        return object(properties(
+                property("type_id", stringSchema(1)), property("display_name", stringSchema(0)),
+                property("category", stringSchema(1)), property("definition_comment", stringSchema(0)),
+                property("definition_mode", stringSchema(1)), property("declares_dynamic_ports", booleanSchema()),
+                property("port_count", integerSchema(0, null)), property("ports_truncated", booleanSchema()),
+                property("dynamic_limits", dynamicLimits), property("ports", arraySchema(port, 0, MAX_LIMIT))
+        ), "type_id", "display_name", "category", "definition_comment", "definition_mode",
+                "declares_dynamic_ports", "port_count", "ports_truncated", "dynamic_limits", "ports");
+    }
+
+    private static JsonObject nodeTypePortOptionsOutput() {
+        JsonObject item = object(properties(
+                property("id", stringSchema(0)), property("label", stringSchema(0))
+        ), "id", "label");
+        return object(properties(
+                property("type_id", stringSchema(1)), property("port_id", stringSchema(1)),
+                property("source", stringSchema(1)), property("registry_id", stringSchema(0)),
+                property("available", booleanSchema()), property("option_context_token", stringSchema(64)),
+                property("items", arraySchema(item, 0, MAX_LIMIT)), property("page", pageSchema())
+        ), "type_id", "port_id", "source", "registry_id", "available", "option_context_token", "items", "page");
+    }
+
+    private static JsonObject graphStatsOutput() {
+        JsonObject group = object(properties(
+                property("key", stringSchema(0)), property("count", integerSchema(0, null))
+        ), "key", "count");
+        return object(properties(
+                property("filter_type_id", stringSchema(0)), property("filter_category", stringSchema(0)),
+                property("group_by", stringSchema(1)), property("total_node_count", integerSchema(0, null)),
+                property("node_count", integerSchema(0, null)),
+                property("total_connection_count", integerSchema(0, null)),
+                property("flow_connection_count", integerSchema(0, null)),
+                property("data_connection_count", integerSchema(0, null)),
+                property("induced_connection_count", integerSchema(0, null)),
+                property("frame_count", integerSchema(0, null)),
+                property("commented_node_count", integerSchema(0, null)),
+                property("unconnected_node_count", integerSchema(0, null)),
+                property("groups", arraySchema(group, 0, MAX_LIMIT)), property("page", pageSchema()),
+                property("session_id", stringSchema(1)), property("scope_id", stringSchema(1)),
+                property("revision", integerSchema(0, null))
+        ), "filter_type_id", "filter_category", "group_by", "total_node_count", "node_count",
+                "total_connection_count", "flow_connection_count", "data_connection_count",
+                "induced_connection_count", "frame_count", "commented_node_count", "unconnected_node_count",
+                "groups", "page");
     }
 
     private static JsonObject nodeDetailsOutput() {
@@ -187,7 +325,9 @@ final class QueryCommandCatalog {
                 property("node_count", integerSchema(0, null)), property("connection_count", integerSchema(0, null)),
                 property("focus_node_id", stringSchema(0)), property("depth", integerSchema(0, 4)),
                 property("nodes", arraySchema(nodeSummarySchema(), 0, MAX_LIMIT)),
-                property("connections", arraySchema(connectionSchema(), 0, MAX_LIMIT)), property("page", pageSchema())
+                property("connections", arraySchema(connectionSchema(), 0, MAX_LIMIT)), property("page", pageSchema()),
+                property("session_id", stringSchema(1)), property("scope_id", stringSchema(1)),
+                property("revision", integerSchema(0, null))
         ), "graph_kind", "version", "comment", "tags", "node_count", "connection_count", "focus_node_id",
                 "depth", "nodes", "connections", "page");
     }
@@ -213,8 +353,10 @@ final class QueryCommandCatalog {
                 property("node_id", stringSchema(1)), property("port_id", stringSchema(1)),
                 property("source", stringSchema(1)), property("registry_id", stringSchema(0)),
                 property("available", booleanSchema()), property("selected_value", stringSchema(0)),
+                property("option_context_token", stringSchema(64)),
                 property("items", arraySchema(item, 0, MAX_LIMIT)), property("page", pageSchema())
-        ), "node_id", "port_id", "source", "registry_id", "available", "selected_value", "items", "page");
+        ), "node_id", "port_id", "source", "registry_id", "available", "selected_value",
+                "option_context_token", "items", "page");
     }
 
     private static JsonObject pagedOutput(String queryName, JsonObject itemSchema) {
@@ -288,6 +430,14 @@ final class QueryCommandCatalog {
     private static JsonObject numberSchema() { return CommandSpec.scalarSchema("number"); }
 
     private static JsonObject booleanSchema() { return CommandSpec.scalarSchema("boolean"); }
+
+    private static JsonObject enumStringSchema(String... values) {
+        JsonObject schema = stringSchema(0);
+        JsonArray allowed = new JsonArray();
+        for (String value : values) allowed.add(value);
+        schema.add("enum", allowed);
+        return schema;
+    }
 
     private static Map.Entry<String, JsonObject> property(String name, JsonObject schema) {
         return Map.entry(name, schema);

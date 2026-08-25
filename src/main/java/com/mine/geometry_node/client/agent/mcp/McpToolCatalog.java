@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Deterministic P4 projection of the production CommandRegistry into read-only MCP tools. */
+/** Deterministic projection of read tools and dry-run-approved reversible writes. */
 public final class McpToolCatalog {
     private static final int MAX_TOOLS = 128;
 
@@ -23,9 +23,12 @@ public final class McpToolCatalog {
         Objects.requireNonNull(registry, "registry");
         Map<String, CommandSpec> selected = new LinkedHashMap<>();
         for (CommandSpec command : registry.commands()) {
-            if (command.exposure() != CommandSpec.Exposure.MODEL_VISIBLE
-                    || command.effect() != ToolContract.CommandEffect.READ_ONLY
-                    || command.riskLevel() != ToolContract.RiskLevel.READ_ONLY) {
+            boolean readOnly = command.effect() == ToolContract.CommandEffect.READ_ONLY
+                    && command.riskLevel() == ToolContract.RiskLevel.READ_ONLY;
+            boolean approvedWrite = command.effect() == ToolContract.CommandEffect.GRAPH_WRITE
+                    && command.riskLevel() == ToolContract.RiskLevel.REVERSIBLE_EDIT
+                    && command.supportsDryRun();
+            if (command.exposure() != CommandSpec.Exposure.MODEL_VISIBLE || !readOnly && !approvedWrite) {
                 continue;
             }
             if (selected.size() >= MAX_TOOLS) throw new IllegalArgumentException("MCP tool catalog is too large");
@@ -48,9 +51,10 @@ public final class McpToolCatalog {
             tool.addProperty("description", command.description());
             tool.add("inputSchema", command.inputSchema());
             JsonObject annotations = new JsonObject();
-            annotations.addProperty("readOnlyHint", true);
-            annotations.addProperty("destructiveHint", false);
-            annotations.addProperty("idempotentHint", true);
+            boolean readOnly = command.effect() == ToolContract.CommandEffect.READ_ONLY;
+            annotations.addProperty("readOnlyHint", readOnly);
+            annotations.addProperty("destructiveHint", !readOnly);
+            annotations.addProperty("idempotentHint", readOnly || command.supportsDryRun());
             annotations.addProperty("openWorldHint", false);
             tool.add("annotations", annotations);
             result.add(tool);

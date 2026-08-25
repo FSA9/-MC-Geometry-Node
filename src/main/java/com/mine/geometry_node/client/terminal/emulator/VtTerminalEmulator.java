@@ -50,6 +50,7 @@ public final class VtTerminalEmulator {
     private int utf8CodePoint;
     private int utf8Remaining;
     private int utf8Minimum;
+    private long revision;
 
     public VtTerminalEmulator(TerminalSize initialSize) {
         size = initialSize;
@@ -58,6 +59,7 @@ public final class VtTerminalEmulator {
     }
 
     public synchronized void accept(byte[] bytes) {
+        if (bytes.length > 0) revision++;
         for (byte value : bytes) acceptByte(value & 0xFF);
     }
 
@@ -76,8 +78,9 @@ public final class VtTerminalEmulator {
                 primarySavedRow = cursorRow;
                 primarySavedColumn = cursorColumn;
             }
-            screen = resizeScreen(alternate, newSize);
-            cursorRow = clamp(alternateRow, 0, newSize.rows() - 1);
+            int sourceStart = alternateResizeStart(alternate.length, newSize.rows(), alternateRow);
+            screen = resizeScreen(alternate, newSize, sourceStart);
+            cursorRow = clamp(alternateRow - sourceStart, 0, newSize.rows() - 1);
             cursorColumn = clamp(alternateColumn, 0, newSize.columns() - 1);
         } else {
             reflowPrimary(newSize);
@@ -88,6 +91,7 @@ public final class VtTerminalEmulator {
         scrollTop = 0;
         scrollBottom = newSize.rows() - 1;
         trimScrollback();
+        revision++;
     }
 
     private void reflowPrimary(TerminalSize newSize) {
@@ -95,10 +99,14 @@ public final class VtTerminalEmulator {
         for (TerminalCell[] line : scrollback) source.add(copyLine(line));
         source.addAll(Arrays.asList(screen));
         int oldCursorLine = scrollback.size() + cursorRow;
+        int sourceEnd = source.size();
+        while (sourceEnd > oldCursorLine + 1 && lastContentColumn(source.get(sourceEnd - 1)) < 0) {
+            sourceEnd--;
+        }
         int reflowedCursorLine = 0;
         int reflowedCursorColumn = 0;
         List<TerminalCell[]> reflowed = new ArrayList<>();
-        for (int index = 0; index < source.size(); index++) {
+        for (int index = 0; index < sourceEnd; index++) {
             TerminalCell[] line = source.get(index);
             int contentColumns = lastContentColumn(line) + 1;
             if (index == oldCursorLine) contentColumns = Math.max(contentColumns, cursorColumn + 1);
@@ -111,7 +119,10 @@ public final class VtTerminalEmulator {
             }
         }
 
-        int screenStart = Math.max(0, reflowed.size() - newSize.rows());
+        int latestStart = Math.max(0, reflowed.size() - newSize.rows());
+        int cursorStartMin = Math.max(0, reflowedCursorLine - newSize.rows() + 1);
+        int cursorStartMax = Math.max(cursorStartMin, reflowedCursorLine);
+        int screenStart = clamp(latestStart, cursorStartMin, cursorStartMax);
         scrollback.clear();
         for (int index = 0; index < screenStart; index++) scrollback.addLast(reflowed.get(index));
         screen = blankScreen(newSize);
@@ -157,9 +168,20 @@ public final class VtTerminalEmulator {
         }
         for (TerminalCell[] line : screen) lines.add(List.of(copyLine(line)));
         int cursorLine = (alternateScreen ? 0 : scrollback.size()) + cursorRow;
-        return new TerminalSnapshot(size.columns(), size.rows(), lines, cursorLine, cursorColumn,
-                cursorVisible, bracketedPaste, applicationCursorKeys, mouseTrackingModes != 0, sgrMouseMode);
+        return new TerminalSnapshot(revision, size.columns(), size.rows(), lines, cursorLine, cursorColumn,
+                cursorVisible, bracketedPaste, applicationCursorKeys, mouseTrackingModes != 0, sgrMouseMode,
+                alternateScreen);
     }
+
+    public synchronized long revision() { return revision; }
+
+    public synchronized boolean applicationCursorKeys() { return applicationCursorKeys; }
+
+    public synchronized boolean bracketedPaste() { return bracketedPaste; }
+
+    public synchronized boolean mouseTracking() { return mouseTrackingModes != 0; }
+
+    public synchronized boolean sgrMouseMode() { return sgrMouseMode; }
 
     public synchronized byte[] drainReplies() {
         byte[] value = replies.toByteArray();
@@ -184,6 +206,7 @@ public final class VtTerminalEmulator {
         mouseTrackingModes = 0;
         parserState = ParserState.GROUND;
         utf8CodePoint = utf8Remaining = utf8Minimum = 0;
+        revision++;
     }
 
     private void acceptByte(int value) {
@@ -388,7 +411,9 @@ public final class VtTerminalEmulator {
         count = clamp(count, 1, scrollBottom - scrollTop + 1);
         for (int n = 0; n < count; n++) {
             TerminalCell[] removed = screen[scrollTop];
-            if (!alternateScreen && scrollTop == 0 && scrollBottom == size.rows() - 1) addScrollback(removed);
+            // Inline TUIs such as Codex insert committed history through a top-anchored
+            // subregion. Alternate-screen content must remain isolated from primary history.
+            if (!alternateScreen && scrollTop == 0) addScrollback(removed);
             System.arraycopy(screen, scrollTop + 1, screen, scrollTop, scrollBottom - scrollTop);
             screen[scrollBottom] = blankLine();
         }
@@ -580,15 +605,21 @@ public final class VtTerminalEmulator {
         return result;
     }
 
-    private TerminalCell[][] resizeScreen(TerminalCell[][] source, TerminalSize targetSize) {
+    private TerminalCell[][] resizeScreen(TerminalCell[][] source, TerminalSize targetSize, int sourceStart) {
         TerminalCell[][] result = blankScreen(targetSize);
-        int rowCount = Math.min(source.length, result.length);
+        int firstRow = clamp(sourceStart, 0, Math.max(0, source.length - 1));
+        int rowCount = Math.min(source.length - firstRow, result.length);
         int columnCount = Math.min(source[0].length, result[0].length);
         for (int row = 0; row < rowCount; row++) {
-            System.arraycopy(source[row], 0, result[row], 0, columnCount);
+            System.arraycopy(source[firstRow + row], 0, result[row], 0, columnCount);
             normalizeWideCells(result[row]);
         }
         return result;
+    }
+
+    private static int alternateResizeStart(int sourceRows, int targetRows, int cursorRow) {
+        if (targetRows >= sourceRows) return 0;
+        return clamp(cursorRow - targetRows + 1, 0, sourceRows - targetRows);
     }
 
     private TerminalCell[] blankLine() {

@@ -123,8 +123,24 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
     }
 
     @Override
-    public CommandResult searchGraphNodes(String query, int offset, int limit) {
-        return queries().searchGraphNodes(query, offset, limit);
+    public CommandResult getNodeTypeDetails(String typeId) {
+        return queries().getNodeTypeDetails(typeId);
+    }
+
+    @Override
+    public CommandResult getNodeTypePortOptions(String typeId, String portId, String query, int offset, int limit) {
+        return queries().getNodeTypePortOptions(typeId, portId, query, offset, limit);
+    }
+
+    @Override
+    public CommandResult searchGraphNodes(String query, String typeId, String category, String commentFilter,
+                                          String connectionState, int offset, int limit) {
+        return queries().searchGraphNodes(query, typeId, category, commentFilter, connectionState, offset, limit);
+    }
+
+    @Override
+    public CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
+        return queries().getGraphStats(typeId, category, groupBy, offset, limit);
     }
 
     @Override

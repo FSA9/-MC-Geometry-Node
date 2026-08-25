@@ -71,7 +71,7 @@ public final class ResizableDivider extends FrameLayout {
     }
 
     private boolean handleTouch(View view, MotionEvent event) {
-        switch (event.getAction()) {
+        switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
                 mDragging = true;
                 mLastRaw = rawCoordinate(event);
@@ -89,14 +89,24 @@ public final class ResizableDivider extends FrameLayout {
                 return true;
             }
             case MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                mDragging = false;
-                updateVisual(false);
+                finishDrag();
                 return true;
             }
             default -> {
                 return false;
             }
         }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        finishDrag();
+        super.onDetachedFromWindow();
+    }
+
+    private void finishDrag() {
+        mDragging = false;
+        updateVisual(false);
     }
 
     private void dispatchDrag(float delta) {
