@@ -102,7 +102,7 @@ public final class CommandCatalog {
         patchSchema.addProperty("maxLength", 262_144);
         List<CommandArgumentSpec> arguments = List.of(
                 argument("patch_json",
-                        "GraphPatch v1 JSON；session_id、scope_id、expected_revision 必须来自当前图上下文",
+                        "GraphPatch JSON；session_id、scope_id、expected_revision 必须来自当前图上下文",
                         true, null, patchSchema, null),
                 argument("surface_ref", "可选的 Viewport 引用，例如 V1；为空时使用最近交互或唯一 Viewport",
                         false, new JsonPrimitive(""), stringSchema(0), null));
@@ -111,8 +111,8 @@ public final class CommandCatalog {
                 property("change_id", stringSchema(1)), property("revision", integerSchema(0)),
                 property("operation_count", integerSchema(1))),
                 "approval_id", "patch_hash", "change_id", "revision", "operation_count");
-        return new CommandSpec("apply_graph_patch", 1, List.of(),
-                "提交 GraphPatch v1 JSON 字符串。根字段: protocol_version=1, session_id, scope_id, "
+        return new CommandSpec("apply_graph_patch", List.of(),
+                "提交 GraphPatch JSON 字符串。根字段: session_id, scope_id, "
                         + "expected_revision, idempotency_key, operations。当前支持 add_node(alias,type_id,position,properties={}), "
                         + "move_node(node,position), set_port_value(port,value,expected_old_value), "
                         + "set_select_value(port,option_id,expected_old_value,option_context_token), "
@@ -230,7 +230,7 @@ public final class CommandCatalog {
                                     ToolContract.CommandEffect effect, ToolContract.RiskLevel risk,
                                     boolean requiresGraph, CommandSpec.Exposure exposure,
                                     CommandSpec.CommandHandler handler) {
-        return new CommandSpec(name, 1, List.of(), description, usage, arguments, outputSchema, effect, risk,
+        return new CommandSpec(name, List.of(), description, usage, arguments, outputSchema, effect, risk,
                 requiresGraph, false, exposure, handler);
     }
 

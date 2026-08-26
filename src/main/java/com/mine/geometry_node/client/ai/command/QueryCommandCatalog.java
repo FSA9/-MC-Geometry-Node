@@ -170,7 +170,7 @@ final class QueryCommandCatalog {
         JsonObject output = object(properties(
                 property("default_viewport", stringSchema(0)), property("surfaces", surfaces)),
                 "default_viewport", "surfaces");
-        return new CommandSpec("get_ui_context", 1, List.of(),
+        return new CommandSpec("get_ui_context", List.of(),
                 "查询 GeometryNode 当前窗口、Viewport 编号和默认图目标；用户提到 V1/T1 等界面引用时优先调用",
                 "get_ui_context", List.of(), output, ToolContract.CommandEffect.READ_ONLY,
                 ToolContract.RiskLevel.READ_ONLY, false, false, CommandSpec.Exposure.MODEL_VISIBLE,
@@ -188,7 +188,7 @@ final class QueryCommandCatalog {
                 property("tab_name", stringSchema(0)), property("session_id", stringSchema(1)),
                 property("scope_id", stringSchema(1)), property("revision", integerSchema(0, null))),
                 "surface_ref", "type", "visible");
-        return new CommandSpec("get_surface_context", 1, List.of(),
+        return new CommandSpec("get_surface_context", List.of(),
                 "读取指定 GeometryNode 窗口的当前上下文；Viewport 会包含当前蓝图 Tab、Group Scope 和 revision",
                 "get_surface_context <surface_ref>", arguments, output, ToolContract.CommandEffect.READ_ONLY,
                 ToolContract.RiskLevel.READ_ONLY, false, false, CommandSpec.Exposure.MODEL_VISIBLE,
@@ -206,7 +206,7 @@ final class QueryCommandCatalog {
             effectiveArguments.add(surfaceRefArgument());
             effectiveArguments = List.copyOf(effectiveArguments);
         }
-        return new CommandSpec(name, 1, List.of(), description, usage, effectiveArguments, outputSchema,
+        return new CommandSpec(name, List.of(), description, usage, effectiveArguments, outputSchema,
                 ToolContract.CommandEffect.READ_ONLY, ToolContract.RiskLevel.READ_ONLY, requiresGraph, false,
                 CommandSpec.Exposure.MODEL_VISIBLE, (context, values) -> {
                     if (!(context.target() instanceof GraphQueryTarget target)) {

@@ -7,9 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Versioned, declarative graph edit plan. Execution is intentionally outside this contract. */
+/** Declarative graph edit plan. Execution is intentionally outside this contract. */
 public record GraphPatch(
-        int protocolVersion,
         SessionRef session,
         ScopeRef scope,
         GraphRevision expectedRevision,
@@ -17,11 +16,9 @@ public record GraphPatch(
         String approvalId,
         List<Operation> operations
 ) {
-    public static final int VERSION = 1;
     public static final int MAX_OPERATIONS = 256;
 
     public GraphPatch {
-        if (VERSION != protocolVersion) throw new IllegalArgumentException("unsupported GraphPatch version: " + protocolVersion);
         session = Objects.requireNonNull(session, "session");
         scope = Objects.requireNonNull(scope, "scope");
         expectedRevision = Objects.requireNonNull(expectedRevision, "expectedRevision");

@@ -5,12 +5,11 @@ import java.util.Map;
 import java.util.Objects;
 
 /** Explicit capability negotiation; UNKNOWN must never be treated as supported. */
-public record ProviderCapabilities(int protocolVersion, Map<Capability, Support> values) {
+public record ProviderCapabilities(Map<Capability, Support> values) {
     public enum Capability { CHAT, STREAMING, TOOLS, PARALLEL_TOOLS, FORCED_TOOL, STRICT_TOOLS, REASONING }
     public enum Support { SUPPORTED, UNSUPPORTED, UNKNOWN }
 
     public ProviderCapabilities {
-        protocolVersion = AiProtocol.requireVersion(protocolVersion);
         EnumMap<Capability, Support> normalized = new EnumMap<>(Capability.class);
         Objects.requireNonNull(values, "values").forEach((capability, support) ->
                 normalized.put(Objects.requireNonNull(capability, "capability"),

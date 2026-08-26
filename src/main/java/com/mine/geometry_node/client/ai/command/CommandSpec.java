@@ -17,7 +17,6 @@ import java.util.regex.Pattern;
 /** Single source for CLI metadata, validation, completion, handlers, and model tool projection. */
 public record CommandSpec(
         String name,
-        int version,
         List<String> aliases,
         String description,
         String usage,
@@ -41,7 +40,6 @@ public record CommandSpec(
 
     public CommandSpec {
         name = normalizeName(name);
-        if (version < 1) throw new IllegalArgumentException("command version must be positive");
         aliases = normalizeAliases(aliases, name);
         if (description == null || description.isBlank()) throw new IllegalArgumentException("description cannot be blank");
         if (usage == null || usage.isBlank()) throw new IllegalArgumentException("usage cannot be blank");
@@ -68,7 +66,7 @@ public record CommandSpec(
     }
 
     private static AiProtocol.ToolDefinition toolDefinition(String name, String description, JsonObject schema) {
-        return new AiProtocol.ToolDefinition(AiProtocol.VERSION, name, description, schema);
+        return new AiProtocol.ToolDefinition(name, description, schema);
     }
 
     private static JsonObject buildInputSchema(List<CommandArgumentSpec> arguments) {

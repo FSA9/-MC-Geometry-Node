@@ -10,7 +10,6 @@ import java.util.regex.Pattern;
 
 /** Provider-neutral wire contracts used by chat and agent implementations. */
 public final class AiProtocol {
-    public static final int VERSION = 1;
     private static final Pattern TOOL_NAME_PATTERN = Pattern.compile("[A-Za-z0-9_]{1,64}");
 
     private AiProtocol() {}
@@ -70,23 +69,20 @@ public final class AiProtocol {
         @Override public JsonElement content() { return copyJson(content); }
     }
 
-    public record Message(int protocolVersion, Role role, List<ContentPart> content) {
+    public record Message(Role role, List<ContentPart> content) {
         public Message {
-            protocolVersion = requireVersion(protocolVersion);
             role = Objects.requireNonNull(role, "role");
             content = List.copyOf(Objects.requireNonNull(content, "content"));
             if (content.isEmpty()) throw new IllegalArgumentException("message content cannot be empty");
         }
 
         public static Message of(Role role, ContentPart... content) {
-            return new Message(VERSION, role, List.of(content));
+            return new Message(role, List.of(content));
         }
     }
 
-    public record ToolDefinition(int protocolVersion, String name, String description,
-                                 JsonElement inputSchema) {
+    public record ToolDefinition(String name, String description, JsonElement inputSchema) {
         public ToolDefinition {
-            protocolVersion = requireVersion(protocolVersion);
             name = requireToolName(name);
             description = requireNonBlank(description, "description");
             inputSchema = copyJson(inputSchema);
@@ -112,10 +108,9 @@ public final class AiProtocol {
         @Override public JsonElement value() { return copyJson(value); }
     }
 
-    public record Turn(int protocolVersion, String turnId, Message message, FinishReason finishReason,
+    public record Turn(String turnId, Message message, FinishReason finishReason,
                        Usage usage, ContinuationMetadata continuation) {
         public Turn {
-            protocolVersion = requireVersion(protocolVersion);
             turnId = requireNonBlank(turnId, "turnId");
             message = Objects.requireNonNull(message, "message");
             finishReason = Objects.requireNonNull(finishReason, "finishReason");
@@ -194,11 +189,6 @@ public final class AiProtocol {
             turnId = requireNonBlank(turnId, "turnId");
             error = Objects.requireNonNull(error, "error");
         }
-    }
-
-    static int requireVersion(int version) {
-        if (VERSION != version) throw new IllegalArgumentException("unsupported AI protocol version: " + version);
-        return version;
     }
 
     static String requireToolName(String name) {

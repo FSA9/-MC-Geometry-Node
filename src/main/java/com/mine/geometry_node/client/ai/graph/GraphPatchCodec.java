@@ -23,7 +23,6 @@ public final class GraphPatchCodec {
 
     public static JsonObject toJsonTree(GraphPatch patch) {
         JsonObject root = new JsonObject();
-        root.addProperty("protocol_version", patch.protocolVersion());
         root.addProperty("session_id", patch.session().id());
         root.addProperty("scope_id", patch.scope().id());
         root.addProperty("expected_revision", patch.expectedRevision().value());
@@ -44,7 +43,7 @@ public final class GraphPatchCodec {
     }
 
     public static GraphPatch fromJsonTree(JsonObject root) {
-        requireOnly(root, "protocol_version", "session_id", "scope_id", "expected_revision",
+        requireOnly(root, "session_id", "scope_id", "expected_revision",
                 "idempotency_key", "approval_id", "operations");
         JsonArray array = array(root, "operations");
         List<GraphPatch.Operation> operations = new ArrayList<>(array.size());
@@ -54,7 +53,6 @@ public final class GraphPatchCodec {
             operations.add(readOperation(element.getAsJsonObject()));
         }
         return new GraphPatch(
-                integer(root, "protocol_version"),
                 new GraphPatch.SessionRef(string(root, "session_id")),
                 new GraphPatch.ScopeRef(string(root, "scope_id")),
                 new GraphPatch.GraphRevision(longInteger(root, "expected_revision")),
