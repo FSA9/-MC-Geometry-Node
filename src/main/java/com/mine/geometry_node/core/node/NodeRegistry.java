@@ -27,6 +27,7 @@ public class NodeRegistry {
     // 后端核心存储
     private final Map<String, BaseNode> registry = new HashMap<>();
     private final Map<String, NodeDef> defaultDefCache = new LinkedHashMap<>();
+    private final Map<String, NodeCapabilities> capabilityRegistry = new HashMap<>();
     private final Map<String, EventDef> eventRegistry = new LinkedHashMap<>();
     private final Map<String, String> eventOwners = new HashMap<>();
     private final Set<String> registeredEventIds = new HashSet<>();
@@ -130,6 +131,10 @@ public class NodeRegistry {
     }
 
     public void register(NodeCategory category, BaseNode node, String addonId) {
+        register(category, node, addonId, NodeCapabilities.LEGACY_BLUEPRINT);
+    }
+
+    public void register(NodeCategory category, BaseNode node, String addonId, NodeCapabilities capabilities) {
         // 1. 基础校验
         if (node == null || category == null) {
             System.err.println("[NodeRegistry] Skip: Cannot register null node or null category");
@@ -166,6 +171,7 @@ public class NodeRegistry {
 
         registry.put(typeId, node);
         defaultDefCache.put(typeId, def);
+        capabilityRegistry.put(typeId, capabilities != null ? capabilities : NodeCapabilities.LEGACY_BLUEPRINT);
 
         category.addNode(node);
 
@@ -234,6 +240,10 @@ public class NodeRegistry {
         return Collections.unmodifiableCollection(defaultDefCache.values());
     }
 
+    public NodeCapabilities getCapabilities(String typeId) {
+        return capabilityRegistry.getOrDefault(typeId, NodeCapabilities.LEGACY_BLUEPRINT);
+    }
+
     public boolean hasEvent(String eventId) {
         return registeredEventIds.contains(eventId);
     }
@@ -290,6 +300,13 @@ public class NodeRegistry {
         @Override
         public void registerNode(String menuPath, BaseNode node) {
             NodeRegistry.this.register(menuPath, node, addonId);
+            registeredCount++;
+        }
+
+        @Override
+        public void registerNode(String menuPath, BaseNode node, NodeCapabilities capabilities) {
+            NodeCategory category = NodeRegistry.this.getOrCreateCategory(menuPath);
+            NodeRegistry.this.register(category, node, addonId, capabilities);
             registeredCount++;
         }
 

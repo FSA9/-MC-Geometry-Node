@@ -2,6 +2,9 @@ package com.mine.geometry_node.core.engine.blueprint.attachment;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mojang.serialization.Codec;
+import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingSet;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
@@ -10,8 +13,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -34,7 +35,7 @@ public class GlobalGraphStorage extends SavedData {
     );
 
     // 全局绑定图ID集合
-    private final Set<String> globalGraphs = new HashSet<>();
+    private final GraphBindingSet globalGraphs = new GraphBindingSet();
 
     // Static Access
 
@@ -58,7 +59,11 @@ public class GlobalGraphStorage extends SavedData {
      * @return 不可修改的集合视图，防止外部直接操作导致未标记 Dirty。
      */
     public Set<String> getGraphs() {
-        return Collections.unmodifiableSet(globalGraphs);
+        return globalGraphs.graphIds(GraphKind.BLUEPRINT);
+    }
+
+    public Set<GraphBindingKey> getBindings() {
+        return globalGraphs.all();
     }
 
     /**
@@ -66,7 +71,11 @@ public class GlobalGraphStorage extends SavedData {
      * @param graphId 图的唯一标识符
      */
     public void addGraph(String graphId) {
-        if (globalGraphs.add(graphId)) {
+        addGraph(GraphBindingKey.blueprint(graphId));
+    }
+
+    public void addGraph(GraphBindingKey binding) {
+        if (globalGraphs.add(binding)) {
             setDirty();
         }
     }
@@ -76,7 +85,11 @@ public class GlobalGraphStorage extends SavedData {
      * @param graphId 图的唯一标识符
      */
     public void removeGraph(String graphId) {
-        if (globalGraphs.remove(graphId)) {
+        removeGraph(GraphBindingKey.blueprint(graphId));
+    }
+
+    public void removeGraph(GraphBindingKey binding) {
+        if (globalGraphs.remove(binding)) {
             setDirty();
         }
     }
@@ -85,8 +98,7 @@ public class GlobalGraphStorage extends SavedData {
      * 清空所有全局图绑定。
      */
     public void clearGraphs() {
-        if (!globalGraphs.isEmpty()) {
-            globalGraphs.clear();
+        if (globalGraphs.clear(GraphKind.BLUEPRINT)) {
             setDirty();
         }
     }
@@ -103,7 +115,7 @@ public class GlobalGraphStorage extends SavedData {
         for (int i = 0; i < list.size(); i++) {
             String graphId = list.getStringOr(i, "");
             if (!graphId.isEmpty()) {
-                storage.globalGraphs.add(graphId);
+                storage.globalGraphs.add(GraphBindingKey.blueprint(graphId));
             }
         }
 
@@ -113,9 +125,9 @@ public class GlobalGraphStorage extends SavedData {
     /**
      * 将当前状态保存到磁盘 NBT。
      */
-    private CompoundTag saveToTag(CompoundTag tag) {
+    CompoundTag saveToTag(CompoundTag tag) {
         ListTag list = new ListTag();
-        for (String graphId : globalGraphs) {
+        for (String graphId : getGraphs()) {
             list.add(StringTag.valueOf(graphId));
         }
 

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.blueprint.runtime;
+package com.mine.geometry_node.core.engine.graph.data;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -7,7 +7,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-final class FrameValueCache {
+public final class GraphValueCache {
     private static final Object CACHE_MISS = new Object();
     private static final Object CACHED_NULL = new Object();
 
@@ -15,41 +15,41 @@ final class FrameValueCache {
     private final Int2ObjectOpenHashMap<Map<String, Object>> dynamicFrameCache = new Int2ObjectOpenHashMap<>();
     private final boolean[] recursionGuard;
 
-    FrameValueCache(int nodeCount) {
+    public GraphValueCache(int nodeCount) {
         this.recursionGuard = new boolean[nodeCount];
     }
 
-    void reset() {
+    public void reset() {
         frameCache.clear();
         dynamicFrameCache.clear();
         Arrays.fill(recursionGuard, false);
     }
 
-    void beginRootRun() {
+    public void beginEpoch() {
         frameCache.clear();
         Arrays.fill(recursionGuard, false);
     }
 
-    void clearFrameValues() {
+    public void clearValues() {
         frameCache.clear();
         for (Map<String, Object> map : dynamicFrameCache.values()) {
             map.clear();
         }
     }
 
-    boolean isRecursing(int nodeId) {
+    public boolean isRecursing(int nodeId) {
         return recursionGuard[nodeId];
     }
 
-    void enterNode(int nodeId) {
+    public void enterNode(int nodeId) {
         recursionGuard[nodeId] = true;
     }
 
-    void exitNode(int nodeId) {
+    public void exitNode(int nodeId) {
         recursionGuard[nodeId] = false;
     }
 
-    Object get(int nodeId, String portName, int portId) {
+    public Object get(int nodeId, String portName, int portId) {
         Object cached;
         if (portId != -1) {
             cached = frameCache.get(cacheKey(nodeId, portId));
@@ -63,11 +63,11 @@ final class FrameValueCache {
         return cached == CACHED_NULL ? null : cached;
     }
 
-    static boolean isCacheMiss(Object value) {
+    public static boolean isCacheMiss(Object value) {
         return value == CACHE_MISS;
     }
 
-    void put(int nodeId, String portName, int portId, Object value) {
+    public void put(int nodeId, String portName, int portId, Object value) {
         Object cacheValue = value == null ? CACHED_NULL : value;
         if (portId != -1) {
             frameCache.put(cacheKey(nodeId, portId), cacheValue);

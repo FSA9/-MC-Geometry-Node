@@ -1,0 +1,29 @@
+package com.mine.geometry_node.core.engine.graph.data;
+
+import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import org.jetbrains.annotations.Nullable;
+
+/** Read-mostly capabilities required by graph data nodes, without control-flow APIs. */
+public interface GraphDataContext {
+    ServerLevel getLevel();
+
+    @Nullable Entity getEntity();
+
+    @Nullable Entity getGraphOwnerEntity();
+
+    String getGraphId();
+
+    @Nullable Object getVariable(String name);
+
+    @Nullable Object getInputValue(String portName);
+
+    @Nullable Object getStaticInput(String portName);
+
+    @Nullable Object getEventData(String key);
+
+    boolean hasPort(String portName);
+
+    @Nullable Object getPersistentAttribute(@Nullable PersistentAttributeTarget target, String name);
+}

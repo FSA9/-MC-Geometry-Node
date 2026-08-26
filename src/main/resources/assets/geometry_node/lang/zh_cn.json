@@ -985,6 +985,7 @@
   "geometry_node.graph_properties.save_failed": "图信息保存失败",
   "geometry_node.graph_properties.kind.blueprint": "蓝图",
   "geometry_node.graph_properties.kind.quest": "任务",
+  "geometry_node.graph_properties.kind.behavior_tree": "行为树",
   "geometry_node.graph_properties.kind.unknown": "未知",
   "geometry_node.graph_properties.quest.section": "任务属性",
   "geometry_node.graph_properties.quest.title": "任务标题",

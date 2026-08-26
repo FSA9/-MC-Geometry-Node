@@ -1,14 +1,15 @@
 package com.mine.geometry_node.core.engine.graph.storage;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
-import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,6 +17,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * [动态图管理器]
@@ -26,33 +28,47 @@ public class DynamicGraphManager {
     public static final LevelResource GRAPH_DIR = new LevelResource("geometry_nodes");
 
     // 核心内存缓存
-    private static final ConcurrentHashMap<String, RuntimeGraphIndex> dynamicIndexCache = new ConcurrentHashMap<>();
-    @Nullable
-    private static ReloadListener reloadListener;
+    private static final ConcurrentHashMap<String, GraphAssetDescriptor> dynamicGraphCache = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<GraphKind, CopyOnWriteArrayList<ReloadListener>> reloadListeners =
+            new ConcurrentHashMap<>();
 
     @FunctionalInterface
     public interface ReloadListener {
         void onDynamicGraphReload(MinecraftServer server, String graphId,
-                                  @Nullable RuntimeGraphIndex oldIndex,
-                                  RuntimeGraphIndex newIndex);
+                                  @Nullable CompiledGraph oldArtifact,
+                                  @Nullable CompiledGraph newArtifact);
     }
 
-    public static void setReloadListener(@Nullable ReloadListener listener) {
-        reloadListener = listener;
+    public static void addReloadListener(GraphKind runtimeKind, ReloadListener listener) {
+        if (runtimeKind == null || runtimeKind == GraphKind.UNKNOWN || listener == null) return;
+        reloadListeners.computeIfAbsent(runtimeKind, ignored -> new CopyOnWriteArrayList<>()).addIfAbsent(listener);
     }
 
-    /**
-     * [API 1: 获取图纸]
-     */
-    public static RuntimeGraphIndex getIndex(String graphId) {
-        return dynamicIndexCache.get(graphId);
+    @Nullable
+    public static GraphAssetDescriptor getGraph(String graphId) {
+        return dynamicGraphCache.get(graphId);
+    }
+
+    @Nullable
+    public static CompiledGraph getArtifact(String graphId, GraphKind runtimeKind) {
+        GraphAssetDescriptor descriptor = dynamicGraphCache.get(graphId);
+        return descriptor != null && descriptor.runtimeKind() == runtimeKind ? descriptor.artifact() : null;
     }
 
     /**
      * [API 2: 获取所有动态图 ID]
      */
     public static Set<String> getAllDynamicGraphIds() {
-        return Collections.unmodifiableSet(dynamicIndexCache.keySet());
+        return Collections.unmodifiableSet(dynamicGraphCache.keySet());
+    }
+
+    public static Set<String> getDynamicGraphIds(GraphKind runtimeKind) {
+        if (runtimeKind == null || runtimeKind == GraphKind.UNKNOWN) return Set.of();
+        Set<String> result = ConcurrentHashMap.newKeySet();
+        dynamicGraphCache.forEach((graphId, descriptor) -> {
+            if (descriptor.runtimeKind() == runtimeKind) result.add(graphId);
+        });
+        return Collections.unmodifiableSet(result);
     }
 
     public static void saveAndHotReload(MinecraftServer server, String graphId, String jsonContent) throws Exception {
@@ -62,10 +78,9 @@ public class DynamicGraphManager {
         Path filePath = GraphPathMapper.resolveGraphPath(folder, graphId);
         File file = filePath.toFile();
 
-        RuntimeGraphIndex index;
-        try (StringReader reader = new StringReader(jsonContent)) {
-            index = BlueprintCompiler.compile(reader);
-        }
+        CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(jsonContent);
+        GraphAssetDescriptor descriptor = new GraphAssetDescriptor(graphId,
+                GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact);
 
         // 创建目录
         File parentDir = file.getParentFile();
@@ -79,15 +94,13 @@ public class DynamicGraphManager {
 
         // 热更新
         String normalizedId = GraphPathMapper.pathToId(folder, file.toPath().toAbsolutePath().normalize());
-        RuntimeGraphIndex oldIndex = dynamicIndexCache.put(normalizedId, index);
-        ReloadListener listener = reloadListener;
-        if (listener != null) {
-            listener.onDynamicGraphReload(server, normalizedId, oldIndex, index);
-        }
+        descriptor = new GraphAssetDescriptor(normalizedId, descriptor.type(), descriptor.artifact());
+        GraphAssetDescriptor oldDescriptor = dynamicGraphCache.put(normalizedId, descriptor);
+        notifyReload(server, normalizedId, oldDescriptor, descriptor);
     }
 
     public static void loadAllFromDisk(MinecraftServer server) {
-        dynamicIndexCache.clear();
+        dynamicGraphCache.clear();
         if (server == null) return;
 
         try {
@@ -104,17 +117,42 @@ public class DynamicGraphManager {
                             try {
                                 String graphId = GraphPathMapper.pathToId(folder, file);
                                 try (java.io.FileReader reader = new java.io.FileReader(file.toFile())) {
-                                    RuntimeGraphIndex index = BlueprintCompiler.compile(reader);
-                                    dynamicIndexCache.put(graphId, index);
+                                    CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(reader);
+                                    dynamicGraphCache.put(graphId, new GraphAssetDescriptor(graphId,
+                                            GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact));
                                 }
                             } catch (Exception e) {
                                 GeometryNode.LOGGER.error("[DynamicGraphManager] Fail to load graph: {}", file, e);
                             }
                         });
             }
-            GeometryNode.LOGGER.info("[DynamicGraphManager] Total load {} graphs。", dynamicIndexCache.size());
+            GeometryNode.LOGGER.info("[DynamicGraphManager] Total load {} graphs。", dynamicGraphCache.size());
         } catch (Exception e) {
             GeometryNode.LOGGER.error("[DynamicGraphManager] Load content failed! ", e);
+        }
+    }
+
+    private static void notifyReload(MinecraftServer server, String graphId,
+                                     @Nullable GraphAssetDescriptor oldDescriptor,
+                                     @Nullable GraphAssetDescriptor newDescriptor) {
+        if (oldDescriptor != null) {
+            notifyKind(oldDescriptor.runtimeKind(), server, graphId, oldDescriptor.artifact(),
+                    newDescriptor != null && newDescriptor.runtimeKind() == oldDescriptor.runtimeKind()
+                            ? newDescriptor.artifact() : null);
+        }
+        if (newDescriptor != null && (oldDescriptor == null
+                || oldDescriptor.runtimeKind() != newDescriptor.runtimeKind())) {
+            notifyKind(newDescriptor.runtimeKind(), server, graphId, null, newDescriptor.artifact());
+        }
+    }
+
+    private static void notifyKind(GraphKind kind, MinecraftServer server, String graphId,
+                                   @Nullable CompiledGraph oldArtifact,
+                                   @Nullable CompiledGraph newArtifact) {
+        CopyOnWriteArrayList<ReloadListener> listeners = reloadListeners.get(kind);
+        if (listeners == null) return;
+        for (ReloadListener listener : listeners) {
+            listener.onDynamicGraphReload(server, graphId, oldArtifact, newArtifact);
         }
     }
 }

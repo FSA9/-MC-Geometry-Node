@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.asset;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetDescriptor;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
@@ -377,16 +377,16 @@ public final class RemoteAssetFileService {
             lastModified = 0L;
         }
         String graphId = GraphPathMapper.pathToId(root, path);
-        RuntimeGraphIndex graphIndex = directory || !AssetTransferPolicy.isGraphPath(path.toString())
+        GraphAssetDescriptor graph = directory || !AssetTransferPolicy.isGraphPath(path.toString())
                 ? null
-                : DynamicGraphManager.getIndex(graphId);
+                : DynamicGraphManager.getGraph(graphId);
         return new RemoteGraphEntry(
                 graphId,
                 path.getFileName().toString(),
                 directory,
                 size,
                 lastModified,
-                graphIndex != null ? graphIndex.getGraphTypeId() : ""
+                graph != null ? graph.type().id() : ""
         );
     }
 

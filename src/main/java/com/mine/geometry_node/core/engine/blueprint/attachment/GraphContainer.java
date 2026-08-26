@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.graph.scheduling.DueTickScheduler;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -14,10 +15,8 @@ import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.PriorityQueue;
 
 /**
  * [蓝图运行容器核心] (组合模式)
@@ -27,8 +26,7 @@ public class GraphContainer {
 
     private final Map<String, GraphProcess> processes = new HashMap<>();
     private final Map<String, Object> attributes = new HashMap<>();
-    private final PriorityQueue<ScheduledProcess> tickQueue = new PriorityQueue<>(Comparator.comparingLong(ScheduledProcess::nextTick));
-    private final Map<String, ScheduledProcess> activeTickSchedules = new HashMap<>();
+    private final DueTickScheduler<String, GraphProcess> tickScheduler = new DueTickScheduler<>();
 
     // 脏标记回调 (用于通知 Level 保存存档)
     private final Runnable dirtyMarker;
@@ -43,30 +41,17 @@ public class GraphContainer {
         this.scheduleChangedCallback = scheduleChangedCallback != null ? scheduleChangedCallback : () -> {};
     }
 
-    private record ScheduledProcess(String graphId, GraphProcess process, long nextTick) {}
-
     /**
      * [心跳驱动] 只唤醒真正存在到期等待任务的常驻进程。
      */
     public void tick(ServerLevel level, @Nullable Entity target) {
-        if (tickQueue.isEmpty()) return;
         long currentTime = level.getGameTime();
 
-        while (!tickQueue.isEmpty()) {
-            ScheduledProcess scheduled = tickQueue.peek();
-            if (activeTickSchedules.get(scheduled.graphId()) != scheduled) {
-                tickQueue.poll();
-                continue;
-            }
-            if (scheduled.nextTick() > currentTime) {
-                return;
-            }
+        DueTickScheduler.Scheduled<String, GraphProcess> scheduled;
+        while ((scheduled = tickScheduler.pollDue(currentTime)) != null) {
 
-            tickQueue.poll();
-            activeTickSchedules.remove(scheduled.graphId(), scheduled);
-
-            GraphProcess process = processes.get(scheduled.graphId());
-            if (process != scheduled.process()) {
+            GraphProcess process = processes.get(scheduled.key());
+            if (process != scheduled.value()) {
                 continue;
             }
 
@@ -106,7 +91,7 @@ public class GraphContainer {
         if (previous != null && previous != process) {
             previous.setTickScheduleCallback(null);
             previous.shutdown("graph_replaced");
-            if (this.activeTickSchedules.remove(previous.getGraphId()) != null) {
+            if (this.tickScheduler.cancel(previous.getGraphId())) {
                 notifyScheduleChanged();
             }
         }
@@ -139,9 +124,7 @@ public class GraphContainer {
     }
 
     public long getNextScheduledTick() {
-        discardStaleTickSchedules();
-        ScheduledProcess scheduled = this.tickQueue.peek();
-        return scheduled != null ? scheduled.nextTick() : Long.MAX_VALUE;
+        return tickScheduler.nextDueTick();
     }
 
     /**
@@ -176,7 +159,7 @@ public class GraphContainer {
         if (previous != null && previous != process) {
             previous.setTickScheduleCallback(null);
             previous.shutdown("graph_reloaded");
-            if (this.activeTickSchedules.remove(previous.getGraphId()) != null) {
+            if (this.tickScheduler.cancel(previous.getGraphId())) {
                 notifyScheduleChanged();
             }
         }
@@ -237,7 +220,7 @@ public class GraphContainer {
         if (!this.processes.remove(graphId, process)) return;
         process.setTickScheduleCallback(null);
         process.shutdown(reason);
-        if (this.activeTickSchedules.remove(graphId) != null) {
+        if (this.tickScheduler.cancel(graphId)) {
             notifyScheduleChanged();
         }
         this.dirtyMarker.run();
@@ -253,38 +236,19 @@ public class GraphContainer {
             return;
         }
         if (nextTick == Long.MAX_VALUE) {
-            if (this.activeTickSchedules.remove(graphId) != null) {
+            if (this.tickScheduler.cancel(graphId)) {
                 notifyScheduleChanged();
             }
             return;
         }
 
-        ScheduledProcess current = this.activeTickSchedules.get(graphId);
-        if (current != null && current.process() == process && current.nextTick() == nextTick) {
-            return;
+        if (this.tickScheduler.schedule(graphId, process, nextTick)) {
+            notifyScheduleChanged();
         }
-
-        ScheduledProcess scheduled = new ScheduledProcess(graphId, process, nextTick);
-        this.activeTickSchedules.put(graphId, scheduled);
-        this.tickQueue.offer(scheduled);
-        notifyScheduleChanged();
     }
 
     private boolean clearTickSchedule() {
-        boolean hadSchedule = !this.activeTickSchedules.isEmpty();
-        this.tickQueue.clear();
-        this.activeTickSchedules.clear();
-        return hadSchedule;
-    }
-
-    private void discardStaleTickSchedules() {
-        while (!this.tickQueue.isEmpty()) {
-            ScheduledProcess scheduled = this.tickQueue.peek();
-            if (this.activeTickSchedules.get(scheduled.graphId()) == scheduled) {
-                return;
-            }
-            this.tickQueue.poll();
-        }
+        return this.tickScheduler.clear();
     }
 
     private void notifyScheduleChanged() {

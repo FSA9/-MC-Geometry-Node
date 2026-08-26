@@ -3,6 +3,9 @@ package com.mine.geometry_node.core.engine.blueprint.attachment;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingSet;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -19,7 +22,7 @@ import java.util.*;
  */
 public class EntityGraphAttachment {
 
-    private final Set<String> boundGraphs = new HashSet<>();
+    private final GraphBindingSet boundGraphs = new GraphBindingSet();
     private WeakReference<Entity> ownerRef = new WeakReference<>(null);
 
     private final GraphContainer container = new GraphContainer(() -> {}, this::onScheduleChanged);
@@ -53,7 +56,11 @@ public class EntityGraphAttachment {
     // --- 实体独占绑定逻辑 ---
 
     public void bindGraph(String graphId) {
-        this.boundGraphs.add(graphId);
+        bind(GraphBindingKey.blueprint(graphId));
+    }
+
+    public void bind(GraphBindingKey binding) {
+        this.boundGraphs.add(binding);
     }
 
     public void unbindGraph(String graphId) {
@@ -61,16 +68,20 @@ public class EntityGraphAttachment {
     }
 
     public void unbindGraph(String graphId, GraphCloseMode closeMode) {
-        this.boundGraphs.remove(graphId);
+        this.boundGraphs.remove(GraphBindingKey.blueprint(graphId));
         this.container.removeProcess(graphId, closeMode);
     }
 
     public Set<String> getBoundGraphs() {
-        return Collections.unmodifiableSet(boundGraphs);
+        return boundGraphs.graphIds(GraphKind.BLUEPRINT);
+    }
+
+    public Set<GraphBindingKey> getBindings() {
+        return boundGraphs.all();
     }
 
     public void clearGraphs() {
-        this.boundGraphs.clear();
+        this.boundGraphs.clear(GraphKind.BLUEPRINT);
         this.container.clear();
     }
 
@@ -98,9 +109,9 @@ public class EntityGraphAttachment {
     // --- 序列化层 ---
 
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
-        if (!boundGraphs.isEmpty()) {
+        if (!getBoundGraphs().isEmpty()) {
             ListTag boundList = new ListTag();
-            for (String graphId : boundGraphs) boundList.add(StringTag.valueOf(graphId));
+            for (String graphId : getBoundGraphs()) boundList.add(StringTag.valueOf(graphId));
             tag.put("BoundGraphs", boundList);
         }
         return container.save(tag, provider);
@@ -112,7 +123,7 @@ public class EntityGraphAttachment {
         for (int i = 0; i < list.size(); i++) {
             String graphId = list.getStringOr(i, "");
             if (!graphId.isEmpty()) {
-                this.boundGraphs.add(graphId);
+                this.boundGraphs.add(GraphBindingKey.blueprint(graphId));
             }
         }
         container.load(tag, provider);

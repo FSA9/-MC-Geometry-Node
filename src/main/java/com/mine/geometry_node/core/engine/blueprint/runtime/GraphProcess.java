@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
-import com.mine.geometry_node.core.engine.blueprint.variables.VariableRegistry;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
@@ -416,7 +417,9 @@ public class GraphProcess {
         final List<RuntimeGraphIndex.IntFlowTarget> executionStack = new ArrayList<>();
         Object[] eventRegisters = new Object[GraphProcess.this.index.getRegisterCount() + 8];
         Map<String, Object> dynamicEventData = null;
-        private final FrameValueCache frameValueCache = new FrameValueCache(GraphProcess.this.index.getNodeCount());
+        private final GraphDataEvaluationSession dataEvaluation =
+                new GraphDataEvaluationSession(GraphProcess.this.index);
+        private final GraphDataEvaluationSession.NodeEvaluator dataNodeEvaluator = this::computeDataNode;
         // ✨ 新增：线程私有的临时黑板
         public final Map<String, Object> tempData = new HashMap<>();
 
@@ -446,7 +449,7 @@ public class GraphProcess {
             this.runDepth = 0;
             this.parentJoinId = null;
             this.executionStack.clear();
-            this.frameValueCache.reset();
+            this.dataEvaluation.reset();
             this.tempData.clear();
             Arrays.fill(this.eventRegisters, null);
             if (this.dynamicEventData != null) this.dynamicEventData.clear();
@@ -531,7 +534,7 @@ public class GraphProcess {
 
             // 只有最外层启动时，才清理初始缓存，防止误清内层递归数据
             if (runDepth == 1) {
-                frameValueCache.beginRootRun();
+                dataEvaluation.beginEpoch();
             }
 
             try {
@@ -785,25 +788,11 @@ public class GraphProcess {
         }
 
         private Object executeDataNode(int nodeId, String portName) {
-            if (frameValueCache.isRecursing(nodeId)) return null;
+            return dataEvaluation.evaluate(nodeId, portName, dataNodeEvaluator);
+        }
 
-            int portId = index.getKeyId(portName);
-
-            // ==========================================
-            // 1. 查缓存 (单次查询 O(1) + 零字符串分配)
-            // ==========================================
-            Object cached = frameValueCache.get(nodeId, portName, portId);
-            if (!FrameValueCache.isCacheMiss(cached)) {
-                return cached;
-            }
-
-            // ==========================================
-            // 2. 执行计算
-            // ==========================================
-            frameValueCache.enterNode(nodeId);
+        private Object computeDataNode(int nodeId, String portName) {
             int prevActive = this.activeNodeId;
-            Object result;
-
             try {
                 BaseNode logic = NodeRegistry.INSTANCE.get(index.getNodeType(nodeId));
                 if (logic == null) {
@@ -814,21 +803,14 @@ public class GraphProcess {
                 }
 
                 this.activeNodeId = nodeId;
-                result = logic.compute(this, portName);
+                return logic.compute((GraphDataContext) this, portName);
             } finally {
                 this.activeNodeId = prevActive;
-                frameValueCache.exitNode(nodeId);
             }
-
-            // ==========================================
-            // 3. 写缓存 (使用 CACHED_NULL 占位)
-            // ==========================================
-            frameValueCache.put(nodeId, portName, portId, result);
-            return result;
         }
 
         private Object evaluateDataOutput(int nodeId, String portName) {
-            frameValueCache.beginRootRun();
+            dataEvaluation.beginEpoch();
             return executeDataNode(nodeId, portName);
         }
 
@@ -1002,7 +984,7 @@ public class GraphProcess {
 
         @Override
         public void clearFrameCache() {
-            frameValueCache.clearFrameValues();
+            dataEvaluation.clearValues();
         }
 
         @Override

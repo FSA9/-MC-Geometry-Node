@@ -12,6 +12,8 @@ import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAtt
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
+import com.mine.geometry_node.core.engine.integration.AttachmentPersistentAttributeStore;
+import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
 import com.mine.geometry_node.core.engine.system.marker.MarkerService;
@@ -134,6 +136,8 @@ public class GeometryNode {
 
         // 初始化节点注册表
         NodeRegistry.INSTANCE.init();
+
+        GraphEngineServices.INSTANCE.setPersistentAttributeStore(new AttachmentPersistentAttributeStore());
 
         // 初始化图运行时注册表
         GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);

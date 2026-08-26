@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.mine.geometry_node.core.engine.blueprint.attachment.GraphContainer;
-import com.mine.geometry_node.core.engine.blueprint.variables.VariableRegistry;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -78,7 +78,7 @@ public class GraphProcessSerializer {
                 // 存临时黑板
                 CompoundTag tempTag = new CompoundTag();
                 for (Map.Entry<String, Object> entry : thread.tempData.entrySet()) {
-                    Tag s = VariableRegistry.toTag(entry.getValue(), provider);
+                    Tag s = GraphValueCodecRegistry.toTag(entry.getValue(), provider);
                     if (s != null) tempTag.put(entry.getKey(), s);
                 }
                 if (!tempTag.isEmpty()) tTag.put("TempData", tempTag);
@@ -103,7 +103,7 @@ public class GraphProcessSerializer {
 
                 CompoundTag tempTag = new CompoundTag();
                 for (Map.Entry<String, Object> entry : join.tempData.entrySet()) {
-                    Tag s = VariableRegistry.toTag(entry.getValue(), provider);
+                    Tag s = GraphValueCodecRegistry.toTag(entry.getValue(), provider);
                     if (s != null) tempTag.put(entry.getKey(), s);
                 }
                 if (!tempTag.isEmpty()) joinTag.put("TempData", tempTag);
@@ -192,7 +192,7 @@ public class GraphProcessSerializer {
                     if (tTag.contains("TempData")) {
                         CompoundTag tempTag = tTag.getCompoundOrEmpty("TempData");
                         for (String key : tempTag.keySet()) {
-                            Object obj = VariableRegistry.fromTag(tempTag.get(key), provider);
+                            Object obj = GraphValueCodecRegistry.fromTag(tempTag.get(key), provider);
                             if (obj != null) thread.tempData.put(key, obj);
                         }
                     }
@@ -219,7 +219,7 @@ public class GraphProcessSerializer {
                 if (joinTag.contains("TempData")) {
                     CompoundTag tempTag = joinTag.getCompoundOrEmpty("TempData");
                     for (String key : tempTag.keySet()) {
-                        Object obj = VariableRegistry.fromTag(tempTag.get(key), provider);
+                        Object obj = GraphValueCodecRegistry.fromTag(tempTag.get(key), provider);
                         if (obj != null) {
                             tempData.put(key, obj);
                         }
@@ -248,13 +248,13 @@ public class GraphProcessSerializer {
         for (int i = 0; i < statics.length; i++) {
             if (statics[i] != null) {
                 String key = index.getKeyFromId(i);
-                Tag s = VariableRegistry.toTag(statics[i], provider);
+                Tag s = GraphValueCodecRegistry.toTag(statics[i], provider);
                 if (s != null && key != null) tag.put(key, s);
             }
         }
         if (dynamics != null) {
             for (Map.Entry<String, Object> entry : dynamics.entrySet()) {
-                Tag s = VariableRegistry.toTag(entry.getValue(), provider);
+                Tag s = GraphValueCodecRegistry.toTag(entry.getValue(), provider);
                 if (s != null) tag.put(entry.getKey(), s);
             }
         }
@@ -262,7 +262,7 @@ public class GraphProcessSerializer {
 
     private static void loadVariablesFromTag(CompoundTag tag, Object[] statics, GraphProcess.VariableScope scope, RuntimeGraphIndex index, HolderLookup.Provider provider) {
         for (String key : tag.keySet()) {
-            Object obj = VariableRegistry.fromTag(tag.get(key), provider);
+            Object obj = GraphValueCodecRegistry.fromTag(tag.get(key), provider);
             if (obj != null) {
                 int id = index.getKeyId(key);
                 if (id != -1 && id < statics.length) {
@@ -288,7 +288,7 @@ public class GraphProcessSerializer {
         if (!container.getAttributesMap().isEmpty()) {
             CompoundTag attrTag = new CompoundTag();
             for (Map.Entry<String, Object> entry : container.getAttributesMap().entrySet()) {
-                Tag t = VariableRegistry.toTag(entry.getValue(), provider);
+                Tag t = GraphValueCodecRegistry.toTag(entry.getValue(), provider);
                 if (t != null) attrTag.put(entry.getKey(), t);
             }
             tag.put("Attributes", attrTag);
@@ -314,7 +314,7 @@ public class GraphProcessSerializer {
         if (tag.contains("Attributes")) {
             CompoundTag attrTag = tag.getCompoundOrEmpty("Attributes");
             for (String key : attrTag.keySet()) {
-                Object obj = VariableRegistry.fromTag(attrTag.get(key), provider);
+                Object obj = GraphValueCodecRegistry.fromTag(attrTag.get(key), provider);
                 if (obj != null) container.getAttributesMap().put(key, obj);
             }
         }

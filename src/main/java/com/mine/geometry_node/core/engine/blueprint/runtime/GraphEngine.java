@@ -11,6 +11,8 @@ import com.mine.geometry_node.core.engine.blueprint.event.subscription.GraphSubs
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
+import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityGainItem;
 import net.minecraft.server.MinecraftServer;
@@ -575,16 +577,23 @@ public class GraphEngine {
     @Nullable
     public static RuntimeGraphIndex getGraphIndex(String graphId) {
         String finalId = GraphPathMapper.normalizeId(graphId);
-        RuntimeGraphIndex dynamicIndex = DynamicGraphManager.getIndex(finalId);
+        RuntimeGraphIndex dynamicIndex = asBlueprintIndex(
+                DynamicGraphManager.getArtifact(finalId, GraphKind.BLUEPRINT));
         if (dynamicIndex != null) return dynamicIndex;
-        return GraphResourceManager.getInstance().getIndex(graphId);
+        return asBlueprintIndex(GraphResourceManager.getInstance()
+                .getArtifact(graphId, GraphKind.BLUEPRINT));
     }
 
     public static String resolveGraphId(@Nullable String graphId) {
         if (graphId == null || graphId.isBlank()) return "";
         String trimmedId = graphId.trim();
         String dynamicId = GraphPathMapper.normalizeId(trimmedId);
-        return DynamicGraphManager.getIndex(dynamicId) != null ? dynamicId : trimmedId;
+        return DynamicGraphManager.getArtifact(dynamicId, GraphKind.BLUEPRINT) != null ? dynamicId : trimmedId;
+    }
+
+    @Nullable
+    private static RuntimeGraphIndex asBlueprintIndex(@Nullable CompiledGraph artifact) {
+        return artifact instanceof RuntimeGraphIndex index ? index : null;
     }
 
     private static EntityGraphAttachment getAttachment(Entity entity) {

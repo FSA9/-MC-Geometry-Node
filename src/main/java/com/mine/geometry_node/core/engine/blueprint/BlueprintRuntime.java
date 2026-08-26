@@ -1,17 +1,14 @@
 package com.mine.geometry_node.core.engine.blueprint;
 
-import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.blueprint.attachment.EntityGraphAttachment;
-import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.service.GraphEngineServices;
-import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
+import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
+import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -44,8 +41,8 @@ public final class BlueprintRuntime implements GraphRuntime {
 
     @Override
     public void init() {
-        DynamicGraphManager.setReloadListener(GraphEngine::refreshGraphSubscriptions);
-        GraphEngineServices.INSTANCE.setPersistentAttributeStore(new BlueprintPersistentAttributeStore());
+        GraphCompilationService.INSTANCE.register(BlueprintCompiler.INSTANCE);
+        DynamicGraphManager.addReloadListener(GraphKind.BLUEPRINT, this::onDynamicGraphReload);
     }
 
     @Nullable
@@ -115,73 +112,12 @@ public final class BlueprintRuntime implements GraphRuntime {
         GraphEngine.refreshGraphSubscriptions(server, graphId, oldIndex, newIndex);
     }
 
-    private static final class BlueprintPersistentAttributeStore implements GraphEngineServices.PersistentAttributeStore {
-        @Override
-        public void set(@Nullable GraphRuntimeContext context,
-                        @Nullable PersistentAttributeTarget target,
-                        String name,
-                        @Nullable Object value) {
-            if (name == null || name.trim().isEmpty()) {
-                return;
-            }
-            PersistentAttributeTarget resolvedTarget = target != null ? target : PersistentAttributeTarget.global();
-            if (resolvedTarget instanceof PersistentAttributeTarget.EntityTarget entityTarget) {
-                if (entityTarget.entity() == null) {
-                    return;
-                }
-                EntityGraphAttachment attachment = entityTarget.entity().getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
-                if (attachment != null) {
-                    attachment.setAttribute(name, value);
-                }
-                return;
-            }
-            if (context == null) {
-                return;
-            }
-            LevelGraphAttachment attachment = LevelGraphAttachment.get(context.level().getServer().overworld());
-            if (resolvedTarget instanceof PersistentAttributeTarget.GlobalTarget) {
-                attachment.setAttribute(name, value);
-            } else if (resolvedTarget instanceof PersistentAttributeTarget.ScopeTarget scopeTarget) {
-                if (scopeTarget.scopeId() == null || scopeTarget.scopeId().isBlank()) {
-                    return;
-                }
-                attachment.setAttribute(scopeKey(scopeTarget.scopeId(), name), value);
-            }
-        }
-
-        @Override
-        public @Nullable Object get(@Nullable GraphRuntimeContext context,
-                                    @Nullable PersistentAttributeTarget target,
-                                    String name) {
-            if (name == null || name.trim().isEmpty()) {
-                return null;
-            }
-            PersistentAttributeTarget resolvedTarget = target != null ? target : PersistentAttributeTarget.global();
-            if (resolvedTarget instanceof PersistentAttributeTarget.EntityTarget entityTarget) {
-                if (entityTarget.entity() == null) {
-                    return null;
-                }
-                EntityGraphAttachment attachment = entityTarget.entity().getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
-                return attachment != null ? attachment.getAttribute(name) : null;
-            }
-            if (context == null) {
-                return null;
-            }
-            LevelGraphAttachment attachment = LevelGraphAttachment.get(context.level().getServer().overworld());
-            if (resolvedTarget instanceof PersistentAttributeTarget.GlobalTarget) {
-                return attachment.getAttribute(name);
-            }
-            if (resolvedTarget instanceof PersistentAttributeTarget.ScopeTarget scopeTarget) {
-                if (scopeTarget.scopeId() == null || scopeTarget.scopeId().isBlank()) {
-                    return null;
-                }
-                return attachment.getAttribute(scopeKey(scopeTarget.scopeId(), name));
-            }
-            return null;
-        }
-
-        private static String scopeKey(String scopeId, String name) {
-            return "scope:" + scopeId + ":" + name;
-        }
+    private void onDynamicGraphReload(MinecraftServer server, String graphId,
+                                      @Nullable CompiledGraph oldArtifact,
+                                      @Nullable CompiledGraph newArtifact) {
+        RuntimeGraphIndex oldIndex = oldArtifact instanceof RuntimeGraphIndex index ? index : null;
+        RuntimeGraphIndex newIndex = newArtifact instanceof RuntimeGraphIndex index ? index : null;
+        refreshGraphSubscriptions(server, graphId, oldIndex, newIndex);
     }
+
 }

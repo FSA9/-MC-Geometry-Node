@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
@@ -16,7 +17,7 @@ import java.util.UUID;
  * 这是一个 {@code Facade} (外观模式) 接口，用于向节点隐藏 {@link GraphProcess} 的底层复杂性（如指针操作、序列化逻辑）。
  * 节点只能通过此接口与世界交互或读写变量。
  */
-public interface ExecutionContext {
+public interface ExecutionContext extends GraphDataContext {
 
     /**
      * 获取当前图所属的世界。

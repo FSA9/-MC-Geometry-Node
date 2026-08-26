@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.container;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -28,7 +28,7 @@ public class GetInputDataType extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.TYPE.getId().equals(portName)) return null;
 
         Object rawValue = getRawInput(context, StandardPorts.ANY_VALUE.getId());

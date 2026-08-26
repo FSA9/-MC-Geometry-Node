@@ -9,6 +9,8 @@ import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructu
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.compile.GraphCompiler;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
@@ -28,8 +30,9 @@ import java.util.Set;
 /**
  * Compiles blueprint JSON into the immutable runtime index used by the VM.
  */
-public final class BlueprintCompiler {
+public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex> {
     private static final Gson GSON = new Gson();
+    public static final BlueprintCompiler INSTANCE = new BlueprintCompiler();
 
     private BlueprintCompiler() {
     }
@@ -37,11 +40,31 @@ public final class BlueprintCompiler {
     @SuppressWarnings("unchecked")
     public static RuntimeGraphIndex compile(Reader jsonReader) {
         JsonObject root = JsonParser.parseReader(jsonReader).getAsJsonObject();
+        return compileDocument(root);
+    }
+
+    @Override
+    public GraphKind runtimeKind() {
+        return GraphKind.BLUEPRINT;
+    }
+
+    @Override
+    public RuntimeGraphIndex compile(JsonObject document) {
+        return compileDocument(document);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static RuntimeGraphIndex compileDocument(JsonObject root) {
         String graphTypeId = root.has("graph_kind")
                 ? GraphType.normalizeId(root.get("graph_kind").getAsString())
                 : GraphTypeRegistry.BLUEPRINT.id();
         if (graphTypeId.isEmpty()) {
             graphTypeId = GraphTypeRegistry.BLUEPRINT.id();
+        }
+        GraphType graphType = GraphTypeRegistry.INSTANCE.require(graphTypeId);
+        if (graphType.runtimeKind() != GraphKind.BLUEPRINT) {
+            throw new IllegalArgumentException(
+                    "Blueprint compiler cannot compile graph type: " + graphType.id());
         }
         QuestDefinition questDefinition = GraphTypeRegistry.QUEST.id().equals(graphTypeId)
                 ? QuestDefinition.fromJson(root.get("quest"))

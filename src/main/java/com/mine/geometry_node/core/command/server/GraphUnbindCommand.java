@@ -28,7 +28,7 @@ public class GraphUnbindCommand {
                                             return targets.size();
                                         })
                                         .then(Commands.argument("graph_id", StringArgumentType.greedyString())
-                                                .suggests(ServerCommandUtils.SUGGEST_GRAPHS)
+                                                .suggests(ServerCommandUtils.SUGGEST_BLUEPRINT_GRAPHS)
                                                 .executes(context -> {
                                                     Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
                                                     String graphId = StringArgumentType.getString(context, "graph_id");
@@ -49,7 +49,7 @@ public class GraphUnbindCommand {
                                     return 1;
                                 })
                                 .then(Commands.argument("graph_id", StringArgumentType.greedyString())
-                                        .suggests(ServerCommandUtils.SUGGEST_GRAPHS)
+                                        .suggests(ServerCommandUtils.SUGGEST_BLUEPRINT_GRAPHS)
                                         .executes(context -> {
                                             String graphId = StringArgumentType.getString(context, "graph_id");
                                             BlueprintRuntime.INSTANCE.unbindGlobalGraph(context.getSource().getLevel(), graphId);

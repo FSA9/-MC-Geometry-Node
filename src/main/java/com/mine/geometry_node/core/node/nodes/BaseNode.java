@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.node.value.dynamic.ExpressionData;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -34,6 +35,19 @@ public abstract class BaseNode {
     }
 
     @Nullable
+    public Object compute(GraphDataContext context, String portName) {
+        if (context instanceof ExecutionContext blueprintContext) {
+            return compute(blueprintContext, portName);
+        }
+        return null;
+    }
+
+    /**
+     * Legacy blueprint-specific data entry point. New pure data nodes should
+     * override {@link #compute(GraphDataContext, String)} instead.
+     */
+    @Deprecated
+    @Nullable
     public Object compute(ExecutionContext context, String portName) {
         return null;
     }
@@ -43,7 +57,7 @@ public abstract class BaseNode {
     // ==========================================
 
     @Nullable
-    protected Object getRawInput(ExecutionContext ctx, String portName) {
+    protected Object getRawInput(GraphDataContext ctx, String portName) {
         Object val = ctx.getInputValue(portName);
         if (val != null) return val;
 
@@ -51,12 +65,12 @@ public abstract class BaseNode {
     }
 
     @Nullable
-    protected <T> T getInput(ExecutionContext ctx, String portName, Class<T> type) {
+    protected <T> T getInput(GraphDataContext ctx, String portName, Class<T> type) {
         Object raw = getRawInput(ctx, portName);
         return TypeConverter.convert(raw, type, ctx);
     }
 
-    protected <T> List<T> getInputList(ExecutionContext ctx, String portName, Class<T> elementType) {
+    protected <T> List<T> getInputList(GraphDataContext ctx, String portName, Class<T> elementType) {
         Object raw = getRawInput(ctx, portName);
         if (raw == null) return List.of();
 
@@ -77,7 +91,7 @@ public abstract class BaseNode {
         return List.of();
     }
 
-    protected Map<String, Object> getInputDict(ExecutionContext ctx, String portName) {
+    protected Map<String, Object> getInputDict(GraphDataContext ctx, String portName) {
         Object raw = getRawInput(ctx, portName);
         if (raw == null) return new java.util.HashMap<>();
 

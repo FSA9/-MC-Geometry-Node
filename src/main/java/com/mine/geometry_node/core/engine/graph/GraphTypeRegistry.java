@@ -15,9 +15,12 @@ import java.util.Map;
  */
 public final class GraphTypeRegistry {
     public static final GraphType BLUEPRINT = new GraphType(
-            "blueprint", "geometry_node.graph_properties.kind.blueprint", 0xFF88CCFF);
+            "blueprint", "geometry_node.graph_properties.kind.blueprint", 0xFF88CCFF, GraphKind.BLUEPRINT, true);
     public static final GraphType QUEST = new GraphType(
-            "quest", "geometry_node.graph_properties.kind.quest", 0xFFFF9E3D);
+            "quest", "geometry_node.graph_properties.kind.quest", 0xFFFF9E3D, GraphKind.BLUEPRINT, true);
+    public static final GraphType BEHAVIOR_TREE = new GraphType(
+            "behavior_tree", "geometry_node.graph_properties.kind.behavior_tree", 0xFF5C9E72,
+            GraphKind.BEHAVIOR_TREE, false);
 
     public static final GraphTypeRegistry INSTANCE = new GraphTypeRegistry();
 
@@ -26,6 +29,7 @@ public final class GraphTypeRegistry {
     private GraphTypeRegistry() {
         register(BLUEPRINT);
         register(QUEST);
+        register(BEHAVIOR_TREE);
     }
 
     public synchronized void register(GraphType type) {
@@ -44,5 +48,21 @@ public final class GraphTypeRegistry {
 
     public synchronized Collection<GraphType> all() {
         return Collections.unmodifiableList(new ArrayList<>(types.values()));
+    }
+
+    public synchronized Collection<GraphType> authorable() {
+        List<GraphType> result = new ArrayList<>();
+        for (GraphType type : types.values()) {
+            if (type.authorable()) result.add(type);
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    public synchronized GraphType require(@Nullable String id) {
+        GraphType type = get(id);
+        if (type == null) {
+            throw new IllegalArgumentException("Unknown graph type: " + id);
+        }
+        return type;
     }
 }

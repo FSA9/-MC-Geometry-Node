@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.port;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.node.value.dynamic.ExpressionData;
@@ -36,7 +36,7 @@ public class TypeConverter {
      * @return 转换后的对象，如果完全无法转换则返回 null
      */
     @Nullable
-    public static <T> T convert(@Nullable Object val, Class<T> type, ExecutionContext ctx) {
+    public static <T> T convert(@Nullable Object val, Class<T> type, GraphDataContext ctx) {
         if (val == null) return null;
 
         // ==========================================
@@ -213,7 +213,7 @@ public class TypeConverter {
     }
 
     @Nullable
-    private static Entity resolveEntity(UUID uuid, @Nullable ExecutionContext ctx) {
+    private static Entity resolveEntity(UUID uuid, @Nullable GraphDataContext ctx) {
         if (ctx == null || ctx.getLevel() == null) return null;
         return ctx.getLevel().getEntity(uuid);
     }

@@ -125,7 +125,7 @@ public final class GraphTypeSelector extends FrameLayout {
         menu.setClickable(true);
         menu.setOnClickListener(v -> {
         });
-        for (GraphType type : GraphTypeRegistry.INSTANCE.all()) {
+        for (GraphType type : GraphTypeRegistry.INSTANCE.authorable()) {
             menu.addView(createOption(type), new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     UIUtils.dp2pxInt(28)));

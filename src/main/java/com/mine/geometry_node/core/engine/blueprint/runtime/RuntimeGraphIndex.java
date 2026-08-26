@@ -2,6 +2,10 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
+import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import org.jetbrains.annotations.Nullable;
@@ -15,7 +19,7 @@ import java.util.Set;
 /**
  * [运行时图索引 / 蓝图字节码载体] (Immutable Graph Index)
  */
-public class RuntimeGraphIndex {
+public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
 
     // ====================================================
     // 1. 数据结构定义
@@ -190,6 +194,16 @@ public class RuntimeGraphIndex {
         return graphTypeId;
     }
 
+    @Override
+    public String graphTypeId() {
+        return graphTypeId;
+    }
+
+    @Override
+    public GraphKind runtimeKind() {
+        return GraphTypeRegistry.INSTANCE.require(graphTypeId).runtimeKind();
+    }
+
     public QuestDefinition getQuestDefinition() {
         return questDefinition;
     }
@@ -203,8 +217,19 @@ public class RuntimeGraphIndex {
         return (id >= 0 && id < idToString.length) ? idToString[id] : null;
     }
 
+    @Override
+    @Nullable
+    public String getNodeId(int nodeId) {
+        return getIdToString(nodeId);
+    }
+
     public int getKeyId(String key) {
         return keyDictionary.getOrDefault(key, -1);
+    }
+
+    @Override
+    public int getPortKey(String portName) {
+        return getKeyId(portName);
     }
 
     /** 将 Int 寄存器 ID 翻译回原始的 String (用于序列化保存) */
@@ -288,6 +313,12 @@ public class RuntimeGraphIndex {
         return staticInputArray[nodeId].get(portName);
     }
 
+    @Override
+    @Nullable
+    public Object getStaticInput(int nodeId, String portName) {
+        return getNodeStaticInput(nodeId, portName);
+    }
+
     /**
      * 查找控制流的下一个目标节点
      * @return 目标节点的 int ID，若分支尽头无连接则返回 -1
@@ -310,6 +341,15 @@ public class RuntimeGraphIndex {
         int portId = getKeyId(inputPortName);
         if (portId < 0 || portId >= inputArray[targetNodeId].length) return null;
         return inputArray[targetNodeId][portId];
+    }
+
+    @Override
+    @Nullable
+    public DataConnectionSource findDataInput(int targetNodeId, String inputPortName) {
+        IntConnectionSource source = findInputSource(targetNodeId, inputPortName);
+        return source != null
+                ? new DataConnectionSource(source.sourceNodeId(), source.sourcePortName())
+                : null;
     }
 
     /**
