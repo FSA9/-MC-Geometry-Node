@@ -19,11 +19,14 @@ import com.mine.geometry_node.client.ui.editor.asset.service.GraphAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.core.network.NetworkHandler;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphFileOperationRequest;
 import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.view.KeyEvent;
@@ -272,6 +275,33 @@ final class AssetBrowserActionController {
                 });
     }
 
+    void triggerNewBehaviorTree() {
+        if (mPanel.isFavoritesMode()
+                || !mPanel.repositorySupports(AssetSourceKind.LOCAL, AssetRepositoryOperation.CREATE)) return;
+        mPanel.clearSearch();
+        File currentDirectory = mPanel.getCurrentDirectory();
+        if (currentDirectory == null) return;
+
+        NodeGraph graph = new NodeGraph();
+        graph.graphKind = GraphTypeRegistry.BEHAVIOR_TREE.id();
+        graph.ensureBehaviorTree();
+        String initialContent = GraphJsonIO.toJson(graph);
+        String defaultName = "新建行为树.json";
+        mIoTasks.run("新建行为树",
+                context -> mLocalAssetService.createAssetItem(
+                        currentDirectory, defaultName, false, initialContent, context),
+                (result, progress) -> {
+                    File newFile = result.file();
+                    AssetEntry newEntry = AssetEntry.local(newFile,
+                            LocalAssetRepository.pathKey(newFile), newFile.getName());
+                    mPanel.refreshFileList(() -> {
+                        mPanel.selectOnly(newEntry);
+                        startInlineEdit(newFile);
+                        progress.requestClose();
+                    });
+                });
+    }
+
     void handleDoubleClick(AssetEntry entry) {
         Consumer<AssetEntry> pickFileAction = mPanel.pickFileAction();
         if (pickFileAction != null && !entry.isDirectory() && entry.supports(AssetTypeAction.PICK)) {
@@ -452,6 +482,7 @@ final class AssetBrowserActionController {
         if (mEnableLocalFileActions && !mPanel.isFavoritesMode() && mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
             menu.addMenuItem("新建文件夹", () -> triggerNewItem(true));
             menu.addMenuItem("新建文件", () -> triggerNewItem(false));
+            menu.addMenuItem("新建行为树", this::triggerNewBehaviorTree);
         }
 
         Consumer<AssetEntry> pickFileAction = mPanel.pickFileAction();

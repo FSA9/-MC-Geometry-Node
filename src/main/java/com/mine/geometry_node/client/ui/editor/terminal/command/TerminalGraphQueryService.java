@@ -7,6 +7,8 @@ import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.graph.PortEditCapabilityResolver;
 import com.mine.geometry_node.client.ui.viewport.menu.NodeSearchService;
 import com.mine.geometry_node.client.ui.viewport.node.comment.NodeCommentTextBuilder;
+import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeStructureValidator;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -168,7 +170,9 @@ final class TerminalGraphQueryService {
                         typeId, category)).toList();
         Set<String> matchingIds = matchingNodes.stream().map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
         long flowConnections = snapshot.edges().stream().filter(edge -> edge.kind().equals("flow")).count();
-        long dataConnections = snapshot.edges().size() - flowConnections;
+        long dataConnections = snapshot.edges().stream().filter(edge -> edge.kind().equals("data")).count();
+        long behaviorConnections = snapshot.edges().stream()
+                .filter(edge -> edge.kind().equals("behavior")).count();
         long inducedConnections = snapshot.edges().stream()
                 .filter(edge -> matchingIds.contains(edge.outputNodeId()) && matchingIds.contains(edge.inputNodeId())).count();
         long commentedNodes = matchingNodes.stream().filter(entry -> hasText(entry.getValue().comment)).count();
@@ -202,6 +206,7 @@ final class TerminalGraphQueryService {
         data.addProperty("total_connection_count", snapshot.edges().size());
         data.addProperty("flow_connection_count", flowConnections);
         data.addProperty("data_connection_count", dataConnections);
+        data.addProperty("behavior_connection_count", behaviorConnections);
         data.addProperty("induced_connection_count", inducedConnections);
         data.addProperty("frame_count", current == null || current.frames == null ? 0 : current.frames.size());
         data.addProperty("commented_node_count", commentedNodes);
@@ -519,6 +524,12 @@ final class TerminalGraphQueryService {
 
     private static List<ValidationDiagnostic> validate(GraphReadSnapshot snapshot) {
         List<ValidationDiagnostic> diagnostics = new ArrayList<>();
+        if (GraphTypeRegistry.BEHAVIOR_TREE.id().equals(snapshot.graph().getGraphTypeId())) {
+            BehaviorTreeStructureValidator.registeredNodes().validate(snapshot.graph()).diagnostics()
+                    .forEach(diagnostic -> diagnostics.add(error(
+                            diagnostic.code(), diagnostic.message(),
+                            diagnostic.nodeId(), diagnostic.relatedNodeId())));
+        }
         Map<String, PortTypes> portTypesByNode = new LinkedHashMap<>();
         snapshot.nodes().forEach((nodeId, node) ->
                 portTypesByNode.put(nodeId, PortTypes.from(snapshot.definition(nodeId))));

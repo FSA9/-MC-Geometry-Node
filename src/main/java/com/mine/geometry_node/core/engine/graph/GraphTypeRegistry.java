@@ -20,7 +20,7 @@ public final class GraphTypeRegistry {
             "quest", "geometry_node.graph_properties.kind.quest", 0xFFFF9E3D, GraphKind.BLUEPRINT, true);
     public static final GraphType BEHAVIOR_TREE = new GraphType(
             "behavior_tree", "geometry_node.graph_properties.kind.behavior_tree", 0xFF5C9E72,
-            GraphKind.BEHAVIOR_TREE, false);
+            GraphKind.BEHAVIOR_TREE, true);
 
     public static final GraphTypeRegistry INSTANCE = new GraphTypeRegistry();
 

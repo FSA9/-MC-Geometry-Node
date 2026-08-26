@@ -1245,5 +1245,11 @@
   "geometry_node.asset_transfer.state.committing": "Saving",
   "geometry_node.asset_transfer.state.completed": "Completed",
   "geometry_node.asset_transfer.state.failed": "Failed",
-  "geometry_node.asset_transfer.state.cancelled": "Cancelled"
+  "geometry_node.asset_transfer.state.cancelled": "Cancelled",
+  "geometry_node.menu.behavior": "Behavior Tree",
+  "geometry_node.menu.control": "Control",
+  "geometry_node.node.behavior_root": "Root",
+  "geometry_node.node.behavior_sequence": "Sequence",
+  "geometry_node.port.behavior_parent": "Parent",
+  "geometry_node.port.behavior_children": "Children"
 }

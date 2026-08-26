@@ -41,12 +41,18 @@ public class CmdConnect implements ICommand {
     }
 
     private boolean isFlowConnection() {
+        if (isBehaviorConnection()) return false;
         if (outPortId.startsWith("flow_") || inPortId.startsWith("flow_")) return true;
         PortType outType = getPortType(outNodeId, outPortId, false);
         PortType inType = getPortType(inNodeId, inPortId, true);
         if ((outType != null && outType.isFlow()) || (inType != null && inType.isFlow())) return true;
         return (isBoundaryVirtualPort(outNodeId) && inType != null && inType.isFlow())
                 || (isBoundaryVirtualPort(inNodeId) && outType != null && outType.isFlow());
+    }
+
+    private boolean isBehaviorConnection() {
+        return mController != null && mController.isBehaviorStructureConnection(
+                outNodeId, outPortId, inNodeId, inPortId);
     }
 
     private PortType getPortType(String nodeId, String portId, boolean inputSide) {
@@ -64,6 +70,7 @@ public class CmdConnect implements ICommand {
      */
     private void snapshotDisplacedConnections() {
         if (mGraph == null) return;
+        if (isBehaviorConnection()) return;
         boolean executionFlow = isFlowConnection();
         if (executionFlow) {
             NodeData outNode = mGraph.getNode(outNodeId);
@@ -115,6 +122,11 @@ public class CmdConnect implements ICommand {
         if (!canExecute()) {
             return;
         }
+        if (isBehaviorConnection()) {
+            mController.addBehaviorChild(outNodeId, inNodeId, Integer.MAX_VALUE);
+            return;
+        }
+
         // 1. 如果有旧连线，先断开它 (打断旧关系)
         if (mDisplacedInboundNodeId != null && mDisplacedInboundPortId != null) {
             if (isFlowConnection()) {
@@ -135,6 +147,10 @@ public class CmdConnect implements ICommand {
 
     @Override
     public void undo() {
+        if (isBehaviorConnection()) {
+            mController.removeBehaviorChild(outNodeId, inNodeId);
+            return;
+        }
         // 1. 撤销新连线
         if (isFlowConnection()) {
             mController.removeExecutionConnection(outNodeId, outPortId);

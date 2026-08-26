@@ -16,6 +16,7 @@ import java.util.List;
  */
 public enum PortType {
     EXECUTION("执行", 0xFFFFFFFF, null, true),
+    BEHAVIOR_STRUCTURE("行为结构", 0xFF5C9E72, null, true),
 
     INTEGER("整数", 0xFF4A90E2, 0),
     LONG("长整数", 0xFF3F7DC2, 0L),

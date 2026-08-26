@@ -10,6 +10,7 @@ import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRegistry;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionRequest;
 import com.mine.geometry_node.client.ui.viewport.action.ViewportActionSink;
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionContext;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.node.NodeCategory;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -23,6 +24,8 @@ import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
 
 import java.util.Stack;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ViewportMenu extends FrameLayout {
     private static final int MENU_WIDTH_DP = 220;
@@ -171,6 +174,8 @@ public class ViewportMenu extends FrameLayout {
                 post(this::dismiss);
             });
 
+            boolean behaviorTree = mActionSink != null && GraphTypeRegistry.BEHAVIOR_TREE.id()
+                    .equals(mActionSink.graphTypeId());
             if (mContext != null && mContext.isInsideGroupScope()) {
                 addActionItem(ViewportActionId.EXIT_GROUP, v -> {
                     performAction(ViewportActionId.EXIT_GROUP, ViewportActionRequest.EMPTY);
@@ -183,10 +188,12 @@ public class ViewportMenu extends FrameLayout {
                 });
             }
 
-            addActionItem(ViewportActionId.GROUP_INTO_NODE_GROUP, v -> {
-                performAction(ViewportActionId.GROUP_INTO_NODE_GROUP, ViewportActionRequest.EMPTY);
-                post(this::dismiss);
-            });
+            if (!behaviorTree) {
+                addActionItem(ViewportActionId.GROUP_INTO_NODE_GROUP, v -> {
+                    performAction(ViewportActionId.GROUP_INTO_NODE_GROUP, ViewportActionRequest.EMPTY);
+                    post(this::dismiss);
+                });
+            }
 
             addDivider();
             addSectionLabel("节点");
@@ -198,11 +205,13 @@ public class ViewportMenu extends FrameLayout {
         }
 
         for (NodeCategory sub : mCurrentFolder.getSubCategories()) {
+            if (!hasVisibleNodes(sub)) continue;
             String label = Component.translatable(sub.translationKey).getString() + "    ›";
             addClickItem(label, COLOR_CATEGORY_TEXT, v -> { mSearchBox.setText(""); navigateTo(sub); });
         }
 
         for (BaseNode node : mCurrentFolder.getNodes()) {
+            if (!isNodeVisible(node)) continue;
             String label = node.getDefaultDefinition().displayName().getString();
             addClickItem(label, COLOR_NODE_TEXT, v -> {
                 performAction(ViewportActionId.ADD_NODE, ViewportActionRequest.builder()
@@ -220,8 +229,15 @@ public class ViewportMenu extends FrameLayout {
     private void performSearch(String query) {
         if (query.trim().isEmpty()) { renderCurrentFolder(); return; }
         mListContainer.removeAllViews();
+        List<NodeDef> visibleDefinitions = new ArrayList<>();
+        for (NodeDef definition : NodeRegistry.INSTANCE.getAllDefinitions()) {
+            if (definition != null && NodeRegistry.INSTANCE.getCapabilities(definition.typeId())
+                    .supports(currentGraphTypeId())) {
+                visibleDefinitions.add(definition);
+            }
+        }
         NodeSearchService.Page results = NodeSearchService.search(
-                NodeRegistry.INSTANCE.getAllDefinitions(), query, 0, NodeRegistry.INSTANCE.getAllDefinitions().size());
+                visibleDefinitions, query, 0, visibleDefinitions.size());
         for (NodeSearchService.Match match : results.items()) {
             NodeDef def = match.definition();
             addClickItem(match.displayName(), COLOR_NODE_TEXT, v -> {
@@ -236,6 +252,25 @@ public class ViewportMenu extends FrameLayout {
 
         updateScrollHeight();
         relayoutIfAttached();
+    }
+
+    private String currentGraphTypeId() {
+        return mActionSink != null ? mActionSink.graphTypeId() : "blueprint";
+    }
+
+    private boolean isNodeVisible(BaseNode node) {
+        return node != null && NodeRegistry.INSTANCE.getCapabilities(node.getTypeId())
+                .supports(currentGraphTypeId());
+    }
+
+    private boolean hasVisibleNodes(NodeCategory category) {
+        for (BaseNode node : category.getNodes()) {
+            if (isNodeVisible(node)) return true;
+        }
+        for (NodeCategory child : category.getSubCategories()) {
+            if (hasVisibleNodes(child)) return true;
+        }
+        return false;
     }
 
     private void addClickItem(String text, int color, View.OnClickListener listener) {

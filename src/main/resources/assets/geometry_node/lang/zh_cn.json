@@ -1318,5 +1318,11 @@
   "geometry_node.asset_transfer.state.committing": "保存中",
   "geometry_node.asset_transfer.state.completed": "已完成",
   "geometry_node.asset_transfer.state.failed": "失败",
-  "geometry_node.asset_transfer.state.cancelled": "已取消"
+  "geometry_node.asset_transfer.state.cancelled": "已取消",
+  "geometry_node.menu.behavior": "行为树",
+  "geometry_node.menu.control": "控制",
+  "geometry_node.node.behavior_root": "根节点",
+  "geometry_node.node.behavior_sequence": "序列",
+  "geometry_node.port.behavior_parent": "父级",
+  "geometry_node.port.behavior_children": "子项"
 }

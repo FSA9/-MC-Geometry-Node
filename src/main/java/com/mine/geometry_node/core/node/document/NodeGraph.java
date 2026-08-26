@@ -27,6 +27,10 @@ public class NodeGraph {
     @SerializedName("quest")
     public QuestDefinition quest = QuestDefinition.EMPTY;
 
+    /** Present only for behavior-tree assets; execution and data links remain on nodes. */
+    @SerializedName("behavior_tree")
+    public BehaviorTreeStructure behaviorTree;
+
     @SerializedName("version")
     public String version;          // 版本
 
@@ -85,5 +89,15 @@ public class NodeGraph {
 
     public void removeNode(String id) {
         this.nodes.remove(id);
+        if (behaviorTree != null) {
+            behaviorTree.removeNode(id);
+        }
+    }
+
+    public BehaviorTreeStructure ensureBehaviorTree() {
+        if (behaviorTree == null) {
+            behaviorTree = new BehaviorTreeStructure();
+        }
+        return behaviorTree;
     }
 }

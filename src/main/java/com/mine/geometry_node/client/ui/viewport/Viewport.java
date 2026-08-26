@@ -22,7 +22,6 @@ import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.document.NodeGraph;
-import com.mine.geometry_node.core.node.document.Connection;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.RectF;
@@ -512,12 +511,8 @@ public class Viewport extends FrameLayout implements InteractionContext {
 
     @Override
     public boolean hasConnection(NodeVisualAdapter outN, String outId, NodeVisualAdapter inN, String inId) {
-        List<Connection> links = outN.getNodeData().getConnections(outId);
-        if (links == null) return false;
-        for (Connection link : links) {
-            if (link.targetNodeId().equals(inN.getNodeId()) && link.targetPortName().equals(inId)) return true;
-        }
-        return false;
+        return mController != null && mController.hasConnection(
+                outN.getNodeId(), outId, inN.getNodeId(), inId);
     }
 
     @Override

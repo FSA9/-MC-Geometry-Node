@@ -19,6 +19,7 @@ import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.document.FrameData;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
@@ -129,6 +130,11 @@ public class ViewportController implements EditorContext.EditorListener,
         return mCurrentSession;
     }
 
+    @Override
+    public String graphTypeId() {
+        return mEditorContext != null ? mEditorContext.getGraph().getGraphTypeId() : "blueprint";
+    }
+
     private ViewportSessionState currentSessionState() {
         return mCurrentSession != null ? sessionState(mCurrentSession) : null;
     }
@@ -163,6 +169,12 @@ public class ViewportController implements EditorContext.EditorListener,
     public boolean canConnectPorts(String outNodeId, String outPortId, String inNodeId, String inPortId) {
         return mEditorContext != null
                 && mEditorContext.getGraphController().canConnectPorts(outNodeId, outPortId, inNodeId, inPortId);
+    }
+
+    public boolean hasConnection(String outNodeId, String outPortId, String inNodeId, String inPortId) {
+        return mEditorContext != null
+                && mEditorContext.getGraphController().hasConnection(
+                outNodeId, outPortId, inNodeId, inPortId);
     }
 
     public void setEditorContext(EditorContext context) {
@@ -240,7 +252,7 @@ public class ViewportController implements EditorContext.EditorListener,
     }
 
     public void executeAddGroup(float uiX, float uiY) {
-        if (mEditorContext == null) return;
+        if (mEditorContext == null || isBehaviorTree()) return;
         NodeData group = GroupNodeFactory.createGroupNode(UUID.randomUUID().toString(), uiX, uiY);
         CmdAddNode cmd = new CmdAddNode(mEditorContext.getGraphController(), group);
         mEditorContext.getCommandManager().execute(cmd);
@@ -259,7 +271,7 @@ public class ViewportController implements EditorContext.EditorListener,
     }
 
     public void executeGroupIntoNodeGroup() {
-        if (mEditorContext == null) return;
+        if (mEditorContext == null || isBehaviorTree()) return;
         List<NodeVisualAdapter> selectedNodes = mViewport.getSelectedNodeVisuals();
         if (selectedNodes.isEmpty()) return;
 
@@ -296,6 +308,11 @@ public class ViewportController implements EditorContext.EditorListener,
             mEditorContext.getCommandManager().execute(cmd);
             mViewport.clearSelection();
         }
+    }
+
+    private boolean isBehaviorTree() {
+        return mEditorContext != null && GraphTypeRegistry.BEHAVIOR_TREE.id()
+                .equals(mEditorContext.getGraph().getGraphTypeId());
     }
 
     public void executeRenamePort(String nodeId, String category, String portId, String oldName, String newName) {
@@ -397,6 +414,9 @@ public class ViewportController implements EditorContext.EditorListener,
     @Override
     public void onInsertReroute(ConnectionLayer.ConnectionHit connection) {
         if (mEditorContext == null || connection == null) return;
+        if (mEditorContext.getGraphController().isBehaviorStructureConnection(
+                connection.outNodeId(), connection.outPortId(),
+                connection.inNodeId(), connection.inPortId())) return;
 
         float radius = UIConstants.Node.PORT_VISUAL_RADIUS;
         CmdInsertRerouteOnConnection cmd = new CmdInsertRerouteOnConnection(

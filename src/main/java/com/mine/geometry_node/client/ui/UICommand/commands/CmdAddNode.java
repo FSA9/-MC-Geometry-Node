@@ -14,6 +14,11 @@ public class CmdAddNode implements ICommand {
     }
 
     @Override
+    public boolean canExecute() {
+        return mController != null && mController.canAddNode(mNodeData);
+    }
+
+    @Override
     public void execute() {
         mController.addNode(mNodeData);
     }

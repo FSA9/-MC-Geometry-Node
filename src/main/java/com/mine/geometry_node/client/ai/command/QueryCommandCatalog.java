@@ -338,6 +338,7 @@ final class QueryCommandCatalog {
                 property("total_connection_count", integerSchema(0, null)),
                 property("flow_connection_count", integerSchema(0, null)),
                 property("data_connection_count", integerSchema(0, null)),
+                property("behavior_connection_count", integerSchema(0, null)),
                 property("induced_connection_count", integerSchema(0, null)),
                 property("frame_count", integerSchema(0, null)),
                 property("commented_node_count", integerSchema(0, null)),
@@ -347,6 +348,7 @@ final class QueryCommandCatalog {
                 property("revision", integerSchema(0, null)), property("surface_ref", stringSchema(0))
         ), "filter_type_id", "filter_category", "group_by", "total_node_count", "node_count",
                 "total_connection_count", "flow_connection_count", "data_connection_count",
+                "behavior_connection_count",
                 "induced_connection_count", "frame_count", "commented_node_count", "unconnected_node_count",
                 "groups", "page");
     }

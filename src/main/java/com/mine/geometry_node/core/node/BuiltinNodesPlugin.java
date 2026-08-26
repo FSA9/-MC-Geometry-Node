@@ -3,9 +3,12 @@ package com.mine.geometry_node.core.node;
 import com.mine.geometry_node.api.GeometryNodePlugin;
 import com.mine.geometry_node.api.MarkerRegistrationContext;
 import com.mine.geometry_node.api.NodeRegistrationContext;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import com.mine.geometry_node.core.node.nodes.actions.block.*;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorRootNode;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorSequenceNode;
 import com.mine.geometry_node.core.node.nodes.actions.display_entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
@@ -45,6 +48,8 @@ import com.mine.geometry_node.core.node.nodes.maths.operation.*;
 import com.mine.geometry_node.core.node.nodes.quest.*;
 import com.mine.geometry_node.core.node.nodes.special.RerouteNode;
 
+import java.util.Set;
+
 public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
     @Override
@@ -69,6 +74,11 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
     @Override
     public void registerNodes(NodeRegistrationContext registry) {
         System.out.println("[BuiltinNodesPlugin] Start to register Nodes...");
+
+        registry.register("behavior/control", new BehaviorRootNode(), behaviorStructureCapabilities(
+                NodeCapabilities.ChildConstraint.EXACTLY_ONE));
+        registry.register("behavior/control", new BehaviorSequenceNode(), behaviorStructureCapabilities(
+                NodeCapabilities.ChildConstraint.ONE_OR_MORE_ORDERED));
 
         registry.register("layout", new RerouteNode());
 
@@ -324,8 +334,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/item/attribution", new HasItemCustomName());
 
         // Data/Container
-        registry.register("data/container", new GetInputDataType());
-        registry.register("data/container", new GetLength());
+        registry.register("data/container", new GetInputDataType(), sharedPureDataCapabilities());
+        registry.register("data/container", new GetLength(), sharedPureDataCapabilities());
         registry.register("data/container", new MakeList());
         registry.register("data/container", new MakeDict());
         registry.register("data/container", new GetListValue());
@@ -494,5 +504,32 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("maths/vector", new CombineXYZ());
 
         System.out.println("[BuiltinNodesPlugin] Register Finished");
+    }
+
+    private static NodeCapabilities behaviorStructureCapabilities(NodeCapabilities.ChildConstraint children) {
+        return new NodeCapabilities(
+                Set.of(GraphTypeRegistry.BEHAVIOR_TREE.id()),
+                NodeCapabilities.Purity.PURE,
+                NodeCapabilities.Context.BEHAVIOR_EXECUTION,
+                NodeCapabilities.Lifecycle.CONTINUOUS,
+                NodeCapabilities.Cancellation.CANCELLABLE,
+                children,
+                Set.of(NodeCapabilities.ResourceUse.NONE),
+                NodeCapabilities.Cost.TRIVIAL,
+                NodeCapabilities.Permission.NONE);
+    }
+
+    private static NodeCapabilities sharedPureDataCapabilities() {
+        return new NodeCapabilities(
+                Set.of(GraphTypeRegistry.BLUEPRINT.id(), GraphTypeRegistry.QUEST.id(),
+                        GraphTypeRegistry.BEHAVIOR_TREE.id()),
+                NodeCapabilities.Purity.PURE,
+                NodeCapabilities.Context.DATA,
+                NodeCapabilities.Lifecycle.INSTANT,
+                NodeCapabilities.Cancellation.NOT_APPLICABLE,
+                NodeCapabilities.ChildConstraint.LEAF,
+                Set.of(NodeCapabilities.ResourceUse.NONE),
+                NodeCapabilities.Cost.TRIVIAL,
+                NodeCapabilities.Permission.NONE);
     }
 }

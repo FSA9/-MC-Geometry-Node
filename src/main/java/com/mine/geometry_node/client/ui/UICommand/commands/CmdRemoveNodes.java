@@ -7,7 +7,9 @@ import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class CmdRemoveNodes implements ICommand {
     private final GraphController mController;
@@ -26,6 +28,7 @@ public class CmdRemoveNodes implements ICommand {
     // 被删节点指向别人的连线 (修复 Bug 1 必须记录这些)
     private final List<ConnectionSnapshot> mBrokenOutgoingLinks = new ArrayList<>();
     private final List<ConnectionSnapshot> mBrokenOutgoingExecs = new ArrayList<>();
+    private final Map<String, List<String>> mBehaviorRelationships = new LinkedHashMap<>();
 
     public CmdRemoveNodes(GraphController controller, NodeGraph graph, List<String> nodeIdsToRemove) {
         this.mController = controller;
@@ -36,6 +39,10 @@ public class CmdRemoveNodes implements ICommand {
             if (node != null) {
                 mRemovedNodes.add(node);
             }
+        }
+        if (graph.behaviorTree != null) {
+            graph.behaviorTree.relationships().forEach((parentId, childIds) ->
+                    mBehaviorRelationships.put(parentId, new ArrayList<>(childIds)));
         }
     }
 
@@ -111,6 +118,9 @@ public class CmdRemoveNodes implements ICommand {
         // 1. 把节点主体加回图中
         for (NodeData node : mRemovedNodes) {
             mController.addNode(node);
+        }
+        if (mGraph.behaviorTree != null || !mBehaviorRelationships.isEmpty()) {
+            mController.restoreBehaviorRelationships(mBehaviorRelationships);
         }
 
         // 2. 依靠全量快照，恢复被删节点发出的连线

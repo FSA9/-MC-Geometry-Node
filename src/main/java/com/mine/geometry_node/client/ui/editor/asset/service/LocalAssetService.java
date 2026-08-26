@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -229,6 +230,11 @@ public final class LocalAssetService {
 
     public CreatedAssetItem createAssetItem(File directory, String sourceName, boolean directoryItem,
                                             AssetTaskContext context) throws Exception {
+        return createAssetItem(directory, sourceName, directoryItem, null, context);
+    }
+
+    public CreatedAssetItem createAssetItem(File directory, String sourceName, boolean directoryItem,
+                                            String initialContent, AssetTaskContext context) throws Exception {
         context.checkCancelled();
         if (directory == null || !directory.isDirectory()) throw new IOException("目标目录无效");
         validateSourceName(sourceName);
@@ -236,7 +242,11 @@ public final class LocalAssetService {
         Path created = GraphDocumentStore.INSTANCE.withStructureMutation(() -> {
             File destination = resolveAvailableDestination(directory, sourceName, directoryItem);
             if (directoryItem) Files.createDirectory(destination.toPath());
-            else Files.createFile(destination.toPath());
+            else if (initialContent != null) {
+                Files.writeString(destination.toPath(), initialContent, StandardCharsets.UTF_8);
+            } else {
+                Files.createFile(destination.toPath());
+            }
             return normalize(destination.toPath());
         });
         context.progress("创建完成", 1, 1);

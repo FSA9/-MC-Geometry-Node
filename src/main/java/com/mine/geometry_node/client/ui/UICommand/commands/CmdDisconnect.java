@@ -14,6 +14,7 @@ public class CmdDisconnect implements ICommand {
     private final String inNodeId;
     private final String inPortId;
     private final List<ExternalConnectionBackup> mExternalConnections = new ArrayList<>();
+    private int mBehaviorChildIndex = -1;
 
     private record ExternalConnectionBackup(String boundaryNodeId, GraphController.ScopedConnectionSnapshot snapshot) {}
 
@@ -27,10 +28,16 @@ public class CmdDisconnect implements ICommand {
     }
 
     private boolean isFlowConnection() {
+        if (isBehaviorConnection()) return false;
         if (outPortId.startsWith("flow_") || inPortId.startsWith("flow_")) return true;
         PortType outType = mController.getResolvedPortType(outNodeId, outPortId, false);
         PortType inType = mController.getResolvedPortType(inNodeId, inPortId, true);
         return (outType != null && outType.isFlow()) || (inType != null && inType.isFlow());
+    }
+
+    private boolean isBehaviorConnection() {
+        return mController != null && mController.isBehaviorStructureConnection(
+                outNodeId, outPortId, inNodeId, inPortId);
     }
 
     private void backupExternalConnections() {
@@ -46,7 +53,9 @@ public class CmdDisconnect implements ICommand {
 
     @Override
     public void execute() {
-        if (isFlowConnection()) {
+        if (isBehaviorConnection()) {
+            mBehaviorChildIndex = mController.removeBehaviorChild(outNodeId, inNodeId);
+        } else if (isFlowConnection()) {
             mController.removeExecutionConnection(outNodeId, outPortId);
         } else {
             mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
@@ -56,7 +65,10 @@ public class CmdDisconnect implements ICommand {
     @Override
     public void undo() {
         // 撤销时：恢复连线
-        if (isFlowConnection()) {
+        if (isBehaviorConnection()) {
+            mController.addBehaviorChild(outNodeId, inNodeId,
+                    mBehaviorChildIndex >= 0 ? mBehaviorChildIndex : Integer.MAX_VALUE);
+        } else if (isFlowConnection()) {
             mController.addExecutionConnection(outNodeId, outPortId, inNodeId, inPortId);
         } else {
             mController.addConnection(outNodeId, outPortId, inNodeId, inPortId);
