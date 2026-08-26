@@ -10,7 +10,7 @@ import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
-/** Ordered, memory-form sequence structural node; runtime semantics start in P2. */
+/** Ordered, memory-form sequence structural node. */
 public final class BehaviorSequenceNode extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {

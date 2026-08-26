@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope;
+import com.mine.geometry_node.core.engine.behavior.contract.BehaviorValueSemantics;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorBlackboardDeclaration;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeDependency;
@@ -31,7 +32,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
@@ -198,7 +198,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             for (PortDef input : nodeInfo.ports.inputs.values()) {
                 Object value = nodeInfo.node.inputs.containsKey(input.id())
                         ? nodeInfo.node.inputs.get(input.id()) : input.defaultValue();
-                if (value != null) effectiveInputs.put(input.id(), compileValue(value, input.type()));
+                if (value != null) effectiveInputs.put(input.id(),
+                        BehaviorValueSemantics.freezeAs(value, input.type()));
             }
             staticInputs[nodeIndex] = Map.copyOf(effectiveInputs);
 
@@ -313,7 +314,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                 continue;
             }
             Object value = node.inputs.get(portId);
-            if (value == null || !valueMatches(value, port.type())) {
+            if (value == null || !BehaviorValueSemantics.matches(value, port.type())) {
                 add(diagnostics, diagnostic(assetId, "STORED_INPUT_TYPE_INVALID",
                         "Stored value is not compatible with input type " + port.type(),
                         nodeId, portId, ""));
@@ -500,14 +501,15 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                         "Blackboard key is declared more than once in the same scope", "", name, ""));
                 continue;
             }
-            if (declaration.defaultValue != null && !valueMatches(declaration.defaultValue, type)) {
+            if (declaration.defaultValue != null
+                    && !BehaviorValueSemantics.matches(declaration.defaultValue, type)) {
                 add(diagnostics, diagnostic(assetId, "BLACKBOARD_DEFAULT_TYPE_INVALID",
                         "Blackboard default does not match " + type, "", name, ""));
                 continue;
             }
             compiled.add(new BehaviorTreePlan.BlackboardKey(name, scope, type,
                     declaration.writable, declaration.defaultValue != null
-                    ? compileValue(declaration.defaultValue, type) : null));
+                    ? BehaviorValueSemantics.freezeAs(declaration.defaultValue, type) : null));
         }
         return new BehaviorTreePlan.BlackboardSchema(compiled);
     }
@@ -555,66 +557,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         return mapping.entrySet().stream().allMatch(entry -> entry.getKey() != null
                 && entry.getValue() != null && entry.getKey().matches(NAME_PATTERN)
                 && entry.getValue().matches(NAME_PATTERN));
-    }
-
-    private static boolean valueMatches(Object value, PortType type) {
-        if (value == null) return false;
-        PortType inferred = PortType.getTypeOf(value);
-        if (!(value instanceof Number) && inferred != PortType.ANY && inferred == type) return true;
-        return switch (type) {
-            case ANY -> true;
-            case INTEGER -> value instanceof Number number && integral(number)
-                    && number.doubleValue() >= Integer.MIN_VALUE && number.doubleValue() <= Integer.MAX_VALUE;
-            case LONG -> value instanceof Number number && integral(number);
-            case FLOAT -> value instanceof Number;
-            case BOOLEAN -> value instanceof Boolean;
-            case STRING, PATH -> value instanceof String;
-            case XYZ -> value instanceof List<?> list && list.size() == 3
-                    && list.stream().allMatch(Number.class::isInstance);
-            case LIST -> value instanceof List<?>;
-            case DICT, SHOP -> value instanceof Map<?, ?>;
-            case EXECUTION, BEHAVIOR_STRUCTURE -> false;
-            default -> value instanceof String || value instanceof Number
-                    || value instanceof Map<?, ?> || value instanceof List<?>;
-        };
-    }
-
-    private static boolean integral(Number number) {
-        double value = number.doubleValue();
-        return Double.isFinite(value) && value == Math.rint(value);
-    }
-
-    private static Object freeze(Object value) {
-        if (value instanceof Map<?, ?> map) {
-            Map<String, Object> frozen = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                if (!(entry.getKey() instanceof String key) || entry.getValue() == null) continue;
-                frozen.put(key, freeze(entry.getValue()));
-            }
-            return Collections.unmodifiableMap(frozen);
-        }
-        if (value instanceof List<?> list) {
-            List<Object> frozen = new ArrayList<>(list.size());
-            for (Object item : list) if (item != null) frozen.add(freeze(item));
-            return Collections.unmodifiableList(frozen);
-        }
-        if (value instanceof Object[] array) {
-            List<Object> frozen = new ArrayList<>(array.length);
-            for (Object item : array) if (item != null) frozen.add(freeze(item));
-            return Collections.unmodifiableList(frozen);
-        }
-        return value;
-    }
-
-    private static Object compileValue(Object value, PortType type) {
-        return switch (type) {
-            case INTEGER -> ((Number) value).intValue();
-            case LONG -> ((Number) value).longValue();
-            case FLOAT -> ((Number) value).floatValue();
-            case XYZ -> value instanceof List<?> list ? list.stream()
-                    .map(component -> ((Number) component).floatValue()).toList() : freeze(value);
-            default -> freeze(value);
-        };
     }
 
     private static NodeGraph readDocument(JsonObject document) {
@@ -741,7 +683,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                         nodeId, port.id(), ""));
             }
             if ("input".equals(direction) && port.defaultValue() != null
-                    && !valueMatches(port.defaultValue(), port.type())) {
+                    && !BehaviorValueSemantics.matches(port.defaultValue(), port.type())) {
                 add(diagnostics, diagnostic(assetId, "PORT_DEFAULT_TYPE_INVALID",
                         "Node input default is not compatible with " + port.type(),
                         nodeId, port.id(), ""));
