@@ -114,7 +114,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         statusBar.setGravity(Gravity.CENTER_VERTICAL);
         statusBar.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(8), 0);
         statusBar.setBackground(colorDrawable(0xFF252526));
-        statusView = UIUtils.createLockedTextView(context, "PowerShell", 12f, 0xFFAAAAAA);
+        statusView = UIUtils.createLockedTextView(context, "HIGH TRUST  PowerShell", 12f, 0xFFAAAAAA);
         statusBar.addView(statusView, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         actionView = UIUtils.createLockedTextView(context, "Start", 12f, 0xFF4FC1FF);
         actionView.setGravity(Gravity.CENTER);
@@ -124,7 +124,8 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
                 ViewGroup.LayoutParams.MATCH_PARENT));
         addView(statusBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(STATUS_HEIGHT_DP)));
 
-        trustedEventView = UIUtils.createLockedTextView(context, "MCP  starts with PowerShell", 11f, 0xFFB5CEA8);
+        trustedEventView = UIUtils.createLockedTextView(context,
+                "CLI inherits OS file and network permissions  |  MCP starts with PowerShell", 11f, 0xFFB5CEA8);
         trustedEventView.setGravity(Gravity.CENTER_VERTICAL);
         trustedEventView.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(8), 0);
         trustedEventView.setBackground(colorDrawable(0xFF173A2A));
@@ -205,7 +206,8 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         post(() -> {
             if (disposed) return;
             String code = event.code().isBlank() ? "" : "  " + event.code();
-            trustedEventView.setText("MCP  " + event.toolName() + "  " + event.state() + code);
+            String elapsed = event.state() == McpToolEvent.State.STARTED ? "" : "  " + event.elapsedMillis() + " ms";
+            trustedEventView.setText("MCP  " + event.toolName() + "  " + event.state() + code + elapsed);
             trustedEventView.setTextColor(event.state() == McpToolEvent.State.FAILED ? 0xFFF48771 : 0xFFB5CEA8);
         });
     }
@@ -594,7 +596,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
 
     private void updateStatus() {
         String detail = pendingError.isBlank() ? displayedState.name() : pendingError;
-        String statusText = "PowerShell  " + detail;
+        String statusText = "HIGH TRUST  PowerShell  " + detail;
         String actionText = displayedState.hasActiveBackend() ? "Stop" : startRequested ? "Cancel" : "Start";
         int statusColor = pendingError.isBlank() ? 0xFFAAAAAA : 0xFFF48771;
         if (!statusText.equals(displayedStatusText)) {

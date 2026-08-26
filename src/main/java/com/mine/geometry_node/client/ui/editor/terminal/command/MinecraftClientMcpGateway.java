@@ -30,6 +30,10 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
         CompletableFuture<CommandResult> result = new CompletableFuture<>();
         Runnable task = () -> {
             try {
+                if (cancellation.isCancelled()) {
+                    result.complete(CommandResult.failure("CANCELLED", "工具调用已取消"));
+                    return;
+                }
                 if (!command.requiresGraph()) {
                     CommandInvocationContext context = new CommandInvocationContext(
                             CommandInvocationContext.CommandOrigin.AGENT, catalogTarget, cancellation);
@@ -53,7 +57,9 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
                 BoundGraphQueryTarget target = resolution.target();
                 if (command.effect() == com.mine.geometry_node.client.ai.protocol.ToolContract.CommandEffect.GRAPH_WRITE) {
                     Thread.ofVirtual().name("geometry-node-graph-patch").start(
-                            () -> result.complete(executeCommand(command, arguments, cancellation, target)));
+                            () -> result.complete(cancellation.isCancelled()
+                                    ? CommandResult.failure("CANCELLED", "工具调用已取消")
+                                    : executeCommand(command, arguments, cancellation, target)));
                     return;
                 }
                 CommandInvocationContext context = new CommandInvocationContext(

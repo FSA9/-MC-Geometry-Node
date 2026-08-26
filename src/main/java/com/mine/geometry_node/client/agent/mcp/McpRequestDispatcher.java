@@ -9,17 +9,26 @@ import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.command.CommandSpec;
 
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.Base64;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeSet;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Stateful JSON-RPC dispatcher for the published 2025 MCP initialization protocol. */
 public final class McpRequestDispatcher implements AutoCloseable {
@@ -28,6 +37,12 @@ public final class McpRequestDispatcher implements AutoCloseable {
     public static final int MAX_RESULT_BYTES = 1_048_576;
     private static final Duration READ_TOOL_TIMEOUT = Duration.ofSeconds(15);
     private static final Duration WRITE_TOOL_TIMEOUT = Duration.ofMinutes(6);
+    private static final Duration INITIALIZING_SESSION_IDLE_TIMEOUT = Duration.ofMinutes(2);
+    private static final Duration SESSION_IDLE_TIMEOUT = Duration.ofMinutes(30);
+    private static final Duration REPEAT_WINDOW = Duration.ofSeconds(30);
+    private static final int MAX_SESSIONS = 16;
+    private static final int MAX_IDENTICAL_CALLS_PER_WINDOW = 12;
+    private static final int MAX_REPEAT_FINGERPRINTS = 1_024;
 
     public record Reply(JsonObject body, String newSessionId, boolean notification) {
         public Reply {
@@ -44,6 +59,7 @@ public final class McpRequestDispatcher implements AutoCloseable {
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, SessionState> sessions = new ConcurrentHashMap<>();
     private final Map<RequestKey, AtomicBoolean> activeCalls = new ConcurrentHashMap<>();
+    private final Map<RepeatFingerprint, Deque<Long>> repeatedCalls = new HashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean();
 
     public McpRequestDispatcher(McpToolCatalog catalog, McpCommandGateway gateway,
@@ -62,20 +78,33 @@ public final class McpRequestDispatcher implements AutoCloseable {
         if (method == null) return protocolError(requestId, -32600, "Request method is required");
 
         if ("initialize".equals(method)) return initialize(requestId, request, sessionId);
-        SessionState session = sessions.get(sessionId);
+        removeExpiredSessions();
+        SessionState session = acquireSession(sessionId);
         if (session == null) return protocolError(requestId, -32001, "Missing or expired MCP session");
-        return switch (method) {
-            case "notifications/initialized" -> initialized(session, requestId);
-            case "notifications/cancelled" -> cancel(sessionId, request, requestId);
-            case "ping" -> success(requestId, new JsonObject());
-            case "resources/list" -> listResources(session, requestId, request);
-            case "resources/templates/list" -> listResourceTemplates(session, requestId, request);
-            case "resources/read" -> readResource(sessionId, session, requestId, request);
-            case "tools/list" -> listTools(session, requestId, request);
-            case "tools/call" -> callTool(sessionId, session, requestId, request);
-            default -> requestId == null ? Reply.acceptedNotification()
-                    : protocolError(requestId, -32601, "Method not found: " + method);
-        };
+        try {
+            return switch (method) {
+                case "notifications/initialized" -> initialized(session, requestId);
+                case "notifications/cancelled" -> cancel(sessionId, request, requestId);
+                case "ping" -> success(requestId, new JsonObject());
+                case "resources/list" -> listResources(session, requestId, request);
+                case "resources/templates/list" -> listResourceTemplates(session, requestId, request);
+                case "resources/read" -> readResource(sessionId, session, requestId, request);
+                case "tools/list" -> listTools(session, requestId, request);
+                case "tools/call" -> callTool(sessionId, session, requestId, request);
+                default -> requestId == null ? Reply.acceptedNotification()
+                        : protocolError(requestId, -32601, "Method not found: " + method);
+            };
+        } finally {
+            session.activeRequests().decrementAndGet();
+        }
+    }
+
+    private SessionState acquireSession(String sessionId) {
+        return sessions.computeIfPresent(sessionId, (ignored, state) -> {
+            state.touch();
+            state.activeRequests().incrementAndGet();
+            return state;
+        });
     }
 
     public boolean removeSession(String sessionId) {
@@ -84,6 +113,7 @@ public final class McpRequestDispatcher implements AutoCloseable {
         activeCalls.forEach((key, token) -> {
             if (key.sessionId().equals(sessionId)) token.set(true);
         });
+        removeRepeatFingerprints(sessionId);
         return removed != null;
     }
 
@@ -94,15 +124,17 @@ public final class McpRequestDispatcher implements AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         if (!closed.compareAndSet(false, true)) return;
         activeCalls.values().forEach(token -> token.set(true));
         activeCalls.clear();
+        clearRepeatFingerprints();
         sessions.clear();
         gateway.close();
     }
 
-    private Reply initialize(JsonElement id, JsonObject request, String existingSessionId) {
+    private synchronized Reply initialize(JsonElement id, JsonObject request, String existingSessionId) {
+        if (closed.get()) return protocolError(id, -32000, "MCP run is closed");
         if (id == null || !existingSessionId.isBlank()) {
             return protocolError(id, -32600, "initialize must start a new MCP session");
         }
@@ -113,6 +145,10 @@ public final class McpRequestDispatcher implements AutoCloseable {
         }
         if (params == null || object(params.get("capabilities")) == null || object(params.get("clientInfo")) == null) {
             return protocolError(id, -32602, "initialize params are incomplete");
+        }
+        removeExpiredSessions();
+        if (sessions.size() >= MAX_SESSIONS && !evictOldestInactiveSession()) {
+            return protocolError(id, -32004, "Too many MCP sessions for this PowerShell run");
         }
         String newSessionId = randomId();
         sessions.put(newSessionId, new SessionState());
@@ -237,6 +273,10 @@ public final class McpRequestDispatcher implements AutoCloseable {
         if (command == null) return protocolError(id, -32602, "Unknown or unavailable tool");
         JsonObject arguments = params.has("arguments") ? object(params.get("arguments")) : new JsonObject();
         if (arguments == null) return protocolError(id, -32602, "Tool arguments must be an object");
+        if (!allowRepeatedCall(fingerprint(sessionId, name, arguments))) {
+            return success(id, McpResultMapper.map(CommandResult.failure(
+                    "REPEATED_CALL_LIMIT", "短时间内重复调用同一工具过多，请检查 Agent 计划")));
+        }
 
         RequestKey requestKey = new RequestKey(sessionId, id.toString());
         AtomicBoolean cancelled = new AtomicBoolean();
@@ -258,13 +298,21 @@ public final class McpRequestDispatcher implements AutoCloseable {
     }
 
     private CommandResult executeCommand(CommandSpec command, JsonObject arguments, AtomicBoolean cancelled) {
-        emit(command.name(), McpToolEvent.State.STARTED, "", "Tool call started");
+        String callId = randomId();
+        long startedNanos = System.nanoTime();
+        emit(callId, command.name(), McpToolEvent.State.STARTED, "", "Tool call started", 0);
         CommandResult commandResult;
         try {
-            Duration timeout = command.effect() == com.mine.geometry_node.client.ai.protocol.ToolContract.CommandEffect.GRAPH_WRITE
-                    ? WRITE_TOOL_TIMEOUT : READ_TOOL_TIMEOUT;
-            commandResult = gateway.execute(command, arguments.deepCopy(), cancelled::get)
-                    .toCompletableFuture().get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (closed.get()) {
+                commandResult = CommandResult.failure("CANCELLED", "MCP run is closed");
+            } else {
+                Duration timeout = command.effect()
+                        == com.mine.geometry_node.client.ai.protocol.ToolContract.CommandEffect.GRAPH_WRITE
+                        ? WRITE_TOOL_TIMEOUT : READ_TOOL_TIMEOUT;
+                commandResult = gateway.execute(command, arguments.deepCopy(),
+                                () -> cancelled.get() || closed.get())
+                        .toCompletableFuture().get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            }
         } catch (TimeoutException timeout) {
             cancelled.set(true);
             commandResult = CommandResult.failure("TIMEOUT", "工具调用超时");
@@ -277,8 +325,9 @@ public final class McpRequestDispatcher implements AutoCloseable {
         } catch (RuntimeException failure) {
             commandResult = CommandResult.failure("COMMAND_INTERNAL_ERROR", "工具调用失败");
         }
-        emit(command.name(), commandResult.ok() ? McpToolEvent.State.SUCCEEDED : McpToolEvent.State.FAILED,
-                commandResult.code(), commandResult.message());
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
+        emit(callId, command.name(), commandResult.ok() ? McpToolEvent.State.SUCCEEDED : McpToolEvent.State.FAILED,
+                commandResult.code(), commandResult.message(), elapsedMillis);
         return commandResult;
     }
 
@@ -293,11 +342,112 @@ public final class McpRequestDispatcher implements AutoCloseable {
         return Reply.acceptedNotification();
     }
 
-    private void emit(String tool, McpToolEvent.State state, String code, String message) {
+    private void emit(String callId, String tool, McpToolEvent.State state, String code,
+                      String message, long elapsedMillis) {
         try {
-            eventListener.onToolEvent(new McpToolEvent(Instant.now(), tool, state, code, message));
+            eventListener.onToolEvent(new McpToolEvent(
+                    Instant.now(), callId, tool, state, code, message, elapsedMillis));
         } catch (RuntimeException ignored) {
         }
+    }
+
+    private synchronized boolean allowRepeatedCall(RepeatFingerprint fingerprint) {
+        long now = System.nanoTime();
+        long cutoff = now - REPEAT_WINDOW.toNanos();
+        if (repeatedCalls.size() >= MAX_REPEAT_FINGERPRINTS && !repeatedCalls.containsKey(fingerprint)) {
+            repeatedCalls.entrySet().removeIf(entry -> {
+                Deque<Long> calls = entry.getValue();
+                synchronized (calls) {
+                    return calls.isEmpty() || calls.peekLast() < cutoff;
+                }
+            });
+            if (repeatedCalls.size() >= MAX_REPEAT_FINGERPRINTS) return false;
+        }
+        Deque<Long> calls = repeatedCalls.computeIfAbsent(fingerprint, ignored -> new ArrayDeque<>());
+        synchronized (calls) {
+            while (!calls.isEmpty() && calls.peekFirst() < cutoff) calls.removeFirst();
+            if (calls.size() >= MAX_IDENTICAL_CALLS_PER_WINDOW) return false;
+            calls.addLast(now);
+            return true;
+        }
+    }
+
+    private void removeExpiredSessions() {
+        long now = System.nanoTime();
+        sessions.forEach((sessionId, state) -> {
+            Duration timeout = state.initialized().get()
+                    ? SESSION_IDLE_TIMEOUT : INITIALIZING_SESSION_IDLE_TIMEOUT;
+            if (state.lastAccessNanos() < now - timeout.toNanos() && removeIfInactive(sessionId, state)) {
+                activeCalls.forEach((key, token) -> {
+                    if (key.sessionId().equals(sessionId)) token.set(true);
+                });
+                removeRepeatFingerprints(sessionId);
+            }
+        });
+    }
+
+    private boolean evictOldestInactiveSession() {
+        Map.Entry<String, SessionState> oldest = sessions.entrySet().stream()
+                .filter(entry -> !hasActiveCalls(entry.getKey()))
+                .min(java.util.Comparator.comparingLong(
+                        (Map.Entry<String, SessionState> entry) -> entry.getValue().lastAccessNanos()))
+                .orElse(null);
+        if (oldest == null || !removeIfInactive(oldest.getKey(), oldest.getValue())) return false;
+        removeRepeatFingerprints(oldest.getKey());
+        return true;
+    }
+
+    private boolean removeIfInactive(String sessionId, SessionState expected) {
+        AtomicBoolean removed = new AtomicBoolean();
+        sessions.computeIfPresent(sessionId, (ignored, state) -> {
+            if (state == expected && state.activeRequests().get() == 0) {
+                removed.set(true);
+                return null;
+            }
+            return state;
+        });
+        return removed.get();
+    }
+
+    private boolean hasActiveCalls(String sessionId) {
+        SessionState session = sessions.get(sessionId);
+        return session != null && session.activeRequests().get() > 0;
+    }
+
+    private static RepeatFingerprint fingerprint(String sessionId, String toolName, JsonObject arguments) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(sessionId.getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            digest.update(toolName.getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            digest.update(canonicalize(arguments).toString().getBytes(StandardCharsets.UTF_8));
+            return new RepeatFingerprint(sessionId, HexFormat.of().formatHex(digest.digest()));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
+    }
+
+    private static JsonElement canonicalize(JsonElement value) {
+        if (value == null) return JsonNull.INSTANCE;
+        if (value.isJsonNull() || value.isJsonPrimitive()) return value.deepCopy();
+        if (value.isJsonArray()) {
+            JsonArray result = new JsonArray();
+            for (JsonElement element : value.getAsJsonArray()) result.add(canonicalize(element));
+            return result;
+        }
+        JsonObject result = new JsonObject();
+        JsonObject object = value.getAsJsonObject();
+        for (String key : new TreeSet<>(object.keySet())) result.add(key, canonicalize(object.get(key)));
+        return result;
+    }
+
+    private synchronized void removeRepeatFingerprints(String sessionId) {
+        repeatedCalls.keySet().removeIf(key -> key.sessionId().equals(sessionId));
+    }
+
+    private synchronized void clearRepeatFingerprints() {
+        repeatedCalls.clear();
     }
 
     private String randomId() {
@@ -376,9 +526,14 @@ public final class McpRequestDispatcher implements AutoCloseable {
         return new Reply(response, "", false);
     }
 
-    private record SessionState(AtomicBoolean initialized) {
-        private SessionState() { this(new AtomicBoolean()); }
+    private record SessionState(AtomicBoolean initialized, AtomicLong lastAccess, AtomicInteger activeRequests) {
+        private SessionState() {
+            this(new AtomicBoolean(), new AtomicLong(System.nanoTime()), new AtomicInteger());
+        }
+        private void touch() { lastAccess.set(System.nanoTime()); }
+        private long lastAccessNanos() { return lastAccess.get(); }
     }
 
     private record RequestKey(String sessionId, String requestId) { }
+    private record RepeatFingerprint(String sessionId, String digest) { }
 }

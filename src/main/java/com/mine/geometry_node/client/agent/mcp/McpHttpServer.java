@@ -14,7 +14,10 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.util.ArrayDeque;
 import java.util.Base64;
+import java.util.Deque;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -138,6 +141,10 @@ public final class McpHttpServer implements AutoCloseable {
                     sendText(exchange, 401, "Unauthorized");
                     return;
                 }
+                if (!binding.requestBudget.tryAcquire()) {
+                    sendText(exchange, 429, "MCP request rate limit exceeded");
+                    return;
+                }
                 if (!binding.requests.tryAcquire()) {
                     sendText(exchange, 429, "Too many concurrent MCP requests");
                     return;
@@ -162,6 +169,7 @@ public final class McpHttpServer implements AutoCloseable {
         }
 
         private Binding authorizedBinding(HttpExchange exchange) {
+            if (headerValues(exchange, "Authorization").size() != 1) return null;
             String authorization = header(exchange, "Authorization");
             if (authorization == null || !authorization.startsWith("Bearer ")) return null;
             byte[] candidate = authorization.substring(7).getBytes(StandardCharsets.UTF_8);
@@ -180,6 +188,11 @@ public final class McpHttpServer implements AutoCloseable {
             sendText(exchange, 415, "Content-Type must be application/json");
             return;
         }
+        long declaredLength = contentLength(exchange);
+        if (declaredLength == Long.MIN_VALUE || declaredLength > MAX_REQUEST_BYTES) {
+            sendText(exchange, 413, "MCP request is too large");
+            return;
+        }
         byte[] body;
         try {
             body = readBounded(exchange.getRequestBody());
@@ -189,7 +202,12 @@ public final class McpHttpServer implements AutoCloseable {
         }
         JsonObject request;
         try {
-            request = GSON.fromJson(new String(body, StandardCharsets.UTF_8), JsonObject.class);
+            String json = new String(body, StandardCharsets.UTF_8);
+            if (!McpJsonLimits.accepts(json)) {
+                sendJson(exchange, 400, jsonRpcError(-32600, "JSON structure exceeds MCP limits"), "");
+                return;
+            }
+            request = GSON.fromJson(json, JsonObject.class);
             if (request == null) throw new JsonParseException("request must be a JSON object");
         } catch (JsonParseException | IllegalStateException malformed) {
             sendJson(exchange, 400, jsonRpcError(-32700, "Parse error"), "");
@@ -225,18 +243,25 @@ public final class McpHttpServer implements AutoCloseable {
     }
 
     private static boolean validHost(HttpExchange exchange) {
+        if (headerValues(exchange, "Host").size() != 1) return false;
         String host = normalize(header(exchange, "Host")).toLowerCase(Locale.ROOT);
-        return host.startsWith("127.0.0.1:") || host.startsWith("localhost:") || host.startsWith("[::1]:");
+        return host.equals("127.0.0.1:" + PORT) || host.equals("localhost:" + PORT);
     }
 
     private static boolean validOrigin(HttpExchange exchange) {
+        List<String> origins = headerValues(exchange, "Origin");
+        if (origins.size() > 1) return false;
         String origin = normalize(header(exchange, "Origin")).toLowerCase(Locale.ROOT);
         if (origin.isBlank()) return true;
         try {
             URI uri = URI.create(origin);
             String host = uri.getHost();
-            return "http".equals(uri.getScheme()) && host != null
-                    && (host.equals("127.0.0.1") || host.equals("localhost") || host.equals("::1"));
+            int port = uri.getPort() < 0 ? 80 : uri.getPort();
+            String path = uri.getPath();
+            return "http".equals(uri.getScheme()) && port == PORT && host != null
+                    && (host.equals("127.0.0.1") || host.equals("localhost"))
+                    && uri.getUserInfo() == null && (path == null || path.isEmpty() || path.equals("/"))
+                    && uri.getQuery() == null && uri.getFragment() == null;
         } catch (IllegalArgumentException ignored) {
             return false;
         }
@@ -287,6 +312,24 @@ public final class McpHttpServer implements AutoCloseable {
         return exchange.getRequestHeaders().getFirst(name);
     }
 
+    private static List<String> headerValues(HttpExchange exchange, String name) {
+        List<String> values = exchange.getRequestHeaders().get(name);
+        return values == null ? List.of() : values;
+    }
+
+    private static long contentLength(HttpExchange exchange) {
+        List<String> values = headerValues(exchange, "Content-Length");
+        if (values.size() > 1) return Long.MIN_VALUE;
+        String value = normalize(header(exchange, "Content-Length"));
+        if (value.isBlank()) return -1;
+        try {
+            long length = Long.parseLong(value);
+            return length < 0 ? Long.MIN_VALUE : length;
+        } catch (NumberFormatException ignored) {
+            return Long.MIN_VALUE;
+        }
+    }
+
     private static String normalize(String value) { return value == null ? "" : value.trim(); }
 
     private static String randomSecret(int bytes) {
@@ -299,10 +342,26 @@ public final class McpHttpServer implements AutoCloseable {
         private final byte[] tokenBytes;
         private final McpRequestDispatcher dispatcher;
         private final Semaphore requests = new Semaphore(8);
+        private final RequestBudget requestBudget = new RequestBudget();
 
         private Binding(String token, McpRequestDispatcher dispatcher) {
             this.tokenBytes = token.getBytes(StandardCharsets.UTF_8);
             this.dispatcher = dispatcher;
+        }
+    }
+
+    private static final class RequestBudget {
+        private static final int MAX_REQUESTS = 240;
+        private static final long WINDOW_NANOS = java.time.Duration.ofMinutes(1).toNanos();
+        private final Deque<Long> requests = new ArrayDeque<>(MAX_REQUESTS);
+
+        private synchronized boolean tryAcquire() {
+            long now = System.nanoTime();
+            long cutoff = now - WINDOW_NANOS;
+            while (!requests.isEmpty() && requests.peekFirst() < cutoff) requests.removeFirst();
+            if (requests.size() >= MAX_REQUESTS) return false;
+            requests.addLast(now);
+            return true;
         }
     }
 
