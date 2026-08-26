@@ -13,6 +13,7 @@ import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.port.TypeConverter;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -130,6 +131,15 @@ public final class BehaviorTreeEvaluator {
                         elapsed(started, instance.host().nanoTime()));
             }
             throw fault;
+        } catch (BehaviorBlackboard.BlackboardAccessException | IllegalArgumentException exception) {
+            String detail = exception.getMessage() != null
+                    ? exception.getMessage() : exception.getClass().getSimpleName();
+            if (instance.rawNodeState(nodeIndex).isActive()) {
+                terminateNode(instance, nodeIndex, executor, context,
+                        BehaviorTerminationReason.INVALID_DATA, detail, false,
+                        elapsed(started, instance.host().nanoTime()));
+            }
+            throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA, detail);
         } catch (Exception exception) {
             String detail = exception.getMessage() != null
                     ? exception.getMessage() : exception.getClass().getSimpleName();
@@ -152,6 +162,13 @@ public final class BehaviorTreeEvaluator {
         if (source == null) return instance.plan().getStaticInput(targetNodeIndex, portName);
         return instance.dataEvaluation().evaluate(source.sourceNodeId(), source.sourcePortName(),
                 (nodeIndex, outputPort) -> computeDataNode(instance, nodeIndex, outputPort));
+    }
+
+    @Nullable
+    <T> T resolveInput(BehaviorTreeInstance instance, int targetNodeIndex,
+                       String portName, Class<T> type) {
+        return TypeConverter.convert(resolveInput(instance, targetNodeIndex, portName),
+                type, new BehaviorDataContext(instance, targetNodeIndex));
     }
 
     private Object computeDataNode(BehaviorTreeInstance instance, int nodeIndex, String outputPort) {
@@ -180,9 +197,8 @@ public final class BehaviorTreeEvaluator {
                                            BehaviorNodeExecutor executor, BehaviorNodeContext context,
                                            BehaviorTerminationReason reason, @Nullable String detail,
                                            boolean propagateExitFailure, long elapsedNanos) {
-        EvaluationFault childFailure = abortChildren(instance, nodeIndex,
-                reason.kind() == BehaviorTerminationReason.Kind.NORMAL
-                ? BehaviorTerminationReason.PARENT_BRANCH_REJECTED : reason);
+        EvaluationFault childFailure = abortChildren(
+                instance, nodeIndex, executor.childTerminationReason(reason));
         BehaviorNodeState current = instance.rawNodeState(nodeIndex);
         if (!current.isActive()) return propagateExitFailure ? childFailure : null;
         transition(instance, nodeIndex, BehaviorNodeState.EXITING);
@@ -347,6 +363,16 @@ public final class BehaviorTreeEvaluator {
                         com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE, name);
             } catch (BehaviorBlackboard.BlackboardAccessException exception) {
                 return null;
+            }
+        }
+
+        @Override
+        public boolean hasVariable(String name) {
+            try {
+                return instance.blackboard().contains(
+                        com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE, name);
+            } catch (BehaviorBlackboard.BlackboardAccessException exception) {
+                return false;
             }
         }
 

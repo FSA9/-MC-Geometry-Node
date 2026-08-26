@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.maths.operation;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
@@ -57,7 +57,7 @@ public class MathOperation extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.VALUE.getId().equals(portName)) return null;
 
         String operator = getInput(context, StandardPorts.STRING.getId(), String.class);

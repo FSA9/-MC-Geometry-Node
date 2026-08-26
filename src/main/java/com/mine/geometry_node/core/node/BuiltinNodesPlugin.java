@@ -7,8 +7,7 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import com.mine.geometry_node.core.node.nodes.actions.block.*;
-import com.mine.geometry_node.core.node.nodes.behavior.BehaviorRootNode;
-import com.mine.geometry_node.core.node.nodes.behavior.BehaviorSequenceNode;
+import com.mine.geometry_node.core.node.nodes.behavior.*;
 import com.mine.geometry_node.core.node.nodes.actions.display_entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
@@ -79,6 +78,38 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
                 NodeCapabilities.ChildConstraint.EXACTLY_ONE));
         registry.register("behavior/control", new BehaviorSequenceNode(), behaviorStructureCapabilities(
                 NodeCapabilities.ChildConstraint.ONE_OR_MORE_ORDERED));
+        registry.register("behavior/control", new BehaviorSelectorNode(), behaviorStructureCapabilities(
+                NodeCapabilities.ChildConstraint.ONE_OR_MORE_ORDERED));
+        registry.register("behavior/condition", new BehaviorConditionNode(), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.PURE, NodeCapabilities.Lifecycle.INSTANT,
+                NodeCapabilities.ChildConstraint.LEAF, NodeCapabilities.Permission.NONE));
+        registry.register("behavior/condition", new BehaviorHasValidTargetNode(), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.READ_ONLY, NodeCapabilities.Lifecycle.INSTANT,
+                NodeCapabilities.ChildConstraint.LEAF, NodeCapabilities.Permission.READ_WORLD));
+        registry.register("behavior/decorator", new BehaviorGuardNode(), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.PURE, NodeCapabilities.Lifecycle.CONTINUOUS,
+                NodeCapabilities.ChildConstraint.EXACTLY_ONE, NodeCapabilities.Permission.NONE));
+        registry.register("behavior/decorator", new BehaviorInverterNode(), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.PURE, NodeCapabilities.Lifecycle.CONTINUOUS,
+                NodeCapabilities.ChildConstraint.EXACTLY_ONE, NodeCapabilities.Permission.NONE));
+        registry.register("behavior/action", new BehaviorWaitNode(), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.PURE, NodeCapabilities.Lifecycle.SUSPENDING,
+                NodeCapabilities.ChildConstraint.LEAF, NodeCapabilities.Permission.NONE));
+        registry.register("behavior/action", new BehaviorIdleNode(), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.PURE, NodeCapabilities.Lifecycle.SUSPENDING,
+                NodeCapabilities.ChildConstraint.LEAF, NodeCapabilities.Permission.NONE));
+        registry.register("behavior/blackboard", new BehaviorGetBlackboardNode(),
+                behaviorDataCapabilities(NodeCapabilities.Purity.READ_ONLY,
+                        NodeCapabilities.Permission.NONE));
+        registry.register("behavior/blackboard", new BehaviorHasBlackboardNode(),
+                behaviorDataCapabilities(NodeCapabilities.Purity.READ_ONLY,
+                        NodeCapabilities.Permission.NONE));
+        registry.register("behavior/blackboard", new BehaviorSetBlackboardNode(), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.SIDE_EFFECTING, NodeCapabilities.Lifecycle.INSTANT,
+                NodeCapabilities.ChildConstraint.LEAF, NodeCapabilities.Permission.WRITE_BLACKBOARD));
+        registry.register("behavior/blackboard", new BehaviorClearBlackboardNode(), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.SIDE_EFFECTING, NodeCapabilities.Lifecycle.INSTANT,
+                NodeCapabilities.ChildConstraint.LEAF, NodeCapabilities.Permission.WRITE_BLACKBOARD));
 
         registry.register("layout", new RerouteNode());
 
@@ -269,11 +300,14 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/player", new IsKeyPressed());
 
         // Data/World
-        registry.register("data/world", new GetGameTime());
-        registry.register("data/world", new GetWorldTime());
+        registry.register("data/world", new GetGameTime(), sharedReadDataCapabilities(
+                NodeCapabilities.Permission.READ_WORLD, NodeCapabilities.Cost.TRIVIAL));
+        registry.register("data/world", new GetWorldTime(), sharedReadDataCapabilities(
+                NodeCapabilities.Permission.READ_WORLD, NodeCapabilities.Cost.TRIVIAL));
 
         // Data/Entity
-        registry.register("data/entity", new GetEntitiesByRadius());
+        registry.register("data/entity", new GetEntitiesByRadius(), sharedReadDataCapabilities(
+                NodeCapabilities.Permission.READ_WORLD, NodeCapabilities.Cost.EXPENSIVE));
         registry.register("data/entity", new GetEntitiesbyRotationBox());
         registry.register("data/entity", new PickEntityTemplate());
 
@@ -281,9 +315,13 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/entity/attribution", new GetEntityDimension());
         registry.register("data/entity/attribution", new GetEntityEyePosition());
         registry.register("data/entity/attribution", new GetEntityFallDistance());
-        registry.register("data/entity/attribution", new GetEntityHealth());
+        registry.register("data/entity/attribution", new GetEntityHealth(), sharedReadDataCapabilities(
+                NodeCapabilities.Permission.READ_WORLD, NodeCapabilities.Cost.TRIVIAL));
+        registry.register("data/entity/attribution", new GetEntityMaxHealth(), sharedReadDataCapabilities(
+                NodeCapabilities.Permission.READ_WORLD, NodeCapabilities.Cost.TRIVIAL));
         registry.register("data/entity/attribution", new GetEntityRotation());
-        registry.register("data/entity/attribution", new GetEntityPosition());
+        registry.register("data/entity/attribution", new GetEntityPosition(), sharedReadDataCapabilities(
+                NodeCapabilities.Permission.READ_WORLD, NodeCapabilities.Cost.TRIVIAL));
         registry.register("data/entity/attribution", new GetEntityTags());
         registry.register("data/entity/attribution", new GetEntityUUID());
         registry.register("data/entity/attribution", new GetEntityVelocity());
@@ -295,7 +333,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/entity/attribution", new GetTotalExperience());
         registry.register("data/entity/attribution", new IsInvisible());
         registry.register("data/entity/attribution", new IsOnFire());
-        registry.register("data/entity/attribution", new IsOnGround());
+        registry.register("data/entity/attribution", new IsOnGround(), sharedReadDataCapabilities(
+                NodeCapabilities.Permission.READ_WORLD, NodeCapabilities.Cost.TRIVIAL));
         registry.register("data/entity/attribution", new IsSneaking());
         registry.register("data/entity/attribution", new IsSprinting());
         registry.register("data/entity/attribution", new IsSwimming());
@@ -313,10 +352,11 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/type", new GetPortType());
 
         // Data/Inventory
-        registry.register("data/inventory", new GetSlot());
-        registry.register("data/inventory", new SlotFromIndex());
+        registry.register("data/inventory", new GetSlot(), sharedPureDataCapabilities());
+        registry.register("data/inventory", new SlotFromIndex(), sharedPureDataCapabilities());
         registry.register("data/inventory", new PickItemStack());
-        registry.register("data/inventory", new GetSlotItem());
+        registry.register("data/inventory", new GetSlotItem(), sharedReadDataCapabilities(
+                NodeCapabilities.Permission.READ_WORLD, NodeCapabilities.Cost.TRIVIAL));
         registry.register("data/inventory", new CountInventoryItem());
         registry.register("data/inventory", new FindInventorySlots());
 
@@ -345,12 +385,12 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/container", new DictHasValue());
 
         // Data/Value
-        registry.register("data/value", new StringValue());
+        registry.register("data/value", new StringValue(), sharedPureDataCapabilities());
         registry.register("data/value", new StringExpression());
         registry.register("data/value", new PathSelection());
-        registry.register("data/value", new IntValue());
-        registry.register("data/value", new FloatValue());
-        registry.register("data/value", new BoolValue());
+        registry.register("data/value", new IntValue(), sharedPureDataCapabilities());
+        registry.register("data/value", new FloatValue(), sharedPureDataCapabilities());
+        registry.register("data/value", new BoolValue(), sharedPureDataCapabilities());
 
         // Geometry
         registry.register("geometry/mesh", new CreateMesh());
@@ -471,7 +511,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // --- FUNCTIONS ---
         registry.register("functions/graph", new FinishGraph());
-        registry.register("functions/graph", new GraphOwner());
+        registry.register("functions/graph", new GraphOwner(), sharedReadDataCapabilities(
+                NodeCapabilities.Permission.READ_OWNER, NodeCapabilities.Cost.TRIVIAL));
         registry.register("functions/graph", new ReceiveBlueprint());
         registry.register("functions/graph", new TriggerBlueprint());
 
@@ -483,7 +524,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // --- LOGICS ---
         registry.register("logics", new Contain());
-        registry.register("logics", new Equal());
+        registry.register("logics", new Equal(), sharedPureDataCapabilities());
         registry.register("logics", new HasTag());
         registry.register("logics", new GetTags());
         registry.register("logics", new ForEachLoop());
@@ -497,7 +538,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("maths", new SnapshotValue());
         registry.register("maths", new RandomValue());
         registry.register("maths/operation", new MathExpression());
-        registry.register("maths/operation", new MathOperation());
+        registry.register("maths/operation", new MathOperation(), sharedPureDataCapabilities());
         registry.register("maths/vector", new VectorAdd());
         registry.register("maths/vector", new ReflectVector());
         registry.register("maths/vector", new SeparateXYZ());
@@ -507,16 +548,33 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
     }
 
     private static NodeCapabilities behaviorStructureCapabilities(NodeCapabilities.ChildConstraint children) {
+        return behaviorNodeCapabilities(NodeCapabilities.Purity.PURE,
+                NodeCapabilities.Lifecycle.CONTINUOUS, children, NodeCapabilities.Permission.NONE);
+    }
+
+    private static NodeCapabilities behaviorNodeCapabilities(
+            NodeCapabilities.Purity purity, NodeCapabilities.Lifecycle lifecycle,
+            NodeCapabilities.ChildConstraint children, NodeCapabilities.Permission permission) {
         return new NodeCapabilities(
                 Set.of(GraphTypeRegistry.BEHAVIOR_TREE.id()),
-                NodeCapabilities.Purity.PURE,
+                purity,
                 NodeCapabilities.Context.BEHAVIOR_EXECUTION,
-                NodeCapabilities.Lifecycle.CONTINUOUS,
+                lifecycle,
                 NodeCapabilities.Cancellation.CANCELLABLE,
                 children,
                 Set.of(NodeCapabilities.ResourceUse.NONE),
                 NodeCapabilities.Cost.TRIVIAL,
-                NodeCapabilities.Permission.NONE);
+                permission);
+    }
+
+    private static NodeCapabilities behaviorDataCapabilities(
+            NodeCapabilities.Purity purity, NodeCapabilities.Permission permission) {
+        return new NodeCapabilities(
+                Set.of(GraphTypeRegistry.BEHAVIOR_TREE.id()), purity,
+                NodeCapabilities.Context.DATA, NodeCapabilities.Lifecycle.INSTANT,
+                NodeCapabilities.Cancellation.NOT_APPLICABLE,
+                NodeCapabilities.ChildConstraint.LEAF, Set.of(NodeCapabilities.ResourceUse.NONE),
+                NodeCapabilities.Cost.TRIVIAL, permission);
     }
 
     private static NodeCapabilities sharedPureDataCapabilities() {
@@ -531,5 +589,18 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
                 Set.of(NodeCapabilities.ResourceUse.NONE),
                 NodeCapabilities.Cost.TRIVIAL,
                 NodeCapabilities.Permission.NONE);
+    }
+
+    private static NodeCapabilities sharedReadDataCapabilities(
+            NodeCapabilities.Permission permission, NodeCapabilities.Cost cost) {
+        return new NodeCapabilities(
+                Set.of(GraphTypeRegistry.BLUEPRINT.id(), GraphTypeRegistry.QUEST.id(),
+                        GraphTypeRegistry.BEHAVIOR_TREE.id()),
+                NodeCapabilities.Purity.READ_ONLY,
+                NodeCapabilities.Context.DATA,
+                NodeCapabilities.Lifecycle.INSTANT,
+                NodeCapabilities.Cancellation.NOT_APPLICABLE,
+                NodeCapabilities.ChildConstraint.LEAF,
+                Set.of(NodeCapabilities.ResourceUse.NONE), cost, permission);
     }
 }

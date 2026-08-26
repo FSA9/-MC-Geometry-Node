@@ -11,6 +11,7 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
+import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 
 import java.util.function.Consumer;
@@ -183,7 +184,9 @@ public final class GraphTypeSelector extends FrameLayout {
         View current = this;
         while (current.getParent() instanceof View parent) {
             current = parent;
-            if (current instanceof FrameLayout frameLayout) return frameLayout;
+            if (current instanceof FrameLayout frameLayout && !(current instanceof ScrollView)) {
+                return frameLayout;
+            }
         }
         return null;
     }

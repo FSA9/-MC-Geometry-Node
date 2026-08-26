@@ -55,6 +55,12 @@ public final class BehaviorNodeContext {
     }
 
     @Nullable
+    public <T> T input(String portName, Class<T> type) {
+        ensureValid();
+        return evaluator.resolveInput(instance, nodeIndex, portName, type);
+    }
+
+    @Nullable
     public Object staticInput(String portName) {
         ensureValid();
         return instance.plan().getStaticInput(nodeIndex, portName);
@@ -92,6 +98,14 @@ public final class BehaviorNodeContext {
     public void setBlackboard(BlackboardScope scope, String name, @Nullable Object value) {
         ensureValid();
         instance.blackboard().set(scope, name, value, nodeId(), epochTick);
+        instance.dataEvaluation().clearValues();
+    }
+
+    public boolean clearBlackboard(BlackboardScope scope, String name) {
+        ensureValid();
+        boolean changed = instance.blackboard().clear(scope, name, nodeId(), epochTick);
+        if (changed) instance.dataEvaluation().clearValues();
+        return changed;
     }
 
     void close() {

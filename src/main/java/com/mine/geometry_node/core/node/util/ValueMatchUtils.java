@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.util;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
@@ -24,7 +24,8 @@ public final class ValueMatchUtils {
     private ValueMatchUtils() {
     }
 
-    public static boolean valuesEqual(Object a, Object b, String rawMode, String rawCountMode, ExecutionContext context) {
+    public static boolean valuesEqual(Object a, Object b, String rawMode, String rawCountMode,
+                                      GraphDataContext context) {
         a = ValueTagUtils.unwrap(a);
         b = ValueTagUtils.unwrap(b);
 
@@ -45,11 +46,14 @@ public final class ValueMatchUtils {
         return countMatches(a, b, normalizeCountMode(rawCountMode), mode);
     }
 
-    public static boolean itemStackMatches(ItemStack candidate, ItemStack template, String rawMode, ExecutionContext context) {
+    public static boolean itemStackMatches(ItemStack candidate, ItemStack template, String rawMode,
+                                           GraphDataContext context) {
         return itemStackMatches(candidate, template, rawMode, COUNT_IGNORE, context);
     }
 
-    public static boolean itemStackMatches(ItemStack candidate, ItemStack template, String rawMode, String rawCountMode, ExecutionContext context) {
+    public static boolean itemStackMatches(ItemStack candidate, ItemStack template,
+                                           String rawMode, String rawCountMode,
+                                           GraphDataContext context) {
         if (candidate == null || candidate.isEmpty() || template == null || template.isEmpty()) {
             return false;
         }
@@ -78,19 +82,19 @@ public final class ValueMatchUtils {
         };
     }
 
-    private static boolean typeOnlyEqual(Object a, Object b, ExecutionContext context) {
+    private static boolean typeOnlyEqual(Object a, Object b, GraphDataContext context) {
         Set<String> left = ValueTagUtils.kindKeys(a, context);
         Set<String> right = ValueTagUtils.kindKeys(b, context);
         return intersects(left, right);
     }
 
-    private static boolean registryIdEqual(Object a, Object b, ExecutionContext context) {
+    private static boolean registryIdEqual(Object a, Object b, GraphDataContext context) {
         Set<String> left = ValueTagUtils.registryIdentities(a, context);
         Set<String> right = ValueTagUtils.registryIdentities(b, context);
         return !left.isEmpty() && intersects(left, right);
     }
 
-    private static boolean componentsEqual(Object a, Object b, ExecutionContext context) {
+    private static boolean componentsEqual(Object a, Object b, GraphDataContext context) {
         if (a instanceof Number numA && b instanceof Number numB) {
             return Double.compare(numA.doubleValue(), numB.doubleValue()) == 0;
         }

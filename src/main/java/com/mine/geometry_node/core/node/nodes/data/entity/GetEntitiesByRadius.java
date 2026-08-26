@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionMa
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaEntityQuery;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortDef;
@@ -46,7 +47,7 @@ public class GetEntitiesByRadius extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.LIST.getId().equals(portName)) return null;
 
         Vec3 center = getInput(context, StandardPorts.CENTER.getId(), Vec3.class);
@@ -69,10 +70,12 @@ public class GetEntitiesByRadius extends BaseNode {
                 AreaTargetType.fromId(targetId),
                 e -> !e.isSpectator()
         );
-        DebugRendererSessionManager.showTransientQueryArea(
-                context.getLevel(), context.getGraphId(), context.getCurrentNodeStableId(),
-                AreaShape.SPHERE.id(), center, size, Vec3.ZERO
-        );
+        if (context instanceof ExecutionContext blueprintContext) {
+            DebugRendererSessionManager.showTransientQueryArea(
+                    context.getLevel(), context.getGraphId(), blueprintContext.getCurrentNodeStableId(),
+                    AreaShape.SPHERE.id(), center, size, Vec3.ZERO
+            );
+        }
         return result;
     }
 }

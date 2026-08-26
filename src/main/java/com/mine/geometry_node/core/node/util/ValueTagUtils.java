@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.util;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
@@ -33,7 +33,7 @@ public final class ValueTagUtils {
         return value instanceof DynamicData dynamicData ? dynamicData.value() : value;
     }
 
-    public static boolean hasTag(Object value, String rawTag, ExecutionContext context) {
+    public static boolean hasTag(Object value, String rawTag, GraphDataContext context) {
         Identifier tagId = parseIdentifier(rawTag);
         if (tagId == null) {
             return false;
@@ -47,7 +47,7 @@ public final class ValueTagUtils {
         return false;
     }
 
-    public static List<String> tags(Object value, ExecutionContext context) {
+    public static List<String> tags(Object value, GraphDataContext context) {
         Set<String> tags = new TreeSet<>();
         for (TagSubject<?> subject : subjects(value, context)) {
             subject.tags().forEach(tags::add);
@@ -55,7 +55,7 @@ public final class ValueTagUtils {
         return new ArrayList<>(tags);
     }
 
-    public static Set<String> kindKeys(Object value, ExecutionContext context) {
+    public static Set<String> kindKeys(Object value, GraphDataContext context) {
         value = unwrap(value);
         Set<String> keys = new LinkedHashSet<>();
         for (TagSubject<?> subject : subjects(value, context)) {
@@ -83,7 +83,7 @@ public final class ValueTagUtils {
         return keys;
     }
 
-    public static Set<String> registryIdentities(Object value, ExecutionContext context) {
+    public static Set<String> registryIdentities(Object value, GraphDataContext context) {
         Set<String> identities = new LinkedHashSet<>();
         for (TagSubject<?> subject : subjects(value, context)) {
             identities.add(subject.identity());
@@ -97,7 +97,7 @@ public final class ValueTagUtils {
         return left != null && left.equals(right);
     }
 
-    private static List<TagSubject<?>> subjects(Object value, ExecutionContext context) {
+    private static List<TagSubject<?>> subjects(Object value, GraphDataContext context) {
         value = unwrap(value);
         if (value == null) {
             return List.of();
@@ -124,7 +124,8 @@ public final class ValueTagUtils {
         return subjects;
     }
 
-    private static void addByRegistryId(List<TagSubject<?>> subjects, String rawId, ExecutionContext context) {
+    private static void addByRegistryId(List<TagSubject<?>> subjects, String rawId,
+                                        GraphDataContext context) {
         Identifier id = parseIdentifier(rawId);
         if (id == null) {
             return;

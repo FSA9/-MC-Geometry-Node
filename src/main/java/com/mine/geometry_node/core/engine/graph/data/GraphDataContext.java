@@ -17,6 +17,10 @@ public interface GraphDataContext {
 
     @Nullable Object getVariable(String name);
 
+    default boolean hasVariable(String name) {
+        return getVariable(name) != null;
+    }
+
     @Nullable Object getInputValue(String portName);
 
     @Nullable Object getStaticInput(String portName);

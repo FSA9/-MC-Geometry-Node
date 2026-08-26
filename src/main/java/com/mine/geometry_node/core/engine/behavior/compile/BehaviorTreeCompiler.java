@@ -151,6 +151,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         validateDepth(assetId, graph, diagnostics);
         BehaviorTreePlan.BlackboardSchema blackboard = compileBlackboard(
                 assetId, graph.behaviorTree, diagnostics);
+        validateBlackboardNodes(assetId, info, inbound, blackboard, diagnostics);
         BehaviorTreePlan.DependencyManifest dependencies = compileDependencies(
                 assetId, context, graph.behaviorTree, diagnostics);
 
@@ -550,6 +551,58 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         }
         compiled.sort(Comparator.comparing(BehaviorTreePlan.SubtreeDependency::assetId));
         return new BehaviorTreePlan.DependencyManifest(compiled);
+    }
+
+    private static void validateBlackboardNodes(
+            String assetId, Map<String, NodeInfo> info, Map<InputKey, DataLink> inbound,
+            BehaviorTreePlan.BlackboardSchema blackboard,
+            List<BehaviorTreeDiagnostic> diagnostics) {
+        Set<String> blackboardTypes = Set.of(
+                BehaviorNodeTypes.GET_BLACKBOARD, BehaviorNodeTypes.HAS_BLACKBOARD,
+                BehaviorNodeTypes.SET_BLACKBOARD, BehaviorNodeTypes.CLEAR_BLACKBOARD);
+        for (Map.Entry<String, NodeInfo> entry : info.entrySet()) {
+            String nodeId = entry.getKey();
+            NodeInfo nodeInfo = entry.getValue();
+            if (!blackboardTypes.contains(nodeInfo.node.type)) continue;
+            Object rawKey = nodeInfo.node.inputs.get(BehaviorNodeTypes.BLACKBOARD_KEY_PORT);
+            String keyName = rawKey instanceof String value ? value.trim() : "";
+            if (keyName.isEmpty()) {
+                add(diagnostics, diagnostic(assetId, "BLACKBOARD_KEY_REQUIRED",
+                        "Blackboard node requires a configured key", nodeId,
+                        BehaviorNodeTypes.BLACKBOARD_KEY_PORT, ""));
+                continue;
+            }
+            BehaviorTreePlan.BlackboardKey key = blackboard.find(BlackboardScope.INSTANCE, keyName);
+            if (key == null) {
+                add(diagnostics, diagnostic(assetId, "BLACKBOARD_KEY_UNDECLARED",
+                        "Instance blackboard key is not declared: " + keyName, nodeId,
+                        BehaviorNodeTypes.BLACKBOARD_KEY_PORT, ""));
+                continue;
+            }
+            boolean writes = BehaviorNodeTypes.SET_BLACKBOARD.equals(nodeInfo.node.type)
+                    || BehaviorNodeTypes.CLEAR_BLACKBOARD.equals(nodeInfo.node.type);
+            if (writes && !key.writable()) {
+                add(diagnostics, diagnostic(assetId, "BLACKBOARD_KEY_READ_ONLY",
+                        "Blackboard key is read-only: " + keyName, nodeId,
+                        BehaviorNodeTypes.BLACKBOARD_KEY_PORT, ""));
+            }
+            if (!BehaviorNodeTypes.SET_BLACKBOARD.equals(nodeInfo.node.type)) continue;
+            Object storedValue = nodeInfo.node.inputs.get(BehaviorNodeTypes.BLACKBOARD_VALUE_PORT);
+            if (storedValue != null && !BehaviorValueSemantics.matches(storedValue, key.type())) {
+                add(diagnostics, diagnostic(assetId, "BLACKBOARD_VALUE_TYPE_INVALID",
+                        "Stored value does not match blackboard key type " + key.type(), nodeId,
+                        BehaviorNodeTypes.BLACKBOARD_VALUE_PORT, ""));
+            }
+            DataLink link = inbound.get(new InputKey(
+                    nodeId, BehaviorNodeTypes.BLACKBOARD_VALUE_PORT));
+            NodeInfo source = link != null ? info.get(link.sourceNodeId) : null;
+            PortDef sourcePort = source != null ? source.ports.outputs.get(link.sourcePortId) : null;
+            if (sourcePort != null && !PortType.isCompatible(sourcePort.type(), key.type())) {
+                add(diagnostics, diagnostic(assetId, "BLACKBOARD_VALUE_TYPE_INVALID",
+                        "Connected value does not match blackboard key type " + key.type(), nodeId,
+                        BehaviorNodeTypes.BLACKBOARD_VALUE_PORT, link.sourceNodeId));
+            }
+        }
     }
 
     private static boolean validMapping(Map<String, String> mapping) {

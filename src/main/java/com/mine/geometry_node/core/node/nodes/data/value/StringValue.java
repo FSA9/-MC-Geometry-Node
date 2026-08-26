@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.value;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
@@ -22,7 +22,7 @@ public class StringValue extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.STRING.getId().equals(portName)) {
             // getInput 会自动判断：如果左边连了线，就取线上的值；没连线，就取玩家在输入框敲的值
             return getInput(context, StandardPorts.STRING.getId(), String.class);
