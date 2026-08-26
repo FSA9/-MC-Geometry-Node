@@ -5,10 +5,12 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.graph.PortEditCapabilityResolver;
+import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.viewport.menu.NodeSearchService;
 import com.mine.geometry_node.client.ui.viewport.node.comment.NodeCommentTextBuilder;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeStructureValidator;
+import com.mine.geometry_node.core.engine.behavior.compile.BehaviorTreeCompiler;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.graph.compile.GraphCompileContext;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -525,10 +527,14 @@ final class TerminalGraphQueryService {
     private static List<ValidationDiagnostic> validate(GraphReadSnapshot snapshot) {
         List<ValidationDiagnostic> diagnostics = new ArrayList<>();
         if (GraphTypeRegistry.BEHAVIOR_TREE.id().equals(snapshot.graph().getGraphTypeId())) {
-            BehaviorTreeStructureValidator.registeredNodes().validate(snapshot.graph()).diagnostics()
+            JsonObject behaviorDocument = com.google.gson.JsonParser.parseString(
+                    GraphJsonIO.toJson(snapshot.graph())).getAsJsonObject();
+            BehaviorTreeCompiler.INSTANCE.validate(
+                            new GraphCompileContext("viewport"), behaviorDocument).diagnostics()
                     .forEach(diagnostic -> diagnostics.add(error(
                             diagnostic.code(), diagnostic.message(),
-                            diagnostic.nodeId(), diagnostic.relatedNodeId())));
+                            diagnostic.nodeId(), diagnostic.portId().isEmpty()
+                                    ? diagnostic.relatedNodeId() : diagnostic.portId())));
         }
         Map<String, PortTypes> portTypesByNode = new LinkedHashMap<>();
         snapshot.nodes().forEach((nodeId, node) ->

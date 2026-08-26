@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
+import com.mine.geometry_node.core.engine.graph.compile.GraphDependencyValidator;
 import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
@@ -16,6 +17,7 @@ import org.jetbrains.annotations.Nullable;
 import java.io.BufferedReader;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -81,7 +83,8 @@ public class GraphResourceManager extends SimplePreparableReloadListener<Map<Ide
             try {
                 String graphId = location.toString();
 
-                CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(json.getAsJsonObject());
+                CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(
+                        graphId, json.getAsJsonObject());
                 newCache.put(graphId, new GraphAssetDescriptor(graphId,
                         GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact));
             } catch (Exception e) {
@@ -89,6 +92,16 @@ public class GraphResourceManager extends SimplePreparableReloadListener<Map<Ide
                 e.printStackTrace();
             }
         });
+
+        Map<String, CompiledGraph> compiledGraphs = new HashMap<>();
+        newCache.forEach((graphId, descriptor) -> compiledGraphs.put(graphId, descriptor.artifact()));
+        List<String> dependencyCycle = GraphDependencyValidator.findCycle(compiledGraphs);
+        Set<String> invalidGraphs = GraphDependencyValidator.findInvalidGraphs(compiledGraphs);
+        if (!invalidGraphs.isEmpty()) {
+            invalidGraphs.forEach(newCache::remove);
+            System.err.println("[GraphResourceManager]: Rejected recursive graph dependencies: "
+                    + String.join(" -> ", dependencyCycle) + "; rejected=" + invalidGraphs);
+        }
 
         // 缓存替换
         this.graphCache = Map.copyOf(newCache);

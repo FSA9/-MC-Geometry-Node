@@ -7,16 +7,19 @@ import com.mine.geometry_node.core.node.document.BehaviorTreeStructure;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.Objects;
 
 /** Validates editable hierarchy without mutating or normalizing the document. */
 public final class BehaviorTreeStructureValidator {
@@ -147,35 +150,47 @@ public final class BehaviorTreeStructureValidator {
         Set<String> visited = new HashSet<>();
         Set<String> active = new HashSet<>();
         Set<String> reported = new HashSet<>();
-        for (String nodeId : nodeIds) {
-            visit(nodeId, edges, visited, active, reported, diagnostics);
-        }
-    }
-
-    private static void visit(String nodeId, Map<String, List<String>> edges, Set<String> visited,
-                              Set<String> active, Set<String> reported,
-                              List<BehaviorTreeDiagnostic> diagnostics) {
-        if (visited.contains(nodeId)) return;
-        if (!active.add(nodeId)) return;
-        for (String childId : edges.getOrDefault(nodeId, List.of())) {
-            if (active.contains(childId)) {
-                String key = nodeId + '\0' + childId;
-                if (reported.add(key)) {
-                    diagnostics.add(problem("STRUCTURE_CYCLE", "Behavior hierarchy contains a cycle", nodeId, childId));
+        for (String start : nodeIds) {
+            if (visited.contains(start)) continue;
+            Deque<TraversalFrame> stack = new ArrayDeque<>();
+            active.add(start);
+            stack.push(new TraversalFrame(start, edges.getOrDefault(start, List.of()).iterator()));
+            while (!stack.isEmpty()) {
+                TraversalFrame frame = stack.peek();
+                if (frame.children.hasNext()) {
+                    String childId = frame.children.next();
+                    if (active.contains(childId)) {
+                        String key = frame.nodeId + '\0' + childId;
+                        if (reported.add(key)) {
+                            diagnostics.add(problem("STRUCTURE_CYCLE",
+                                    "Behavior hierarchy contains a cycle", frame.nodeId, childId));
+                        }
+                    } else if (!visited.contains(childId)) {
+                        active.add(childId);
+                        stack.push(new TraversalFrame(childId,
+                                edges.getOrDefault(childId, List.of()).iterator()));
+                    }
+                } else {
+                    stack.pop();
+                    active.remove(frame.nodeId);
+                    visited.add(frame.nodeId);
                 }
-            } else {
-                visit(childId, edges, visited, active, reported, diagnostics);
             }
         }
-        active.remove(nodeId);
-        visited.add(nodeId);
     }
 
-    private static void collectReachable(String nodeId, Map<String, List<String>> edges, Set<String> result) {
-        if (!result.add(nodeId)) return;
-        for (String childId : edges.getOrDefault(nodeId, List.of())) {
-            collectReachable(childId, edges, result);
+    private static void collectReachable(String rootId, Map<String, List<String>> edges, Set<String> result) {
+        Deque<String> pending = new ArrayDeque<>();
+        pending.push(rootId);
+        while (!pending.isEmpty()) {
+            String nodeId = pending.pop();
+            if (!result.add(nodeId)) continue;
+            List<String> children = edges.getOrDefault(nodeId, List.of());
+            for (int i = children.size() - 1; i >= 0; i--) pending.push(children.get(i));
         }
+    }
+
+    private record TraversalFrame(String nodeId, Iterator<String> children) {
     }
 
     private static BehaviorTreeDiagnostic problem(String code, String message,

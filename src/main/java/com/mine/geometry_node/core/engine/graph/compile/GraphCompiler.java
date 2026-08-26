@@ -8,4 +8,8 @@ public interface GraphCompiler<T extends CompiledGraph> {
     GraphKind runtimeKind();
 
     T compile(JsonObject document);
+
+    default T compile(GraphCompileContext context, JsonObject document) {
+        return compile(document);
+    }
 }

@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
+import com.mine.geometry_node.core.engine.graph.compile.GraphDependencyValidator;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
@@ -15,6 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -77,10 +81,19 @@ public class DynamicGraphManager {
         Path folder = server.getWorldPath(GRAPH_DIR).toAbsolutePath().normalize();
         Path filePath = GraphPathMapper.resolveGraphPath(folder, graphId);
         File file = filePath.toFile();
+        String normalizedId = GraphPathMapper.pathToId(folder, filePath);
 
-        CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(jsonContent);
-        GraphAssetDescriptor descriptor = new GraphAssetDescriptor(graphId,
+        CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(normalizedId, jsonContent);
+        GraphAssetDescriptor descriptor = new GraphAssetDescriptor(normalizedId,
                 GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact);
+        Map<String, CompiledGraph> dependencyView = new HashMap<>();
+        dynamicGraphCache.forEach((id, existing) -> dependencyView.put(id, existing.artifact()));
+        dependencyView.put(normalizedId, artifact);
+        List<String> dependencyCycle = GraphDependencyValidator.findCycle(dependencyView);
+        if (!dependencyCycle.isEmpty()) {
+            throw new IllegalStateException("Recursive graph dependencies: "
+                    + String.join(" -> ", dependencyCycle));
+        }
 
         // 创建目录
         File parentDir = file.getParentFile();
@@ -93,7 +106,6 @@ public class DynamicGraphManager {
         Files.move(tempPath, filePath, StandardCopyOption.REPLACE_EXISTING);
 
         // 热更新
-        String normalizedId = GraphPathMapper.pathToId(folder, file.toPath().toAbsolutePath().normalize());
         descriptor = new GraphAssetDescriptor(normalizedId, descriptor.type(), descriptor.artifact());
         GraphAssetDescriptor oldDescriptor = dynamicGraphCache.put(normalizedId, descriptor);
         notifyReload(server, normalizedId, oldDescriptor, descriptor);
@@ -117,7 +129,7 @@ public class DynamicGraphManager {
                             try {
                                 String graphId = GraphPathMapper.pathToId(folder, file);
                                 try (java.io.FileReader reader = new java.io.FileReader(file.toFile())) {
-                                    CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(reader);
+                                    CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(graphId, reader);
                                     dynamicGraphCache.put(graphId, new GraphAssetDescriptor(graphId,
                                             GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact));
                                 }
@@ -126,10 +138,22 @@ public class DynamicGraphManager {
                             }
                         });
             }
+            removeInvalidDependencies();
             GeometryNode.LOGGER.info("[DynamicGraphManager] Total load {} graphs。", dynamicGraphCache.size());
         } catch (Exception e) {
             GeometryNode.LOGGER.error("[DynamicGraphManager] Load content failed! ", e);
         }
+    }
+
+    private static void removeInvalidDependencies() {
+        Map<String, CompiledGraph> compiledGraphs = new HashMap<>();
+        dynamicGraphCache.forEach((graphId, descriptor) -> compiledGraphs.put(graphId, descriptor.artifact()));
+        List<String> dependencyCycle = GraphDependencyValidator.findCycle(compiledGraphs);
+        Set<String> invalidGraphs = GraphDependencyValidator.findInvalidGraphs(compiledGraphs);
+        if (invalidGraphs.isEmpty()) return;
+        invalidGraphs.forEach(dynamicGraphCache::remove);
+        GeometryNode.LOGGER.error("[DynamicGraphManager] Rejected recursive graph dependencies: {}; rejected={}",
+                String.join(" -> ", dependencyCycle), invalidGraphs);
     }
 
     private static void notifyReload(MinecraftServer server, String graphId,

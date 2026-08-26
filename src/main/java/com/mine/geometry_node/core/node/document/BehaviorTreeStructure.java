@@ -1,6 +1,8 @@
 package com.mine.geometry_node.core.node.document;
 
 import com.google.gson.annotations.SerializedName;
+import com.mine.geometry_node.core.engine.behavior.document.BehaviorBlackboardDeclaration;
+import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeDependency;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -16,6 +18,12 @@ public final class BehaviorTreeStructure {
     @SerializedName("children")
     private Map<String, List<String>> children = new LinkedHashMap<>();
 
+    @SerializedName("blackboard")
+    private List<BehaviorBlackboardDeclaration> blackboard = new ArrayList<>();
+
+    @SerializedName("subtrees")
+    private List<BehaviorSubtreeDependency> subtreeDependencies = new ArrayList<>();
+
     public List<String> childrenOf(String parentId) {
         List<String> result = children.get(parentId);
         return result != null ? Collections.unmodifiableList(result) : List.of();
@@ -27,6 +35,34 @@ public final class BehaviorTreeStructure {
             snapshot.put(entry.getKey(), Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
         }
         return Collections.unmodifiableMap(snapshot);
+    }
+
+    /** Counts stored hierarchy edges without allocating a relationship snapshot. */
+    public int relationshipCountUpTo(int limit) {
+        if (limit < 0) throw new IllegalArgumentException("limit must be non-negative");
+        long count = 0;
+        for (List<String> childIds : children.values()) {
+            if (childIds == null) continue;
+            count += childIds.size();
+            if (count > limit) return limit + 1;
+        }
+        return (int) count;
+    }
+
+    public List<BehaviorBlackboardDeclaration> blackboardDeclarations() {
+        return Collections.unmodifiableList(blackboard);
+    }
+
+    public void setBlackboardDeclarations(List<BehaviorBlackboardDeclaration> declarations) {
+        blackboard = declarations != null ? new ArrayList<>(declarations) : new ArrayList<>();
+    }
+
+    public List<BehaviorSubtreeDependency> subtreeDependencies() {
+        return Collections.unmodifiableList(subtreeDependencies);
+    }
+
+    public void setSubtreeDependencies(List<BehaviorSubtreeDependency> dependencies) {
+        subtreeDependencies = dependencies != null ? new ArrayList<>(dependencies) : new ArrayList<>();
     }
 
     public void replaceRelationships(Map<String, ? extends List<String>> relationships) {
@@ -94,7 +130,6 @@ public final class BehaviorTreeStructure {
     public void restoreDocumentDefaults() {
         if (children == null) {
             children = new LinkedHashMap<>();
-            return;
         }
         Map<String, List<String>> restored = new LinkedHashMap<>();
         for (Map.Entry<String, List<String>> entry : children.entrySet()) {
@@ -103,5 +138,10 @@ public final class BehaviorTreeStructure {
                     ? new ArrayList<>(entry.getValue()) : new ArrayList<>());
         }
         children = restored;
+        if (blackboard == null) blackboard = new ArrayList<>();
+        blackboard.removeIf(java.util.Objects::isNull);
+        if (subtreeDependencies == null) subtreeDependencies = new ArrayList<>();
+        subtreeDependencies.removeIf(java.util.Objects::isNull);
+        subtreeDependencies.forEach(BehaviorSubtreeDependency::restoreDocumentDefaults);
     }
 }

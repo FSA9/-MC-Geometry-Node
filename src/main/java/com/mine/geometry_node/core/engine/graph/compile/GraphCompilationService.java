@@ -35,15 +35,37 @@ public final class GraphCompilationService {
     }
 
     public CompiledGraph compile(String json) {
-        return compile(new StringReader(Objects.requireNonNull(json, "json")));
+        return compile(GraphCompileContext.ANONYMOUS,
+                new StringReader(Objects.requireNonNull(json, "json")));
+    }
+
+    public CompiledGraph compile(String assetId, String json) {
+        return compile(new GraphCompileContext(assetId),
+                new StringReader(Objects.requireNonNull(json, "json")));
     }
 
     public CompiledGraph compile(Reader reader) {
+        return compile(GraphCompileContext.ANONYMOUS, reader);
+    }
+
+    public CompiledGraph compile(String assetId, Reader reader) {
+        return compile(new GraphCompileContext(assetId), reader);
+    }
+
+    private CompiledGraph compile(GraphCompileContext context, Reader reader) {
         JsonObject document = JsonParser.parseReader(reader).getAsJsonObject();
-        return compile(document);
+        return compile(context, document);
     }
 
     public CompiledGraph compile(JsonObject document) {
+        return compile(GraphCompileContext.ANONYMOUS, document);
+    }
+
+    public CompiledGraph compile(String assetId, JsonObject document) {
+        return compile(new GraphCompileContext(assetId), document);
+    }
+
+    private CompiledGraph compile(GraphCompileContext context, JsonObject document) {
         Objects.requireNonNull(document, "document");
         String rawType = document.has("graph_kind")
                 ? document.get("graph_kind").getAsString()
@@ -60,7 +82,7 @@ public final class GraphCompilationService {
         if (compiler == null) {
             throw new IllegalStateException("Graph type is registered but not executable yet: " + type.id());
         }
-        CompiledGraph result = compiler.compile(document.deepCopy());
+        CompiledGraph result = compiler.compile(context, document.deepCopy());
         if (!type.id().equals(result.graphTypeId()) || type.runtimeKind() != result.runtimeKind()) {
             throw new IllegalStateException("Compiler returned an artifact with mismatched graph identity: " + type.id());
         }
