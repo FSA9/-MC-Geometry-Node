@@ -11,13 +11,9 @@ import com.mine.geometry_node.client.terminal.pty.pty4j.Pty4jProcessFactory;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
-import com.mine.geometry_node.client.ui.editor.terminal.command.BoundGraphQueryTarget;
-import com.mine.geometry_node.client.ui.editor.terminal.command.BoundGraphScope;
 import com.mine.geometry_node.client.ui.editor.terminal.command.MinecraftClientMcpGateway;
 import com.mine.geometry_node.client.ui.shell.MainUiServices;
 import com.mine.geometry_node.client.ui.shell.layer.MainUiLayerManager;
-import com.mine.geometry_node.client.ui.session.DocumentManager;
-import com.mine.geometry_node.client.ui.session.GraphSession;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -272,14 +268,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     private static void startMcpPowerShell(ShellTerminalCoordinator coordinator,
                                            ShellTerminalView view, GraphPatchApprovalController approvals,
                                            TerminalSize size, long generation) {
-        GraphSession graphSession = DocumentManager.INSTANCE.getActiveSession();
-        if (graphSession == null) {
-            view.reportError("请先打开一个蓝图，再启动 PowerShell");
-            return;
-        }
-        var scope = BoundGraphScope.capture(graphSession.editorContext);
-        var target = new BoundGraphQueryTarget(graphSession, scope, approvals);
-        var gateway = new MinecraftClientMcpGateway(CommandCatalog.registry(), target);
+        var gateway = new MinecraftClientMcpGateway(CommandCatalog.registry(), approvals);
         Thread.ofVirtual().name("geometry-node-mcp-powershell-start").start(() -> {
             McpPowerShellRun run = null;
             try {

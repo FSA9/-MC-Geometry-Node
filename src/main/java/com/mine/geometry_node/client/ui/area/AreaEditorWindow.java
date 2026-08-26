@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.area;
 
+import com.mine.geometry_node.client.ui.surface.UiSurfaceId;
 import icyllis.modernui.view.View;
 
 /**
@@ -7,6 +8,10 @@ import icyllis.modernui.view.View;
  */
 public interface AreaEditorWindow {
     View getView();
+
+    default UiSurfaceId surfaceId() {
+        return null;
+    }
 
     void onShow();
 

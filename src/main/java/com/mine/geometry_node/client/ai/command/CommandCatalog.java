@@ -100,9 +100,12 @@ public final class CommandCatalog {
     private static CommandSpec applyGraphPatch() {
         JsonObject patchSchema = stringSchema(2);
         patchSchema.addProperty("maxLength", 262_144);
-        List<CommandArgumentSpec> arguments = List.of(argument("patch_json",
-                "GraphPatch v1 JSON；session_id、scope_id、expected_revision 必须来自当前图上下文",
-                true, null, patchSchema, null));
+        List<CommandArgumentSpec> arguments = List.of(
+                argument("patch_json",
+                        "GraphPatch v1 JSON；session_id、scope_id、expected_revision 必须来自当前图上下文",
+                        true, null, patchSchema, null),
+                argument("surface_ref", "可选的 Viewport 引用，例如 V1；为空时使用最近交互或唯一 Viewport",
+                        false, new JsonPrimitive(""), stringSchema(0), null));
         JsonObject output = CommandSpec.objectSchema(properties(
                 property("approval_id", stringSchema(1)), property("patch_hash", stringSchema(64)),
                 property("change_id", stringSchema(1)), property("revision", integerSchema(0)),

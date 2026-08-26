@@ -61,35 +61,50 @@ import java.util.function.Supplier;
 public final class GraphPatchTransactionService {
     private static final Duration APPROVAL_TIMEOUT = Duration.ofMinutes(5);
     private static final Duration UI_HANDOFF_TIMEOUT = Duration.ofSeconds(30);
-    private static final int MAX_IDEMPOTENCY_KEYS = 1_024;
     private static final Gson GSON = new Gson();
 
     private final GraphSession session;
     private final BoundGraphScope scope;
     private final GraphPatchApprovalPresenter approvalPresenter;
-    private final Map<String, CompletedPatch> completed = new LinkedHashMap<>();
+    private final java.util.function.BooleanSupplier targetValidator;
+    private final GraphPatchIdempotencyStore idempotencyStore;
 
     public GraphPatchTransactionService(GraphSession session, BoundGraphScope scope,
                                         GraphPatchApprovalPresenter approvalPresenter) {
+        this(session, scope, approvalPresenter, () -> true, new GraphPatchIdempotencyStore());
+    }
+
+    public GraphPatchTransactionService(GraphSession session, BoundGraphScope scope,
+                                        GraphPatchApprovalPresenter approvalPresenter,
+                                        java.util.function.BooleanSupplier targetValidator,
+                                        GraphPatchIdempotencyStore idempotencyStore) {
         this.session = Objects.requireNonNull(session, "session");
         this.scope = Objects.requireNonNull(scope, "scope");
         this.approvalPresenter = Objects.requireNonNull(approvalPresenter, "approvalPresenter");
+        this.targetValidator = Objects.requireNonNull(targetValidator, "targetValidator");
+        this.idempotencyStore = Objects.requireNonNull(idempotencyStore, "idempotencyStore");
     }
 
-    public synchronized CommandResult apply(GraphPatch patch, CommandInvocationContext.CancellationToken cancellation) {
+    public CommandResult apply(GraphPatch patch, CommandInvocationContext.CancellationToken cancellation) {
+        synchronized (idempotencyStore) {
+            return applySerialized(patch, cancellation);
+        }
+    }
+
+    private CommandResult applySerialized(GraphPatch patch, CommandInvocationContext.CancellationToken cancellation) {
         if (Minecraft.getInstance().isSameThread() || Core.isOnUiThread()) {
             return CommandResult.failure("THREAD_VIOLATION", "GraphPatch 审批不能阻塞客户端或 UI 线程");
         }
         cancellation = cancellation == null ? CommandInvocationContext.CancellationToken.NONE : cancellation;
         try {
             String requestedHash = sha256(GraphPatchCodec.toJson(patch));
-            CompletedPatch previous = completed.get(patch.idempotencyKey());
+            GraphPatchIdempotencyStore.CompletedPatch previous = idempotencyStore.get(patch.idempotencyKey());
             if (previous != null) {
-                return previous.patchHash.equals(requestedHash)
-                        ? previous.result
+                return previous.patchHash().equals(requestedHash)
+                        ? previous.result()
                         : CommandResult.failure("IDEMPOTENCY_CONFLICT", "idempotency_key 已用于不同 GraphPatch");
             }
-            if (completed.size() >= MAX_IDEMPOTENCY_KEYS) {
+            if (idempotencyStore.size() >= GraphPatchIdempotencyStore.MAX_KEYS) {
                 return CommandResult.failure("IDEMPOTENCY_LIMIT_REACHED",
                         "当前 PowerShell Run 的 GraphPatch 幂等键已达到上限，请重启 Run");
             }
@@ -108,7 +123,7 @@ public final class GraphPatchTransactionService {
             CommandInvocationContext.CancellationToken commitCancellation = cancellation;
             CommandResult result = awaitUi(onUi(() -> commit(plan, commitCancellation)), cancellation);
             if (result.ok()) {
-                completed.put(patch.idempotencyKey(), new CompletedPatch(plan.patchHash, result));
+                idempotencyStore.put(patch.idempotencyKey(), plan.patchHash, result);
             }
             return result;
         } catch (PatchFailure failure) {
@@ -280,6 +295,7 @@ public final class GraphPatchTransactionService {
     }
 
     private void requireOpenAndBound(GraphPatch patch) {
+        if (!targetValidator.getAsBoolean()) throw fail("TARGET_CHANGED", "审批期间目标 Viewport、蓝图 Tab 或 Group Scope 已变化");
         if (!DocumentManager.INSTANCE.getSessions().contains(session)) throw fail("GRAPH_SESSION_CLOSED", "绑定的蓝图会话已关闭");
         if (!session.sessionId().toString().equals(patch.session().id())) throw fail("GRAPH_SESSION_MISMATCH", "GraphPatch session_id 与当前 Run 不匹配");
         if (!scope.id().equals(patch.scope().id())) throw fail("GRAPH_SCOPE_MISMATCH", "GraphPatch scope_id 与当前 Run 不匹配");
@@ -569,7 +585,6 @@ public final class GraphPatchTransactionService {
     private record PlannedPatch(GraphPatch patch, String patchHash, String beforeJson, String afterJson,
                                 GraphPatchApprovalPresenter.ApprovalSummary summary) {}
     private record PlanSnapshot(String beforeJson, RegistryAccess registryAccess) {}
-    private record CompletedPatch(String patchHash, CommandResult result) {}
     private enum UiHandoffState { PENDING, RUNNING, COMPLETED, CANCELLED }
     private static final class UiHandoff<T> {
         private final CompletableFuture<T> future = new CompletableFuture<>();

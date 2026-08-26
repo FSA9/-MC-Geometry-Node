@@ -303,7 +303,11 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         if (mHintButton != null) {
             return;
         }
-        mTitle.setText(mNode.editorType().displayName());
+        AreaEditorWindow window = mNode.window(
+                getContext(), mRoot.editorRegistry(), mRoot::requestSessionSave);
+        String surfaceRef = window != null && window.surfaceId() != null
+                ? " " + window.surfaceId().ref() : "";
+        mTitle.setText(mNode.editorType().displayName() + surfaceRef);
         mTitle.setTextColor(mRoot.canCloseLeaf() ? AreaStyle.COLOR_TEXT : AreaStyle.COLOR_TEXT_MUTED);
     }
 

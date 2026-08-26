@@ -71,6 +71,7 @@ public class GraphViewportPanel extends LinearLayout {
     private Consumer<GraphSession> mSessionChangedListener;
     private Consumer<GraphSession> mBeforeSessionSaveListener;
     private GraphSession mLastNotifiedSession;
+    private Runnable mInteractionListener;
 
     public GraphViewportPanel(Context context) {
         super(context);
@@ -144,6 +145,14 @@ public class GraphViewportPanel extends LinearLayout {
 
     public void setBeforeSessionSaveListener(Consumer<GraphSession> listener) {
         mBeforeSessionSaveListener = listener;
+    }
+
+    public void setInteractionListener(Runnable listener) {
+        mInteractionListener = listener;
+    }
+
+    public GraphSession currentSession() {
+        return mViewport.getController().getCurrentSession();
     }
 
     public void saveCurrentSession() {
@@ -352,6 +361,7 @@ public class GraphViewportPanel extends LinearLayout {
 
     private void markFocused() {
         sFocusedPanel = this;
+        if (mInteractionListener != null) mInteractionListener.run();
     }
 
     private void applyOpenedSession(DocumentManager docMgr) {

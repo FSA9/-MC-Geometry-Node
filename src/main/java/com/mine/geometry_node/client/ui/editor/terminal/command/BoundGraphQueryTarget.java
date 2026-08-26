@@ -13,17 +13,36 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 
 import java.util.Objects;
 
-/** Read-only target pinned to the graph scope selected at Agent run start. */
+/** Graph target pinned for one resolved viewport/session/scope context. */
 public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatchCommandTarget {
     private final GraphSession session;
     private final BoundGraphScope scope;
     private final GraphPatchTransactionService transactions;
+    private final String surfaceRef;
+    private final java.util.function.BooleanSupplier targetValidator;
 
     public BoundGraphQueryTarget(GraphSession session, BoundGraphScope scope,
                                  GraphPatchApprovalPresenter approvalPresenter) {
+        this(session, scope, approvalPresenter, "", () -> true);
+    }
+
+    public BoundGraphQueryTarget(GraphSession session, BoundGraphScope scope,
+                                 GraphPatchApprovalPresenter approvalPresenter,
+                                 String surfaceRef,
+                                 java.util.function.BooleanSupplier targetValidator) {
+        this(session, scope, approvalPresenter, surfaceRef, targetValidator, new GraphPatchIdempotencyStore());
+    }
+
+    BoundGraphQueryTarget(GraphSession session, BoundGraphScope scope,
+                          GraphPatchApprovalPresenter approvalPresenter, String surfaceRef,
+                          java.util.function.BooleanSupplier targetValidator,
+                          GraphPatchIdempotencyStore idempotencyStore) {
         this.session = Objects.requireNonNull(session, "session");
         this.scope = Objects.requireNonNull(scope, "scope");
-        this.transactions = new GraphPatchTransactionService(session, scope, approvalPresenter);
+        this.surfaceRef = surfaceRef == null ? "" : surfaceRef;
+        this.targetValidator = Objects.requireNonNull(targetValidator, "targetValidator");
+        this.transactions = new GraphPatchTransactionService(
+                session, scope, approvalPresenter, targetValidator, idempotencyStore);
     }
 
     @Override public boolean hasGraph() { return DocumentManager.INSTANCE.getSessions().contains(session) && resolve() != null; }
@@ -57,6 +76,7 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
         data.addProperty("session_id", sessionId());
         data.addProperty("scope_id", scopeId());
         data.addProperty("revision", responseRevision);
+        if (!surfaceRef.isEmpty()) data.addProperty("surface_ref", surfaceRef);
         return new CommandResult(result.ok(), result.code(), result.message(), data, result.diagnostics(),
                 responseRevision, result.changeId(), result.clientAction());
     }
@@ -68,6 +88,7 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
     public String sessionId() { return session.sessionId().toString(); }
     public String scopeId() { return scope.id(); }
     public long revision() { return session.revision(); }
+    public boolean isTargetCurrent() { return targetValidator.getAsBoolean(); }
 
     private NodeGraph resolve() { return scope.resolve(session.editorContext.getGraph()); }
     private TerminalGraphQueryService queries() {

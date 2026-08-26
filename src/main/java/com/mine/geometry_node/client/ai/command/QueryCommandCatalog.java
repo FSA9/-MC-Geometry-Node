@@ -26,6 +26,8 @@ final class QueryCommandCatalog {
         registry.register(getGraphContext());
         registry.register(validateGraph());
         registry.register(getPortOptions());
+        registry.register(getUiContext());
+        registry.register(getSurfaceContext());
     }
 
     private static CommandSpec searchNodes() {
@@ -159,10 +161,52 @@ final class QueryCommandCatalog {
                         text(values, "query"), integer(values, "offset"), integer(values, "limit")));
     }
 
+    private static CommandSpec getUiContext() {
+        JsonObject surfaces = new JsonObject();
+        surfaces.addProperty("type", "array");
+        surfaces.add("items", object(properties(
+                property("surface_ref", stringSchema(1)), property("type", stringSchema(1)),
+                property("visible", booleanSchema())), "surface_ref", "type", "visible"));
+        JsonObject output = object(properties(
+                property("default_viewport", stringSchema(0)), property("surfaces", surfaces)),
+                "default_viewport", "surfaces");
+        return new CommandSpec("get_ui_context", 1, List.of(),
+                "查询 GeometryNode 当前窗口、Viewport 编号和默认图目标；用户提到 V1/T1 等界面引用时优先调用",
+                "get_ui_context", List.of(), output, ToolContract.CommandEffect.READ_ONLY,
+                ToolContract.RiskLevel.READ_ONLY, false, false, CommandSpec.Exposure.MODEL_VISIBLE,
+                (context, values) -> context.target() instanceof UiSurfaceQueryTarget target
+                        ? target.getUiContext()
+                        : CommandResult.failure("UI_CONTEXT_UNAVAILABLE", "当前环境不支持界面上下文查询"));
+    }
+
+    private static CommandSpec getSurfaceContext() {
+        List<CommandArgumentSpec> arguments = List.of(argument(
+                "surface_ref", "界面引用，例如 V1、T1 或 A1", true, null, stringSchema(2)));
+        JsonObject output = object(properties(
+                property("surface_ref", stringSchema(1)), property("type", stringSchema(1)),
+                property("visible", booleanSchema()), property("has_graph", booleanSchema()),
+                property("tab_name", stringSchema(0)), property("session_id", stringSchema(1)),
+                property("scope_id", stringSchema(1)), property("revision", integerSchema(0, null))),
+                "surface_ref", "type", "visible");
+        return new CommandSpec("get_surface_context", 1, List.of(),
+                "读取指定 GeometryNode 窗口的当前上下文；Viewport 会包含当前蓝图 Tab、Group Scope 和 revision",
+                "get_surface_context <surface_ref>", arguments, output, ToolContract.CommandEffect.READ_ONLY,
+                ToolContract.RiskLevel.READ_ONLY, false, false, CommandSpec.Exposure.MODEL_VISIBLE,
+                (context, values) -> context.target() instanceof UiSurfaceQueryTarget target
+                        ? target.getSurfaceContext(text(values, "surface_ref"))
+                        : CommandResult.failure("UI_CONTEXT_UNAVAILABLE", "当前环境不支持界面上下文查询"));
+    }
+
     private static CommandSpec querySpec(String name, String description, String usage,
                                          List<CommandArgumentSpec> arguments, JsonObject outputSchema,
                                          boolean requiresGraph, QueryHandler handler) {
-        return new CommandSpec(name, 1, List.of(), description, usage, arguments, outputSchema,
+        List<CommandArgumentSpec> effectiveArguments = arguments;
+        if (requiresGraph) {
+            effectiveArguments = new java.util.ArrayList<>(arguments);
+            effectiveArguments.add(surfaceRefArgument());
+            effectiveArguments = List.copyOf(effectiveArguments);
+        }
+        return new CommandSpec(name, 1, List.of(), description, usage, effectiveArguments, outputSchema,
                 ToolContract.CommandEffect.READ_ONLY, ToolContract.RiskLevel.READ_ONLY, requiresGraph, false,
                 CommandSpec.Exposure.MODEL_VISIBLE, (context, values) -> {
                     if (!(context.target() instanceof GraphQueryTarget target)) {
@@ -170,6 +214,11 @@ final class QueryCommandCatalog {
                     }
                     return handler.execute(target, values);
                 });
+    }
+
+    private static CommandArgumentSpec surfaceRefArgument() {
+        return argument("surface_ref", "可选的 Viewport 引用，例如 V1；为空时使用最近交互或唯一 Viewport",
+                false, new JsonPrimitive(""), stringSchema(0));
     }
 
     private static CommandArgumentSpec nodeIdArgument() {
@@ -295,7 +344,7 @@ final class QueryCommandCatalog {
                 property("unconnected_node_count", integerSchema(0, null)),
                 property("groups", arraySchema(group, 0, MAX_LIMIT)), property("page", pageSchema()),
                 property("session_id", stringSchema(1)), property("scope_id", stringSchema(1)),
-                property("revision", integerSchema(0, null))
+                property("revision", integerSchema(0, null)), property("surface_ref", stringSchema(0))
         ), "filter_type_id", "filter_category", "group_by", "total_node_count", "node_count",
                 "total_connection_count", "flow_connection_count", "data_connection_count",
                 "induced_connection_count", "frame_count", "commented_node_count", "unconnected_node_count",
@@ -327,7 +376,7 @@ final class QueryCommandCatalog {
                 property("nodes", arraySchema(nodeSummarySchema(), 0, MAX_LIMIT)),
                 property("connections", arraySchema(connectionSchema(), 0, MAX_LIMIT)), property("page", pageSchema()),
                 property("session_id", stringSchema(1)), property("scope_id", stringSchema(1)),
-                property("revision", integerSchema(0, null))
+                property("revision", integerSchema(0, null)), property("surface_ref", stringSchema(0))
         ), "graph_kind", "version", "comment", "tags", "node_count", "connection_count", "focus_node_id",
                 "depth", "nodes", "connections", "page");
     }

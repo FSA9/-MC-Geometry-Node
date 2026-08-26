@@ -15,6 +15,10 @@ import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
+import com.mine.geometry_node.client.ui.area.SurfaceRegistrationAware;
+import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.surface.UiSurfaceRegistry;
+import com.mine.geometry_node.client.ui.surface.ViewportSurface;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.resources.TypedValue;
@@ -27,7 +31,8 @@ import icyllis.modernui.widget.RelativeLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 
-public class GraphEditorWindow extends LinearLayout implements AreaEditorWindow {
+public class GraphEditorWindow extends LinearLayout
+        implements AreaEditorWindow, SurfaceRegistrationAware, ViewportSurface {
     private final GraphViewportPanel mGraphViewportPanel;
     private final GraphPropertiesPanel mPropertiesPanel;
     private final EditorSidebar mRightSidebar;
@@ -104,6 +109,16 @@ public class GraphEditorWindow extends LinearLayout implements AreaEditorWindow 
     @Override
     public View getView() {
         return this;
+    }
+
+    @Override
+    public void bindSurfaceRegistration(UiSurfaceRegistry.Registration registration) {
+        mGraphViewportPanel.setInteractionListener(registration::markInteracted);
+    }
+
+    @Override
+    public GraphSession currentGraphSession() {
+        return mGraphViewportPanel.currentSession();
     }
 
     @Override

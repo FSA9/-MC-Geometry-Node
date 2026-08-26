@@ -9,9 +9,12 @@ import java.util.concurrent.CompletionStage;
 
 /** Thread-bound adapter used by MCP without exposing a mutable graph to protocol threads. */
 @FunctionalInterface
-public interface McpCommandGateway {
+public interface McpCommandGateway extends AutoCloseable {
     CompletionStage<CommandResult> execute(
             CommandSpec command,
             JsonObject arguments,
             CommandInvocationContext.CancellationToken cancellation);
+
+    @Override
+    default void close() {}
 }

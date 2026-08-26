@@ -16,23 +16,46 @@ import java.util.concurrent.CompletionStage;
 /** Marshals graph access onto the ModernUI thread that owns the editor model and views. */
 public final class MinecraftClientMcpGateway implements McpCommandGateway {
     private final CommandRegistry registry;
-    private final BoundGraphQueryTarget target;
+    private final ViewportGraphTargetResolver targetResolver;
+    private final NodeCatalogQueryTarget catalogTarget = new NodeCatalogQueryTarget();
 
-    public MinecraftClientMcpGateway(CommandRegistry registry, BoundGraphQueryTarget target) {
+    public MinecraftClientMcpGateway(CommandRegistry registry, GraphPatchApprovalPresenter approvals) {
         this.registry = Objects.requireNonNull(registry, "registry");
-        this.target = Objects.requireNonNull(target, "target");
+        this.targetResolver = new ViewportGraphTargetResolver(Objects.requireNonNull(approvals, "approvals"));
     }
 
     @Override
     public CompletionStage<CommandResult> execute(CommandSpec command, JsonObject arguments,
                                                    CommandInvocationContext.CancellationToken cancellation) {
-        if (command.effect() == com.mine.geometry_node.client.ai.protocol.ToolContract.CommandEffect.GRAPH_WRITE) {
-            return CompletableFuture.supplyAsync(() -> executeCommand(command, arguments, cancellation),
-                    runnable -> Thread.ofVirtual().name("geometry-node-graph-patch").start(runnable));
-        }
         CompletableFuture<CommandResult> result = new CompletableFuture<>();
         Runnable task = () -> {
             try {
+                if (!command.requiresGraph()) {
+                    CommandInvocationContext context = new CommandInvocationContext(
+                            CommandInvocationContext.CommandOrigin.AGENT, catalogTarget, cancellation);
+                    result.complete(registry.execute(command, arguments, context));
+                    return;
+                }
+                String surfaceRef = "";
+                if (arguments.has("surface_ref")) {
+                    if (!arguments.get("surface_ref").isJsonPrimitive()
+                            || !arguments.getAsJsonPrimitive("surface_ref").isString()) {
+                        result.complete(CommandResult.failure("ARGUMENT_INVALID", "surface_ref 必须是字符串，例如 V1"));
+                        return;
+                    }
+                    surfaceRef = arguments.get("surface_ref").getAsString();
+                }
+                ViewportGraphTargetResolver.Resolution resolution = targetResolver.resolve(surfaceRef);
+                if (!resolution.ok()) {
+                    result.complete(resolution.failure());
+                    return;
+                }
+                BoundGraphQueryTarget target = resolution.target();
+                if (command.effect() == com.mine.geometry_node.client.ai.protocol.ToolContract.CommandEffect.GRAPH_WRITE) {
+                    Thread.ofVirtual().name("geometry-node-graph-patch").start(
+                            () -> result.complete(executeCommand(command, arguments, cancellation, target)));
+                    return;
+                }
                 CommandInvocationContext context = new CommandInvocationContext(
                         CommandInvocationContext.CommandOrigin.AGENT, target, cancellation);
                 result.complete(registry.execute(command, arguments, context));
@@ -53,8 +76,14 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
         return result;
     }
 
+    @Override
+    public void close() {
+        targetResolver.close();
+    }
+
     private CommandResult executeCommand(CommandSpec command, JsonObject arguments,
-                                         CommandInvocationContext.CancellationToken cancellation) {
+                                         CommandInvocationContext.CancellationToken cancellation,
+                                         BoundGraphQueryTarget target) {
         try {
             CommandInvocationContext context = new CommandInvocationContext(
                     CommandInvocationContext.CommandOrigin.AGENT, target, cancellation);
