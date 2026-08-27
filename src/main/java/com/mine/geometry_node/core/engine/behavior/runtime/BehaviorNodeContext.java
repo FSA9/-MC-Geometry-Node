@@ -10,8 +10,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Random;
 import java.util.Objects;
+import java.util.Random;
 import java.util.UUID;
 
 /** Node-scoped view of one deterministic evaluation epoch. */
@@ -34,7 +34,7 @@ public final class BehaviorNodeContext {
     }
 
     public UUID instanceId() { return instance.instanceId(); }
-    public String graphId() { return instance.graphId(); }
+    public String graphId() { return instance.plan().getNodeAssetId(nodeIndex); }
     public int nodeIndex() { return nodeIndex; }
     public String nodeId() { return instance.plan().getNodeId(nodeIndex); }
     public long gameTick() { ensureValid(); return epochTick; }
@@ -42,7 +42,7 @@ public final class BehaviorNodeContext {
     @Nullable public ServerLevel level() { ensureValid(); return instance.host().level(); }
     @Nullable public Entity owner() { ensureValid(); return instance.host().owner(); }
     public Random random() { ensureValid(); return instance.random(); }
-    public BehaviorBlackboard blackboard() { ensureValid(); return instance.blackboard(); }
+    public BehaviorBlackboard blackboard() { ensureValid(); return instance.blackboard(nodeIndex); }
 
     public BehaviorResult tickChild(int childIndex) {
         ensureValid();
@@ -139,18 +139,18 @@ public final class BehaviorNodeContext {
     @Nullable
     public Object getBlackboard(BlackboardScope scope, String name) {
         ensureValid();
-        return instance.blackboard().get(scope, name);
+        return instance.blackboard(nodeIndex).get(scope, name);
     }
 
     public void setBlackboard(BlackboardScope scope, String name, @Nullable Object value) {
         ensureValid();
-        instance.blackboard().set(scope, name, value, nodeId(), epochTick);
+        instance.blackboard(nodeIndex).set(scope, name, value, nodeId(), epochTick);
         instance.dataEvaluation().clearValues();
     }
 
     public boolean clearBlackboard(BlackboardScope scope, String name) {
         ensureValid();
-        boolean changed = instance.blackboard().clear(scope, name, nodeId(), epochTick);
+        boolean changed = instance.blackboard(nodeIndex).clear(scope, name, nodeId(), epochTick);
         if (changed) instance.dataEvaluation().clearValues();
         return changed;
     }
@@ -158,6 +158,16 @@ public final class BehaviorNodeContext {
     public void reportActionFailure(@Nullable BehaviorActionFailure failure) {
         ensureValid();
         actionFailure = failure;
+    }
+
+    void enterSubtreeCall() {
+        ensureValid();
+        instance.enterSubtreeCall(nodeIndex);
+    }
+
+    void exitSubtreeCall(BehaviorTerminationReason reason) {
+        ensureValid();
+        instance.exitSubtreeCall(nodeIndex, Objects.requireNonNull(reason, "reason"));
     }
 
     @Nullable

@@ -23,6 +23,7 @@ import java.util.*;
 public class EntityGraphAttachment {
 
     private final GraphBindingSet boundGraphs = new GraphBindingSet();
+    private String selectedBehaviorTree;
     private WeakReference<Entity> ownerRef = new WeakReference<>(null);
 
     private final GraphContainer container = new GraphContainer(() -> {}, this::onScheduleChanged);
@@ -80,21 +81,39 @@ public class EntityGraphAttachment {
         return boundGraphs.all();
     }
 
-    public void bindBehaviorTree(String graphId) {
-        boundGraphs.clear(GraphKind.BEHAVIOR_TREE);
-        boundGraphs.add(GraphBindingKey.behaviorTree(graphId));
+    public boolean bindBehaviorTree(String graphId) {
+        return boundGraphs.add(GraphBindingKey.behaviorTree(graphId));
     }
 
-    public void unbindBehaviorTree(String graphId) {
-        boundGraphs.remove(GraphBindingKey.behaviorTree(graphId));
+    public boolean unbindBehaviorTree(String graphId) {
+        boolean removed = boundGraphs.remove(GraphBindingKey.behaviorTree(graphId));
+        if (removed && Objects.equals(selectedBehaviorTree, graphId)) selectedBehaviorTree = null;
+        return removed;
     }
 
-    public void clearBehaviorTrees() {
-        boundGraphs.clear(GraphKind.BEHAVIOR_TREE);
+    public boolean clearBehaviorTrees() {
+        selectedBehaviorTree = null;
+        return boundGraphs.clear(GraphKind.BEHAVIOR_TREE);
     }
 
     public Set<String> getBoundBehaviorTrees() {
         return boundGraphs.graphIds(GraphKind.BEHAVIOR_TREE);
+    }
+
+    public String getSelectedBehaviorTree() {
+        return selectedBehaviorTree;
+    }
+
+    public void selectBehaviorTree(String graphId) {
+        String normalized = graphId != null ? graphId.trim() : "";
+        if (!boundGraphs.contains(GraphBindingKey.behaviorTree(normalized))) {
+            throw new IllegalArgumentException("Selected behavior tree must be bound: " + normalized);
+        }
+        selectedBehaviorTree = normalized;
+    }
+
+    public void clearSelectedBehaviorTree() {
+        selectedBehaviorTree = null;
     }
 
     public void clearGraphs() {
@@ -138,6 +157,9 @@ public class EntityGraphAttachment {
             }
             tag.put("BehaviorTrees", behaviorList);
         }
+        if (selectedBehaviorTree != null && getBoundBehaviorTrees().contains(selectedBehaviorTree)) {
+            tag.putString("SelectedBehaviorTree", selectedBehaviorTree);
+        }
         return container.save(tag, provider);
     }
 
@@ -157,6 +179,8 @@ public class EntityGraphAttachment {
                 this.boundGraphs.add(GraphBindingKey.behaviorTree(graphId));
             }
         }
+        String selected = tag.getStringOr("SelectedBehaviorTree", "");
+        selectedBehaviorTree = getBoundBehaviorTrees().contains(selected) ? selected : null;
         container.load(tag, provider);
     }
 }

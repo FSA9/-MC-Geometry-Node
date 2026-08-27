@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferUploa
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
+import com.mine.geometry_node.core.network.packet.s2c.PacketBehaviorDebugSnapshot;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerRemove;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerSnapshot;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerUpsert;
@@ -51,6 +52,7 @@ public final class ClientboundPayloadRegistry {
         add(PacketSpawnDynamicVisual.TYPE, PacketSpawnDynamicVisual.STREAM_CODEC);
         add(PacketVisualAssetData.TYPE, PacketVisualAssetData.STREAM_CODEC);
         add(PacketGeometryDebugSnapshot.TYPE, PacketGeometryDebugSnapshot.STREAM_CODEC);
+        add(PacketBehaviorDebugSnapshot.TYPE, PacketBehaviorDebugSnapshot.STREAM_CODEC);
         add(PacketSchematicProjection.TYPE, PacketSchematicProjection.STREAM_CODEC);
         add(PacketSyncResponse.TYPE, PacketSyncResponse.STREAM_CODEC);
         add(PacketSyncDownload.TYPE, PacketSyncDownload.STREAM_CODEC);

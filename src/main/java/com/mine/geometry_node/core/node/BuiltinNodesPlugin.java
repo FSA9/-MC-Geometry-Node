@@ -81,6 +81,9 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         registry.register("behavior/control", new BehaviorRootNode(), behaviorStructureCapabilities(
                 NodeCapabilities.ChildConstraint.EXACTLY_ONE));
+        registry.register("behavior/control", new BehaviorSubtreeNode(), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.SIDE_EFFECTING, NodeCapabilities.Lifecycle.CONTINUOUS,
+                NodeCapabilities.ChildConstraint.LEAF, NodeCapabilities.Permission.WRITE_BLACKBOARD));
         registry.register("behavior/control", new BehaviorSequenceNode(), behaviorStructureCapabilities(
                 NodeCapabilities.ChildConstraint.ONE_OR_MORE_ORDERED));
         registry.register("behavior/control", new BehaviorSelectorNode(), behaviorStructureCapabilities(

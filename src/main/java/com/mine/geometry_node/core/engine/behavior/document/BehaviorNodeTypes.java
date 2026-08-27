@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.behavior.document;
 /** Stable ids for behavior-tree structural nodes. */
 public final class BehaviorNodeTypes {
     public static final String ROOT = "geometry_node:behavior_root";
+    public static final String SUBTREE = "geometry_node:behavior_subtree";
     public static final String SEQUENCE = "geometry_node:behavior_sequence";
     public static final String SELECTOR = "geometry_node:behavior_selector";
     public static final String CONDITION = "geometry_node:behavior_condition";
@@ -38,6 +39,7 @@ public final class BehaviorNodeTypes {
     public static final String POLL_INTERVAL_PORT = "poll_interval";
     public static final String RECHECK_INTERVAL_PORT = "recheck_interval";
     public static final String SCHEDULE_OFFSET_PORT = "schedule_offset";
+    public static final String SUBTREE_ASSET_PORT = "subtree_asset";
     public static final String BLACKBOARD_KEY_PORT = "input";
     public static final String BLACKBOARD_VALUE_PORT = "value";
     public static final String COUNT_PORT = "count";

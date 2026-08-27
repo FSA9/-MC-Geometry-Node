@@ -66,6 +66,23 @@ public final class BehaviorBlackboard {
         write(key, value, sourceNodeId, gameTick, false);
     }
 
+    /** Initializes a call-frame input, including a declared read-only input. */
+    public void initialize(BlackboardScope scope, String name, @Nullable Object value,
+                           String sourceNodeId, long gameTick) {
+        BehaviorTreePlan.BlackboardKey key = requireDeclaration(scope, name);
+        if (value == null) {
+            Provider provider = requireProvider(scope);
+            if (provider.get(name) != null) {
+                provider.remove(name);
+                revision++;
+                lastChanges.put(new BehaviorTreePlan.BlackboardSchema.Key(scope, name),
+                        new ChangeMetadata(revision, sourceNodeId != null ? sourceNodeId : "", gameTick));
+            }
+            return;
+        }
+        write(key, value, sourceNodeId, gameTick, true);
+    }
+
     public boolean clear(BlackboardScope scope, String name, String sourceNodeId, long gameTick) {
         BehaviorTreePlan.BlackboardKey key = requireDeclaration(scope, name);
         if (!key.writable()) throw new BlackboardAccessException("Blackboard input is read-only: " + name);

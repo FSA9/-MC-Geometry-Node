@@ -52,12 +52,12 @@ public final class BehaviorTreeEvaluator {
             long nextTick = safeIncrement(tick);
             instance.finishEvaluation(result, nextTick);
             long elapsedNanos = elapsed(started, instance.host().nanoTime());
-            instance.recordEvaluationTime(elapsedNanos);
+            instance.recordEvaluationMetrics(elapsedNanos, pass.visits, pass.immediateTransitions);
             return new EvaluationOutcome(result, null, instance.nextWakeTick(), pass.visits,
                     elapsedNanos, "");
         } catch (EvaluationFault fault) {
             long elapsedNanos = elapsed(started, instance.host().nanoTime());
-            instance.recordEvaluationTime(elapsedNanos);
+            instance.recordEvaluationMetrics(elapsedNanos, pass.visits, pass.immediateTransitions);
             instance.failEvaluation(fault.reason);
             return EvaluationOutcome.failed(fault.reason, fault.getMessage(), pass.visits, elapsedNanos);
         } finally {
@@ -467,12 +467,12 @@ public final class BehaviorTreeEvaluator {
         @Override public ServerLevel getLevel() { return instance.host().level(); }
         @Override public Entity getEntity() { return instance.host().owner(); }
         @Override public Entity getGraphOwnerEntity() { return instance.host().owner(); }
-        @Override public String getGraphId() { return instance.graphId(); }
+        @Override public String getGraphId() { return instance.plan().getNodeAssetId(nodeIndex); }
 
         @Override
         public Object getVariable(String name) {
             try {
-                return instance.blackboard().get(
+                return instance.blackboard(nodeIndex).get(
                         com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE, name);
             } catch (BehaviorBlackboard.BlackboardAccessException exception) {
                 return null;
@@ -482,7 +482,7 @@ public final class BehaviorTreeEvaluator {
         @Override
         public boolean hasVariable(String name) {
             try {
-                return instance.blackboard().contains(
+                return instance.blackboard(nodeIndex).contains(
                         com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE, name);
             } catch (BehaviorBlackboard.BlackboardAccessException exception) {
                 return false;

@@ -18,6 +18,22 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class BehaviorNodeExecutorRegistry {
     public static final BehaviorNodeExecutorRegistry INSTANCE = new BehaviorNodeExecutorRegistry();
     private static final BehaviorNodeExecutor ROOT_EXECUTOR = context -> context.tickChild(0);
+    private static final BehaviorNodeExecutor SUBTREE_EXECUTOR = new BehaviorNodeExecutor() {
+        @Override
+        public void enter(BehaviorNodeContext context) {
+            context.enterSubtreeCall();
+        }
+
+        @Override
+        public BehaviorResult update(BehaviorNodeContext context) {
+            return context.tickChild(0);
+        }
+
+        @Override
+        public void exit(BehaviorNodeContext context, BehaviorTerminationReason reason) {
+            context.exitSubtreeCall(reason);
+        }
+    };
     private static final BehaviorNodeExecutor SEQUENCE_EXECUTOR = new MemoryCompositeExecutor(
             BehaviorCompositeMode.MEMORY_SEQUENCE);
     private static final BehaviorNodeExecutor SELECTOR_EXECUTOR = new MemoryCompositeExecutor(
@@ -93,6 +109,7 @@ public final class BehaviorNodeExecutorRegistry {
 
     public void registerCoreExecutors() {
         register(BehaviorNodeTypes.ROOT, ROOT_EXECUTOR);
+        register(BehaviorNodeTypes.SUBTREE, SUBTREE_EXECUTOR);
         register(BehaviorNodeTypes.SEQUENCE, SEQUENCE_EXECUTOR);
         register(BehaviorNodeTypes.SELECTOR, SELECTOR_EXECUTOR);
         register(BehaviorNodeTypes.CONDITION, CONDITION_EXECUTOR);

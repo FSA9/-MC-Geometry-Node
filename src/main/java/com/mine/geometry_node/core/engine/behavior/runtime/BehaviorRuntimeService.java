@@ -1,12 +1,14 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
+import com.mine.geometry_node.core.engine.behavior.compile.BehaviorTreeLinker;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
+import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugSnapshot;
+import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugAccess;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
-import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -21,6 +23,9 @@ import java.util.*;
 
 /** Server-authoritative instance repository and fair per-world scheduler. */
 public final class BehaviorRuntimeService {
+    private static final int MAX_RETAINED_TERMINAL_SNAPSHOTS = 128;
+    private static final int MAX_ASSET_RELOADS_PER_SERVER_TICK = 64;
+
     private final BehaviorTreeEvaluator evaluator;
     private final BehaviorNodeExecutorRegistry executors;
     private final BehaviorRuntimeBudget budget;
@@ -66,6 +71,9 @@ public final class BehaviorRuntimeService {
             throw new IllegalArgumentException("Behavior owner must be alive in the target server level");
         }
         requireExecutable(plan);
+        BehaviorTreePlan executablePlan = BehaviorTreeLinker.link(plan,
+                BehaviorRuntimeService::resolvePlan);
+        if (executablePlan != plan) requireExecutable(executablePlan);
         ServerState server = state(level.getServer());
         if (server.instances.size() >= budget.targetLoadedInstances()) {
             throw new IllegalStateException("Behavior instance population limit exceeded");
@@ -79,12 +87,14 @@ public final class BehaviorRuntimeService {
                     + level.dimension().identifier());
         }
 
-        BehaviorTreeInstance instance = new BehaviorTreeInstance(UUID.randomUUID(), plan,
+        BehaviorTreeInstance instance = new BehaviorTreeInstance(UUID.randomUUID(), executablePlan,
                 new EntityHost(owner), budget, randomSeed);
         instance.markRunning();
-        InstanceEntry entry = new InstanceEntry(instance, managedAsset);
+        InstanceEntry entry = new InstanceEntry(instance, managedAsset, owner.getUUID());
         server.instances.put(instance.instanceId(), entry);
         server.ownerInstances.put(owner.getUUID(), instance.instanceId());
+        server.assetInstances.computeIfAbsent(instance.graphId(), ignored -> new LinkedHashSet<>())
+                .add(instance.instanceId());
         schedule(server, entry, safeIncrement(level.getGameTime()));
         return instance;
     }
@@ -104,6 +114,63 @@ public final class BehaviorRuntimeService {
         UUID instanceId = state.ownerInstances.get(owner.getUUID());
         InstanceEntry entry = instanceId != null ? state.instances.get(instanceId) : null;
         return entry != null ? entry.instance : null;
+    }
+
+    /** Read-only server-thread query. A missing instance produces no side effects. */
+    @Nullable
+    public BehaviorDebugSnapshot debugSnapshot(MinecraftServer server, UUID instanceId) {
+        ServerState state = servers.get(server);
+        if (state == null) return null;
+        InstanceEntry entry = state.instances.get(instanceId);
+        return entry != null ? BehaviorDebugSnapshot.capture(entry.instance)
+                : state.terminalSnapshots.get(instanceId);
+    }
+
+    /** Lightweight server-thread access query that never captures nodes, blackboard or history. */
+    @Nullable
+    public BehaviorDebugAccess debugAccess(MinecraftServer server, UUID instanceId) {
+        ServerState state = servers.get(server);
+        if (state == null) return null;
+        InstanceEntry entry = state.instances.get(instanceId);
+        if (entry != null) return entry.access(true);
+        return state.terminalAccess.get(instanceId);
+    }
+
+    /** Read-only server-thread query by stable owner UUID. */
+    @Nullable
+    public BehaviorDebugSnapshot debugSnapshotForOwner(MinecraftServer server, UUID ownerId) {
+        ServerState state = servers.get(server);
+        UUID instanceId = state != null ? state.ownerInstances.get(ownerId) : null;
+        if (instanceId == null && state != null) instanceId = state.lastTerminalByOwner.get(ownerId);
+        return instanceId != null ? debugSnapshot(server, instanceId) : null;
+    }
+
+    /** Read-only indexed query; ordering is stable for the lifetime of the active entries. */
+    public List<BehaviorDebugSnapshot> debugSnapshotsForAsset(MinecraftServer server, String assetId) {
+        ServerState state = servers.get(server);
+        if (state == null || assetId == null) return List.of();
+        Set<UUID> instanceIds = state.assetInstances.get(assetId);
+        if (instanceIds == null || instanceIds.isEmpty()) return List.of();
+        List<BehaviorDebugSnapshot> result = new ArrayList<>(instanceIds.size());
+        for (UUID instanceId : instanceIds) {
+            InstanceEntry entry = state.instances.get(instanceId);
+            if (entry != null) result.add(BehaviorDebugSnapshot.capture(entry.instance));
+        }
+        return List.copyOf(result);
+    }
+
+    /** Lightweight status query that does not allocate a full debug snapshot. */
+    @Nullable
+    public BehaviorTerminationReason lastStopReasonForOwner(MinecraftServer server, UUID ownerId) {
+        ServerState state = servers.get(server);
+        if (state == null) return null;
+        UUID activeId = state.ownerInstances.get(ownerId);
+        InstanceEntry active = activeId != null ? state.instances.get(activeId) : null;
+        if (active != null) return active.instance.stopReason();
+        UUID terminalId = state.lastTerminalByOwner.get(ownerId);
+        BehaviorDebugSnapshot terminal = terminalId != null
+                ? state.terminalSnapshots.get(terminalId) : null;
+        return terminal != null ? terminal.stopReason() : null;
     }
 
     public boolean suspend(MinecraftServer server, UUID instanceId) {
@@ -147,6 +214,7 @@ public final class BehaviorRuntimeService {
         if (server == null) return;
         long tick = level.getGameTime();
         server.beginServerTick(tick);
+        server.processAssetReloadsOnce(tick, this);
         WorldState world = server.worlds.get(level.dimension());
         if (world == null) return;
 
@@ -170,11 +238,6 @@ public final class BehaviorRuntimeService {
                 stopAndRemove(server, entry, BehaviorTerminationReason.DIMENSION_CHANGED);
                 continue;
             }
-            if (entry.managedAsset && currentPlan(instance.graphId()) != instance.plan()) {
-                replaceManagedInstance(server, entry);
-                continue;
-            }
-
             long evaluationStarted = System.nanoTime();
             BehaviorTreeEvaluator.EvaluationOutcome outcome = evaluator.evaluate(instance);
             long elapsed = Math.max(0L, System.nanoTime() - evaluationStarted);
@@ -197,14 +260,17 @@ public final class BehaviorRuntimeService {
         if (entry != null) stopAndRemove(server, entry, reason);
     }
 
-    public void graphReloaded(MinecraftServer minecraftServer, String graphId,
-                              @Nullable CompiledGraph newArtifact) {
-        ServerState server = servers.get(minecraftServer);
-        if (server == null) return;
-        List<InstanceEntry> affected = server.instances.values().stream()
-                .filter(entry -> entry.managedAsset && entry.instance.graphId().equals(graphId))
-                .toList();
-        for (InstanceEntry entry : affected) replaceManagedInstance(server, entry, newArtifact);
+    public void graphAssetsChanged(@Nullable MinecraftServer minecraftServer,
+                                   Set<String> affectedAssetIds) {
+        if (affectedAssetIds == null || affectedAssetIds.isEmpty()) return;
+        if (minecraftServer != null) {
+            ServerState server = servers.get(minecraftServer);
+            if (server != null) server.enqueueAssetReloads(affectedAssetIds);
+            return;
+        }
+        for (ServerState server : List.copyOf(servers.values())) {
+            server.enqueueAssetReloads(affectedAssetIds);
+        }
     }
 
     public void shutdown(MinecraftServer minecraftServer) {
@@ -219,10 +285,6 @@ public final class BehaviorRuntimeService {
     public int activeCount(MinecraftServer server) {
         ServerState state = servers.get(server);
         return state != null ? state.instances.size() : 0;
-    }
-
-    private void replaceManagedInstance(ServerState server, InstanceEntry oldEntry) {
-        replaceManagedInstance(server, oldEntry, currentPlan(oldEntry.instance.graphId()));
     }
 
     private void replaceManagedInstance(ServerState server, InstanceEntry oldEntry,
@@ -244,9 +306,20 @@ public final class BehaviorRuntimeService {
 
     private void removeIndexes(ServerState server, InstanceEntry entry) {
         UUID instanceId = entry.instance.instanceId();
+        if (!entry.instance.state().isActive()) {
+            entry.refreshOwnerAccess();
+            server.retainTerminalSnapshot(entry.ownerId, BehaviorDebugSnapshot.capture(entry.instance),
+                    entry.access(false));
+        }
         server.instances.remove(instanceId, entry);
-        Entity owner = entry.instance.host().owner();
-        if (owner != null) server.ownerInstances.remove(owner.getUUID(), instanceId);
+        server.ownerInstances.remove(entry.ownerId, instanceId);
+        Set<UUID> assetInstanceIds = server.assetInstances.get(entry.instance.graphId());
+        if (assetInstanceIds != null) {
+            assetInstanceIds.remove(instanceId);
+            if (assetInstanceIds.isEmpty()) {
+                server.assetInstances.remove(entry.instance.graphId(), assetInstanceIds);
+            }
+        }
         WorldState world = server.worlds.get(entry.levelKey());
         if (world != null) {
             world.scheduler.cancel(instanceId);
@@ -288,9 +361,7 @@ public final class BehaviorRuntimeService {
 
     @Nullable
     private static CompiledGraph currentPlan(String graphId) {
-        CompiledGraph dynamic = DynamicGraphManager.getArtifact(graphId, GraphKind.BEHAVIOR_TREE);
-        return dynamic != null ? dynamic : GraphResourceManager.getInstance()
-                .getArtifact(graphId, GraphKind.BEHAVIOR_TREE);
+        return GraphAssetLifecycleIndex.INSTANCE.getArtifact(graphId, GraphKind.BEHAVIOR_TREE);
     }
 
     private ServerState state(MinecraftServer server) {
@@ -314,8 +385,14 @@ public final class BehaviorRuntimeService {
     private static final class ServerState {
         private final Map<UUID, InstanceEntry> instances = new HashMap<>();
         private final Map<UUID, UUID> ownerInstances = new HashMap<>();
+        private final Map<String, LinkedHashSet<UUID>> assetInstances = new HashMap<>();
+        private final LinkedHashMap<UUID, BehaviorDebugSnapshot> terminalSnapshots = new LinkedHashMap<>();
+        private final Map<UUID, BehaviorDebugAccess> terminalAccess = new HashMap<>();
+        private final Map<UUID, UUID> lastTerminalByOwner = new HashMap<>();
+        private final LinkedHashSet<UUID> pendingAssetReloads = new LinkedHashSet<>();
         private final Map<ResourceKey<Level>, WorldState> worlds = new HashMap<>();
         private long tick = Long.MIN_VALUE;
+        private long assetReloadTick = Long.MIN_VALUE;
         private long spentNanos;
 
         private WorldState world(ResourceKey<Level> levelKey) {
@@ -328,9 +405,63 @@ public final class BehaviorRuntimeService {
             spentNanos = 0L;
         }
 
+        private void enqueueAssetReloads(Set<String> affectedAssetIds) {
+            for (String assetId : affectedAssetIds) {
+                Set<UUID> ids = assetInstances.get(assetId);
+                if (ids != null) pendingAssetReloads.addAll(ids);
+            }
+        }
+
+        private void processAssetReloadsOnce(long currentTick, BehaviorRuntimeService service) {
+            if (assetReloadTick == currentTick) return;
+            assetReloadTick = currentTick;
+            int processed = 0;
+            Iterator<UUID> iterator = pendingAssetReloads.iterator();
+            while (iterator.hasNext() && processed < MAX_ASSET_RELOADS_PER_SERVER_TICK) {
+                UUID instanceId = iterator.next();
+                iterator.remove();
+                InstanceEntry entry = instances.get(instanceId);
+                if (entry != null && entry.managedAsset) {
+                    try {
+                        service.replaceManagedInstance(this, entry, currentPlan(entry.instance.graphId()));
+                    } catch (RuntimeException exception) {
+                        com.mine.geometry_node.GeometryNode.LOGGER.error(
+                                "Unable to restart behavior asset {} for owner {}",
+                                entry.instance.graphId(), entry.ownerId, exception);
+                    }
+                }
+                processed++;
+            }
+        }
+
+        private void retainTerminalSnapshot(UUID ownerId, BehaviorDebugSnapshot snapshot,
+                                            BehaviorDebugAccess access) {
+            terminalSnapshots.put(snapshot.instanceId(), snapshot);
+            terminalAccess.put(snapshot.instanceId(), access);
+            lastTerminalByOwner.put(ownerId, snapshot.instanceId());
+            while (terminalSnapshots.size() > MAX_RETAINED_TERMINAL_SNAPSHOTS) {
+                Iterator<Map.Entry<UUID, BehaviorDebugSnapshot>> iterator =
+                        terminalSnapshots.entrySet().iterator();
+                Map.Entry<UUID, BehaviorDebugSnapshot> oldest = iterator.next();
+                iterator.remove();
+                terminalAccess.remove(oldest.getKey());
+                UUID oldOwnerId = oldest.getValue().ownerId();
+                if (oldOwnerId != null) {
+                    lastTerminalByOwner.remove(oldOwnerId, oldest.getKey());
+                } else {
+                    lastTerminalByOwner.values().removeIf(oldest.getKey()::equals);
+                }
+            }
+        }
+
         private void clear() {
             instances.clear();
             ownerInstances.clear();
+            assetInstances.clear();
+            terminalSnapshots.clear();
+            terminalAccess.clear();
+            lastTerminalByOwner.clear();
+            pendingAssetReloads.clear();
             worlds.values().forEach(world -> world.scheduler.clear());
             worlds.clear();
         }
@@ -344,16 +475,44 @@ public final class BehaviorRuntimeService {
         private final BehaviorTreeInstance instance;
         private final boolean managedAsset;
         private final ResourceKey<Level> levelKey;
+        private final UUID ownerId;
+        private String lastOwnerDimension;
+        private double lastOwnerX;
+        private double lastOwnerY;
+        private double lastOwnerZ;
+        private boolean positionKnown;
 
-        private InstanceEntry(BehaviorTreeInstance instance, boolean managedAsset) {
+        private InstanceEntry(BehaviorTreeInstance instance, boolean managedAsset, UUID ownerId) {
             this.instance = instance;
             this.managedAsset = managedAsset;
+            this.ownerId = ownerId;
             ServerLevel level = instance.host().level();
             this.levelKey = level != null ? level.dimension() : Level.OVERWORLD;
+            this.lastOwnerDimension = this.levelKey.identifier().toString();
+            refreshOwnerAccess();
         }
 
         private ResourceKey<Level> levelKey() {
             return levelKey;
+        }
+
+        private boolean refreshOwnerAccess() {
+            Entity owner = instance.host().owner();
+            if (owner == null) return false;
+            if (owner.level() instanceof ServerLevel level) {
+                lastOwnerDimension = level.dimension().identifier().toString();
+            }
+            lastOwnerX = owner.getX();
+            lastOwnerY = owner.getY();
+            lastOwnerZ = owner.getZ();
+            positionKnown = true;
+            return true;
+        }
+
+        private BehaviorDebugAccess access(boolean active) {
+            boolean confirmedPosition = active ? refreshOwnerAccess() : positionKnown;
+            return new BehaviorDebugAccess(instance.instanceId(), ownerId, lastOwnerDimension,
+                    lastOwnerX, lastOwnerY, lastOwnerZ, confirmedPosition, active);
         }
     }
 

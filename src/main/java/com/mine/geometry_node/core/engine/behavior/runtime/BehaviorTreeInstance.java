@@ -13,7 +13,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
@@ -34,7 +36,7 @@ public final class BehaviorTreeInstance {
     private final long[] lastNanos;
     private final int[] resourceOwners;
     private final boolean[] resourcesAcquired;
-    private final BehaviorBlackboard blackboard;
+    private final BehaviorBlackboard[] blackboards;
     private final GraphDataEvaluationSession dataEvaluation;
     private final Random random;
     private final TraceEvent[] history;
@@ -47,6 +49,10 @@ public final class BehaviorTreeInstance {
     private long totalEvaluationNanos;
     private long lastEvaluationNanos;
     private long evaluationTimeOverruns;
+    private int lastNodeVisits;
+    private int peakNodeVisits;
+    private int lastImmediateTransitions;
+    private int peakImmediateTransitions;
     private long lastEvaluationTick = Long.MIN_VALUE;
     private long nextWakeTick = Long.MAX_VALUE;
     private long traceSequence;
@@ -73,8 +79,17 @@ public final class BehaviorTreeInstance {
         this.resourceOwners = new int[NodeCapabilities.ResourceUse.values().length];
         Arrays.fill(resourceOwners, -1);
         this.resourcesAcquired = new boolean[nodeCount];
-        this.blackboard = new BehaviorBlackboard(plan.blackboardSchema(),
-                budget.maxBlackboardEntriesPerInstance());
+        int declaredFrameEntries = plan.blackboardFrameSchemas().stream()
+                .mapToInt(schema -> schema.declarations().size()).sum();
+        if (declaredFrameEntries > budget.maxBlackboardEntriesPerInstance()) {
+            throw new IllegalArgumentException("Linked behavior blackboard declarations exceed instance limit: "
+                    + declaredFrameEntries + " > " + budget.maxBlackboardEntriesPerInstance());
+        }
+        this.blackboards = new BehaviorBlackboard[plan.blackboardFrameSchemas().size()];
+        for (int frame = 0; frame < blackboards.length; frame++) {
+            blackboards[frame] = new BehaviorBlackboard(plan.blackboardFrameSchemas().get(frame),
+                    budget.maxBlackboardEntriesPerInstance());
+        }
         this.dataEvaluation = new GraphDataEvaluationSession(plan);
         this.random = new Random(randomSeed);
         this.history = new TraceEvent[budget.maxHistoryEntriesPerInstance()];
@@ -92,11 +107,72 @@ public final class BehaviorTreeInstance {
     public long evaluationCount() { return evaluationCount; }
     public EvaluationMetrics evaluationMetrics() {
         return new EvaluationMetrics(evaluationCount, totalEvaluationNanos,
-                lastEvaluationNanos, evaluationTimeOverruns);
+                lastEvaluationNanos, evaluationTimeOverruns, lastNodeVisits,
+                peakNodeVisits, lastImmediateTransitions, peakImmediateTransitions);
     }
     public long lastEvaluationTick() { return lastEvaluationTick; }
     public long nextWakeTick() { return nextWakeTick; }
-    public BehaviorBlackboard blackboard() { return blackboard; }
+    public BehaviorBlackboard blackboard() { return blackboards[0]; }
+
+    /** Read-only copies of all call-frame blackboards for diagnostics. */
+    public List<BlackboardFrameSnapshot> blackboardFrameSnapshots() {
+        List<BlackboardFrameSnapshot> result = new ArrayList<>(blackboards.length);
+        for (int frame = 0; frame < blackboards.length; frame++) {
+            BehaviorTreePlan.BlackboardFrameInfo info = plan.blackboardFrameInfos().get(frame);
+            result.add(new BlackboardFrameSnapshot(frame, info.assetId(), info.callNodePath(),
+                    blackboards[frame].revision(), blackboards[frame].snapshot()));
+        }
+        return List.copyOf(result);
+    }
+
+    BehaviorBlackboard blackboard(int nodeIndex) {
+        return blackboards[plan.blackboardFrame(nodeIndex)];
+    }
+
+    void enterSubtreeCall(int nodeIndex) {
+        BehaviorTreePlan.SubtreeCallBoundary call = requireSubtreeCall(nodeIndex);
+        blackboards[call.childFrame()] = new BehaviorBlackboard(
+                plan.blackboardFrameSchemas().get(call.childFrame()),
+                budget.maxBlackboardEntriesPerInstance());
+        BehaviorBlackboard parent = blackboards[call.parentFrame()];
+        BehaviorBlackboard child = blackboards[call.childFrame()];
+        for (Map.Entry<String, String> mapping : call.inputKeyMapping().entrySet()) {
+            Object value = parent.get(
+                    com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE,
+                    mapping.getValue());
+            child.initialize(
+                    com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE,
+                    mapping.getKey(), value, plan.getNodeId(nodeIndex), host.gameTick());
+        }
+        dataEvaluation.clearValues();
+    }
+
+    void exitSubtreeCall(int nodeIndex, BehaviorTerminationReason reason) {
+        BehaviorTreePlan.SubtreeCallBoundary call = requireSubtreeCall(nodeIndex);
+        if (reason == BehaviorTerminationReason.COMPLETED_SUCCESS
+                || reason == BehaviorTerminationReason.COMPLETED_FAILURE) {
+            BehaviorBlackboard parent = blackboards[call.parentFrame()];
+            BehaviorBlackboard child = blackboards[call.childFrame()];
+            Map<String, Object> outputs = new LinkedHashMap<>();
+            for (Map.Entry<String, String> mapping : call.outputKeyMapping().entrySet()) {
+                outputs.put(mapping.getKey(), child.get(
+                        com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE,
+                        mapping.getValue()));
+            }
+            for (Map.Entry<String, Object> output : outputs.entrySet()) {
+                parent.set(com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE,
+                        output.getKey(), output.getValue(), plan.getNodeId(nodeIndex), host.gameTick());
+            }
+        }
+        dataEvaluation.clearValues();
+    }
+
+    private BehaviorTreePlan.SubtreeCallBoundary requireSubtreeCall(int nodeIndex) {
+        BehaviorTreePlan.SubtreeCallBoundary call = plan.subtreeCall(nodeIndex);
+        if (call == null) throw new IllegalStateException(
+                "Linked plan has no subtree call boundary for " + plan.getNodeId(nodeIndex));
+        return call;
+    }
 
     public BehaviorNodeState nodeState(int nodeIndex) {
         return validNode(nodeIndex) ? nodeStates[nodeIndex] : BehaviorNodeState.IDLE;
@@ -234,9 +310,13 @@ public final class BehaviorTreeInstance {
         totalNanos[nodeIndex] = saturatingAdd(totalNanos[nodeIndex], lastNanos[nodeIndex]);
     }
 
-    void recordEvaluationTime(long elapsedNanos) {
+    void recordEvaluationMetrics(long elapsedNanos, int nodeVisits, int immediateTransitions) {
         lastEvaluationNanos = Math.max(0L, elapsedNanos);
         totalEvaluationNanos = saturatingAdd(totalEvaluationNanos, lastEvaluationNanos);
+        lastNodeVisits = Math.max(0, nodeVisits);
+        peakNodeVisits = Math.max(peakNodeVisits, lastNodeVisits);
+        lastImmediateTransitions = Math.max(0, immediateTransitions);
+        peakImmediateTransitions = Math.max(peakImmediateTransitions, lastImmediateTransitions);
         if (lastEvaluationNanos > budget.instanceNanosPerEvaluation()) {
             evaluationTimeOverruns++;
         }
@@ -354,12 +434,22 @@ public final class BehaviorTreeInstance {
     }
 
     public record EvaluationMetrics(long evaluations, long totalNanos, long lastNanos,
-                                    long softTimeBudgetOverruns) {
+                                    long softTimeBudgetOverruns, int lastNodeVisits,
+                                    int peakNodeVisits, int lastImmediateTransitions,
+                                    int peakImmediateTransitions) {
     }
 
     public record TraceEvent(long sequence, long gameTick, int nodeIndex, String nodeId,
                              String nodeType,
                              BehaviorTerminationReason reason, @Nullable BehaviorResult result,
                              long elapsedNanos, @Nullable String failureCode, String detail) {
+    }
+
+    public record BlackboardFrameSnapshot(int frameId, String assetId, String callNodePath,
+                                          long revision,
+                                          List<BehaviorBlackboard.EntrySnapshot> entries) {
+        public BlackboardFrameSnapshot {
+            entries = List.copyOf(entries);
+        }
     }
 }

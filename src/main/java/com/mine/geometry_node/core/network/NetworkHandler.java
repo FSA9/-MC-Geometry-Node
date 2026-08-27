@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateTargetResolvers;
+import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugSubscriptionService;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
@@ -18,6 +19,7 @@ import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferPlanR
 import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferResult;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
 import com.mine.geometry_node.core.network.packet.c2s.PacketCaptureEntityTemplateRequest;
+import com.mine.geometry_node.core.network.packet.c2s.PacketBehaviorDebugSubscription;
 import com.mine.geometry_node.core.network.packet.c2s.PacketAssetPreviewRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketAssetPreviewCancel;
 import com.mine.geometry_node.core.network.packet.c2s.PacketDialogueChoice;
@@ -61,6 +63,15 @@ public class NetworkHandler {
         GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
         ServerAssetTransferService.INSTANCE.init();
         ServerAssetPreviewService.INSTANCE.init();
+        BehaviorDebugSubscriptionService.INSTANCE.init();
+
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketBehaviorDebugSubscription.TYPE,
+                PacketBehaviorDebugSubscription.STREAM_CODEC, (payload, context) -> context.queue(() -> {
+                    if (context.getPlayer() instanceof ServerPlayer player) {
+                        BehaviorDebugSubscriptionService.INSTANCE.handle(
+                                player, payload.instanceId(), payload.subscribe());
+                    }
+                }));
 
         NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetPreviewRequest.TYPE,
                 PacketAssetPreviewRequest.STREAM_CODEC, (payload, context) -> context.queue(() -> {
@@ -408,12 +419,25 @@ public class NetworkHandler {
         }
 
         try {
-            int count = switch (payload.operation()) {
-                case DELETE -> RemoteAssetFileService.deleteSelection(player.level().getServer(), payload.paths());
-                case COPY -> RemoteAssetFileService.copySelection(player.level().getServer(), payload.paths(), payload.targetDirectory());
-                case MOVE -> RemoteAssetFileService.moveSelection(player.level().getServer(), payload.paths(), payload.targetDirectory());
-            };
-            DynamicGraphManager.loadAllFromDisk(player.level().getServer());
+            MinecraftServer server = player.level().getServer();
+            int count;
+            try {
+                count = switch (payload.operation()) {
+                    case DELETE -> RemoteAssetFileService.deleteSelection(server, payload.paths());
+                    case COPY -> RemoteAssetFileService.copySelection(
+                            server, payload.paths(), payload.targetDirectory());
+                    case MOVE -> RemoteAssetFileService.moveSelection(
+                            server, payload.paths(), payload.targetDirectory());
+                };
+            } catch (Exception operationException) {
+                try {
+                    DynamicGraphManager.loadAllFromDisk(server);
+                } catch (RuntimeException reloadException) {
+                    operationException.addSuppressed(reloadException);
+                }
+                throw operationException;
+            }
+            DynamicGraphManager.loadAllFromDisk(server);
             String action = switch (payload.operation()) {
                 case DELETE -> "删除";
                 case COPY -> "复制";

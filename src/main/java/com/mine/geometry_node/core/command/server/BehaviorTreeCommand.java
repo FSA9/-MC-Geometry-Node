@@ -16,6 +16,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 
 import java.util.Collection;
+import java.util.Set;
 
 /** Operator-facing binding and lifecycle controls for server behavior-tree instances. */
 public final class BehaviorTreeCommand {
@@ -30,7 +31,14 @@ public final class BehaviorTreeCommand {
                 .then(targetOperation("suspend", BehaviorTreeCommand::suspend))
                 .then(targetOperation("resume", BehaviorTreeCommand::resume))
                 .then(targetOperation("stop", BehaviorTreeCommand::stop))
-                .then(targetOperation("unbind", BehaviorTreeCommand::unbind))
+                .then(Commands.literal("unbind")
+                        .then(Commands.literal("all")
+                                .then(Commands.argument("targets", EntityArgument.entities())
+                                        .executes(context -> runTargets(context, BehaviorTreeCommand::unbindAll))))
+                        .then(Commands.argument("targets", EntityArgument.entities())
+                                .then(Commands.argument("graph_id", StringArgumentType.greedyString())
+                                        .suggests(ServerCommandUtils.SUGGEST_BEHAVIOR_TREES)
+                                        .executes(BehaviorTreeCommand::unbind))))
                 .then(Commands.literal("bind")
                         .then(Commands.argument("targets", EntityArgument.entities())
                                 .then(Commands.argument("graph_id", StringArgumentType.greedyString())
@@ -52,10 +60,10 @@ public final class BehaviorTreeCommand {
     private static int bind(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         String graphId = StringArgumentType.getString(context, "graph_id");
         return runTargets(context, (source, mob) -> {
-            BehaviorTreeRuntime.INSTANCE.bind(mob, graphId);
-            source.sendSuccess(() -> Component.literal("Bound " + graphId + " to "
-                    + mob.getName().getString()), false);
-            return true;
+            boolean changed = BehaviorTreeRuntime.INSTANCE.bind(mob, graphId);
+            source.sendSuccess(() -> Component.literal((changed ? "Bound " : "Already bound ")
+                    + graphId + " to " + mob.getName().getString()), false);
+            return changed;
         });
     }
 
@@ -71,11 +79,16 @@ public final class BehaviorTreeCommand {
 
     private static boolean status(CommandSourceStack source, Mob mob) {
         BehaviorTreeInstance instance = BehaviorTreeRuntime.INSTANCE.getForOwner(mob);
-        String bound = BehaviorTreeRuntime.INSTANCE.boundGraph(mob);
+        Set<String> bindings = BehaviorTreeRuntime.INSTANCE.boundGraphs(mob);
+        String selected = BehaviorTreeRuntime.INSTANCE.selectedGraph(mob);
+        BehaviorTerminationReason lastStop = BehaviorTreeRuntime.INSTANCE.lastStopReasonForOwner(
+                source.getServer(), mob.getUUID());
         source.sendSuccess(() -> Component.literal(mob.getName().getString()
-                + ": bound=" + (bound != null ? bound : "none")
+                + ": bindings=" + bindings
+                + ", selected=" + (selected != null ? selected : "none")
                 + ", runtime=" + (instance != null
-                ? instance.state() + " (" + instance.instanceId() + ")" : "none")), false);
+                ? instance.state() + " (" + instance.instanceId() + ")" : "none")
+                + ", last_stop=" + (lastStop != null ? lastStop : "none")), false);
         return true;
     }
 
@@ -110,9 +123,20 @@ public final class BehaviorTreeCommand {
         return changed;
     }
 
-    private static boolean unbind(CommandSourceStack source, Mob mob) {
-        boolean changed = BehaviorTreeRuntime.INSTANCE.unbind(mob);
-        if (changed) sendLifecycle(source, mob, "Unbound");
+    private static int unbind(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        String graphId = StringArgumentType.getString(context, "graph_id");
+        return runTargets(context, (source, mob) -> {
+            boolean changed = BehaviorTreeRuntime.INSTANCE.unbind(mob, graphId);
+            if (changed) source.sendSuccess(() -> Component.literal("Unbound " + graphId
+                    + " from " + mob.getName().getString()), false);
+            return changed;
+        });
+    }
+
+    private static boolean unbindAll(CommandSourceStack source, Mob mob) {
+        boolean changed = BehaviorTreeRuntime.INSTANCE.unbindAll(mob);
+        if (changed) source.sendSuccess(() -> Component.literal("Unbound all behavior trees from "
+                + mob.getName().getString()), false);
         return changed;
     }
 

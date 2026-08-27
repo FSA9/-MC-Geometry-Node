@@ -1,9 +1,10 @@
 package com.mine.geometry_node.core.node.document;
 
 import com.google.gson.annotations.SerializedName;
+import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeCall;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
-import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.*;
 
@@ -42,6 +43,9 @@ public class NodeData {
 
     @SerializedName("behavior_outputs")
     public Map<String, Connection> behaviorOutputs = new LinkedHashMap<>();
+
+    @SerializedName("behavior_subtree")
+    public BehaviorSubtreeCall behaviorSubtree;
 
     @SerializedName("port_config")
     public PortsConfig portConfig = new PortsConfig();
@@ -154,6 +158,7 @@ public class NodeData {
         if (execOutputs == null) execOutputs = new HashMap<>();
         if (outputs == null) outputs = new HashMap<>();
         if (behaviorOutputs == null) behaviorOutputs = new LinkedHashMap<>();
+        if (behaviorSubtree != null) behaviorSubtree.restoreDocumentDefaults();
         if (connectedInputs == null) connectedInputs = new HashSet<>();
         ensurePortConfig();
     }

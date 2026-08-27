@@ -6,7 +6,6 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
-import com.mine.geometry_node.core.engine.graph.compile.GraphDependencyValidator;
 import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
@@ -17,7 +16,6 @@ import org.jetbrains.annotations.Nullable;
 import java.io.BufferedReader;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -93,19 +91,12 @@ public class GraphResourceManager extends SimplePreparableReloadListener<Map<Ide
             }
         });
 
-        Map<String, CompiledGraph> compiledGraphs = new HashMap<>();
-        newCache.forEach((graphId, descriptor) -> compiledGraphs.put(graphId, descriptor.artifact()));
-        List<String> dependencyCycle = GraphDependencyValidator.findCycle(compiledGraphs);
-        Set<String> invalidGraphs = GraphDependencyValidator.findInvalidGraphs(compiledGraphs);
-        if (!invalidGraphs.isEmpty()) {
-            invalidGraphs.forEach(newCache::remove);
-            System.err.println("[GraphResourceManager]: Rejected recursive graph dependencies: "
-                    + String.join(" -> ", dependencyCycle) + "; rejected=" + invalidGraphs);
-        }
-
         // 缓存替换
         this.graphCache = Map.copyOf(newCache);
-        System.out.println("[GraphResourceManager]: Loaded " + graphCache.size() + " graph(s).");
+        GraphAssetLifecycleIndex.INSTANCE.replacePackagedGraphs(this.graphCache);
+        System.out.println("[GraphResourceManager]: Loaded " + graphCache.size()
+                + " source graph(s), " + GraphAssetLifecycleIndex.INSTANCE.getGraphIds().size()
+                + " effective graph(s).");
     }
 
     /**

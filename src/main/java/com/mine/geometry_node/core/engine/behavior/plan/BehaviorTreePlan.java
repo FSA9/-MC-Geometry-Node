@@ -1,24 +1,31 @@
 package com.mine.geometry_node.core.engine.behavior.plan;
 
+import com.mine.geometry_node.core.engine.behavior.compile.BehaviorSubtreePlanValidator;
 import com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope;
+import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeParameter;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.CompiledGraphDependencies;
+import com.mine.geometry_node.core.engine.graph.compile.ResolvedGraphDependencyDiagnostic;
+import com.mine.geometry_node.core.engine.graph.compile.ResolvedGraphDependencyValidator;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.port.PortType;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /** Immutable, compact behavior-tree artifact shared by all future runtime instances. */
-public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex, CompiledGraphDependencies {
+public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex, CompiledGraphDependencies,
+        ResolvedGraphDependencyValidator {
     private final String assetId;
     private final String[] nodeIds;
     private final Map<String, Integer> nodeIndexes;
@@ -35,7 +42,14 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
     private final Map<String, List<Integer>> nodesByType;
     private final BlackboardSchema blackboardSchema;
     private final DependencyManifest dependencyManifest;
+    private final SubtreeSignature subtreeSignature;
     private final RootSchedule rootSchedule;
+    private final String[] nodeAssetIds;
+    private final int[] blackboardFrameIds;
+    private final List<BlackboardSchema> blackboardFrameSchemas;
+    private final List<BlackboardFrameInfo> blackboardFrameInfos;
+    private final Map<Integer, SubtreeCallBoundary> subtreeCalls;
+    private final boolean linked;
 
     private BehaviorTreePlan(String assetId, String[] nodeIds, Map<String, Integer> nodeIndexes,
                              String[] nodeTypes, NodeCapabilities[] capabilities, int rootNode,
@@ -44,7 +58,8 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
                              Map<String, Integer> portKeys, List<String> portNames,
                              Map<String, List<Integer>> nodesByType,
                              BlackboardSchema blackboardSchema,
-                             DependencyManifest dependencyManifest, RootSchedule rootSchedule) {
+                             DependencyManifest dependencyManifest, SubtreeSignature subtreeSignature,
+                             RootSchedule rootSchedule, @Nullable LinkedMetadata linkedMetadata) {
         this.assetId = assetId != null ? assetId : "";
         this.nodeIds = nodeIds.clone();
         this.nodeIndexes = Map.copyOf(nodeIndexes);
@@ -61,7 +76,31 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
         this.nodesByType = copyLookup(nodesByType);
         this.blackboardSchema = blackboardSchema;
         this.dependencyManifest = dependencyManifest;
+        this.subtreeSignature = subtreeSignature != null ? subtreeSignature : SubtreeSignature.EMPTY;
         this.rootSchedule = rootSchedule != null ? rootSchedule : RootSchedule.DEFAULT;
+        if (linkedMetadata == null) {
+            this.nodeAssetIds = new String[nodeIds.length];
+            Arrays.fill(this.nodeAssetIds, this.assetId);
+            this.blackboardFrameIds = new int[nodeIds.length];
+            this.blackboardFrameSchemas = List.of(blackboardSchema);
+            this.blackboardFrameInfos = List.of(new BlackboardFrameInfo(0, this.assetId, ""));
+            this.subtreeCalls = Map.of();
+            this.linked = false;
+        } else {
+            if (linkedMetadata.nodeAssetIds().length != nodeIds.length
+                    || linkedMetadata.blackboardFrameIds().length != nodeIds.length) {
+                throw new IllegalArgumentException("Linked behavior metadata must match node count");
+            }
+            this.nodeAssetIds = linkedMetadata.nodeAssetIds().clone();
+            this.blackboardFrameIds = linkedMetadata.blackboardFrameIds().clone();
+            this.blackboardFrameSchemas = List.copyOf(linkedMetadata.blackboardFrameSchemas());
+            this.blackboardFrameInfos = List.copyOf(linkedMetadata.blackboardFrameInfos());
+            if (blackboardFrameSchemas.size() != blackboardFrameInfos.size()) {
+                throw new IllegalArgumentException("Linked behavior frame metadata is incomplete");
+            }
+            this.subtreeCalls = Map.copyOf(linkedMetadata.subtreeCalls());
+            this.linked = true;
+        }
     }
 
     public static BehaviorTreePlan createCompiled(
@@ -71,11 +110,27 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
             Map<String, DataConnectionSource>[] dataInputs, Set<String>[] ports,
             Map<String, Integer> portKeys, List<String> portNames,
             Map<String, List<Integer>> nodesByType, BlackboardSchema blackboardSchema,
-            DependencyManifest dependencyManifest, RootSchedule rootSchedule) {
+            DependencyManifest dependencyManifest, SubtreeSignature subtreeSignature,
+            RootSchedule rootSchedule) {
         return new BehaviorTreePlan(assetId, nodeIds, nodeIndexes, nodeTypes, capabilities,
                 rootNode, parents, children, staticInputs, dataInputs, ports,
                 portKeys, portNames, nodesByType, blackboardSchema, dependencyManifest,
-                rootSchedule);
+                subtreeSignature, rootSchedule, null);
+    }
+
+    public static BehaviorTreePlan createLinked(
+            String assetId, String[] nodeIds, Map<String, Integer> nodeIndexes,
+            String[] nodeTypes, NodeCapabilities[] capabilities, int rootNode,
+            int[] parents, int[][] children, Map<String, Object>[] staticInputs,
+            Map<String, DataConnectionSource>[] dataInputs, Set<String>[] ports,
+            Map<String, Integer> portKeys, List<String> portNames,
+            Map<String, List<Integer>> nodesByType, BlackboardSchema blackboardSchema,
+            DependencyManifest dependencyManifest, SubtreeSignature subtreeSignature,
+            RootSchedule rootSchedule, LinkedMetadata linkedMetadata) {
+        return new BehaviorTreePlan(assetId, nodeIds, nodeIndexes, nodeTypes, capabilities,
+                rootNode, parents, children, staticInputs, dataInputs, ports, portKeys,
+                portNames, nodesByType, blackboardSchema, dependencyManifest,
+                subtreeSignature, rootSchedule, linkedMetadata);
     }
 
     public static BehaviorTreePlan createCompiled(
@@ -89,7 +144,7 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
         return createCompiled(assetId, nodeIds, nodeIndexes, nodeTypes, capabilities,
                 rootNode, parents, children, staticInputs, dataInputs, ports, portKeys,
                 portNames, nodesByType, blackboardSchema, dependencyManifest,
-                RootSchedule.DEFAULT);
+                SubtreeSignature.EMPTY, RootSchedule.DEFAULT);
     }
 
     @Override
@@ -100,6 +155,17 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
     @Override
     public GraphKind runtimeKind() {
         return GraphKind.BEHAVIOR_TREE;
+    }
+
+    @Override
+    public List<ResolvedGraphDependencyDiagnostic> validateResolvedDependencies(
+            Function<String, @Nullable CompiledGraph> resolver) {
+        return BehaviorSubtreePlanValidator.validateDirectDependencies(this, assetId -> {
+            CompiledGraph graph = resolver.apply(assetId);
+            return graph instanceof BehaviorTreePlan plan ? plan : null;
+        }).stream().map(diagnostic -> new ResolvedGraphDependencyDiagnostic(
+                diagnostic.assetId(), diagnostic.code(), diagnostic.message(),
+                diagnostic.nodeId(), diagnostic.relatedNodeId())).toList();
     }
 
     public String assetId() {
@@ -124,6 +190,10 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
     @Override
     public String getNodeType(int nodeId) {
         return validNode(nodeId) ? nodeTypes[nodeId] : "";
+    }
+
+    public String getNodeAssetId(int nodeId) {
+        return validNode(nodeId) ? nodeAssetIds[nodeId] : "";
     }
 
     public NodeCapabilities getNodeCapabilities(int nodeId) {
@@ -178,6 +248,10 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
         return validNode(nodeId) && ports[nodeId].contains(portName);
     }
 
+    public Set<String> getPorts(int nodeId) {
+        return validNode(nodeId) ? ports[nodeId] : Set.of();
+    }
+
     public BlackboardSchema blackboardSchema() {
         return blackboardSchema;
     }
@@ -186,8 +260,31 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
         return dependencyManifest;
     }
 
+    public SubtreeSignature subtreeSignature() {
+        return subtreeSignature;
+    }
+
     public RootSchedule rootSchedule() {
         return rootSchedule;
+    }
+
+    public boolean isLinked() { return linked; }
+
+    public int blackboardFrame(int nodeId) {
+        return validNode(nodeId) ? blackboardFrameIds[nodeId] : 0;
+    }
+
+    public List<BlackboardSchema> blackboardFrameSchemas() {
+        return blackboardFrameSchemas;
+    }
+
+    public List<BlackboardFrameInfo> blackboardFrameInfos() {
+        return blackboardFrameInfos;
+    }
+
+    @Nullable
+    public SubtreeCallBoundary subtreeCall(int nodeId) {
+        return subtreeCalls.get(nodeId);
     }
 
     @Override
@@ -283,12 +380,69 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
         }
     }
 
-    public record SubtreeDependency(String assetId, Map<String, String> inputMapping,
+    public record SubtreeDependency(String callNodeId, String assetId,
+                                    Map<String, String> inputMapping,
                                     Map<String, String> outputMapping) {
         public SubtreeDependency {
+            callNodeId = callNodeId != null ? callNodeId : "";
             inputMapping = Map.copyOf(inputMapping);
             outputMapping = Map.copyOf(outputMapping);
         }
+    }
+
+    public record SubtreeParameter(String name, BehaviorSubtreeParameter.Direction direction,
+                                   PortType type, String blackboardKey) {
+    }
+
+    public record SubtreeCallBoundary(int childRootNode, int parentFrame, int childFrame,
+                                      Map<String, String> inputKeyMapping,
+                                      Map<String, String> outputKeyMapping) {
+        public SubtreeCallBoundary {
+            inputKeyMapping = Map.copyOf(inputKeyMapping);
+            outputKeyMapping = Map.copyOf(outputKeyMapping);
+        }
+    }
+
+    public record BlackboardFrameInfo(int frameId, String assetId, String callNodePath) {
+        public BlackboardFrameInfo {
+            assetId = assetId != null ? assetId : "";
+            callNodePath = callNodePath != null ? callNodePath : "";
+        }
+    }
+
+    public record LinkedMetadata(String[] nodeAssetIds, int[] blackboardFrameIds,
+                                 List<BlackboardSchema> blackboardFrameSchemas,
+                                 List<BlackboardFrameInfo> blackboardFrameInfos,
+                                 Map<Integer, SubtreeCallBoundary> subtreeCalls) {
+        public LinkedMetadata {
+            nodeAssetIds = nodeAssetIds.clone();
+            blackboardFrameIds = blackboardFrameIds.clone();
+            blackboardFrameSchemas = List.copyOf(blackboardFrameSchemas);
+            blackboardFrameInfos = List.copyOf(blackboardFrameInfos);
+            subtreeCalls = Map.copyOf(subtreeCalls);
+        }
+
+        @Override public String[] nodeAssetIds() { return nodeAssetIds.clone(); }
+        @Override public int[] blackboardFrameIds() { return blackboardFrameIds.clone(); }
+    }
+
+    public static final class SubtreeSignature {
+        public static final SubtreeSignature EMPTY = new SubtreeSignature(List.of());
+
+        private final List<SubtreeParameter> parameters;
+        private final Map<String, SubtreeParameter> byName;
+
+        public SubtreeSignature(List<SubtreeParameter> parameters) {
+            this.parameters = List.copyOf(parameters);
+            Map<String, SubtreeParameter> index = new LinkedHashMap<>();
+            parameters.forEach(parameter -> index.put(parameter.name(), parameter));
+            byName = Map.copyOf(index);
+        }
+
+        public List<SubtreeParameter> parameters() { return parameters; }
+
+        @Nullable
+        public SubtreeParameter find(String name) { return byName.get(name); }
     }
 
     public static final class DependencyManifest {

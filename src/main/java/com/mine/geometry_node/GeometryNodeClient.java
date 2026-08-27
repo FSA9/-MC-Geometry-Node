@@ -1,6 +1,7 @@
 package com.mine.geometry_node;
 
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
+import com.mine.geometry_node.client.runtime.behavior.ClientBehaviorDebugStore;
 import com.mine.geometry_node.client.runtime.dialogue.DialogueStyleRenderer;
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.input.KeyBindings;
@@ -107,6 +108,7 @@ public class GeometryNodeClient {
         ClientAssetTransferPlanState.reset();
         ClientAssetTransferService.INSTANCE.resetConnection();
         ClientAssetPreviewService.INSTANCE.resetConnection();
+        ClientBehaviorDebugStore.clear();
         EntityTemplatePickerController.reset();
         clearClientRenderState();
     }

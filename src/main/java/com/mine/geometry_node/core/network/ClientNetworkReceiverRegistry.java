@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
+import com.mine.geometry_node.client.runtime.behavior.ClientBehaviorDebugStore;
 import com.mine.geometry_node.client.runtime.marker.ClientMarkerStore;
 import com.mine.geometry_node.client.runtime.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.runtime.render.ClientVisualManager;
@@ -22,6 +23,7 @@ import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferPlanR
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
+import com.mine.geometry_node.core.network.packet.s2c.PacketBehaviorDebugSnapshot;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerRemove;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerSnapshot;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerUpsert;
@@ -70,6 +72,8 @@ public final class ClientNetworkReceiverRegistry {
                 (payload, context) -> context.queue(() -> ClientImageAssetManager.acceptServerAsset(payload.assetId(), payload.data())));
         ClientboundPayloadRegistry.registerClientReceiver(PacketGeometryDebugSnapshot.TYPE,
                 (payload, context) -> context.queue(() -> GeometryDebugRenderer.handleSnapshot(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketBehaviorDebugSnapshot.TYPE,
+                (payload, context) -> context.queue(() -> ClientBehaviorDebugStore.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketSchematicProjection.TYPE,
                 (payload, context) -> context.queue(() -> SchematicProjectionRenderer.handleProjection(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketSyncResponse.TYPE,

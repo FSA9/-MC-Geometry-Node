@@ -9,12 +9,12 @@ import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorEventHandler;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutorRegistry;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorRuntimeService;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeInstance;
+import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugAccess;
+import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugSnapshot;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
-import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -22,6 +22,7 @@ import net.minecraft.world.entity.Mob;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
+import java.util.List;
 import java.util.Set;
 
 /** Behavior-tree family facade and server-authoritative runtime entry point. */
@@ -48,7 +49,8 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     public void init() {
         BehaviorNodeExecutorRegistry.INSTANCE.registerCoreExecutors();
         GraphCompilationService.INSTANCE.register(BehaviorTreeCompiler.INSTANCE);
-        DynamicGraphManager.addReloadListener(GraphKind.BEHAVIOR_TREE, this::onDynamicGraphReload);
+        GraphAssetLifecycleIndex.INSTANCE.addChangeListener(
+                GraphKind.BEHAVIOR_TREE, this::onGraphAssetsChanged);
         BehaviorEventHandler.init();
     }
 
@@ -56,15 +58,10 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         return service.start(level, owner, graphId);
     }
 
-    public void bind(Mob owner, String graphId) {
+    public boolean bind(Mob owner, String graphId) {
         requireServerOwner(owner);
         String normalized = requireAvailable(graphId);
-        BehaviorTreeInstance current = service.getForOwner(owner);
-        if (current != null && !current.graphId().equals(normalized)) {
-            throw new IllegalStateException("Owner is running " + current.graphId()
-                    + "; use switch to replace the active tree");
-        }
-        owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).bindBehaviorTree(normalized);
+        return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).bindBehaviorTree(normalized);
     }
 
     public BehaviorTreeInstance startBound(Mob owner) {
@@ -72,31 +69,44 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         if (service.getForOwner(owner) != null) {
             throw new IllegalStateException("Owner already has a running behavior tree");
         }
-        String graphId = boundGraph(owner);
-        if (graphId == null) throw new IllegalStateException("Owner has no bound behavior tree");
+        String graphId = selectedGraph(owner);
+        if (graphId == null) throw new IllegalStateException("Owner has no selected behavior tree");
         return service.start(level, owner, graphId);
     }
 
     public BehaviorTreeInstance switchTo(Mob owner, String graphId) {
         ServerLevel level = requireServerOwner(owner);
         String normalized = requireAvailable(graphId);
+        if (!boundGraphs(owner).contains(normalized)) {
+            throw new IllegalStateException("Behavior tree is not bound: " + normalized);
+        }
         BehaviorTreeInstance current = service.getForOwner(owner);
         if (current != null) {
             service.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.TREE_STOPPED);
         }
-        owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).bindBehaviorTree(normalized);
+        owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).selectBehaviorTree(normalized);
         return service.start(level, owner, normalized);
     }
 
-    public boolean unbind(Mob owner) {
+    public boolean unbind(Mob owner, String graphId) {
+        ServerLevel level = requireServerOwner(owner);
+        String normalized = graphId != null ? graphId.trim() : "";
+        if (normalized.isEmpty()) throw new IllegalArgumentException("Behavior graph id cannot be empty");
+        if (!boundGraphs(owner).contains(normalized)) return false;
+        BehaviorTreeInstance current = service.getForOwner(owner);
+        if (current != null && current.graphId().equals(normalized)) {
+            service.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.UNBOUND);
+        }
+        return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).unbindBehaviorTree(normalized);
+    }
+
+    public boolean unbindAll(Mob owner) {
         ServerLevel level = requireServerOwner(owner);
         BehaviorTreeInstance current = service.getForOwner(owner);
         if (current != null) {
             service.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.UNBOUND);
         }
-        boolean changed = !boundGraphs(owner).isEmpty();
-        owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).clearBehaviorTrees();
-        return changed;
+        return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).clearBehaviorTrees();
     }
 
     public Set<String> boundGraphs(Entity owner) {
@@ -105,8 +115,15 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     }
 
     @Nullable
+    public String selectedGraph(Entity owner) {
+        if (owner == null) return null;
+        return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).getSelectedBehaviorTree();
+    }
+
+    /** Compatibility name for callers that previously treated the sole binding as the selection. */
+    @Nullable
     public String boundGraph(Entity owner) {
-        return boundGraphs(owner).stream().findFirst().orElse(null);
+        return selectedGraph(owner);
     }
 
     public BehaviorTreeInstance start(ServerLevel level, Mob owner, BehaviorTreePlan plan) {
@@ -121,6 +138,30 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     @Nullable
     public BehaviorTreeInstance get(MinecraftServer server, UUID instanceId) {
         return service.get(server, instanceId);
+    }
+
+    @Nullable
+    public BehaviorDebugSnapshot debugSnapshot(MinecraftServer server, UUID instanceId) {
+        return service.debugSnapshot(server, instanceId);
+    }
+
+    @Nullable
+    public BehaviorDebugAccess debugAccess(MinecraftServer server, UUID instanceId) {
+        return service.debugAccess(server, instanceId);
+    }
+
+    @Nullable
+    public BehaviorDebugSnapshot debugSnapshotForOwner(MinecraftServer server, UUID ownerId) {
+        return service.debugSnapshotForOwner(server, ownerId);
+    }
+
+    public List<BehaviorDebugSnapshot> debugSnapshotsForAsset(MinecraftServer server, String assetId) {
+        return service.debugSnapshotsForAsset(server, assetId);
+    }
+
+    @Nullable
+    public BehaviorTerminationReason lastStopReasonForOwner(MinecraftServer server, UUID ownerId) {
+        return service.lastStopReasonForOwner(server, ownerId);
     }
 
     public boolean suspend(MinecraftServer server, UUID instanceId) {
@@ -172,18 +213,14 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     private static String requireAvailable(String graphId) {
         String normalized = graphId != null ? graphId.trim() : "";
         if (normalized.isEmpty()) throw new IllegalArgumentException("Behavior graph id cannot be empty");
-        CompiledGraph dynamic = DynamicGraphManager.getArtifact(normalized, GraphKind.BEHAVIOR_TREE);
-        CompiledGraph packaged = GraphResourceManager.getInstance()
-                .getArtifact(normalized, GraphKind.BEHAVIOR_TREE);
-        if (dynamic == null && packaged == null) {
+        if (GraphAssetLifecycleIndex.INSTANCE.getArtifact(
+                normalized, GraphKind.BEHAVIOR_TREE) == null) {
             throw new IllegalArgumentException("Behavior tree is unavailable: " + normalized);
         }
         return normalized;
     }
 
-    private void onDynamicGraphReload(MinecraftServer server, String graphId,
-                                      @Nullable CompiledGraph oldArtifact,
-                                      @Nullable CompiledGraph newArtifact) {
-        service.graphReloaded(server, graphId, newArtifact);
+    private void onGraphAssetsChanged(GraphAssetLifecycleIndex.Change change) {
+        service.graphAssetsChanged(change.server(), change.affectedAssetIds());
     }
 }

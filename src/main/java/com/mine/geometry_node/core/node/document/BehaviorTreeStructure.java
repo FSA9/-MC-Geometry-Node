@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.node.document;
 
 import com.google.gson.annotations.SerializedName;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorBlackboardDeclaration;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeDependency;
+import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeParameter;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -16,8 +16,8 @@ public final class BehaviorTreeStructure {
     @SerializedName("blackboard")
     private List<BehaviorBlackboardDeclaration> blackboard = new ArrayList<>();
 
-    @SerializedName("subtrees")
-    private List<BehaviorSubtreeDependency> subtreeDependencies = new ArrayList<>();
+    @SerializedName("parameters")
+    private List<BehaviorSubtreeParameter> parameters = new ArrayList<>();
 
     public List<BehaviorBlackboardDeclaration> blackboardDeclarations() {
         return Collections.unmodifiableList(blackboard);
@@ -27,20 +27,20 @@ public final class BehaviorTreeStructure {
         blackboard = declarations != null ? new ArrayList<>(declarations) : new ArrayList<>();
     }
 
-    public List<BehaviorSubtreeDependency> subtreeDependencies() {
-        return Collections.unmodifiableList(subtreeDependencies);
+    public List<BehaviorSubtreeParameter> parameters() {
+        return Collections.unmodifiableList(parameters);
     }
 
-    public void setSubtreeDependencies(List<BehaviorSubtreeDependency> dependencies) {
-        subtreeDependencies = dependencies != null ? new ArrayList<>(dependencies) : new ArrayList<>();
+    public void setParameters(List<BehaviorSubtreeParameter> declarations) {
+        parameters = declarations != null ? new ArrayList<>(declarations) : new ArrayList<>();
     }
 
     /** Restores collection invariants without discarding invalid editable data. */
     public void restoreDocumentDefaults() {
         if (blackboard == null) blackboard = new ArrayList<>();
         blackboard.removeIf(java.util.Objects::isNull);
-        if (subtreeDependencies == null) subtreeDependencies = new ArrayList<>();
-        subtreeDependencies.removeIf(java.util.Objects::isNull);
-        subtreeDependencies.forEach(BehaviorSubtreeDependency::restoreDocumentDefaults);
+        if (parameters == null) parameters = new ArrayList<>();
+        parameters.removeIf(java.util.Objects::isNull);
+        parameters.forEach(BehaviorSubtreeParameter::restoreDocumentDefaults);
     }
 }

@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.command.server;
 
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
@@ -26,9 +27,7 @@ public class ServerCommandUtils {
     };
 
     public static final SuggestionProvider<CommandSourceStack> SUGGEST_BEHAVIOR_TREES = (context, builder) -> {
-        Set<String> graphs = new HashSet<>();
-        graphs.addAll(GraphResourceManager.getInstance().getGraphIds(GraphKind.BEHAVIOR_TREE));
-        graphs.addAll(DynamicGraphManager.getDynamicGraphIds(GraphKind.BEHAVIOR_TREE));
-        return SharedSuggestionProvider.suggest(graphs, builder);
+        return SharedSuggestionProvider.suggest(
+                GraphAssetLifecycleIndex.INSTANCE.getGraphIds(GraphKind.BEHAVIOR_TREE), builder);
     };
 }
