@@ -334,7 +334,7 @@ public final class QuestService {
     }
 
     /**
-     * Returns the current value and persists a zero-valued counter when the key
+     * Returns the current value and persists a zero-valued counter when the input
      * does not exist yet. This is intentionally not a pure read operation.
      */
     public double getOrCreateCounter(Entity owner, String taskKey, String counterKey) {

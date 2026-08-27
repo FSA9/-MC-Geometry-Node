@@ -1,12 +1,12 @@
 package com.mine.geometry_node.core.network;
 
-import com.mine.geometry_node.client.dialogue.ClientDialogueState;
-import com.mine.geometry_node.client.marker.ClientMarkerStore;
-import com.mine.geometry_node.client.quest.ClientQuestScreenState;
-import com.mine.geometry_node.client.render.ClientVisualManager;
-import com.mine.geometry_node.client.render.debug.GeometryDebugRenderer;
-import com.mine.geometry_node.client.render.debug.SchematicProjectionRenderer;
-import com.mine.geometry_node.client.render.image.ClientImageAssetManager;
+import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
+import com.mine.geometry_node.client.runtime.marker.ClientMarkerStore;
+import com.mine.geometry_node.client.runtime.quest.ClientQuestScreenState;
+import com.mine.geometry_node.client.runtime.render.ClientVisualManager;
+import com.mine.geometry_node.client.runtime.render.debug.GeometryDebugRenderer;
+import com.mine.geometry_node.client.runtime.render.debug.SchematicProjectionRenderer;
+import com.mine.geometry_node.client.runtime.render.image.ClientImageAssetManager;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;

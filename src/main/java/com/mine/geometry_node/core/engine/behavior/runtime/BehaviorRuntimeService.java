@@ -17,14 +17,7 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.ref.WeakReference;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.PriorityQueue;
-import java.util.UUID;
-import java.util.WeakHashMap;
+import java.util.*;
 
 /** Server-authoritative instance repository and fair per-world scheduler. */
 public final class BehaviorRuntimeService {
@@ -263,6 +256,11 @@ public final class BehaviorRuntimeService {
 
     private void schedule(ServerState server, InstanceEntry entry, long dueTick) {
         WorldState world = server.world(entry.levelKey());
+        if (dueTick == Long.MAX_VALUE) {
+            world.scheduler.cancel(entry.instance.instanceId());
+            if (world.scheduler.isEmpty()) server.worlds.remove(entry.levelKey(), world);
+            return;
+        }
         if (!world.scheduler.contains(entry.instance.instanceId())
                 && world.scheduler.size() >= budget.maxQueuedWakeupsPerWorld()) {
             stopAndRemove(server, entry, BehaviorTerminationReason.BUDGET_EXHAUSTED);
@@ -417,10 +415,12 @@ public final class BehaviorRuntimeService {
     private static final class EntityHost implements BehaviorRuntimeHost {
         private final UUID ownerId;
         private final WeakReference<Mob> owner;
+        private final BehaviorNativeAiController nativeAi;
 
         private EntityHost(Mob owner) {
             this.ownerId = owner.getUUID();
             this.owner = new WeakReference<>(owner);
+            this.nativeAi = new BehaviorNativeAiController(owner);
         }
 
         @Override public String identity() { return ownerId.toString(); }
@@ -443,5 +443,16 @@ public final class BehaviorRuntimeService {
             return value != null && value.level() instanceof ServerLevel level ? level : null;
         }
         @Override public Mob owner() { return owner.get(); }
+
+        @Override
+        public boolean acquireResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
+            Mob mob = owner.get();
+            return mob != null && nativeAi.acquire(resources);
+        }
+
+        @Override
+        public void releaseResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
+            nativeAi.release(resources);
+        }
     }
 }

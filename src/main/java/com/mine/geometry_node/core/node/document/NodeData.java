@@ -40,6 +40,9 @@ public class NodeData {
     @SerializedName("outputs")
     public Map<String, List<Connection>> outputs = new HashMap<>();
 
+    @SerializedName("behavior_outputs")
+    public Map<String, Connection> behaviorOutputs = new LinkedHashMap<>();
+
     @SerializedName("port_config")
     public PortsConfig portConfig = new PortsConfig();
 
@@ -150,6 +153,7 @@ public class NodeData {
         if (inputs == null) inputs = new HashMap<>();
         if (execOutputs == null) execOutputs = new HashMap<>();
         if (outputs == null) outputs = new HashMap<>();
+        if (behaviorOutputs == null) behaviorOutputs = new LinkedHashMap<>();
         if (connectedInputs == null) connectedInputs = new HashSet<>();
         ensurePortConfig();
     }

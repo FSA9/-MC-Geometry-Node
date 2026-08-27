@@ -24,4 +24,11 @@ public class ServerCommandUtils {
         allGraphs.addAll(DynamicGraphManager.getDynamicGraphIds(GraphKind.BLUEPRINT));
         return SharedSuggestionProvider.suggest(allGraphs, builder);
     };
+
+    public static final SuggestionProvider<CommandSourceStack> SUGGEST_BEHAVIOR_TREES = (context, builder) -> {
+        Set<String> graphs = new HashSet<>();
+        graphs.addAll(GraphResourceManager.getInstance().getGraphIds(GraphKind.BEHAVIOR_TREE));
+        graphs.addAll(DynamicGraphManager.getDynamicGraphIds(GraphKind.BEHAVIOR_TREE));
+        return SharedSuggestionProvider.suggest(graphs, builder);
+    };
 }

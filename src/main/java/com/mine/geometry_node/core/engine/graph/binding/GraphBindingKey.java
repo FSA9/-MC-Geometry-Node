@@ -20,4 +20,8 @@ public record GraphBindingKey(GraphKind kind, String graphId) {
     public static GraphBindingKey blueprint(String graphId) {
         return new GraphBindingKey(GraphKind.BLUEPRINT, graphId);
     }
+
+    public static GraphBindingKey behaviorTree(String graphId) {
+        return new GraphBindingKey(GraphKind.BEHAVIOR_TREE, graphId);
+    }
 }

@@ -28,6 +28,7 @@ import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ui.session.DocumentManager;
+import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
@@ -53,6 +54,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow, AssetBrowserCoordinator {
@@ -68,6 +70,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     private final Set<Integer> mTransferPlanRequestIds = new HashSet<>();
     private final EditorSessionState.AssetBrowserState mSessionState;
     private final Runnable mSessionChanged;
+    private final Consumer<GraphSession> mSessionSavedListener;
     private boolean mRestoringLocation;
     private String mPendingRemoteRestore;
 
@@ -111,6 +114,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 1.0f - navigationWeight));
 
         mBrowserPanel = new AssetFileBrowserPanel(context, this);
+        mSessionSavedListener = session -> post(() ->
+                mBrowserPanel.refreshIfDisplayingLocalFile(session.filePath()));
         browserWorkspace.addView(mBrowserPanel, new LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -231,6 +236,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     @Override
     public void onShow() {
         mSidebarLayout.onOwnerShown();
+        DocumentManager.INSTANCE.addOnSessionSavedListener(mSessionSavedListener);
         if (mBrowserPanel != null) {
             mBrowserPanel.activatePanel();
         }
@@ -244,6 +250,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     public void onHide() {
+        DocumentManager.INSTANCE.removeOnSessionSavedListener(mSessionSavedListener);
         mSidebarLayout.onOwnerHidden();
         mSidebarLayout.persistState();
         if (mBrowserPanel != null) {
@@ -253,6 +260,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     protected void onDetachedFromWindow() {
+        DocumentManager.INSTANCE.removeOnSessionSavedListener(mSessionSavedListener);
         mPropertiesPanel.commitPendingEdits();
         mIoTasks.cancelAll();
         cancelRemoteRequests();

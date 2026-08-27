@@ -35,7 +35,7 @@ public class RevertSchematicPlacement extends BaseNode {
                         .output(StandardPorts.COUNT, "count")
                         .output(StandardPorts.BLOCK_STATS, "block_stats")
                         .input(StandardPorts.FLOW_IN, "flow_in")
-                        .input(StandardPorts.KEY, "key")
+                        .input(StandardPorts.KEY, "input")
                         .input(StandardPorts.AFFECT_ENTITIES, "affect_entities")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
@@ -60,7 +60,7 @@ public class RevertSchematicPlacement extends BaseNode {
             } else {
                 String safeKey = previousRecord.key();
                 if (lookup.resolvedByPosition() && !lookup.requestedKey().equals(safeKey)) {
-                    GeometryNode.LOGGER.info("[GeometryNode] Revert schematic placement key '{}' resolved to '{}' by event position.",
+                    GeometryNode.LOGGER.info("[GeometryNode] Revert schematic placement input '{}' resolved to '{}' by event position.",
                             lookup.requestedKey(), safeKey);
                 }
                 boolean affectEntities = _SchematicActionUtils.boolOrDefault(
@@ -97,9 +97,9 @@ public class RevertSchematicPlacement extends BaseNode {
 
     private static void logMissing(ServerLevel level, String key) {
         if (key == null || key.isEmpty()) {
-            GeometryNode.LOGGER.warn("[GeometryNode] Revert schematic placement skipped: empty key and no placement at event position.");
+            GeometryNode.LOGGER.warn("[GeometryNode] Revert schematic placement skipped: empty input and no placement at event position.");
         } else {
-            GeometryNode.LOGGER.warn("[GeometryNode] Revert schematic placement skipped: no placement record for key '{}' in dimension '{}'.",
+            GeometryNode.LOGGER.warn("[GeometryNode] Revert schematic placement skipped: no placement record for input '{}' in dimension '{}'.",
                     key, level.dimension().identifier());
         }
     }
@@ -110,7 +110,7 @@ public class RevertSchematicPlacement extends BaseNode {
 
     private static void logResult(ServerLevel level, String key, SchematicPlacementRecord record, OperationResult result) {
         if (!result.found()) {
-            GeometryNode.LOGGER.warn("[GeometryNode] Revert schematic placement skipped: no placement record for key '{}' in dimension '{}'.",
+            GeometryNode.LOGGER.warn("[GeometryNode] Revert schematic placement skipped: no placement record for input '{}' in dimension '{}'.",
                     key, level.dimension().identifier());
             return;
         }

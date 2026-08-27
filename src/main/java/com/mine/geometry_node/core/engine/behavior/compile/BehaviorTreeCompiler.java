@@ -8,9 +8,9 @@ import com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorValueSemantics;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorBlackboardDeclaration;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
+import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeConnections;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeDependency;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeDiagnostic;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeStructureValidator;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeValidationResult;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
@@ -24,6 +24,7 @@ import com.mine.geometry_node.core.node.document.BehaviorTreeStructure;
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
+import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -117,22 +118,27 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                     "", "", ""));
         }
 
-        BehaviorTreeStructureValidator structureValidator = new BehaviorTreeStructureValidator(
-                nodes::has, nodes::capabilities);
-        structureValidator.validate(graph).diagnostics().forEach(diagnostic ->
-                add(diagnostics, diagnostic.withAssetId(assetId)));
-
         Map<String, NodeInfo> info = new LinkedHashMap<>();
         for (String nodeId : nodeIds) {
             NodeData node = graph.nodes.get(nodeId);
-            if (node == null || node.type == null || !nodes.has(node.type)) continue;
+            if (node == null || node.type == null || !nodes.has(node.type)) {
+                add(diagnostics, diagnostic(assetId, "NODE_TYPE_MISSING",
+                        "Node type is missing or unavailable", nodeId, "", ""));
+                continue;
+            }
+            NodeCapabilities capabilities = nodes.capabilities(node.type);
+            if (!capabilities.supports(GraphTypeRegistry.BEHAVIOR_TREE.id())) {
+                add(diagnostics, diagnostic(assetId, "NODE_GRAPH_TYPE_UNSUPPORTED",
+                        "Node type is not available in behavior trees: " + node.type,
+                        nodeId, "", ""));
+                continue;
+            }
             NodeDef definition = nodes.definition(node);
             if (definition == null) {
                 add(diagnostics, diagnostic(assetId, "NODE_DEFINITION_MISSING",
                         "Node type did not provide a definition", nodeId, "", ""));
                 continue;
             }
-            NodeCapabilities capabilities = nodes.capabilities(node.type);
             PortCatalog ports = PortCatalog.from(assetId, nodeId, definition, diagnostics);
             info.put(nodeId, new NodeInfo(node, capabilities, ports));
             validateCapabilities(assetId, nodeId, capabilities, diagnostics);
@@ -145,13 +151,15 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             }
         }
 
+        validateStructureConnections(assetId, nodeIds, graph, info, diagnostics);
         Map<InputKey, DataLink> inbound = validateDataConnections(assetId, nodeIds, graph, info, diagnostics);
+        BehaviorTreePlan.RootSchedule rootSchedule = compileRootSchedule(
+                assetId, info, inbound, diagnostics);
         validateRequiredInputs(assetId, info, inbound, diagnostics);
         validateDataCycles(assetId, nodeIds, inbound, diagnostics);
         validateDepth(assetId, graph, diagnostics);
         BehaviorTreePlan.BlackboardSchema blackboard = compileBlackboard(
                 assetId, graph.behaviorTree, diagnostics);
-        validateBlackboardNodes(assetId, info, inbound, blackboard, diagnostics);
         BehaviorTreePlan.DependencyManifest dependencies = compileDependencies(
                 assetId, context, graph.behaviorTree, diagnostics);
 
@@ -161,7 +169,42 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                 .thenComparing(BehaviorTreeDiagnostic::relatedNodeId)
                 .thenComparing(BehaviorTreeDiagnostic::message));
         return new Compilation(graph, nodeIds, info, inbound, blackboard, dependencies,
+                rootSchedule,
                 List.copyOf(diagnostics));
+    }
+
+    private static void validateStructureConnections(
+            String assetId, List<String> nodeIds, NodeGraph graph, Map<String, NodeInfo> info,
+            List<BehaviorTreeDiagnostic> diagnostics) {
+        for (String sourceId : nodeIds) {
+            NodeData source = graph.nodes.get(sourceId);
+            NodeInfo sourceInfo = info.get(sourceId);
+            if (source == null || sourceInfo == null || source.behaviorOutputs == null) continue;
+            for (String sourcePortId : new java.util.TreeSet<>(source.behaviorOutputs.keySet())) {
+                Connection link = source.behaviorOutputs.get(sourcePortId);
+                PortDef sourcePort = sourceInfo.ports.outputs.get(sourcePortId);
+                if (sourcePort == null || sourcePort.type() != PortType.BEHAVIOR_STRUCTURE) {
+                    add(diagnostics, diagnostic(assetId, "STRUCTURE_OUTPUT_PORT_INVALID",
+                            "Stored behavior connection references an unavailable structure output",
+                            sourceId, sourcePortId, ""));
+                    continue;
+                }
+                if (link == null || !link.isValid()) {
+                    add(diagnostics, diagnostic(assetId, "STRUCTURE_CONNECTION_MALFORMED",
+                            "Behavior connection requires a target node and input port",
+                            sourceId, sourcePortId, ""));
+                    continue;
+                }
+                NodeInfo targetInfo = info.get(link.targetNodeId());
+                PortDef targetPort = targetInfo != null
+                        ? targetInfo.ports.inputs.get(link.targetPortName()) : null;
+                if (targetPort == null || targetPort.type() != PortType.BEHAVIOR_STRUCTURE) {
+                    add(diagnostics, diagnostic(assetId, "STRUCTURE_INPUT_PORT_INVALID",
+                            "Behavior connection references an unavailable structure input",
+                            link.targetNodeId(), link.targetPortName(), sourceId));
+                }
+            }
+        }
     }
 
     private BehaviorTreePlan buildPlan(GraphCompileContext context, Compilation compilation) {
@@ -190,8 +233,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             nodesByType.computeIfAbsent(nodeInfo.node.type, ignored -> new ArrayList<>()).add(nodeIndex);
             if (BehaviorNodeTypes.ROOT.equals(nodeInfo.node.type)) root = nodeIndex;
 
-            List<String> childIds = compilation.graph.behaviorTree != null
-                    ? compilation.graph.behaviorTree.childrenOf(nodeId) : List.of();
+            List<String> childIds = BehaviorTreeConnections.childrenOf(compilation.graph, nodeId);
             children[nodeIndex] = childIds.stream().mapToInt(indexes::get).toArray();
             for (int child : children[nodeIndex]) parents[child] = nodeIndex;
 
@@ -225,7 +267,61 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         return BehaviorTreePlan.createCompiled(
                 context != null ? context.assetId() : "", ids, indexes, types, capabilities,
                 root, parents, children, staticInputs, dataInputs, ports, portKeys, portNames,
-                nodesByType, compilation.blackboard, compilation.dependencies);
+                nodesByType, compilation.blackboard, compilation.dependencies,
+                compilation.rootSchedule);
+    }
+
+    private static BehaviorTreePlan.RootSchedule compileRootSchedule(
+            String assetId, Map<String, NodeInfo> info, Map<InputKey, DataLink> inbound,
+            List<BehaviorTreeDiagnostic> diagnostics) {
+        Map.Entry<String, NodeInfo> rootEntry = null;
+        for (Map.Entry<String, NodeInfo> entry : info.entrySet()) {
+            if (!BehaviorNodeTypes.ROOT.equals(entry.getValue().node.type)) continue;
+            rejectDynamicRootSchedule(assetId, entry.getKey(),
+                    BehaviorNodeTypes.RECHECK_INTERVAL_PORT, inbound, diagnostics);
+            rejectDynamicRootSchedule(assetId, entry.getKey(),
+                    BehaviorNodeTypes.SCHEDULE_OFFSET_PORT, inbound, diagnostics);
+            // buildPlan uses the last Root in the same deterministic node order.
+            rootEntry = entry;
+        }
+        if (rootEntry == null) return BehaviorTreePlan.RootSchedule.DEFAULT;
+
+        String nodeId = rootEntry.getKey();
+        NodeInfo root = rootEntry.getValue();
+        int interval = staticInteger(root, BehaviorNodeTypes.RECHECK_INTERVAL_PORT, 1);
+        int offset = staticInteger(root, BehaviorNodeTypes.SCHEDULE_OFFSET_PORT,
+                BehaviorTreePlan.RootSchedule.AUTO_OFFSET);
+        if (interval < 1) {
+            add(diagnostics, diagnostic(assetId, "ROOT_RECHECK_INTERVAL_INVALID",
+                    "Root recheck interval must be at least 1", nodeId,
+                    BehaviorNodeTypes.RECHECK_INTERVAL_PORT, ""));
+            interval = 1;
+        }
+        if (offset < BehaviorTreePlan.RootSchedule.AUTO_OFFSET) {
+            add(diagnostics, diagnostic(assetId, "ROOT_SCHEDULE_OFFSET_INVALID",
+                    "Root schedule offset must be -1 (automatic) or greater", nodeId,
+                    BehaviorNodeTypes.SCHEDULE_OFFSET_PORT, ""));
+            offset = BehaviorTreePlan.RootSchedule.AUTO_OFFSET;
+        }
+        return new BehaviorTreePlan.RootSchedule(interval, offset);
+    }
+
+    private static void rejectDynamicRootSchedule(
+            String assetId, String nodeId, String portId, Map<InputKey, DataLink> inbound,
+            List<BehaviorTreeDiagnostic> diagnostics) {
+        if (inbound.containsKey(new InputKey(nodeId, portId))) {
+            add(diagnostics, diagnostic(assetId, "ROOT_SCHEDULE_STATIC_REQUIRED",
+                    "Root scheduling inputs must use static values", nodeId, portId, ""));
+        }
+    }
+
+    private static int staticInteger(NodeInfo node, String portId, int fallback) {
+        Object value = node.node.inputs.get(portId);
+        if (value == null) {
+            PortDef port = node.ports.inputs.get(portId);
+            value = port != null ? port.defaultValue() : null;
+        }
+        return value instanceof Number number ? number.intValue() : fallback;
     }
 
     private static Map<InputKey, DataLink> validateDataConnections(
@@ -308,6 +404,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                                              List<BehaviorTreeDiagnostic> diagnostics) {
         if (node.inputs == null) return;
         for (String portId : new java.util.TreeSet<>(node.inputs.keySet())) {
+            if (StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id().equals(portId)
+                    || StaticKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id().equals(portId)) continue;
             PortDef port = ports.inputs.get(portId);
             if (port == null) {
                 add(diagnostics, diagnostic(assetId, "STORED_INPUT_PORT_MISSING",
@@ -425,13 +523,12 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
 
     private static void validateDepth(String assetId, NodeGraph graph,
                                       List<BehaviorTreeDiagnostic> diagnostics) {
-        if (graph.behaviorTree == null) return;
         String root = graph.nodes.entrySet().stream()
                 .filter(entry -> entry.getValue() != null
                         && BehaviorNodeTypes.ROOT.equals(entry.getValue().type))
                 .map(Map.Entry::getKey).sorted().findFirst().orElse(null);
         if (root == null) return;
-        int depth = maxDepth(root, graph.behaviorTree);
+        int depth = maxDepth(root, graph);
         if (depth > BehaviorRuntimeBudget.DEFAULT.maxTreeDepth()) {
             add(diagnostics, diagnostic(assetId, "TREE_DEPTH_EXCEEDED",
                     "Tree depth " + depth + " exceeds limit "
@@ -439,7 +536,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         }
     }
 
-    private static int maxDepth(String rootId, BehaviorTreeStructure structure) {
+    private static int maxDepth(String rootId, NodeGraph graph) {
         int maximum = 0;
         Set<String> visited = new HashSet<>();
         Deque<NodeDepth> pending = new ArrayDeque<>();
@@ -448,7 +545,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             NodeDepth current = pending.pop();
             if (!visited.add(current.nodeId)) continue;
             maximum = Math.max(maximum, current.depth);
-            for (String child : structure.childrenOf(current.nodeId)) {
+            for (String child : BehaviorTreeConnections.childrenOf(graph, current.nodeId)) {
                 pending.push(new NodeDepth(child, current.depth + 1));
             }
         }
@@ -472,7 +569,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             String name = declaration.name != null ? declaration.name.trim() : "";
             if (!name.matches(NAME_PATTERN)) {
                 add(diagnostics, diagnostic(assetId, "BLACKBOARD_NAME_INVALID",
-                        "Blackboard key name is invalid: " + name, "", name, ""));
+                        "Blackboard input name is invalid: " + name, "", name, ""));
                 continue;
             }
             BlackboardScope scope;
@@ -499,7 +596,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             String identity = scope.name() + '\0' + name;
             if (!keys.add(identity)) {
                 add(diagnostics, diagnostic(assetId, "BLACKBOARD_KEY_DUPLICATED",
-                        "Blackboard key is declared more than once in the same scope", "", name, ""));
+                        "Blackboard input is declared more than once in the same scope", "", name, ""));
                 continue;
             }
             if (declaration.defaultValue != null
@@ -553,58 +650,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         return new BehaviorTreePlan.DependencyManifest(compiled);
     }
 
-    private static void validateBlackboardNodes(
-            String assetId, Map<String, NodeInfo> info, Map<InputKey, DataLink> inbound,
-            BehaviorTreePlan.BlackboardSchema blackboard,
-            List<BehaviorTreeDiagnostic> diagnostics) {
-        Set<String> blackboardTypes = Set.of(
-                BehaviorNodeTypes.GET_BLACKBOARD, BehaviorNodeTypes.HAS_BLACKBOARD,
-                BehaviorNodeTypes.SET_BLACKBOARD, BehaviorNodeTypes.CLEAR_BLACKBOARD);
-        for (Map.Entry<String, NodeInfo> entry : info.entrySet()) {
-            String nodeId = entry.getKey();
-            NodeInfo nodeInfo = entry.getValue();
-            if (!blackboardTypes.contains(nodeInfo.node.type)) continue;
-            Object rawKey = nodeInfo.node.inputs.get(BehaviorNodeTypes.BLACKBOARD_KEY_PORT);
-            String keyName = rawKey instanceof String value ? value.trim() : "";
-            if (keyName.isEmpty()) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_KEY_REQUIRED",
-                        "Blackboard node requires a configured key", nodeId,
-                        BehaviorNodeTypes.BLACKBOARD_KEY_PORT, ""));
-                continue;
-            }
-            BehaviorTreePlan.BlackboardKey key = blackboard.find(BlackboardScope.INSTANCE, keyName);
-            if (key == null) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_KEY_UNDECLARED",
-                        "Instance blackboard key is not declared: " + keyName, nodeId,
-                        BehaviorNodeTypes.BLACKBOARD_KEY_PORT, ""));
-                continue;
-            }
-            boolean writes = BehaviorNodeTypes.SET_BLACKBOARD.equals(nodeInfo.node.type)
-                    || BehaviorNodeTypes.CLEAR_BLACKBOARD.equals(nodeInfo.node.type);
-            if (writes && !key.writable()) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_KEY_READ_ONLY",
-                        "Blackboard key is read-only: " + keyName, nodeId,
-                        BehaviorNodeTypes.BLACKBOARD_KEY_PORT, ""));
-            }
-            if (!BehaviorNodeTypes.SET_BLACKBOARD.equals(nodeInfo.node.type)) continue;
-            Object storedValue = nodeInfo.node.inputs.get(BehaviorNodeTypes.BLACKBOARD_VALUE_PORT);
-            if (storedValue != null && !BehaviorValueSemantics.matches(storedValue, key.type())) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_VALUE_TYPE_INVALID",
-                        "Stored value does not match blackboard key type " + key.type(), nodeId,
-                        BehaviorNodeTypes.BLACKBOARD_VALUE_PORT, ""));
-            }
-            DataLink link = inbound.get(new InputKey(
-                    nodeId, BehaviorNodeTypes.BLACKBOARD_VALUE_PORT));
-            NodeInfo source = link != null ? info.get(link.sourceNodeId) : null;
-            PortDef sourcePort = source != null ? source.ports.outputs.get(link.sourcePortId) : null;
-            if (sourcePort != null && !PortType.isCompatible(sourcePort.type(), key.type())) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_VALUE_TYPE_INVALID",
-                        "Connected value does not match blackboard key type " + key.type(), nodeId,
-                        BehaviorNodeTypes.BLACKBOARD_VALUE_PORT, link.sourceNodeId));
-            }
-        }
-    }
-
     private static boolean validMapping(Map<String, String> mapping) {
         if (mapping == null) return false;
         return mapping.entrySet().stream().allMatch(entry -> entry.getKey() != null
@@ -639,10 +684,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
 
     private static int storedConnectionCount(NodeGraph graph) {
         long count = 0;
-        if (graph.behaviorTree != null) {
-            count = graph.behaviorTree.relationshipCountUpTo(MAX_COMPILED_CONNECTIONS);
-            if (count > MAX_COMPILED_CONNECTIONS) return MAX_COMPILED_CONNECTIONS + 1;
-        }
+        count = BehaviorTreeConnections.connectionCountUpTo(graph, MAX_COMPILED_CONNECTIONS);
+        if (count > MAX_COMPILED_CONNECTIONS) return MAX_COMPILED_CONNECTIONS + 1;
         for (NodeData node : graph.nodes.values()) {
             if (node == null || node.outputs == null) continue;
             for (List<Connection> connections : node.outputs.values()) {
@@ -659,7 +702,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         graph.graphKind = GraphTypeRegistry.BEHAVIOR_TREE.id();
         return new Compilation(graph, List.of(), Map.of(), Map.of(),
                 BehaviorTreePlan.BlackboardSchema.EMPTY,
-                BehaviorTreePlan.DependencyManifest.EMPTY, List.of(diagnostic));
+                BehaviorTreePlan.DependencyManifest.EMPTY,
+                BehaviorTreePlan.RootSchedule.DEFAULT, List.of(diagnostic));
     }
 
     private static void add(List<BehaviorTreeDiagnostic> diagnostics,
@@ -705,6 +749,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                                Map<String, NodeInfo> info, Map<InputKey, DataLink> inbound,
                                BehaviorTreePlan.BlackboardSchema blackboard,
                                BehaviorTreePlan.DependencyManifest dependencies,
+                               BehaviorTreePlan.RootSchedule rootSchedule,
                                List<BehaviorTreeDiagnostic> diagnostics) {
     }
 

@@ -4,7 +4,8 @@ public enum DebugRenderChannel {
     AREA("area:", 0xFF4FC3E8),
     GEOMETRY("geometry:", 0xFFFFFFFF),
     SCHEMATIC("schematic:", 0xFFB58CFF),
-    INTERACTION("interaction:", 0xFFF2B36D);
+    INTERACTION("interaction:", 0xFFF2B36D),
+    PATHFINDING("pathfinding:", 0xFF4FC3E8);
 
     private final String sourcePrefix;
     private final int color;

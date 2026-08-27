@@ -34,7 +34,7 @@ public final class TerminalInputEncoder {
     }
 
     public static byte[] key(TerminalKey key, boolean applicationCursorKeys) {
-        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(key, "input");
         String sequence = switch (key) {
             case ENTER -> "\r";
             case TAB -> "\t";

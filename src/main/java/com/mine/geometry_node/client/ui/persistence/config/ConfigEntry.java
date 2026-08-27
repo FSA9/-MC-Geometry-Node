@@ -69,7 +69,7 @@ public final class ConfigEntry<T> {
             throw new IllegalArgumentException("Choice config entry requires options: " + mId);
         }
         if ((mEditorType == EditorType.KEY_BINDING || mEditorType == EditorType.SHORTCUT) && mKeyScope == null) {
-            throw new IllegalArgumentException("Shortcut config entry requires a key scope: " + mId);
+            throw new IllegalArgumentException("Shortcut config entry requires a input scope: " + mId);
         }
     }
 

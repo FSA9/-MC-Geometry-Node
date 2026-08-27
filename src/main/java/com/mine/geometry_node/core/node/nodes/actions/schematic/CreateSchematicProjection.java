@@ -81,7 +81,7 @@ public class CreateSchematicProjection extends BaseNode {
                 .output(StandardPorts.KEY, "key_out")
                 .input(StandardPorts.FLOW_IN, "flow_in")
                 .input(StandardPorts.PATH, "path")
-                .input(StandardPorts.KEY, "key")
+                .input(StandardPorts.KEY, "input")
                 .input(StandardPorts.XYZ, "xyz")
                 .input(StandardPorts.DEBUG, "debug");
 
@@ -487,7 +487,7 @@ public class CreateSchematicProjection extends BaseNode {
     }
 
     private static String tempKey(ExecutionContext context) {
-        return TYPE_ID + ":key:" + context.getCurrentNodeId();
+        return TYPE_ID + ":input:" + context.getCurrentNodeId();
     }
 
     private static boolean resolveDebugMode(NodeData data) {

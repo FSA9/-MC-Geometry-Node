@@ -38,6 +38,7 @@ public final class BehaviorTreeInstance {
     private final GraphDataEvaluationSession dataEvaluation;
     private final Random random;
     private final TraceEvent[] history;
+    private final int rootScheduleOffset;
 
     private BehaviorInstanceState state = BehaviorInstanceState.CREATED;
     private BehaviorTerminationReason stopReason;
@@ -77,6 +78,7 @@ public final class BehaviorTreeInstance {
         this.dataEvaluation = new GraphDataEvaluationSession(plan);
         this.random = new Random(randomSeed);
         this.history = new TraceEvent[budget.maxHistoryEntriesPerInstance()];
+        this.rootScheduleOffset = plan.rootSchedule().resolveOffset(host.identity(), plan.assetId());
     }
 
     public UUID instanceId() { return instanceId; }
@@ -196,10 +198,14 @@ public final class BehaviorTreeInstance {
     void finishEvaluation(BehaviorResult result, long defaultWakeTick) {
         lastTreeResult = result;
         evaluating = false;
-        if (state == BehaviorInstanceState.RUNNING) {
-            if (reentrantWakeRequested) requestWakeup(defaultWakeTick);
-            if (nextWakeTick == Long.MAX_VALUE) nextWakeTick = defaultWakeTick;
+        if (state != BehaviorInstanceState.RUNNING) return;
+        if (result != BehaviorResult.RUNNING) {
+            nextWakeTick = nextRootRoundTick(lastEvaluationTick,
+                    plan.rootSchedule().recheckInterval(), rootScheduleOffset);
+            return;
         }
+        if (reentrantWakeRequested) requestWakeup(defaultWakeTick);
+        if (nextWakeTick == Long.MAX_VALUE) nextWakeTick = defaultWakeTick;
     }
 
     void failEvaluation(BehaviorTerminationReason reason) {
@@ -237,13 +243,14 @@ public final class BehaviorTreeInstance {
     }
 
     void recordTermination(int nodeIndex, BehaviorTerminationReason reason, long elapsedNanos,
-                           @Nullable String detail) {
+                           @Nullable String failureCode, @Nullable String detail) {
         BehaviorResult result = reason.result();
         lastResults[nodeIndex] = result;
         lastReasons[nodeIndex] = reason;
         TraceEvent event = new TraceEvent(++traceSequence, host.gameTick(), nodeIndex,
-                plan.getNodeId(nodeIndex), reason, result, Math.max(0L, elapsedNanos),
-                detail != null ? detail : "");
+                plan.getNodeId(nodeIndex), plan.getNodeType(nodeIndex), reason, result,
+                Math.max(0L, elapsedNanos),
+                failureCode, detail != null ? detail : "");
         if (history.length == 0) return;
         int insertion = (historyStart + historySize) % history.length;
         history[insertion] = event;
@@ -258,17 +265,42 @@ public final class BehaviorTreeInstance {
         boolean requiresLease = resources.stream().anyMatch(resource ->
                 resource != NodeCapabilities.ResourceUse.NONE);
         if (!requiresLease) return true;
-        for (NodeCapabilities.ResourceUse resource : resources) {
-            if (resource == NodeCapabilities.ResourceUse.NONE) continue;
-            int owner = resourceOwners[resource.ordinal()];
-            if (owner != -1 && owner != nodeIndex) return false;
-        }
+        if (conflictingResourceOwner(nodeIndex, resources) >= 0) return false;
         if (!host.acquireResources(nodeIndex, resources)) return false;
         for (NodeCapabilities.ResourceUse resource : resources) {
             if (resource != NodeCapabilities.ResourceUse.NONE) resourceOwners[resource.ordinal()] = nodeIndex;
         }
         resourcesAcquired[nodeIndex] = true;
         return true;
+    }
+
+    int conflictingResourceOwner(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
+        for (NodeCapabilities.ResourceUse requested : resources) {
+            if (requested == NodeCapabilities.ResourceUse.NONE) continue;
+            for (NodeCapabilities.ResourceUse held : NodeCapabilities.ResourceUse.values()) {
+                int owner = resourceOwners[held.ordinal()];
+                if (owner != -1 && owner != nodeIndex && resourcesConflict(requested, held)) {
+                    return owner;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static boolean resourcesConflict(NodeCapabilities.ResourceUse first,
+                                             NodeCapabilities.ResourceUse second) {
+        if (first == NodeCapabilities.ResourceUse.NONE || second == NodeCapabilities.ResourceUse.NONE) {
+            return false;
+        }
+        if (first == second) return true;
+        return first == NodeCapabilities.ResourceUse.COMBAT
+                && (second == NodeCapabilities.ResourceUse.MOVEMENT
+                || second == NodeCapabilities.ResourceUse.LOOK
+                || second == NodeCapabilities.ResourceUse.TARGET)
+                || second == NodeCapabilities.ResourceUse.COMBAT
+                && (first == NodeCapabilities.ResourceUse.MOVEMENT
+                || first == NodeCapabilities.ResourceUse.LOOK
+                || first == NodeCapabilities.ResourceUse.TARGET);
     }
 
     void releaseResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
@@ -303,6 +335,13 @@ public final class BehaviorTreeInstance {
         return value == Long.MAX_VALUE ? Long.MAX_VALUE : value + 1;
     }
 
+    private static long nextRootRoundTick(long currentTick, int interval, int offset) {
+        long remainder = Math.floorMod(currentTick, (long) interval);
+        long delta = Math.floorMod((long) offset - remainder, (long) interval);
+        if (delta == 0L) delta = interval;
+        return currentTick > Long.MAX_VALUE - delta ? Long.MAX_VALUE : currentTick + delta;
+    }
+
     private static long saturatingAdd(long first, long second) {
         long result = first + second;
         return result < first ? Long.MAX_VALUE : result;
@@ -319,7 +358,8 @@ public final class BehaviorTreeInstance {
     }
 
     public record TraceEvent(long sequence, long gameTick, int nodeIndex, String nodeId,
+                             String nodeType,
                              BehaviorTerminationReason reason, @Nullable BehaviorResult result,
-                             long elapsedNanos, String detail) {
+                             long elapsedNanos, @Nullable String failureCode, String detail) {
     }
 }

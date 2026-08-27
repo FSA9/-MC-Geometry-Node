@@ -3,6 +3,9 @@
   "package": "com.mine.geometry_node.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "BrainBehaviorLeaseMixin",
+    "MobNavigationInvoker",
+    "PathNavigationAccessor",
     "ProjectileHitMixin"
   ],
   "client": [

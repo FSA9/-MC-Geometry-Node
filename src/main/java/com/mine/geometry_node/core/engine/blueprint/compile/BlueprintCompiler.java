@@ -232,7 +232,7 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
             if (unwrapped != null) {
                 map.put(key, unwrapped);
             } else {
-                System.err.println("[BlueprintCompiler] Warning: Ignored null/unsupported value for key: " + key);
+                System.err.println("[BlueprintCompiler] Warning: Ignored null/unsupported value for input: " + key);
             }
         }
         return Map.copyOf(map);

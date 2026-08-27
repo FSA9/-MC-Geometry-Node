@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.quest;
 
-import com.mine.geometry_node.client.quest.ui.QuestHintView;
+import com.mine.geometry_node.client.runtime.quest.ui.QuestHintView;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ExpandedTextInputOverlay;

@@ -5,7 +5,7 @@ import icyllis.modernui.view.MotionEvent;
 
 import java.util.Locale;
 
-/** Canonical MainUI binding supporting either a keyboard key or a mouse button. */
+/** Canonical MainUI binding supporting either a keyboard input or a mouse button. */
 public final class InputBinding {
     public enum Device { KEYBOARD, MOUSE }
 

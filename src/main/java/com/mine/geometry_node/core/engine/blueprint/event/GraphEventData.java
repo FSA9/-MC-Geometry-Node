@@ -15,14 +15,14 @@ public final class GraphEventData {
             return Map.of();
         }
         if ((entries.length & 1) != 0) {
-            throw new IllegalArgumentException("Graph event data must be key/value pairs");
+            throw new IllegalArgumentException("Graph event data must be input/value pairs");
         }
 
         Map<String, Object> data = new LinkedHashMap<>();
         for (int i = 0; i < entries.length; i += 2) {
             Object key = entries[i];
             if (!(key instanceof String portId) || portId.isBlank()) {
-                throw new IllegalArgumentException("Graph event data key must be a non-empty string");
+                throw new IllegalArgumentException("Graph event data input must be a non-empty string");
             }
             Object value = entries[i + 1];
             if (value != null) {

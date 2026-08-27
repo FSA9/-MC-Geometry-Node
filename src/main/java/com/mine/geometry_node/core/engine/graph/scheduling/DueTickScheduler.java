@@ -22,7 +22,7 @@ public final class DueTickScheduler<K, V> {
 
     public boolean schedule(K key, V value, long dueTick) {
         if (key == null || value == null) {
-            throw new IllegalArgumentException("Scheduler key and value cannot be null");
+            throw new IllegalArgumentException("Scheduler input and value cannot be null");
         }
 
         Scheduled<K, V> current = active.get(key);

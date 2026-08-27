@@ -35,7 +35,7 @@ public final class GeometryNodeEvents {
                 Object value = entry.getValue();
                 if (value != null && !GraphValueCodecRegistry.isSupported(value)) {
                     System.err.println("[GeometryNodeEvents] Skip unsupported event payload value: event=" +
-                            eventTypeId + ", key=" + entry.getKey() + ", type=" + value.getClass().getName());
+                            eventTypeId + ", input=" + entry.getKey() + ", type=" + value.getClass().getName());
                     continue;
                 }
                 sanitized.put(entry.getKey(), value);

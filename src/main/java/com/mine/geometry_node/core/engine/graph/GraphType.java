@@ -5,7 +5,7 @@ import java.util.Objects;
 
 /**
  * Registered definition of a graph family. The id is serialized in
- * {@code graph_kind}; the translation key provides its editor-facing name and
+ * {@code graph_kind}; the translation input provides its editor-facing name and
  * the icon color identifies graph files in the asset browser.
  */
 public record GraphType(String id, String translationKey, int assetIconColor, GraphKind runtimeKind,
@@ -22,7 +22,7 @@ public record GraphType(String id, String translationKey, int assetIconColor, Gr
         }
         translationKey = Objects.requireNonNullElse(translationKey, "").trim();
         if (translationKey.isEmpty()) {
-            throw new IllegalArgumentException("Graph type translation key cannot be empty");
+            throw new IllegalArgumentException("Graph type translation input cannot be empty");
         }
         runtimeKind = Objects.requireNonNull(runtimeKind, "runtimeKind");
         if (runtimeKind == GraphKind.UNKNOWN) {

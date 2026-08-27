@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.editor.terminal.command;
 
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.client.agent.mcp.McpCommandGateway;
+import com.mine.geometry_node.client.ai.mcp.McpCommandGateway;
 import com.mine.geometry_node.client.ai.command.CommandInvocationContext;
 import com.mine.geometry_node.client.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ai.command.CommandResult;

@@ -7,7 +7,12 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import com.mine.geometry_node.core.node.nodes.actions.block.*;
-import com.mine.geometry_node.core.node.nodes.behavior.*;
+import com.mine.geometry_node.core.node.nodes.behavior.action.*;
+import com.mine.geometry_node.core.node.nodes.behavior.blackboard.*;
+import com.mine.geometry_node.core.node.nodes.behavior.condition.*;
+import com.mine.geometry_node.core.node.nodes.behavior.control.*;
+import com.mine.geometry_node.core.node.nodes.behavior.decorator.*;
+import com.mine.geometry_node.core.node.nodes.behavior.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.display_entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.entity.*;
 import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
@@ -110,6 +115,41 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("behavior/blackboard", new BehaviorClearBlackboardNode(), behaviorNodeCapabilities(
                 NodeCapabilities.Purity.SIDE_EFFECTING, NodeCapabilities.Lifecycle.INSTANT,
                 NodeCapabilities.ChildConstraint.LEAF, NodeCapabilities.Permission.WRITE_BLACKBOARD));
+        registry.register("behavior/control", new BehaviorCompositeNode(
+                BehaviorCompositeNode.Kind.REACTIVE_SEQUENCE), behaviorStructureCapabilities(
+                NodeCapabilities.ChildConstraint.ONE_OR_MORE_ORDERED));
+        registry.register("behavior/control", new BehaviorCompositeNode(
+                BehaviorCompositeNode.Kind.PRIORITY_SELECTOR), behaviorStructureCapabilities(
+                NodeCapabilities.ChildConstraint.ONE_OR_MORE_ORDERED));
+        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.REPEAT);
+        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.RETRY);
+        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.TIMEOUT);
+        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.COOLDOWN);
+        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.ALWAYS_SUCCEED);
+        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.ALWAYS_FAIL);
+        registry.register("behavior/condition", new BehaviorUtilityConditionNode(
+                BehaviorUtilityConditionNode.Kind.BLACKBOARD_VALUE_CHANGED), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.READ_ONLY, NodeCapabilities.Lifecycle.INSTANT,
+                NodeCapabilities.ChildConstraint.LEAF, NodeCapabilities.Permission.NONE));
+        registry.register("behavior/condition", new BehaviorUtilityConditionNode(
+                BehaviorUtilityConditionNode.Kind.CAN_NAVIGATE_TO), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.READ_ONLY, NodeCapabilities.Lifecycle.INSTANT,
+                NodeCapabilities.ChildConstraint.LEAF, NodeCapabilities.Permission.READ_WORLD));
+        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.SELECT_TARGET,
+                NodeCapabilities.Lifecycle.INSTANT, Set.of(NodeCapabilities.ResourceUse.TARGET));
+        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.CLEAR_TARGET,
+                NodeCapabilities.Lifecycle.INSTANT, Set.of(NodeCapabilities.ResourceUse.TARGET));
+        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.MOVE_TO,
+                NodeCapabilities.Lifecycle.CONTINUOUS, Set.of(
+                        NodeCapabilities.ResourceUse.MOVEMENT, NodeCapabilities.ResourceUse.TARGET));
+        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.STOP_MOVING,
+                NodeCapabilities.Lifecycle.INSTANT, Set.of(NodeCapabilities.ResourceUse.MOVEMENT));
+        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.WANDER,
+                NodeCapabilities.Lifecycle.CONTINUOUS, Set.of(NodeCapabilities.ResourceUse.MOVEMENT));
+        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.LOOK_AT,
+                NodeCapabilities.Lifecycle.CONTINUOUS, Set.of(NodeCapabilities.ResourceUse.LOOK));
+        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.ATTACK_TARGET,
+                NodeCapabilities.Lifecycle.SUSPENDING, Set.of(NodeCapabilities.ResourceUse.COMBAT));
 
         registry.register("layout", new RerouteNode());
 
@@ -552,6 +592,23 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
                 NodeCapabilities.Lifecycle.CONTINUOUS, children, NodeCapabilities.Permission.NONE);
     }
 
+    private static void registerBehaviorDecorator(NodeRegistrationContext registry,
+                                                  BehaviorDecoratorNode.Kind kind) {
+        registry.register("behavior/decorator", new BehaviorDecoratorNode(kind), behaviorNodeCapabilities(
+                NodeCapabilities.Purity.PURE, NodeCapabilities.Lifecycle.CONTINUOUS,
+                NodeCapabilities.ChildConstraint.EXACTLY_ONE, NodeCapabilities.Permission.NONE));
+    }
+
+    private static void registerBehaviorAction(NodeRegistrationContext registry,
+                                               BehaviorEntityActionNode.Kind kind,
+                                               NodeCapabilities.Lifecycle lifecycle,
+                                               Set<NodeCapabilities.ResourceUse> resources) {
+        registry.register("behavior/entity", new BehaviorEntityActionNode(kind),
+                behaviorNodeCapabilities(NodeCapabilities.Purity.SIDE_EFFECTING, lifecycle,
+                        NodeCapabilities.ChildConstraint.LEAF,
+                        resources, NodeCapabilities.Permission.MUTATE_OWNER));
+    }
+
     private static NodeCapabilities behaviorNodeCapabilities(
             NodeCapabilities.Purity purity, NodeCapabilities.Lifecycle lifecycle,
             NodeCapabilities.ChildConstraint children, NodeCapabilities.Permission permission) {
@@ -565,6 +622,17 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
                 Set.of(NodeCapabilities.ResourceUse.NONE),
                 NodeCapabilities.Cost.TRIVIAL,
                 permission);
+    }
+
+    private static NodeCapabilities behaviorNodeCapabilities(
+            NodeCapabilities.Purity purity, NodeCapabilities.Lifecycle lifecycle,
+            NodeCapabilities.ChildConstraint children, Set<NodeCapabilities.ResourceUse> resources,
+            NodeCapabilities.Permission permission) {
+        return new NodeCapabilities(
+                Set.of(GraphTypeRegistry.BEHAVIOR_TREE.id()), purity,
+                NodeCapabilities.Context.BEHAVIOR_EXECUTION, lifecycle,
+                NodeCapabilities.Cancellation.CANCELLABLE, children, resources,
+                NodeCapabilities.Cost.NORMAL, permission);
     }
 
     private static NodeCapabilities behaviorDataCapabilities(

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays;
 
 import com.mine.geometry_node.client.ui.common.UiActionButton;
-import com.mine.geometry_node.client.dialogue.ui.DialogueHudTheme;
+import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;

@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.ui.viewport.connection;
 
 import com.mine.geometry_node.client.ui.viewport.interaction.InteractionManager;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
 import com.mine.geometry_node.core.node.document.Connection;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -131,21 +130,22 @@ public class ConnectionLayer {
                 }
             }
         }
-        if (graph.behaviorTree != null) {
-            for (Map.Entry<String, List<String>> entry : graph.behaviorTree.relationships().entrySet()) {
-                ConnectionNodeVisual outUi = nodeVisuals.get(entry.getKey());
-                if (outUi == null) continue;
-                for (String childId : entry.getValue()) {
-                    ConnectionNodeVisual inUi = nodeVisuals.get(childId);
-                    if (inUi == null) continue;
-                    VisualConnection connection = new VisualConnection(
-                            outUi, BehaviorNodeTypes.CHILDREN_PORT,
-                            inUi, BehaviorNodeTypes.PARENT_PORT,
-                            false, PortType.BEHAVIOR_STRUCTURE.getColor());
-                    connection.updateUiCoordinates(mTempOutPos, mTempInPos);
-                    mVisualConnections.add(connection);
-                    indexVisualConnection(connection);
-                }
+        for (Map.Entry<String, NodeData> nodeEntry : graph.nodes.entrySet()) {
+            ConnectionNodeVisual outUi = nodeVisuals.get(nodeEntry.getKey());
+            NodeData parent = nodeEntry.getValue();
+            if (outUi == null || parent == null || parent.behaviorOutputs == null) continue;
+            for (Map.Entry<String, Connection> entry : parent.behaviorOutputs.entrySet()) {
+                Connection link = entry.getValue();
+                if (link == null) continue;
+                ConnectionNodeVisual inUi = nodeVisuals.get(link.targetNodeId());
+                if (inUi == null) continue;
+                VisualConnection connection = new VisualConnection(
+                        outUi, entry.getKey(),
+                        inUi, link.targetPortName(),
+                        false, PortType.BEHAVIOR_STRUCTURE.getColor());
+                connection.updateUiCoordinates(mTempOutPos, mTempInPos);
+                mVisualConnections.add(connection);
+                indexVisualConnection(connection);
             }
         }
         mViewport.invalidate();

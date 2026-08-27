@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.terminal.command;
 
 import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
@@ -67,14 +66,10 @@ final class GraphReadSnapshot {
                     }
                 });
             }
-        }
-        if (graph != null && graph.behaviorTree != null) {
-            graph.behaviorTree.relationships().forEach((parentId, childIds) -> {
-                for (String childId : childIds) {
-                    edges.add(new Edge("behavior", parentId, BehaviorNodeTypes.CHILDREN_PORT,
-                            childId, BehaviorNodeTypes.PARENT_PORT));
-                }
-            });
+            if (node.behaviorOutputs != null) {
+                node.behaviorOutputs.forEach((portId, connection) ->
+                        addEdge(edges, "behavior", sourceId, portId, connection));
+            }
         }
         edges.sort(Edge.ORDER);
         Map<String, List<Edge>> outgoing = new LinkedHashMap<>();

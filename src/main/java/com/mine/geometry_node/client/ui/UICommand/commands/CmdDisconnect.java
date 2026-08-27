@@ -14,7 +14,6 @@ public class CmdDisconnect implements ICommand {
     private final String inNodeId;
     private final String inPortId;
     private final List<ExternalConnectionBackup> mExternalConnections = new ArrayList<>();
-    private int mBehaviorChildIndex = -1;
 
     private record ExternalConnectionBackup(String boundaryNodeId, GraphController.ScopedConnectionSnapshot snapshot) {}
 
@@ -54,7 +53,7 @@ public class CmdDisconnect implements ICommand {
     @Override
     public void execute() {
         if (isBehaviorConnection()) {
-            mBehaviorChildIndex = mController.removeBehaviorChild(outNodeId, inNodeId);
+            mController.removeBehaviorConnection(outNodeId, outPortId, inNodeId, inPortId);
         } else if (isFlowConnection()) {
             mController.removeExecutionConnection(outNodeId, outPortId);
         } else {
@@ -66,8 +65,7 @@ public class CmdDisconnect implements ICommand {
     public void undo() {
         // 撤销时：恢复连线
         if (isBehaviorConnection()) {
-            mController.addBehaviorChild(outNodeId, inNodeId,
-                    mBehaviorChildIndex >= 0 ? mBehaviorChildIndex : Integer.MAX_VALUE);
+            mController.addBehaviorConnection(outNodeId, outPortId, inNodeId, inPortId);
         } else if (isFlowConnection()) {
             mController.addExecutionConnection(outNodeId, outPortId, inNodeId, inPortId);
         } else {

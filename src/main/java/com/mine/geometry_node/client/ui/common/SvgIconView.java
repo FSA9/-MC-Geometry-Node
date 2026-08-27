@@ -37,16 +37,33 @@ public class SvgIconView extends View {
         PERFORMANCE("analysis.svg"),
         CLEAR("clear.svg"),
         RESET("refresh.svg"),
-        CLOSE("close.svg");
+        CLOSE("close.svg"),
+        BLUEPRINT("graph_editor.svg", "blueprint"),
+        QUEST("quest.svg", "quest"),
+        BEHAVIOR_TREE("behavior_tree.svg", "behavior_tree");
 
         private final String mFileName;
+        private final String mGraphTypeId;
 
         Icon(String fileName) {
+            this(fileName, null);
+        }
+
+        Icon(String fileName, String graphTypeId) {
             mFileName = fileName;
+            mGraphTypeId = graphTypeId;
         }
 
         String resourcePath() {
             return "/assets/geometry_node/icons/ui/" + mFileName;
+        }
+
+        public static Icon forGraphType(String graphTypeId) {
+            if (graphTypeId == null || graphTypeId.isBlank()) return null;
+            for (Icon icon : values()) {
+                if (graphTypeId.equals(icon.mGraphTypeId)) return icon;
+            }
+            return null;
         }
     }
 

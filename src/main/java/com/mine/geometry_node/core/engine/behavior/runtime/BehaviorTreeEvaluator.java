@@ -5,6 +5,9 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorLifecycleCon
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorNodeState;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
+import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionFailure;
+import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorBudgetExceededException;
+import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.engine.graph.compile.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
@@ -117,42 +120,79 @@ public final class BehaviorTreeEvaluator {
                 throw new EvaluationFault(BehaviorTerminationReason.BUDGET_EXHAUSTED,
                         "Behavior immediate-transition budget exceeded");
             }
-            BehaviorTerminationReason reason = result == BehaviorResult.SUCCESS
-                    ? BehaviorTerminationReason.COMPLETED_SUCCESS
-                    : BehaviorTerminationReason.COMPLETED_FAILURE;
+            BehaviorTerminationReason reason = executor.completionReason(context, result);
+            if (reason == null || (reason.result() != null && reason.result() != result)) {
+                throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA,
+                        "Behavior executor returned an incompatible completion reason");
+            }
+            BehaviorActionFailure actionFailure = result == BehaviorResult.FAILURE
+                    ? context.actionFailure() : null;
             EvaluationFault exitFailure = terminateNode(instance, nodeIndex, executor, context,
-                    reason, null, true, elapsed(started, instance.host().nanoTime()));
+                    reason, actionFailure != null ? actionFailure.code() : null,
+                    actionFailure != null ? actionFailure.detail() : null, true,
+                    elapsed(started, instance.host().nanoTime()));
             if (exitFailure != null) throw exitFailure;
             return result;
         } catch (EvaluationFault fault) {
             if (instance.rawNodeState(nodeIndex).isActive()) {
-                terminateNode(instance, nodeIndex, executor, context,
-                        fault.reason, fault.getMessage(), false,
+                EvaluationFault cleanupFailure = terminateNode(instance, nodeIndex, executor, context,
+                        fault.reason, null, fault.getMessage(), true,
                         elapsed(started, instance.host().nanoTime()));
+                if (cleanupFailure != null) throw cleanupFailure;
             }
             throw fault;
-        } catch (BehaviorBlackboard.BlackboardAccessException | IllegalArgumentException exception) {
+        } catch (BehaviorBudgetExceededException exception) {
             String detail = exception.getMessage() != null
                     ? exception.getMessage() : exception.getClass().getSimpleName();
             if (instance.rawNodeState(nodeIndex).isActive()) {
-                terminateNode(instance, nodeIndex, executor, context,
-                        BehaviorTerminationReason.INVALID_DATA, detail, false,
+                EvaluationFault cleanupFailure = terminateNode(instance, nodeIndex, executor, context,
+                        BehaviorTerminationReason.BUDGET_EXHAUSTED, null, detail, true,
                         elapsed(started, instance.host().nanoTime()));
+                if (cleanupFailure != null) throw cleanupFailure;
+            }
+            throw new EvaluationFault(BehaviorTerminationReason.BUDGET_EXHAUSTED, detail);
+        } catch (BehaviorBlackboard.BlackboardAccessException | BehaviorContractViolation exception) {
+            String detail = exception.getMessage() != null
+                    ? exception.getMessage() : exception.getClass().getSimpleName();
+            if (instance.rawNodeState(nodeIndex).isActive()) {
+                EvaluationFault cleanupFailure = terminateNode(instance, nodeIndex, executor, context,
+                        BehaviorTerminationReason.INVALID_DATA, null, detail, true,
+                        elapsed(started, instance.host().nanoTime()));
+                if (cleanupFailure != null) throw cleanupFailure;
             }
             throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA, detail);
         } catch (Exception exception) {
             String detail = exception.getMessage() != null
                     ? exception.getMessage() : exception.getClass().getSimpleName();
             if (instance.rawNodeState(nodeIndex).isActive()) {
-                terminateNode(instance, nodeIndex, executor, context,
-                        BehaviorTerminationReason.NODE_EXCEPTION, detail, false,
+                EvaluationFault cleanupFailure = terminateNode(instance, nodeIndex, executor, context,
+                        BehaviorTerminationReason.NODE_EXCEPTION, null, detail, true,
                         elapsed(started, instance.host().nanoTime()));
+                if (cleanupFailure != null) throw cleanupFailure;
             }
             throw new EvaluationFault(BehaviorTerminationReason.NODE_EXCEPTION, detail);
         } finally {
             context.close();
             instance.recordVisit(nodeIndex, elapsed(started, instance.host().nanoTime()));
         }
+    }
+
+    BehaviorResult evaluateNodeReplacing(BehaviorTreeInstance instance, int candidateNodeIndex,
+                                         int previousNodeIndex, BehaviorTerminationReason reason,
+                                         int depth, long epochTick) {
+        EvaluationPass pass = requirePass(instance);
+        PendingPreemption outer = pass.pendingPreemption;
+        pass.pendingPreemption = new PendingPreemption(previousNodeIndex, reason, outer);
+        try {
+            return evaluateNode(instance, candidateNodeIndex, depth, epochTick);
+        } finally {
+            pass.pendingPreemption = outer;
+        }
+    }
+
+    void abortChild(BehaviorTreeInstance instance, int nodeIndex, BehaviorTerminationReason reason) {
+        EvaluationFault failure = abortSubtree(instance, nodeIndex, reason);
+        if (failure != null) throw failure;
     }
 
     @Nullable
@@ -171,6 +211,13 @@ public final class BehaviorTreeEvaluator {
                 type, new BehaviorDataContext(instance, targetNodeIndex));
     }
 
+    @Nullable
+    <T> T convertInput(BehaviorTreeInstance instance, int targetNodeIndex,
+                       Object value, Class<T> type) {
+        return TypeConverter.convert(value, type,
+                new BehaviorDataContext(instance, targetNodeIndex));
+    }
+
     private Object computeDataNode(BehaviorTreeInstance instance, int nodeIndex, String outputPort) {
         BaseNode node = NodeRegistry.INSTANCE.get(instance.plan().getNodeType(nodeIndex));
         if (node == null) {
@@ -182,9 +229,20 @@ public final class BehaviorTreeEvaluator {
 
     private void enterNode(BehaviorTreeInstance instance, int nodeIndex, BehaviorNodeExecutor executor,
                            BehaviorNodeContext context) throws Exception {
-        transition(instance, nodeIndex, BehaviorNodeState.ENTERING);
         Set<NodeCapabilities.ResourceUse> resources = instance.plan()
                 .getNodeCapabilities(nodeIndex).resources();
+        int conflictOwner = instance.conflictingResourceOwner(nodeIndex, resources);
+        if (conflictOwner >= 0) {
+            PendingPreemption pending = matchingPreemption(
+                    requirePass(instance).pendingPreemption, instance, conflictOwner);
+            if (pending != null) {
+                pending.consumed = true;
+                EvaluationFault abortFailure = abortSubtree(
+                        instance, pending.previousNodeIndex, pending.reason);
+                if (abortFailure != null) throw abortFailure;
+            }
+        }
+        transition(instance, nodeIndex, BehaviorNodeState.ENTERING);
         if (!instance.acquireResources(nodeIndex, resources)) {
             throw new EvaluationFault(BehaviorTerminationReason.CAPABILITY_LOST,
                     "Behavior resources are already owned by another active node");
@@ -193,9 +251,30 @@ public final class BehaviorTreeEvaluator {
     }
 
     @Nullable
+    private static PendingPreemption matchingPreemption(@Nullable PendingPreemption pending,
+                                                        BehaviorTreeInstance instance,
+                                                        int conflictOwner) {
+        for (PendingPreemption candidate = pending; candidate != null; candidate = candidate.outer) {
+            if (!candidate.consumed && isWithinSubtree(
+                    instance, conflictOwner, candidate.previousNodeIndex)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isWithinSubtree(BehaviorTreeInstance instance, int nodeIndex, int rootIndex) {
+        for (int current = nodeIndex; current >= 0; current = instance.plan().getParent(current)) {
+            if (current == rootIndex) return true;
+        }
+        return false;
+    }
+
+    @Nullable
     private EvaluationFault terminateNode(BehaviorTreeInstance instance, int nodeIndex,
                                            BehaviorNodeExecutor executor, BehaviorNodeContext context,
-                                           BehaviorTerminationReason reason, @Nullable String detail,
+                                           BehaviorTerminationReason reason,
+                                           @Nullable String failureCode, @Nullable String detail,
                                            boolean propagateExitFailure, long elapsedNanos) {
         EvaluationFault childFailure = abortChildren(
                 instance, nodeIndex, executor.childTerminationReason(reason));
@@ -205,11 +284,26 @@ public final class BehaviorTreeEvaluator {
         BehaviorTerminationReason finalReason = childFailure != null
                 ? childFailure.reason : reason;
         String finalDetail = childFailure != null ? childFailure.getMessage() : detail;
+        String finalFailureCode = childFailure == null
+                && reason == BehaviorTerminationReason.COMPLETED_FAILURE ? failureCode : null;
         EvaluationFault exitFailure = childFailure;
         try {
             executor.exit(context, finalReason);
+        } catch (BehaviorBudgetExceededException exception) {
+            finalReason = BehaviorTerminationReason.BUDGET_EXHAUSTED;
+            finalFailureCode = null;
+            finalDetail = exception.getMessage() != null
+                    ? exception.getMessage() : exception.getClass().getSimpleName();
+            exitFailure = new EvaluationFault(finalReason, finalDetail);
+        } catch (BehaviorContractViolation exception) {
+            finalReason = BehaviorTerminationReason.INVALID_DATA;
+            finalFailureCode = null;
+            finalDetail = exception.getMessage() != null
+                    ? exception.getMessage() : exception.getClass().getSimpleName();
+            exitFailure = new EvaluationFault(finalReason, finalDetail);
         } catch (Exception exception) {
             finalReason = BehaviorTerminationReason.NODE_EXCEPTION;
+            finalFailureCode = null;
             finalDetail = exception.getMessage() != null
                     ? exception.getMessage() : exception.getClass().getSimpleName();
             exitFailure = new EvaluationFault(finalReason, finalDetail);
@@ -219,12 +313,14 @@ public final class BehaviorTreeEvaluator {
                     instance.plan().getNodeCapabilities(nodeIndex).resources());
         } catch (Exception exception) {
             finalReason = BehaviorTerminationReason.NODE_EXCEPTION;
+            finalFailureCode = null;
             finalDetail = exception.getMessage() != null
                     ? exception.getMessage() : exception.getClass().getSimpleName();
             exitFailure = new EvaluationFault(finalReason, finalDetail);
         }
         transition(instance, nodeIndex, BehaviorLifecycleContract.terminalState(finalReason));
-        instance.recordTermination(nodeIndex, finalReason, elapsedNanos, finalDetail);
+        instance.recordTermination(nodeIndex, finalReason, elapsedNanos,
+                finalFailureCode, finalDetail);
         transition(instance, nodeIndex, BehaviorNodeState.IDLE);
         return propagateExitFailure ? exitFailure : null;
     }
@@ -261,14 +357,16 @@ public final class BehaviorTreeEvaluator {
                         ? exception.getMessage() : exception.getClass().getSimpleName();
             }
             transition(instance, nodeIndex, BehaviorNodeState.ERROR);
-            instance.recordTermination(nodeIndex, BehaviorTerminationReason.INVALID_DATA, 0L, detail);
+            instance.recordTermination(nodeIndex, BehaviorTerminationReason.INVALID_DATA,
+                    0L, null, detail);
             transition(instance, nodeIndex, BehaviorNodeState.IDLE);
             return new EvaluationFault(BehaviorTerminationReason.INVALID_DATA, detail);
         }
         BehaviorNodeContext context = new BehaviorNodeContext(this, instance, nodeIndex, 0,
                 instance.host().gameTick());
         try {
-            return terminateNode(instance, nodeIndex, executor, context, reason, null, true, 0L);
+            return terminateNode(instance, nodeIndex, executor, context,
+                    reason, null, null, true, 0L);
         } finally {
             context.close();
         }
@@ -325,11 +423,26 @@ public final class BehaviorTreeEvaluator {
 
     private static final class EvaluationPass {
         private final BehaviorTreeInstance instance;
+        @Nullable private PendingPreemption pendingPreemption;
         private int visits;
         private int immediateTransitions;
 
         private EvaluationPass(BehaviorTreeInstance instance) {
             this.instance = instance;
+        }
+    }
+
+    private static final class PendingPreemption {
+        private final int previousNodeIndex;
+        private final BehaviorTerminationReason reason;
+        @Nullable private final PendingPreemption outer;
+        private boolean consumed;
+
+        private PendingPreemption(int previousNodeIndex, BehaviorTerminationReason reason,
+                                  @Nullable PendingPreemption outer) {
+            this.previousNodeIndex = previousNodeIndex;
+            this.reason = reason;
+            this.outer = outer;
         }
     }
 

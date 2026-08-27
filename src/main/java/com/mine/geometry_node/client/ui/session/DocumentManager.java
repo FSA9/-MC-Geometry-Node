@@ -7,6 +7,7 @@ import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class DocumentManager {
     public static final DocumentManager INSTANCE = new DocumentManager();
@@ -17,6 +18,7 @@ public class DocumentManager {
     private long mOpenSessionSerial = 0L;
 
     private final List<Runnable> mOnTabChangedListeners = new ArrayList<>();
+    private final List<Consumer<GraphSession>> mOnSessionSavedListeners = new ArrayList<>();
 
     private DocumentManager() {}
 
@@ -35,6 +37,16 @@ public class DocumentManager {
 
     public void removeOnTabChangedListener(Runnable listener) {
         mOnTabChangedListeners.remove(listener);
+    }
+
+    public void addOnSessionSavedListener(Consumer<GraphSession> listener) {
+        if (listener != null && !mOnSessionSavedListeners.contains(listener)) {
+            mOnSessionSavedListeners.add(listener);
+        }
+    }
+
+    public void removeOnSessionSavedListener(Consumer<GraphSession> listener) {
+        mOnSessionSavedListeners.remove(listener);
     }
 
     public List<GraphSession> getSessions() {
@@ -170,7 +182,10 @@ public class DocumentManager {
             // 3. 清除脏标记
             session.isDirty = false;
 
-            // 4. 触发 UI 刷新 (消除 Tab 上的星号)
+            // 4. Notify file-backed consumers before refreshing tab state.
+            notifySessionSaved(session);
+
+            // 5. 触发 UI 刷新 (消除 Tab 上的星号)
             notifyTabChanged();
 
             System.out.println("[DocumentManager] Save Success: " + session.filePath());
@@ -186,6 +201,13 @@ public class DocumentManager {
         List<Runnable> listeners = List.copyOf(mOnTabChangedListeners);
         for (Runnable listener : listeners) {
             listener.run();
+        }
+    }
+
+    private void notifySessionSaved(GraphSession session) {
+        List<Consumer<GraphSession>> listeners = List.copyOf(mOnSessionSavedListeners);
+        for (Consumer<GraphSession> listener : listeners) {
+            listener.accept(session);
         }
     }
 

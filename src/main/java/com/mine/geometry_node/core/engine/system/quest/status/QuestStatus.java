@@ -17,7 +17,7 @@ public record QuestStatus(String id,
         }
         translationKey = Objects.requireNonNullElse(translationKey, "").trim();
         if (translationKey.isEmpty()) {
-            throw new IllegalArgumentException("Quest status translation key cannot be empty");
+            throw new IllegalArgumentException("Quest status translation input cannot be empty");
         }
     }
 

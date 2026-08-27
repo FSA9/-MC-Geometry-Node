@@ -134,7 +134,7 @@ public class NetworkHandler {
                                     return;
                                 }
                                 DynamicGraphManager.saveAndHotReload(server, graphId, jsonContent);
-                                sendToPlayer(player, new PacketSyncResponse(true, graphId, "上传并热更新成功！"));
+                                sendToPlayer(player, new PacketSyncResponse(true, graphId, "上传成功！"));
                             } catch (Exception e) {
                                 sendToPlayer(player, new PacketSyncResponse(false, graphId, "上传失败: " + e.getMessage()));
                             }

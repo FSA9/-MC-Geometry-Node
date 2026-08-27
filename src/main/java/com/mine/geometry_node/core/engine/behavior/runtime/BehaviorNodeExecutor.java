@@ -13,6 +13,13 @@ public interface BehaviorNodeExecutor {
 
     BehaviorResult update(BehaviorNodeContext context) throws Exception;
 
+    default BehaviorTerminationReason completionReason(BehaviorNodeContext context,
+                                                        BehaviorResult result) {
+        return result == BehaviorResult.SUCCESS
+                ? BehaviorTerminationReason.COMPLETED_SUCCESS
+                : BehaviorTerminationReason.COMPLETED_FAILURE;
+    }
+
     default BehaviorTerminationReason childTerminationReason(BehaviorTerminationReason ownReason) {
         return ownReason.kind() == BehaviorTerminationReason.Kind.NORMAL
                 ? BehaviorTerminationReason.PARENT_BRANCH_REJECTED : ownReason;

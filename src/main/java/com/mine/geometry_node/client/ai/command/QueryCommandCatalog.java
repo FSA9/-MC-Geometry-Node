@@ -329,8 +329,8 @@ final class QueryCommandCatalog {
 
     private static JsonObject graphStatsOutput() {
         JsonObject group = object(properties(
-                property("key", stringSchema(0)), property("count", integerSchema(0, null))
-        ), "key", "count");
+                property("input", stringSchema(0)), property("count", integerSchema(0, null))
+        ), "input", "count");
         return object(properties(
                 property("filter_type_id", stringSchema(0)), property("filter_category", stringSchema(0)),
                 property("group_by", stringSchema(1)), property("total_node_count", integerSchema(0, null)),

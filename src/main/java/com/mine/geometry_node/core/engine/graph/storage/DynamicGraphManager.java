@@ -83,18 +83,6 @@ public class DynamicGraphManager {
         File file = filePath.toFile();
         String normalizedId = GraphPathMapper.pathToId(folder, filePath);
 
-        CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(normalizedId, jsonContent);
-        GraphAssetDescriptor descriptor = new GraphAssetDescriptor(normalizedId,
-                GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact);
-        Map<String, CompiledGraph> dependencyView = new HashMap<>();
-        dynamicGraphCache.forEach((id, existing) -> dependencyView.put(id, existing.artifact()));
-        dependencyView.put(normalizedId, artifact);
-        List<String> dependencyCycle = GraphDependencyValidator.findCycle(dependencyView);
-        if (!dependencyCycle.isEmpty()) {
-            throw new IllegalStateException("Recursive graph dependencies: "
-                    + String.join(" -> ", dependencyCycle));
-        }
-
         // 创建目录
         File parentDir = file.getParentFile();
         if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
@@ -105,10 +93,26 @@ public class DynamicGraphManager {
         Files.writeString(tempPath, jsonContent, StandardCharsets.UTF_8);
         Files.move(tempPath, filePath, StandardCopyOption.REPLACE_EXISTING);
 
-        // 热更新
-        descriptor = new GraphAssetDescriptor(normalizedId, descriptor.type(), descriptor.artifact());
-        GraphAssetDescriptor oldDescriptor = dynamicGraphCache.put(normalizedId, descriptor);
-        notifyReload(server, normalizedId, oldDescriptor, descriptor);
+        try {
+            CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(normalizedId, jsonContent);
+            GraphAssetDescriptor descriptor = new GraphAssetDescriptor(normalizedId,
+                    GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact);
+            Map<String, CompiledGraph> dependencyView = new HashMap<>();
+            dynamicGraphCache.forEach((id, existing) -> dependencyView.put(id, existing.artifact()));
+            dependencyView.put(normalizedId, artifact);
+            List<String> dependencyCycle = GraphDependencyValidator.findCycle(dependencyView);
+            if (!dependencyCycle.isEmpty()) {
+                throw new IllegalStateException("Recursive graph dependencies: "
+                        + String.join(" -> ", dependencyCycle));
+            }
+
+            GraphAssetDescriptor oldDescriptor = dynamicGraphCache.put(normalizedId, descriptor);
+            notifyReload(server, normalizedId, oldDescriptor, descriptor);
+        } catch (Exception exception) {
+            GraphAssetDescriptor oldDescriptor = dynamicGraphCache.remove(normalizedId);
+            notifyReload(server, normalizedId, oldDescriptor, null);
+            GeometryNode.LOGGER.info("[DynamicGraphManager] Graph saved without runtime artifact: {}", normalizedId);
+        }
     }
 
     public static void loadAllFromDisk(MinecraftServer server) {

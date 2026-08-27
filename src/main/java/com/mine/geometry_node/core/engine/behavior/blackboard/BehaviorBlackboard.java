@@ -68,7 +68,7 @@ public final class BehaviorBlackboard {
 
     public boolean clear(BlackboardScope scope, String name, String sourceNodeId, long gameTick) {
         BehaviorTreePlan.BlackboardKey key = requireDeclaration(scope, name);
-        if (!key.writable()) throw new BlackboardAccessException("Blackboard key is read-only: " + name);
+        if (!key.writable()) throw new BlackboardAccessException("Blackboard input is read-only: " + name);
         Provider provider = requireProvider(scope);
         if (provider.get(name) == null) return false;
         provider.remove(name);
@@ -80,6 +80,15 @@ public final class BehaviorBlackboard {
 
     public long revision() {
         return revision;
+    }
+
+    public long revision(BlackboardScope scope, String name) {
+        BehaviorTreePlan.BlackboardKey key = requireDeclaration(scope, name);
+        Entry entry = requireProvider(scope).get(key.name());
+        if (entry != null) return entry.revision();
+        ChangeMetadata change = lastChanges.get(
+                new BehaviorTreePlan.BlackboardSchema.Key(scope, key.name()));
+        return change != null ? change.revision() : 0L;
     }
 
     public List<EntrySnapshot> snapshot() {
@@ -102,7 +111,7 @@ public final class BehaviorBlackboard {
     private void write(BehaviorTreePlan.BlackboardKey key, Object value, String sourceNodeId,
                        long gameTick, boolean initializing) {
         if (!initializing && !key.writable()) {
-            throw new BlackboardAccessException("Blackboard key is read-only: " + key.name());
+            throw new BlackboardAccessException("Blackboard input is read-only: " + key.name());
         }
         if (!BehaviorValueSemantics.matches(value, key.type())) {
             throw new BlackboardAccessException("Blackboard value does not match "
@@ -124,7 +133,7 @@ public final class BehaviorBlackboard {
     private BehaviorTreePlan.BlackboardKey requireDeclaration(BlackboardScope scope, String name) {
         BehaviorTreePlan.BlackboardKey key = schema.find(
                 Objects.requireNonNull(scope, "scope"), name != null ? name : "");
-        if (key == null) throw new BlackboardAccessException("Undeclared blackboard key: " + scope + "/" + name);
+        if (key == null) throw new BlackboardAccessException("Undeclared blackboard input: " + scope + "/" + name);
         return key;
     }
 

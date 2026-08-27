@@ -15,10 +15,10 @@ public record MarkerAddress(MarkerAudience audience, @Nullable UUID viewerId, St
         audience = Objects.requireNonNull(audience, "audience");
         key = key == null ? "" : key.trim();
         if (key.isEmpty()) {
-            throw new IllegalArgumentException("marker key must not be blank");
+            throw new IllegalArgumentException("marker input must not be blank");
         }
         if (key.length() > MAX_KEY_LENGTH) {
-            throw new IllegalArgumentException("marker key is too long");
+            throw new IllegalArgumentException("marker input is too long");
         }
         if (audience == MarkerAudience.SELF && viewerId == null) {
             throw new IllegalArgumentException("personal marker requires a viewer");

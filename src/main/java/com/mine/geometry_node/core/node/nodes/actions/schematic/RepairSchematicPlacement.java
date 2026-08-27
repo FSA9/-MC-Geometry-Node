@@ -35,7 +35,7 @@ public class RepairSchematicPlacement extends BaseNode {
                         .output(StandardPorts.COUNT, "count")
                         .output(StandardPorts.BLOCK_STATS, "block_stats")
                         .input(StandardPorts.FLOW_IN, "flow_in")
-                        .input(StandardPorts.KEY, "key")
+                        .input(StandardPorts.KEY, "input")
                         .input(StandardPorts.REPAIR_AIR, "repair_air")
                         .input(StandardPorts.AFFECT_ENTITIES, "affect_entities")
                         .build())
@@ -62,7 +62,7 @@ public class RepairSchematicPlacement extends BaseNode {
             } else {
                 String safeKey = currentRecord.key();
                 if (lookup.resolvedByPosition() && !lookup.requestedKey().equals(safeKey)) {
-                    GeometryNode.LOGGER.info("[GeometryNode] Repair schematic placement key '{}' resolved to '{}' by event position.",
+                    GeometryNode.LOGGER.info("[GeometryNode] Repair schematic placement input '{}' resolved to '{}' by event position.",
                             lookup.requestedKey(), safeKey);
                 }
                 boolean repairAir = _SchematicActionUtils.boolOrDefault(
@@ -98,9 +98,9 @@ public class RepairSchematicPlacement extends BaseNode {
 
     private static void logMissing(ServerLevel level, String key) {
         if (key == null || key.isEmpty()) {
-            GeometryNode.LOGGER.warn("[GeometryNode] Repair schematic placement skipped: empty key and no placement at event position.");
+            GeometryNode.LOGGER.warn("[GeometryNode] Repair schematic placement skipped: empty input and no placement at event position.");
         } else {
-            GeometryNode.LOGGER.warn("[GeometryNode] Repair schematic placement skipped: no placement record for key '{}' in dimension '{}'.",
+            GeometryNode.LOGGER.warn("[GeometryNode] Repair schematic placement skipped: no placement record for input '{}' in dimension '{}'.",
                     key, level.dimension().identifier());
         }
     }
@@ -111,7 +111,7 @@ public class RepairSchematicPlacement extends BaseNode {
 
     private static void logResult(ServerLevel level, String key, SchematicPlacementRecord record, OperationResult result) {
         if (!result.found()) {
-            GeometryNode.LOGGER.warn("[GeometryNode] Repair schematic placement skipped: no placement record for key '{}' in dimension '{}'.",
+            GeometryNode.LOGGER.warn("[GeometryNode] Repair schematic placement skipped: no placement record for input '{}' in dimension '{}'.",
                     key, level.dimension().identifier());
             return;
         }

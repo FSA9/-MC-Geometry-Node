@@ -26,7 +26,7 @@ public final class RemoveMarker extends BaseNode {
                         .input(StandardPorts.FLOW_IN, "flow_in")
                         .output(StandardPorts.FLOW_OUT, "flow_out")
                         .output(StandardPorts.BOOL, "bool")
-                        .input(StandardPorts.KEY, "key")
+                        .input(StandardPorts.KEY, "input")
                         .input(StandardPorts.ONLY_SELF_VISIBLE, "only_self_visible")
                         .input(StandardPorts.PLAYER, "player")
                         .build())

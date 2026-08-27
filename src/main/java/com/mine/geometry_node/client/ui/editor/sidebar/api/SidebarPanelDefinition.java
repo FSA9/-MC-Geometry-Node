@@ -18,7 +18,7 @@ public record SidebarPanelDefinition(
         if (id.isEmpty()) throw new IllegalArgumentException("Sidebar panel id cannot be blank");
         titleTranslationKey = Objects.requireNonNullElse(titleTranslationKey, "").trim();
         if (titleTranslationKey.isEmpty()) {
-            throw new IllegalArgumentException("Sidebar panel title translation key cannot be blank");
+            throw new IllegalArgumentException("Sidebar panel title translation input cannot be blank");
         }
         scopes = scopes != null ? Set.copyOf(scopes) : Set.of();
         if (scopes.isEmpty()) throw new IllegalArgumentException("Sidebar panel scopes cannot be empty");

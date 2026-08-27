@@ -39,7 +39,13 @@ public final class GraphJsonIO {
         JsonObject nodes = new JsonObject();
         for (Map.Entry<String, NodeData> e : g.nodes.entrySet()) {
             JsonElement el = GSON.toJsonTree(e.getValue());
-            if (el.isJsonObject()) el.getAsJsonObject().addProperty("id", e.getKey());
+            if (el.isJsonObject()) {
+                JsonObject nodeObject = el.getAsJsonObject();
+                nodeObject.addProperty("id", e.getKey());
+                if (e.getValue().behaviorOutputs == null || e.getValue().behaviorOutputs.isEmpty()) {
+                    nodeObject.remove("behavior_outputs");
+                }
+            }
             nodes.add(e.getKey(), el);
         }
         root.add("nodes", nodes);
@@ -137,6 +143,13 @@ public final class GraphJsonIO {
                         NodeData targetNode = scopeIndex.get(link.targetNodeId());
                         if (targetNode != null) targetNode.setInputConnected(link.targetPortName(), true);
                     }
+                }
+            }
+            if (outNode.behaviorOutputs != null) {
+                for (Connection link : outNode.behaviorOutputs.values()) {
+                    if (link == null || !link.isValid()) continue;
+                    NodeData targetNode = scopeIndex.get(link.targetNodeId());
+                    if (targetNode != null) targetNode.setInputConnected(link.targetPortName(), true);
                 }
             }
         }

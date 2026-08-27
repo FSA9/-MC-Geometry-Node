@@ -6,7 +6,7 @@ import java.util.Map;
 
 /**
  * 事件数据包。
- * key 必须与事件节点输出端口 ID 保持一致。
+ * input 必须与事件节点输出端口 ID 保持一致。
  */
 public final class EventPayload {
     private static final EventPayload EMPTY = new EventPayload(Map.of());
@@ -34,7 +34,7 @@ public final class EventPayload {
 
         public Builder put(String key, Object value) {
             if (key == null || key.isBlank()) {
-                throw new IllegalArgumentException("Event payload key cannot be null or blank");
+                throw new IllegalArgumentException("Event payload input cannot be null or blank");
             }
             values.put(key, value);
             return this;

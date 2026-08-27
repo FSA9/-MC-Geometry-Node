@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
+import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -50,6 +51,24 @@ public final class BehaviorNodeExecutorRegistry {
         context.clearBlackboard(BlackboardScope.INSTANCE, key);
         return BehaviorResult.SUCCESS;
     };
+    private static final BehaviorNodeExecutor REACTIVE_SEQUENCE_EXECUTOR =
+            new ReactiveCompositeExecutor(true);
+    private static final BehaviorNodeExecutor PRIORITY_SELECTOR_EXECUTOR =
+            new ReactiveCompositeExecutor(false);
+    private static final BehaviorNodeExecutor REPEAT_EXECUTOR = new RepeatExecutor(false);
+    private static final BehaviorNodeExecutor RETRY_EXECUTOR = new RepeatExecutor(true);
+    private static final BehaviorNodeExecutor TIMEOUT_EXECUTOR = new TimeoutExecutor();
+    private static final BehaviorNodeExecutor COOLDOWN_EXECUTOR = new CooldownExecutor();
+    private static final BehaviorNodeExecutor ALWAYS_SUCCEED_EXECUTOR = context -> {
+        BehaviorResult result = context.tickChild(0);
+        return result == BehaviorResult.RUNNING ? result : BehaviorResult.SUCCESS;
+    };
+    private static final BehaviorNodeExecutor ALWAYS_FAIL_EXECUTOR = context -> {
+        BehaviorResult result = context.tickChild(0);
+        return result == BehaviorResult.RUNNING ? result : BehaviorResult.FAILURE;
+    };
+    private static final BehaviorNodeExecutor BLACKBOARD_VALUE_CHANGED_EXECUTOR =
+            new BlackboardValueChangedExecutor();
 
     private final Map<String, BehaviorNodeExecutor> executors = new ConcurrentHashMap<>();
 
@@ -84,21 +103,31 @@ public final class BehaviorNodeExecutorRegistry {
         register(BehaviorNodeTypes.IDLE, IDLE_EXECUTOR);
         register(BehaviorNodeTypes.SET_BLACKBOARD, SET_BLACKBOARD_EXECUTOR);
         register(BehaviorNodeTypes.CLEAR_BLACKBOARD, CLEAR_BLACKBOARD_EXECUTOR);
+        register(BehaviorNodeTypes.REACTIVE_SEQUENCE, REACTIVE_SEQUENCE_EXECUTOR);
+        register(BehaviorNodeTypes.PRIORITY_SELECTOR, PRIORITY_SELECTOR_EXECUTOR);
+        register(BehaviorNodeTypes.REPEAT, REPEAT_EXECUTOR);
+        register(BehaviorNodeTypes.RETRY, RETRY_EXECUTOR);
+        register(BehaviorNodeTypes.TIMEOUT, TIMEOUT_EXECUTOR);
+        register(BehaviorNodeTypes.COOLDOWN, COOLDOWN_EXECUTOR);
+        register(BehaviorNodeTypes.ALWAYS_SUCCEED, ALWAYS_SUCCEED_EXECUTOR);
+        register(BehaviorNodeTypes.ALWAYS_FAIL, ALWAYS_FAIL_EXECUTOR);
+        register(BehaviorNodeTypes.BLACKBOARD_VALUE_CHANGED, BLACKBOARD_VALUE_CHANGED_EXECUTOR);
+        BehaviorEntityExecutors.register(this);
     }
 
     private static String requireKey(BehaviorNodeContext context) {
         String key = context.input(BehaviorNodeTypes.BLACKBOARD_KEY_PORT, String.class);
-        if (key == null || key.isBlank()) throw new IllegalArgumentException("Blackboard key is missing");
+        if (key == null || key.isBlank()) throw new BehaviorContractViolation("Blackboard input is missing");
         return key.trim();
     }
 
     private static <T> T require(@Nullable T value, String message) {
-        if (value == null) throw new IllegalArgumentException(message);
+        if (value == null) throw new BehaviorContractViolation(message);
         return value;
     }
 
     private static long deadline(long tick, int delay) {
-        if (delay < 0) throw new IllegalArgumentException("Tick delay cannot be negative");
+        if (delay < 0) throw new BehaviorContractViolation("Tick delay cannot be negative");
         return delay > Long.MAX_VALUE - tick ? Long.MAX_VALUE : tick + delay;
     }
 
@@ -178,6 +207,7 @@ public final class BehaviorNodeExecutorRegistry {
         public void exit(BehaviorNodeContext context, BehaviorTerminationReason reason) {
             context.setMemory(null);
         }
+
     }
 
     private static final class IdleExecutor implements BehaviorNodeExecutor {
@@ -186,9 +216,183 @@ public final class BehaviorNodeExecutorRegistry {
             Integer interval = require(context.input(
                     BehaviorNodeTypes.POLL_INTERVAL_PORT, Integer.class),
                     "Idle poll interval is missing");
-            if (interval <= 0) throw new IllegalArgumentException("Idle poll interval must be positive");
+            if (interval <= 0) throw new BehaviorContractViolation("Idle poll interval must be positive");
             context.requestWakeupAt(deadline(context.gameTick(), interval));
             return BehaviorResult.RUNNING;
         }
+    }
+
+    private static final class ReactiveCompositeExecutor implements BehaviorNodeExecutor {
+        private final boolean sequence;
+
+        private ReactiveCompositeExecutor(boolean sequence) {
+            this.sequence = sequence;
+        }
+
+        @Override
+        public BehaviorResult update(BehaviorNodeContext context) {
+            int previous = context.memory() instanceof Integer value ? value : -1;
+            for (int child = 0; child < context.childCount(); child++) {
+                BehaviorTerminationReason replacementReason = sequence
+                        ? BehaviorTerminationReason.GUARD_INVALIDATED
+                        : BehaviorTerminationReason.PRIORITY_PREEMPTED;
+                BehaviorResult result = previous >= 0 && previous != child
+                        ? context.tickChildReplacing(child, previous, replacementReason)
+                        : context.tickChild(child);
+                if (result == BehaviorResult.RUNNING) {
+                    preemptPrevious(context, previous, child);
+                    context.setMemory(child);
+                    return BehaviorResult.RUNNING;
+                }
+                boolean terminal = sequence
+                        ? result == BehaviorResult.FAILURE : result == BehaviorResult.SUCCESS;
+                if (terminal) {
+                    preemptPrevious(context, previous, child);
+                    context.setMemory(-1);
+                    return result;
+                }
+            }
+            preemptPrevious(context, previous, -1);
+            context.setMemory(-1);
+            return sequence ? BehaviorResult.SUCCESS : BehaviorResult.FAILURE;
+        }
+
+        private void preemptPrevious(BehaviorNodeContext context, int previous, int selected) {
+            if (previous < 0 || previous == selected) return;
+            context.abortChild(previous, sequence
+                    ? BehaviorTerminationReason.GUARD_INVALIDATED
+                    : BehaviorTerminationReason.PRIORITY_PREEMPTED);
+        }
+
+        @Override
+        public void exit(BehaviorNodeContext context, BehaviorTerminationReason reason) {
+            context.setMemory(null);
+        }
+
+    }
+
+    private static final class RepeatExecutor implements BehaviorNodeExecutor {
+        private final boolean retryFailures;
+
+        private RepeatExecutor(boolean retryFailures) {
+            this.retryFailures = retryFailures;
+        }
+
+        @Override
+        public void enter(BehaviorNodeContext context) {
+            context.setMemory(new RepeatState(0, context.gameTick()));
+        }
+
+        @Override
+        public BehaviorResult update(BehaviorNodeContext context) {
+            RepeatState state = require(context.memory() instanceof RepeatState value ? value : null,
+                    "Repeat state is unavailable");
+            int count = require(context.input(BehaviorNodeTypes.COUNT_PORT, Integer.class),
+                    "Repeat count is missing");
+            if (count < 0) throw new BehaviorContractViolation("Repeat count cannot be negative");
+            if (context.gameTick() < state.nextAttemptTick()) {
+                context.requestWakeupAt(state.nextAttemptTick());
+                return BehaviorResult.RUNNING;
+            }
+            BehaviorResult result = context.tickChild(0);
+            if (result == BehaviorResult.RUNNING) return result;
+
+            boolean repeat = retryFailures ? result == BehaviorResult.FAILURE
+                    : result == BehaviorResult.SUCCESS;
+            if (!repeat) return result;
+            int completed = state.completed() + 1;
+            if (count > 0 && completed >= count) {
+                return retryFailures ? BehaviorResult.FAILURE : BehaviorResult.SUCCESS;
+            }
+            int interval = retryFailures
+                    ? require(context.input(BehaviorNodeTypes.RETRY_INTERVAL_PORT, Integer.class),
+                    "Retry interval is missing") : 1;
+            if (interval <= 0) throw new BehaviorContractViolation("Attempt interval must be positive");
+            long next = deadline(context.gameTick(), interval);
+            context.setMemory(new RepeatState(completed, next));
+            context.requestWakeupAt(next);
+            return BehaviorResult.RUNNING;
+        }
+
+        @Override
+        public void exit(BehaviorNodeContext context, BehaviorTerminationReason reason) {
+            context.setMemory(null);
+        }
+
+        @Override
+        public BehaviorTerminationReason completionReason(BehaviorNodeContext context,
+                                                           BehaviorResult result) {
+            return retryFailures && result == BehaviorResult.FAILURE
+                    ? BehaviorTerminationReason.RETRIES_EXHAUSTED
+                    : BehaviorNodeExecutor.super.completionReason(context, result);
+        }
+    }
+
+    private static final class TimeoutExecutor implements BehaviorNodeExecutor {
+        @Override
+        public void enter(BehaviorNodeContext context) {
+            int ticks = require(context.input(BehaviorNodeTypes.TICKS_PORT, Integer.class),
+                    "Timeout ticks are missing");
+            context.setMemory(new TimeoutState(deadline(context.gameTick(), ticks), false));
+        }
+
+        @Override
+        public BehaviorResult update(BehaviorNodeContext context) {
+            TimeoutState state = require(context.memory() instanceof TimeoutState value ? value : null,
+                    "Timeout deadline is unavailable");
+            if (context.gameTick() >= state.deadline()) {
+                context.abortChild(0, BehaviorTerminationReason.TIMEOUT);
+                context.setMemory(new TimeoutState(state.deadline(), true));
+                return BehaviorResult.FAILURE;
+            }
+            BehaviorResult result = context.tickChild(0);
+            if (result == BehaviorResult.RUNNING) context.requestWakeupAt(state.deadline());
+            return result;
+        }
+
+        @Override
+        public BehaviorTerminationReason completionReason(BehaviorNodeContext context,
+                                                           BehaviorResult result) {
+            return context.memory() instanceof TimeoutState state && state.timedOut()
+                    ? BehaviorTerminationReason.TIMEOUT
+                    : BehaviorNodeExecutor.super.completionReason(context, result);
+        }
+
+        @Override
+        public void exit(BehaviorNodeContext context, BehaviorTerminationReason reason) {
+            context.setMemory(null);
+        }
+    }
+
+    private static final class CooldownExecutor implements BehaviorNodeExecutor {
+        @Override
+        public BehaviorResult update(BehaviorNodeContext context) {
+            long availableAt = context.memory() instanceof Long value ? value : Long.MIN_VALUE;
+            if (context.gameTick() < availableAt) return BehaviorResult.FAILURE;
+            BehaviorResult result = context.tickChild(0);
+            if (result == BehaviorResult.SUCCESS) {
+                int ticks = require(context.input(BehaviorNodeTypes.COOLDOWN_TICKS_PORT, Integer.class),
+                        "Cooldown ticks are missing");
+                context.setMemory(deadline(context.gameTick(), ticks));
+            }
+            return result;
+        }
+    }
+
+    private static final class BlackboardValueChangedExecutor implements BehaviorNodeExecutor {
+        @Override
+        public BehaviorResult update(BehaviorNodeContext context) {
+            String key = requireKey(context);
+            long current = context.blackboard().revision(BlackboardScope.INSTANCE, key);
+            long previous = context.memory() instanceof Long value ? value : current;
+            context.setMemory(current);
+            return current != previous ? BehaviorResult.SUCCESS : BehaviorResult.FAILURE;
+        }
+    }
+
+    private record RepeatState(int completed, long nextAttemptTick) {
+    }
+
+    private record TimeoutState(long deadline, boolean timedOut) {
     }
 }

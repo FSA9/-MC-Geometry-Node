@@ -6,6 +6,7 @@ import dev.architectury.event.events.common.TickEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
@@ -22,6 +23,19 @@ public final class BehaviorEventHandler {
         registered = true;
         TickEvent.SERVER_LEVEL_POST.register(BehaviorTreeRuntime.INSTANCE::tickLevel);
         var bus = NeoForge.EVENT_BUS;
+        bus.addListener((EntityJoinLevelEvent event) -> {
+            if (!(event.getLevel() instanceof ServerLevel) || !(event.getEntity() instanceof net.minecraft.world.entity.Mob mob)) {
+                return;
+            }
+            if (BehaviorTreeRuntime.INSTANCE.boundGraph(mob) == null
+                    || BehaviorTreeRuntime.INSTANCE.getForOwner(mob) != null) return;
+            try {
+                BehaviorTreeRuntime.INSTANCE.startBound(mob);
+            } catch (RuntimeException exception) {
+                com.mine.geometry_node.GeometryNode.LOGGER.warn(
+                        "Unable to restore behavior tree for entity {}", mob.getUUID(), exception);
+            }
+        });
         bus.addListener((LivingDeathEvent event) -> BehaviorTreeRuntime.INSTANCE.ownerUnavailable(
                 event.getEntity(), BehaviorTerminationReason.OWNER_INVALID));
         bus.addListener((EntityTravelToDimensionEvent event) -> BehaviorTreeRuntime.INSTANCE.ownerUnavailable(

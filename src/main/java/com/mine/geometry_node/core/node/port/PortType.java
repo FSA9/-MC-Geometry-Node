@@ -163,12 +163,6 @@ public enum PortType {
             return true;
         }
 
-        // 6. 列表聚合 (LIST -> ENTITY)
-        // 允许将实体列表连入单个实体端口，由底层动作节点自动拆解执行
-        if (outputport == LIST && inputport == ENTITY) {
-            return true;
-        }
-
         return false;
     }
 

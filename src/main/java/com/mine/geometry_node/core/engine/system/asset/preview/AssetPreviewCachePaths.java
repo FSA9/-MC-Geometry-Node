@@ -18,7 +18,7 @@ public final class AssetPreviewCachePaths {
     public static String validateCacheKey(String cacheKey) {
         String key = cacheKey != null ? cacheKey.trim().toLowerCase(java.util.Locale.ROOT) : "";
         if (key.length() != AssetPreviewLimits.CACHE_KEY_HEX_LENGTH || !key.matches("[0-9a-f]+")) {
-            throw new IllegalArgumentException("Invalid preview cache key");
+            throw new IllegalArgumentException("Invalid preview cache input");
         }
         return key;
     }

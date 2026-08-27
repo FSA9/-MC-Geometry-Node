@@ -80,6 +80,23 @@ public class EntityGraphAttachment {
         return boundGraphs.all();
     }
 
+    public void bindBehaviorTree(String graphId) {
+        boundGraphs.clear(GraphKind.BEHAVIOR_TREE);
+        boundGraphs.add(GraphBindingKey.behaviorTree(graphId));
+    }
+
+    public void unbindBehaviorTree(String graphId) {
+        boundGraphs.remove(GraphBindingKey.behaviorTree(graphId));
+    }
+
+    public void clearBehaviorTrees() {
+        boundGraphs.clear(GraphKind.BEHAVIOR_TREE);
+    }
+
+    public Set<String> getBoundBehaviorTrees() {
+        return boundGraphs.graphIds(GraphKind.BEHAVIOR_TREE);
+    }
+
     public void clearGraphs() {
         this.boundGraphs.clear(GraphKind.BLUEPRINT);
         this.container.clear();
@@ -114,6 +131,13 @@ public class EntityGraphAttachment {
             for (String graphId : getBoundGraphs()) boundList.add(StringTag.valueOf(graphId));
             tag.put("BoundGraphs", boundList);
         }
+        if (!getBoundBehaviorTrees().isEmpty()) {
+            ListTag behaviorList = new ListTag();
+            for (String graphId : getBoundBehaviorTrees()) {
+                behaviorList.add(StringTag.valueOf(graphId));
+            }
+            tag.put("BehaviorTrees", behaviorList);
+        }
         return container.save(tag, provider);
     }
 
@@ -124,6 +148,13 @@ public class EntityGraphAttachment {
             String graphId = list.getStringOr(i, "");
             if (!graphId.isEmpty()) {
                 this.boundGraphs.add(GraphBindingKey.blueprint(graphId));
+            }
+        }
+        ListTag behaviorList = tag.getListOrEmpty("BehaviorTrees");
+        for (int i = 0; i < behaviorList.size(); i++) {
+            String graphId = behaviorList.getStringOr(i, "");
+            if (!graphId.isEmpty()) {
+                this.boundGraphs.add(GraphBindingKey.behaviorTree(graphId));
             }
         }
         container.load(tag, provider);

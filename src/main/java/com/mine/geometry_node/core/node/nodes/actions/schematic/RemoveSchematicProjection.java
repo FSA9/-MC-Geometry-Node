@@ -23,7 +23,7 @@ public class RemoveSchematicProjection extends BaseNode {
                         .output(StandardPorts.FLOW_OUT, "flow_out")
                         .output(StandardPorts.BOOL, "bool")
                         .input(StandardPorts.FLOW_IN, "flow_in")
-                        .input(StandardPorts.KEY, "key")
+                        .input(StandardPorts.KEY, "input")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))

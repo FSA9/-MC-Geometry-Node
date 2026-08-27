@@ -45,7 +45,7 @@ public record SlotRef(String space, String key) {
         }
         if (raw instanceof Map<?, ?> map) {
             Object space = map.get("space");
-            Object key = map.get("key");
+            Object key = map.get("input");
             if (space != null && key != null) {
                 return new SlotRef(String.valueOf(space), String.valueOf(key));
             }

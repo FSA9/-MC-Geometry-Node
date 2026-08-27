@@ -89,7 +89,7 @@ public class CreateGeometryDebugMesh extends BaseNode {
     }
 
     private static String tempKey(ExecutionContext context) {
-        return TYPE_ID + ":key:" + context.getCurrentNodeId();
+        return TYPE_ID + ":input:" + context.getCurrentNodeId();
     }
 
 }

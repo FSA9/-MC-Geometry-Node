@@ -10,7 +10,7 @@ import com.mine.geometry_node.client.terminal.emulator.TerminalStyle;
 import com.mine.geometry_node.client.terminal.input.TerminalKey;
 import com.mine.geometry_node.client.terminal.shell.ShellTerminalCoordinator;
 import com.mine.geometry_node.client.terminal.shell.ShellTerminalObserver;
-import com.mine.geometry_node.client.agent.mcp.McpToolEvent;
+import com.mine.geometry_node.client.ai.mcp.McpToolEvent;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;

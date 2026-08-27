@@ -17,6 +17,15 @@ public final class GeometryNodeDebugCommand {
                 Commands.literal("geometry_node")
                         .requires(source -> source.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER))
                         .then(Commands.literal("debug")
+                                .then(Commands.literal("on")
+                                        .executes(context -> enableAll(context, DebugRendererSessionManager.DEFAULT_RADIUS))
+                                        .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
+                                                .executes(context -> enableAll(context, DoubleArgumentType.getDouble(context, "radius")))
+                                        )
+                                )
+                                .then(Commands.literal("off")
+                                        .executes(GeometryNodeDebugCommand::disableAll)
+                                )
                                 .then(Commands.literal("area")
                                         .then(Commands.literal("on")
                                                 .executes(context -> enableArea(context, DebugRendererSessionManager.DEFAULT_RADIUS))
@@ -61,8 +70,29 @@ public final class GeometryNodeDebugCommand {
                                                 .executes(GeometryNodeDebugCommand::disableInteraction)
                                         )
                                 )
+                                .then(Commands.literal("pathfinding")
+                                        .then(Commands.literal("on")
+                                                .executes(context -> enablePathfinding(context, DebugRendererSessionManager.DEFAULT_RADIUS))
+                                                .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
+                                                        .executes(context -> enablePathfinding(context, DoubleArgumentType.getDouble(context, "radius")))
+                                                )
+                                        )
+                                        .then(Commands.literal("off")
+                                                .executes(GeometryNodeDebugCommand::disablePathfinding)
+                                        )
+                                )
                         )
         );
+    }
+
+    private static int enableAll(CommandContext<CommandSourceStack> context, double radius)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return DebugRendererSessionManager.enableAll(context.getSource().getPlayerOrException(), radius);
+    }
+
+    private static int disableAll(CommandContext<CommandSourceStack> context)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return DebugRendererSessionManager.disableAll(context.getSource().getPlayerOrException(), true);
     }
 
     private static int enableArea(CommandContext<CommandSourceStack> context, double radius)
@@ -111,5 +141,15 @@ public final class GeometryNodeDebugCommand {
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         return DebugRendererSessionManager.disableInteraction(player, true);
+    }
+
+    private static int enablePathfinding(CommandContext<CommandSourceStack> context, double radius)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return DebugRendererSessionManager.enablePathfinding(context.getSource().getPlayerOrException(), radius);
+    }
+
+    private static int disablePathfinding(CommandContext<CommandSourceStack> context)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return DebugRendererSessionManager.disablePathfinding(context.getSource().getPlayerOrException(), true);
     }
 }

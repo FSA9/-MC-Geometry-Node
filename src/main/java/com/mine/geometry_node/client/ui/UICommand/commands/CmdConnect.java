@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeConnections;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.List;
@@ -21,6 +22,8 @@ public class CmdConnect implements ICommand {
     private String mDisplacedInboundNodeId;
     private String mDisplacedInboundPortId;
     private Connection mDisplacedExecutionOutput;
+    private Connection mDisplacedBehaviorOutput;
+    private BehaviorTreeConnections.ParentConnection mDisplacedBehaviorParent;
 
     public CmdConnect(GraphController controller, NodeGraph graph, String outNodeId, String outPortId, String inNodeId, String inPortId) {
         this.mController = controller;
@@ -70,7 +73,11 @@ public class CmdConnect implements ICommand {
      */
     private void snapshotDisplacedConnections() {
         if (mGraph == null) return;
-        if (isBehaviorConnection()) return;
+        if (isBehaviorConnection()) {
+            mDisplacedBehaviorOutput = mController.getBehaviorConnection(outNodeId, outPortId);
+            mDisplacedBehaviorParent = mController.getBehaviorParent(inNodeId);
+            return;
+        }
         boolean executionFlow = isFlowConnection();
         if (executionFlow) {
             NodeData outNode = mGraph.getNode(outNodeId);
@@ -123,7 +130,7 @@ public class CmdConnect implements ICommand {
             return;
         }
         if (isBehaviorConnection()) {
-            mController.addBehaviorChild(outNodeId, inNodeId, Integer.MAX_VALUE);
+            mController.addBehaviorConnection(outNodeId, outPortId, inNodeId, inPortId);
             return;
         }
 
@@ -148,7 +155,20 @@ public class CmdConnect implements ICommand {
     @Override
     public void undo() {
         if (isBehaviorConnection()) {
-            mController.removeBehaviorChild(outNodeId, inNodeId);
+            mController.removeBehaviorConnection(outNodeId, outPortId, inNodeId, inPortId);
+            if (mDisplacedBehaviorOutput != null) {
+                mController.addBehaviorConnection(outNodeId, outPortId,
+                        mDisplacedBehaviorOutput.targetNodeId(),
+                        mDisplacedBehaviorOutput.targetPortName());
+            }
+            if (mDisplacedBehaviorParent != null
+                    && (mDisplacedBehaviorOutput == null
+                    || !mDisplacedBehaviorParent.parentId().equals(outNodeId)
+                    || !mDisplacedBehaviorParent.portId().equals(outPortId))) {
+                mController.addBehaviorConnection(mDisplacedBehaviorParent.parentId(),
+                        mDisplacedBehaviorParent.portId(), inNodeId,
+                        mDisplacedBehaviorParent.connection().targetPortName());
+            }
             return;
         }
         // 1. 撤销新连线

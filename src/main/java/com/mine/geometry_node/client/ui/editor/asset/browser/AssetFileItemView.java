@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
+import com.mine.geometry_node.client.ui.common.SvgIconView;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetPreviewKind;
@@ -49,6 +50,7 @@ final class AssetFileItemView extends LinearLayout {
     private final String mGraphTypeId;
     private final boolean mFavorite;
     private final VectorIconView mIconView;
+    private final SvgIconView mGraphIconView;
     private final AssetPreviewView mPreviewView;
     private final TextView mNameView;
     private final TextView mSubtitleView;
@@ -74,6 +76,9 @@ final class AssetFileItemView extends LinearLayout {
         setBackground(AssetFileBrowserPanel.createRectDrawable(COLOR_ITEM_TRANSPARENT, 4));
 
         mIconView = new VectorIconView(context, iconKind(), iconColor());
+        SvgIconView.Icon graphIcon = AssetTypeRegistry.INSTANCE.isType(entry, AssetTypeRegistry.GRAPH_ID)
+                ? SvgIconView.Icon.forGraphType(mGraphTypeId) : null;
+        mGraphIconView = graphIcon != null ? new SvgIconView(context, graphIcon, iconColor()) : null;
         mPreviewView = entry.supports(AssetTypeAction.PREVIEW)
                 && entry.type().previewKind() != AssetPreviewKind.NONE
                 ? new AssetPreviewView(context, entry, mIconView)
@@ -113,6 +118,7 @@ final class AssetFileItemView extends LinearLayout {
         removeAllViews();
         mIconView.setKind(iconKind());
         mIconView.setIconColor(iconColor());
+        if (mGraphIconView != null) mGraphIconView.setIconColor(iconColor());
         View iconView = iconView();
         mNameView.setText(displayName);
         mNameView.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(mode.nameTextSizeDp));
@@ -212,7 +218,8 @@ final class AssetFileItemView extends LinearLayout {
     }
 
     private View iconView() {
-        return mPreviewView != null ? mPreviewView : mIconView;
+        if (mPreviewView != null) return mPreviewView;
+        return mGraphIconView != null ? mGraphIconView : mIconView;
     }
 
     private TextView createTagChip(String tag) {

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
-import com.mine.geometry_node.client.agent.mcp.McpPowerShellRun;
+import com.mine.geometry_node.client.ai.mcp.McpPowerShellRun;
 import com.mine.geometry_node.client.ai.command.CommandCatalog;
 import com.mine.geometry_node.client.terminal.TerminalSession;
 import com.mine.geometry_node.client.terminal.TerminalMode;

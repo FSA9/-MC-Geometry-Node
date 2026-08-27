@@ -41,6 +41,7 @@ import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -549,6 +550,18 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     public void refreshFileList() {
         refreshFileList(null);
+    }
+
+    public void refreshIfDisplayingLocalFile(Path file) {
+        if (mSourceKind != AssetSourceKind.LOCAL || file == null) return;
+        Path normalized = file.toAbsolutePath().normalize();
+        for (AssetEntry entry : mCurrentListing.entries()) {
+            File localFile = entry.localFile();
+            if (localFile != null && localFile.toPath().toAbsolutePath().normalize().equals(normalized)) {
+                refreshFileList();
+                return;
+            }
+        }
     }
 
     void refreshFileList(Runnable afterRender) {

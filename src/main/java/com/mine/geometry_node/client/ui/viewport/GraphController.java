@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
+import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
@@ -16,6 +17,7 @@ import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
+import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeConnections;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -176,6 +178,12 @@ public class GraphController {
         } else {
             node.inputs.put(portId, value);
         }
+        if (BehaviorNodeTypes.MOVE_TO.equals(node.type)
+                && BehaviorNodeTypes.TARGET_MODE_PORT.equals(portId)) {
+            String inactivePort = BehaviorNodeTypes.TARGET_MODE_POSITION.equals(value)
+                    ? BehaviorNodeTypes.TARGET_ENTITY_PORT : BehaviorNodeTypes.TARGET_POSITION_PORT;
+            node.inputs.remove(inactivePort);
+        }
 
         // 2. 获取更新属性后的新 NodeDef (防止这个输入值是动态分支数量控制参数)
         NodeDef newDef = NodeRegistry.INSTANCE.resolveDefinition(node);
@@ -201,6 +209,15 @@ public class GraphController {
             List<Connection> links = new ArrayList<>(node.getConnections(invalidOut));
             for (Connection link : links) {
                 removeConnection(nodeId, invalidOut, link.targetNodeId(), link.targetPortName());
+            }
+        }
+        for (String behaviorPort : new ArrayList<>(node.behaviorOutputs.keySet())) {
+            if (!validOutputs.contains(behaviorPort)) {
+                Connection link = node.behaviorOutputs.get(behaviorPort);
+                if (link != null) {
+                    removeBehaviorConnection(nodeId, behaviorPort,
+                            link.targetNodeId(), link.targetPortName());
+                }
             }
         }
 
@@ -374,39 +391,58 @@ public class GraphController {
                 && getResolvedPortType(inNodeId, inPortId, true) == PortType.BEHAVIOR_STRUCTURE;
     }
 
-    public boolean hasBehaviorChild(String parentId, String childId) {
-        return mContext.getGraph().behaviorTree != null
-                && mContext.getGraph().behaviorTree.contains(parentId, childId);
+    public Connection getBehaviorConnection(String parentId, String outPortId) {
+        NodeData parent = mContext.getGraph().getNode(parentId);
+        return parent != null && parent.behaviorOutputs != null
+                ? parent.behaviorOutputs.get(outPortId) : null;
     }
 
-    public int behaviorChildIndex(String parentId, String childId) {
-        return mContext.getGraph().behaviorTree != null
-                ? mContext.getGraph().behaviorTree.childrenOf(parentId).indexOf(childId) : -1;
+    public BehaviorTreeConnections.ParentConnection getBehaviorParent(String childId) {
+        return BehaviorTreeConnections.parentOf(mContext.getGraph(), childId);
     }
 
-    public void addBehaviorChild(String parentId, String childId, int index) {
-        if (!canAddBehaviorChild(parentId, BehaviorNodeTypes.CHILDREN_PORT,
-                childId, BehaviorNodeTypes.PARENT_PORT)) return;
-        mContext.getGraph().ensureBehaviorTree().addChild(parentId, childId, index);
-        mContext.notifyGraphConnectionsRebuildRequested();
+    public void addBehaviorConnection(String parentId, String outPortId,
+                                      String childId, String inPortId) {
+        if (!canAddBehaviorChild(parentId, outPortId, childId, inPortId)) return;
+        NodeGraph graph = mContext.getGraph();
+        NodeData parent = graph.getNode(parentId);
+        NodeData child = graph.getNode(childId);
+        if (parent == null || child == null) return;
+
+        Connection displaced = parent.behaviorOutputs.get(outPortId);
+        if (displaced != null) {
+            removeBehaviorConnection(parentId, outPortId,
+                    displaced.targetNodeId(), displaced.targetPortName());
+        }
+        BehaviorTreeConnections.ParentConnection oldParent = BehaviorTreeConnections.parentOf(graph, childId);
+        if (oldParent != null) {
+            removeBehaviorConnection(oldParent.parentId(), oldParent.portId(), childId,
+                    oldParent.connection().targetPortName());
+        }
+        parent.behaviorOutputs.put(outPortId, new Connection(childId, inPortId));
+        child.setInputConnected(inPortId, true);
+        mContext.notifyConnectionAdded(parentId, outPortId, childId, inPortId);
     }
 
-    public int removeBehaviorChild(String parentId, String childId) {
-        if (mContext.getGraph().behaviorTree == null) return -1;
-        int index = mContext.getGraph().behaviorTree.removeChild(parentId, childId);
-        if (index >= 0) mContext.notifyGraphConnectionsRebuildRequested();
-        return index;
-    }
-
-    public void restoreBehaviorRelationships(Map<String, ? extends List<String>> relationships) {
-        mContext.getGraph().ensureBehaviorTree().replaceRelationships(relationships);
-        mContext.notifyGraphConnectionsRebuildRequested();
+    public void removeBehaviorConnection(String parentId, String outPortId,
+                                         String childId, String inPortId) {
+        NodeData parent = mContext.getGraph().getNode(parentId);
+        if (parent == null || parent.behaviorOutputs == null) return;
+        Connection connection = parent.behaviorOutputs.get(outPortId);
+        if (connection == null || !childId.equals(connection.targetNodeId())
+                || !inPortId.equals(connection.targetPortName())) return;
+        parent.behaviorOutputs.remove(outPortId);
+        NodeData child = mContext.getGraph().getNode(childId);
+        if (child != null) child.setInputConnected(inPortId, false);
+        mContext.notifyConnectionRemoved(parentId, outPortId, childId, inPortId);
     }
 
     public boolean hasConnection(String outNodeId, String outPortId,
                                  String inNodeId, String inPortId) {
         if (isBehaviorStructureConnection(outNodeId, outPortId, inNodeId, inPortId)) {
-            return hasBehaviorChild(outNodeId, inNodeId);
+            Connection connection = getBehaviorConnection(outNodeId, outPortId);
+            return connection != null && inNodeId.equals(connection.targetNodeId())
+                    && inPortId.equals(connection.targetPortName());
         }
         NodeData outNode = mContext.getCurrentGraph().getNode(outNodeId);
         if (outNode == null) return false;
@@ -427,7 +463,7 @@ public class GraphController {
                                         String childId, String inPortId) {
         NodeGraph graph = mContext.getGraph();
         if (!GraphTypeRegistry.BEHAVIOR_TREE.id().equals(graph.getGraphTypeId())
-                || !BehaviorNodeTypes.CHILDREN_PORT.equals(outPortId)
+                || !BehaviorNodeTypes.isChildPort(outPortId)
                 || !BehaviorNodeTypes.PARENT_PORT.equals(inPortId)) return false;
         NodeData parent = graph.getNode(parentId);
         NodeData child = graph.getNode(childId);
@@ -435,18 +471,18 @@ public class GraphController {
         if (NodeRegistry.INSTANCE.getCapabilities(parent.type).children().maximum() == 0) return false;
         if (BehaviorNodeTypes.ROOT.equals(child.type)) return false;
 
-        var structure = graph.ensureBehaviorTree();
-        if (structure.contains(parentId, childId) || structure.parentOf(childId) != null) return false;
-        int currentChildren = structure.childrenOf(parentId).size();
+        Connection currentOutput = parent.behaviorOutputs.get(outPortId);
+        if (currentOutput != null && childId.equals(currentOutput.targetNodeId())) return false;
+        int currentChildren = parent.behaviorOutputs.size();
         int maximum = NodeRegistry.INSTANCE.getCapabilities(parent.type).children().maximum();
         if (maximum != com.mine.geometry_node.core.node.NodeCapabilities.ChildConstraint.UNBOUNDED
-                && currentChildren >= maximum) return false;
+                && currentOutput == null && currentChildren >= maximum) return false;
         return !isBehaviorDescendant(childId, parentId, new HashSet<>());
     }
 
     private boolean isBehaviorDescendant(String nodeId, String targetId, Set<String> visited) {
-        if (!visited.add(nodeId) || mContext.getGraph().behaviorTree == null) return false;
-        for (String childId : mContext.getGraph().behaviorTree.childrenOf(nodeId)) {
+        if (!visited.add(nodeId)) return false;
+        for (String childId : BehaviorTreeConnections.childrenOf(mContext.getGraph(), nodeId)) {
             if (targetId.equals(childId) || isBehaviorDescendant(childId, targetId, visited)) return true;
         }
         return false;
@@ -459,12 +495,22 @@ public class GraphController {
         if (removeIndex < 1 || removeIndex > totalCount) return;
         ensurePortConfig(node);
 
+        if (StaticKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id().equals(propertyKey)) {
+            String removedPort = BehaviorNodeTypes.childPort(removeIndex);
+            Connection removed = node.behaviorOutputs.get(removedPort);
+            if (removed != null) {
+                removeBehaviorConnection(nodeId, removedPort,
+                        removed.targetNodeId(), removed.targetPortName());
+            }
+        }
+
         for (int i = removeIndex; i < totalCount; i++) {
             String oldSuffix = "_" + (i + 1);
             String newSuffix = "_" + i;
             shiftMapData(node.inputs, oldSuffix, newSuffix);
             shiftMapData(node.outputs, oldSuffix, newSuffix);
             shiftMapData(node.execOutputs, oldSuffix, newSuffix);
+            shiftMapData(node.behaviorOutputs, oldSuffix, newSuffix);
             shiftPortConfig(node.portConfig, oldSuffix, newSuffix);
             shiftConnections(nodeId, oldSuffix, newSuffix);
         }
@@ -473,6 +519,7 @@ public class GraphController {
         node.inputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
         node.outputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
         node.execOutputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
+        node.behaviorOutputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
         removePortConfigSuffix(node.portConfig, lastSuffix);
         shiftConnections(nodeId, lastSuffix, null);
 

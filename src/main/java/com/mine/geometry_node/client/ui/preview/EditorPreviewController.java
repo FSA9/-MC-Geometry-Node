@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.preview;
 
-import com.mine.geometry_node.client.dialogue.ClientDialogueState;
-import com.mine.geometry_node.client.quest.ClientQuestScreenState;
+import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
+import com.mine.geometry_node.client.runtime.quest.ClientQuestScreenState;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueStyleRegistry;
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueChoicePayload;
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialoguePageFactory;

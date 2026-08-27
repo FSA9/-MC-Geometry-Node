@@ -8,7 +8,9 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Interaction;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.NeoForge;
@@ -33,8 +35,17 @@ public final class DebugRendererSessionManager {
     private static final double MOVE_REFRESH_DISTANCE = 32.0D;
     private static final double MOVE_REFRESH_DISTANCE_SQR = MOVE_REFRESH_DISTANCE * MOVE_REFRESH_DISTANCE;
     private static final int IDLE_CHECK_INTERVAL_TICKS = 20;
+    private static final int PATHFINDING_REFRESH_INTERVAL_TICKS = 5;
+    private static final int MAX_PATHFINDING_ENTITIES = 32;
+    private static final int MAX_PATH_NODES = 128;
+    private static final int REQUESTED_TARGET_RETENTION_TICKS = 100;
+    private static final int PATH_COLOR = DebugRenderChannel.PATHFINDING.color();
+    private static final int NEXT_NODE_COLOR = 0xFFFFC247;
+    private static final int FINAL_TARGET_COLOR = 0xFF4FD17A;
+    private static final int REQUESTED_TARGET_COLOR = 0xFF4A8DFF;
 
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
+    private static final Map<UUID, RequestedPathTarget> REQUESTED_PATH_TARGETS = new HashMap<>();
     private static final Map<ServerLevel, LevelCache> LEVEL_CACHES = new IdentityHashMap<>();
     private static final List<Consumer<ServerPlayer>> SCHEMATIC_CHANNEL_HYDRATORS = new ArrayList<>();
     private static boolean registered;
@@ -50,6 +61,7 @@ public final class DebugRendererSessionManager {
         bus.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
             if (event.getEntity() instanceof ServerPlayer player) {
                 SESSIONS.remove(player.getUUID());
+                clearRequestedPathTargetsIfUnused();
             }
         });
         bus.addListener((PlayerEvent.PlayerChangedDimensionEvent event) -> {
@@ -80,6 +92,32 @@ public final class DebugRendererSessionManager {
         session.areaEnabled = true;
         finishEnable(player, session, "Area");
         return 1;
+    }
+
+    public static int enableAll(ServerPlayer player, double radius) {
+        Session session = enableChannel(player, radius);
+        session.areaEnabled = true;
+        session.schematicEnabled = true;
+        session.geometryEnabled = true;
+        session.interactionEnabled = true;
+        session.pathfindingEnabled = true;
+        hydrateSchematicChannel(player, session);
+        refreshPlayer(player, session);
+        player.sendSystemMessage(Component.literal("All debug channels enabled. radius="
+                + formatRadius(session.radius) + ", max=" + DEFAULT_MAX_MESHES));
+        return 1;
+    }
+
+    public static int disableAll(ServerPlayer player, boolean notify) {
+        boolean changed = SESSIONS.remove(player.getUUID()) != null;
+        clearRequestedPathTargetsIfUnused();
+        sendDisabledSnapshot(player);
+        if (notify) {
+            player.sendSystemMessage(Component.literal(changed
+                    ? "All debug channels disabled."
+                    : "Debug is not enabled."));
+        }
+        return changed ? 1 : 0;
     }
 
     public static int disableArea(ServerPlayer player, boolean notify) {
@@ -156,6 +194,39 @@ public final class DebugRendererSessionManager {
         return changed ? 1 : 0;
     }
 
+    public static int enablePathfinding(ServerPlayer player, double radius) {
+        Session session = enableChannel(player, radius);
+        session.pathfindingEnabled = true;
+        finishEnable(player, session, "Pathfinding");
+        return 1;
+    }
+
+    public static int disablePathfinding(ServerPlayer player, boolean notify) {
+        Session session = SESSIONS.get(player.getUUID());
+        boolean changed = session != null && session.pathfindingEnabled;
+        if (session != null) {
+            session.pathfindingEnabled = false;
+            finishDisableOrRefresh(player, session);
+        } else {
+            sendDisabledSnapshot(player);
+        }
+        clearRequestedPathTargetsIfUnused();
+        notifyDisabled(player, notify, changed, "Pathfinding");
+        return changed ? 1 : 0;
+    }
+
+    public static void recordRequestedPathTarget(Mob mob, Vec3 position) {
+        if (mob == null || position == null || !hasPathfindingSessions()) return;
+        REQUESTED_PATH_TARGETS.put(mob.getUUID(), new RequestedPathTarget(
+                mob.level().dimension(), position,
+                mob.level().getGameTime() + REQUESTED_TARGET_RETENTION_TICKS
+        ));
+    }
+
+    public static void clearRequestedPathTarget(Mob mob) {
+        if (mob != null && REQUESTED_PATH_TARGETS.remove(mob.getUUID()) != null) markDirty();
+    }
+
     private static Session enableChannel(ServerPlayer player, double radius) {
         Session session = SESSIONS.computeIfAbsent(player.getUUID(), ignored -> new Session());
         session.radius = clampRadius(radius);
@@ -188,6 +259,7 @@ public final class DebugRendererSessionManager {
 
         long tick = level.getGameTime();
         boolean cadence = Math.floorMod(tick, IDLE_CHECK_INTERVAL_TICKS) == 0;
+        boolean pathfindingCadence = Math.floorMod(tick, PATHFINDING_REFRESH_INTERVAL_TICKS) == 0;
         LevelCache levelCache = LEVEL_CACHES.get(level);
         boolean hasExpiredSources = levelCache != null
                 && levelCache.sources.values().stream().anyMatch(source -> source.isTransientExpired(tick));
@@ -201,7 +273,8 @@ public final class DebugRendererSessionManager {
             boolean moved = session.lastPosition == null
                     || session.lastPosition.distanceToSqr(player.position()) >= MOVE_REFRESH_DISTANCE_SQR;
             boolean dirty = session.lastDirtyVersion != dirtyVersion;
-            boolean refresh = cadence || dimensionChanged || moved || dirty || hasExpiredSources;
+            boolean refresh = cadence || dimensionChanged || moved || dirty || hasExpiredSources
+                    || session.pathfindingEnabled && pathfindingCadence;
             if (!session.interactionEnabled && !refresh) continue;
 
             MeshSnapshot snapshot = collectSnapshot(player, session);
@@ -337,6 +410,17 @@ public final class DebugRendererSessionManager {
         return false;
     }
 
+    private static boolean hasPathfindingSessions() {
+        for (Session session : SESSIONS.values()) {
+            if (session.pathfindingEnabled) return true;
+        }
+        return false;
+    }
+
+    private static void clearRequestedPathTargetsIfUnused() {
+        if (!hasPathfindingSessions()) REQUESTED_PATH_TARGETS.clear();
+    }
+
     public static String levelSourceKey(ServerLevel level, String graphId) {
         return DebugRenderChannel.AREA.sourcePrefix() + "level:" + level.dimension().identifier() + ":" + graphId;
     }
@@ -384,6 +468,9 @@ public final class DebugRendererSessionManager {
 
         if (session.interactionEnabled) {
             collectInteractionCandidates(level, origin, session.radius, radiusSqr, candidates);
+        }
+        if (session.pathfindingEnabled) {
+            collectPathfindingCandidates(level, origin, session.radius, radiusSqr, candidates);
         }
         if (removedExpiredSource) dirtyVersion++;
 
@@ -443,6 +530,112 @@ public final class DebugRendererSessionManager {
             GeometryDebugElement mesh = GeometryDebugMeshFactory.buildShapeMesh(shape);
             candidates.add(new Candidate(mesh, center.distanceToSqr(origin)));
         }
+    }
+
+    private static void collectPathfindingCandidates(ServerLevel level,
+                                                      Vec3 origin,
+                                                      double radius,
+                                                      double radiusSqr,
+                                                      List<Candidate> candidates) {
+        AABB queryBounds = AABB.ofSize(origin, radius * 2.0D, radius * 2.0D, radius * 2.0D);
+        long currentTick = level.getGameTime();
+        REQUESTED_PATH_TARGETS.entrySet().removeIf(entry -> {
+            RequestedPathTarget target = entry.getValue();
+            return target.dimension().equals(level.dimension()) && target.expiresAt() < currentTick;
+        });
+        List<Mob> mobs = level.getEntitiesOfClass(Mob.class, queryBounds, mob -> {
+            Path path = mob.getNavigation().getPath();
+            return !mob.isRemoved() && (path != null && !path.isDone()
+                    || requestedPathTarget(mob, level, currentTick) != null);
+        });
+        mobs.sort((left, right) -> Double.compare(left.distanceToSqr(origin), right.distanceToSqr(origin)));
+
+        int entityCount = Math.min(MAX_PATHFINDING_ENTITIES, mobs.size());
+        for (int i = 0; i < entityCount; i++) {
+            Mob mob = mobs.get(i);
+            if (mob.distanceToSqr(origin) > radiusSqr) continue;
+            Path path = mob.getNavigation().getPath();
+            RequestedPathTarget requested = requestedPathTarget(mob, level, currentTick);
+            if (path == null || path.isDone()) {
+                if (requested != null) {
+                    addPathMarker(mob, "requested", requested.position(),
+                            REQUESTED_TARGET_COLOR, candidates, origin);
+                }
+                continue;
+            }
+
+            BlockPos pathEndPos = path.getNodePos(path.getNodeCount() - 1);
+            addPathMesh(mob, path, candidates, origin);
+            addPathMarker(mob, "next", path.getNextNodePos(), NEXT_NODE_COLOR, candidates, origin);
+            if (requested != null) {
+                addPathMarker(mob, "requested", requested.position(),
+                        REQUESTED_TARGET_COLOR, candidates, origin);
+            }
+            if (requested == null || !pathEndPos.equals(BlockPos.containing(requested.position()))) {
+                addPathMarker(mob, "target", pathEndPos, FINAL_TARGET_COLOR, candidates, origin);
+            }
+        }
+    }
+
+    private static RequestedPathTarget requestedPathTarget(Mob mob, ServerLevel level, long currentTick) {
+        RequestedPathTarget target = REQUESTED_PATH_TARGETS.get(mob.getUUID());
+        return target != null && target.dimension().equals(level.dimension()) && target.expiresAt() >= currentTick
+                ? target : null;
+    }
+
+    private static void addPathMesh(Mob mob, Path path, List<Candidate> candidates, Vec3 origin) {
+        int firstNode = path.getNextNodeIndex();
+        int nodeCount = Math.min(path.getNodeCount() - firstNode, MAX_PATH_NODES);
+        if (nodeCount <= 0) return;
+
+        Vec3 center = Vec3.atCenterOf(mob.blockPosition());
+        float[] vertices = new float[(nodeCount + 1) * 3];
+        writeRelativeVertex(vertices, 0, center, center);
+        for (int i = 0; i < nodeCount; i++) {
+            writeRelativeVertex(vertices, i + 1,
+                    Vec3.atCenterOf(path.getNodePos(firstNode + i)), center);
+        }
+        int[] edges = new int[nodeCount * 2];
+        for (int i = 0; i < nodeCount; i++) {
+            edges[i * 2] = i;
+            edges[i * 2 + 1] = i + 1;
+        }
+
+        String id = DebugRenderChannel.PATHFINDING.sourcePrefix() + mob.getStringUUID() + ":path";
+        GeometryDebugElement mesh = new GeometryDebugElement(
+                id, "pathfinding", GeometryDebugType.MESH, PATH_COLOR, true,
+                center, Vec3.ZERO, Vec3.ZERO, vertices, edges, new int[0]
+        );
+        candidates.add(new Candidate(mesh, center.distanceToSqr(origin)));
+    }
+
+    private static void addPathMarker(Mob mob,
+                                      String markerName,
+                                      BlockPos blockPos,
+                                      int color,
+                                      List<Candidate> candidates,
+                                      Vec3 origin) {
+        addPathMarker(mob, markerName, Vec3.atCenterOf(blockPos), color, candidates, origin);
+    }
+
+    private static void addPathMarker(Mob mob,
+                                      String markerName,
+                                      Vec3 position,
+                                      int color,
+                                      List<Candidate> candidates,
+                                      Vec3 origin) {
+        String id = DebugRenderChannel.PATHFINDING.sourcePrefix() + mob.getStringUUID() + ":" + markerName;
+        DebugRenderShape shape = new DebugRenderShape(
+                id, "pathfinding", "box", position, new Vec3(1.0D, 1.0D, 1.0D), Vec3.ZERO, color
+        );
+        candidates.add(new Candidate(GeometryDebugMeshFactory.buildShapeMesh(shape), position.distanceToSqr(origin)));
+    }
+
+    private static void writeRelativeVertex(float[] vertices, int index, Vec3 position, Vec3 center) {
+        int offset = index * 3;
+        vertices[offset] = (float) (position.x - center.x);
+        vertices[offset + 1] = (float) (position.y - center.y);
+        vertices[offset + 2] = (float) (position.z - center.z);
     }
 
     private static boolean isCenterChunkLoaded(ServerLevel level, Vec3 center) {
@@ -559,6 +752,9 @@ public final class DebugRendererSessionManager {
     private record MeshSnapshot(List<PacketGeometryDebugSnapshot.Mesh> meshes, long signature) {
     }
 
+    private record RequestedPathTarget(ResourceKey<Level> dimension, Vec3 position, long expiresAt) {
+    }
+
     private static final class LevelCache {
         private final Map<String, SourceCache> sources = new HashMap<>();
     }
@@ -593,19 +789,21 @@ public final class DebugRendererSessionManager {
         private boolean schematicEnabled;
         private boolean geometryEnabled;
         private boolean interactionEnabled;
+        private boolean pathfindingEnabled;
         private Vec3 lastPosition;
         private ResourceKey<Level> lastDimension;
         private long lastDirtyVersion = Long.MIN_VALUE;
         private long lastSignature = Long.MIN_VALUE;
 
         private boolean hasAnyChannel() {
-            return areaEnabled || schematicEnabled || geometryEnabled || interactionEnabled;
+            return areaEnabled || schematicEnabled || geometryEnabled || interactionEnabled || pathfindingEnabled;
         }
 
         private boolean isSourceVisible(String sourceKey) {
             if (DebugRenderChannel.AREA.owns(sourceKey)) return areaEnabled;
             if (DebugRenderChannel.GEOMETRY.owns(sourceKey)) return geometryEnabled;
             if (DebugRenderChannel.SCHEMATIC.owns(sourceKey)) return schematicEnabled;
+            if (DebugRenderChannel.PATHFINDING.owns(sourceKey)) return pathfindingEnabled;
             return false;
         }
 

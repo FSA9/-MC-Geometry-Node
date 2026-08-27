@@ -35,6 +35,7 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
     private final Map<String, List<Integer>> nodesByType;
     private final BlackboardSchema blackboardSchema;
     private final DependencyManifest dependencyManifest;
+    private final RootSchedule rootSchedule;
 
     private BehaviorTreePlan(String assetId, String[] nodeIds, Map<String, Integer> nodeIndexes,
                              String[] nodeTypes, NodeCapabilities[] capabilities, int rootNode,
@@ -43,7 +44,7 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
                              Map<String, Integer> portKeys, List<String> portNames,
                              Map<String, List<Integer>> nodesByType,
                              BlackboardSchema blackboardSchema,
-                             DependencyManifest dependencyManifest) {
+                             DependencyManifest dependencyManifest, RootSchedule rootSchedule) {
         this.assetId = assetId != null ? assetId : "";
         this.nodeIds = nodeIds.clone();
         this.nodeIndexes = Map.copyOf(nodeIndexes);
@@ -60,6 +61,21 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
         this.nodesByType = copyLookup(nodesByType);
         this.blackboardSchema = blackboardSchema;
         this.dependencyManifest = dependencyManifest;
+        this.rootSchedule = rootSchedule != null ? rootSchedule : RootSchedule.DEFAULT;
+    }
+
+    public static BehaviorTreePlan createCompiled(
+            String assetId, String[] nodeIds, Map<String, Integer> nodeIndexes,
+            String[] nodeTypes, NodeCapabilities[] capabilities, int rootNode,
+            int[] parents, int[][] children, Map<String, Object>[] staticInputs,
+            Map<String, DataConnectionSource>[] dataInputs, Set<String>[] ports,
+            Map<String, Integer> portKeys, List<String> portNames,
+            Map<String, List<Integer>> nodesByType, BlackboardSchema blackboardSchema,
+            DependencyManifest dependencyManifest, RootSchedule rootSchedule) {
+        return new BehaviorTreePlan(assetId, nodeIds, nodeIndexes, nodeTypes, capabilities,
+                rootNode, parents, children, staticInputs, dataInputs, ports,
+                portKeys, portNames, nodesByType, blackboardSchema, dependencyManifest,
+                rootSchedule);
     }
 
     public static BehaviorTreePlan createCompiled(
@@ -70,9 +86,10 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
             Map<String, Integer> portKeys, List<String> portNames,
             Map<String, List<Integer>> nodesByType, BlackboardSchema blackboardSchema,
             DependencyManifest dependencyManifest) {
-        return new BehaviorTreePlan(assetId, nodeIds, nodeIndexes, nodeTypes, capabilities,
-                rootNode, parents, children, staticInputs, dataInputs, ports,
-                portKeys, portNames, nodesByType, blackboardSchema, dependencyManifest);
+        return createCompiled(assetId, nodeIds, nodeIndexes, nodeTypes, capabilities,
+                rootNode, parents, children, staticInputs, dataInputs, ports, portKeys,
+                portNames, nodesByType, blackboardSchema, dependencyManifest,
+                RootSchedule.DEFAULT);
     }
 
     @Override
@@ -169,6 +186,10 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
         return dependencyManifest;
     }
 
+    public RootSchedule rootSchedule() {
+        return rootSchedule;
+    }
+
     @Override
     public Set<String> graphDependencies() {
         return dependencyManifest.assetIds();
@@ -210,6 +231,28 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
 
     public record BlackboardKey(String name, BlackboardScope scope, PortType type,
                                 boolean writable, @Nullable Object defaultValue) {
+    }
+
+    public record RootSchedule(int recheckInterval, int scheduleOffset) {
+        public static final int AUTO_OFFSET = -1;
+        public static final RootSchedule DEFAULT = new RootSchedule(1, AUTO_OFFSET);
+
+        public RootSchedule {
+            if (recheckInterval < 1) {
+                throw new IllegalArgumentException("Root recheck interval must be positive");
+            }
+            if (scheduleOffset < AUTO_OFFSET) {
+                throw new IllegalArgumentException("Root schedule offset must be -1 or greater");
+            }
+            if (scheduleOffset >= 0) scheduleOffset = Math.floorMod(scheduleOffset, recheckInterval);
+        }
+
+        public int resolveOffset(String hostIdentity, String assetId) {
+            if (scheduleOffset >= 0) return scheduleOffset;
+            int hash = 31 * (hostIdentity != null ? hostIdentity.hashCode() : 0)
+                    + (assetId != null ? assetId.hashCode() : 0);
+            return Math.floorMod(hash, recheckInterval);
+        }
     }
 
     public static final class BlackboardSchema {

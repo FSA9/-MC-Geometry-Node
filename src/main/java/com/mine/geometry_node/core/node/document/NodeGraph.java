@@ -89,9 +89,6 @@ public class NodeGraph {
 
     public void removeNode(String id) {
         this.nodes.remove(id);
-        if (behaviorTree != null) {
-            behaviorTree.removeNode(id);
-        }
     }
 
     public BehaviorTreeStructure ensureBehaviorTree() {

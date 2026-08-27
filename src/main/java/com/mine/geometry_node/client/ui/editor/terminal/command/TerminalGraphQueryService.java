@@ -193,7 +193,7 @@ final class TerminalGraphQueryService {
         JsonArray groups = new JsonArray();
         for (Map.Entry<String, Integer> entry : groupsPage.items()) {
             JsonObject item = new JsonObject();
-            item.addProperty("key", entry.getKey());
+            item.addProperty("input", entry.getKey());
             item.addProperty("count", entry.getValue());
             groups.add(item);
         }

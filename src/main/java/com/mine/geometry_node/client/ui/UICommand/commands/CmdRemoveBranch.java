@@ -24,6 +24,7 @@ public class CmdRemoveBranch implements ICommand {
     private final Map<String, Object> mBackupInputs = new HashMap<>();
     private final Map<String, List<Connection>> mBackupOutputs = new HashMap<>();
     private final Map<String, Connection> mBackupExecution = new HashMap<>();
+    private final Map<String, Connection> mBackupBehaviorOutputs = new HashMap<>();
     private final Map<String, NodeData.PortConfig> mBackupPortConfigInputs = new HashMap<>();
     private final Map<String, NodeData.PortConfig> mBackupPortConfigExecInputs = new HashMap<>();
     private final Map<String, NodeData.PortConfig> mBackupPortConfigExecOutputs = new HashMap<>();
@@ -61,6 +62,9 @@ public class CmdRemoveBranch implements ICommand {
         // 备份 execOutputs
         if (targetNode.execOutputs != null) {
             mBackupExecution.putAll(targetNode.execOutputs);
+        }
+        if (targetNode.behaviorOutputs != null) {
+            mBackupBehaviorOutputs.putAll(targetNode.behaviorOutputs);
         }
 
         if (targetNode.portConfig != null) {
@@ -129,10 +133,17 @@ public class CmdRemoveBranch implements ICommand {
                 mController.removeExecutionConnection(mNodeId, execPort);
             }
         }
+        for (Map.Entry<String, Connection> entry
+                : new ArrayList<>(targetNode.behaviorOutputs.entrySet())) {
+            Connection link = entry.getValue();
+            mController.removeBehaviorConnection(mNodeId, entry.getKey(),
+                    link.targetNodeId(), link.targetPortName());
+        }
 
         targetNode.inputs.clear();
         targetNode.inputs.putAll(mBackupInputs);
         restorePortsConfig(targetNode);
+        mController.setNodeInputValue(mNodeId, mPropertyKey, mOldCount);
 
         for (Map.Entry<String, List<Connection>> entry : mBackupOutputs.entrySet()) {
             for (Connection link : entry.getValue()) {
@@ -145,6 +156,11 @@ public class CmdRemoveBranch implements ICommand {
             Connection link = entry.getValue();
             mController.addExecutionConnection(mNodeId, entry.getKey(), link.targetNodeId(), link.targetPortName());
         }
+        for (Map.Entry<String, Connection> entry : mBackupBehaviorOutputs.entrySet()) {
+            Connection link = entry.getValue();
+            mController.addBehaviorConnection(mNodeId, entry.getKey(),
+                    link.targetNodeId(), link.targetPortName());
+        }
 
         for (InboundConnectionBackup inbound : mBackupInbounds) {
             if (inbound.execution) {
@@ -156,7 +172,6 @@ public class CmdRemoveBranch implements ICommand {
             }
         }
 
-        mController.setNodeInputValue(mNodeId, mPropertyKey, mOldCount);
     }
 
     private void backupPortsConfig(Map<String, NodeData.PortConfig> source, Map<String, NodeData.PortConfig> target) {

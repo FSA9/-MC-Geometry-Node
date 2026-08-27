@@ -124,7 +124,7 @@ public enum StandardPorts {
     SOUND_TYPE("sound_type", PortType.STRING),
     ITEM_TYPE("item_type", PortType.STRING),
     PREDICATE("predicate", PortType.STRING),
-    KEY("key", PortType.STRING),
+    KEY("input", PortType.STRING),
     BILLBOARD("billboard", PortType.STRING),
     ENTRY_ID("entry_id", PortType.STRING),
     SHOP_ID("shop_id", PortType.STRING),
