@@ -107,7 +107,12 @@ public class DynamicGraphManager {
             GraphAssetLifecycleIndex.INSTANCE.replaceDynamicGraphs(server, dynamicGraphCache,
                     invalidDynamicGraphIds);
             notifyReload(server, normalizedId, oldDescriptor, null);
-            GeometryNode.LOGGER.info("[DynamicGraphManager] Graph saved without runtime artifact: {}", normalizedId);
+            GeometryNode.LOGGER.warn(
+                    "[DynamicGraphManager] Graph saved without runtime artifact: {} ({})",
+                    normalizedId, exception.getMessage());
+            GeometryNode.LOGGER.debug(
+                    "[DynamicGraphManager] Compilation failure for uploaded graph: " + normalizedId,
+                    exception);
         }
     }
 

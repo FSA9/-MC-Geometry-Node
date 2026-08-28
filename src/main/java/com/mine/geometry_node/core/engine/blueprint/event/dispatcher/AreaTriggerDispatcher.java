@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
-import com.mine.geometry_node.core.engine.blueprint.attachment.EntityGraphAttachment;
+import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.debug.DebugRenderShape;
 import com.mine.geometry_node.core.engine.blueprint.debug.DebugRenderChannel;

@@ -123,6 +123,14 @@ public class ViewportEventDispatcher {
         }
 
         int action = ev.getActionMasked();
+        if (action == MotionEvent.ACTION_SCROLL) {
+            HintHitResult hitResult = findInteractiveHint(ev);
+            if (hitResult != null
+                    && dispatchTransformedEvent(ev, hitResult.view(), hitResult.isLogical(), !hitResult.isLogical(), true)) {
+                return true;
+            }
+            return false;
+        }
         if (action == MotionEvent.ACTION_HOVER_MOVE || action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_EXIT) {
             HintHitResult hitResult = findInteractiveHint(ev);
             updateHoveredHint(ev, hitResult);

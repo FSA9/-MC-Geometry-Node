@@ -7,7 +7,7 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
-import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import net.minecraft.core.HolderLookup;
@@ -967,13 +967,23 @@ public class GraphProcess {
         }
 
         @Override
-        public void setPersistentAttribute(@Nullable PersistentAttributeTarget target, String name, Object value) {
-            GraphEngineServices.INSTANCE.persistentAttributes().set(runtimeContext(), target, name, value);
+        public void setScopedState(ScopedStateTarget target, String name, Object value) {
+            GraphEngineServices.INSTANCE.scopedState().set(runtimeContext(), target, name, value);
         }
 
         @Override
-        public Object getPersistentAttribute(@Nullable PersistentAttributeTarget target, String name) {
-            return GraphEngineServices.INSTANCE.persistentAttributes().get(runtimeContext(), target, name);
+        public Object getScopedState(ScopedStateTarget target, String name) {
+            return GraphEngineServices.INSTANCE.scopedState().get(runtimeContext(), target, name);
+        }
+
+        @Override
+        public boolean hasScopedState(ScopedStateTarget target, String name) {
+            return GraphEngineServices.INSTANCE.scopedState().has(runtimeContext(), target, name);
+        }
+
+        @Override
+        public boolean clearScopedState(ScopedStateTarget target, String name) {
+            return GraphEngineServices.INSTANCE.scopedState().clear(runtimeContext(), target, name);
         }
 
         @Nullable

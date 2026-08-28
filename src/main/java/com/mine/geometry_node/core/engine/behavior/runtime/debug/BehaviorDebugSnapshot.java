@@ -126,8 +126,8 @@ public record BehaviorDebugSnapshot(
             BehaviorBlackboard.EntrySnapshot entry) {
         Object value = entry.value();
         return new BlackboardSnapshot(frame.frameId(), frame.assetId(), frame.callNodePath(), frame.revision(),
-                entry.name(), entry.scope().name(), entry.type(),
-                entry.writable(), value != null, valueKind(value), observedText(value),
+                entry.name(), entry.scope().name(), entry.providerIdentity(), entry.type(),
+                value != null, valueKind(value), observedText(value),
                 entry.revision(), entry.sourceNodeId(), entry.gameTick(), entry.scopeAvailable());
     }
 
@@ -226,7 +226,8 @@ public record BehaviorDebugSnapshot(
 
     public record BlackboardSnapshot(int frameId, String frameAssetId, String callNodePath,
                                      long frameRevision,
-                                     String name, String scope, PortType type, boolean writable,
+                                     String name, String scope,
+                                     String providerIdentity, PortType type,
                                      boolean present, String valueKind, String displayValue,
                                      long revision, String sourceNodeId, long gameTick,
                                      boolean scopeAvailable) {

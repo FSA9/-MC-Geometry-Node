@@ -6,13 +6,13 @@ import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
-import com.mine.geometry_node.core.engine.blueprint.attachment.EntityGraphAttachment;
+import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
-import com.mine.geometry_node.core.engine.integration.AttachmentPersistentAttributeStore;
+import com.mine.geometry_node.core.engine.graph.scoped.ServerScopedStateStore;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
@@ -137,7 +137,7 @@ public class GeometryNode {
         // 初始化节点注册表
         NodeRegistry.INSTANCE.init();
 
-        GraphEngineServices.INSTANCE.setPersistentAttributeStore(new AttachmentPersistentAttributeStore());
+        GraphEngineServices.INSTANCE.setScopedStateStore(new ServerScopedStateStore());
 
         // 初始化图运行时注册表
         GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);

@@ -48,9 +48,6 @@ public class LevelGraphAttachment extends SavedData {
     public void removeProcess(String graphId, GraphCloseMode closeMode) { container.removeProcess(graphId, closeMode); }
     public Collection<GraphProcess> getProcesses() { return container.getProcesses(); }
     public GraphProcess getProcess(String graphId) { return container.getProcess(graphId); }
-    public void setAttribute(String key, Object value) { container.setAttribute(key, value); }
-    public Object getAttribute(String key) { return container.getAttribute(key); }
-
     // --- 序列化层 ---
 
     private static Codec<LevelGraphAttachment> codec(ServerLevel level) {

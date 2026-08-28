@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityInven
 import com.mine.geometry_node.core.engine.blueprint.attachment.GlobalGraphStorage;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.EventSubscription;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.GraphSubscriptionIndex;
+import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;

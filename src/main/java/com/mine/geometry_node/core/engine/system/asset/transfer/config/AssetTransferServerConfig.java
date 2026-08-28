@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.transfer.config;
 
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateServerConfig;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 import java.time.Duration;
@@ -65,6 +66,7 @@ public final class AssetTransferServerConfig {
                         + "'.geometrynode-preview-cache' beside the server geometry-nodes asset root.")
                 .defineInRange("previewCacheMaxSizeMiB", 512, 64, 65_536);
         BUILDER.pop();
+        ScopedStateServerConfig.register(BUILDER);
         SPEC = BUILDER.build();
     }
 

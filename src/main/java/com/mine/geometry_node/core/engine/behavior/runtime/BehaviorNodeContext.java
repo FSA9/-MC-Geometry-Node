@@ -3,7 +3,8 @@ package com.mine.geometry_node.core.engine.behavior.runtime;
 import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
-import com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
+import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionFailure;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import net.minecraft.server.level.ServerLevel;
@@ -137,20 +138,51 @@ public final class BehaviorNodeContext {
     }
 
     @Nullable
-    public Object getBlackboard(BlackboardScope scope, String name) {
+    public Object getBlackboard(ScopedStateScope scope, String name) {
         ensureValid();
         return instance.blackboard(nodeIndex).get(scope, name);
     }
 
-    public void setBlackboard(BlackboardScope scope, String name, @Nullable Object value) {
+    public boolean hasBlackboard(ScopedStateScope scope, String name) {
         ensureValid();
-        instance.blackboard(nodeIndex).set(scope, name, value, nodeId(), epochTick);
+        return instance.blackboard(nodeIndex).contains(scope, name);
+    }
+
+    public long blackboardRevision(ScopedStateScope scope, String name) {
+        ensureValid();
+        return instance.blackboard(nodeIndex).revision(scope, name);
+    }
+
+    public com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard.ObservationToken
+    observeBlackboard(ScopedStateScope scope, String name) {
+        ensureValid();
+        return instance.blackboard(nodeIndex).observe(scope, name);
+    }
+
+    public ScopedStateScope blackboardScope() {
+        ensureValid();
+        Object raw = staticInput(BehaviorNodeTypes.BLACKBOARD_SCOPE_PORT);
+        if (!(raw instanceof String text)) {
+            throw new BehaviorContractViolation("Blackboard scope is missing");
+        }
+        try {
+            return ScopedStateScope.valueOf(text.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new BehaviorContractViolation("Blackboard scope is invalid: " + text);
+        }
+    }
+
+    public void setBlackboard(ScopedStateScope scope, String name, @Nullable Object value) {
+        ensureValid();
+        instance.blackboard(nodeIndex).set(
+                scope, name, value, instance.blackboardAuditSource(nodeIndex), epochTick);
         instance.dataEvaluation().clearValues();
     }
 
-    public boolean clearBlackboard(BlackboardScope scope, String name) {
+    public boolean clearBlackboard(ScopedStateScope scope, String name) {
         ensureValid();
-        boolean changed = instance.blackboard(nodeIndex).clear(scope, name, nodeId(), epochTick);
+        boolean changed = instance.blackboard(nodeIndex).clear(
+                scope, name, instance.blackboardAuditSource(nodeIndex), epochTick);
         if (changed) instance.dataEvaluation().clearValues();
         return changed;
     }

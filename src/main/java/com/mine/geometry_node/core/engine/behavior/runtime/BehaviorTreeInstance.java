@@ -1,13 +1,17 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
 import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard;
+import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorScopedStateProviders;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorLifecycleContract;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorNodeState;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
+import com.mine.geometry_node.core.engine.behavior.contract.BehaviorValueSemantics;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
+import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import org.jetbrains.annotations.Nullable;
 
@@ -79,16 +83,9 @@ public final class BehaviorTreeInstance {
         this.resourceOwners = new int[NodeCapabilities.ResourceUse.values().length];
         Arrays.fill(resourceOwners, -1);
         this.resourcesAcquired = new boolean[nodeCount];
-        int declaredFrameEntries = plan.blackboardFrameSchemas().stream()
-                .mapToInt(schema -> schema.declarations().size()).sum();
-        if (declaredFrameEntries > budget.maxBlackboardEntriesPerInstance()) {
-            throw new IllegalArgumentException("Linked behavior blackboard declarations exceed instance limit: "
-                    + declaredFrameEntries + " > " + budget.maxBlackboardEntriesPerInstance());
-        }
-        this.blackboards = new BehaviorBlackboard[plan.blackboardFrameSchemas().size()];
+        this.blackboards = new BehaviorBlackboard[plan.blackboardFrameInfos().size()];
         for (int frame = 0; frame < blackboards.length; frame++) {
-            blackboards[frame] = new BehaviorBlackboard(plan.blackboardFrameSchemas().get(frame),
-                    budget.maxBlackboardEntriesPerInstance());
+            blackboards[frame] = newBlackboard(frame);
         }
         this.dataEvaluation = new GraphDataEvaluationSession(plan);
         this.random = new Random(randomSeed);
@@ -120,7 +117,9 @@ public final class BehaviorTreeInstance {
         for (int frame = 0; frame < blackboards.length; frame++) {
             BehaviorTreePlan.BlackboardFrameInfo info = plan.blackboardFrameInfos().get(frame);
             result.add(new BlackboardFrameSnapshot(frame, info.assetId(), info.callNodePath(),
-                    blackboards[frame].revision(), blackboards[frame].snapshot()));
+                    blackboards[frame].revision(), frame == 0 ? blackboards[frame].snapshot()
+                    : blackboards[frame].snapshot(
+                            ScopedStateScope.INSTANCE)));
         }
         return List.copyOf(result);
     }
@@ -131,20 +130,37 @@ public final class BehaviorTreeInstance {
 
     void enterSubtreeCall(int nodeIndex) {
         BehaviorTreePlan.SubtreeCallBoundary call = requireSubtreeCall(nodeIndex);
-        blackboards[call.childFrame()] = new BehaviorBlackboard(
-                plan.blackboardFrameSchemas().get(call.childFrame()),
-                budget.maxBlackboardEntriesPerInstance());
+        blackboards[call.childFrame()] = newBlackboard(call.childFrame());
         BehaviorBlackboard parent = blackboards[call.parentFrame()];
         BehaviorBlackboard child = blackboards[call.childFrame()];
-        for (Map.Entry<String, String> mapping : call.inputKeyMapping().entrySet()) {
+        for (BehaviorTreePlan.SubtreeParameterTransfer transfer : call.inputTransfers()) {
             Object value = parent.get(
-                    com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE,
-                    mapping.getValue());
-            child.initialize(
-                    com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE,
-                    mapping.getKey(), value, plan.getNodeId(nodeIndex), host.gameTick());
+                    ScopedStateScope.INSTANCE,
+                    transfer.sourceKey());
+            if (value != null) {
+                child.set(ScopedStateScope.INSTANCE,
+                        transfer.targetKey(), validateSubtreeTransfer(nodeIndex, transfer, value, "input"),
+                        blackboardAuditSource(nodeIndex), host.gameTick());
+            }
         }
         dataEvaluation.clearValues();
+    }
+
+    private void installPersistentBlackboards(BehaviorBlackboard blackboard) {
+        if (host.level() != null && host.owner() != null) {
+            BehaviorScopedStateProviders.install(blackboard, host.level(), host.owner());
+        }
+    }
+
+    private BehaviorBlackboard newBlackboard(int frame) {
+        BehaviorBlackboard blackboard = new BehaviorBlackboard(
+                budget.maxBlackboardEntriesPerInstance());
+        installPersistentBlackboards(blackboard);
+        return blackboard;
+    }
+
+    String blackboardAuditSource(int nodeIndex) {
+        return instanceId + "|" + plan.getNodeAssetId(nodeIndex) + "|" + plan.getNodeId(nodeIndex);
     }
 
     void exitSubtreeCall(int nodeIndex, BehaviorTerminationReason reason) {
@@ -153,15 +169,20 @@ public final class BehaviorTreeInstance {
                 || reason == BehaviorTerminationReason.COMPLETED_FAILURE) {
             BehaviorBlackboard parent = blackboards[call.parentFrame()];
             BehaviorBlackboard child = blackboards[call.childFrame()];
-            Map<String, Object> outputs = new LinkedHashMap<>();
-            for (Map.Entry<String, String> mapping : call.outputKeyMapping().entrySet()) {
-                outputs.put(mapping.getKey(), child.get(
-                        com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE,
-                        mapping.getValue()));
+            Map<BehaviorTreePlan.SubtreeParameterTransfer, Object> outputs = new LinkedHashMap<>();
+            for (BehaviorTreePlan.SubtreeParameterTransfer transfer : call.outputTransfers()) {
+                Object value = child.get(
+                        ScopedStateScope.INSTANCE,
+                        transfer.sourceKey());
+                if (value != null) {
+                    outputs.put(transfer, validateSubtreeTransfer(
+                            nodeIndex, transfer, value, "output"));
+                }
             }
-            for (Map.Entry<String, Object> output : outputs.entrySet()) {
-                parent.set(com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE,
-                        output.getKey(), output.getValue(), plan.getNodeId(nodeIndex), host.gameTick());
+            for (Map.Entry<BehaviorTreePlan.SubtreeParameterTransfer, Object> output : outputs.entrySet()) {
+                parent.set(ScopedStateScope.INSTANCE,
+                        output.getKey().targetKey(), output.getValue(),
+                        blackboardAuditSource(nodeIndex), host.gameTick());
             }
         }
         dataEvaluation.clearValues();
@@ -172,6 +193,18 @@ public final class BehaviorTreeInstance {
         if (call == null) throw new IllegalStateException(
                 "Linked plan has no subtree call boundary for " + plan.getNodeId(nodeIndex));
         return call;
+    }
+
+    private Object validateSubtreeTransfer(int nodeIndex,
+                                           BehaviorTreePlan.SubtreeParameterTransfer transfer,
+                                           Object value, String direction) {
+        if (!BehaviorValueSemantics.matches(value, transfer.type())) {
+            throw new BehaviorContractViolation("Subtree " + direction + " type mismatch at "
+                    + plan.getNodeId(nodeIndex) + ": " + transfer.sourceKey() + " -> "
+                    + transfer.targetKey() + " requires " + transfer.type() + " but received "
+                    + value.getClass().getSimpleName());
+        }
+        return BehaviorValueSemantics.freezeAs(value, transfer.type());
     }
 
     public BehaviorNodeState nodeState(int nodeIndex) {

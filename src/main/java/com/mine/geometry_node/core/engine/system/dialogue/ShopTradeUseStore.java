@@ -2,7 +2,8 @@ package com.mine.geometry_node.core.engine.system.dialogue;
 
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
-import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -90,17 +91,19 @@ public final class ShopTradeUseStore {
     }
 
     private static Object getAttribute(ServerLevel level, @Nullable Entity owner, String key) {
-        return GraphEngineServices.INSTANCE.persistentAttributes().get(
+        return GraphEngineServices.INSTANCE.scopedState().get(
                 new GraphRuntimeContext(level, owner),
-                PersistentAttributeTarget.global(),
+                ScopedStateNamespace.SHOP,
+                ScopedStateTarget.shared(),
                 key
         );
     }
 
-    private static void setAttribute(ServerLevel level, @Nullable Entity owner, String key, @Nullable Object value) {
-        GraphEngineServices.INSTANCE.persistentAttributes().set(
+    private static void setAttribute(ServerLevel level, @Nullable Entity owner, String key, Object value) {
+        GraphEngineServices.INSTANCE.scopedState().set(
                 new GraphRuntimeContext(level, owner),
-                PersistentAttributeTarget.global(),
+                ScopedStateNamespace.SHOP,
+                ScopedStateTarget.shared(),
                 key,
                 value
         );

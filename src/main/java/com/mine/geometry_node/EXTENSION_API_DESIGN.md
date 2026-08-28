@@ -483,7 +483,7 @@ EventPayload.builder()
 - 对话节点只接收 boolean 条件输入。
 - 不在对话系统内置专用条件语言。
 - 条件应复用现有节点，例如 `GetEntityTags -> ListHasValue -> choice_visible_1`。
-- 这保证对话系统兼容 `GetEntityAttribute`、`GetEntityTags` 等任意数据节点。
+- 这保证对话系统兼容 `GetScopedState`、`GetEntityTags` 等任意数据节点。
 
 ### MVP 暂不实现
 

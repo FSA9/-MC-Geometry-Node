@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
-import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorLifecycleContract;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorNodeState;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
@@ -11,8 +10,10 @@ import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContra
 import com.mine.geometry_node.core.engine.graph.compile.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
-import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -151,7 +152,7 @@ public final class BehaviorTreeEvaluator {
                 if (cleanupFailure != null) throw cleanupFailure;
             }
             throw new EvaluationFault(BehaviorTerminationReason.BUDGET_EXHAUSTED, detail);
-        } catch (BehaviorBlackboard.BlackboardAccessException | BehaviorContractViolation exception) {
+        } catch (ScopedStateAccessException | BehaviorContractViolation exception) {
             String detail = exception.getMessage() != null
                     ? exception.getMessage() : exception.getClass().getSimpleName();
             if (instance.rawNodeState(nodeIndex).isActive()) {
@@ -455,7 +456,8 @@ public final class BehaviorTreeEvaluator {
         }
     }
 
-    private final class BehaviorDataContext implements GraphDataContext {
+    private final class BehaviorDataContext implements GraphDataContext,
+            com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboardView {
         private final BehaviorTreeInstance instance;
         private final int nodeIndex;
 
@@ -473,8 +475,8 @@ public final class BehaviorTreeEvaluator {
         public Object getVariable(String name) {
             try {
                 return instance.blackboard(nodeIndex).get(
-                        com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE, name);
-            } catch (BehaviorBlackboard.BlackboardAccessException exception) {
+                        ScopedStateScope.INSTANCE, name);
+            } catch (ScopedStateAccessException exception) {
                 return null;
             }
         }
@@ -483,10 +485,24 @@ public final class BehaviorTreeEvaluator {
         public boolean hasVariable(String name) {
             try {
                 return instance.blackboard(nodeIndex).contains(
-                        com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope.INSTANCE, name);
-            } catch (BehaviorBlackboard.BlackboardAccessException exception) {
+                        ScopedStateScope.INSTANCE, name);
+            } catch (ScopedStateAccessException exception) {
                 return false;
             }
+        }
+
+        @Override
+        public Object getBlackboard(
+                ScopedStateScope scope,
+                String name) {
+            return instance.blackboard(nodeIndex).get(scope, name);
+        }
+
+        @Override
+        public boolean hasBlackboard(
+                ScopedStateScope scope,
+                String name) {
+            return instance.blackboard(nodeIndex).contains(scope, name);
         }
 
         @Override public Object getInputValue(String portName) {
@@ -501,10 +517,10 @@ public final class BehaviorTreeEvaluator {
         @Override public boolean hasPort(String portName) { return instance.plan().hasPort(nodeIndex, portName); }
 
         @Override
-        public Object getPersistentAttribute(@Nullable PersistentAttributeTarget target, String name) {
+        public Object getScopedState(ScopedStateTarget target, String name) {
             ServerLevel level = instance.host().level();
             if (level == null) return null;
-            return GraphEngineServices.INSTANCE.persistentAttributes().get(
+            return GraphEngineServices.INSTANCE.scopedState().get(
                     new GraphRuntimeContext(level, instance.host().owner()), target, name);
         }
     }

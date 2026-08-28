@@ -1,9 +1,8 @@
 package com.mine.geometry_node.core.engine.service;
 
-import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateStore;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
@@ -19,7 +18,7 @@ public final class GraphEngineServices {
     public static final GraphEngineServices INSTANCE = new GraphEngineServices();
 
     private VisualSink visualSink = VisualSink.NOOP;
-    private PersistentAttributeStore persistentAttributeStore = PersistentAttributeStore.NOOP;
+    private ScopedStateStore scopedStateStore = ScopedStateStore.NOOP;
 
     private GraphEngineServices() {
     }
@@ -32,14 +31,12 @@ public final class GraphEngineServices {
         this.visualSink = visualSink != null ? visualSink : VisualSink.NOOP;
     }
 
-    public PersistentAttributeStore persistentAttributes() {
-        return persistentAttributeStore;
+    public ScopedStateStore scopedState() {
+        return scopedStateStore;
     }
 
-    public void setPersistentAttributeStore(@Nullable PersistentAttributeStore persistentAttributeStore) {
-        this.persistentAttributeStore = persistentAttributeStore != null
-                ? persistentAttributeStore
-                : PersistentAttributeStore.NOOP;
+    public void setScopedStateStore(@Nullable ScopedStateStore scopedStateStore) {
+        this.scopedStateStore = scopedStateStore != null ? scopedStateStore : ScopedStateStore.NOOP;
     }
 
     public interface VisualSink {
@@ -72,54 +69,4 @@ public final class GraphEngineServices {
         }
     }
 
-    public interface PersistentAttributeStore {
-        PersistentAttributeStore NOOP = new PersistentAttributeStore() {
-            @Override
-            public void set(@Nullable GraphRuntimeContext context, @Nullable PersistentAttributeTarget target, String name, @Nullable Object value) {
-            }
-
-            @Override
-            public @Nullable Object get(@Nullable GraphRuntimeContext context, @Nullable PersistentAttributeTarget target, String name) {
-                return null;
-            }
-        };
-
-        void set(@Nullable GraphRuntimeContext context, @Nullable PersistentAttributeTarget target, String name, @Nullable Object value);
-
-        @Nullable
-        Object get(@Nullable GraphRuntimeContext context, @Nullable PersistentAttributeTarget target, String name);
-
-        @Deprecated
-        default void set(@Nullable GraphRuntimeContext context, @Nullable Object target, String name, @Nullable Object value) {
-            PersistentAttributeTarget converted = convertLegacyTarget(target);
-            if (converted != null) {
-                set(context, converted, name, value);
-            }
-        }
-
-        @Deprecated
-        @Nullable
-        default Object get(@Nullable GraphRuntimeContext context, @Nullable Object target, String name) {
-            PersistentAttributeTarget converted = convertLegacyTarget(target);
-            return converted != null ? get(context, converted, name) : null;
-        }
-
-        private static PersistentAttributeTarget convertLegacyTarget(@Nullable Object target) {
-            if (target == null) {
-                return PersistentAttributeTarget.global();
-            }
-            if (target instanceof PersistentAttributeTarget typedTarget) {
-                return typedTarget;
-            }
-            if (target instanceof Entity entity) {
-                return PersistentAttributeTarget.entity(entity);
-            }
-            if (target instanceof String scopeId && !scopeId.isBlank()) {
-                return "GLOBAL".equals(scopeId)
-                        ? PersistentAttributeTarget.global()
-                        : PersistentAttributeTarget.scope(scopeId);
-            }
-            return null;
-        }
-    }
 }

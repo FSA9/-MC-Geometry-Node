@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.engine.behavior.compile;
 
-import com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeParameter;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeDiagnostic;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
@@ -85,31 +84,18 @@ public final class BehaviorSubtreePlanValidator {
             BehaviorTreePlan target, List<BehaviorTreeDiagnostic> diagnostics) {
         call.inputMapping().forEach((parameterName, callerKeyName) -> {
             BehaviorTreePlan.SubtreeParameter parameter = target.subtreeSignature().find(parameterName);
-            BehaviorTreePlan.BlackboardKey callerKey = caller.blackboardSchema()
-                    .find(BlackboardScope.INSTANCE, callerKeyName);
             if (parameter == null || parameter.direction() != BehaviorSubtreeParameter.Direction.INPUT) {
                 diagnostics.add(diagnostic(caller, call, "SUBTREE_INPUT_PARAMETER_MISSING",
                         "Subtree input mapping references an unavailable INPUT parameter: "
                                 + parameterName));
-            } else if (callerKey == null || callerKey.type() != parameter.type()) {
-                diagnostics.add(diagnostic(caller, call, "SUBTREE_INPUT_TYPE_MISMATCH",
-                        "Subtree input mapping types do not match: " + callerKeyName
-                                + " -> " + parameterName));
             }
         });
         call.outputMapping().forEach((callerKeyName, parameterName) -> {
             BehaviorTreePlan.SubtreeParameter parameter = target.subtreeSignature().find(parameterName);
-            BehaviorTreePlan.BlackboardKey callerKey = caller.blackboardSchema()
-                    .find(BlackboardScope.INSTANCE, callerKeyName);
             if (parameter == null || parameter.direction() != BehaviorSubtreeParameter.Direction.OUTPUT) {
                 diagnostics.add(diagnostic(caller, call, "SUBTREE_OUTPUT_PARAMETER_MISSING",
                         "Subtree output mapping references an unavailable OUTPUT parameter: "
                                 + parameterName));
-            } else if (callerKey == null || !callerKey.writable()
-                    || callerKey.type() != parameter.type()) {
-                diagnostics.add(diagnostic(caller, call, "SUBTREE_OUTPUT_TYPE_MISMATCH",
-                        "Subtree output mapping types do not match: " + parameterName
-                                + " -> " + callerKeyName));
             }
         });
     }

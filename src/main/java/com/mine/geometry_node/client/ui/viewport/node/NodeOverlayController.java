@@ -35,6 +35,7 @@ import java.util.Map;
 
 final class NodeOverlayController {
     static final int COMMENT_POPUP_WIDTH_DP = 10 * UIConstants.GRID_SIZE;
+    private static final int COMMENT_POPUP_MAX_HEIGHT_DP = 8 * UIConstants.GRID_SIZE;
 
     private static NodeOverlayController sOpenCommentOverlay;
 
@@ -164,7 +165,7 @@ final class NodeOverlayController {
 
     int getOverlayHeightDp() {
         return hasCommentOverlay()
-                ? Math.max(mTotalHeight, estimateCommentPopupHeightDp())
+                ? Math.max(mTotalHeight, Math.min(COMMENT_POPUP_MAX_HEIGHT_DP, estimateCommentPopupHeightDp()))
                 : mTotalHeight;
     }
 
@@ -423,10 +424,14 @@ final class NodeOverlayController {
         mCommentTooltip.setPadding(UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5), UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5));
         mCommentTooltip.setBackground(createRectDrawable(0xF0222222, 4.0f, 1, 0xFF555555));
         mCommentTooltip.setTextIsSelectable(true);
+        mCommentTooltip.setVerticalScrollBarEnabled(true);
         mCommentTooltip.setVisibility(View.GONE);
 
         int tooltipWidth = UIUtils.dp2pxInt(COMMENT_POPUP_WIDTH_DP);
-        FrameLayout.LayoutParams tooltipLp = new FrameLayout.LayoutParams(tooltipWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+        int tooltipHeight = UIUtils.dp2pxInt(Math.min(
+                COMMENT_POPUP_MAX_HEIGHT_DP,
+                estimateCommentPopupHeightDp()));
+        FrameLayout.LayoutParams tooltipLp = new FrameLayout.LayoutParams(tooltipWidth, tooltipHeight);
         tooltipLp.gravity = Gravity.TOP | Gravity.LEFT;
         tooltipLp.leftMargin = UIUtils.dp2pxInt(mNodeWidth);
         tooltipLp.topMargin = 0;

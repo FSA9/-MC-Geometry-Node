@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.behavior.compile.BehaviorTreeLinker;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
@@ -307,9 +308,15 @@ public final class BehaviorRuntimeService {
     private void removeIndexes(ServerState server, InstanceEntry entry) {
         UUID instanceId = entry.instance.instanceId();
         if (!entry.instance.state().isActive()) {
-            entry.refreshOwnerAccess();
-            server.retainTerminalSnapshot(entry.ownerId, BehaviorDebugSnapshot.capture(entry.instance),
-                    entry.access(false));
+            try {
+                entry.refreshOwnerAccess();
+                server.retainTerminalSnapshot(entry.ownerId,
+                        BehaviorDebugSnapshot.capture(entry.instance), entry.access(false));
+            } catch (RuntimeException exception) {
+                GeometryNode.LOGGER.warn(
+                        "[BehaviorRuntime] Failed to capture terminal snapshot for {}; indexes will still be removed",
+                        instanceId, exception);
+            }
         }
         server.instances.remove(instanceId, entry);
         server.ownerInstances.remove(entry.ownerId, instanceId);

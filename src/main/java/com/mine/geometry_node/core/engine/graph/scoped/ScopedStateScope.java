@@ -1,7 +1,7 @@
-package com.mine.geometry_node.core.engine.behavior.contract;
+package com.mine.geometry_node.core.engine.graph.scoped;
 
-/** Final author-visible blackboard scopes. Evaluation cache is intentionally internal. */
-public enum BlackboardScope {
+/** Common state scopes. INSTANCE is reserved for a behavior runtime frame. */
+public enum ScopedStateScope {
     INSTANCE(false),
     OWNER(true),
     SHARED(true),
@@ -10,7 +10,7 @@ public enum BlackboardScope {
 
     private final boolean persistent;
 
-    BlackboardScope(boolean persistent) {
+    ScopedStateScope(boolean persistent) {
         this.persistent = persistent;
     }
 

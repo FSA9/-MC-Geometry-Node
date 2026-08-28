@@ -4,9 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
-import com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorValueSemantics;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorBlackboardDeclaration;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeConnections;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeCall;
@@ -36,12 +34,10 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -159,19 +155,17 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         validateRequiredInputs(assetId, info, inbound, diagnostics);
         validateDataCycles(assetId, nodeIds, inbound, diagnostics);
         validateDepth(assetId, graph, diagnostics);
-        BehaviorTreePlan.BlackboardSchema blackboard = compileBlackboard(
-                assetId, graph.behaviorTree, diagnostics);
         BehaviorTreePlan.SubtreeSignature signature = compileSubtreeSignature(
-                assetId, graph.behaviorTree, blackboard, diagnostics);
+                assetId, graph.behaviorTree, diagnostics);
         BehaviorTreePlan.DependencyManifest dependencies = compileDependencies(
-                assetId, context, info, blackboard, diagnostics);
+                assetId, context, info, diagnostics);
 
         diagnostics.sort(Comparator.comparing(BehaviorTreeDiagnostic::code)
                 .thenComparing(BehaviorTreeDiagnostic::nodeId)
                 .thenComparing(BehaviorTreeDiagnostic::portId)
                 .thenComparing(BehaviorTreeDiagnostic::relatedNodeId)
                 .thenComparing(BehaviorTreeDiagnostic::message));
-        return new Compilation(graph, nodeIds, info, inbound, blackboard, signature, dependencies,
+        return new Compilation(graph, nodeIds, info, inbound, signature, dependencies,
                 rootSchedule,
                 List.copyOf(diagnostics));
     }
@@ -270,7 +264,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         return BehaviorTreePlan.createCompiled(
                 context != null ? context.assetId() : "", ids, indexes, types, capabilities,
                 root, parents, children, staticInputs, dataInputs, ports, portKeys, portNames,
-                nodesByType, compilation.blackboard, compilation.dependencies,
+                nodesByType, compilation.dependencies,
                 compilation.subtreeSignature, compilation.rootSchedule);
     }
 
@@ -555,69 +549,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         return maximum;
     }
 
-    private static BehaviorTreePlan.BlackboardSchema compileBlackboard(
-            String assetId, @Nullable BehaviorTreeStructure structure,
-            List<BehaviorTreeDiagnostic> diagnostics) {
-        if (structure == null) return BehaviorTreePlan.BlackboardSchema.EMPTY;
-        List<BehaviorBlackboardDeclaration> declarations = structure.blackboardDeclarations();
-        if (declarations.size() > BehaviorRuntimeBudget.DEFAULT.maxBlackboardEntriesPerInstance()) {
-            add(diagnostics, diagnostic(assetId, "BLACKBOARD_LIMIT_EXCEEDED",
-                    "Blackboard declaration count exceeds "
-                            + BehaviorRuntimeBudget.DEFAULT.maxBlackboardEntriesPerInstance(), "", "", ""));
-        }
-        List<BehaviorTreePlan.BlackboardKey> compiled = new ArrayList<>();
-        Set<String> keys = new HashSet<>();
-        for (BehaviorBlackboardDeclaration declaration : declarations) {
-            if (declaration == null) continue;
-            String name = declaration.name != null ? declaration.name.trim() : "";
-            if (!name.matches(NAME_PATTERN)) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_NAME_INVALID",
-                        "Blackboard input name is invalid: " + name, "", name, ""));
-                continue;
-            }
-            BlackboardScope scope;
-            PortType type;
-            try {
-                scope = BlackboardScope.valueOf(text(declaration.scope).toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException exception) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_SCOPE_INVALID",
-                        "Unknown blackboard scope: " + declaration.scope, "", name, ""));
-                continue;
-            }
-            try {
-                type = PortType.valueOf(text(declaration.type).toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException exception) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_TYPE_INVALID",
-                        "Unknown blackboard value type: " + declaration.type, "", name, ""));
-                continue;
-            }
-            if (type.isFlow() || type == PortType.ANY) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_TYPE_INVALID",
-                        "Blackboard keys require a concrete data type", "", name, ""));
-                continue;
-            }
-            String identity = scope.name() + '\0' + name;
-            if (!keys.add(identity)) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_KEY_DUPLICATED",
-                        "Blackboard input is declared more than once in the same scope", "", name, ""));
-                continue;
-            }
-            if (declaration.defaultValue != null
-                    && !BehaviorValueSemantics.matches(declaration.defaultValue, type)) {
-                add(diagnostics, diagnostic(assetId, "BLACKBOARD_DEFAULT_TYPE_INVALID",
-                        "Blackboard default does not match " + type, "", name, ""));
-                continue;
-            }
-            compiled.add(new BehaviorTreePlan.BlackboardKey(name, scope, type,
-                    declaration.writable, declaration.defaultValue != null
-                    ? BehaviorValueSemantics.freezeAs(declaration.defaultValue, type) : null));
-        }
-        return new BehaviorTreePlan.BlackboardSchema(compiled);
-    }
-
     private static BehaviorTreePlan.SubtreeSignature compileSubtreeSignature(
             String assetId, @Nullable BehaviorTreeStructure structure,
-            BehaviorTreePlan.BlackboardSchema blackboard,
             List<BehaviorTreeDiagnostic> diagnostics) {
         if (structure == null) return BehaviorTreePlan.SubtreeSignature.EMPTY;
         List<BehaviorTreePlan.SubtreeParameter> compiled = new ArrayList<>();
@@ -636,29 +569,15 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                         "Subtree parameter is declared more than once", "", name, ""));
                 continue;
             }
-            BehaviorTreePlan.BlackboardKey blackboardKey = blackboard.find(BlackboardScope.INSTANCE, key);
-            if (blackboardKey == null) {
-                add(diagnostics, diagnostic(assetId, "SUBTREE_PARAMETER_KEY_MISSING",
-                        "Subtree parameter references an undeclared INSTANCE blackboard key",
-                        "", name, key));
-                continue;
-            }
             PortType type = declaration.type != null ? declaration.type : PortType.ANY;
-            if (type != PortType.ANY && type != blackboardKey.type()) {
-                add(diagnostics, diagnostic(assetId, "SUBTREE_PARAMETER_TYPE_MISMATCH",
-                        "Subtree parameter type does not match its blackboard key",
-                        "", name, key));
-                continue;
-            }
-            if (declaration.direction == BehaviorSubtreeParameter.Direction.OUTPUT
-                    && !blackboardKey.writable()) {
-                add(diagnostics, diagnostic(assetId, "SUBTREE_OUTPUT_READ_ONLY",
-                        "Subtree output must reference a writable blackboard key",
-                        "", name, key));
+            if (type.isFlow()) {
+                add(diagnostics, diagnostic(assetId, "SUBTREE_PARAMETER_TYPE_INVALID",
+                        "Subtree parameters must use a data port type",
+                        "", name, ""));
                 continue;
             }
             compiled.add(new BehaviorTreePlan.SubtreeParameter(name, declaration.direction,
-                    blackboardKey.type(), key));
+                    type, key));
         }
         compiled.sort(Comparator.comparing(BehaviorTreePlan.SubtreeParameter::name));
         return new BehaviorTreePlan.SubtreeSignature(compiled);
@@ -666,7 +585,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
 
     private static BehaviorTreePlan.DependencyManifest compileDependencies(
             String assetId, GraphCompileContext context, Map<String, NodeInfo> info,
-            BehaviorTreePlan.BlackboardSchema blackboard,
             List<BehaviorTreeDiagnostic> diagnostics) {
         List<BehaviorTreePlan.SubtreeDependency> compiled = new ArrayList<>();
         for (Map.Entry<String, NodeInfo> entry : info.entrySet()) {
@@ -697,25 +615,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                         callNodeId, "", dependencyId));
                 continue;
             }
-            boolean localKeysValid = true;
-            for (String localKey : call.inputMapping.values()) {
-                if (blackboard.find(BlackboardScope.INSTANCE, localKey) == null) {
-                    add(diagnostics, diagnostic(assetId, "SUBTREE_INPUT_SOURCE_MISSING",
-                            "Subtree input mapping references an undeclared caller blackboard key",
-                            callNodeId, localKey, dependencyId));
-                    localKeysValid = false;
-                }
-            }
-            for (String localKey : call.outputMapping.keySet()) {
-                BehaviorTreePlan.BlackboardKey key = blackboard.find(BlackboardScope.INSTANCE, localKey);
-                if (key == null || !key.writable()) {
-                    add(diagnostics, diagnostic(assetId, "SUBTREE_OUTPUT_TARGET_INVALID",
-                            "Subtree output target must be a writable caller blackboard key",
-                            callNodeId, localKey, dependencyId));
-                    localKeysValid = false;
-                }
-            }
-            if (!localKeysValid) continue;
             compiled.add(new BehaviorTreePlan.SubtreeDependency(callNodeId, dependencyId,
                     new TreeMap<>(call.inputMapping), new TreeMap<>(call.outputMapping)));
         }
@@ -774,7 +673,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         NodeGraph graph = new NodeGraph();
         graph.graphKind = GraphTypeRegistry.BEHAVIOR_TREE.id();
         return new Compilation(graph, List.of(), Map.of(), Map.of(),
-                BehaviorTreePlan.BlackboardSchema.EMPTY,
                 BehaviorTreePlan.SubtreeSignature.EMPTY,
                 BehaviorTreePlan.DependencyManifest.EMPTY,
                 BehaviorTreePlan.RootSchedule.DEFAULT, List.of(diagnostic));
@@ -821,7 +719,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
 
     private record Compilation(NodeGraph graph, List<String> nodeIds,
                                Map<String, NodeInfo> info, Map<InputKey, DataLink> inbound,
-                               BehaviorTreePlan.BlackboardSchema blackboard,
                                BehaviorTreePlan.SubtreeSignature subtreeSignature,
                                BehaviorTreePlan.DependencyManifest dependencies,
                                BehaviorTreePlan.RootSchedule rootSchedule,

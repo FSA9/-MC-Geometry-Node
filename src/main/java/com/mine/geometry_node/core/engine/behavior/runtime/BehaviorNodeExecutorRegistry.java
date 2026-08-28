@@ -3,7 +3,6 @@ package com.mine.geometry_node.core.engine.behavior.runtime;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorCompositeMode;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
-import com.mine.geometry_node.core.engine.behavior.contract.BlackboardScope;
 import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -59,12 +58,12 @@ public final class BehaviorNodeExecutorRegistry {
         String key = requireKey(context);
         Object value = require(context.input(BehaviorNodeTypes.BLACKBOARD_VALUE_PORT),
                 "Blackboard value is missing: " + key);
-        context.setBlackboard(BlackboardScope.INSTANCE, key, value);
+        context.setBlackboard(context.blackboardScope(), key, value);
         return BehaviorResult.SUCCESS;
     };
     private static final BehaviorNodeExecutor CLEAR_BLACKBOARD_EXECUTOR = context -> {
         String key = requireKey(context);
-        context.clearBlackboard(BlackboardScope.INSTANCE, key);
+        context.clearBlackboard(context.blackboardScope(), key);
         return BehaviorResult.SUCCESS;
     };
     private static final BehaviorNodeExecutor REACTIVE_SEQUENCE_EXECUTOR =
@@ -400,10 +399,12 @@ public final class BehaviorNodeExecutorRegistry {
         @Override
         public BehaviorResult update(BehaviorNodeContext context) {
             String key = requireKey(context);
-            long current = context.blackboard().revision(BlackboardScope.INSTANCE, key);
-            long previous = context.memory() instanceof Long value ? value : current;
+            var current = context.observeBlackboard(context.blackboardScope(), key);
+            var previous = context.memory() instanceof
+                    com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard.ObservationToken value
+                    ? value : current;
             context.setMemory(current);
-            return current != previous ? BehaviorResult.SUCCESS : BehaviorResult.FAILURE;
+            return !current.equals(previous) ? BehaviorResult.SUCCESS : BehaviorResult.FAILURE;
         }
     }
 

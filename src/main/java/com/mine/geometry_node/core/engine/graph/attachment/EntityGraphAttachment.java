@@ -1,7 +1,9 @@
-package com.mine.geometry_node.core.engine.blueprint.attachment;
+package com.mine.geometry_node.core.engine.graph.attachment;
 
+import com.mine.geometry_node.core.engine.blueprint.attachment.GraphContainer;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
+import com.mine.geometry_node.core.engine.graph.scoped.OwnerScopedStateStore;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
@@ -23,6 +25,8 @@ import java.util.*;
 public class EntityGraphAttachment {
 
     private final GraphBindingSet boundGraphs = new GraphBindingSet();
+    private final OwnerScopedStateStore ownerScopedState =
+            new OwnerScopedStateStore();
     private String selectedBehaviorTree;
     private WeakReference<Entity> ownerRef = new WeakReference<>(null);
 
@@ -139,8 +143,7 @@ public class EntityGraphAttachment {
         }
         return process;
     }
-    public void setAttribute(String key, Object value) { container.setAttribute(key, value); }
-    public Object getAttribute(String key) { return container.getAttribute(key); }
+    public OwnerScopedStateStore ownerScopedState() { return ownerScopedState; }
 
     // --- 序列化层 ---
 
@@ -159,6 +162,10 @@ public class EntityGraphAttachment {
         }
         if (selectedBehaviorTree != null && getBoundBehaviorTrees().contains(selectedBehaviorTree)) {
             tag.putString("SelectedBehaviorTree", selectedBehaviorTree);
+        }
+        if (!ownerScopedState.isEmpty()) {
+            tag.put("OwnerScopedState",
+                    ownerScopedState.save(new CompoundTag(), provider));
         }
         return container.save(tag, provider);
     }
@@ -181,6 +188,7 @@ public class EntityGraphAttachment {
         }
         String selected = tag.getStringOr("SelectedBehaviorTree", "");
         selectedBehaviorTree = getBoundBehaviorTrees().contains(selected) ? selected : null;
+        ownerScopedState.load(tag.getCompoundOrEmpty("OwnerScopedState"), provider);
         container.load(tag, provider);
     }
 }

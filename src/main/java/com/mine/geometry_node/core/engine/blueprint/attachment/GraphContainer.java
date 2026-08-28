@@ -25,7 +25,6 @@ import java.util.Map;
 public class GraphContainer {
 
     private final Map<String, GraphProcess> processes = new HashMap<>();
-    private final Map<String, Object> attributes = new HashMap<>();
     private final DueTickScheduler<String, GraphProcess> tickScheduler = new DueTickScheduler<>();
 
     // 脏标记回调 (用于通知 Level 保存存档)
@@ -136,7 +135,6 @@ public class GraphContainer {
             process.shutdown("graph_unloaded");
         }
         this.processes.clear();
-        this.attributes.clear();
         if (clearTickSchedule()) {
             notifyScheduleChanged();
         }
@@ -167,22 +165,6 @@ public class GraphContainer {
     }
 
     /**
-     * [属性写入]
-     */
-    public void setAttribute(String key, Object value) {
-        if (value == null) this.attributes.remove(key);
-        else this.attributes.put(key, value);
-        this.dirtyMarker.run();
-    }
-
-    /**
-     * [属性读取]
-     */
-    public Object getAttribute(String key) {
-        return this.attributes.get(key);
-    }
-
-    /**
      * [序列化] 将进程和属性保存到 NBT
      */
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
@@ -198,10 +180,6 @@ public class GraphContainer {
 
     public Map<String, GraphProcess> getProcessesMap() {
         return this.processes;
-    }
-
-    public Map<String, Object> getAttributesMap() {
-        return this.attributes;
     }
 
     private void attachProcess(GraphProcess process) {

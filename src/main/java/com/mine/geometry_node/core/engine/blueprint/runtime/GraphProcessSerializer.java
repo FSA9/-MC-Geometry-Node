@@ -285,14 +285,6 @@ public class GraphProcessSerializer {
             }
             tag.put("ActiveProcesses", processList);
         }
-        if (!container.getAttributesMap().isEmpty()) {
-            CompoundTag attrTag = new CompoundTag();
-            for (Map.Entry<String, Object> entry : container.getAttributesMap().entrySet()) {
-                Tag t = GraphValueCodecRegistry.toTag(entry.getValue(), provider);
-                if (t != null) attrTag.put(entry.getKey(), t);
-            }
-            tag.put("Attributes", attrTag);
-        }
         return tag;
     }
 
@@ -310,13 +302,5 @@ public class GraphProcessSerializer {
             }
         }
 
-        container.getAttributesMap().clear();
-        if (tag.contains("Attributes")) {
-            CompoundTag attrTag = tag.getCompoundOrEmpty("Attributes");
-            for (String key : attrTag.keySet()) {
-                Object obj = GraphValueCodecRegistry.fromTag(attrTag.get(key), provider);
-                if (obj != null) container.getAttributesMap().put(key, obj);
-            }
-        }
     }
 }

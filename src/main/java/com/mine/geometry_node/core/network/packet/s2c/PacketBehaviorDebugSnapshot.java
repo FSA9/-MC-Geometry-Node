@@ -146,7 +146,8 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
         return new BlackboardEntry(source.frameId(), bounded(source.frameAssetId(), MAX_ID_LENGTH),
                 bounded(source.callNodePath(), MAX_ID_LENGTH), source.frameRevision(),
                 bounded(source.name(), MAX_NAME_LENGTH),
-                bounded(source.scope(), MAX_NAME_LENGTH), source.type(), source.writable(), source.present(),
+                bounded(source.scope(), MAX_NAME_LENGTH),
+                bounded(source.providerIdentity(), MAX_ID_LENGTH), source.type(), source.present(),
                 bounded(source.valueKind(), MAX_NAME_LENGTH),
                 bounded(source.displayValue(), MAX_VALUE_LENGTH), source.revision(),
                 bounded(source.sourceNodeId(), MAX_ID_LENGTH), source.gameTick(), source.scopeAvailable());
@@ -192,6 +193,7 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
     private static int blackboardBytes(BlackboardEntry entry) {
         return 64 + stringBytes(entry.frameAssetId()) + stringBytes(entry.callNodePath())
                 + stringBytes(entry.name()) + stringBytes(entry.scope())
+                + stringBytes(entry.providerIdentity())
                 + stringBytes(entry.valueKind()) + stringBytes(entry.displayValue())
                 + stringBytes(entry.sourceNodeId());
     }
@@ -425,7 +427,8 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
 
     public record BlackboardEntry(int frameId, String frameAssetId, String callNodePath,
                                   long frameRevision,
-                                  String name, String scope, PortType type, boolean writable,
+                                  String name, String scope,
+                                  String providerIdentity, PortType type,
                                   boolean present, String valueKind, String displayValue,
                                   long revision, String sourceNodeId, long gameTick,
                                   boolean scopeAvailable) {
@@ -436,8 +439,8 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
             buffer.writeLong(frameRevision);
             buffer.writeUtf(name, MAX_NAME_LENGTH);
             buffer.writeUtf(scope, MAX_NAME_LENGTH);
+            buffer.writeUtf(providerIdentity, MAX_ID_LENGTH);
             buffer.writeEnum(type);
-            buffer.writeBoolean(writable);
             buffer.writeBoolean(present);
             buffer.writeUtf(valueKind, MAX_NAME_LENGTH);
             buffer.writeUtf(displayValue, MAX_VALUE_LENGTH);
@@ -450,8 +453,8 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
         private static BlackboardEntry read(RegistryFriendlyByteBuf buffer) {
             return new BlackboardEntry(buffer.readVarInt(), buffer.readUtf(MAX_ID_LENGTH),
                     buffer.readUtf(MAX_ID_LENGTH), buffer.readLong(), buffer.readUtf(MAX_NAME_LENGTH),
-                    buffer.readUtf(MAX_NAME_LENGTH), buffer.readEnum(PortType.class),
-                    buffer.readBoolean(), buffer.readBoolean(), buffer.readUtf(MAX_NAME_LENGTH),
+                    buffer.readUtf(MAX_NAME_LENGTH), buffer.readUtf(MAX_ID_LENGTH),
+                    buffer.readEnum(PortType.class), buffer.readBoolean(), buffer.readUtf(MAX_NAME_LENGTH),
                     buffer.readUtf(MAX_VALUE_LENGTH), buffer.readLong(), buffer.readUtf(MAX_ID_LENGTH),
                     buffer.readLong(), buffer.readBoolean());
         }

@@ -41,6 +41,7 @@ public final class BehaviorNodeTypes {
     public static final String SCHEDULE_OFFSET_PORT = "schedule_offset";
     public static final String SUBTREE_ASSET_PORT = "subtree_asset";
     public static final String BLACKBOARD_KEY_PORT = "input";
+    public static final String BLACKBOARD_SCOPE_PORT = "blackboard_scope";
     public static final String BLACKBOARD_VALUE_PORT = "value";
     public static final String COUNT_PORT = "count";
     public static final String RETRY_INTERVAL_PORT = "retry_interval";

@@ -1,5 +1,10 @@
 package com.mine.geometry_node.core.engine.system.asset;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.mine.geometry_node.core.engine.graph.GraphType;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetDescriptor;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
@@ -380,14 +385,39 @@ public final class RemoteAssetFileService {
         GraphAssetDescriptor graph = directory || !AssetTransferPolicy.isGraphPath(path.toString())
                 ? null
                 : DynamicGraphManager.getGraph(graphId);
+        String graphTypeId = graph != null ? graph.type().id()
+                : directory || !AssetTransferPolicy.isGraphPath(path.toString())
+                ? "" : readGraphTypeId(path);
         return new RemoteGraphEntry(
                 graphId,
                 path.getFileName().toString(),
                 directory,
                 size,
                 lastModified,
-                graph != null ? graph.type().id() : ""
+                graphTypeId
         );
+    }
+
+    private static String readGraphTypeId(Path path) {
+        try (var reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            JsonElement parsed = JsonParser.parseReader(reader);
+            if (!parsed.isJsonObject()) return "";
+            JsonObject root = parsed.getAsJsonObject();
+            if (root.has("graph_kind") && root.get("graph_kind").isJsonPrimitive()) {
+                String explicitId = GraphType.normalizeId(root.get("graph_kind").getAsString());
+                if (GraphTypeRegistry.INSTANCE.get(explicitId) != null) return explicitId;
+            }
+            if (root.has("tags") && root.get("tags").isJsonArray()) {
+                for (JsonElement tag : root.getAsJsonArray("tags")) {
+                    if (!tag.isJsonPrimitive() || !tag.getAsJsonPrimitive().isString()) continue;
+                    GraphType legacyType = GraphTypeRegistry.INSTANCE.get(tag.getAsString());
+                    if (legacyType != null) return legacyType.id();
+                }
+            }
+            return GraphTypeRegistry.BLUEPRINT.id();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
 }

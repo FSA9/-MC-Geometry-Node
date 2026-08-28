@@ -37,7 +37,6 @@ public final class BehaviorTreeLinker {
         private final BehaviorTreePlan root;
         private final Function<String, @Nullable BehaviorTreePlan> resolver;
         private final List<NodeEntry> nodes = new ArrayList<>();
-        private final List<BehaviorTreePlan.BlackboardSchema> frameSchemas = new ArrayList<>();
         private final List<BehaviorTreePlan.BlackboardFrameInfo> frameInfos = new ArrayList<>();
         private final Map<Integer, BehaviorTreePlan.SubtreeCallBoundary> calls = new LinkedHashMap<>();
         private final List<BehaviorTreePlan.SubtreeDependency> dependencies = new ArrayList<>();
@@ -46,7 +45,6 @@ public final class BehaviorTreeLinker {
                         Function<String, @Nullable BehaviorTreePlan> resolver) {
             this.root = root;
             this.resolver = resolver;
-            frameSchemas.add(root.blackboardSchema());
             frameInfos.add(new BehaviorTreePlan.BlackboardFrameInfo(0, root.assetId(), ""));
         }
 
@@ -88,10 +86,9 @@ public final class BehaviorTreeLinker {
             for (int index = 0; index < portNames.size(); index++) portKeys.put(portNames.get(index), index);
             return BehaviorTreePlan.createLinked(root.assetId(), ids, indexes, types, capabilities,
                     rootNode, parents, children, staticInputs, dataInputs, ports, portKeys,
-                    portNames, byType, root.blackboardSchema(),
-                    new BehaviorTreePlan.DependencyManifest(dependencies), root.subtreeSignature(),
+                    portNames, byType, new BehaviorTreePlan.DependencyManifest(dependencies), root.subtreeSignature(),
                     root.rootSchedule(), new BehaviorTreePlan.LinkedMetadata(assetIds, frames,
-                            frameSchemas, frameInfos, calls));
+                            frameInfos, calls));
         }
 
         private int appendPlan(BehaviorTreePlan source, String namespace, int frame, int parentOverride) {
@@ -139,21 +136,20 @@ public final class BehaviorTreeLinker {
                     throw new IllegalStateException("Validated subtree asset became unavailable: "
                             + call.assetId());
                 }
-                if (frameSchemas.size() >= MAX_CALL_FRAMES) {
+                if (frameInfos.size() >= MAX_CALL_FRAMES) {
                     throw linkLimit(source, "SUBTREE_CALL_FRAME_LIMIT",
                             "Linked behavior tree exceeds " + MAX_CALL_FRAMES + " call frames");
                 }
-                int childFrame = frameSchemas.size();
-                frameSchemas.add(target.blackboardSchema());
+                int childFrame = frameInfos.size();
                 frameInfos.add(new BehaviorTreePlan.BlackboardFrameInfo(
                         childFrame, target.assetId(), nodes.get(callNode).id));
                 String childNamespace = nodes.get(callNode).id + "=>" + target.assetId() + "::";
                 int childRoot = appendPlan(target, childNamespace, childFrame, callNode);
                 nodes.get(callNode).children = new int[]{childRoot};
 
-                Map<String, String> inputs = resolveParameterKeys(
+                List<BehaviorTreePlan.SubtreeParameterTransfer> inputs = resolveParameterTransfers(
                         target, call.inputMapping(), BehaviorSubtreeParameter.Direction.INPUT, false);
-                Map<String, String> outputs = resolveParameterKeys(
+                List<BehaviorTreePlan.SubtreeParameterTransfer> outputs = resolveParameterTransfers(
                         target, call.outputMapping(), BehaviorSubtreeParameter.Direction.OUTPUT, true);
                 calls.put(callNode, new BehaviorTreePlan.SubtreeCallBoundary(
                         childRoot, frame, childFrame, inputs, outputs));
@@ -163,10 +159,10 @@ public final class BehaviorTreeLinker {
             return indexes[source.getRootNode()];
         }
 
-        private static Map<String, String> resolveParameterKeys(
+        private static List<BehaviorTreePlan.SubtreeParameterTransfer> resolveParameterTransfers(
                 BehaviorTreePlan target, Map<String, String> mapping,
                 BehaviorSubtreeParameter.Direction direction, boolean reverse) {
-            Map<String, String> result = new LinkedHashMap<>();
+            List<BehaviorTreePlan.SubtreeParameterTransfer> result = new ArrayList<>();
             mapping.forEach((first, second) -> {
                 String parameterName = reverse ? second : first;
                 String callerKey = reverse ? first : second;
@@ -175,10 +171,13 @@ public final class BehaviorTreeLinker {
                     throw new IllegalStateException("Validated subtree parameter became unavailable: "
                             + target.assetId() + "/" + parameterName);
                 }
-                if (reverse) result.put(callerKey, parameter.blackboardKey());
-                else result.put(parameter.blackboardKey(), callerKey);
+                result.add(reverse
+                        ? new BehaviorTreePlan.SubtreeParameterTransfer(
+                        callerKey, parameter.blackboardKey(), parameter.type())
+                        : new BehaviorTreePlan.SubtreeParameterTransfer(
+                        parameter.blackboardKey(), callerKey, parameter.type()));
             });
-            return Map.copyOf(result);
+            return List.copyOf(result);
         }
 
         private static BehaviorCompilationException linkLimit(

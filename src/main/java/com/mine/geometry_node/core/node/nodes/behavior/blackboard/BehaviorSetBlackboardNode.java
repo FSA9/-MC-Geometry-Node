@@ -10,13 +10,15 @@ import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
-/** Writes one value to a declared instance-blackboard input. */
+/** Creates or overwrites one dynamic value in an explicit scope. */
 public final class BehaviorSetBlackboardNode extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(BehaviorNodeTypes.SET_BLACKBOARD, NodeType.ACTION,
                         Component.translatable("geometry_node.node.behavior_set_blackboard"))
+                .comment(BlackboardNodePorts.comment(BehaviorNodeTypes.SET_BLACKBOARD))
                 .addRow(new PortRow(parentPort(), null, UIHint.DEFAULT, null, null))
+                .addRow(BlackboardNodePorts.scopeRow())
                 .addRow(new PortRow(keyPort(), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(PortDef.create(BehaviorNodeTypes.BLACKBOARD_VALUE_PORT,
                         "geometry_node.port." + BehaviorNodeTypes.BLACKBOARD_VALUE_PORT,

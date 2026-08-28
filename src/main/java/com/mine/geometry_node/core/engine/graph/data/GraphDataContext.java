@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.data;
 
-import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -29,5 +29,5 @@ public interface GraphDataContext {
 
     boolean hasPort(String portName);
 
-    @Nullable Object getPersistentAttribute(@Nullable PersistentAttributeTarget target, String name);
+    @Nullable Object getScopedState(ScopedStateTarget target, String name);
 }

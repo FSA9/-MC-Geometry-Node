@@ -1,14 +1,12 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
-import com.mine.geometry_node.core.engine.service.PersistentAttributeTarget;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * [执行上下文接口]
@@ -117,55 +115,19 @@ public interface ExecutionContext extends GraphDataContext {
      * [持久化属性写入] 设置实体、全局或命名作用域的持久化属性。
      * @param target 持久属性目标
      * @param name 属性名
-     * @param value 属性值 (传 null 视为删除)
+     * @param value 属性值；Java null 非法，删除必须调用 clearScopedState
      */
-    void setPersistentAttribute(@Nullable PersistentAttributeTarget target, String name, Object value);
+    void setScopedState(ScopedStateTarget target, String name, Object value);
 
     /**
      * [持久化属性读取]
      */
     @Nullable
-    Object getPersistentAttribute(@Nullable PersistentAttributeTarget target, String name);
+    Object getScopedState(ScopedStateTarget target, String name);
 
-    /**
-     * @deprecated Use {@link #setPersistentAttribute(PersistentAttributeTarget, String, Object)}.
-     */
-    @Deprecated
-    default void setPersistentAttribute(@Nullable Object target, String name, Object value) {
-        PersistentAttributeTarget converted = convertPersistentAttributeTarget(target);
-        if (converted != null) {
-            setPersistentAttribute(converted, name, value);
-        }
-    }
+    boolean hasScopedState(ScopedStateTarget target, String name);
 
-    /**
-     * @deprecated Use {@link #getPersistentAttribute(PersistentAttributeTarget, String)}.
-     */
-    @Deprecated
-    @Nullable
-    default Object getPersistentAttribute(@Nullable Object target, String name) {
-        PersistentAttributeTarget converted = convertPersistentAttributeTarget(target);
-        return converted != null ? getPersistentAttribute(converted, name) : null;
-    }
-
-    @Nullable
-    private static PersistentAttributeTarget convertPersistentAttributeTarget(@Nullable Object target) {
-        if (target == null) {
-            return PersistentAttributeTarget.global();
-        }
-        if (target instanceof PersistentAttributeTarget typedTarget) {
-            return typedTarget;
-        }
-        if (target instanceof Entity entity) {
-            return PersistentAttributeTarget.entity(entity);
-        }
-        if (target instanceof String scopeId && !scopeId.isBlank()) {
-            return "GLOBAL".equals(scopeId)
-                    ? PersistentAttributeTarget.global()
-                    : PersistentAttributeTarget.scope(scopeId);
-        }
-        return null;
-    }
+    boolean clearScopedState(ScopedStateTarget target, String name);
 
     // ==========================================
     // 高级控制流与引擎特权 API
