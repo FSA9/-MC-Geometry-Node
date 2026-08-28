@@ -44,7 +44,7 @@ public class AddAttributeModifier extends BaseNode {
                         Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:attribute")
                 ))
                 // 增量值
-                .addRow(new PortRow(StandardPorts.VALUE.toInput(1.0f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.FLOAT_VALUE.toInput(1.0f), null, UIHint.INPUT, null, null))
                 // 运算方式下拉框
                 .addRow(new PortRow(
                         StandardPorts.TYPE.toInputWithIndex(1, "ADD_VALUE"),
@@ -67,7 +67,7 @@ public class AddAttributeModifier extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
-        Float amount = getInput(context, StandardPorts.VALUE.getId(), Float.class);
+        Float amount = getInput(context, StandardPorts.FLOAT_VALUE.getId(), Float.class);
         String opStr = getInput(context, StandardPorts.TYPE.getIdWithIndex(1), String.class);
         String slotStr = getInput(context, StandardPorts.TYPE.getIdWithIndex(2), String.class);
         String attrId = getInput(context, StandardPorts.TYPE.getId(), String.class);

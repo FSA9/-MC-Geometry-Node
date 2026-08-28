@@ -143,7 +143,7 @@ public final class BehaviorNativeAiController {
         }
     }
 
-    static <U> void setControlledMemory(Brain<?> brain, MemoryModuleType<U> memory, U value) {
+    public static <U> void setControlledMemory(Brain<?> brain, MemoryModuleType<U> memory, U value) {
         Brain<?> previous = ALLOWED_BRAIN_WRITE.get();
         ALLOWED_BRAIN_WRITE.set(brain);
         try {

@@ -62,8 +62,9 @@ public final class GraphAssetLifecycleIndex {
                 .addIfAbsent(listener);
     }
 
-    public void replacePackagedGraphs(Map<String, GraphAssetDescriptor> graphs) {
-        update(null, graphs, null, null);
+    public void replacePackagedGraphs(@Nullable MinecraftServer server,
+                                      Map<String, GraphAssetDescriptor> graphs) {
+        update(server, graphs, null, null);
     }
 
     public void replaceDynamicGraphs(MinecraftServer server,

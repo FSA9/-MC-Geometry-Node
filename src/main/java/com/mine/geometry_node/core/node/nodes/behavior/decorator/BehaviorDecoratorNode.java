@@ -5,12 +5,15 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
+import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorDecoratorExecutors;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 /** Editor definitions shared by configurable behavior decorators. */
-public final class BehaviorDecoratorNode extends BaseNode {
+public final class BehaviorDecoratorNode extends BaseNode implements BehaviorExecutableNode {
     public enum Kind {
         REPEAT("geometry_node:behavior_repeat"),
         RETRY("geometry_node:behavior_retry"),
@@ -64,5 +67,10 @@ public final class BehaviorDecoratorNode extends BaseNode {
 
     private static String path(String typeId) {
         return typeId.substring(typeId.indexOf(':') + 1);
+    }
+
+    @Override
+    public BehaviorNodeExecutor behaviorExecutor() {
+        return BehaviorDecoratorExecutors.forKind(kind);
     }
 }

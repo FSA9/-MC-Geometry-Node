@@ -204,6 +204,47 @@ public final class GraphValueCodecRegistry {
         return null;
     }
 
+    /**
+     * Encodes a complete value or fails. Unlike the permissive legacy entry point,
+     * this method never drops unsupported list elements, map keys, or map values.
+     */
+    public static Tag toTagStrict(Object value, HolderLookup.Provider provider) {
+        if (value == null) {
+            throw new IllegalArgumentException("Graph values cannot contain null");
+        }
+        if (value instanceof List<?> list) {
+            CompoundTag wrapper = new CompoundTag();
+            wrapper.putString(TYPE_KEY, "_gn_list");
+            ListTag encoded = new ListTag();
+            for (Object item : list) {
+                CompoundTag element = new CompoundTag();
+                element.put("v", toTagStrict(item, provider));
+                encoded.add(element);
+            }
+            wrapper.put(DATA_KEY, encoded);
+            return wrapper;
+        }
+        if (value instanceof Map<?, ?> map) {
+            CompoundTag wrapper = new CompoundTag();
+            wrapper.putString(TYPE_KEY, "_gn_dict");
+            CompoundTag encoded = new CompoundTag();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!(entry.getKey() instanceof String key)) {
+                    throw new IllegalArgumentException("Graph map keys must be strings");
+                }
+                encoded.put(key, toTagStrict(entry.getValue(), provider));
+            }
+            wrapper.put(DATA_KEY, encoded);
+            return wrapper;
+        }
+        Tag encoded = toTag(value, provider);
+        if (encoded == null) {
+            throw new IllegalArgumentException("Unsupported graph value type: "
+                    + value.getClass().getName());
+        }
+        return encoded;
+    }
+
     @Nullable
     public static Object fromTag(Tag tag, HolderLookup.Provider provider) {
         if (tag == null) return null;

@@ -28,6 +28,18 @@ public final class GraphSubscriptionIndex {
     private final Map<String, RuntimeGraphIndex> registeredGlobalGraphs = new HashMap<>();
     private final Map<Entity, Map<String, RuntimeGraphIndex>> registeredEntityGraphs = new WeakHashMap<>();
 
+    public boolean isGlobalGraphRegistered(String graphId) {
+        return registeredGlobalGraphs.containsKey(graphId);
+    }
+
+    public Set<Entity> registeredEntitiesForGraph(String graphId) {
+        Set<Entity> result = new HashSet<>();
+        registeredEntityGraphs.forEach((entity, graphs) -> {
+            if (graphs.containsKey(graphId)) result.add(entity);
+        });
+        return Set.copyOf(result);
+    }
+
     public void registerGlobalGraph(String graphId, RuntimeGraphIndex index) {
         RuntimeGraphIndex previous = registeredGlobalGraphs.get(graphId);
         if (previous == index) return;

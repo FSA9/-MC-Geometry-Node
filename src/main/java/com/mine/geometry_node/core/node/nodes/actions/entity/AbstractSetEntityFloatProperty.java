@@ -49,8 +49,8 @@ abstract class AbstractSetEntityFloatProperty extends EntityPassthroughActionNod
     @Override
     public NodeDef getDefaultDefinition() {
         PortDef valuePort = defaultValue != null
-                ? StandardPorts.VALUE.toInput(defaultValue)
-                : StandardPorts.VALUE.toInput();
+                ? StandardPorts.FLOAT_VALUE.toInput(defaultValue)
+                : StandardPorts.FLOAT_VALUE.toInput();
         Map<com.mine.geometry_node.core.node.meta.MetaKey<?>, Object> params = minValue != null
                 ? Map.of(PortMetaKeys.NUMERIC_MIN, minValue)
                 : null;
@@ -65,7 +65,7 @@ abstract class AbstractSetEntityFloatProperty extends EntityPassthroughActionNod
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        Float value = getInput(context, StandardPorts.VALUE.getId(), Float.class);
+        Float value = getInput(context, StandardPorts.FLOAT_VALUE.getId(), Float.class);
 
         if (value != null && !entities.isEmpty()) {
             for (Entity entity : entities) {

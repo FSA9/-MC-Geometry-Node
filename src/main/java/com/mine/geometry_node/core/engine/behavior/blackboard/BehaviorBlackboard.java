@@ -1,12 +1,10 @@
 package com.mine.geometry_node.core.engine.behavior.blackboard;
 
-import com.mine.geometry_node.core.engine.behavior.contract.BehaviorValueSemantics;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
-import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateChange;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateEntry;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateProvider;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
-import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateValueCodec;
 import com.mine.geometry_node.core.node.port.PortType;
 import org.jetbrains.annotations.Nullable;
 
@@ -18,7 +16,6 @@ import java.util.Objects;
 
 /** Dynamic scoped blackboard facade. Keys are created by Set and removed by Clear. */
 public final class BehaviorBlackboard {
-    private static final int MAX_KEY_LENGTH = 256;
     private final Map<ScopedStateScope, ScopedStateProvider> providers = new LinkedHashMap<>();
     private final int maxEntries;
 
@@ -39,38 +36,33 @@ public final class BehaviorBlackboard {
     @Nullable
     public Object get(ScopedStateScope scope, String name) {
         ScopedStateEntry entry = requireProvider(scope).get(requireName(name));
-        return entry != null ? freeze(entry.value()) : null;
+        return entry != null ? entry.value() : null;
     }
 
     public boolean contains(ScopedStateScope scope, String name) {
         return requireProvider(scope).hasRecord(requireName(name));
     }
 
-    public void set(ScopedStateScope scope, String name, @Nullable Object value,
-                    String sourceNodeId, long gameTick) {
+    public void set(ScopedStateScope scope, String name, @Nullable Object value) {
         Objects.requireNonNull(scope, "scope");
         String key = requireName(name);
         if (value == null) {
             throw new ScopedStateAccessException("Blackboard value cannot be Java null: " + scope + "/" + key);
         }
-        if (scope.isPersistent()) ScopedStateValueCodec.validate(value, scope + "/" + key);
         ScopedStateProvider provider = requireProvider(scope);
         if (scope == ScopedStateScope.INSTANCE
                 && !provider.hasRecord(key) && provider.size() >= maxEntries) {
             throw new ScopedStateAccessException("Blackboard entry limit exceeded: " + maxEntries);
         }
-        String source = sourceNodeId != null ? sourceNodeId : "";
-        provider.put(key, freeze(value), source, gameTick);
+        provider.put(key, value);
     }
 
     /** Removes the complete key/value record. Missing keys are an idempotent no-op. */
-    public boolean clear(ScopedStateScope scope, String name, String sourceNodeId, long gameTick) {
+    public boolean clear(ScopedStateScope scope, String name) {
         Objects.requireNonNull(scope, "scope");
         String key = requireName(name);
         ScopedStateProvider provider = requireProvider(scope);
-        if (!provider.hasRecord(key)) return false;
-        provider.remove(key, sourceNodeId != null ? sourceNodeId : "", gameTick);
-        return true;
+        return provider.remove(key);
     }
 
     public long revision() {
@@ -79,22 +71,12 @@ public final class BehaviorBlackboard {
         return total;
     }
 
-    public long revision(ScopedStateScope scope, String name) {
-        String key = requireName(name);
-        ScopedStateProvider provider = requireProvider(scope);
-        ScopedStateEntry entry = provider.get(key);
-        if (entry != null) return entry.revision();
-        ScopedStateChange providerChange = provider.lastChange(key);
-        if (providerChange != null) return providerChange.revision();
-        return 0L;
-    }
-
     public ObservationToken observe(ScopedStateScope scope, String name) {
         String key = requireName(name);
         ScopedStateProvider provider = requireProvider(scope);
         ScopedStateEntry entry = provider.get(key);
         return new ObservationToken(provider.identity(), entry != null,
-                entry != null ? entry.revision() : 0L);
+                entry != null ? freeze(entry.value()) : null);
     }
 
     public List<EntrySnapshot> snapshot() {
@@ -118,8 +100,7 @@ public final class BehaviorBlackboard {
         for (Map.Entry<String, ScopedStateEntry> stored : provider.entries().entrySet()) {
             ScopedStateEntry entry = stored.getValue();
             result.add(new EntrySnapshot(stored.getKey(), scope,
-                    provider.identity(), entry.type(), freeze(entry.value()), entry.revision(),
-                    entry.sourceNodeId(), entry.gameTick(), true));
+                    provider.identity(), entry.type(), freeze(entry.value()), true));
         }
     }
 
@@ -132,76 +113,68 @@ public final class BehaviorBlackboard {
     }
 
     private static String requireName(String name) {
-        String normalized = name != null ? name.trim() : "";
-        if (normalized.isEmpty()) throw new ScopedStateAccessException("Blackboard key cannot be empty");
-        if (normalized.length() > MAX_KEY_LENGTH) {
-            throw new ScopedStateAccessException("Blackboard key exceeds " + MAX_KEY_LENGTH + " characters");
-        }
-        return normalized;
+        return name != null ? name : "";
     }
 
     private static Object freeze(Object value) {
-        return BehaviorValueSemantics.freezeAs(value, PortType.ANY);
+        return GraphValueSnapshot.snapshot(value);
     }
 
     /** Stable change detector state; removed-key history is deliberately excluded. */
-    public record ObservationToken(String providerIdentity, boolean present, long revision) {
+    public record ObservationToken(String providerIdentity, boolean present, @Nullable Object value) {
         public ObservationToken {
             providerIdentity = providerIdentity != null ? providerIdentity : "";
-            if (!present) revision = 0L;
+            value = present ? freeze(value) : null;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof ObservationToken token
+                    && present == token.present
+                    && providerIdentity.equals(token.providerIdentity)
+                    && GraphValueSnapshot.equivalent(value, token.value);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(providerIdentity, present);
         }
     }
 
     public record EntrySnapshot(String name, ScopedStateScope scope, String providerIdentity,
-                                PortType type, @Nullable Object value, long revision,
-                                String sourceNodeId, long gameTick, boolean scopeAvailable) {
+                                PortType type, @Nullable Object value, boolean scopeAvailable) {
     }
 
     private static final class MemoryProvider implements ScopedStateProvider {
         private final ScopedStateScope scope;
         private final Map<String, ScopedStateEntry> values = new LinkedHashMap<>();
-        private final Map<String, ScopedStateChange> changes = new LinkedHashMap<>();
-        private final int maxChanges;
         private long revision;
 
-        private MemoryProvider(ScopedStateScope scope, int maxChanges) {
+        private MemoryProvider(ScopedStateScope scope, int maxEntries) {
             this.scope = scope;
-            this.maxChanges = maxChanges;
         }
 
         @Override public ScopedStateScope scope() { return scope; }
         @Override public String identity() { return "instance"; }
         @Override public ScopedStateEntry get(String name) {
             ScopedStateEntry entry = values.get(name);
-            return entry != null ? new ScopedStateEntry(freeze(entry.value()), entry.type(), entry.revision(),
-                    entry.sourceNodeId(), entry.gameTick()) : null;
+            return entry != null ? new ScopedStateEntry(freeze(entry.value()), entry.type()) : null;
         }
-        @Override public ScopedStateEntry put(String name, Object value, String sourceNodeId, long gameTick) {
+        @Override public ScopedStateEntry put(String name, Object value) {
             Object frozen = freeze(value);
-            ScopedStateEntry entry = new ScopedStateEntry(frozen, PortType.getTypeOf(value), ++revision,
-                    sourceNodeId, gameTick);
+            ScopedStateEntry entry = new ScopedStateEntry(frozen, PortType.getTypeOf(value));
+            revision++;
             values.put(name, entry);
-            recordChange(name, new ScopedStateChange(revision, sourceNodeId, gameTick));
             return entry;
         }
-        @Override public ScopedStateChange remove(String name, String sourceNodeId, long gameTick) {
-            values.remove(name);
-            ScopedStateChange change = new ScopedStateChange(++revision, sourceNodeId, gameTick);
-            recordChange(name, change);
-            return change;
+        @Override public boolean remove(String name) {
+            if (values.remove(name) == null) return false;
+            revision++;
+            return true;
         }
-        @Override public ScopedStateChange lastChange(String name) { return changes.get(name); }
         @Override public boolean hasRecord(String name) { return values.containsKey(name); }
         @Override public Map<String, ScopedStateEntry> entries() { return Map.copyOf(values); }
         @Override public long revision() { return revision; }
         @Override public int size() { return values.size(); }
-
-        private void recordChange(String name, ScopedStateChange change) {
-            changes.remove(name);
-            changes.put(name, change);
-            while (changes.size() > maxChanges) {
-                changes.remove(changes.keySet().iterator().next());
-            }
-        }
     }
 }

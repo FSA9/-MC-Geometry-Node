@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.graph.scoped;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.HolderLookup;
@@ -20,7 +21,7 @@ import java.util.Objects;
 
 /** Persistent storage for named shared, scoreboard group, and dimension blackboards. */
 public final class ScopedStateStorage extends SavedData {
-    private static final int VERSION = 3;
+    private static final int VERSION = 4;
     private static final int MAX_BUCKETS = 4_096;
     private static final int HARD_MAX_RECORDS_PER_BUCKET =
             ScopedStateServerConfig.HARD_MAX_ENTRIES;
@@ -93,26 +94,16 @@ public final class ScopedStateStorage extends SavedData {
                 bucket = new Bucket();
                 storage.buckets.put(scopeKey, bucket);
             }
-            bucket.revision = Math.max(bucket.revision,
-                    Math.max(0L, tag.getLongOr("Revision", 0L)));
             for (Tag rawEntry : tag.getListOrEmpty("Entries")) {
                 if (bucket.entries.size() >= HARD_MAX_RECORDS_PER_BUCKET) break;
                 if (!(rawEntry instanceof CompoundTag entryTag)) continue;
                 String name = entryTag.getStringOr("Name", "");
-                if (name.isEmpty()) continue;
-                long revision = Math.max(0L, entryTag.getLongOr("Revision", 0L));
-                String source = entryTag.getStringOr("Source", "");
-                long gameTick = entryTag.getLongOr("GameTick", 0L);
                 Tag value = entryTag.get("Value");
-                ScopedStateChange change = new ScopedStateChange(
-                        revision, source, gameTick);
                 if (value != null) {
-                    bucket.entries.put(name, new StoredEntry(value.copy(), revision, source, gameTick));
+                    bucket.entries.put(name, new StoredEntry(value.copy()));
                 }
-                recordChange(bucket, name, change);
-                bucket.revision = Math.max(bucket.revision, revision);
             }
-            readChanges(bucket, tag.getListOrEmpty("Changes"));
+            if (bucket.entries.isEmpty()) storage.buckets.remove(scopeKey);
         }
         return storage;
     }
@@ -125,19 +116,14 @@ public final class ScopedStateStorage extends SavedData {
             tag.putString("Namespace", bucketEntry.getKey().namespace().serializedName());
             tag.putString("Scope", bucketEntry.getKey().scope().name());
             tag.putString("Identity", bucketEntry.getKey().identity());
-            tag.putLong("Revision", bucketEntry.getValue().revision);
             ListTag entries = new ListTag();
             for (Map.Entry<String, StoredEntry> stored : bucketEntry.getValue().entries.entrySet()) {
                 CompoundTag entryTag = new CompoundTag();
                 entryTag.putString("Name", stored.getKey());
-                entryTag.putLong("Revision", stored.getValue().revision());
-                entryTag.putString("Source", stored.getValue().sourceNodeId());
-                entryTag.putLong("GameTick", stored.getValue().gameTick());
                 entryTag.put("Value", stored.getValue().value().copy());
                 entries.add(entryTag);
             }
             tag.put("Entries", entries);
-            tag.put("Changes", writeChanges(bucketEntry.getValue()));
             bucketTags.add(tag);
         }
         root.put("Buckets", bucketTags);
@@ -187,19 +173,16 @@ public final class ScopedStateStorage extends SavedData {
                 throw new ScopedStateAccessException(
                         "Persistent blackboard value cannot be decoded: " + scope + "/" + name);
             }
-            ScopedStateValueCodec.validate(value, scope + "/" + name);
-            Object frozen = ScopedStateValueCodec.freeze(value);
-            return new ScopedStateEntry(frozen, PortType.getTypeOf(frozen), stored.revision(),
-                    stored.sourceNodeId(), stored.gameTick());
+            Object frozen = GraphValueSnapshot.snapshot(value);
+            return new ScopedStateEntry(frozen, PortType.getTypeOf(frozen));
         }
 
         @Override
-        public ScopedStateEntry put(String name, Object value,
-                                            String sourceNodeId, long gameTick) {
+        public ScopedStateEntry put(String name, Object value) {
             Objects.requireNonNull(value, "value");
+            Object frozen = GraphValueSnapshot.snapshot(value);
             Tag encoded = ScopedStateValueCodec.encode(
-                    value, registries, scope + "/" + name);
-            Object frozen = ScopedStateValueCodec.freeze(value);
+                    frozen, registries, scope + "/" + name);
             Bucket bucket = bucketForMutation(storageKey);
             StoredEntry previous = bucket.entries.get(name);
             int currentSize = ScopedStateStorage.size(bucket);
@@ -210,41 +193,24 @@ public final class ScopedStateStorage extends SavedData {
                 throw new ScopedStateAccessException(
                         "Scoped-state namespace entry limit exceeded: " + maxEntries);
             }
-            long revision = ++bucket.revision;
-            String source = sourceNodeId != null ? sourceNodeId : "";
-            bucket.entries.put(name, new StoredEntry(encoded.copy(), revision, source, gameTick));
-            recordChange(bucket, name,
-                    new ScopedStateChange(revision, source, gameTick));
+            bucket.revision++;
+            bucket.entries.put(name, new StoredEntry(encoded.copy()));
             setDirty();
             if (previous == null && currentSize + 1 == maxEntries) {
                 ScopedStateLimitNotifier.notifyLimit(level, namespace, scope,
                         storageKey.identity(), maxEntries);
             }
-            return new ScopedStateEntry(
-                    frozen, PortType.getTypeOf(frozen), revision, source, gameTick);
+            return new ScopedStateEntry(frozen, PortType.getTypeOf(frozen));
         }
 
         @Override
-        public ScopedStateChange remove(
-                String name, String sourceNodeId, long gameTick) {
+        public boolean remove(String name) {
             Bucket bucket = buckets.get(storageKey);
-            if (bucket == null || bucket.entries.remove(name) == null) {
-                throw new ScopedStateAccessException(
-                        "Cannot clear a missing persistent blackboard record: " + scope + "/" + name);
-            }
-            long revision = ++bucket.revision;
-            String source = sourceNodeId != null ? sourceNodeId : "";
-            ScopedStateChange change = new ScopedStateChange(
-                    revision, source, gameTick);
-            recordChange(bucket, name, change);
+            if (bucket == null || bucket.entries.remove(name) == null) return false;
+            bucket.revision++;
+            if (bucket.entries.isEmpty()) buckets.remove(storageKey);
             setDirty();
-            return change;
-        }
-
-        @Override
-        public @Nullable ScopedStateChange lastChange(String name) {
-            Bucket bucket = buckets.get(storageKey);
-            return bucket != null ? bucket.changes.get(name) : null;
+            return true;
         }
 
         @Override public boolean hasRecord(String name) {
@@ -282,40 +248,6 @@ public final class ScopedStateStorage extends SavedData {
         return bucket.entries.size();
     }
 
-    private static ListTag writeChanges(Bucket bucket) {
-        ListTag result = new ListTag();
-        for (Map.Entry<String, ScopedStateChange> item : bucket.changes.entrySet()) {
-            CompoundTag tag = new CompoundTag();
-            tag.putString("Name", item.getKey());
-            tag.putLong("Revision", item.getValue().revision());
-            tag.putString("Source", item.getValue().sourceNodeId());
-            tag.putLong("GameTick", item.getValue().gameTick());
-            result.add(tag);
-        }
-        return result;
-    }
-
-    private static void readChanges(Bucket bucket, ListTag list) {
-        for (Tag raw : list) {
-            if (!(raw instanceof CompoundTag tag)) continue;
-            String name = tag.getStringOr("Name", "");
-            if (name.isEmpty()) continue;
-            long revision = Math.max(0L, tag.getLongOr("Revision", 0L));
-            recordChange(bucket, name, new ScopedStateChange(revision,
-                    tag.getStringOr("Source", ""), tag.getLongOr("GameTick", 0L)));
-            bucket.revision = Math.max(bucket.revision, revision);
-        }
-    }
-
-    private static void recordChange(Bucket bucket, String name,
-                                     ScopedStateChange change) {
-        bucket.changes.remove(name);
-        bucket.changes.put(name, change);
-        while (bucket.changes.size() > HARD_MAX_RECORDS_PER_BUCKET) {
-            bucket.changes.remove(bucket.changes.keySet().iterator().next());
-        }
-    }
-
     private Bucket bucketForMutation(ScopeKey key) {
         Bucket existing = buckets.get(key);
         if (existing != null) return existing;
@@ -334,11 +266,9 @@ public final class ScopedStateStorage extends SavedData {
 
     private static final class Bucket {
         private final Map<String, StoredEntry> entries = new LinkedHashMap<>();
-        private final Map<String, ScopedStateChange> changes = new LinkedHashMap<>();
         private long revision;
     }
 
-    private record StoredEntry(Tag value, long revision,
-                               String sourceNodeId, long gameTick) {
+    private record StoredEntry(Tag value) {
     }
 }

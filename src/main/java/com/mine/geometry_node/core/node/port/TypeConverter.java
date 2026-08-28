@@ -2,9 +2,11 @@ package com.mine.geometry_node.core.node.port;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
+import com.mine.geometry_node.core.node.value.DialogueChoiceValue;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.node.value.dynamic.ExpressionData;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
+import com.mine.geometry_node.core.node.value.QuestConditionValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
@@ -68,11 +70,6 @@ public class TypeConverter {
         // 1. 完美匹配：本身就是目标类型或其子类
         if (type.isInstance(val)) {
             return type.cast(val);
-        }
-
-        if (type == Entity.class && val instanceof EntityTemplateValue template) {
-            if (ctx == null || ctx.getLevel() == null || template.isEmpty()) return null;
-            return type.cast(template.create(ctx.getLevel(), Vec3.ZERO));
         }
 
         if (type == Entity.class && val instanceof UUID uuid) {
@@ -210,6 +207,53 @@ public class TypeConverter {
 
         System.err.println("[TypeConverter] Failed to convert " + val.getClass().getSimpleName() + " to " + type.getSimpleName());
         return null;
+    }
+
+    /**
+     * Converts a value to the canonical in-memory representation of a port type.
+     * Context-free callers, such as graph compilers, must use the overload without
+     * a context; conversions that require a world then deliberately return null.
+     */
+    @Nullable
+    public static Object convertForPort(@Nullable Object value, PortType type,
+                                        @Nullable GraphDataContext context) {
+        if (value == null || type == null || type.isFlow()) return null;
+        if (type == PortType.ANY) return value;
+
+        return switch (type) {
+            case INTEGER -> convert(value, Integer.class, context);
+            case LONG -> convert(value, Long.class, context);
+            case FLOAT -> convert(value, Float.class, context);
+            case BOOLEAN -> convert(value, Boolean.class, context);
+            case STRING, PATH -> convert(value, String.class, context);
+            case RICH_TEXT -> convert(value, RichTextValue.class, context);
+            case ENTITY -> convert(value, Entity.class, context);
+            case ENTITY_TEMPLATE -> convert(value, EntityTemplateValue.class, context);
+            case ITEM -> value instanceof Item ? value : null;
+            case ITEM_STACK -> value instanceof ItemStack ? value : null;
+            case SLOT -> convert(value, SlotRef.class, context);
+            case BLOCK -> value instanceof BlockState ? value : null;
+            case GEOMETRY -> value instanceof GeometryValue ? value : null;
+            case COLOR -> convert(value, ColorValue.class, context);
+            case XYZ -> normalizeVector(value, context);
+            case LIST -> value instanceof List<?> ? value : null;
+            case DIALOGUE_CHOICE -> value instanceof DialogueChoiceValue ? value : null;
+            case QUEST_CONDITION -> value instanceof QuestConditionValue ? value : null;
+            case DICT, SHOP -> value instanceof java.util.Map<?, ?> ? value : null;
+            default -> PortType.getTypeOf(value) == type ? value : null;
+        };
+    }
+
+    @Nullable
+    public static Object convertForPort(@Nullable Object value, PortType type) {
+        return convertForPort(value, type, null);
+    }
+
+    @Nullable
+    private static Object normalizeVector(Object value, @Nullable GraphDataContext context) {
+        Vec3 vector = convert(value, Vec3.class, context);
+        if (vector == null) return null;
+        return List.of((float) vector.x, (float) vector.y, (float) vector.z);
     }
 
     @Nullable

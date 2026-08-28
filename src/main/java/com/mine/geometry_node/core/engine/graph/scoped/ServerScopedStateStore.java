@@ -15,8 +15,6 @@ import org.jetbrains.annotations.Nullable;
  * INSTANCE remains behavior-frame private and is intentionally not addressable here.
  */
 public final class ServerScopedStateStore implements ScopedStateStore {
-    private static final int MAX_KEY_LENGTH = 256;
-    private static final String BLUEPRINT_SOURCE = "blueprint";
 
     @Override
     public void set(GraphRuntimeContext context, ScopedStateNamespace namespace,
@@ -27,7 +25,7 @@ public final class ServerScopedStateStore implements ScopedStateStore {
                     "Scoped state value cannot be Java null: " + key);
         }
         ResolvedTarget resolved = resolve(context, namespace, target);
-        resolved.provider().put(key, value, BLUEPRINT_SOURCE, resolved.level().getGameTime());
+        resolved.provider().put(key, value);
     }
 
     @Override
@@ -51,9 +49,7 @@ public final class ServerScopedStateStore implements ScopedStateStore {
                          ScopedStateTarget target, String name) {
         String key = requireKey(name);
         ResolvedTarget resolved = resolve(context, namespace, target);
-        if (!resolved.provider().hasRecord(key)) return false;
-        resolved.provider().remove(key, BLUEPRINT_SOURCE, resolved.level().getGameTime());
-        return true;
+        return resolved.provider().remove(key);
     }
 
     private static ResolvedTarget resolve(GraphRuntimeContext context,
@@ -115,15 +111,7 @@ public final class ServerScopedStateStore implements ScopedStateStore {
     }
 
     private static String requireKey(String name) {
-        String key = name != null ? name.trim() : "";
-        if (key.isEmpty()) {
-            throw new ScopedStateAccessException("Scoped state key cannot be empty");
-        }
-        if (key.length() > MAX_KEY_LENGTH) {
-            throw new ScopedStateAccessException(
-                    "Scoped state key exceeds " + MAX_KEY_LENGTH + " characters");
-        }
-        return key;
+        return name != null ? name : "";
     }
 
     private static Entity requireEntity(@Nullable Entity entity, String scope) {

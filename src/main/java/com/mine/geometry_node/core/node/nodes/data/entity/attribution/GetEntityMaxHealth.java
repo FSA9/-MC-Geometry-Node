@@ -20,7 +20,7 @@ public class GetEntityMaxHealth extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_max_health"))
                 .addRow(new PortRow(
                         StandardPorts.ENTITY.toInput(),
-                        StandardPorts.VALUE.toOutput(),
+                        StandardPorts.FLOAT_VALUE.toOutput(),
                         UIHint.DEFAULT, null, null
                 ))
                 .build();
@@ -28,7 +28,7 @@ public class GetEntityMaxHealth extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        if (!StandardPorts.VALUE.getId().equals(portName)) {
+        if (!StandardPorts.FLOAT_VALUE.getId().equals(portName)) {
             return null;
         }
 

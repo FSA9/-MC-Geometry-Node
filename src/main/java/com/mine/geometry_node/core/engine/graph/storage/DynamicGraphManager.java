@@ -19,7 +19,6 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * [动态图管理器]
@@ -32,28 +31,6 @@ public class DynamicGraphManager {
     // 核心内存缓存
     private static final ConcurrentHashMap<String, GraphAssetDescriptor> dynamicGraphCache = new ConcurrentHashMap<>();
     private static final Set<String> invalidDynamicGraphIds = ConcurrentHashMap.newKeySet();
-    private static final ConcurrentHashMap<GraphKind, CopyOnWriteArrayList<ReloadListener>> reloadListeners =
-            new ConcurrentHashMap<>();
-    @Nullable
-    private static PendingStartupActivation pendingStartupActivation;
-
-    private record PendingStartupActivation(MinecraftServer server,
-                                            Map<String, GraphAssetDescriptor> oldGraphs,
-                                            Map<String, GraphAssetDescriptor> newGraphs) {
-    }
-
-    @FunctionalInterface
-    public interface ReloadListener {
-        void onDynamicGraphReload(MinecraftServer server, String graphId,
-                                  @Nullable CompiledGraph oldArtifact,
-                                  @Nullable CompiledGraph newArtifact);
-    }
-
-    public static void addReloadListener(GraphKind runtimeKind, ReloadListener listener) {
-        if (runtimeKind == null || runtimeKind == GraphKind.UNKNOWN || listener == null) return;
-        reloadListeners.computeIfAbsent(runtimeKind, ignored -> new CopyOnWriteArrayList<>()).addIfAbsent(listener);
-    }
-
     @Nullable
     public static GraphAssetDescriptor getGraph(String graphId) {
         return dynamicGraphCache.get(graphId);
@@ -103,17 +80,15 @@ public class DynamicGraphManager {
             CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(normalizedId, jsonContent);
             GraphAssetDescriptor descriptor = new GraphAssetDescriptor(normalizedId,
                     GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact);
-            GraphAssetDescriptor oldDescriptor = dynamicGraphCache.put(normalizedId, descriptor);
+            dynamicGraphCache.put(normalizedId, descriptor);
             invalidDynamicGraphIds.remove(normalizedId);
             GraphAssetLifecycleIndex.INSTANCE.replaceDynamicGraphs(server, dynamicGraphCache,
                     invalidDynamicGraphIds);
-            notifyReload(server, normalizedId, oldDescriptor, descriptor);
         } catch (Exception exception) {
-            GraphAssetDescriptor oldDescriptor = dynamicGraphCache.remove(normalizedId);
+            dynamicGraphCache.remove(normalizedId);
             invalidDynamicGraphIds.add(normalizedId);
             GraphAssetLifecycleIndex.INSTANCE.replaceDynamicGraphs(server, dynamicGraphCache,
                     invalidDynamicGraphIds);
-            notifyReload(server, normalizedId, oldDescriptor, null);
             GeometryNode.LOGGER.warn(
                     "[DynamicGraphManager] Graph saved without runtime artifact: {} ({})",
                     normalizedId, exception.getMessage());
@@ -124,28 +99,10 @@ public class DynamicGraphManager {
     }
 
     public static void prepareForServerStart(MinecraftServer server) {
-        loadAllFromDisk(server, false);
-    }
-
-    public static void activatePreparedGraphs(MinecraftServer server) {
-        PendingStartupActivation pending = pendingStartupActivation;
-        if (pending == null || pending.server() != server) return;
-        if (server.overworld() == null) {
-            GeometryNode.LOGGER.error(
-                    "[DynamicGraphManager] Cannot activate startup graphs before the overworld is available");
-            return;
-        }
-
-        pendingStartupActivation = null;
-        notifyBulkReload(server, pending.oldGraphs(), pending.newGraphs());
+        loadAllFromDisk(server);
     }
 
     public static void loadAllFromDisk(MinecraftServer server) {
-        loadAllFromDisk(server, true);
-    }
-
-    private static void loadAllFromDisk(MinecraftServer server, boolean activateImmediately) {
-        Map<String, GraphAssetDescriptor> oldGraphs = Map.copyOf(dynamicGraphCache);
         dynamicGraphCache.clear();
         invalidDynamicGraphIds.clear();
         if (server == null) return;
@@ -153,7 +110,7 @@ public class DynamicGraphManager {
         try {
             Path folder = server.getWorldPath(GRAPH_DIR).toAbsolutePath().normalize();
             if (!java.nio.file.Files.exists(folder) || !java.nio.file.Files.isDirectory(folder)) {
-                publishDynamicSnapshot(server, oldGraphs, activateImmediately);
+                publishDynamicSnapshot(server);
                 return;
             }
 
@@ -179,64 +136,16 @@ public class DynamicGraphManager {
                             }
                         });
             }
-            publishDynamicSnapshot(server, oldGraphs, activateImmediately);
+            publishDynamicSnapshot(server);
             GeometryNode.LOGGER.info("[DynamicGraphManager] Total load {} graphs。", dynamicGraphCache.size());
         } catch (Exception e) {
-            publishDynamicSnapshot(server, oldGraphs, activateImmediately);
+            publishDynamicSnapshot(server);
             GeometryNode.LOGGER.error("[DynamicGraphManager] Load content failed! ", e);
         }
     }
 
-    private static void publishDynamicSnapshot(MinecraftServer server,
-                                               Map<String, GraphAssetDescriptor> oldGraphs,
-                                               boolean activateImmediately) {
+    private static void publishDynamicSnapshot(MinecraftServer server) {
         GraphAssetLifecycleIndex.INSTANCE.replaceDynamicGraphs(server, dynamicGraphCache,
                 invalidDynamicGraphIds);
-        Map<String, GraphAssetDescriptor> newGraphs = Map.copyOf(dynamicGraphCache);
-        if (activateImmediately) {
-            pendingStartupActivation = null;
-            notifyBulkReload(server, oldGraphs, newGraphs);
-        } else {
-            pendingStartupActivation = new PendingStartupActivation(
-                    server, Map.copyOf(oldGraphs), newGraphs);
-        }
-    }
-
-    private static void notifyBulkReload(MinecraftServer server,
-                                         Map<String, GraphAssetDescriptor> oldGraphs,
-                                         Map<String, GraphAssetDescriptor> newGraphs) {
-        Set<String> ids = new java.util.TreeSet<>(oldGraphs.keySet());
-        ids.addAll(newGraphs.keySet());
-        for (String graphId : ids) {
-            GraphAssetDescriptor oldDescriptor = oldGraphs.get(graphId);
-            GraphAssetDescriptor newDescriptor = newGraphs.get(graphId);
-            if (oldDescriptor != newDescriptor) {
-                notifyReload(server, graphId, oldDescriptor, newDescriptor);
-            }
-        }
-    }
-
-    private static void notifyReload(MinecraftServer server, String graphId,
-                                     @Nullable GraphAssetDescriptor oldDescriptor,
-                                     @Nullable GraphAssetDescriptor newDescriptor) {
-        if (oldDescriptor != null) {
-            notifyKind(oldDescriptor.runtimeKind(), server, graphId, oldDescriptor.artifact(),
-                    newDescriptor != null && newDescriptor.runtimeKind() == oldDescriptor.runtimeKind()
-                            ? newDescriptor.artifact() : null);
-        }
-        if (newDescriptor != null && (oldDescriptor == null
-                || oldDescriptor.runtimeKind() != newDescriptor.runtimeKind())) {
-            notifyKind(newDescriptor.runtimeKind(), server, graphId, null, newDescriptor.artifact());
-        }
-    }
-
-    private static void notifyKind(GraphKind kind, MinecraftServer server, String graphId,
-                                   @Nullable CompiledGraph oldArtifact,
-                                   @Nullable CompiledGraph newArtifact) {
-        CopyOnWriteArrayList<ReloadListener> listeners = reloadListeners.get(kind);
-        if (listeners == null) return;
-        for (ReloadListener listener : listeners) {
-            listener.onDynamicGraphReload(server, graphId, oldArtifact, newArtifact);
-        }
     }
 }

@@ -23,14 +23,14 @@ public class HealEntity extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.heal_entity"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.VALUE.toInput(), null, UIHint.INPUT, null, null)) // 使用 VALUE 作为治疗数值
+                .addRow(new PortRow(StandardPorts.FLOAT_VALUE.toInput(), null, UIHint.INPUT, null, null)) // 使用 VALUE 作为治疗数值
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        Float healAmount = getInput(context, StandardPorts.VALUE.getId(), Float.class);
+        Float healAmount = getInput(context, StandardPorts.FLOAT_VALUE.getId(), Float.class);
 
         if (healAmount != null && healAmount > 0 && !entities.isEmpty()) {
             for (Entity entity : entities) {

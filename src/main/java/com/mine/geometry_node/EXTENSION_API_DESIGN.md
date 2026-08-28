@@ -283,7 +283,7 @@ public void registerEvents(EventRegistrationContext registry) {
             EventScope.LEVEL,
             List.of(
                     StandardPorts.ENTITY.toOutput(),
-                    StandardPorts.VALUE.toOutput()
+                    StandardPorts.FLOAT_VALUE.toOutput()
             )
     ));
 }
@@ -302,7 +302,7 @@ public final class OnMachineTick extends BaseEventNode {
         return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("example_geometry.node.on_machine_tick"))
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.FLOAT_VALUE.toOutput(), UIHint.DEFAULT, null, null))
                 .build();
     }
 }
@@ -322,7 +322,7 @@ Addon 不应直接调用 `GraphEngine.dispatchEvent(... Consumer<ExecutionThread
 GeometryNodeEvents.dispatch(level, target, "example_geometry:on_machine_tick",
         EventPayload.builder()
                 .put(StandardPorts.ENTITY.getId(), entity)
-                .put(StandardPorts.VALUE.getId(), value)
+                .put(StandardPorts.FLOAT_VALUE.getId(), value)
                 .build()
 );
 ```

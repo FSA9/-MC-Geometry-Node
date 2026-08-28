@@ -178,8 +178,10 @@ public final class BehaviorRuntimeService {
         ServerState state = servers.get(server);
         InstanceEntry entry = state != null ? state.instances.get(instanceId) : null;
         if (entry == null || entry.instance.state() != BehaviorInstanceState.RUNNING) return false;
-        entry.instance.markSuspended();
         state.world(entry.levelKey()).scheduler.cancel(instanceId);
+        evaluator.suspend(entry.instance);
+        Entity owner = entry.instance.host().owner();
+        if (owner instanceof Mob mob) mob.getNavigation().stop();
         return true;
     }
 

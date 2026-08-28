@@ -15,6 +15,9 @@ import com.mine.geometry_node.core.node.group.GroupNodeDefinitions;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutorRegistry;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import org.jetbrains.annotations.Nullable;
@@ -134,7 +137,8 @@ public class NodeRegistry {
         register(category, node, addonId, NodeCapabilities.LEGACY_BLUEPRINT);
     }
 
-    public void register(NodeCategory category, BaseNode node, String addonId, NodeCapabilities capabilities) {
+    public synchronized void register(NodeCategory category, BaseNode node, String addonId,
+                                      NodeCapabilities capabilities) {
         // 1. 基础校验
         if (node == null || category == null) {
             System.err.println("[NodeRegistry] Skip: Cannot register null node or null category");
@@ -169,9 +173,27 @@ public class NodeRegistry {
             return;
         }
 
+        NodeCapabilities effectiveCapabilities = capabilities != null
+                ? capabilities : NodeCapabilities.LEGACY_BLUEPRINT;
+        BehaviorNodeExecutor behaviorExecutor = node instanceof BehaviorExecutableNode executable
+                ? Objects.requireNonNull(executable.behaviorExecutor(),
+                "Behavior executor cannot be null: " + typeId) : null;
+        if (effectiveCapabilities.context() == NodeCapabilities.Context.BEHAVIOR_EXECUTION
+                && behaviorExecutor == null) {
+            throw new IllegalStateException("Behavior node has no executor: " + typeId);
+        }
+        if (effectiveCapabilities.context() != NodeCapabilities.Context.BEHAVIOR_EXECUTION
+                && behaviorExecutor != null) {
+            throw new IllegalStateException(
+                    "Non-behavior node cannot provide a behavior executor: " + typeId);
+        }
+        if (behaviorExecutor != null) {
+            BehaviorNodeExecutorRegistry.INSTANCE.register(typeId, behaviorExecutor);
+        }
+
         registry.put(typeId, node);
         defaultDefCache.put(typeId, def);
-        capabilityRegistry.put(typeId, capabilities != null ? capabilities : NodeCapabilities.LEGACY_BLUEPRINT);
+        capabilityRegistry.put(typeId, effectiveCapabilities);
 
         category.addNode(node);
 

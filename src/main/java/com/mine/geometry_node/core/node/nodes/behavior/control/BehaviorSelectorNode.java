@@ -3,9 +3,12 @@ package com.mine.geometry_node.core.node.nodes.behavior.control;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
+import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorControlExecutors;
 
 /** Ordered, memory-form fallback selector. */
-public final class BehaviorSelectorNode extends BaseNode {
+public final class BehaviorSelectorNode extends BaseNode implements BehaviorExecutableNode {
     public static final String TYPE_ID = "geometry_node:behavior_selector";
 
     @Override
@@ -21,5 +24,10 @@ public final class BehaviorSelectorNode extends BaseNode {
     private static NodeDef definition(NodeData instanceData) {
         return BehaviorCompositeDefinition.create(TYPE_ID,
                 "geometry_node.node.behavior_selector", instanceData);
+    }
+
+    @Override
+    public BehaviorNodeExecutor behaviorExecutor() {
+        return BehaviorControlExecutors.selector();
     }
 }

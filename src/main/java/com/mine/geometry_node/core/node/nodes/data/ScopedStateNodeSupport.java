@@ -82,9 +82,7 @@ final class ScopedStateNodeSupport {
     }
 
     static String requireKey(@Nullable String name) {
-        String key = name != null ? name.trim() : "";
-        if (key.isEmpty()) throw new IllegalStateException("Scoped state key cannot be empty");
-        return key;
+        return name != null ? name : "";
     }
 
     private static ScopedStateScope normalizeScope(@Nullable Object value) {

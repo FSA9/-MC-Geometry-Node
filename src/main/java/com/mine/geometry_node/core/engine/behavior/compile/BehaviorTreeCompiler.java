@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mine.geometry_node.core.engine.behavior.contract.BehaviorValueSemantics;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.document.behavior.BehaviorSubtreeCall;
 import com.mine.geometry_node.core.node.document.behavior.BehaviorSubtreeParameter;
 import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructure;
@@ -31,6 +31,7 @@ import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.port.TypeConverter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -121,7 +122,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         Map<String, List<String>> structure = compileStructure(nodeIds, graph, info);
         Map<InputKey, DataLink> inbound = compileDataConnections(nodeIds, graph, info);
         GraphValidationResult common = GraphDocumentValidator.validate(validationInput(
-                assetId, graph, nodeIds, inbound));
+                assetId, graph, nodeIds));
         diagnostics.addAll(common.diagnostics());
         BehaviorTreePlan.RootSchedule rootSchedule = compileRootSchedule(info);
         BehaviorTreePlan.SubtreeSignature signature = compileSubtreeSignature(
@@ -219,9 +220,14 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             for (PortDef input : nodeInfo.ports.inputs.values()) {
                 Object value = nodeInfo.node.inputs.containsKey(input.id())
                         ? nodeInfo.node.inputs.get(input.id()) : input.defaultValue();
-                if (value != null && BehaviorValueSemantics.matches(value, input.type())) {
-                    effectiveInputs.put(input.id(),
-                        BehaviorValueSemantics.freezeAs(value, input.type()));
+                if (value != null) {
+                    Object converted = TypeConverter.convertForPort(value, input.type());
+                    if (converted != null) {
+                        effectiveInputs.put(input.id(), GraphValueSnapshot.snapshot(converted));
+                    } else if (PortType.isCompatible(PortType.getTypeOf(value), input.type())) {
+                        // Resolution that requires a world (for example UUID -> entity) is deferred.
+                        effectiveInputs.put(input.id(), GraphValueSnapshot.snapshot(value));
+                    }
                 }
             }
             staticInputs[nodeIndex] = Map.copyOf(effectiveInputs);
@@ -411,17 +417,12 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     }
 
     private static GraphDocumentValidator.Input validationInput(
-            String assetId, NodeGraph graph, List<String> nodeIds,
-            Map<InputKey, DataLink> inbound) {
+            String assetId, NodeGraph graph, List<String> nodeIds) {
         List<GraphDocumentValidator.Node> nodes = nodeIds.stream()
                 .map(nodeId -> new GraphDocumentValidator.Node(nodeId,
                         graph.nodes.get(nodeId) != null ? graph.nodes.get(nodeId).type : null))
                 .toList();
-        List<GraphDocumentValidator.DataEdge> edges = inbound.entrySet().stream()
-                .map(entry -> new GraphDocumentValidator.DataEdge(
-                        entry.getValue().sourceNodeId, entry.getKey().nodeId))
-                .toList();
-        return new GraphDocumentValidator.Input(assetId, graph.getGraphTypeId(), nodes, edges,
+        return new GraphDocumentValidator.Input(assetId, graph.getGraphTypeId(), nodes,
                 storedConnectionCount(graph));
     }
 

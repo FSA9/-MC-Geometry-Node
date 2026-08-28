@@ -24,13 +24,13 @@ public final class GetQuestCounter extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.PATH.toInput(""), null, UIHint.PATH, null, null))
-                .addRow(new PortRow(StandardPorts.KEY.toInput(""), StandardPorts.VALUE.toOutput(), UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.KEY.toInput(""), StandardPorts.FLOAT_VALUE.toOutput(), UIHint.INPUT, null, null))
                 .build();
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (!StandardPorts.VALUE.getId().equals(portName)) return null;
+        if (!StandardPorts.FLOAT_VALUE.getId().equals(portName)) return null;
         Entity owner = QuestNodeContext.resolveOwner(
                 context,
                 getInput(context, StandardPorts.ENTITY.getId(), Entity.class));

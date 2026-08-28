@@ -3,9 +3,12 @@ package com.mine.geometry_node.core.node.nodes.behavior.control;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
+import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorControlExecutors;
 
 /** Ordered, memory-form sequence structural node. */
-public final class BehaviorSequenceNode extends BaseNode {
+public final class BehaviorSequenceNode extends BaseNode implements BehaviorExecutableNode {
     public static final String TYPE_ID = "geometry_node:behavior_sequence";
 
     @Override
@@ -21,5 +24,10 @@ public final class BehaviorSequenceNode extends BaseNode {
     private static NodeDef definition(NodeData instanceData) {
         return BehaviorCompositeDefinition.create(TYPE_ID,
                 "geometry_node.node.behavior_sequence", instanceData);
+    }
+
+    @Override
+    public BehaviorNodeExecutor behaviorExecutor() {
+        return BehaviorControlExecutors.sequence();
     }
 }

@@ -5,8 +5,7 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
-import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
 import net.minecraft.server.MinecraftServer;
@@ -42,7 +41,8 @@ public final class BlueprintRuntime implements GraphRuntime {
     @Override
     public void init() {
         GraphCompilationService.INSTANCE.register(BlueprintCompiler.INSTANCE);
-        DynamicGraphManager.addReloadListener(GraphKind.BLUEPRINT, this::onDynamicGraphReload);
+        GraphAssetLifecycleIndex.INSTANCE.addChangeListener(
+                GraphKind.BLUEPRINT, this::onGraphAssetsChanged);
     }
 
     @Nullable
@@ -106,18 +106,18 @@ public final class BlueprintRuntime implements GraphRuntime {
         GraphEngine.dispatchCustomEvent(currentLevel, frequency, eventData);
     }
 
-    public void refreshGraphSubscriptions(MinecraftServer server, String graphId,
-                                          @Nullable RuntimeGraphIndex oldIndex,
+    public void refreshGraphSubscriptions(@Nullable MinecraftServer server, String graphId,
                                           @Nullable RuntimeGraphIndex newIndex) {
-        GraphEngine.refreshGraphSubscriptions(server, graphId, oldIndex, newIndex);
+        GraphEngine.refreshGraphSubscriptions(server, graphId, newIndex);
     }
 
-    private void onDynamicGraphReload(MinecraftServer server, String graphId,
-                                      @Nullable CompiledGraph oldArtifact,
-                                      @Nullable CompiledGraph newArtifact) {
-        RuntimeGraphIndex oldIndex = oldArtifact instanceof RuntimeGraphIndex index ? index : null;
-        RuntimeGraphIndex newIndex = newArtifact instanceof RuntimeGraphIndex index ? index : null;
-        refreshGraphSubscriptions(server, graphId, oldIndex, newIndex);
+    private void onGraphAssetsChanged(GraphAssetLifecycleIndex.Change change) {
+        for (String graphId : change.affectedAssetIds()) {
+            RuntimeGraphIndex index = GraphAssetLifecycleIndex.INSTANCE
+                    .getArtifact(graphId, GraphKind.BLUEPRINT) instanceof RuntimeGraphIndex value
+                    ? value : null;
+            refreshGraphSubscriptions(change.server(), graphId, index);
+        }
     }
 
 }

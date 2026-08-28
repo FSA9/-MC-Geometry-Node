@@ -5,6 +5,9 @@ import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
+import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorEntityExecutors;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -17,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Editor definitions for the first server-authoritative entity behavior actions. */
-public final class BehaviorEntityActionNode extends BaseNode {
+public final class BehaviorEntityActionNode extends BaseNode implements BehaviorExecutableNode {
     public enum Kind {
         SELECT_TARGET("geometry_node:behavior_select_target"),
         CLEAR_TARGET("geometry_node:behavior_clear_target"),
@@ -133,4 +136,9 @@ public final class BehaviorEntityActionNode extends BaseNode {
 
     public static final String TARGET_MODE_ENTITY = "entity";
     public static final String TARGET_MODE_POSITION = "position";
+
+    @Override
+    public BehaviorNodeExecutor behaviorExecutor() {
+        return BehaviorEntityExecutors.forKind(kind);
+    }
 }

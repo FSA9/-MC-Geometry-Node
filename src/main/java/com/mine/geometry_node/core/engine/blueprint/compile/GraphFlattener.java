@@ -3,10 +3,11 @@ package com.mine.geometry_node.core.engine.blueprint.compile;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.Gson;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
-import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
@@ -20,6 +21,7 @@ import java.util.*;
  * node_group / group_in / group_out 这些 UI 边界节点。
  */
 class GraphFlattener {
+    private static final Gson GSON = new Gson();
 
     public record TargetConnection(String targetNodeId, String targetPortName) {}
 
@@ -29,6 +31,7 @@ class GraphFlattener {
     final Map<String, List<String>> typeLookup = new HashMap<>();
     final Map<String, Map<String, Object>> propertyLookup = new HashMap<>();
     final Map<String, Map<String, Object>> staticInputLookup = new HashMap<>();
+    final Map<String, Set<String>> portLookup = new HashMap<>();
 
     final Set<String> allStaticKeys = new HashSet<>();
 
@@ -58,6 +61,11 @@ class GraphFlattener {
 
             nodeDataLookup.put(globalId, nodeObj);
             typeLookup.computeIfAbsent(type, ignored -> new ArrayList<>()).add(globalId);
+            NodeData instanceData = GSON.fromJson(nodeObj, NodeData.class);
+            instanceData.id = globalId;
+            instanceData.restoreDocumentDefaults();
+            NodeDef instanceDefinition = NodeRegistry.INSTANCE.resolveDefinition(instanceData);
+            collectPorts(globalId, instanceDefinition);
 
             if (isVirtualType(type)) {
                 virtualNodeIds.add(globalId);
@@ -72,7 +80,7 @@ class GraphFlattener {
             }
 
             parseProperties(globalId, nodeObj);
-            parseStaticInputs(globalId, type, nodeObj);
+            parseStaticInputs(globalId, instanceDefinition, nodeObj);
             parseExecutionOutputs(globalId, prefix, nodeObj);
             parseDataOutputs(globalId, prefix, nodeObj);
 
@@ -93,16 +101,13 @@ class GraphFlattener {
         }
     }
 
-    private void parseStaticInputs(String globalId, String type, JsonObject nodeObj) {
+    private void parseStaticInputs(String globalId, NodeDef definition, JsonObject nodeObj) {
         Map<String, Object> bakedInputs = new HashMap<>();
-        BaseNode logic = NodeRegistry.INSTANCE.get(type);
-        if (logic != null) {
-            NodeDef def = logic.getDefaultDefinition();
-            if (def != null) {
-                for (PortRow row : def.rows()) {
-                    if (row.leftPort() != null && row.leftPort().defaultValue() != null) {
-                        bakedInputs.put(row.leftPort().id(), row.leftPort().defaultValue());
-                    }
+        if (definition != null) {
+            for (PortRow row : definition.rows()) {
+                if (row.leftPort() != null && !row.leftPort().type().isFlow()
+                        && row.leftPort().defaultValue() != null) {
+                    bakedInputs.put(row.leftPort().id(), row.leftPort().defaultValue());
                 }
             }
         }
@@ -116,6 +121,17 @@ class GraphFlattener {
 
         staticInputLookup.put(globalId, bakedInputs);
         allStaticKeys.addAll(bakedInputs.keySet());
+    }
+
+    private void collectPorts(String globalId, NodeDef definition) {
+        if (definition == null) return;
+        Set<String> ports = new HashSet<>();
+        for (PortRow row : definition.rows()) {
+            if (row.leftPort() != null) ports.add(row.leftPort().id());
+            if (row.rightPort() != null) ports.add(row.rightPort().id());
+        }
+        portLookup.put(globalId, Set.copyOf(ports));
+        allStaticKeys.addAll(ports);
     }
 
     private void addPortConfigInputDefaults(JsonObject nodeObj, Map<String, Object> bakedInputs) {
@@ -366,6 +382,7 @@ class GraphFlattener {
             flowOutputLookup.remove(virtualId);
             propertyLookup.remove(virtualId);
             staticInputLookup.remove(virtualId);
+            portLookup.remove(virtualId);
         }
 
         for (Iterator<Map.Entry<String, List<String>>> iterator = typeLookup.entrySet().iterator(); iterator.hasNext();) {

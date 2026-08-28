@@ -55,8 +55,8 @@ public final class BehaviorNodeContext {
                 depth + 1, epochTick);
     }
 
-    BehaviorResult tickChildReplacing(int childIndex, int previousChildIndex,
-                                      BehaviorTerminationReason reason) {
+    public BehaviorResult tickChildReplacing(int childIndex, int previousChildIndex,
+                                              BehaviorTerminationReason reason) {
         ensureValid();
         if (childIndex < 0 || childIndex >= childCount()
                 || previousChildIndex < 0 || previousChildIndex >= childCount()) {
@@ -149,11 +149,6 @@ public final class BehaviorNodeContext {
         return instance.blackboard(nodeIndex).contains(scope, name);
     }
 
-    public long blackboardRevision(ScopedStateScope scope, String name) {
-        ensureValid();
-        return instance.blackboard(nodeIndex).revision(scope, name);
-    }
-
     public com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard.ObservationToken
     observeBlackboard(ScopedStateScope scope, String name) {
         ensureValid();
@@ -175,15 +170,13 @@ public final class BehaviorNodeContext {
 
     public void setBlackboard(ScopedStateScope scope, String name, @Nullable Object value) {
         ensureValid();
-        instance.blackboard(nodeIndex).set(
-                scope, name, value, instance.blackboardAuditSource(nodeIndex), epochTick);
+        instance.blackboard(nodeIndex).set(scope, name, value);
         instance.dataEvaluation().clearValues();
     }
 
     public boolean clearBlackboard(ScopedStateScope scope, String name) {
         ensureValid();
-        boolean changed = instance.blackboard(nodeIndex).clear(
-                scope, name, instance.blackboardAuditSource(nodeIndex), epochTick);
+        boolean changed = instance.blackboard(nodeIndex).clear(scope, name);
         if (changed) instance.dataEvaluation().clearValues();
         return changed;
     }
@@ -193,12 +186,12 @@ public final class BehaviorNodeContext {
         actionFailure = failure;
     }
 
-    void enterSubtreeCall() {
+    public void enterSubtreeCall() {
         ensureValid();
         instance.enterSubtreeCall(nodeIndex);
     }
 
-    void exitSubtreeCall(BehaviorTerminationReason reason) {
+    public void exitSubtreeCall(BehaviorTerminationReason reason) {
         ensureValid();
         instance.exitSubtreeCall(nodeIndex, Objects.requireNonNull(reason, "reason"));
     }

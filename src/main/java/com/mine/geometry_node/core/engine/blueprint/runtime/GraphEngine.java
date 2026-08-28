@@ -9,9 +9,8 @@ import com.mine.geometry_node.core.engine.blueprint.attachment.GlobalGraphStorag
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.EventSubscription;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.GraphSubscriptionIndex;
 import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
-import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
-import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
@@ -63,6 +62,18 @@ public class GraphEngine {
         if (entities.isEmpty()) {
             eventSubscribers.remove(frequency);
         }
+    }
+
+    private static void removeSubscribersForGraph(String graphId) {
+        String normalizedId = normalizeSubscriptionGraphId(graphId);
+        eventSubscribers.entrySet().removeIf(frequencyEntry -> {
+            Map<Entity, Set<String>> entities = frequencyEntry.getValue();
+            entities.entrySet().removeIf(entityEntry -> {
+                entityEntry.getValue().remove(normalizedId);
+                return entityEntry.getValue().isEmpty();
+            });
+            return entities.isEmpty();
+        });
     }
 
     // ==========================================
@@ -541,34 +552,44 @@ public class GraphEngine {
         }
     }
 
-    public static void refreshGraphSubscriptions(MinecraftServer server, String graphId,
-                                                 @Nullable RuntimeGraphIndex oldIndex,
+    public static void refreshGraphSubscriptions(@Nullable MinecraftServer server, String graphId,
                                                  @Nullable RuntimeGraphIndex newIndex) {
-        if (server == null) return;
+        boolean registeredGlobal = graphSubscriptions.isGlobalGraphRegistered(graphId);
+        Set<Entity> registeredEntities = new HashSet<>(
+                graphSubscriptions.registeredEntitiesForGraph(graphId));
+        graphSubscriptions.unregisterGlobalGraph(graphId, null);
+        for (Entity entity : registeredEntities) {
+            graphSubscriptions.unregisterEntityGraph(entity, graphId, null);
+            EntityGraphAttachment attachment = getAttachment(entity);
+            if (attachment != null) attachment.removeProcess(graphId);
+        }
+        removeSubscribersForGraph(graphId);
 
-        GlobalGraphStorage storage = GlobalGraphStorage.get(server.overworld());
-        if (storage.getGraphs().contains(graphId)) {
-            graphSubscriptions.unregisterGlobalGraph(graphId, oldIndex);
-            if (newIndex != null) {
-                graphSubscriptions.registerGlobalGraph(graphId, newIndex);
-            }
+        boolean worldReady = server != null && server.overworld() != null;
+        if (worldReady) {
+            GlobalGraphStorage storage = GlobalGraphStorage.get(server.overworld());
+            registeredGlobal = storage.getGraphs().contains(graphId);
             for (ServerLevel level : server.getAllLevels()) {
                 LevelGraphAttachment.get(level).removeProcess(graphId);
+                for (Entity entity : level.getAllEntities()) {
+                    EntityGraphAttachment attachment = getAttachment(entity);
+                    if (attachment == null || !attachment.getBoundGraphs().contains(graphId)) continue;
+                    registeredEntities.add(entity);
+                    attachment.removeProcess(graphId);
+                }
             }
         }
 
-        for (ServerLevel level : server.getAllLevels()) {
-            for (Entity entity : level.getAllEntities()) {
+        if (newIndex != null && registeredGlobal) {
+            graphSubscriptions.registerGlobalGraph(graphId, newIndex);
+        }
+        if (newIndex != null) {
+            for (Entity entity : registeredEntities) {
                 EntityGraphAttachment attachment = getAttachment(entity);
                 if (attachment == null || !attachment.getBoundGraphs().contains(graphId)) continue;
-
-                attachment.removeProcess(graphId);
-                unregisterEntityForGraph(entity, graphId, oldIndex);
-                if (newIndex != null) {
-                    graphSubscriptions.registerEntityGraph(entity, graphId, newIndex);
-                    for (String frequency : newIndex.getReceiveBlueprintFrequencies()) {
-                        addSubscriber(frequency, entity, graphId);
-                    }
+                graphSubscriptions.registerEntityGraph(entity, graphId, newIndex);
+                for (String frequency : newIndex.getReceiveBlueprintFrequencies()) {
+                    addSubscriber(frequency, entity, graphId);
                 }
             }
         }
@@ -577,19 +598,28 @@ public class GraphEngine {
 
     @Nullable
     public static RuntimeGraphIndex getGraphIndex(String graphId) {
-        String finalId = GraphPathMapper.normalizeId(graphId);
-        RuntimeGraphIndex dynamicIndex = asBlueprintIndex(
-                DynamicGraphManager.getArtifact(finalId, GraphKind.BLUEPRINT));
-        if (dynamicIndex != null) return dynamicIndex;
-        return asBlueprintIndex(GraphResourceManager.getInstance()
-                .getArtifact(graphId, GraphKind.BLUEPRINT));
+        if (graphId == null || graphId.isBlank()) return null;
+        String trimmedId = graphId.trim();
+        RuntimeGraphIndex exact = asBlueprintIndex(GraphAssetLifecycleIndex.INSTANCE
+                .getArtifact(trimmedId, GraphKind.BLUEPRINT));
+        if (exact != null) return exact;
+        String normalizedId = GraphPathMapper.normalizeId(trimmedId);
+        return asBlueprintIndex(GraphAssetLifecycleIndex.INSTANCE
+                .getArtifact(normalizedId, GraphKind.BLUEPRINT));
     }
 
     public static String resolveGraphId(@Nullable String graphId) {
         if (graphId == null || graphId.isBlank()) return "";
         String trimmedId = graphId.trim();
-        String dynamicId = GraphPathMapper.normalizeId(trimmedId);
-        return DynamicGraphManager.getArtifact(dynamicId, GraphKind.BLUEPRINT) != null ? dynamicId : trimmedId;
+        if (GraphAssetLifecycleIndex.INSTANCE
+                .getArtifact(trimmedId, GraphKind.BLUEPRINT) != null) return trimmedId;
+        String normalizedId = GraphPathMapper.normalizeId(trimmedId);
+        if (GraphAssetLifecycleIndex.INSTANCE
+                .getArtifact(normalizedId, GraphKind.BLUEPRINT) != null
+                || GraphAssetLifecycleIndex.INSTANCE.invalidGraphIds().contains(normalizedId)) {
+            return normalizedId;
+        }
+        return trimmedId;
     }
 
     @Nullable

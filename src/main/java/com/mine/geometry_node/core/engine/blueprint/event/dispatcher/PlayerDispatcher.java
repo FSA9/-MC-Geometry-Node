@@ -190,7 +190,7 @@ public class PlayerDispatcher {
             if (!event.getEntity().level().isClientSide()) {
                 GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerLevelChange.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
-                        StandardPorts.VALUE.getId(), event.getLevels()
+                        StandardPorts.INT_VALUE.getId(), event.getLevels()
                 ));
             }
         });
@@ -199,7 +199,7 @@ public class PlayerDispatcher {
             if (!event.getEntity().level().isClientSide()) {
                 GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerPickupXp.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
-                        StandardPorts.VALUE.getId(), (float) event.getOrb().getValue(),
+                        StandardPorts.INT_VALUE.getId(), event.getOrb().getValue(),
                         StandardPorts.SOURCE_ENTITY.getId(), event.getOrb()
                 ));
             }

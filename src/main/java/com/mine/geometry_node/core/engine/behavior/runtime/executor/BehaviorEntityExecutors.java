@@ -1,6 +1,9 @@
-package com.mine.geometry_node.core.engine.behavior.runtime;
+package com.mine.geometry_node.core.engine.behavior.runtime.executor;
 
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNativeAiController;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeContext;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionFailure;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionStep;
@@ -9,7 +12,6 @@ import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContra
 import com.mine.geometry_node.core.engine.behavior.runtime.action.InstantBehaviorActionExecutor;
 import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.node.port.StandardPorts;
-import com.mine.geometry_node.core.node.nodes.behavior.condition.BehaviorUtilityConditionNode;
 import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorEntityActionNode;
 import com.mine.geometry_node.mixin.MobNavigationInvoker;
 import com.mine.geometry_node.mixin.PathNavigationAccessor;
@@ -28,7 +30,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /** Server-side executors for entity target, navigation, and look actions. */
-final class BehaviorEntityExecutors {
+public final class BehaviorEntityExecutors {
     private static final int MAX_TARGET_CANDIDATES = 4_096;
     private static final int WANDER_ATTEMPTS = 10;
     private static final double WANDER_ARRIVAL_DISTANCE = 1.0D;
@@ -37,15 +39,20 @@ final class BehaviorEntityExecutors {
     private BehaviorEntityExecutors() {
     }
 
-    static void register(BehaviorNodeExecutorRegistry registry) {
-        registry.register(BehaviorEntityActionNode.Kind.SELECT_TARGET.typeId(), new SelectTargetExecutor());
-        registry.register(BehaviorEntityActionNode.Kind.CLEAR_TARGET.typeId(), new ClearTargetExecutor());
-        registry.register(BehaviorEntityActionNode.Kind.MOVE_TO.typeId(), new MoveToExecutor());
-        registry.register(BehaviorEntityActionNode.Kind.STOP_MOVING.typeId(), new StopMovingExecutor());
-        registry.register(BehaviorEntityActionNode.Kind.WANDER.typeId(), new WanderExecutor());
-        registry.register(BehaviorEntityActionNode.Kind.LOOK_AT.typeId(), new LookAtExecutor());
-        registry.register(BehaviorEntityActionNode.Kind.ATTACK_TARGET.typeId(), new AttackTargetExecutor());
-        registry.register(BehaviorUtilityConditionNode.Kind.CAN_NAVIGATE_TO.typeId(), new CanNavigateToExecutor());
+    public static BehaviorNodeExecutor forKind(BehaviorEntityActionNode.Kind kind) {
+        return switch (kind) {
+            case SELECT_TARGET -> new SelectTargetExecutor();
+            case CLEAR_TARGET -> new ClearTargetExecutor();
+            case MOVE_TO -> new MoveToExecutor();
+            case STOP_MOVING -> new StopMovingExecutor();
+            case WANDER -> new WanderExecutor();
+            case LOOK_AT -> new LookAtExecutor();
+            case ATTACK_TARGET -> new AttackTargetExecutor();
+        };
+    }
+
+    public static BehaviorNodeExecutor canNavigateTo() {
+        return new CanNavigateToExecutor();
     }
 
     private static final class SelectTargetExecutor extends InstantBehaviorActionExecutor {

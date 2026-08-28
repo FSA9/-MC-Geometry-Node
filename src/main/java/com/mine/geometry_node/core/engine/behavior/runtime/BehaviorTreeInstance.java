@@ -7,12 +7,13 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorNodeState;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
-import com.mine.geometry_node.core.engine.behavior.contract.BehaviorValueSemantics;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.node.NodeCapabilities;
+import com.mine.geometry_node.core.node.port.TypeConverter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -139,8 +140,7 @@ public final class BehaviorTreeInstance {
                     transfer.sourceKey());
             if (value != null) {
                 child.set(ScopedStateScope.INSTANCE,
-                        transfer.targetKey(), validateSubtreeTransfer(nodeIndex, transfer, value, "input"),
-                        blackboardAuditSource(nodeIndex), host.gameTick());
+                        transfer.targetKey(), validateSubtreeTransfer(nodeIndex, transfer, value, "input"));
             }
         }
         dataEvaluation.clearValues();
@@ -157,10 +157,6 @@ public final class BehaviorTreeInstance {
                 budget.maxBlackboardEntriesPerInstance());
         installPersistentBlackboards(blackboard);
         return blackboard;
-    }
-
-    String blackboardAuditSource(int nodeIndex) {
-        return instanceId + "|" + plan.getNodeAssetId(nodeIndex) + "|" + plan.getNodeId(nodeIndex);
     }
 
     void exitSubtreeCall(int nodeIndex, BehaviorTerminationReason reason) {
@@ -181,8 +177,7 @@ public final class BehaviorTreeInstance {
             }
             for (Map.Entry<BehaviorTreePlan.SubtreeParameterTransfer, Object> output : outputs.entrySet()) {
                 parent.set(ScopedStateScope.INSTANCE,
-                        output.getKey().targetKey(), output.getValue(),
-                        blackboardAuditSource(nodeIndex), host.gameTick());
+                        output.getKey().targetKey(), output.getValue());
             }
         }
         dataEvaluation.clearValues();
@@ -198,13 +193,14 @@ public final class BehaviorTreeInstance {
     private Object validateSubtreeTransfer(int nodeIndex,
                                            BehaviorTreePlan.SubtreeParameterTransfer transfer,
                                            Object value, String direction) {
-        if (!BehaviorValueSemantics.matches(value, transfer.type())) {
+        Object converted = TypeConverter.convertForPort(value, transfer.type());
+        if (converted == null) {
             throw new BehaviorContractViolation("Subtree " + direction + " type mismatch at "
                     + plan.getNodeId(nodeIndex) + ": " + transfer.sourceKey() + " -> "
                     + transfer.targetKey() + " requires " + transfer.type() + " but received "
-                    + value.getClass().getSimpleName());
+                    + (value != null ? value.getClass().getSimpleName() : "null"));
         }
-        return BehaviorValueSemantics.freezeAs(value, transfer.type());
+        return GraphValueSnapshot.snapshot(converted);
     }
 
     public BehaviorNodeState nodeState(int nodeIndex) {
@@ -262,21 +258,13 @@ public final class BehaviorTreeInstance {
     void markSuspended() {
         if (state != BehaviorInstanceState.RUNNING) return;
         state = BehaviorInstanceState.SUSPENDED;
-        for (int index = 0; index < nodeStates.length; index++) {
-            if (nodeStates[index] == BehaviorNodeState.RUNNING) {
-                transitionNode(index, BehaviorNodeState.SUSPENDED);
-            }
-        }
+        nextWakeTick = Long.MAX_VALUE;
+        dataEvaluation.clearValues();
     }
 
     void markResumed() {
         if (state != BehaviorInstanceState.SUSPENDED) return;
         state = BehaviorInstanceState.RUNNING;
-        for (int index = 0; index < nodeStates.length; index++) {
-            if (nodeStates[index] == BehaviorNodeState.SUSPENDED) {
-                transitionNode(index, BehaviorNodeState.RUNNING);
-            }
-        }
     }
 
     void markStopped(BehaviorTerminationReason reason) {
@@ -427,6 +415,14 @@ public final class BehaviorTreeInstance {
                         && resourceOwners[resource.ordinal()] == nodeIndex) {
                     resourceOwners[resource.ordinal()] = -1;
                 }
+            }
+        }
+    }
+
+    void releaseAllResources() {
+        for (int nodeIndex = 0; nodeIndex < resourcesAcquired.length; nodeIndex++) {
+            if (resourcesAcquired[nodeIndex]) {
+                releaseResources(nodeIndex, plan.getNodeCapabilities(nodeIndex).resources());
             }
         }
     }

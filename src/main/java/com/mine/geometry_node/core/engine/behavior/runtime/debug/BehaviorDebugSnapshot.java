@@ -127,8 +127,7 @@ public record BehaviorDebugSnapshot(
         Object value = entry.value();
         return new BlackboardSnapshot(frame.frameId(), frame.assetId(), frame.callNodePath(), frame.revision(),
                 entry.name(), entry.scope().name(), entry.providerIdentity(), entry.type(),
-                value != null, valueKind(value), observedText(value),
-                entry.revision(), entry.sourceNodeId(), entry.gameTick(), entry.scopeAvailable());
+                value != null, valueKind(value), observedText(value), entry.scopeAvailable());
     }
 
     private static String valueKind(@Nullable Object value) {
@@ -229,7 +228,6 @@ public record BehaviorDebugSnapshot(
                                      String name, String scope,
                                      String providerIdentity, PortType type,
                                      boolean present, String valueKind, String displayValue,
-                                     long revision, String sourceNodeId, long gameTick,
                                      boolean scopeAvailable) {
     }
 

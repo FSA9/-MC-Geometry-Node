@@ -86,12 +86,15 @@ dependencies {
         exclude group: "org.slf4j", module: "slf4j-api"
     }) {
         version {
-            strictly "[${pty4j_version}]"
+            strictly "[${pty4j_version},)"
             prefer pty4j_version
         }
     }
-    jarJar(implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.21")) {
-        version { strictly "[2.1.21]"; prefer "2.1.21" }
+    jarJar(implementation("org.jetbrains.kotlin:kotlin-stdlib:${kotlin_stdlib_version}")) {
+        version {
+            strictly "[${kotlin_stdlib_version},)"
+            prefer kotlin_stdlib_version
+        }
     }
     // Minecraft already supplies JNA 5.17 at runtime; compile against that exact host ABI.
     compileOnly "net.java.dev.jna:jna-platform:5.17.0"

@@ -50,8 +50,9 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
     // --- 节点数据核心数组 (数组下标即为 int nodeId) ---
     private final JsonObject[] nodeDataArray;                               // 节点原始配置数据 (只读透传)
     private final String[] typeArray;                                       // 节点类型标识 (如 "math_add")
-    private final IntFlowTarget[][] flowOutputArray;                        // [nodeId][portId] -> 目标节点
-    private final IntConnectionSource[][] inputArray;
+    private final Set<String>[] portArray;
+    private final Map<Integer, IntFlowTarget>[] flowOutputArray;
+    private final Map<Integer, IntConnectionSource>[] inputArray;
     private final Map<String, Object>[] propertyArray;                      // 节点静态属性 (Properties)
     private final Map<String, Object>[] staticInputArray;                   // 节点静态默认输入 (Static Inputs)
 
@@ -71,8 +72,9 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
                               Map<String, Integer> stringToId,
                               JsonObject[] nodeDataArray,
                               String[] typeArray,
-                              IntFlowTarget[][] flowOutputArray,
-                              IntConnectionSource[][] inputArray,
+                              Set<String>[] portArray,
+                              Map<Integer, IntFlowTarget>[] flowOutputArray,
+                              Map<Integer, IntConnectionSource>[] inputArray,
                               Map<String, List<Integer>> typeLookup,
                               Map<String, List<Integer>> receiveBlueprintLookup,
                               Map<String, List<Integer>> multiblockStructureLookup,
@@ -89,8 +91,9 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
         this.stringToId = Map.copyOf(stringToId);
         this.nodeDataArray = nodeDataArray.clone();
         this.typeArray = typeArray.clone();
-        this.flowOutputArray = copyFlowOutputArray(flowOutputArray);
-        this.inputArray = copyInputArray(inputArray);
+        this.portArray = copySetArray(portArray);
+        this.flowOutputArray = copyMapArray(flowOutputArray);
+        this.inputArray = copyMapArray(inputArray);
         this.typeLookup = copyLookup(typeLookup);
         this.receiveBlueprintLookup = copyLookup(receiveBlueprintLookup);
         this.multiblockStructureLookup = copyLookup(multiblockStructureLookup);
@@ -108,18 +111,20 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
         return Map.copyOf(copy);
     }
 
-    private static IntFlowTarget[][] copyFlowOutputArray(IntFlowTarget[][] source) {
-        IntFlowTarget[][] copy = new IntFlowTarget[source.length][];
+    @SuppressWarnings("unchecked")
+    private static <T> Map<Integer, T>[] copyMapArray(Map<Integer, T>[] source) {
+        Map<Integer, T>[] copy = new Map[source.length];
         for (int i = 0; i < source.length; i++) {
-            copy[i] = source[i] != null ? source[i].clone() : new IntFlowTarget[0];
+            copy[i] = source[i] != null ? Map.copyOf(source[i]) : Map.of();
         }
         return copy;
     }
 
-    private static IntConnectionSource[][] copyInputArray(IntConnectionSource[][] source) {
-        IntConnectionSource[][] copy = new IntConnectionSource[source.length][];
+    @SuppressWarnings("unchecked")
+    private static Set<String>[] copySetArray(Set<String>[] source) {
+        Set<String>[] copy = new Set[source.length];
         for (int i = 0; i < source.length; i++) {
-            copy[i] = source[i] != null ? source[i].clone() : new IntConnectionSource[0];
+            copy[i] = source[i] != null ? Set.copyOf(source[i]) : Set.of();
         }
         return copy;
     }
@@ -144,8 +149,9 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
                                                    Map<String, Integer> stringToId,
                                                    JsonObject[] nodeDataArray,
                                                    String[] typeArray,
-                                                   IntFlowTarget[][] flowOutputArray,
-                                                   IntConnectionSource[][] inputArray,
+                                                   Set<String>[] portArray,
+                                                   Map<Integer, IntFlowTarget>[] flowOutputArray,
+                                                   Map<Integer, IntConnectionSource>[] inputArray,
                                                    Map<String, List<Integer>> typeLookup,
                                                    Map<String, List<Integer>> receiveBlueprintLookup,
                                                    Map<String, List<Integer>> multiblockStructureLookup,
@@ -161,6 +167,7 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
                 stringToId,
                 nodeDataArray,
                 typeArray,
+                portArray,
                 flowOutputArray,
                 inputArray,
                 typeLookup,
@@ -252,30 +259,7 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
     }
 
     public boolean hasPort(int nodeId, String portName) {
-        if (nodeId < 0 || nodeId >= nodeDataArray.length) return false;
-        JsonObject node = nodeDataArray[nodeId];
-        if (node == null) return false;
-
-        if (node.has("inputs") && node.getAsJsonObject("inputs").has(portName)) return true;
-        if (node.has("outputs") && node.getAsJsonObject("outputs").has(portName)) return true;
-        if (node.has("exec_outputs") && node.getAsJsonObject("exec_outputs").has(portName)) return true;
-        if (node.has("execution") && node.getAsJsonObject("execution").has(portName)) return true;
-
-        if (node.has("port_config") && node.get("port_config").isJsonObject()) {
-            JsonObject portConfig = node.getAsJsonObject("port_config");
-            if (hasPortConfigEntry(portConfig, "inputs", portName)) return true;
-            if (hasPortConfigEntry(portConfig, "exec_inputs", portName)) return true;
-            if (hasPortConfigEntry(portConfig, "outputs", portName)) return true;
-            if (hasPortConfigEntry(portConfig, "exec_outputs", portName)) return true;
-        }
-
-        return false;
-    }
-
-    private static boolean hasPortConfigEntry(JsonObject portConfig, String category, String portName) {
-        return portConfig.has(category)
-                && portConfig.get(category).isJsonObject()
-                && portConfig.getAsJsonObject(category).has(portName);
+        return nodeId >= 0 && nodeId < portArray.length && portArray[nodeId].contains(portName);
     }
 
     @SuppressWarnings("unchecked")
@@ -327,8 +311,7 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
     public IntFlowTarget findFlowTarget(int currentNodeId, String outputPortName) {
         if (currentNodeId < 0 || currentNodeId >= flowOutputArray.length) return null;
         int portId = getKeyId(outputPortName);
-        if (portId < 0 || portId >= flowOutputArray[currentNodeId].length) return null;
-        return flowOutputArray[currentNodeId][portId];
+        return portId >= 0 ? flowOutputArray[currentNodeId].get(portId) : null;
     }
 
     /**
@@ -339,8 +322,7 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
     public IntConnectionSource findInputSource(int targetNodeId, String inputPortName) {
         if (targetNodeId < 0 || targetNodeId >= inputArray.length) return null;
         int portId = getKeyId(inputPortName);
-        if (portId < 0 || portId >= inputArray[targetNodeId].length) return null;
-        return inputArray[targetNodeId][portId];
+        return portId >= 0 ? inputArray[targetNodeId].get(portId) : null;
     }
 
     @Override

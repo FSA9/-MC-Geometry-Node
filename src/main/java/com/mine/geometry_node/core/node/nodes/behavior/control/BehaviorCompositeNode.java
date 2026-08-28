@@ -3,9 +3,12 @@ package com.mine.geometry_node.core.node.nodes.behavior.control;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
+import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorControlExecutors;
 
 /** Editor definition shared by the additional ordered behavior composites. */
-public final class BehaviorCompositeNode extends BaseNode {
+public final class BehaviorCompositeNode extends BaseNode implements BehaviorExecutableNode {
     public enum Kind {
         REACTIVE_SEQUENCE("geometry_node:behavior_reactive_sequence"),
         PRIORITY_SELECTOR("geometry_node:behavior_priority_selector");
@@ -44,5 +47,10 @@ public final class BehaviorCompositeNode extends BaseNode {
 
     private static String path(String typeId) {
         return typeId.substring(typeId.indexOf(':') + 1);
+    }
+
+    @Override
+    public BehaviorNodeExecutor behaviorExecutor() {
+        return BehaviorControlExecutors.forKind(kind);
     }
 }

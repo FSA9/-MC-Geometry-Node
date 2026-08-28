@@ -2,10 +2,8 @@ package com.mine.geometry_node.core.node.nodes.data.entity.attribution;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.nodes.*;
-import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
-import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
@@ -21,7 +19,7 @@ public class GetTotalExperience extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_total_experience"))
                 .addRow(new PortRow(
                         StandardPorts.ENTITY.toInput(),
-                        PortDef.create(StandardPorts.VALUE.getId(), StandardPorts.VALUE.getTranslationKey(), PortType.INTEGER),
+                        StandardPorts.INT_VALUE.toOutput(),
                         UIHint.DEFAULT, null, null
                 ))
                 .build();
@@ -29,7 +27,7 @@ public class GetTotalExperience extends BaseNode {
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (!StandardPorts.VALUE.getId().equals(portName)) return null;
+        if (!StandardPorts.INT_VALUE.getId().equals(portName)) return null;
 
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return null;

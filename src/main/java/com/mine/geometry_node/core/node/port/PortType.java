@@ -113,11 +113,6 @@ public enum PortType {
 
         // --- 隐式类型转换白名单 ---
 
-        // Entity templates can be materialized as unspawned entities at runtime.
-        if (outputport == ENTITY_TEMPLATE && inputport == ENTITY) {
-            return true;
-        }
-
         // 1. 基础数值/布尔互转
         boolean isOutMath = (outputport == INTEGER || outputport == LONG || outputport == FLOAT || outputport == BOOLEAN);
         boolean isInMath  = (inputport == INTEGER || inputport == LONG || inputport == FLOAT || inputport == BOOLEAN);
@@ -182,7 +177,9 @@ public enum PortType {
         if (value instanceof SlotRef) return SLOT;
         if (value instanceof net.minecraft.world.entity.Entity) return ENTITY;
         if (value instanceof EntityTemplateValue) return ENTITY_TEMPLATE;
+        if (value instanceof net.minecraft.world.item.Item) return ITEM;
         if (value instanceof net.minecraft.world.item.ItemStack) return ITEM_STACK;
+        if (value instanceof net.minecraft.world.level.block.state.BlockState) return BLOCK;
         if (value instanceof DialogueChoiceValue) return DIALOGUE_CHOICE;
         if (value instanceof QuestConditionValue) return QUEST_CONDITION;
         if (value instanceof java.util.List) return LIST;

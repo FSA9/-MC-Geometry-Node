@@ -19,7 +19,7 @@ public class GetSaturation extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_saturation"))
                 .addRow(new PortRow(
                         StandardPorts.ENTITY.toInput(),
-                        StandardPorts.VALUE.toOutput(),
+                        StandardPorts.FLOAT_VALUE.toOutput(),
                         UIHint.DEFAULT, null, null
                 ))
                 .build();
@@ -27,7 +27,7 @@ public class GetSaturation extends BaseNode {
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (!StandardPorts.VALUE.getId().equals(portName)) return null;
+        if (!StandardPorts.FLOAT_VALUE.getId().equals(portName)) return null;
 
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return null;

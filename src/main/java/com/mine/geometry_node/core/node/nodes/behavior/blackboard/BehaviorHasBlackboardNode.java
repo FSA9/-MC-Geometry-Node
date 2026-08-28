@@ -33,8 +33,7 @@ public final class BehaviorHasBlackboardNode extends BaseNode {
         ScopedStateScope scope = BlackboardNodePorts.scope(
                 context.getStaticInput(StandardPorts.BLACKBOARD_SCOPE.getId()));
         String key = getInput(context, StandardPorts.KEY.getId(), String.class);
-        return scope != null && key != null && !key.isBlank()
-                && blackboard.hasBlackboard(scope, key.trim());
+        return scope != null && blackboard.hasBlackboard(scope, key != null ? key : "");
     }
 
     private static PortDef keyPort() {

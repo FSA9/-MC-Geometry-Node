@@ -149,8 +149,7 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
                 bounded(source.scope(), MAX_NAME_LENGTH),
                 bounded(source.providerIdentity(), MAX_ID_LENGTH), source.type(), source.present(),
                 bounded(source.valueKind(), MAX_NAME_LENGTH),
-                bounded(source.displayValue(), MAX_VALUE_LENGTH), source.revision(),
-                bounded(source.sourceNodeId(), MAX_ID_LENGTH), source.gameTick(), source.scopeAvailable());
+                bounded(source.displayValue(), MAX_VALUE_LENGTH), source.scopeAvailable());
     }
 
     private static Trace trace(BehaviorDebugSnapshot.TraceSnapshot source) {
@@ -194,8 +193,7 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
         return 64 + stringBytes(entry.frameAssetId()) + stringBytes(entry.callNodePath())
                 + stringBytes(entry.name()) + stringBytes(entry.scope())
                 + stringBytes(entry.providerIdentity())
-                + stringBytes(entry.valueKind()) + stringBytes(entry.displayValue())
-                + stringBytes(entry.sourceNodeId());
+                + stringBytes(entry.valueKind()) + stringBytes(entry.displayValue());
     }
 
     private static int traceBytes(Trace trace) {
@@ -430,7 +428,6 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
                                   String name, String scope,
                                   String providerIdentity, PortType type,
                                   boolean present, String valueKind, String displayValue,
-                                  long revision, String sourceNodeId, long gameTick,
                                   boolean scopeAvailable) {
         private void write(RegistryFriendlyByteBuf buffer) {
             buffer.writeVarInt(frameId);
@@ -444,9 +441,6 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
             buffer.writeBoolean(present);
             buffer.writeUtf(valueKind, MAX_NAME_LENGTH);
             buffer.writeUtf(displayValue, MAX_VALUE_LENGTH);
-            buffer.writeLong(revision);
-            buffer.writeUtf(sourceNodeId, MAX_ID_LENGTH);
-            buffer.writeLong(gameTick);
             buffer.writeBoolean(scopeAvailable);
         }
 
@@ -455,8 +449,7 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
                     buffer.readUtf(MAX_ID_LENGTH), buffer.readLong(), buffer.readUtf(MAX_NAME_LENGTH),
                     buffer.readUtf(MAX_NAME_LENGTH), buffer.readUtf(MAX_ID_LENGTH),
                     buffer.readEnum(PortType.class), buffer.readBoolean(), buffer.readUtf(MAX_NAME_LENGTH),
-                    buffer.readUtf(MAX_VALUE_LENGTH), buffer.readLong(), buffer.readUtf(MAX_ID_LENGTH),
-                    buffer.readLong(), buffer.readBoolean());
+                    buffer.readUtf(MAX_VALUE_LENGTH), buffer.readBoolean());
         }
     }
 

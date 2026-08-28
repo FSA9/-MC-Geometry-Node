@@ -33,8 +33,7 @@ public final class BehaviorGetBlackboardNode extends BaseNode {
         if (!(context instanceof BehaviorBlackboardView blackboard)) return null;
         ScopedStateScope scope = scope(context);
         String key = getInput(context, StandardPorts.KEY.getId(), String.class);
-        return scope != null && key != null && !key.isBlank()
-                ? blackboard.getBlackboard(scope, key.trim()) : null;
+        return scope != null ? blackboard.getBlackboard(scope, key != null ? key : "") : null;
     }
 
     private static PortDef keyPort() {

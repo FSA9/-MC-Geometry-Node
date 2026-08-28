@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.dependency.CompiledGraphDependencies;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.port.PortType;
 import org.jetbrains.annotations.Nullable;
@@ -223,7 +224,9 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
     @Override
     @Nullable
     public Object getStaticInput(int nodeId, String portName) {
-        return validNode(nodeId) ? staticInputs[nodeId].get(portName) : null;
+        return validNode(nodeId)
+                ? GraphValueSnapshot.snapshot(staticInputs[nodeId].get(portName))
+                : null;
     }
 
     @Override

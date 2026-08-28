@@ -74,6 +74,15 @@ public final class BehaviorTreeEvaluator {
         instance.markStopped(reason);
     }
 
+    /** Exits the active branch while retaining the instance for a later root restart. */
+    public void suspend(BehaviorTreeInstance instance) {
+        Objects.requireNonNull(instance, "instance");
+        int root = instance.plan().getRootNode();
+        if (root >= 0) abortSubtree(instance, root, BehaviorTerminationReason.TREE_SUSPENDED);
+        instance.releaseAllResources();
+        instance.markSuspended();
+    }
+
     BehaviorResult evaluateNode(BehaviorTreeInstance instance, int nodeIndex, int depth, long epochTick) {
         EvaluationPass pass = requirePass(instance);
         if (depth > instance.budget().maxTreeDepth()) {

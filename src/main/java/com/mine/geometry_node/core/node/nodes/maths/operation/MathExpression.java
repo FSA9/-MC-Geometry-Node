@@ -66,7 +66,7 @@ public class MathExpression extends BaseNode {
     private NodeDef buildDef(int portCount) {
         NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
                 .text("summary")
-                .output(StandardPorts.VALUE, "value")
+                .output(StandardPorts.FLOAT_VALUE, "value")
                 .input(StandardPorts.EXPRESSION, "expression");
         for (int i = 1; i <= portCount; i++) {
             comment.input(PORT_IDS[i], "variable");
@@ -76,7 +76,7 @@ public class MathExpression extends BaseNode {
                 .comment(comment.build())
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 26);
 
-        builder.addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null));
+        builder.addRow(new PortRow(null, StandardPorts.FLOAT_VALUE.toOutput(), UIHint.DEFAULT, null, null));
 
         builder.addRow(new PortRow(StandardPorts.EXPRESSION.toInput(), null, UIHint.INPUT, null, null));
         for (int i = 1; i <= portCount; i++) {
@@ -93,7 +93,7 @@ public class MathExpression extends BaseNode {
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (!StandardPorts.VALUE.getId().equals(portName)) return null;
+        if (!StandardPorts.FLOAT_VALUE.getId().equals(portName)) return null;
 
         String mainExpr = getInput(context, StandardPorts.EXPRESSION.getId(), String.class);
         if (mainExpr == null || mainExpr.trim().isEmpty()) {

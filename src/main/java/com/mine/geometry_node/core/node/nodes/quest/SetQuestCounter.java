@@ -26,7 +26,7 @@ public final class SetQuestCounter extends BaseNode {
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.PATH.toInput(""), null, UIHint.PATH, null, null))
                 .addRow(new PortRow(StandardPorts.KEY.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.VALUE.toInput(0.0f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.FLOAT_VALUE.toInput(0.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(null, PortDef.create(SUCCESS_PORT, "geometry_node.port.success", PortType.BOOLEAN), UIHint.DEFAULT, null, null))
                 .build();
     }
@@ -40,7 +40,7 @@ public final class SetQuestCounter extends BaseNode {
                 context,
                 getInput(context, StandardPorts.PATH.getId(), String.class));
         String counterKey = getInput(context, StandardPorts.KEY.getId(), String.class);
-        Float value = getInput(context, StandardPorts.VALUE.getId(), Float.class);
+        Float value = getInput(context, StandardPorts.FLOAT_VALUE.getId(), Float.class);
         QuestOperationResult result = QuestService.INSTANCE.setCounter(
                 owner, questPath, counterKey, value != null ? value.doubleValue() : 0.0);
         context.setTempData(tempKey(context), result.successful());

@@ -49,12 +49,9 @@ public final class GetScopedState extends BaseNode {
                 ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
         ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
 
-        if (attrName == null || attrName.trim().isEmpty()) {
-            throw new IllegalStateException("Scoped state key cannot be empty");
-        }
         if (target == null) {
             throw new IllegalStateException("Scoped state target is unavailable for " + scope);
         }
-        return context.getScopedState(target, attrName.trim());
+        return context.getScopedState(target, ScopedStateNodeSupport.requireKey(attrName));
     }
 }

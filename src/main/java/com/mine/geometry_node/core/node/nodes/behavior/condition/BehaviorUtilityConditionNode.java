@@ -6,12 +6,15 @@ import com.mine.geometry_node.core.node.nodes.behavior.blackboard.BlackboardNode
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
+import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorConditionExecutors;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 /** Editor definitions shared by the additional behavior conditions. */
-public final class BehaviorUtilityConditionNode extends BaseNode {
+public final class BehaviorUtilityConditionNode extends BaseNode implements BehaviorExecutableNode {
     public enum Kind {
         BLACKBOARD_VALUE_CHANGED("geometry_node:behavior_blackboard_value_changed"),
         CAN_NAVIGATE_TO("geometry_node:behavior_can_navigate_to");
@@ -56,5 +59,10 @@ public final class BehaviorUtilityConditionNode extends BaseNode {
 
     private static String path(String typeId) {
         return typeId.substring(typeId.indexOf(':') + 1);
+    }
+
+    @Override
+    public BehaviorNodeExecutor behaviorExecutor() {
+        return BehaviorConditionExecutors.forKind(kind);
     }
 }

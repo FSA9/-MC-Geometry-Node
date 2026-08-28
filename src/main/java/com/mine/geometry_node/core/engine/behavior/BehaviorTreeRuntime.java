@@ -47,7 +47,6 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
 
     @Override
     public void init() {
-        BehaviorNodeExecutorRegistry.INSTANCE.registerCoreExecutors();
         GraphCompilationService.INSTANCE.register(BehaviorTreeCompiler.INSTANCE);
         GraphAssetLifecycleIndex.INSTANCE.addChangeListener(
                 GraphKind.BEHAVIOR_TREE, this::onGraphAssetsChanged);

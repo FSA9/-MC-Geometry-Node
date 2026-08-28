@@ -41,14 +41,14 @@ public class MathOperation extends BaseNode {
 
     private NodeDef buildDef(String operator) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.math_operation"));
-        builder.addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null));
+        builder.addRow(new PortRow(null, StandardPorts.FLOAT_VALUE.toOutput(), UIHint.DEFAULT, null, null));
         builder.addRow(new PortRow(
                 StandardPorts.STRING.toInput("+").hiddenPin(), null, UIHint.SELECT, null,
                 Map.of(PortMetaKeys.OPTIONS, ALL_OPERATORS)));
-        builder.addRow(new PortRow(StandardPorts.VALUE.toInputWithIndex(1), null, UIHint.INPUT, null, null));
+        builder.addRow(new PortRow(StandardPorts.FLOAT_VALUE.toInputWithIndex(1), null, UIHint.INPUT, null, null));
         if (isBinaryOperator(operator)) {
             builder.addRow(new PortRow(
-                    StandardPorts.VALUE.toInputWithIndex(2),
+                    StandardPorts.FLOAT_VALUE.toInputWithIndex(2),
                     null, UIHint.INPUT, null, null
             ));
         }
@@ -58,15 +58,15 @@ public class MathOperation extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        if (!StandardPorts.VALUE.getId().equals(portName)) return null;
+        if (!StandardPorts.FLOAT_VALUE.getId().equals(portName)) return null;
 
         String operator = getInput(context, StandardPorts.STRING.getId(), String.class);
         if (operator == null) operator = "+";
 
-        Float rawV1 = getInput(context, StandardPorts.VALUE.getIdWithIndex(1), Float.class);
+        Float rawV1 = getInput(context, StandardPorts.FLOAT_VALUE.getIdWithIndex(1), Float.class);
         Float rawV2 = null;
         if (isBinaryOperator(operator)) {
-            rawV2 = getInput(context, StandardPorts.VALUE.getIdWithIndex(2), Float.class);
+            rawV2 = getInput(context, StandardPorts.FLOAT_VALUE.getIdWithIndex(2), Float.class);
         }
 
         float v1 = rawV1 != null ? rawV1 : 0.0f;

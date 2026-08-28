@@ -19,7 +19,7 @@ public class OnEntityPotionEffectApply extends BaseEventNode {
                 // 输出药水效果的注册名 (例如 "minecraft:speed")
                 .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), UIHint.DEFAULT, null, null))
                 // 输出药水等级 (Amplifier)
-                .addRow(new PortRow(null, StandardPorts.VALUE.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.INT_VALUE.toOutput(), UIHint.DEFAULT, null, null))
                 .build();
     }
 }

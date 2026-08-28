@@ -62,13 +62,10 @@ public final class SetScopedState extends BaseNode {
         context.setTempData(tempKey(context, StandardPorts.NAME.getId()), attrName);
         context.setTempData(tempKey(context, StandardPorts.ANY_VALUE.getId()), attrValue);
 
-        if (attrName == null || attrName.trim().isEmpty()) {
-            throw new IllegalStateException("Scoped state key cannot be empty");
-        }
         if (target == null) {
             throw new IllegalStateException("Scoped state target is unavailable for " + scope);
         }
-        context.setScopedState(target, attrName.trim(), attrValue);
+        context.setScopedState(target, ScopedStateNodeSupport.requireKey(attrName), attrValue);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }

@@ -2,7 +2,6 @@ package com.mine.geometry_node.core.engine.behavior.blackboard;
 
 import com.mine.geometry_node.core.engine.graph.scoped.OwnerScopedStateProvider;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
-import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateChange;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateEntry;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateProvider;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
@@ -64,16 +63,11 @@ public final class BehaviorScopedStateProviders {
         @Override public ScopedStateEntry get(String name) {
             return delegate().get(name);
         }
-        @Override public ScopedStateEntry put(
-                String name, Object value, String sourceNodeId, long gameTick) {
-            return delegate().put(name, value, sourceNodeId, gameTick);
+        @Override public ScopedStateEntry put(String name, Object value) {
+            return delegate().put(name, value);
         }
-        @Override public ScopedStateChange remove(
-                String name, String sourceNodeId, long gameTick) {
-            return delegate().remove(name, sourceNodeId, gameTick);
-        }
-        @Override public ScopedStateChange lastChange(String name) {
-            return delegate().lastChange(name);
+        @Override public boolean remove(String name) {
+            return delegate().remove(name);
         }
         @Override public boolean hasRecord(String name) { return delegate().hasRecord(name); }
         @Override public Map<String, ScopedStateEntry> entries() {

@@ -104,12 +104,11 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
                 dictReverse.add(key);
             }
         }
-        int maxPortId = dictReverse.size();
-
         JsonObject[] nodeDataArray = new JsonObject[size];
         String[] typeArray = new String[size];
-        RuntimeGraphIndex.IntFlowTarget[][] flowOutputArray = new RuntimeGraphIndex.IntFlowTarget[size][maxPortId];
-        RuntimeGraphIndex.IntConnectionSource[][] inputArray = new RuntimeGraphIndex.IntConnectionSource[size][maxPortId];
+        Map<Integer, RuntimeGraphIndex.IntFlowTarget>[] flowOutputArray = new Map[size];
+        Map<Integer, RuntimeGraphIndex.IntConnectionSource>[] inputArray = new Map[size];
+        Set<String>[] portArray = new Set[size];
         Map<String, Object>[] propertyArray = new Map[size];
         Map<String, Object>[] staticInputArray = new Map[size];
 
@@ -119,6 +118,9 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
             nodeDataArray[i] = flattener.nodeDataLookup.get(strId);
             JsonObject node = nodeDataArray[i];
             typeArray[i] = node != null && node.has("node_type") ? node.get("node_type").getAsString() : "unknown";
+            flowOutputArray[i] = new HashMap<>();
+            inputArray[i] = new HashMap<>();
+            portArray[i] = flattener.portLookup.getOrDefault(strId, Set.of());
 
             Map<String, GraphFlattener.TargetConnection> oldFlow = flattener.flowOutputLookup.get(strId);
             if (oldFlow != null) {
@@ -126,7 +128,8 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
                     Integer targetInt = stringToId.get(e.getValue().targetNodeId());
                     Integer portId = keyDict.get(e.getKey());
                     if (targetInt != null && portId != null) {
-                        flowOutputArray[i][portId] = new RuntimeGraphIndex.IntFlowTarget(targetInt, e.getValue().targetPortName());
+                        flowOutputArray[i].put(portId,
+                                new RuntimeGraphIndex.IntFlowTarget(targetInt, e.getValue().targetPortName()));
                     }
                 }
             }
@@ -145,7 +148,8 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
             Integer portId = keyDict.get(portName);
 
             if (targetInt != null && sourceInt != null && portId != null) {
-                inputArray[targetInt][portId] = new RuntimeGraphIndex.IntConnectionSource(sourceInt, entry.getValue().sourcePortName());
+                inputArray[targetInt].put(portId,
+                        new RuntimeGraphIndex.IntConnectionSource(sourceInt, entry.getValue().sourcePortName()));
             }
         }
 
@@ -205,6 +209,7 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
                 stringToId,
                 nodeDataArray,
                 typeArray,
+                portArray,
                 flowOutputArray,
                 inputArray,
                 typeToIntList,
@@ -272,19 +277,10 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
                         entry.getValue() != null && entry.getValue().has("node_type")
                                 ? entry.getValue().get("node_type").getAsString() : null))
                 .toList();
-        List<GraphDocumentValidator.DataEdge> edges = flattener.inputLookup.entrySet().stream()
-                .map(entry -> new GraphDocumentValidator.DataEdge(
-                        entry.getValue().sourceNodeId(), dataTargetNode(entry.getKey())))
-                .toList();
         int flowConnections = flattener.flowOutputLookup.values().stream()
                 .mapToInt(Map::size).sum();
         return new GraphDocumentValidator.Input(
                 context != null ? context.diagnosticAssetId() : "<anonymous>",
-                graphTypeId, nodes, edges, flowConnections + flattener.inputLookup.size());
-    }
-
-    private static String dataTargetNode(String inputKey) {
-        int separator = inputKey != null ? inputKey.indexOf('#') : -1;
-        return separator >= 0 ? inputKey.substring(0, separator) : inputKey;
+                graphTypeId, nodes, flowConnections + flattener.inputLookup.size());
     }
 }

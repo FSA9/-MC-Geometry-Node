@@ -11,6 +11,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
@@ -93,7 +94,8 @@ public class GraphResourceManager extends SimplePreparableReloadListener<Map<Ide
 
         // 缓存替换
         this.graphCache = Map.copyOf(newCache);
-        GraphAssetLifecycleIndex.INSTANCE.replacePackagedGraphs(this.graphCache);
+        GraphAssetLifecycleIndex.INSTANCE.replacePackagedGraphs(
+                ServerLifecycleHooks.getCurrentServer(), this.graphCache);
         System.out.println("[GraphResourceManager]: Loaded " + graphCache.size()
                 + " source graph(s), " + GraphAssetLifecycleIndex.INSTANCE.getGraphIds().size()
                 + " effective graph(s).");

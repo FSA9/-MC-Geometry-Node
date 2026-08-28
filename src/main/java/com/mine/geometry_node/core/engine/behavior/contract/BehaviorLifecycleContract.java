@@ -10,8 +10,8 @@ import java.util.Set;
  * occurs once before the first update. A RUNNING result retains the node and
  * later evaluations call update without entering again. Normal completion,
  * abort and error all pass through EXITING exactly once; active descendants are
- * exited in reverse child order before their parent. Suspension retains state
- * and owns no enter/exit call of its own.
+ * exited in reverse child order before their parent. Suspending an instance
+ * aborts its active branch; resuming starts a fresh evaluation from the root.
  */
 public final class BehaviorLifecycleContract {
     private static final Map<BehaviorNodeState, Set<BehaviorNodeState>> TRANSITIONS = Map.of(

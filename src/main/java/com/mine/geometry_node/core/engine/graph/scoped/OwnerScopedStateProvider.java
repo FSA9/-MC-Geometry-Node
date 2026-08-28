@@ -33,28 +33,14 @@ public final class OwnerScopedStateProvider implements ScopedStateProvider {
     }
 
     @Override
-    public ScopedStateEntry put(String name, Object value,
-                                        String sourceNodeId, long gameTick) {
-        OwnerScopedStateStore store = store();
-        boolean creating = !store.hasRecord(namespace, name);
-        int currentSize = creating ? store.size(namespace) : -1;
-        if (creating && currentSize >= maxEntries) {
-            notifyLimit();
-        }
-        ScopedStateEntry entry = store.put(namespace, name, value, sourceNodeId,
-                gameTick, maxEntries, registries());
-        if (creating && currentSize + 1 == maxEntries) notifyLimit();
-        return entry;
+    public ScopedStateEntry put(String name, Object value) {
+        return store().put(namespace, name, value,
+                maxEntries, registries(), this::notifyLimit);
     }
 
     @Override
-    public ScopedStateChange remove(String name, String sourceNodeId, long gameTick) {
-        return store().remove(namespace, name, sourceNodeId, gameTick);
-    }
-
-    @Override
-    public @Nullable ScopedStateChange lastChange(String name) {
-        return store().lastChange(namespace, name);
+    public boolean remove(String name) {
+        return store().remove(namespace, name);
     }
 
     @Override public long revision() { return store().revision(); }

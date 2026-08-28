@@ -15,6 +15,7 @@ public enum BehaviorTerminationReason {
     OWNER_INVALID(Kind.ABORT, null),
     WORLD_INVALID(Kind.ABORT, null),
     CAPABILITY_LOST(Kind.ABORT, null),
+    TREE_SUSPENDED(Kind.ABORT, null),
     TREE_STOPPED(Kind.ABORT, null),
     UNBOUND(Kind.ABORT, null),
     ASSET_REPLACED(Kind.ABORT, null),

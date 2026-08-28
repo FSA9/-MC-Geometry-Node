@@ -30,7 +30,7 @@ public class WorldDispatcher {
                 ServerLevel serverLevel = (ServerLevel) event.getLevel();
                 GraphEngine.dispatchEvent(serverLevel, event.getExplosion().getIndirectSourceEntity(), OnExplosion.TYPE_ID, GraphEventData.of(
                         StandardPorts.XYZ.getId(), event.getExplosion().center(),
-                        StandardPorts.VALUE.getId(), event.getExplosion().radius(),
+                        StandardPorts.FLOAT_VALUE.getId(), event.getExplosion().radius(),
                         StandardPorts.ENTITY.getId(), event.getExplosion().getIndirectSourceEntity()
                 ));
             }

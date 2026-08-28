@@ -24,14 +24,14 @@ public class SetWalkSpeed extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 // 默认移速是 0.1f
-                .addRow(new PortRow(StandardPorts.VALUE.toInput(0.1f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.FLOAT_VALUE.toInput(0.1f), null, UIHint.INPUT, null, null))
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        Float speed = getInput(context, StandardPorts.VALUE.getId(), Float.class);
+        Float speed = getInput(context, StandardPorts.FLOAT_VALUE.getId(), Float.class);
 
         if (speed != null && !entities.isEmpty()) {
             for (Entity entity : entities) {

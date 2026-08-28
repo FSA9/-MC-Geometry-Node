@@ -54,7 +54,7 @@ public class EntityDispatcher {
 
                 GraphEngine.dispatchEvent(serverLevel, entity, OnEntityHurt.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), entity,
-                        StandardPorts.VALUE.getId(), amount,
+                        StandardPorts.FLOAT_VALUE.getId(), amount,
                         StandardPorts.DAMAGE_TYPE.getId(), damageTypeId,
                         StandardPorts.ATTACK_SOURCE.getId(), attacker,
                         StandardPorts.DIRECT_SOURCE.getId(), directSource
@@ -64,7 +64,7 @@ public class EntityDispatcher {
                     GraphEngine.dispatchEvent(serverLevel, attacker, OnEntityDealDamage.TYPE_ID, GraphEventData.of(
                             StandardPorts.TRIGGER_ENTITY.getId(), attacker,
                             StandardPorts.ENTITY.getId(), entity,
-                            StandardPorts.VALUE.getId(), amount,
+                            StandardPorts.FLOAT_VALUE.getId(), amount,
                             StandardPorts.DAMAGE_TYPE.getId(), damageTypeId,
                             StandardPorts.DIRECT_SOURCE.getId(), directSource
                     ));
@@ -167,7 +167,7 @@ public class EntityDispatcher {
             if (!event.getEntity().level().isClientSide()) {
                 GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityHeal.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
-                        StandardPorts.VALUE.getId(), event.getAmount()
+                        StandardPorts.FLOAT_VALUE.getId(), event.getAmount()
                 ));
             }
         });
@@ -253,7 +253,7 @@ public class EntityDispatcher {
                 GraphEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityPotionEffectApply.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.TYPE.getId(), effectId,
-                        StandardPorts.VALUE.getId(), event.getEffectInstance().getAmplifier()
+                        StandardPorts.INT_VALUE.getId(), event.getEffectInstance().getAmplifier()
                 ));
             }
         });
