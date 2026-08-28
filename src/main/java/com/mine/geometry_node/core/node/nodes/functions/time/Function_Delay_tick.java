@@ -15,17 +15,16 @@ public class Function_Delay_tick extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.function_delay_tick"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TIME.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null, null))
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        Float tick = getInput(context, StandardPorts.TIME.getId(), Float.class);
+        Integer tick = getInput(context, StandardPorts.TICK.getId(), Integer.class);
 
         if (tick != null && tick > 0) {
-            long ticks = (long) (tick * 1);
-            return ExecutionResult.delay(ticks, StandardPorts.FLOW_OUT.getId());
+            return ExecutionResult.delay(tick.longValue(), StandardPorts.FLOW_OUT.getId());
         }
 
         return next(StandardPorts.FLOW_OUT.getId());

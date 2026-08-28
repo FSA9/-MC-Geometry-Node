@@ -48,9 +48,9 @@ public final class BehaviorDecoratorNode extends BaseNode implements BehaviorExe
             case REPEAT -> builder.addRow(input(StandardPorts.COUNT, 1)).build();
             case RETRY -> builder
                     .addRow(input(StandardPorts.COUNT, 1))
-                    .addRow(input(StandardPorts.RETRY_INTERVAL, 1)).build();
-            case TIMEOUT -> builder.addRow(input(StandardPorts.BEHAVIOR_TICKS, 100)).build();
-            case COOLDOWN -> builder.addRow(input(StandardPorts.COOLDOWN_TICKS, 20)).build();
+                    .addRow(tickInput(1, "geometry_node.port.tick.retry")).build();
+            case TIMEOUT -> builder.addRow(tickInput(100, "geometry_node.port.tick.timeout")).build();
+            case COOLDOWN -> builder.addRow(tickInput(20, "geometry_node.port.tick.cooldown")).build();
             case ALWAYS_SUCCEED, ALWAYS_FAIL -> builder.build();
         };
     }
@@ -62,6 +62,11 @@ public final class BehaviorDecoratorNode extends BaseNode implements BehaviorExe
 
     private static PortRow input(StandardPorts port, Object value) {
         return new PortRow(port.toInput(value),
+                null, UIHint.INPUT, null, null);
+    }
+
+    private static PortRow tickInput(int value, String translationKey) {
+        return new PortRow(StandardPorts.TICK.toInput(value).withDisplayName(translationKey),
                 null, UIHint.INPUT, null, null);
     }
 

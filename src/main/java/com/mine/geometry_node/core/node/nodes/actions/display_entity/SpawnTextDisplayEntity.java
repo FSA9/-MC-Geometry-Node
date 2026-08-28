@@ -48,8 +48,10 @@ public class SpawnTextDisplayEntity extends BaseNode {
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.TELEPORT_DURATION.toInput(0), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.INTERPOLATION_DURATION.toInput(0), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInput(0)
+                        .withDisplayName("geometry_node.port.tick.teleport"), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInputWithIndex(1, 0)
+                        .withDisplayName("geometry_node.port.tick.interpolation"), null, UIHint.INPUT, null, null))
                 .build();
     }
 
@@ -80,8 +82,8 @@ public class SpawnTextDisplayEntity extends BaseNode {
         if (rotation == null) rotation = Vec3.ZERO;
         if (scaleVec == null) scaleVec = new Vec3(1, 1, 1);
 
-        Integer tpDuration = getInput(context, StandardPorts.TELEPORT_DURATION.getId(), Integer.class);
-        Integer interpDuration = getInput(context, StandardPorts.INTERPOLATION_DURATION.getId(), Integer.class);
+        Integer tpDuration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
+        Integer interpDuration = getInput(context, StandardPorts.TICK.getIdWithIndex(1), Integer.class);
 
         Quaternionf leftRotation = new Quaternionf().rotationYXZ(
                 (float) Math.toRadians(rotation.y),

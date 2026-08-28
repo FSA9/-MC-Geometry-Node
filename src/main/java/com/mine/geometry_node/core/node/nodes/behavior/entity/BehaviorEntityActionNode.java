@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
@@ -72,7 +73,7 @@ public final class BehaviorEntityActionNode extends BaseNode implements Behavior
                     .addRow(input(StandardPorts.VERTICAL_RANGE, 4)).build();
             case LOOK_AT -> builder
                     .addRow(input(StandardPorts.TARGET, null))
-                    .addRow(input(StandardPorts.DURATION, 20)).build();
+                    .addRow(tickInput(20, "geometry_node.port.tick.look")).build();
             case ATTACK_TARGET -> builder
                     .comment(NodeComment.builder(path(Kind.ATTACK_TARGET.typeId))
                             .text("summary")
@@ -117,7 +118,14 @@ public final class BehaviorEntityActionNode extends BaseNode implements Behavior
     }
 
     private static PortRow input(StandardPorts port, Object value) {
+        UIHint hint = port.getType() == PortType.ENTITY || port.getType() == PortType.LIST
+                ? UIHint.DEFAULT : UIHint.INPUT;
         return new PortRow(port.toInput(value),
+                null, hint, null, null);
+    }
+
+    private static PortRow tickInput(int value, String translationKey) {
+        return new PortRow(StandardPorts.TICK.toInput(value).withDisplayName(translationKey),
                 null, UIHint.INPUT, null, null);
     }
 

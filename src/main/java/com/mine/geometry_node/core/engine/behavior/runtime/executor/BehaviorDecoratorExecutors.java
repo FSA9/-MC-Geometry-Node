@@ -112,7 +112,7 @@ public final class BehaviorDecoratorExecutors {
                 return retryFailures ? BehaviorResult.FAILURE : BehaviorResult.SUCCESS;
             }
             int interval = retryFailures
-                    ? require(context.input(StandardPorts.RETRY_INTERVAL.getId(), Integer.class),
+                    ? require(context.input(StandardPorts.TICK.getId(), Integer.class),
                     "Retry interval is missing") : 1;
             if (interval <= 0) {
                 throw new BehaviorContractViolation("Attempt interval must be positive");
@@ -140,7 +140,7 @@ public final class BehaviorDecoratorExecutors {
     private static final class TimeoutExecutor implements BehaviorNodeExecutor {
         @Override
         public void enter(BehaviorNodeContext context) {
-            int ticks = require(context.input(StandardPorts.BEHAVIOR_TICKS.getId(), Integer.class),
+            int ticks = require(context.input(StandardPorts.TICK.getId(), Integer.class),
                     "Timeout ticks are missing");
             context.setMemory(new TimeoutState(deadline(context.gameTick(), ticks), false));
         }
@@ -180,7 +180,7 @@ public final class BehaviorDecoratorExecutors {
             if (context.gameTick() < availableAt) return BehaviorResult.FAILURE;
             BehaviorResult result = context.tickChild(0);
             if (result == BehaviorResult.SUCCESS) {
-                int ticks = require(context.input(StandardPorts.COOLDOWN_TICKS.getId(), Integer.class),
+                int ticks = require(context.input(StandardPorts.TICK.getId(), Integer.class),
                         "Cooldown ticks are missing");
                 context.setMemory(deadline(context.gameTick(), ticks));
             }

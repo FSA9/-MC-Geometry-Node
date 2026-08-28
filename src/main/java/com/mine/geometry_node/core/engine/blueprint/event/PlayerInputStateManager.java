@@ -67,10 +67,9 @@ public final class PlayerInputStateManager {
                         .put(StandardPorts.ENTITY.getId(), player)
                         .put(GraphEventFields.KEY_ID, keyId)
                         .put(GraphEventFields.ACTION, action)
-                        .put(GraphEventFields.DURATION, durationTicks)
                         .put(GraphEventFields.CLIENT_VELOCITY, clientVelocity)
                         .put(GraphEventFields.CLIENT_VELOCITY_GAME_TIME, gameTime)
-                        .put(StandardPorts.TIME.getId(), durationTicks)
+                        .put(StandardPorts.TICK.getId(), durationTicks)
                         .build()
         );
     }

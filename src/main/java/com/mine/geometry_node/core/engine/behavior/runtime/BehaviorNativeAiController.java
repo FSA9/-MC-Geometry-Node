@@ -10,9 +10,11 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -26,11 +28,15 @@ public final class BehaviorNativeAiController {
             = new WeakHashMap<>();
     private static final Map<Brain<?>, WeakReference<LivingEntity>> BRAIN_OWNERS = new WeakHashMap<>();
     private static final ThreadLocal<Brain<?>> ALLOWED_BRAIN_WRITE = new ThreadLocal<>();
+    private static final Set<BehaviorNativeAiController> ACTIVE_TARGET_ASSIGNMENTS =
+            Collections.newSetFromMap(new WeakHashMap<>());
 
     private final Mob owner;
     private final EnumMap<Goal.Flag, GoalLease> goalLeases = new EnumMap<>(Goal.Flag.class);
     private final SelectorLeases goalSelector;
     private final SelectorLeases targetSelector;
+    @Nullable private WeakReference<LivingEntity> assignedTarget;
+    private boolean targetAssignmentActive;
 
     BehaviorNativeAiController(Mob owner) {
         this.owner = owner;
@@ -42,6 +48,8 @@ public final class BehaviorNativeAiController {
         EnumSet<Goal.Flag> acquiredFlags = EnumSet.noneOf(Goal.Flag.class);
         EnumSet<NodeCapabilities.ResourceUse> acquiredBrainResources = normalizedResources(resources);
         Set<MemoryModuleType<?>> newlyControlledMemories = newlyControlledMemories(
+                owner, acquiredBrainResources);
+        Set<MemoryModuleType<?>> newlyBlockedBehaviorMemories = newlyBlockedBehaviorMemories(
                 owner, acquiredBrainResources);
         boolean brainLeasesAdded = false;
         try {
@@ -57,7 +65,7 @@ public final class BehaviorNativeAiController {
 
             addBrainLeases(owner, acquiredBrainResources);
             brainLeasesAdded = true;
-            stopConflictingBrainBehaviors(newlyControlledMemories);
+            stopConflictingBrainBehaviors(newlyBlockedBehaviorMemories);
             clearControlledMemories(newlyControlledMemories);
             return true;
         } catch (RuntimeException exception) {
@@ -71,6 +79,104 @@ public final class BehaviorNativeAiController {
         EnumSet<NodeCapabilities.ResourceUse> normalized = normalizedResources(resources);
         removeBrainLeases(owner, normalized);
         releaseGoalFlags(goalFlags(normalized));
+    }
+
+    @Nullable
+    LivingEntity setAttackTarget(@Nullable LivingEntity target) {
+        if (target == null) return clearAttackTarget();
+
+        boolean acquiredNow = false;
+        if (!targetAssignmentActive) {
+            if (!acquire(Set.of(NodeCapabilities.ResourceUse.TARGET))) {
+                return owner.getTargetUnchecked();
+            }
+            targetAssignmentActive = true;
+            acquiredNow = true;
+        }
+
+        LivingEntity previous = assignedTarget != null ? assignedTarget.get() : null;
+        writeAttackTarget(target);
+        LivingEntity actual = owner.getTargetUnchecked();
+        if (actual == target) {
+            assignedTarget = new WeakReference<>(target);
+            synchronized (ACTIVE_TARGET_ASSIGNMENTS) {
+                ACTIVE_TARGET_ASSIGNMENTS.add(this);
+            }
+            return actual;
+        }
+
+        if (acquiredNow) {
+            targetAssignmentActive = false;
+            assignedTarget = null;
+            release(Set.of(NodeCapabilities.ResourceUse.TARGET));
+        } else if (previous != null && validAssignedTarget(previous)) {
+            writeAttackTarget(previous);
+        }
+        return actual;
+    }
+
+    void maintainPersistentControls() {
+        if (!targetAssignmentActive) return;
+        LivingEntity target = assignedTarget != null ? assignedTarget.get() : null;
+        if (!validAssignedTarget(target)) {
+            releasePersistentControls();
+            return;
+        }
+        if (owner.getTargetUnchecked() == target) return;
+        writeAttackTarget(target);
+        if (owner.getTargetUnchecked() != target) releasePersistentControls();
+    }
+
+    static void maintainPersistentControls(ServerLevel level) {
+        List<BehaviorNativeAiController> active;
+        synchronized (ACTIVE_TARGET_ASSIGNMENTS) {
+            active = List.copyOf(ACTIVE_TARGET_ASSIGNMENTS);
+        }
+        for (BehaviorNativeAiController controller : active) {
+            if (controller.owner.level() == level) controller.maintainPersistentControls();
+        }
+    }
+
+    void releasePersistentControls() {
+        if (!targetAssignmentActive) return;
+        try {
+            writeAttackTarget(null);
+        } finally {
+            assignedTarget = null;
+            targetAssignmentActive = false;
+            synchronized (ACTIVE_TARGET_ASSIGNMENTS) {
+                ACTIVE_TARGET_ASSIGNMENTS.remove(this);
+            }
+            release(Set.of(NodeCapabilities.ResourceUse.TARGET));
+        }
+    }
+
+    @Nullable
+    private LivingEntity clearAttackTarget() {
+        writeAttackTarget(null);
+        LivingEntity actual = owner.getTargetUnchecked();
+        if (actual == null && targetAssignmentActive) {
+            assignedTarget = null;
+            targetAssignmentActive = false;
+            synchronized (ACTIVE_TARGET_ASSIGNMENTS) {
+                ACTIVE_TARGET_ASSIGNMENTS.remove(this);
+            }
+            release(Set.of(NodeCapabilities.ResourceUse.TARGET));
+        }
+        return actual;
+    }
+
+    private boolean validAssignedTarget(@Nullable LivingEntity target) {
+        return target != null && target != owner && target.isAlive() && !target.isRemoved()
+                && target.level() == owner.level() && owner.canAttack(target);
+    }
+
+    private void writeAttackTarget(@Nullable LivingEntity target) {
+        owner.setTarget(target);
+        LivingEntity actual = owner.getTargetUnchecked();
+        if (owner.getBrain().getMemoryInternal(MemoryModuleType.ATTACK_TARGET) != null) {
+            setControlledMemory(owner.getBrain(), MemoryModuleType.ATTACK_TARGET, actual);
+        }
     }
 
     private void releaseGoalFlags(Set<Goal.Flag> flags) {
@@ -168,7 +274,7 @@ public final class BehaviorNativeAiController {
     private static boolean isBehaviorBlocked(LivingEntity body, BehaviorControl<?> behavior) {
         synchronized (ACTIVE_BRAIN_LEASES) {
             EnumMap<NodeCapabilities.ResourceUse, Integer> leases = ACTIVE_BRAIN_LEASES.get(body);
-            return leases != null && blocks(leases.keySet(), behavior.getRequiredMemories());
+            return leases != null && blocksBehavior(leases.keySet(), behavior.getRequiredMemories());
         }
     }
 
@@ -181,10 +287,29 @@ public final class BehaviorNativeAiController {
         }
     }
 
-    private static boolean blocks(Set<NodeCapabilities.ResourceUse> resources,
-                                  Set<MemoryModuleType<?>> requiredMemories) {
+    private static boolean blocksBehavior(Set<NodeCapabilities.ResourceUse> resources,
+                                          Set<MemoryModuleType<?>> requiredMemories) {
         for (MemoryModuleType<?> memory : requiredMemories) {
-            if (controlsMemory(resources, memory)) return true;
+            if (blocksBehaviorUsing(resources, memory)) return true;
+        }
+        return false;
+    }
+
+    private static boolean blocksBehaviorUsing(Set<NodeCapabilities.ResourceUse> resources,
+                                               MemoryModuleType<?> memory) {
+        for (NodeCapabilities.ResourceUse resource : resources) {
+            if ((resource == NodeCapabilities.ResourceUse.MOVEMENT
+                    && (memory == MemoryModuleType.WALK_TARGET || memory == MemoryModuleType.PATH))
+                    || (resource == NodeCapabilities.ResourceUse.LOOK
+                    && memory == MemoryModuleType.LOOK_TARGET)
+                    || (resource == NodeCapabilities.ResourceUse.COMBAT
+                    && (memory == MemoryModuleType.WALK_TARGET
+                    || memory == MemoryModuleType.PATH
+                    || memory == MemoryModuleType.LOOK_TARGET
+                    || memory == MemoryModuleType.ATTACK_TARGET
+                    || memory == MemoryModuleType.ATTACK_COOLING_DOWN))) {
+                return true;
+            }
         }
         return false;
     }
@@ -216,6 +341,19 @@ public final class BehaviorNativeAiController {
         synchronized (ACTIVE_BRAIN_LEASES) {
             EnumMap<NodeCapabilities.ResourceUse, Integer> leases = ACTIVE_BRAIN_LEASES.get(body);
             if (leases != null) result.removeIf(memory -> controlsMemory(leases.keySet(), memory));
+        }
+        return result;
+    }
+
+    private static Set<MemoryModuleType<?>> newlyBlockedBehaviorMemories(
+            LivingEntity body, Set<NodeCapabilities.ResourceUse> resources) {
+        Set<MemoryModuleType<?>> result = controlledMemories(resources);
+        result.removeIf(memory -> !blocksBehaviorUsing(resources, memory));
+        synchronized (ACTIVE_BRAIN_LEASES) {
+            EnumMap<NodeCapabilities.ResourceUse, Integer> leases = ACTIVE_BRAIN_LEASES.get(body);
+            if (leases != null) {
+                result.removeIf(memory -> blocksBehaviorUsing(leases.keySet(), memory));
+            }
         }
         return result;
     }

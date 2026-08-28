@@ -8,9 +8,7 @@ import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.nodes.events.BaseEventNode;
-import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.network.chat.Component;
@@ -35,7 +33,7 @@ public class OnPlayerKeyEvent extends BaseEventNode {
                         .text("summary")
                         .output(StandardPorts.FLOW_OUT, "flow_out")
                         .output(StandardPorts.ENTITY, "entity")
-                        .output(StandardPorts.TIME, "time")
+                        .output(StandardPorts.TICK, "tick")
                         .input(StandardPorts.NAME, "name")
                         .input(StandardPorts.TYPE, "type")
                         .build())
@@ -45,9 +43,7 @@ public class OnPlayerKeyEvent extends BaseEventNode {
                         .build())
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, PortDef.create(
-                        StandardPorts.TIME.getId(), StandardPorts.TIME.getTranslationKey(), PortType.INTEGER
-                ), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.TICK.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.NAME.toInput(""), null,
                         UIHint.SELECT, null,

@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.behavior.runtime;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Set;
@@ -26,5 +27,17 @@ public interface BehaviorRuntimeHost {
     }
 
     default void releaseResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
+    }
+
+    /** Assigns a target whose selection remains owned by this behavior instance until cleared. */
+    @Nullable
+    default LivingEntity setAttackTarget(@Nullable LivingEntity target) {
+        return null;
+    }
+
+    default void maintainPersistentControls() {
+    }
+
+    default void releasePersistentControls() {
     }
 }

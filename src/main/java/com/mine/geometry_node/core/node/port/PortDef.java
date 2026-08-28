@@ -33,4 +33,13 @@ public record PortDef(
     public PortDef withHiddenPin(boolean hide) {
         return new PortDef(this.id, this.displayName, this.type, this.defaultValue, hide);
     }
+
+    /** Keeps the canonical port id/type while overriding only its UI label. */
+    public PortDef withDisplayName(String translationKey) {
+        return withDisplayName(Component.translatable(translationKey));
+    }
+
+    public PortDef withDisplayName(Component displayName) {
+        return new PortDef(this.id, displayName, this.type, this.defaultValue, this.hidePin);
+    }
 }

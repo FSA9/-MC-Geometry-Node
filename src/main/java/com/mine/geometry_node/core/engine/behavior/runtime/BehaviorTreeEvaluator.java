@@ -41,6 +41,7 @@ public final class BehaviorTreeEvaluator {
             stop(instance, BehaviorTerminationReason.OWNER_INVALID);
             return EvaluationOutcome.failed(BehaviorTerminationReason.OWNER_INVALID, "Behavior owner is unavailable");
         }
+        instance.host().maintainPersistentControls();
         if (!instance.beginEvaluation(tick)) {
             return EvaluationOutcome.skipped(instance.nextWakeTick());
         }
@@ -59,6 +60,8 @@ public final class BehaviorTreeEvaluator {
         } catch (EvaluationFault fault) {
             long elapsedNanos = elapsed(started, instance.host().nanoTime());
             instance.recordEvaluationMetrics(elapsedNanos, pass.visits, pass.immediateTransitions);
+            instance.releaseAllResources();
+            instance.host().releasePersistentControls();
             instance.failEvaluation(fault.reason);
             return EvaluationOutcome.failed(fault.reason, fault.getMessage(), pass.visits, elapsedNanos);
         } finally {
@@ -71,6 +74,8 @@ public final class BehaviorTreeEvaluator {
         Objects.requireNonNull(reason, "reason");
         int root = instance.plan().getRootNode();
         if (root >= 0) abortSubtree(instance, root, reason);
+        instance.releaseAllResources();
+        instance.host().releasePersistentControls();
         instance.markStopped(reason);
     }
 
@@ -80,6 +85,7 @@ public final class BehaviorTreeEvaluator {
         int root = instance.plan().getRootNode();
         if (root >= 0) abortSubtree(instance, root, BehaviorTerminationReason.TREE_SUSPENDED);
         instance.releaseAllResources();
+        instance.host().releasePersistentControls();
         instance.markSuspended();
     }
 

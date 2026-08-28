@@ -198,8 +198,8 @@ public final class AreaTriggerDispatcher {
         Vec3 rotation = shape == AreaShape.SPHERE
                 ? Vec3.ZERO
                 : readVec3(index.getNodeStaticInput(nodeId, StandardPorts.ROTATION.getId()), Vec3.ZERO);
-        int interval = Math.max(1, index.getNodeStaticInput(nodeId, StandardPorts.INTERVAL.getId(), Integer.class, 1));
-        int offset = Math.floorMod(index.getNodeStaticInput(nodeId, StandardPorts.OFFSET.getId(), Integer.class, 0), interval);
+        int interval = Math.max(1, index.getNodeStaticInput(nodeId, AreaTriggerEvent.INTERVAL_TICK_PORT, Integer.class, 1));
+        int offset = Math.floorMod(index.getNodeStaticInput(nodeId, AreaTriggerEvent.OFFSET_TICK_PORT, Integer.class, 0), interval);
         return new AreaConfig(anchor, shape, targetType, center, size, rotation, interval, offset);
     }
 

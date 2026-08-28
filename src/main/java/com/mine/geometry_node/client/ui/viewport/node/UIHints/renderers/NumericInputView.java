@@ -64,6 +64,7 @@ final class NumericInputView extends FrameLayout {
     private Object mDisplayValue;
     private ShapedText mDisplayText;
     private ShapedText mLabelText;
+    private String mLabel = "";
     private boolean mHovered;
     private boolean mPressed;
     private boolean mDragging;
@@ -363,9 +364,11 @@ final class NumericInputView extends FrameLayout {
         valueTextX = Math.max(leftTextX, Math.min(valueTextX, rightBound - valueTextWidth));
 
         float minGap = UIUtils.dp2px(8.0f);
-        if (mLabelText != null && leftTextX + mLabelText.getAdvance() + minGap <= valueTextX) {
+        if (mLabelText != null) {
+            float availableWidth = Math.max(UIUtils.dp2px(1.0f), valueTextX - minGap - leftTextX);
+            ShapedText labelText = labelTextForWidth(availableWidth);
             mTextPaint.setColor(COLOR_LABEL);
-            canvas.drawShapedText(mLabelText, leftTextX, baseline, mTextPaint);
+            canvas.drawShapedText(labelText, leftTextX, baseline, mTextPaint);
         }
 
         mTextPaint.setColor(COLOR_TEXT);
@@ -374,11 +377,28 @@ final class NumericInputView extends FrameLayout {
 
     private void setInlineLabelText(String label) {
         if (label == null || label.isBlank()) {
+            mLabel = "";
             mLabelText = null;
             return;
         }
-        String text = label.trim();
-        mLabelText = TextShaper.shapeText(text, 0, text.length(), TextDirectionHeuristics.FIRSTSTRONG_LTR, mTextPaint);
+        mLabel = label.trim();
+        mLabelText = shapeLabel(mLabel);
+    }
+
+    private ShapedText labelTextForWidth(float availableWidth) {
+        if (mLabelText == null || mLabelText.getAdvance() <= availableWidth) {
+            return mLabelText;
+        }
+        float originalSize = mTextPaint.getTextSize();
+        float fittedSize = Math.max(UIUtils.dp2px(1.0f), originalSize * availableWidth / mLabelText.getAdvance());
+        mTextPaint.setTextSize(fittedSize);
+        ShapedText fitted = shapeLabel(mLabel);
+        mTextPaint.setTextSize(originalSize);
+        return fitted;
+    }
+
+    private ShapedText shapeLabel(String label) {
+        return TextShaper.shapeText(label, 0, label.length(), TextDirectionHeuristics.FIRSTSTRONG_LTR, mTextPaint);
     }
 
     private void drawArrow(Canvas canvas, boolean left, float w, float h) {

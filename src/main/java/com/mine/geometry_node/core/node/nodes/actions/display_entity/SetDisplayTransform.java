@@ -34,8 +34,10 @@ public class SetDisplayTransform extends BaseNode {
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
                 // 2. 动画插值控制
-                .addRow(new PortRow(StandardPorts.INTERPOLATION_DURATION.toInput(0), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.START_INTERPOLATION.toInput(0), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInput(0)
+                        .withDisplayName("geometry_node.port.tick.interpolation"), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInputWithIndex(1, 0)
+                        .withDisplayName("geometry_node.port.tick.delay"), null, UIHint.INPUT, null, null))
                 .build();
     }
 
@@ -47,8 +49,8 @@ public class SetDisplayTransform extends BaseNode {
         Vec3 translation = getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class);
         Vec3 rotation = getInput(context, StandardPorts.ROTATION.getId(), Vec3.class);
         Vec3 scaleVec = getInput(context, StandardPorts.SIZE_3.getId(), Vec3.class);
-        Integer interpDuration = getInput(context, StandardPorts.INTERPOLATION_DURATION.getId(), Integer.class);
-        Integer startInterp = getInput(context, StandardPorts.START_INTERPOLATION.getId(), Integer.class);
+        Integer interpDuration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
+        Integer startInterp = getInput(context, StandardPorts.TICK.getIdWithIndex(1), Integer.class);
 
         if (translation == null) translation = Vec3.ZERO;
         if (rotation == null) rotation = Vec3.ZERO;

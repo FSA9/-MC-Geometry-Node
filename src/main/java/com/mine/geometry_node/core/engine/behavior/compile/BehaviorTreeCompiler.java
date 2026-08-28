@@ -267,8 +267,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         if (rootEntry == null) return BehaviorTreePlan.RootSchedule.DEFAULT;
 
         NodeInfo root = rootEntry.getValue();
-        int interval = Math.max(1, staticInteger(root, StandardPorts.RECHECK_INTERVAL.getId(), 1));
-        int offset = staticInteger(root, StandardPorts.SCHEDULE_OFFSET.getId(),
+        int interval = Math.max(1, staticInteger(root, BehaviorRootNode.RECHECK_TICK_PORT, 1));
+        int offset = staticInteger(root, BehaviorRootNode.SCHEDULE_TICK_PORT,
                 BehaviorTreePlan.RootSchedule.AUTO_OFFSET);
         offset = Math.max(BehaviorTreePlan.RootSchedule.AUTO_OFFSET, offset);
         return new BehaviorTreePlan.RootSchedule(interval, offset);

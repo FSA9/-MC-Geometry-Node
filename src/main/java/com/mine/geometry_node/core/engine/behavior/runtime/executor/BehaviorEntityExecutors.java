@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.engine.behavior.runtime.executor;
 
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
-import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNativeAiController;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeContext;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionExecutor;
@@ -83,7 +82,7 @@ public final class BehaviorEntityExecutors {
             }
             if (nearest == null) return failure(BehaviorActionFailure.NO_CANDIDATE,
                     "No legal target candidate is available");
-            return setTarget(owner, nearest) == nearest
+            return context.setAttackTarget(nearest) == nearest
                     ? BehaviorActionStep.success()
                     : failure(BehaviorActionFailure.COMMAND_REJECTED,
                     "The requested target was rejected or replaced");
@@ -100,7 +99,7 @@ public final class BehaviorEntityExecutors {
                     && (brainTarget == null || brainTarget.isEmpty())) {
                 return BehaviorActionStep.success();
             }
-            return setTarget(owner, null) == null
+            return context.setAttackTarget(null) == null
                     ? BehaviorActionStep.success()
                     : failure(BehaviorActionFailure.COMMAND_REJECTED,
                     "The target clear request was rejected");
@@ -280,7 +279,7 @@ public final class BehaviorEntityExecutors {
         @Override
         protected BehaviorActionStep<LookState> start(BehaviorNodeContext context) {
             Mob owner = requireOwner(context);
-            int duration = nonNegativeInt(context, StandardPorts.DURATION.getId());
+            int duration = nonNegativeInt(context, StandardPorts.TICK.getId());
             EntityTarget resolution = resolveEntityTarget(
                     context, owner, StandardPorts.TARGET.getId());
             Entity target = resolution.target();
@@ -334,7 +333,7 @@ public final class BehaviorEntityExecutors {
                 return failure(BehaviorActionFailure.OUT_OF_RANGE,
                         "Target is outside the assignment range");
             }
-            return setTarget(owner, target) == target
+            return context.setAttackTarget(target) == target
                     ? BehaviorActionStep.success()
                     : failure(BehaviorActionFailure.COMMAND_REJECTED,
                     "The requested attack target was rejected or replaced");
@@ -442,17 +441,6 @@ public final class BehaviorEntityExecutors {
     @Nullable
     private static LivingEntity currentTarget(Mob owner) {
         return owner.getTargetUnchecked();
-    }
-
-    @Nullable
-    private static LivingEntity setTarget(Mob owner, @Nullable LivingEntity target) {
-        owner.setTarget(target);
-        LivingEntity actual = owner.getTargetUnchecked();
-        if (owner.getBrain().getMemoryInternal(MemoryModuleType.ATTACK_TARGET) != null) {
-            BehaviorNativeAiController.setControlledMemory(
-                    owner.getBrain(), MemoryModuleType.ATTACK_TARGET, actual);
-        }
-        return actual;
     }
 
     private static Mob requireOwner(BehaviorNodeContext context) {

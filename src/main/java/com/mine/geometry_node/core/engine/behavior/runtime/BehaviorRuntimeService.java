@@ -15,6 +15,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
@@ -218,6 +219,7 @@ public final class BehaviorRuntimeService {
         long tick = level.getGameTime();
         server.beginServerTick(tick);
         server.processAssetReloadsOnce(tick, this);
+        BehaviorNativeAiController.maintainPersistentControls(level);
         WorldState world = server.worlds.get(level.dimension());
         if (world == null) return;
 
@@ -621,6 +623,21 @@ public final class BehaviorRuntimeService {
         @Override
         public void releaseResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
             nativeAi.release(resources);
+        }
+
+        @Override
+        public LivingEntity setAttackTarget(@Nullable LivingEntity target) {
+            return nativeAi.setAttackTarget(target);
+        }
+
+        @Override
+        public void maintainPersistentControls() {
+            nativeAi.maintainPersistentControls();
+        }
+
+        @Override
+        public void releasePersistentControls() {
+            nativeAi.releasePersistentControls();
         }
     }
 }

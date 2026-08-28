@@ -20,7 +20,7 @@ public final class BehaviorWaitNode extends BaseNode implements BehaviorExecutab
         return NodeDef.builder(TYPE_ID, NodeType.ACTION,
                         Component.translatable("geometry_node.node.behavior_wait"))
                 .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.BEHAVIOR_TICKS.toInput(20), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInput(20), null, UIHint.INPUT, null, null))
                 .build();
     }
 

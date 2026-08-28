@@ -37,7 +37,7 @@ public final class BehaviorActionExecutors {
     private static final class WaitExecutor implements BehaviorNodeExecutor {
         @Override
         public void enter(BehaviorNodeContext context) {
-            Integer ticks = require(context.input(StandardPorts.BEHAVIOR_TICKS.getId(), Integer.class),
+            Integer ticks = require(context.input(StandardPorts.TICK.getId(), Integer.class),
                     "Wait ticks are missing");
             context.setMemory(deadline(context.gameTick(), ticks));
         }
@@ -61,7 +61,7 @@ public final class BehaviorActionExecutors {
         @Override
         public BehaviorResult update(BehaviorNodeContext context) {
             Integer interval = require(context.input(
-                    StandardPorts.POLL_INTERVAL.getId(), Integer.class),
+                    StandardPorts.TICK.getId(), Integer.class),
                     "Idle poll interval is missing");
             if (interval <= 0) {
                 throw new BehaviorContractViolation("Idle poll interval must be positive");

@@ -10,6 +10,7 @@ import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorAction
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -43,6 +44,10 @@ public final class BehaviorNodeContext {
     public int childCount() { ensureValid(); return instance.plan().getChildCount(nodeIndex); }
     @Nullable public ServerLevel level() { ensureValid(); return instance.host().level(); }
     @Nullable public Entity owner() { ensureValid(); return instance.host().owner(); }
+    @Nullable public LivingEntity setAttackTarget(@Nullable LivingEntity target) {
+        ensureValid();
+        return instance.host().setAttackTarget(target);
+    }
     public Random random() { ensureValid(); return instance.random(); }
     public BehaviorBlackboard blackboard() { ensureValid(); return instance.blackboard(nodeIndex); }
 

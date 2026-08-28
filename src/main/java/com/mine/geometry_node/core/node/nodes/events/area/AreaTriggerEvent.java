@@ -28,6 +28,8 @@ public class AreaTriggerEvent extends BaseEventNode {
     public static final String HEIGHT_PORT = StandardPorts.HEIGHT.getId();
     public static final String TRIGGER_ID_PORT = "trigger_id";
     public static final String INSIDE_COUNT_PORT = "inside_count";
+    public static final String INTERVAL_TICK_PORT = StandardPorts.TICK.getId();
+    public static final String OFFSET_TICK_PORT = StandardPorts.TICK.getIdWithIndex(1);
     public static final double DEFAULT_RADIUS = 1.0D;
     public static final double DEFAULT_HEIGHT = 2.0D;
 
@@ -67,8 +69,8 @@ public class AreaTriggerEvent extends BaseEventNode {
                 .input(SHAPE_PORT, "shape")
                 .input(TARGET_PORT, "target")
                 .input(StandardPorts.CENTER, "input_center")
-                .input(StandardPorts.INTERVAL, "interval")
-                .input(StandardPorts.OFFSET, "offset");
+                .input(INTERVAL_TICK_PORT, "interval")
+                .input(OFFSET_TICK_PORT, "offset");
 
         switch (shape) {
             case SPHERE -> comment.output(StandardPorts.RADIUS, "output_radius")
@@ -142,8 +144,10 @@ public class AreaTriggerEvent extends BaseEventNode {
         }
 
         return builder
-                .addRow(new PortRow(StandardPorts.INTERVAL.toInput(1).hiddenPin(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.OFFSET.toInput(0).hiddenPin(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInput(1)
+                        .withDisplayName("geometry_node.port.tick.interval").hiddenPin(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.TICK.toInputWithIndex(1, 0)
+                        .withDisplayName("geometry_node.port.tick.offset").hiddenPin(), null, UIHint.INPUT, null, null))
                 .build();
     }
 
