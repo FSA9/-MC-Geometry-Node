@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.graph.compile;
+package com.mine.geometry_node.core.engine.graph.compile.artifact;
 
 import org.jetbrains.annotations.Nullable;
 

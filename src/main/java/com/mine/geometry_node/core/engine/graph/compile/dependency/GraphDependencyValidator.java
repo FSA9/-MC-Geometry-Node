@@ -1,4 +1,6 @@
-package com.mine.geometry_node.core.engine.graph.compile;
+package com.mine.geometry_node.core.engine.graph.compile.dependency;
+
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -73,6 +75,7 @@ public final class GraphDependencyValidator {
                 if (rejected.contains(graphId)) continue;
                 CompiledGraph graph = graphs.get(graphId);
                 Set<String> dependencies = graph instanceof CompiledGraphDependencies manifest
+                        && manifest.requiresAvailableDependencies()
                         ? manifest.graphDependencies() : Set.of();
                 if (dependencies.stream().anyMatch(rejected::contains)) {
                     rejected.add(graphId);
@@ -85,6 +88,7 @@ public final class GraphDependencyValidator {
 
     private static Set<String> dependenciesOf(CompiledGraph graph) {
         Set<String> dependencies = graph instanceof CompiledGraphDependencies manifest
+                && manifest.requiresAvailableDependencies()
                 ? manifest.graphDependencies() : Set.of();
         return new TreeSet<>(dependencies);
     }

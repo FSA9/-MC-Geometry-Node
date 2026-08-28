@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.graph.storage;
 
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphType;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 
 import java.util.Objects;
 

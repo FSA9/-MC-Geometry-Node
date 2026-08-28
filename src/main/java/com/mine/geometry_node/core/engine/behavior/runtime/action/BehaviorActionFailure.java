@@ -15,7 +15,6 @@ public record BehaviorActionFailure(String code, String detail) {
     public static final String COMMAND_REJECTED = "geometry_node:command_rejected";
     public static final String NO_DESTINATION = "geometry_node:no_destination";
     public static final String TARGET_LOST = "geometry_node:target_lost";
-    public static final String ATTACK_REJECTED = "geometry_node:attack_rejected";
 
     public BehaviorActionFailure {
         Objects.requireNonNull(code, "code");

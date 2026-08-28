@@ -4,7 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.Identifier;

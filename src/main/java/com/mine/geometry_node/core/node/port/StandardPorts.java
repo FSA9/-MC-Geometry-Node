@@ -14,6 +14,8 @@ public enum StandardPorts {
     FLOW_FALSE("flow_false", PortType.EXECUTION),
     SELECTED("selected", PortType.EXECUTION),
     CLOSED("closed", PortType.EXECUTION),
+    BEHAVIOR_PARENT("behavior_parent", PortType.BEHAVIOR_STRUCTURE),
+    BEHAVIOR_CHILDREN("behavior_children", PortType.BEHAVIOR_STRUCTURE),
 
     // Int
     INT("int", PortType.INTEGER),
@@ -43,6 +45,15 @@ public enum StandardPorts {
     GLOW_COLOR("glow_color", PortType.INTEGER),
     TEXT_LINE_WIDTH("text_line_width", PortType.INTEGER),
     BACKGROUND_COLOR("background_color", PortType.INTEGER),
+    BEHAVIOR_TICKS("ticks", PortType.INTEGER),
+    POLL_INTERVAL("poll_interval", PortType.INTEGER),
+    RECHECK_INTERVAL("recheck_interval", PortType.INTEGER),
+    SCHEDULE_OFFSET("schedule_offset", PortType.INTEGER),
+    RETRY_INTERVAL("retry_interval", PortType.INTEGER),
+    COOLDOWN_TICKS("cooldown_ticks", PortType.INTEGER),
+    HORIZONTAL_RANGE("horizontal_range", PortType.INTEGER),
+    VERTICAL_RANGE("vertical_range", PortType.INTEGER),
+    DURATION("duration", PortType.INTEGER),
 
     // Long
     GAME_TIME("game_time", PortType.LONG),
@@ -101,6 +112,8 @@ public enum StandardPorts {
     TEXT_OPACITY("text_opacity", PortType.FLOAT),
     ALPHA("alpha", PortType.FLOAT),
     FAC("fac", PortType.FLOAT),
+    ARRIVAL_DISTANCE("arrival_distance", PortType.FLOAT),
+    TARGET_RANGE("target_range", PortType.FLOAT),
 
 
     // String
@@ -138,6 +151,9 @@ public enum StandardPorts {
     SIZE_MODE("size_mode", PortType.STRING),
     MARKER_TYPE("marker_type", PortType.STRING),
     ANCHOR_TYPE("anchor_type", PortType.STRING),
+    SUBTREE_ASSET("subtree_asset", PortType.STRING),
+    BLACKBOARD_SCOPE("blackboard_scope", PortType.STRING),
+    TARGET_MODE("target_mode", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),
@@ -149,6 +165,7 @@ public enum StandardPorts {
     SPEAKER_ENTITY("speaker_entity", PortType.ENTITY),
     TRIGGER_ENTITY("trigger_entity", PortType.ENTITY),
     SOURCE_ENTITY("source_entity", PortType.ENTITY),
+    TARGET("target", PortType.ENTITY),
     TARGET_ENTITY("target_entity", PortType.ENTITY),
     ATTACK_SOURCE("attack_source", PortType.ENTITY),
     DIRECT_SOURCE("direct_source", PortType.ENTITY),
@@ -176,6 +193,7 @@ public enum StandardPorts {
     LIST_XYZ("list_xyz", PortType.LIST),
     COSTS("costs", PortType.LIST),
     REWARDS("rewards", PortType.LIST),
+    CANDIDATES("candidates", PortType.LIST),
 
     // Dialogue
     DIALOGUE_CHOICE("dialogue_choice", PortType.DIALOGUE_CHOICE),
@@ -201,6 +219,7 @@ public enum StandardPorts {
     SIZE_3("size_3", PortType.XYZ),
     SPREAD("spread", PortType.XYZ),
     TRANSLATION("translation", PortType.XYZ),
+    TARGET_POSITION("target_position", PortType.XYZ),
 
     // Color
     COLOR("color", PortType.COLOR),

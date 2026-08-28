@@ -1,39 +1,40 @@
 package com.mine.geometry_node.core.engine.behavior.compile;
 
+import com.mine.geometry_node.core.node.port.StandardPorts;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorValueSemantics;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeConnections;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeCall;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeParameter;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeDiagnostic;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeValidationResult;
+import com.mine.geometry_node.core.node.document.behavior.BehaviorSubtreeCall;
+import com.mine.geometry_node.core.node.document.behavior.BehaviorSubtreeParameter;
+import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructure;
+import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructureConnections;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledDataIndex;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompileContext;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompiler;
+import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDiagnostic;
+import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
+import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationException;
+import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationResult;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.node.document.BehaviorTreeStructure;
+import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorRootNode;
+import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorSubtreeNode;
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
-import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -46,10 +47,6 @@ import java.util.TreeMap;
 public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePlan> {
     public static final BehaviorTreeCompiler INSTANCE = new BehaviorTreeCompiler(NodeCatalog.REGISTRY);
     private static final Gson GSON = new Gson();
-    private static final int MAX_DIAGNOSTICS = 256;
-    private static final int MAX_COMPILED_NODES = 8_192;
-    private static final int MAX_COMPILED_CONNECTIONS = 32_768;
-    private static final String NAME_PATTERN = "[A-Za-z_][A-Za-z0-9_.-]{0,63}";
 
     private final NodeCatalog nodes;
 
@@ -75,19 +72,19 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     public BehaviorTreePlan compile(GraphCompileContext context, JsonObject document) {
         Compilation compilation = inspectDocument(context, document);
         if (!compilation.diagnostics.isEmpty()) {
-            throw new BehaviorCompilationException(compilation.diagnostics);
+            throw new GraphValidationException(compilation.diagnostics);
         }
         return buildPlan(context, compilation);
     }
 
-    public BehaviorTreeValidationResult validate(GraphCompileContext context, JsonObject document) {
-        return new BehaviorTreeValidationResult(inspectDocument(context, document).diagnostics);
+    public GraphValidationResult validate(GraphCompileContext context, JsonObject document) {
+        return new GraphValidationResult(inspectDocument(context, document).diagnostics);
     }
 
     private Compilation inspectDocument(GraphCompileContext context, JsonObject document) {
         String assetId = context != null ? context.diagnosticAssetId() : "<anonymous>";
         if (document == null) {
-            return failedCompilation(diagnostic(assetId, "DOCUMENT_MISSING",
+            return failedCompilation(diagnostic(assetId, "DOCUMENT_MALFORMED",
                     "Behavior tree document is missing", "", "", ""));
         }
         try {
@@ -102,106 +99,90 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
 
     private Compilation inspect(GraphCompileContext context, NodeGraph graph) {
         String assetId = context != null ? context.diagnosticAssetId() : "<anonymous>";
-        List<BehaviorTreeDiagnostic> diagnostics = new ArrayList<>();
+        List<GraphDiagnostic> diagnostics = new ArrayList<>();
         List<String> nodeIds = graph.nodes.keySet().stream().sorted().toList();
-        if (nodeIds.size() > MAX_COMPILED_NODES) {
-            return failedCompilation(diagnostic(assetId, "NODE_LIMIT_EXCEEDED",
-                    "Behavior tree contains more than " + MAX_COMPILED_NODES + " nodes",
-                    "", "", ""));
-        }
-        if (storedConnectionCount(graph) > MAX_COMPILED_CONNECTIONS) {
-            return failedCompilation(diagnostic(assetId, "CONNECTION_LIMIT_EXCEEDED",
-                    "Behavior tree contains more than " + MAX_COMPILED_CONNECTIONS + " connections",
-                    "", "", ""));
-        }
 
         Map<String, NodeInfo> info = new LinkedHashMap<>();
         for (String nodeId : nodeIds) {
             NodeData node = graph.nodes.get(nodeId);
             if (node == null || node.type == null || !nodes.has(node.type)) {
-                add(diagnostics, diagnostic(assetId, "NODE_TYPE_MISSING",
-                        "Node type is missing or unavailable", nodeId, "", ""));
                 continue;
             }
             NodeCapabilities capabilities = nodes.capabilities(node.type);
             if (!capabilities.supports(GraphTypeRegistry.BEHAVIOR_TREE.id())) {
-                add(diagnostics, diagnostic(assetId, "NODE_GRAPH_TYPE_UNSUPPORTED",
-                        "Node type is not available in behavior trees: " + node.type,
-                        nodeId, "", ""));
                 continue;
             }
             NodeDef definition = nodes.definition(node);
-            if (definition == null) {
-                add(diagnostics, diagnostic(assetId, "NODE_DEFINITION_MISSING",
-                        "Node type did not provide a definition", nodeId, "", ""));
-                continue;
-            }
-            PortCatalog ports = PortCatalog.from(assetId, nodeId, definition, diagnostics);
+            if (definition == null) continue;
+            PortCatalog ports = PortCatalog.from(definition);
             info.put(nodeId, new NodeInfo(node, capabilities, ports));
-            validateCapabilities(assetId, nodeId, capabilities, diagnostics);
-            validateStoredInputs(assetId, nodeId, node, ports, diagnostics);
-            if (node.execOutputs != null && !node.execOutputs.isEmpty()) {
-                node.execOutputs.keySet().stream().sorted().forEach(portId -> add(diagnostics,
-                        diagnostic(assetId, "EXECUTION_CONNECTION_FORBIDDEN",
-                                "Behavior trees cannot store blueprint execution-flow connections",
-                                nodeId, portId, "")));
-            }
         }
 
-        validateStructureConnections(assetId, nodeIds, graph, info, diagnostics);
-        Map<InputKey, DataLink> inbound = validateDataConnections(assetId, nodeIds, graph, info, diagnostics);
-        BehaviorTreePlan.RootSchedule rootSchedule = compileRootSchedule(
-                assetId, info, inbound, diagnostics);
-        validateRequiredInputs(assetId, info, inbound, diagnostics);
-        validateDataCycles(assetId, nodeIds, inbound, diagnostics);
-        validateDepth(assetId, graph, diagnostics);
+        Map<String, List<String>> structure = compileStructure(nodeIds, graph, info);
+        Map<InputKey, DataLink> inbound = compileDataConnections(nodeIds, graph, info);
+        GraphValidationResult common = GraphDocumentValidator.validate(validationInput(
+                assetId, graph, nodeIds, inbound));
+        diagnostics.addAll(common.diagnostics());
+        BehaviorTreePlan.RootSchedule rootSchedule = compileRootSchedule(info);
         BehaviorTreePlan.SubtreeSignature signature = compileSubtreeSignature(
-                assetId, graph.behaviorTree, diagnostics);
+                graph.behaviorTree);
         BehaviorTreePlan.DependencyManifest dependencies = compileDependencies(
-                assetId, context, info, diagnostics);
+                context, info);
 
-        diagnostics.sort(Comparator.comparing(BehaviorTreeDiagnostic::code)
-                .thenComparing(BehaviorTreeDiagnostic::nodeId)
-                .thenComparing(BehaviorTreeDiagnostic::portId)
-                .thenComparing(BehaviorTreeDiagnostic::relatedNodeId)
-                .thenComparing(BehaviorTreeDiagnostic::message));
-        return new Compilation(graph, nodeIds, info, inbound, signature, dependencies,
+        diagnostics.sort(Comparator.comparing(GraphDiagnostic::code)
+                .thenComparing(GraphDiagnostic::nodeId)
+                .thenComparing(GraphDiagnostic::portId)
+                .thenComparing(GraphDiagnostic::relatedNodeId)
+                .thenComparing(GraphDiagnostic::message));
+        return new Compilation(graph, nodeIds, info, structure, inbound, signature, dependencies,
                 rootSchedule,
                 List.copyOf(diagnostics));
     }
 
-    private static void validateStructureConnections(
-            String assetId, List<String> nodeIds, NodeGraph graph, Map<String, NodeInfo> info,
-            List<BehaviorTreeDiagnostic> diagnostics) {
+    private static Map<String, List<String>> compileStructure(
+            List<String> nodeIds, NodeGraph graph, Map<String, NodeInfo> info) {
+        Map<String, List<String>> children = new LinkedHashMap<>();
+        Set<String> claimedChildren = new HashSet<>();
         for (String sourceId : nodeIds) {
             NodeData source = graph.nodes.get(sourceId);
             NodeInfo sourceInfo = info.get(sourceId);
             if (source == null || sourceInfo == null || source.behaviorOutputs == null) continue;
+            List<String> accepted = new ArrayList<>();
             for (String sourcePortId : new java.util.TreeSet<>(source.behaviorOutputs.keySet())) {
                 Connection link = source.behaviorOutputs.get(sourcePortId);
                 PortDef sourcePort = sourceInfo.ports.outputs.get(sourcePortId);
                 if (sourcePort == null || sourcePort.type() != PortType.BEHAVIOR_STRUCTURE) {
-                    add(diagnostics, diagnostic(assetId, "STRUCTURE_OUTPUT_PORT_INVALID",
-                            "Stored behavior connection references an unavailable structure output",
-                            sourceId, sourcePortId, ""));
                     continue;
                 }
-                if (link == null || !link.isValid()) {
-                    add(diagnostics, diagnostic(assetId, "STRUCTURE_CONNECTION_MALFORMED",
-                            "Behavior connection requires a target node and input port",
-                            sourceId, sourcePortId, ""));
-                    continue;
-                }
+                if (link == null || !link.isValid()) continue;
                 NodeInfo targetInfo = info.get(link.targetNodeId());
                 PortDef targetPort = targetInfo != null
                         ? targetInfo.ports.inputs.get(link.targetPortName()) : null;
-                if (targetPort == null || targetPort.type() != PortType.BEHAVIOR_STRUCTURE) {
-                    add(diagnostics, diagnostic(assetId, "STRUCTURE_INPUT_PORT_INVALID",
-                            "Behavior connection references an unavailable structure input",
-                            link.targetNodeId(), link.targetPortName(), sourceId));
+                if (targetPort == null || targetPort.type() != PortType.BEHAVIOR_STRUCTURE) continue;
+                if (!claimedChildren.add(link.targetNodeId())) continue;
+                if (reaches(children, link.targetNodeId(), sourceId)) {
+                    claimedChildren.remove(link.targetNodeId());
+                    continue;
                 }
+                accepted.add(link.targetNodeId());
             }
+            if (!accepted.isEmpty()) children.put(sourceId, List.copyOf(accepted));
         }
+        return Map.copyOf(children);
+    }
+
+    private static boolean reaches(Map<String, List<String>> children, String start, String target) {
+        if (start.equals(target)) return true;
+        List<String> pending = new ArrayList<>();
+        pending.add(start);
+        Set<String> visited = new HashSet<>();
+        while (!pending.isEmpty()) {
+            String current = pending.removeLast();
+            if (!visited.add(current)) continue;
+            if (current.equals(target)) return true;
+            pending.addAll(children.getOrDefault(current, List.of()));
+        }
+        return false;
     }
 
     private BehaviorTreePlan buildPlan(GraphCompileContext context, Compilation compilation) {
@@ -228,9 +209,9 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             types[nodeIndex] = nodeInfo.node.type;
             capabilities[nodeIndex] = nodeInfo.capabilities;
             nodesByType.computeIfAbsent(nodeInfo.node.type, ignored -> new ArrayList<>()).add(nodeIndex);
-            if (BehaviorNodeTypes.ROOT.equals(nodeInfo.node.type)) root = nodeIndex;
+            if (root < 0 && BehaviorRootNode.TYPE_ID.equals(nodeInfo.node.type)) root = nodeIndex;
 
-            List<String> childIds = BehaviorTreeConnections.childrenOf(compilation.graph, nodeId);
+            List<String> childIds = compilation.structure.getOrDefault(nodeId, List.of());
             children[nodeIndex] = childIds.stream().mapToInt(indexes::get).toArray();
             for (int child : children[nodeIndex]) parents[child] = nodeIndex;
 
@@ -238,8 +219,10 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             for (PortDef input : nodeInfo.ports.inputs.values()) {
                 Object value = nodeInfo.node.inputs.containsKey(input.id())
                         ? nodeInfo.node.inputs.get(input.id()) : input.defaultValue();
-                if (value != null) effectiveInputs.put(input.id(),
+                if (value != null && BehaviorValueSemantics.matches(value, input.type())) {
+                    effectiveInputs.put(input.id(),
                         BehaviorValueSemantics.freezeAs(value, input.type()));
+                }
             }
             staticInputs[nodeIndex] = Map.copyOf(effectiveInputs);
 
@@ -268,48 +251,21 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                 compilation.subtreeSignature, compilation.rootSchedule);
     }
 
-    private static BehaviorTreePlan.RootSchedule compileRootSchedule(
-            String assetId, Map<String, NodeInfo> info, Map<InputKey, DataLink> inbound,
-            List<BehaviorTreeDiagnostic> diagnostics) {
+    private static BehaviorTreePlan.RootSchedule compileRootSchedule(Map<String, NodeInfo> info) {
         Map.Entry<String, NodeInfo> rootEntry = null;
         for (Map.Entry<String, NodeInfo> entry : info.entrySet()) {
-            if (!BehaviorNodeTypes.ROOT.equals(entry.getValue().node.type)) continue;
-            rejectDynamicRootSchedule(assetId, entry.getKey(),
-                    BehaviorNodeTypes.RECHECK_INTERVAL_PORT, inbound, diagnostics);
-            rejectDynamicRootSchedule(assetId, entry.getKey(),
-                    BehaviorNodeTypes.SCHEDULE_OFFSET_PORT, inbound, diagnostics);
-            // buildPlan uses the last Root in the same deterministic node order.
+            if (!BehaviorRootNode.TYPE_ID.equals(entry.getValue().node.type)) continue;
             rootEntry = entry;
+            break;
         }
         if (rootEntry == null) return BehaviorTreePlan.RootSchedule.DEFAULT;
 
-        String nodeId = rootEntry.getKey();
         NodeInfo root = rootEntry.getValue();
-        int interval = staticInteger(root, BehaviorNodeTypes.RECHECK_INTERVAL_PORT, 1);
-        int offset = staticInteger(root, BehaviorNodeTypes.SCHEDULE_OFFSET_PORT,
+        int interval = Math.max(1, staticInteger(root, StandardPorts.RECHECK_INTERVAL.getId(), 1));
+        int offset = staticInteger(root, StandardPorts.SCHEDULE_OFFSET.getId(),
                 BehaviorTreePlan.RootSchedule.AUTO_OFFSET);
-        if (interval < 1) {
-            add(diagnostics, diagnostic(assetId, "ROOT_RECHECK_INTERVAL_INVALID",
-                    "Root recheck interval must be at least 1", nodeId,
-                    BehaviorNodeTypes.RECHECK_INTERVAL_PORT, ""));
-            interval = 1;
-        }
-        if (offset < BehaviorTreePlan.RootSchedule.AUTO_OFFSET) {
-            add(diagnostics, diagnostic(assetId, "ROOT_SCHEDULE_OFFSET_INVALID",
-                    "Root schedule offset must be -1 (automatic) or greater", nodeId,
-                    BehaviorNodeTypes.SCHEDULE_OFFSET_PORT, ""));
-            offset = BehaviorTreePlan.RootSchedule.AUTO_OFFSET;
-        }
+        offset = Math.max(BehaviorTreePlan.RootSchedule.AUTO_OFFSET, offset);
         return new BehaviorTreePlan.RootSchedule(interval, offset);
-    }
-
-    private static void rejectDynamicRootSchedule(
-            String assetId, String nodeId, String portId, Map<InputKey, DataLink> inbound,
-            List<BehaviorTreeDiagnostic> diagnostics) {
-        if (inbound.containsKey(new InputKey(nodeId, portId))) {
-            add(diagnostics, diagnostic(assetId, "ROOT_SCHEDULE_STATIC_REQUIRED",
-                    "Root scheduling inputs must use static values", nodeId, portId, ""));
-        }
     }
 
     private static int staticInteger(NodeInfo node, String portId, int fallback) {
@@ -321,9 +277,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         return value instanceof Number number ? number.intValue() : fallback;
     }
 
-    private static Map<InputKey, DataLink> validateDataConnections(
-            String assetId, List<String> nodeIds, NodeGraph graph, Map<String, NodeInfo> info,
-            List<BehaviorTreeDiagnostic> diagnostics) {
+    private static Map<InputKey, DataLink> compileDataConnections(
+            List<String> nodeIds, NodeGraph graph, Map<String, NodeInfo> info) {
         Map<InputKey, DataLink> inbound = new LinkedHashMap<>();
         for (String sourceId : nodeIds) {
             NodeData source = graph.nodes.get(sourceId);
@@ -332,250 +287,38 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             for (String sourcePortId : new java.util.TreeSet<>(source.outputs.keySet())) {
                 List<Connection> links = source.outputs.get(sourcePortId);
                 PortDef sourcePort = sourceInfo.ports.outputs.get(sourcePortId);
-                if (sourcePort == null) {
-                    add(diagnostics, diagnostic(assetId, "DATA_OUTPUT_PORT_MISSING",
-                            "Stored data connection references an unavailable output port",
-                            sourceId, sourcePortId, ""));
-                    continue;
-                }
-                if (sourcePort.type().isFlow()) {
-                    add(diagnostics, diagnostic(assetId, "DATA_OUTPUT_PORT_INVALID",
-                            "Structural or execution ports cannot be stored as data connections",
-                            sourceId, sourcePortId, ""));
-                    continue;
-                }
-                if (links == null) {
-                    add(diagnostics, diagnostic(assetId, "DATA_CONNECTION_MALFORMED",
-                            "Data connection list is missing", sourceId, sourcePortId, ""));
-                    continue;
-                }
-                for (Connection link : links) {
-                    if (link == null || !link.isValid()) {
-                        add(diagnostics, diagnostic(assetId, "DATA_CONNECTION_MALFORMED",
-                                "Data connection requires a target node and input port",
-                                sourceId, sourcePortId, ""));
-                    }
-                }
+                if (sourcePort == null || sourcePort.type().isFlow() || links == null) continue;
                 List<Connection> ordered = links.stream()
                         .filter(link -> link != null && link.isValid())
                         .sorted(Comparator.comparing(Connection::targetNodeId)
                                 .thenComparing(Connection::targetPortName)).toList();
                 for (Connection link : ordered) {
                     NodeInfo targetInfo = info.get(link.targetNodeId());
-                    if (targetInfo == null) {
-                        add(diagnostics, diagnostic(assetId, "DATA_TARGET_NODE_MISSING",
-                                "Data connection target node is missing or unavailable",
-                                sourceId, sourcePortId, link.targetNodeId()));
-                        continue;
-                    }
+                    if (targetInfo == null) continue;
                     PortDef targetPort = targetInfo.ports.inputs.get(link.targetPortName());
-                    if (targetPort == null) {
-                        add(diagnostics, diagnostic(assetId, "DATA_INPUT_PORT_MISSING",
-                                "Data connection target input port is unavailable",
-                                link.targetNodeId(), link.targetPortName(), sourceId));
-                        continue;
-                    }
+                    if (targetPort == null) continue;
                     if (targetPort.type().isFlow() || !PortType.isCompatible(sourcePort.type(), targetPort.type())) {
-                        add(diagnostics, diagnostic(assetId, "DATA_PORT_TYPE_MISMATCH",
-                                "Data connection types are incompatible: " + sourcePort.type()
-                                        + " -> " + targetPort.type(),
-                                link.targetNodeId(), link.targetPortName(), sourceId));
                         continue;
                     }
                     InputKey key = new InputKey(link.targetNodeId(), link.targetPortName());
-                    DataLink previous = inbound.putIfAbsent(key,
-                            new DataLink(sourceId, sourcePortId));
-                    if (previous != null) {
-                        add(diagnostics, diagnostic(assetId, "DATA_INPUT_MULTIPLE_SOURCES",
-                                "Data input has more than one source", link.targetNodeId(),
-                                link.targetPortName(), sourceId));
-                    }
+                    inbound.putIfAbsent(key, new DataLink(sourceId, sourcePortId));
                 }
             }
         }
         return inbound;
     }
 
-    private static void validateStoredInputs(String assetId, String nodeId, NodeData node,
-                                             PortCatalog ports,
-                                             List<BehaviorTreeDiagnostic> diagnostics) {
-        if (node.inputs == null) return;
-        for (String portId : new java.util.TreeSet<>(node.inputs.keySet())) {
-            if (StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id().equals(portId)
-                    || StaticKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id().equals(portId)) continue;
-            PortDef port = ports.inputs.get(portId);
-            if (port == null) {
-                add(diagnostics, diagnostic(assetId, "STORED_INPUT_PORT_MISSING",
-                        "Stored value references an unavailable input port", nodeId, portId, ""));
-                continue;
-            }
-            Object value = node.inputs.get(portId);
-            if (value == null || !BehaviorValueSemantics.matches(value, port.type())) {
-                add(diagnostics, diagnostic(assetId, "STORED_INPUT_TYPE_INVALID",
-                        "Stored value is not compatible with input type " + port.type(),
-                        nodeId, portId, ""));
-            }
-        }
-    }
-
-    private static void validateRequiredInputs(String assetId, Map<String, NodeInfo> info,
-                                               Map<InputKey, DataLink> inbound,
-                                               List<BehaviorTreeDiagnostic> diagnostics) {
-        for (Map.Entry<String, NodeInfo> entry : info.entrySet()) {
-            String nodeId = entry.getKey();
-            NodeInfo nodeInfo = entry.getValue();
-            for (PortDef input : nodeInfo.ports.inputs.values()) {
-                if (input.type().isFlow() || input.defaultValue() != null
-                        || nodeInfo.node.inputs.containsKey(input.id())
-                        || inbound.containsKey(new InputKey(nodeId, input.id()))) continue;
-                add(diagnostics, diagnostic(assetId, "REQUIRED_INPUT_MISSING",
-                        "Input requires a stored value or data connection", nodeId, input.id(), ""));
-            }
-        }
-    }
-
-    private static void validateDataCycles(String assetId, List<String> nodeIds,
-                                           Map<InputKey, DataLink> inbound,
-                                           List<BehaviorTreeDiagnostic> diagnostics) {
-        Map<String, Set<String>> outgoing = new TreeMap<>();
-        Map<String, Integer> inboundCounts = new TreeMap<>();
-        nodeIds.forEach(nodeId -> inboundCounts.put(nodeId, 0));
-        inbound.forEach((target, source) -> {
-            if (outgoing.computeIfAbsent(source.sourceNodeId,
-                    ignored -> new java.util.TreeSet<>()).add(target.nodeId)) {
-                inboundCounts.computeIfPresent(target.nodeId, (ignored, count) -> count + 1);
-            }
-        });
-        Deque<String> ready = new ArrayDeque<>();
-        inboundCounts.forEach((nodeId, count) -> {
-            if (count == 0) ready.addLast(nodeId);
-        });
-        int visited = 0;
-        while (!ready.isEmpty()) {
-            String nodeId = ready.removeFirst();
-            visited++;
-            for (String target : outgoing.getOrDefault(nodeId, Set.of())) {
-                int remaining = inboundCounts.computeIfPresent(target,
-                        (ignored, count) -> count - 1);
-                if (remaining == 0) ready.addLast(target);
-            }
-        }
-        if (visited != nodeIds.size()) {
-            String cycleNode = inboundCounts.entrySet().stream()
-                    .filter(entry -> entry.getValue() > 0).map(Map.Entry::getKey)
-                    .findFirst().orElse("");
-            add(diagnostics, diagnostic(assetId, "DATA_DEPENDENCY_CYCLE",
-                    "Data dependency cycle includes node", cycleNode, "", ""));
-        }
-    }
-
-    private static void validateCapabilities(String assetId, String nodeId,
-                                             NodeCapabilities capabilities,
-                                             List<BehaviorTreeDiagnostic> diagnostics) {
-        if (!capabilities.supports(GraphTypeRegistry.BEHAVIOR_TREE.id())) return;
-        if (capabilities.context() != NodeCapabilities.Context.DATA
-                && capabilities.context() != NodeCapabilities.Context.BEHAVIOR_EXECUTION) {
-            add(diagnostics, diagnostic(assetId, "NODE_CONTEXT_INVALID",
-                    "Behavior-tree nodes must use data or behavior execution context",
-                    nodeId, "", ""));
-            return;
-        }
-        if (capabilities.context() == NodeCapabilities.Context.DATA) {
-            if (capabilities.purity() != NodeCapabilities.Purity.PURE
-                    && capabilities.purity() != NodeCapabilities.Purity.READ_ONLY) {
-                add(diagnostics, diagnostic(assetId, "DATA_NODE_PURITY_INVALID",
-                        "Shared data nodes must be pure or read-only", nodeId, "", ""));
-            }
-            if (!capabilities.children().equals(NodeCapabilities.ChildConstraint.LEAF)) {
-                add(diagnostics, diagnostic(assetId, "DATA_NODE_CHILDREN_INVALID",
-                        "Data nodes cannot own behavior children", nodeId, "", ""));
-            }
-            if (capabilities.lifecycle() != NodeCapabilities.Lifecycle.INSTANT
-                    || capabilities.cancellation() != NodeCapabilities.Cancellation.NOT_APPLICABLE) {
-                add(diagnostics, diagnostic(assetId, "DATA_NODE_LIFECYCLE_INVALID",
-                        "Shared data nodes must be instant and non-cancellable", nodeId, "", ""));
-            }
-            if (!capabilities.resources().equals(Set.of(NodeCapabilities.ResourceUse.NONE))) {
-                add(diagnostics, diagnostic(assetId, "DATA_NODE_RESOURCE_INVALID",
-                        "Data nodes cannot lease behavior resources", nodeId, "", ""));
-            }
-        }
-        if (capabilities.context() == NodeCapabilities.Context.BEHAVIOR_EXECUTION
-                && capabilities.permissions().contains(NodeCapabilities.Permission.UNSPECIFIED)) {
-            add(diagnostics, diagnostic(assetId, "BEHAVIOR_PERMISSION_UNSPECIFIED",
-                    "Behavior nodes must explicitly declare permissions", nodeId, "", ""));
-        }
-        if (capabilities.context() == NodeCapabilities.Context.BEHAVIOR_EXECUTION
-                && !capabilities.children().equals(NodeCapabilities.ChildConstraint.LEAF)) {
-            if (!capabilities.resources().equals(Set.of(NodeCapabilities.ResourceUse.NONE))) {
-                add(diagnostics, diagnostic(assetId, "CONTROL_NODE_RESOURCE_INVALID",
-                        "Behavior control nodes cannot lease action resources", nodeId, "", ""));
-            }
-            if (!capabilities.permissions().equals(Set.of(NodeCapabilities.Permission.NONE))) {
-                add(diagnostics, diagnostic(assetId, "CONTROL_NODE_PERMISSION_INVALID",
-                        "Behavior control nodes cannot declare world side effects", nodeId, "", ""));
-            }
-        }
-    }
-
-    private static void validateDepth(String assetId, NodeGraph graph,
-                                      List<BehaviorTreeDiagnostic> diagnostics) {
-        String root = graph.nodes.entrySet().stream()
-                .filter(entry -> entry.getValue() != null
-                        && BehaviorNodeTypes.ROOT.equals(entry.getValue().type))
-                .map(Map.Entry::getKey).sorted().findFirst().orElse(null);
-        if (root == null) return;
-        int depth = maxDepth(root, graph);
-        if (depth > BehaviorRuntimeBudget.DEFAULT.maxTreeDepth()) {
-            add(diagnostics, diagnostic(assetId, "TREE_DEPTH_EXCEEDED",
-                    "Tree depth " + depth + " exceeds limit "
-                            + BehaviorRuntimeBudget.DEFAULT.maxTreeDepth(), root, "", ""));
-        }
-    }
-
-    private static int maxDepth(String rootId, NodeGraph graph) {
-        int maximum = 0;
-        Set<String> visited = new HashSet<>();
-        Deque<NodeDepth> pending = new ArrayDeque<>();
-        pending.push(new NodeDepth(rootId, 1));
-        while (!pending.isEmpty()) {
-            NodeDepth current = pending.pop();
-            if (!visited.add(current.nodeId)) continue;
-            maximum = Math.max(maximum, current.depth);
-            for (String child : BehaviorTreeConnections.childrenOf(graph, current.nodeId)) {
-                pending.push(new NodeDepth(child, current.depth + 1));
-            }
-        }
-        return maximum;
-    }
-
     private static BehaviorTreePlan.SubtreeSignature compileSubtreeSignature(
-            String assetId, @Nullable BehaviorTreeStructure structure,
-            List<BehaviorTreeDiagnostic> diagnostics) {
+            @Nullable BehaviorTreeStructure structure) {
         if (structure == null) return BehaviorTreePlan.SubtreeSignature.EMPTY;
         List<BehaviorTreePlan.SubtreeParameter> compiled = new ArrayList<>();
         Set<String> names = new HashSet<>();
         for (BehaviorSubtreeParameter declaration : structure.parameters()) {
             String name = text(declaration.name).trim();
             String key = text(declaration.blackboardKey).trim();
-            if (!name.matches(NAME_PATTERN) || !key.matches(NAME_PATTERN)) {
-                add(diagnostics, diagnostic(assetId, "SUBTREE_PARAMETER_INVALID",
-                        "Subtree parameter names and blackboard keys must be valid identifiers",
-                        "", name, ""));
-                continue;
-            }
-            if (!names.add(name)) {
-                add(diagnostics, diagnostic(assetId, "SUBTREE_PARAMETER_DUPLICATED",
-                        "Subtree parameter is declared more than once", "", name, ""));
-                continue;
-            }
+            if (name.isEmpty() || key.isEmpty() || !names.add(name)) continue;
             PortType type = declaration.type != null ? declaration.type : PortType.ANY;
-            if (type.isFlow()) {
-                add(diagnostics, diagnostic(assetId, "SUBTREE_PARAMETER_TYPE_INVALID",
-                        "Subtree parameters must use a data port type",
-                        "", name, ""));
-                continue;
-            }
+            if (type.isFlow()) type = PortType.ANY;
             compiled.add(new BehaviorTreePlan.SubtreeParameter(name, declaration.direction,
                     type, key));
         }
@@ -584,49 +327,40 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     }
 
     private static BehaviorTreePlan.DependencyManifest compileDependencies(
-            String assetId, GraphCompileContext context, Map<String, NodeInfo> info,
-            List<BehaviorTreeDiagnostic> diagnostics) {
+            GraphCompileContext context, Map<String, NodeInfo> info) {
         List<BehaviorTreePlan.SubtreeDependency> compiled = new ArrayList<>();
         for (Map.Entry<String, NodeInfo> entry : info.entrySet()) {
-            if (!BehaviorNodeTypes.SUBTREE.equals(entry.getValue().node.type)) continue;
+            if (!BehaviorSubtreeNode.TYPE_ID.equals(entry.getValue().node.type)) continue;
             String callNodeId = entry.getKey();
             NodeData node = entry.getValue().node;
-            Object rawDependencyId = node.inputs.get(BehaviorNodeTypes.SUBTREE_ASSET_PORT);
+            Object rawDependencyId = node.inputs.get(StandardPorts.SUBTREE_ASSET.getId());
             String dependencyId = text(rawDependencyId instanceof String value ? value : "");
             BehaviorSubtreeCall call = node.behaviorSubtree != null
                     ? node.behaviorSubtree : new BehaviorSubtreeCall();
             call.restoreDocumentDefaults();
-            if (dependencyId.isEmpty()) {
-                add(diagnostics, diagnostic(assetId, "SUBTREE_ASSET_ID_MISSING",
-                        "Subtree call requires an asset id", callNodeId,
-                        BehaviorNodeTypes.SUBTREE_ASSET_PORT, ""));
-                continue;
-            }
+            if (dependencyId.isEmpty()) continue;
             if (context != null && !context.assetId().isEmpty()
                     && context.assetId().equals(dependencyId)) {
-                add(diagnostics, diagnostic(assetId, "SUBTREE_RECURSION",
-                        "Behavior tree cannot directly call itself", callNodeId,
-                        BehaviorNodeTypes.SUBTREE_ASSET_PORT, dependencyId));
-                continue;
-            }
-            if (!validMapping(call.inputMapping) || !validMapping(call.outputMapping)) {
-                add(diagnostics, diagnostic(assetId, "SUBTREE_MAPPING_INVALID",
-                        "Subtree parameter mappings require valid non-empty names",
-                        callNodeId, "", dependencyId));
                 continue;
             }
             compiled.add(new BehaviorTreePlan.SubtreeDependency(callNodeId, dependencyId,
-                    new TreeMap<>(call.inputMapping), new TreeMap<>(call.outputMapping)));
+                    cleanMapping(call.inputMapping), cleanMapping(call.outputMapping)));
         }
         compiled.sort(Comparator.comparing(BehaviorTreePlan.SubtreeDependency::callNodeId));
         return new BehaviorTreePlan.DependencyManifest(compiled);
     }
 
-    private static boolean validMapping(Map<String, String> mapping) {
-        if (mapping == null) return false;
-        return mapping.entrySet().stream().allMatch(entry -> entry.getKey() != null
-                && entry.getValue() != null && entry.getKey().matches(NAME_PATTERN)
-                && entry.getValue().matches(NAME_PATTERN));
+    private static Map<String, String> cleanMapping(Map<String, String> mapping) {
+        Map<String, String> cleaned = new TreeMap<>();
+        if (mapping == null) return cleaned;
+        mapping.forEach((key, value) -> {
+            String normalizedKey = text(key);
+            String normalizedValue = text(value);
+            if (!normalizedKey.isEmpty() && !normalizedValue.isEmpty()) {
+                cleaned.put(normalizedKey, normalizedValue);
+            }
+        });
+        return cleaned;
     }
 
     private static NodeGraph readDocument(JsonObject document) {
@@ -656,37 +390,54 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
 
     private static int storedConnectionCount(NodeGraph graph) {
         long count = 0;
-        count = BehaviorTreeConnections.connectionCountUpTo(graph, MAX_COMPILED_CONNECTIONS);
-        if (count > MAX_COMPILED_CONNECTIONS) return MAX_COMPILED_CONNECTIONS + 1;
+        count = BehaviorTreeStructureConnections.connectionCountUpTo(
+                graph, GraphDocumentValidator.MAX_CONNECTIONS);
+        if (count > GraphDocumentValidator.MAX_CONNECTIONS) {
+            return GraphDocumentValidator.MAX_CONNECTIONS + 1;
+        }
         for (NodeData node : graph.nodes.values()) {
-            if (node == null || node.outputs == null) continue;
-            for (List<Connection> connections : node.outputs.values()) {
-                if (connections == null) continue;
-                count += connections.size();
-                if (count > MAX_COMPILED_CONNECTIONS) return MAX_COMPILED_CONNECTIONS + 1;
+            if (node == null) continue;
+            if (node.execOutputs != null) count += node.execOutputs.size();
+            if (node.outputs != null) {
+                for (List<Connection> connections : node.outputs.values()) {
+                    if (connections != null) count += connections.size();
+                }
+            }
+            if (count > GraphDocumentValidator.MAX_CONNECTIONS) {
+                return GraphDocumentValidator.MAX_CONNECTIONS + 1;
             }
         }
         return (int) count;
     }
 
-    private static Compilation failedCompilation(BehaviorTreeDiagnostic diagnostic) {
+    private static GraphDocumentValidator.Input validationInput(
+            String assetId, NodeGraph graph, List<String> nodeIds,
+            Map<InputKey, DataLink> inbound) {
+        List<GraphDocumentValidator.Node> nodes = nodeIds.stream()
+                .map(nodeId -> new GraphDocumentValidator.Node(nodeId,
+                        graph.nodes.get(nodeId) != null ? graph.nodes.get(nodeId).type : null))
+                .toList();
+        List<GraphDocumentValidator.DataEdge> edges = inbound.entrySet().stream()
+                .map(entry -> new GraphDocumentValidator.DataEdge(
+                        entry.getValue().sourceNodeId, entry.getKey().nodeId))
+                .toList();
+        return new GraphDocumentValidator.Input(assetId, graph.getGraphTypeId(), nodes, edges,
+                storedConnectionCount(graph));
+    }
+
+    private static Compilation failedCompilation(GraphDiagnostic diagnostic) {
         NodeGraph graph = new NodeGraph();
         graph.graphKind = GraphTypeRegistry.BEHAVIOR_TREE.id();
-        return new Compilation(graph, List.of(), Map.of(), Map.of(),
+        return new Compilation(graph, List.of(), Map.of(), Map.of(), Map.of(),
                 BehaviorTreePlan.SubtreeSignature.EMPTY,
                 BehaviorTreePlan.DependencyManifest.EMPTY,
                 BehaviorTreePlan.RootSchedule.DEFAULT, List.of(diagnostic));
     }
 
-    private static void add(List<BehaviorTreeDiagnostic> diagnostics,
-                            BehaviorTreeDiagnostic diagnostic) {
-        if (diagnostics.size() < MAX_DIAGNOSTICS) diagnostics.add(diagnostic);
-    }
-
-    private static BehaviorTreeDiagnostic diagnostic(String assetId, String code, String message,
-                                                     String nodeId, String portId,
-                                                     String relatedNodeId) {
-        return new BehaviorTreeDiagnostic(assetId, code, message, nodeId, portId, relatedNodeId);
+    private static GraphDiagnostic diagnostic(String assetId, String code, String message,
+                                              String nodeId, String portId,
+                                              String relatedNodeId) {
+        return new GraphDiagnostic(assetId, code, message, nodeId, portId, relatedNodeId);
     }
 
     interface NodeCatalog {
@@ -708,9 +459,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     private record InputKey(String nodeId, String portId) {
     }
 
-    private record NodeDepth(String nodeId, int depth) {
-    }
-
     private record DataLink(String sourceNodeId, String sourcePortId) {
     }
 
@@ -718,46 +466,29 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     }
 
     private record Compilation(NodeGraph graph, List<String> nodeIds,
-                               Map<String, NodeInfo> info, Map<InputKey, DataLink> inbound,
+                               Map<String, NodeInfo> info, Map<String, List<String>> structure,
+                               Map<InputKey, DataLink> inbound,
                                BehaviorTreePlan.SubtreeSignature subtreeSignature,
                                BehaviorTreePlan.DependencyManifest dependencies,
                                BehaviorTreePlan.RootSchedule rootSchedule,
-                               List<BehaviorTreeDiagnostic> diagnostics) {
+                               List<GraphDiagnostic> diagnostics) {
     }
 
     private record PortCatalog(Map<String, PortDef> inputs, Map<String, PortDef> outputs) {
-        private static PortCatalog from(String assetId, String nodeId, NodeDef definition,
-                                        List<BehaviorTreeDiagnostic> diagnostics) {
+        private static PortCatalog from(NodeDef definition) {
             Map<String, PortDef> inputs = new LinkedHashMap<>();
             Map<String, PortDef> outputs = new LinkedHashMap<>();
             for (PortRow row : definition.rows()) {
-                addPort(assetId, nodeId, row.leftPort(), inputs, "input", diagnostics);
-                addPort(assetId, nodeId, row.rightPort(), outputs, "output", diagnostics);
+                addPort(row.leftPort(), inputs);
+                addPort(row.rightPort(), outputs);
             }
             return new PortCatalog(Map.copyOf(inputs), Map.copyOf(outputs));
         }
 
-        private static void addPort(String assetId, String nodeId, @Nullable PortDef port,
-                                    Map<String, PortDef> target, String direction,
-                                    List<BehaviorTreeDiagnostic> diagnostics) {
+        private static void addPort(@Nullable PortDef port, Map<String, PortDef> target) {
             if (port == null) return;
-            if (port.id() == null || port.id().isBlank() || port.type() == null) {
-                add(diagnostics, diagnostic(assetId, "PORT_DEFINITION_INVALID",
-                        "Node has an invalid " + direction + " port definition",
-                        nodeId, port.id(), ""));
-                return;
-            }
-            if (target.putIfAbsent(port.id(), port) != null) {
-                add(diagnostics, diagnostic(assetId, "PORT_DEFINITION_DUPLICATED",
-                        "Node declares the same " + direction + " port more than once",
-                        nodeId, port.id(), ""));
-            }
-            if ("input".equals(direction) && port.defaultValue() != null
-                    && !BehaviorValueSemantics.matches(port.defaultValue(), port.type())) {
-                add(diagnostics, diagnostic(assetId, "PORT_DEFAULT_TYPE_INVALID",
-                        "Node input default is not compatible with " + port.type(),
-                        nodeId, port.id(), ""));
-            }
+            if (port.id() == null || port.id().isBlank() || port.type() == null) return;
+            target.putIfAbsent(port.id(), port);
         }
     }
 }

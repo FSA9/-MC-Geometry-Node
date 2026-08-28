@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructure;
 
 import java.util.ArrayList;
 import java.util.HashMap;

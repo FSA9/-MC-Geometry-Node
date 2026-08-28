@@ -8,9 +8,8 @@ import com.mine.geometry_node.client.ai.graph.PortEditCapabilityResolver;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.viewport.menu.NodeSearchService;
 import com.mine.geometry_node.client.ui.viewport.node.comment.NodeCommentTextBuilder;
-import com.mine.geometry_node.core.engine.behavior.compile.BehaviorTreeCompiler;
-import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
-import com.mine.geometry_node.core.engine.graph.compile.GraphCompileContext;
+import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
+import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationException;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -22,7 +21,6 @@ import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortOptionResolver;
 import com.mine.geometry_node.core.node.port.PortOptionContext;
 import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.RegistryAccess;
@@ -30,8 +28,6 @@ import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -526,104 +522,21 @@ final class TerminalGraphQueryService {
 
     private static List<ValidationDiagnostic> validate(GraphReadSnapshot snapshot) {
         List<ValidationDiagnostic> diagnostics = new ArrayList<>();
-        if (GraphTypeRegistry.BEHAVIOR_TREE.id().equals(snapshot.graph().getGraphTypeId())) {
-            JsonObject behaviorDocument = com.google.gson.JsonParser.parseString(
-                    GraphJsonIO.toJson(snapshot.graph())).getAsJsonObject();
-            BehaviorTreeCompiler.INSTANCE.validate(
-                            new GraphCompileContext("viewport"), behaviorDocument).diagnostics()
-                    .forEach(diagnostic -> diagnostics.add(error(
-                            diagnostic.code(), diagnostic.message(),
-                            diagnostic.nodeId(), diagnostic.portId().isEmpty()
-                                    ? diagnostic.relatedNodeId() : diagnostic.portId())));
-        }
-        Map<String, PortTypes> portTypesByNode = new LinkedHashMap<>();
-        snapshot.nodes().forEach((nodeId, node) ->
-                portTypesByNode.put(nodeId, PortTypes.from(snapshot.definition(nodeId))));
-        if (snapshot.graph().nodes != null) {
-            for (Map.Entry<String, NodeData> entry : snapshot.graph().nodes.entrySet()) {
-                if (entry.getKey() == null || entry.getKey().isBlank()) {
-                    diagnostics.add(error("NODE_ID_MISSING", "图中存在空节点 ID", "", ""));
-                }
-                if (entry.getValue() == null) {
-                    diagnostics.add(error("NODE_DATA_MISSING", "节点索引指向空数据", text(entry.getKey()), ""));
-                }
-            }
-        }
-        for (Map.Entry<String, NodeData> entry : snapshot.nodes().entrySet()) {
-            String nodeId = entry.getKey();
-            NodeData node = entry.getValue();
-            NodeDef definition = snapshot.definition(nodeId);
-            if (node.type == null || node.type.isBlank()) {
-                diagnostics.add(error("NODE_TYPE_MISSING", "节点缺少 type_id", nodeId, ""));
-            } else if (definition == null) {
-                diagnostics.add(error("NODE_TYPE_UNKNOWN", "未找到节点类型定义: " + node.type, nodeId, ""));
-            }
-            if (node.id != null && !node.id.equals(nodeId)) {
-                diagnostics.add(warning("NODE_ID_MISMATCH", "节点内部 ID 与图索引 ID 不一致", nodeId, ""));
-            }
-            if (definition != null && node.inputs != null) {
-                Set<String> inputIds = portTypesByNode.get(nodeId).inputs().keySet();
-                for (String storedPort : node.inputs.keySet()) {
-                    if (!inputIds.contains(storedPort)) {
-                        diagnostics.add(warning("STORED_INPUT_UNKNOWN", "存储值引用了不存在的输入端口", nodeId, storedPort));
-                    }
-                }
-            }
-            validateStoredConnections(nodeId, node, diagnostics);
-        }
-
-        Set<String> inbound = new HashSet<>();
-        for (GraphReadSnapshot.Edge edge : snapshot.edges()) {
-            if (!snapshot.nodes().containsKey(edge.inputNodeId())) {
-                diagnostics.add(error("CONNECTION_TARGET_NODE_MISSING", "连接目标节点不存在", edge.outputNodeId(), edge.outputPortId()));
-                continue;
-            }
-            PortType outputType = portTypesByNode.getOrDefault(edge.outputNodeId(), PortTypes.EMPTY)
-                    .outputs().get(edge.outputPortId());
-            PortType inputType = portTypesByNode.getOrDefault(edge.inputNodeId(), PortTypes.EMPTY)
-                    .inputs().get(edge.inputPortId());
-            if (outputType == null) {
-                diagnostics.add(error("CONNECTION_OUTPUT_PORT_MISSING", "连接源端口不存在", edge.outputNodeId(), edge.outputPortId()));
-            }
-            if (inputType == null) {
-                diagnostics.add(error("CONNECTION_INPUT_PORT_MISSING", "连接目标端口不存在", edge.inputNodeId(), edge.inputPortId()));
-            }
-            if (outputType != null && inputType != null && !PortType.isCompatible(outputType, inputType)) {
-                diagnostics.add(error("CONNECTION_TYPE_MISMATCH", "连接端口类型不兼容", edge.inputNodeId(), edge.inputPortId()));
-            }
-            String inboundKey = edge.kind() + "\u0000" + edge.inputNodeId() + "\u0000" + edge.inputPortId();
-            if (!inbound.add(inboundKey)) {
-                diagnostics.add(error("MULTIPLE_INBOUND_CONNECTIONS", "输入端口存在多个入站连接", edge.inputNodeId(), edge.inputPortId()));
-            }
+        try {
+            GraphCompilationService.INSTANCE.compile("viewport", GraphJsonIO.toJson(snapshot.graph()));
+        } catch (GraphValidationException exception) {
+            exception.diagnostics().forEach(diagnostic -> diagnostics.add(error(
+                    diagnostic.code(), diagnostic.message(), diagnostic.nodeId(),
+                    diagnostic.portId().isEmpty() ? diagnostic.relatedNodeId() : diagnostic.portId())));
+        } catch (RuntimeException exception) {
+            diagnostics.add(error("GRAPH_COMPILE_FAILED",
+                    exception.getMessage() != null ? exception.getMessage()
+                            : exception.getClass().getSimpleName(), "", ""));
         }
         diagnostics.sort(Comparator.comparing(ValidationDiagnostic::severity)
                 .thenComparing(ValidationDiagnostic::code).thenComparing(ValidationDiagnostic::nodeId)
                 .thenComparing(ValidationDiagnostic::portId).thenComparing(ValidationDiagnostic::message));
         return List.copyOf(diagnostics);
-    }
-
-    private static void validateStoredConnections(String nodeId, NodeData node,
-                                                   List<ValidationDiagnostic> diagnostics) {
-        if (node.execOutputs != null) {
-            node.execOutputs.forEach((portId, connection) -> {
-                if (portId == null || portId.isBlank() || connection == null || !connection.isValid()) {
-                    diagnostics.add(error("CONNECTION_MALFORMED", "执行连接缺少有效的端口或目标", nodeId, text(portId)));
-                }
-            });
-        }
-        if (node.outputs != null) {
-            node.outputs.forEach((portId, connections) -> {
-                if (portId == null || portId.isBlank() || connections == null) {
-                    diagnostics.add(error("CONNECTION_MALFORMED", "数据连接缺少有效的源端口或列表", nodeId, text(portId)));
-                    return;
-                }
-                for (var connection : connections) {
-                    if (connection == null || !connection.isValid()) {
-                        diagnostics.add(error("CONNECTION_MALFORMED", "数据连接缺少有效目标", nodeId, portId));
-                    }
-                }
-            });
-        }
     }
 
     private static CommandResult missingNode(String nodeId) {
@@ -702,29 +615,9 @@ final class TerminalGraphQueryService {
         return new ValidationDiagnostic("error", code, message, text(nodeId), text(portId));
     }
 
-    private static ValidationDiagnostic warning(String code, String message, String nodeId, String portId) {
-        return new ValidationDiagnostic("warning", code, message, text(nodeId), text(portId));
-    }
-
     private record PageSlice<T>(List<T> items, int offset, int limit, int total) {
         private PageSlice {
             items = List.copyOf(items);
-        }
-    }
-
-    private record PortTypes(Map<String, PortType> inputs, Map<String, PortType> outputs) {
-        private static final PortTypes EMPTY = new PortTypes(Map.of(), Map.of());
-
-        private static PortTypes from(NodeDef definition) {
-            if (definition == null) return EMPTY;
-            Map<String, PortType> inputs = new LinkedHashMap<>();
-            Map<String, PortType> outputs = new LinkedHashMap<>();
-            for (PortRow row : definition.rows()) {
-                if (row.leftPort() != null) inputs.put(row.leftPort().id(), row.leftPort().type());
-                if (row.rightPort() != null) outputs.put(row.rightPort().id(), row.rightPort().type());
-            }
-            return new PortTypes(java.util.Collections.unmodifiableMap(inputs),
-                    java.util.Collections.unmodifiableMap(outputs));
         }
     }
 

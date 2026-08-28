@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.node.document.Connection;
-import com.mine.geometry_node.core.node.document.BehaviorTreeStructure;
+import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructure;
 import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;

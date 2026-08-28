@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
 import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
 import net.minecraft.server.MinecraftServer;

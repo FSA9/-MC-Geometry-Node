@@ -1,8 +1,6 @@
-package com.mine.geometry_node.core.node.document;
+package com.mine.geometry_node.core.node.document.behavior;
 
 import com.google.gson.annotations.SerializedName;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeParameter;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

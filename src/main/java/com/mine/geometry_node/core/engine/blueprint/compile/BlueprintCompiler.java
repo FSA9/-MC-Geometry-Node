@@ -11,8 +11,9 @@ import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompiler;
+import com.mine.geometry_node.core.engine.graph.compile.GraphCompileContext;
+import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.nodes.events.block.OnMultiblockBuilt;
@@ -22,7 +23,6 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,7 +40,7 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
     @SuppressWarnings("unchecked")
     public static RuntimeGraphIndex compile(Reader jsonReader) {
         JsonObject root = JsonParser.parseReader(jsonReader).getAsJsonObject();
-        return compileDocument(root);
+        return compileDocument(GraphCompileContext.ANONYMOUS, root);
     }
 
     @Override
@@ -50,11 +50,16 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
 
     @Override
     public RuntimeGraphIndex compile(JsonObject document) {
-        return compileDocument(document);
+        return compileDocument(GraphCompileContext.ANONYMOUS, document);
+    }
+
+    @Override
+    public RuntimeGraphIndex compile(GraphCompileContext context, JsonObject document) {
+        return compileDocument(context, document);
     }
 
     @SuppressWarnings("unchecked")
-    private static RuntimeGraphIndex compileDocument(JsonObject root) {
+    private static RuntimeGraphIndex compileDocument(GraphCompileContext context, JsonObject root) {
         String graphTypeId = root.has("graph_kind")
                 ? GraphType.normalizeId(root.get("graph_kind").getAsString())
                 : GraphTypeRegistry.BLUEPRINT.id();
@@ -76,8 +81,7 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
 
         GraphFlattener flattener = new GraphFlattener();
         flattener.flatten(rootNodes);
-
-        validateNoDataCycles(flattener.inputLookup);
+        GraphDocumentValidator.requireValid(validationInput(context, graphTypeId, flattener));
 
         Set<String> allIds = flattener.nodeDataLookup.keySet();
         int size = allIds.size();
@@ -155,17 +159,6 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
                 }
             }
             typeToIntList.put(entry.getKey(), List.copyOf(intList));
-        }
-
-        if (GraphTypeRegistry.QUEST.id().equals(graphTypeId)) {
-            for (QuestConditionKind kind : QuestConditionKind.all()) {
-                int count = typeToIntList.getOrDefault(kind.nodeTypeId(), List.of()).size();
-                if (count > 1) {
-                    throw new IllegalStateException(
-                            "Quest graph contains duplicate singleton condition node: kind="
-                                    + kind + ", count=" + count);
-                }
-            }
         }
 
         Map<String, List<Integer>> receiveLookup = new HashMap<>();
@@ -272,41 +265,26 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
         return null;
     }
 
-    private static void validateNoDataCycles(Map<String, RuntimeGraphIndex.ConnectionSource> inputLookup) {
-        Map<String, Set<String>> dependencyGraph = new HashMap<>();
-
-        for (String key : inputLookup.keySet()) {
-            String targetNodeId = key.split("#")[0];
-            String sourceNodeId = inputLookup.get(key).sourceNodeId();
-            dependencyGraph.computeIfAbsent(targetNodeId, k -> new HashSet<>()).add(sourceNodeId);
-        }
-
-        Set<String> visited = new HashSet<>();
-        Set<String> recStack = new HashSet<>();
-
-        for (String nodeId : dependencyGraph.keySet()) {
-            if (checkCycleDFS(nodeId, dependencyGraph, visited, recStack)) {
-                throw new IllegalStateException("[BlueprintCompiler] Data flow cycle detected! Graph compilation failed at node: " + nodeId);
-            }
-        }
+    private static GraphDocumentValidator.Input validationInput(
+            GraphCompileContext context, String graphTypeId, GraphFlattener flattener) {
+        List<GraphDocumentValidator.Node> nodes = flattener.nodeDataLookup.entrySet().stream()
+                .map(entry -> new GraphDocumentValidator.Node(entry.getKey(),
+                        entry.getValue() != null && entry.getValue().has("node_type")
+                                ? entry.getValue().get("node_type").getAsString() : null))
+                .toList();
+        List<GraphDocumentValidator.DataEdge> edges = flattener.inputLookup.entrySet().stream()
+                .map(entry -> new GraphDocumentValidator.DataEdge(
+                        entry.getValue().sourceNodeId(), dataTargetNode(entry.getKey())))
+                .toList();
+        int flowConnections = flattener.flowOutputLookup.values().stream()
+                .mapToInt(Map::size).sum();
+        return new GraphDocumentValidator.Input(
+                context != null ? context.diagnosticAssetId() : "<anonymous>",
+                graphTypeId, nodes, edges, flowConnections + flattener.inputLookup.size());
     }
 
-    private static boolean checkCycleDFS(String current, Map<String, Set<String>> adj,
-                                         Set<String> visited, Set<String> recStack) {
-        if (recStack.contains(current)) return true;
-        if (visited.contains(current)) return false;
-
-        recStack.add(current);
-        visited.add(current);
-
-        Set<String> dependencies = adj.get(current);
-        if (dependencies != null) {
-            for (String dep : dependencies) {
-                if (checkCycleDFS(dep, adj, visited, recStack)) return true;
-            }
-        }
-
-        recStack.remove(current);
-        return false;
+    private static String dataTargetNode(String inputKey) {
+        int separator = inputKey != null ? inputKey.indexOf('#') : -1;
+        return separator >= 0 ? inputKey.substring(0, separator) : inputKey;
     }
 }

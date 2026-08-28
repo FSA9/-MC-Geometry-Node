@@ -1,12 +1,11 @@
 package com.mine.geometry_node.core.node.nodes.behavior.blackboard;
 
+import com.mine.geometry_node.core.node.port.StandardPorts;
+
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.UIHint;
 
 import java.util.Locale;
@@ -19,9 +18,8 @@ public final class BlackboardNodePorts {
     }
 
     public static PortRow scopeRow() {
-        return new PortRow(PortDef.create(BehaviorNodeTypes.BLACKBOARD_SCOPE_PORT,
-                "geometry_node.port." + BehaviorNodeTypes.BLACKBOARD_SCOPE_PORT,
-                PortType.STRING, "instance").hiddenPin(), null, UIHint.SELECT, null,
+        return new PortRow(StandardPorts.BLACKBOARD_SCOPE.toInput("instance").hiddenPin(),
+                null, UIHint.SELECT, null,
                 Map.of(PortMetaKeys.OPTIONS, OPTIONS));
     }
 

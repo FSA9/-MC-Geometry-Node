@@ -1,14 +1,11 @@
 package com.mine.geometry_node.core.engine.behavior.plan;
 
-import com.mine.geometry_node.core.engine.behavior.compile.BehaviorSubtreePlanValidator;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeParameter;
+import com.mine.geometry_node.core.node.document.behavior.BehaviorSubtreeParameter;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledDataIndex;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraphDependencies;
-import com.mine.geometry_node.core.engine.graph.compile.ResolvedGraphDependencyDiagnostic;
-import com.mine.geometry_node.core.engine.graph.compile.ResolvedGraphDependencyValidator;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.dependency.CompiledGraphDependencies;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.port.PortType;
 import org.jetbrains.annotations.Nullable;
@@ -21,11 +18,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 
 /** Immutable, compact behavior-tree artifact shared by all future runtime instances. */
-public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex, CompiledGraphDependencies,
-        ResolvedGraphDependencyValidator {
+public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex, CompiledGraphDependencies {
     private final String assetId;
     private final String[] nodeIds;
     private final Map<String, Integer> nodeIndexes;
@@ -156,17 +151,6 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
         return GraphKind.BEHAVIOR_TREE;
     }
 
-    @Override
-    public List<ResolvedGraphDependencyDiagnostic> validateResolvedDependencies(
-            Function<String, @Nullable CompiledGraph> resolver) {
-        return BehaviorSubtreePlanValidator.validateDirectDependencies(this, assetId -> {
-            CompiledGraph graph = resolver.apply(assetId);
-            return graph instanceof BehaviorTreePlan plan ? plan : null;
-        }).stream().map(diagnostic -> new ResolvedGraphDependencyDiagnostic(
-                diagnostic.assetId(), diagnostic.code(), diagnostic.message(),
-                diagnostic.nodeId(), diagnostic.relatedNodeId())).toList();
-    }
-
     public String assetId() {
         return assetId;
     }
@@ -281,6 +265,11 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex,
     @Override
     public Set<String> graphDependencies() {
         return dependencyManifest.assetIds();
+    }
+
+    @Override
+    public boolean requiresAvailableDependencies() {
+        return false;
     }
 
     private boolean validNode(int nodeId) {

@@ -13,7 +13,7 @@ import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityGainItem;
 import net.minecraft.server.MinecraftServer;

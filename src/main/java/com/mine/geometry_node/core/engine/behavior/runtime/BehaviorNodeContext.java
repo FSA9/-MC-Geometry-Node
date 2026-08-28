@@ -1,10 +1,11 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
+import com.mine.geometry_node.core.node.port.StandardPorts;
+
 import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionFailure;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import net.minecraft.server.level.ServerLevel;
@@ -161,7 +162,7 @@ public final class BehaviorNodeContext {
 
     public ScopedStateScope blackboardScope() {
         ensureValid();
-        Object raw = staticInput(BehaviorNodeTypes.BLACKBOARD_SCOPE_PORT);
+        Object raw = staticInput(StandardPorts.BLACKBOARD_SCOPE.getId());
         if (!(raw instanceof String text)) {
             throw new BehaviorContractViolation("Blackboard scope is missing");
         }

@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionFailure;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionStep;
@@ -9,16 +8,17 @@ import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorBudget
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.InstantBehaviorActionExecutor;
 import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.nodes.behavior.condition.BehaviorUtilityConditionNode;
+import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorEntityActionNode;
 import com.mine.geometry_node.mixin.MobNavigationInvoker;
 import com.mine.geometry_node.mixin.PathNavigationAccessor;
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.level.pathfinder.NodeEvaluator;
 import net.minecraft.world.phys.Vec3;
@@ -27,7 +27,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Server-side executors for entity target, navigation, look, and combat actions. */
+/** Server-side executors for entity target, navigation, and look actions. */
 final class BehaviorEntityExecutors {
     private static final int MAX_TARGET_CANDIDATES = 4_096;
     private static final int WANDER_ATTEMPTS = 10;
@@ -38,21 +38,21 @@ final class BehaviorEntityExecutors {
     }
 
     static void register(BehaviorNodeExecutorRegistry registry) {
-        registry.register(BehaviorNodeTypes.SELECT_TARGET, new SelectTargetExecutor());
-        registry.register(BehaviorNodeTypes.CLEAR_TARGET, new ClearTargetExecutor());
-        registry.register(BehaviorNodeTypes.MOVE_TO, new MoveToExecutor());
-        registry.register(BehaviorNodeTypes.STOP_MOVING, new StopMovingExecutor());
-        registry.register(BehaviorNodeTypes.WANDER, new WanderExecutor());
-        registry.register(BehaviorNodeTypes.LOOK_AT, new LookAtExecutor());
-        registry.register(BehaviorNodeTypes.ATTACK_TARGET, new AttackTargetExecutor());
-        registry.register(BehaviorNodeTypes.CAN_NAVIGATE_TO, new CanNavigateToExecutor());
+        registry.register(BehaviorEntityActionNode.Kind.SELECT_TARGET.typeId(), new SelectTargetExecutor());
+        registry.register(BehaviorEntityActionNode.Kind.CLEAR_TARGET.typeId(), new ClearTargetExecutor());
+        registry.register(BehaviorEntityActionNode.Kind.MOVE_TO.typeId(), new MoveToExecutor());
+        registry.register(BehaviorEntityActionNode.Kind.STOP_MOVING.typeId(), new StopMovingExecutor());
+        registry.register(BehaviorEntityActionNode.Kind.WANDER.typeId(), new WanderExecutor());
+        registry.register(BehaviorEntityActionNode.Kind.LOOK_AT.typeId(), new LookAtExecutor());
+        registry.register(BehaviorEntityActionNode.Kind.ATTACK_TARGET.typeId(), new AttackTargetExecutor());
+        registry.register(BehaviorUtilityConditionNode.Kind.CAN_NAVIGATE_TO.typeId(), new CanNavigateToExecutor());
     }
 
     private static final class SelectTargetExecutor extends InstantBehaviorActionExecutor {
         @Override
         protected BehaviorActionStep<Void> execute(BehaviorNodeContext context) {
             Mob owner = requireOwner(context);
-            Object candidates = context.input(BehaviorNodeTypes.CANDIDATES_PORT);
+            Object candidates = context.input(StandardPorts.CANDIDATES.getId());
             if (candidates == null) return failure(BehaviorActionFailure.NO_CANDIDATE,
                     "Target candidates are unavailable");
             if (!(candidates instanceof Iterable<?> values)) {
@@ -113,7 +113,7 @@ final class BehaviorEntityExecutors {
         protected BehaviorActionStep<Void> execute(BehaviorNodeContext context) {
             Mob owner = requireOwner(context);
             EntityTarget resolution = resolveEntityTarget(
-                    context, owner, BehaviorNodeTypes.TARGET_PORT);
+                    context, owner, StandardPorts.TARGET.getId());
             Entity target = resolution.target();
             if (target == null) return failure(resolution.supplied()
                             ? BehaviorActionFailure.INVALID_TARGET
@@ -137,8 +137,8 @@ final class BehaviorEntityExecutors {
         @Override
         protected BehaviorActionStep<MoveState> start(BehaviorNodeContext context) {
             Mob owner = requireOwner(context);
-            double speed = positiveFloat(context, BehaviorNodeTypes.SPEED_PORT);
-            double arrival = nonNegativeFloat(context, BehaviorNodeTypes.ARRIVAL_DISTANCE_PORT);
+            double speed = positiveFloat(context, StandardPorts.SPEED.getId());
+            double arrival = nonNegativeFloat(context, StandardPorts.ARRIVAL_DISTANCE.getId());
             MoveTarget resolution = resolveMoveTarget(context, owner);
             Object target = resolution.target();
             if (target == null) return failure(resolution.supplied()
@@ -210,13 +210,13 @@ final class BehaviorEntityExecutors {
         @Override
         protected BehaviorActionStep<WanderState> start(BehaviorNodeContext context) {
             Mob owner = requireOwner(context);
-            int horizontal = positiveInt(context, BehaviorNodeTypes.HORIZONTAL_RANGE_PORT);
-            int vertical = nonNegativeInt(context, BehaviorNodeTypes.VERTICAL_RANGE_PORT);
+            int horizontal = positiveInt(context, StandardPorts.HORIZONTAL_RANGE.getId());
+            int vertical = nonNegativeInt(context, StandardPorts.VERTICAL_RANGE.getId());
             if (horizontal > 128 || vertical > 64) {
                 throw new BehaviorContractViolation(
                         "Wander range exceeds 128 horizontal / 64 vertical");
             }
-            double speed = positiveFloat(context, BehaviorNodeTypes.SPEED_PORT);
+            double speed = positiveFloat(context, StandardPorts.SPEED.getId());
             Mob navigator = navigationOwner(owner);
             PathNavigation probe = isolatedNavigation(owner);
             BlockPos origin = navigator.blockPosition();
@@ -273,9 +273,9 @@ final class BehaviorEntityExecutors {
         @Override
         protected BehaviorActionStep<LookState> start(BehaviorNodeContext context) {
             Mob owner = requireOwner(context);
-            int duration = nonNegativeInt(context, BehaviorNodeTypes.DURATION_PORT);
+            int duration = nonNegativeInt(context, StandardPorts.DURATION.getId());
             EntityTarget resolution = resolveEntityTarget(
-                    context, owner, BehaviorNodeTypes.TARGET_PORT);
+                    context, owner, StandardPorts.TARGET.getId());
             Entity target = resolution.target();
             if (target == null) return failure(resolution.supplied()
                             ? BehaviorActionFailure.INVALID_TARGET
@@ -302,14 +302,13 @@ final class BehaviorEntityExecutors {
         }
     }
 
-    private static final class AttackTargetExecutor extends BehaviorActionExecutor<AttackState> {
+    private static final class AttackTargetExecutor extends InstantBehaviorActionExecutor {
         @Override
-        protected BehaviorActionStep<AttackState> start(BehaviorNodeContext context) {
+        protected BehaviorActionStep<Void> execute(BehaviorNodeContext context) {
             Mob owner = requireOwner(context);
-            double range = nonNegativeFloat(context, BehaviorNodeTypes.ATTACK_RANGE_PORT);
-            int cooldown = positiveInt(context, BehaviorNodeTypes.ATTACK_COOLDOWN_PORT);
+            double range = nonNegativeFloat(context, StandardPorts.TARGET_RANGE.getId());
             EntityTarget resolution = resolveEntityTarget(
-                    context, owner, BehaviorNodeTypes.TARGET_PORT);
+                    context, owner, StandardPorts.TARGET.getId());
             Entity resolved = resolution.target();
             if (resolved == null) return failure(resolution.supplied()
                             ? BehaviorActionFailure.INVALID_TARGET
@@ -326,44 +325,12 @@ final class BehaviorEntityExecutors {
                     "The owner cannot attack this target");
             if (!withinDistance(owner, target.position(), range)) {
                 return failure(BehaviorActionFailure.OUT_OF_RANGE,
-                        "Attack target is outside attack range");
+                        "Target is outside the assignment range");
             }
-            return BehaviorActionStep.running(
-                    new AttackState(target, range, cooldown, context.gameTick()));
-        }
-
-        @Override
-        protected BehaviorActionStep<AttackState> tick(BehaviorNodeContext context,
-                                                       AttackState state) {
-            Mob owner = requireOwner(context);
-            LivingEntity target = state.target();
-            if (target.isRemoved() || target.level() != owner.level()) {
-                return failure(state, BehaviorActionFailure.TARGET_LOST,
-                        "Attack target became unavailable");
-            }
-            if (!target.isAlive()) return BehaviorActionStep.success(state);
-            if (!owner.canAttack(target)) return failure(state, BehaviorActionFailure.CANNOT_ATTACK,
-                    "The owner can no longer attack this target");
-            if (!withinDistance(owner, target.position(), state.range())) {
-                return failure(state, BehaviorActionFailure.OUT_OF_RANGE,
-                        "Attack target moved outside attack range");
-            }
-
-            AttackState next = state;
-            if (context.gameTick() >= state.nextAttackTick()) {
-                ServerLevel level = context.level();
-                if (level == null) throw new IllegalStateException("Behavior ServerLevel is unavailable");
-                owner.swing(InteractionHand.MAIN_HAND);
-                if (!owner.doHurtTarget(level, target)) {
-                    return failure(state, BehaviorActionFailure.ATTACK_REJECTED,
-                            "The attack command did not deal damage");
-                }
-                next = new AttackState(target, state.range(), state.cooldown(),
-                        safeAdd(context.gameTick(), state.cooldown()));
-                if (!target.isAlive()) return BehaviorActionStep.success(next);
-            }
-            context.requestWakeupAfter(1);
-            return BehaviorActionStep.running(next);
+            return setTarget(owner, target) == target
+                    ? BehaviorActionStep.success()
+                    : failure(BehaviorActionFailure.COMMAND_REJECTED,
+                    "The requested attack target was rejected or replaced");
         }
     }
 
@@ -381,22 +348,22 @@ final class BehaviorEntityExecutors {
     }
 
     private static MoveTarget resolveMoveTarget(BehaviorNodeContext context, Mob owner) {
-        String mode = context.optionalTypedInput(BehaviorNodeTypes.TARGET_MODE_PORT, String.class);
-        if (BehaviorNodeTypes.TARGET_MODE_POSITION.equals(mode)) {
-            Object raw = context.input(BehaviorNodeTypes.TARGET_POSITION_PORT);
+        String mode = context.optionalTypedInput(StandardPorts.TARGET_MODE.getId(), String.class);
+        if (BehaviorEntityActionNode.TARGET_MODE_POSITION.equals(mode)) {
+            Object raw = context.input(StandardPorts.TARGET_POSITION.getId());
             Vec3 position = context.optionalTypedInput(
-                    BehaviorNodeTypes.TARGET_POSITION_PORT, Vec3.class);
+                    StandardPorts.TARGET_POSITION.getId(), Vec3.class);
             if (position != null && !finite(position)) {
                 throw new BehaviorContractViolation("Move target position must be finite");
             }
             return new MoveTarget(position, raw != null);
         }
         if (mode != null && !mode.isBlank()
-                && !BehaviorNodeTypes.TARGET_MODE_ENTITY.equals(mode)) {
+                && !BehaviorEntityActionNode.TARGET_MODE_ENTITY.equals(mode)) {
             throw new BehaviorContractViolation("Unknown move target mode: " + mode);
         }
         EntityTarget target = resolveEntityTarget(
-                context, owner, BehaviorNodeTypes.TARGET_ENTITY_PORT);
+                context, owner, StandardPorts.TARGET_ENTITY.getId());
         return new MoveTarget(target.target(), target.supplied());
     }
 
@@ -541,10 +508,6 @@ final class BehaviorEntityExecutors {
     }
 
     private record LookState(Entity target, long deadline) {
-    }
-
-    private record AttackState(LivingEntity target, double range, int cooldown,
-                               long nextAttackTick) {
     }
 
     private record EntityTarget(@Nullable Entity target, boolean supplied) {

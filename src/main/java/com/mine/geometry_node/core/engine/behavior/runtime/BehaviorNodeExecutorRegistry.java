@@ -3,8 +3,22 @@ package com.mine.geometry_node.core.engine.behavior.runtime;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorCompositeMode;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
+import com.mine.geometry_node.core.node.nodes.behavior.action.BehaviorIdleNode;
+import com.mine.geometry_node.core.node.nodes.behavior.action.BehaviorWaitNode;
+import com.mine.geometry_node.core.node.nodes.behavior.blackboard.BehaviorClearBlackboardNode;
+import com.mine.geometry_node.core.node.nodes.behavior.blackboard.BehaviorSetBlackboardNode;
+import com.mine.geometry_node.core.node.nodes.behavior.condition.BehaviorConditionNode;
+import com.mine.geometry_node.core.node.nodes.behavior.condition.BehaviorHasValidTargetNode;
+import com.mine.geometry_node.core.node.nodes.behavior.condition.BehaviorUtilityConditionNode;
+import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorCompositeNode;
+import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorRootNode;
+import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorSelectorNode;
+import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorSequenceNode;
+import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorSubtreeNode;
+import com.mine.geometry_node.core.node.nodes.behavior.decorator.BehaviorDecoratorNode;
+import com.mine.geometry_node.core.node.nodes.behavior.decorator.BehaviorGuardNode;
+import com.mine.geometry_node.core.node.nodes.behavior.decorator.BehaviorInverterNode;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -56,7 +70,7 @@ public final class BehaviorNodeExecutorRegistry {
     private static final BehaviorNodeExecutor IDLE_EXECUTOR = new IdleExecutor();
     private static final BehaviorNodeExecutor SET_BLACKBOARD_EXECUTOR = context -> {
         String key = requireKey(context);
-        Object value = require(context.input(BehaviorNodeTypes.BLACKBOARD_VALUE_PORT),
+        Object value = require(context.input(StandardPorts.ANY_VALUE.getId()),
                 "Blackboard value is missing: " + key);
         context.setBlackboard(context.blackboardScope(), key, value);
         return BehaviorResult.SUCCESS;
@@ -107,32 +121,32 @@ public final class BehaviorNodeExecutorRegistry {
     }
 
     public void registerCoreExecutors() {
-        register(BehaviorNodeTypes.ROOT, ROOT_EXECUTOR);
-        register(BehaviorNodeTypes.SUBTREE, SUBTREE_EXECUTOR);
-        register(BehaviorNodeTypes.SEQUENCE, SEQUENCE_EXECUTOR);
-        register(BehaviorNodeTypes.SELECTOR, SELECTOR_EXECUTOR);
-        register(BehaviorNodeTypes.CONDITION, CONDITION_EXECUTOR);
-        register(BehaviorNodeTypes.GUARD, GUARD_EXECUTOR);
-        register(BehaviorNodeTypes.INVERTER, INVERTER_EXECUTOR);
-        register(BehaviorNodeTypes.HAS_VALID_TARGET, HAS_VALID_TARGET_EXECUTOR);
-        register(BehaviorNodeTypes.WAIT, WAIT_EXECUTOR);
-        register(BehaviorNodeTypes.IDLE, IDLE_EXECUTOR);
-        register(BehaviorNodeTypes.SET_BLACKBOARD, SET_BLACKBOARD_EXECUTOR);
-        register(BehaviorNodeTypes.CLEAR_BLACKBOARD, CLEAR_BLACKBOARD_EXECUTOR);
-        register(BehaviorNodeTypes.REACTIVE_SEQUENCE, REACTIVE_SEQUENCE_EXECUTOR);
-        register(BehaviorNodeTypes.PRIORITY_SELECTOR, PRIORITY_SELECTOR_EXECUTOR);
-        register(BehaviorNodeTypes.REPEAT, REPEAT_EXECUTOR);
-        register(BehaviorNodeTypes.RETRY, RETRY_EXECUTOR);
-        register(BehaviorNodeTypes.TIMEOUT, TIMEOUT_EXECUTOR);
-        register(BehaviorNodeTypes.COOLDOWN, COOLDOWN_EXECUTOR);
-        register(BehaviorNodeTypes.ALWAYS_SUCCEED, ALWAYS_SUCCEED_EXECUTOR);
-        register(BehaviorNodeTypes.ALWAYS_FAIL, ALWAYS_FAIL_EXECUTOR);
-        register(BehaviorNodeTypes.BLACKBOARD_VALUE_CHANGED, BLACKBOARD_VALUE_CHANGED_EXECUTOR);
+        register(BehaviorRootNode.TYPE_ID, ROOT_EXECUTOR);
+        register(BehaviorSubtreeNode.TYPE_ID, SUBTREE_EXECUTOR);
+        register(BehaviorSequenceNode.TYPE_ID, SEQUENCE_EXECUTOR);
+        register(BehaviorSelectorNode.TYPE_ID, SELECTOR_EXECUTOR);
+        register(BehaviorConditionNode.TYPE_ID, CONDITION_EXECUTOR);
+        register(BehaviorGuardNode.TYPE_ID, GUARD_EXECUTOR);
+        register(BehaviorInverterNode.TYPE_ID, INVERTER_EXECUTOR);
+        register(BehaviorHasValidTargetNode.TYPE_ID, HAS_VALID_TARGET_EXECUTOR);
+        register(BehaviorWaitNode.TYPE_ID, WAIT_EXECUTOR);
+        register(BehaviorIdleNode.TYPE_ID, IDLE_EXECUTOR);
+        register(BehaviorSetBlackboardNode.TYPE_ID, SET_BLACKBOARD_EXECUTOR);
+        register(BehaviorClearBlackboardNode.TYPE_ID, CLEAR_BLACKBOARD_EXECUTOR);
+        register(BehaviorCompositeNode.Kind.REACTIVE_SEQUENCE.typeId(), REACTIVE_SEQUENCE_EXECUTOR);
+        register(BehaviorCompositeNode.Kind.PRIORITY_SELECTOR.typeId(), PRIORITY_SELECTOR_EXECUTOR);
+        register(BehaviorDecoratorNode.Kind.REPEAT.typeId(), REPEAT_EXECUTOR);
+        register(BehaviorDecoratorNode.Kind.RETRY.typeId(), RETRY_EXECUTOR);
+        register(BehaviorDecoratorNode.Kind.TIMEOUT.typeId(), TIMEOUT_EXECUTOR);
+        register(BehaviorDecoratorNode.Kind.COOLDOWN.typeId(), COOLDOWN_EXECUTOR);
+        register(BehaviorDecoratorNode.Kind.ALWAYS_SUCCEED.typeId(), ALWAYS_SUCCEED_EXECUTOR);
+        register(BehaviorDecoratorNode.Kind.ALWAYS_FAIL.typeId(), ALWAYS_FAIL_EXECUTOR);
+        register(BehaviorUtilityConditionNode.Kind.BLACKBOARD_VALUE_CHANGED.typeId(), BLACKBOARD_VALUE_CHANGED_EXECUTOR);
         BehaviorEntityExecutors.register(this);
     }
 
     private static String requireKey(BehaviorNodeContext context) {
-        String key = context.input(BehaviorNodeTypes.BLACKBOARD_KEY_PORT, String.class);
+        String key = context.input(StandardPorts.KEY.getId(), String.class);
         if (key == null || key.isBlank()) throw new BehaviorContractViolation("Blackboard input is missing");
         return key.trim();
     }
@@ -205,7 +219,7 @@ public final class BehaviorNodeExecutorRegistry {
     private static final class WaitExecutor implements BehaviorNodeExecutor {
         @Override
         public void enter(BehaviorNodeContext context) {
-            Integer ticks = require(context.input(BehaviorNodeTypes.TICKS_PORT, Integer.class),
+            Integer ticks = require(context.input(StandardPorts.BEHAVIOR_TICKS.getId(), Integer.class),
                     "Wait ticks are missing");
             context.setMemory(deadline(context.gameTick(), ticks));
         }
@@ -230,7 +244,7 @@ public final class BehaviorNodeExecutorRegistry {
         @Override
         public BehaviorResult update(BehaviorNodeContext context) {
             Integer interval = require(context.input(
-                    BehaviorNodeTypes.POLL_INTERVAL_PORT, Integer.class),
+                    StandardPorts.POLL_INTERVAL.getId(), Integer.class),
                     "Idle poll interval is missing");
             if (interval <= 0) throw new BehaviorContractViolation("Idle poll interval must be positive");
             context.requestWakeupAt(deadline(context.gameTick(), interval));
@@ -303,7 +317,7 @@ public final class BehaviorNodeExecutorRegistry {
         public BehaviorResult update(BehaviorNodeContext context) {
             RepeatState state = require(context.memory() instanceof RepeatState value ? value : null,
                     "Repeat state is unavailable");
-            int count = require(context.input(BehaviorNodeTypes.COUNT_PORT, Integer.class),
+            int count = require(context.input(StandardPorts.COUNT.getId(), Integer.class),
                     "Repeat count is missing");
             if (count < 0) throw new BehaviorContractViolation("Repeat count cannot be negative");
             if (context.gameTick() < state.nextAttemptTick()) {
@@ -321,7 +335,7 @@ public final class BehaviorNodeExecutorRegistry {
                 return retryFailures ? BehaviorResult.FAILURE : BehaviorResult.SUCCESS;
             }
             int interval = retryFailures
-                    ? require(context.input(BehaviorNodeTypes.RETRY_INTERVAL_PORT, Integer.class),
+                    ? require(context.input(StandardPorts.RETRY_INTERVAL.getId(), Integer.class),
                     "Retry interval is missing") : 1;
             if (interval <= 0) throw new BehaviorContractViolation("Attempt interval must be positive");
             long next = deadline(context.gameTick(), interval);
@@ -347,7 +361,7 @@ public final class BehaviorNodeExecutorRegistry {
     private static final class TimeoutExecutor implements BehaviorNodeExecutor {
         @Override
         public void enter(BehaviorNodeContext context) {
-            int ticks = require(context.input(BehaviorNodeTypes.TICKS_PORT, Integer.class),
+            int ticks = require(context.input(StandardPorts.BEHAVIOR_TICKS.getId(), Integer.class),
                     "Timeout ticks are missing");
             context.setMemory(new TimeoutState(deadline(context.gameTick(), ticks), false));
         }
@@ -387,7 +401,7 @@ public final class BehaviorNodeExecutorRegistry {
             if (context.gameTick() < availableAt) return BehaviorResult.FAILURE;
             BehaviorResult result = context.tickChild(0);
             if (result == BehaviorResult.SUCCESS) {
-                int ticks = require(context.input(BehaviorNodeTypes.COOLDOWN_TICKS_PORT, Integer.class),
+                int ticks = require(context.input(StandardPorts.COOLDOWN_TICKS.getId(), Integer.class),
                         "Cooldown ticks are missing");
                 context.setMemory(deadline(context.gameTick(), ticks));
             }

@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.graph.storage;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -34,6 +34,13 @@ public class DynamicGraphManager {
     private static final Set<String> invalidDynamicGraphIds = ConcurrentHashMap.newKeySet();
     private static final ConcurrentHashMap<GraphKind, CopyOnWriteArrayList<ReloadListener>> reloadListeners =
             new ConcurrentHashMap<>();
+    @Nullable
+    private static PendingStartupActivation pendingStartupActivation;
+
+    private record PendingStartupActivation(MinecraftServer server,
+                                            Map<String, GraphAssetDescriptor> oldGraphs,
+                                            Map<String, GraphAssetDescriptor> newGraphs) {
+    }
 
     @FunctionalInterface
     public interface ReloadListener {
@@ -116,7 +123,28 @@ public class DynamicGraphManager {
         }
     }
 
+    public static void prepareForServerStart(MinecraftServer server) {
+        loadAllFromDisk(server, false);
+    }
+
+    public static void activatePreparedGraphs(MinecraftServer server) {
+        PendingStartupActivation pending = pendingStartupActivation;
+        if (pending == null || pending.server() != server) return;
+        if (server.overworld() == null) {
+            GeometryNode.LOGGER.error(
+                    "[DynamicGraphManager] Cannot activate startup graphs before the overworld is available");
+            return;
+        }
+
+        pendingStartupActivation = null;
+        notifyBulkReload(server, pending.oldGraphs(), pending.newGraphs());
+    }
+
     public static void loadAllFromDisk(MinecraftServer server) {
+        loadAllFromDisk(server, true);
+    }
+
+    private static void loadAllFromDisk(MinecraftServer server, boolean activateImmediately) {
         Map<String, GraphAssetDescriptor> oldGraphs = Map.copyOf(dynamicGraphCache);
         dynamicGraphCache.clear();
         invalidDynamicGraphIds.clear();
@@ -125,7 +153,7 @@ public class DynamicGraphManager {
         try {
             Path folder = server.getWorldPath(GRAPH_DIR).toAbsolutePath().normalize();
             if (!java.nio.file.Files.exists(folder) || !java.nio.file.Files.isDirectory(folder)) {
-                publishDynamicSnapshot(server, oldGraphs);
+                publishDynamicSnapshot(server, oldGraphs, activateImmediately);
                 return;
             }
 
@@ -151,19 +179,27 @@ public class DynamicGraphManager {
                             }
                         });
             }
-            publishDynamicSnapshot(server, oldGraphs);
+            publishDynamicSnapshot(server, oldGraphs, activateImmediately);
             GeometryNode.LOGGER.info("[DynamicGraphManager] Total load {} graphs。", dynamicGraphCache.size());
         } catch (Exception e) {
-            publishDynamicSnapshot(server, oldGraphs);
+            publishDynamicSnapshot(server, oldGraphs, activateImmediately);
             GeometryNode.LOGGER.error("[DynamicGraphManager] Load content failed! ", e);
         }
     }
 
     private static void publishDynamicSnapshot(MinecraftServer server,
-                                               Map<String, GraphAssetDescriptor> oldGraphs) {
+                                               Map<String, GraphAssetDescriptor> oldGraphs,
+                                               boolean activateImmediately) {
         GraphAssetLifecycleIndex.INSTANCE.replaceDynamicGraphs(server, dynamicGraphCache,
                 invalidDynamicGraphIds);
-        notifyBulkReload(server, oldGraphs, dynamicGraphCache);
+        Map<String, GraphAssetDescriptor> newGraphs = Map.copyOf(dynamicGraphCache);
+        if (activateImmediately) {
+            pendingStartupActivation = null;
+            notifyBulkReload(server, oldGraphs, newGraphs);
+        } else {
+            pendingStartupActivation = new PendingStartupActivation(
+                    server, Map.copyOf(oldGraphs), newGraphs);
+        }
     }
 
     private static void notifyBulkReload(MinecraftServer server,

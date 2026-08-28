@@ -1,13 +1,15 @@
 package com.mine.geometry_node.core.engine.behavior.compile;
 
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeParameter;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeDiagnostic;
+import com.mine.geometry_node.core.node.document.behavior.BehaviorSubtreeParameter;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledDataIndex;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
+import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDiagnostic;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,8 +29,6 @@ public final class BehaviorTreeLinker {
     public static BehaviorTreePlan link(
             BehaviorTreePlan root, Function<String, @Nullable BehaviorTreePlan> resolver) {
         if (root.isLinked() || root.dependencyManifest().dependencies().isEmpty()) return root;
-        List<BehaviorTreeDiagnostic> diagnostics = BehaviorSubtreePlanValidator.validate(root, resolver);
-        if (!diagnostics.isEmpty()) throw new BehaviorCompilationException(diagnostics);
         Builder builder = new Builder(root, resolver);
         return builder.build();
     }
@@ -40,6 +40,7 @@ public final class BehaviorTreeLinker {
         private final List<BehaviorTreePlan.BlackboardFrameInfo> frameInfos = new ArrayList<>();
         private final Map<Integer, BehaviorTreePlan.SubtreeCallBoundary> calls = new LinkedHashMap<>();
         private final List<BehaviorTreePlan.SubtreeDependency> dependencies = new ArrayList<>();
+        private final Deque<String> activeAssets = new ArrayDeque<>();
 
         private Builder(BehaviorTreePlan root,
                         Function<String, @Nullable BehaviorTreePlan> resolver) {
@@ -97,6 +98,7 @@ public final class BehaviorTreeLinker {
                         "Linked behavior tree exceeds " + MAX_LINKED_NODES + " nodes");
             }
             int offset = nodes.size();
+            activeAssets.addLast(source.assetId());
             int[] indexes = new int[source.getNodeCount()];
             for (int local = 0; local < source.getNodeCount(); local++) indexes[local] = offset + local;
             for (int local = 0; local < source.getNodeCount(); local++) {
@@ -126,16 +128,11 @@ public final class BehaviorTreeLinker {
 
             for (BehaviorTreePlan.SubtreeDependency call : source.dependencyManifest().dependencies()) {
                 int localCall = source.getNodeIndex(call.callNodeId());
-                if (localCall < 0) {
-                    throw new IllegalStateException("Subtree manifest references a missing call node: "
-                            + source.assetId() + "/" + call.callNodeId());
-                }
+                if (localCall < 0) continue;
                 int callNode = indexes[localCall];
                 BehaviorTreePlan target = resolver.apply(call.assetId());
-                if (target == null) {
-                    throw new IllegalStateException("Validated subtree asset became unavailable: "
-                            + call.assetId());
-                }
+                if (target == null || target.getRootNode() < 0
+                        || activeAssets.contains(target.assetId())) continue;
                 if (frameInfos.size() >= MAX_CALL_FRAMES) {
                     throw linkLimit(source, "SUBTREE_CALL_FRAME_LIMIT",
                             "Linked behavior tree exceeds " + MAX_CALL_FRAMES + " call frames");
@@ -156,6 +153,7 @@ public final class BehaviorTreeLinker {
                 dependencies.add(new BehaviorTreePlan.SubtreeDependency(nodes.get(callNode).id,
                         call.assetId(), call.inputMapping(), call.outputMapping()));
             }
+            activeAssets.removeLast();
             return indexes[source.getRootNode()];
         }
 
@@ -167,10 +165,7 @@ public final class BehaviorTreeLinker {
                 String parameterName = reverse ? second : first;
                 String callerKey = reverse ? first : second;
                 BehaviorTreePlan.SubtreeParameter parameter = target.subtreeSignature().find(parameterName);
-                if (parameter == null || parameter.direction() != direction) {
-                    throw new IllegalStateException("Validated subtree parameter became unavailable: "
-                            + target.assetId() + "/" + parameterName);
-                }
+                if (parameter == null || parameter.direction() != direction) return;
                 result.add(reverse
                         ? new BehaviorTreePlan.SubtreeParameterTransfer(
                         callerKey, parameter.blackboardKey(), parameter.type())
@@ -182,7 +177,7 @@ public final class BehaviorTreeLinker {
 
         private static BehaviorCompilationException linkLimit(
                 BehaviorTreePlan plan, String code, String message) {
-            return new BehaviorCompilationException(List.of(new BehaviorTreeDiagnostic(
+            return new BehaviorCompilationException(List.of(new GraphDiagnostic(
                     plan.assetId(), code, message, "", "", "")));
         }
     }

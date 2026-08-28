@@ -1,6 +1,8 @@
 package com.mine.geometry_node.core.node.nodes.behavior.control;
 
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorNodeTypes;
+import com.mine.geometry_node.core.node.port.StandardPorts;
+
+import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructureConnections;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
@@ -56,13 +58,11 @@ final class BehaviorCompositeDefinition {
     }
 
     private static PortDef parentPort() {
-        return PortDef.create(BehaviorNodeTypes.PARENT_PORT,
-                "geometry_node.port." + BehaviorNodeTypes.PARENT_PORT,
-                PortType.BEHAVIOR_STRUCTURE);
+        return StandardPorts.BEHAVIOR_PARENT.toInput();
     }
 
     private static PortDef childPort(int index) {
-        return new PortDef(BehaviorNodeTypes.childPort(index),
+        return new PortDef(BehaviorTreeStructureConnections.childPort(index),
                 Component.translatable("geometry_node.port.behavior_child_indexed", index),
                 PortType.BEHAVIOR_STRUCTURE, null, false);
     }

@@ -2,11 +2,10 @@ package com.mine.geometry_node.core.engine.graph.storage;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraphDependencies;
-import com.mine.geometry_node.core.engine.graph.compile.GraphDependencyValidator;
-import com.mine.geometry_node.core.engine.graph.compile.ResolvedGraphDependencyDiagnostic;
-import com.mine.geometry_node.core.engine.graph.compile.ResolvedGraphDependencyValidator;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.dependency.CompiledGraphDependencies;
+import com.mine.geometry_node.core.engine.graph.compile.dependency.GraphDependencyDiagnostic;
+import com.mine.geometry_node.core.engine.graph.compile.dependency.GraphDependencyValidator;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
@@ -102,11 +101,11 @@ public final class GraphAssetLifecycleIndex {
         return snapshot.invalidIds;
     }
 
-    public synchronized List<ResolvedGraphDependencyDiagnostic> diagnostics(String graphId) {
+    public synchronized List<GraphDependencyDiagnostic> diagnostics(String graphId) {
         return snapshot.diagnostics.getOrDefault(graphId, List.of());
     }
 
-    public synchronized Map<String, List<ResolvedGraphDependencyDiagnostic>> diagnostics() {
+    public synchronized Map<String, List<GraphDependencyDiagnostic>> diagnostics() {
         return snapshot.diagnostics;
     }
 
@@ -169,21 +168,21 @@ public final class GraphAssetLifecycleIndex {
                         ignored -> new TreeSet<>()).add(graphId)));
 
         Set<String> invalid = new TreeSet<>(invalidDynamicIds);
-        Map<String, LinkedHashSet<ResolvedGraphDependencyDiagnostic>> diagnostics = new TreeMap<>();
+        Map<String, LinkedHashSet<GraphDependencyDiagnostic>> diagnostics = new TreeMap<>();
         invalidDynamicIds.forEach(graphId -> addDiagnostic(diagnostics,
-                new ResolvedGraphDependencyDiagnostic(graphId, "DYNAMIC_GRAPH_COMPILE_INVALID",
+                new GraphDependencyDiagnostic(graphId, "DYNAMIC_GRAPH_COMPILE_INVALID",
                         "Dynamic graph document does not have a compiled artifact", "", graphId)));
         boolean changed;
         do {
             changed = false;
             for (Map.Entry<String, GraphAssetDescriptor> entry : selected.entrySet()) {
                 if (invalid.contains(entry.getKey())) continue;
-                for (String dependencyId : dependenciesOf(entry.getValue().artifact())) {
+                for (String dependencyId : requiredDependenciesOf(entry.getValue().artifact())) {
                     GraphAssetDescriptor dependency = selected.get(dependencyId);
                     if (dependency == null || invalid.contains(dependencyId)
                             || dependency.runtimeKind() != entry.getValue().runtimeKind()) {
                         changed |= invalid.add(entry.getKey());
-                        addDiagnostic(diagnostics, new ResolvedGraphDependencyDiagnostic(
+                        addDiagnostic(diagnostics, new GraphDependencyDiagnostic(
                                 entry.getKey(), dependency == null
                                         ? "GRAPH_DEPENDENCY_MISSING" : "GRAPH_DEPENDENCY_INVALID",
                                 dependency == null ? "Graph dependency is unavailable"
@@ -202,63 +201,16 @@ public final class GraphAssetLifecycleIndex {
         Set<String> cycleInvalid = GraphDependencyValidator.findInvalidGraphs(cycleCandidates);
         for (String graphId : cycleInvalid) {
             invalid.add(graphId);
-            addDiagnostic(diagnostics, new ResolvedGraphDependencyDiagnostic(graphId,
+            addDiagnostic(diagnostics, new GraphDependencyDiagnostic(graphId,
                     "GRAPH_DEPENDENCY_CYCLE", "Graph belongs to or transitively depends on a cycle",
                     "", graphId));
         }
-
-        // Resolved validation is repeated because one invalid signature can make callers
-        // invalid and must then be visible as unavailable to their own family validator.
-        do {
-            changed = false;
-            Map<String, CompiledGraph> resolvable = new HashMap<>();
-            selected.forEach((graphId, descriptor) -> {
-                if (!invalid.contains(graphId)) resolvable.put(graphId, descriptor.artifact());
-            });
-            for (Map.Entry<String, GraphAssetDescriptor> entry : selected.entrySet()) {
-                if (!(entry.getValue().artifact() instanceof ResolvedGraphDependencyValidator validator)) {
-                    continue;
-                }
-                List<ResolvedGraphDependencyDiagnostic> resolvedDiagnostics;
-                try {
-                    resolvedDiagnostics = validator.validateResolvedDependencies(resolvable::get);
-                } catch (RuntimeException exception) {
-                    resolvedDiagnostics = List.of(new ResolvedGraphDependencyDiagnostic(
-                            entry.getKey(), "RESOLVED_DEPENDENCY_VALIDATION_FAILED",
-                            "Resolved dependency validator failed: " + exception.getClass().getSimpleName(),
-                            "", entry.getKey()));
-                }
-                for (ResolvedGraphDependencyDiagnostic diagnostic : resolvedDiagnostics) {
-                    String diagnosticAsset = entry.getKey();
-                    ResolvedGraphDependencyDiagnostic normalized =
-                            new ResolvedGraphDependencyDiagnostic(diagnosticAsset, diagnostic.code(),
-                                    diagnostic.message(), diagnostic.nodeId(),
-                                    diagnostic.relatedAssetId());
-                    addDiagnostic(diagnostics, normalized);
-                    changed |= invalid.add(diagnosticAsset);
-                }
-            }
-
-            // A parent of any invalid graph is also fail-closed. Family validators still run on
-            // invalid parents above, allowing them to provide a call-site-specific diagnostic.
-            for (Map.Entry<String, GraphAssetDescriptor> entry : selected.entrySet()) {
-                if (!invalid.contains(entry.getKey())
-                        && dependenciesOf(entry.getValue().artifact()).stream().anyMatch(invalid::contains)) {
-                    String invalidDependency = dependenciesOf(entry.getValue().artifact()).stream()
-                            .filter(invalid::contains).sorted().findFirst().orElse("");
-                    changed |= invalid.add(entry.getKey());
-                    addDiagnostic(diagnostics, new ResolvedGraphDependencyDiagnostic(entry.getKey(),
-                            "GRAPH_DEPENDENCY_INVALID", "Graph dependency is invalid", "",
-                            invalidDependency));
-                }
-            }
-        } while (changed);
 
         Map<String, GraphAssetDescriptor> effective = new LinkedHashMap<>(selected);
         invalid.forEach(effective::remove);
         Map<String, Set<String>> immutableReverse = new HashMap<>();
         reverse.forEach((graphId, dependents) -> immutableReverse.put(graphId, Set.copyOf(dependents)));
-        Map<String, List<ResolvedGraphDependencyDiagnostic>> immutableDiagnostics = new TreeMap<>();
+        Map<String, List<GraphDependencyDiagnostic>> immutableDiagnostics = new TreeMap<>();
         diagnostics.forEach((graphId, values) -> immutableDiagnostics.put(graphId, List.copyOf(values)));
         return new Snapshot(Map.copyOf(effective), Map.copyOf(selected),
                 Map.copyOf(immutableReverse), Set.copyOf(invalid), Map.copyOf(immutableDiagnostics));
@@ -332,9 +284,15 @@ public final class GraphAssetLifecycleIndex {
                 ? dependencies.graphDependencies() : Set.of();
     }
 
+    private static Set<String> requiredDependenciesOf(CompiledGraph graph) {
+        return graph instanceof CompiledGraphDependencies dependencies
+                && dependencies.requiresAvailableDependencies()
+                ? dependencies.graphDependencies() : Set.of();
+    }
+
     private static void addDiagnostic(
-            Map<String, LinkedHashSet<ResolvedGraphDependencyDiagnostic>> diagnostics,
-            ResolvedGraphDependencyDiagnostic diagnostic) {
+            Map<String, LinkedHashSet<GraphDependencyDiagnostic>> diagnostics,
+            GraphDependencyDiagnostic diagnostic) {
         diagnostics.computeIfAbsent(diagnostic.assetId(), ignored -> new LinkedHashSet<>())
                 .add(diagnostic);
     }
@@ -343,7 +301,7 @@ public final class GraphAssetLifecycleIndex {
                             Map<String, GraphAssetDescriptor> selected,
                             Map<String, Set<String>> reverseDependencies,
                             Set<String> invalidIds,
-                            Map<String, List<ResolvedGraphDependencyDiagnostic>> diagnostics) {
+                            Map<String, List<GraphDependencyDiagnostic>> diagnostics) {
         private static final Snapshot EMPTY = new Snapshot(Map.of(), Map.of(), Map.of(), Set.of(), Map.of());
     }
 }

@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.port.PortType;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorTreeConnections;
+import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructureConnections;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.List;
@@ -23,7 +23,7 @@ public class CmdConnect implements ICommand {
     private String mDisplacedInboundPortId;
     private Connection mDisplacedExecutionOutput;
     private Connection mDisplacedBehaviorOutput;
-    private BehaviorTreeConnections.ParentConnection mDisplacedBehaviorParent;
+    private BehaviorTreeStructureConnections.ParentConnection mDisplacedBehaviorParent;
 
     public CmdConnect(GraphController controller, NodeGraph graph, String outNodeId, String outPortId, String inNodeId, String inPortId) {
         this.mController = controller;

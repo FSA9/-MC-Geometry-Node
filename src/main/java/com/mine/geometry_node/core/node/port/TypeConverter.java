@@ -215,6 +215,13 @@ public class TypeConverter {
     @Nullable
     private static Entity resolveEntity(UUID uuid, @Nullable GraphDataContext ctx) {
         if (ctx == null || ctx.getLevel() == null) return null;
-        return ctx.getLevel().getEntity(uuid);
+        Entity entity = ctx.getLevel().getEntity(uuid);
+        if (entity != null) return entity;
+        for (var level : ctx.getLevel().getServer().getAllLevels()) {
+            if (level == ctx.getLevel()) continue;
+            entity = level.getEntity(uuid);
+            if (entity != null) return entity;
+        }
+        return null;
     }
 }

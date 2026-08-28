@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.node.document;
 
 import com.google.gson.annotations.SerializedName;
-import com.mine.geometry_node.core.engine.behavior.document.BehaviorSubtreeCall;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
+import com.mine.geometry_node.core.node.document.behavior.BehaviorSubtreeCall;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 

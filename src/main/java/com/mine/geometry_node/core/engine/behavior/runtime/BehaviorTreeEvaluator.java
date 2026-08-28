@@ -7,7 +7,7 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationR
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionFailure;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorBudgetExceededException;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledDataIndex;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.data;
 
-import com.mine.geometry_node.core.engine.graph.compile.CompiledDataIndex;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;

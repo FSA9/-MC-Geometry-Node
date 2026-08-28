@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugSnapshot;
 import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugAccess;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
-import com.mine.geometry_node.core.engine.graph.compile.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import net.minecraft.resources.ResourceKey;

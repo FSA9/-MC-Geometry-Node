@@ -152,7 +152,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.LOOK_AT,
                 NodeCapabilities.Lifecycle.CONTINUOUS, Set.of(NodeCapabilities.ResourceUse.LOOK));
         registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.ATTACK_TARGET,
-                NodeCapabilities.Lifecycle.SUSPENDING, Set.of(NodeCapabilities.ResourceUse.COMBAT));
+                NodeCapabilities.Lifecycle.INSTANT, Set.of(NodeCapabilities.ResourceUse.TARGET));
 
         registry.register("layout", new RerouteNode());
 

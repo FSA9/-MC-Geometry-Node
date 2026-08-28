@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 
 import java.io.Reader;
 import java.io.StringReader;

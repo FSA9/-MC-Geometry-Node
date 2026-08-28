@@ -25,6 +25,7 @@ public final class ScopedStateValueCodec {
 
     public static Tag encode(Object value, HolderLookup.Provider registries, String location) {
         validate(value, location);
+        Object comparable = value instanceof Entity entity ? entity.getUUID() : value;
         Tag encoded;
         try {
             encoded = GraphValueCodecRegistry.toTag(value, registries);
@@ -43,7 +44,7 @@ public final class ScopedStateValueCodec {
             throw new ScopedStateAccessException(
                     "Persistent blackboard value cannot be decoded after encoding: " + location);
         }
-        if (decoded == null || !equivalent(value, decoded)) {
+        if (decoded == null || !equivalent(comparable, decoded)) {
             throw new ScopedStateAccessException(
                     "Persistent blackboard value does not round-trip losslessly: " + location);
         }
@@ -96,8 +97,7 @@ public final class ScopedStateValueCodec {
 
     private static void requireLossless(Object value, String location, int depth,
                                         IdentityHashMap<Object, Boolean> visiting) {
-        if (value == null || depth > 16 || value instanceof Entity
-                || !GraphValueCodecRegistry.isSupported(value)) {
+        if (value == null || depth > 16 || !GraphValueCodecRegistry.isSupported(value)) {
             throw new ScopedStateAccessException(
                     "Persistent blackboard value is not losslessly serializable: " + location);
         }
