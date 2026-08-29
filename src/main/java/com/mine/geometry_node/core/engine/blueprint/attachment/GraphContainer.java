@@ -1,11 +1,12 @@
 package com.mine.geometry_node.core.engine.blueprint.attachment;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcessSerializer;
-import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.engine.graph.scheduling.DueTickScheduler;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -69,8 +70,9 @@ public class GraphContainer {
      * [智能获取进程] 自带热更新比对机制。
      */
     public BlueprintProcess getProcess(String graphId) {
+        graphId = GraphAssetId.require(graphId);
         BlueprintProcess process = this.processes.get(graphId);
-        BlueprintPlan latestIndex = BlueprintEngine.getGraphIndex(graphId);
+        BlueprintPlan latestIndex = BlueprintRuntime.INSTANCE.getGraphIndex(graphId);
 
         if (latestIndex != null) {
             // 如果内存没进程，或者图纸版本更新了，强行重建
@@ -106,16 +108,17 @@ public class GraphContainer {
     }
 
     public void removeProcess(String graphId, GraphCloseMode closeMode) {
-        BlueprintProcess process = this.processes.get(graphId);
+        String canonicalGraphId = GraphAssetId.require(graphId);
+        BlueprintProcess process = this.processes.get(canonicalGraphId);
         if (process == null) return;
 
         GraphCloseMode mode = closeMode != null ? closeMode : GraphCloseMode.IMMEDIATE;
         if (mode == GraphCloseMode.DRAIN) {
             this.dirtyMarker.run();
-            process.requestDrain(() -> completeDrainingProcess(graphId, process));
+            process.requestDrain(() -> completeDrainingProcess(canonicalGraphId, process));
             return;
         }
-        removeProcessNow(graphId, process, "graph_unloaded");
+        removeProcessNow(canonicalGraphId, process, "graph_unloaded");
     }
 
     public Collection<BlueprintProcess> getProcesses() {

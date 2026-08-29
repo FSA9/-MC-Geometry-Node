@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.player;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputStateManager;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -52,6 +52,6 @@ public class IsKeyPressed extends BaseNode {
         }
 
         // 瞬间 O(1) 性能查询服务端的内存字典
-        return PlayerInputStateManager.isKeyPressed(entity.getUUID(), keyId);
+        return BlueprintRuntime.INSTANCE.isKeyPressed(entity, keyId);
     }
 }

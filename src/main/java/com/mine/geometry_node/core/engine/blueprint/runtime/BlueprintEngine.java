@@ -3,15 +3,14 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.attachment.*;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
-import com.mine.geometry_node.core.engine.blueprint.event.BlueprintEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityInventoryGainTracker;
 import com.mine.geometry_node.core.engine.blueprint.attachment.GlobalGraphStorage;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.EventSubscription;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.GraphSubscriptionIndex;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
-import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
+import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
-import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
@@ -31,25 +30,47 @@ import java.util.function.Function;
  * * 经过重构，支持“常驻进程 (Persistent VM)”架构。
  * 负责协调事件派发，将事件注入到已经存在的进程中，通过轻量级线程执行。
  */
-public class BlueprintEngine {
+public final class BlueprintEngine {
 
     // ==========================================
     // 高性能事件订阅字典 (保持现状)
     // ==========================================
     private static final String RECEIVE_BLUEPRINT_EVENT_TYPE = "receive_blueprint";
     private static final String MULTIBLOCK_BUILT_EVENT_TYPE = "on_multiblock_built";
-    private static final Map<String, Map<Entity, Set<String>>> eventSubscribers = new HashMap<>();
-    private static final GraphSubscriptionIndex graphSubscriptions = new GraphSubscriptionIndex();
+    private final Map<MinecraftServer, ServerState> servers = new WeakHashMap<>();
+    private final Consumer<Entity> activityMarker;
+    private final EntityInventoryGainTracker inventoryGainTracker;
 
-    private static void addSubscriber(String frequency, Entity entity, String graphId) {
-        eventSubscribers
+    public BlueprintEngine(Consumer<Entity> activityMarker, EntityInventoryGainTracker inventoryGainTracker) {
+        this.activityMarker = Objects.requireNonNull(activityMarker, "activityMarker");
+        this.inventoryGainTracker = Objects.requireNonNull(inventoryGainTracker, "inventoryGainTracker");
+    }
+
+    private ServerState state(MinecraftServer server) {
+        return servers.computeIfAbsent(server, ignored -> new ServerState());
+    }
+
+    private ServerState state(ServerLevel level) {
+        return state(level.getServer());
+    }
+
+    private ServerState state(Entity entity) {
+        if (!(entity.level() instanceof ServerLevel level)) {
+            throw new IllegalArgumentException("Blueprint entity must belong to a server level");
+        }
+        return state(level);
+    }
+
+    private void addSubscriber(String frequency, Entity entity, String graphId) {
+        state(entity).eventSubscribers
                 .computeIfAbsent(frequency, k -> new WeakHashMap<>())
                 .computeIfAbsent(entity, k -> new HashSet<>())
                 .add(normalizeSubscriptionGraphId(graphId));
     }
 
-    private static void removeSubscriber(String frequency, Entity entity, String graphId) {
-        Map<Entity, Set<String>> entities = eventSubscribers.get(frequency);
+    private void removeSubscriber(String frequency, Entity entity, String graphId) {
+        Map<String, Map<Entity, Set<String>>> subscribers = state(entity).eventSubscribers;
+        Map<Entity, Set<String>> entities = subscribers.get(frequency);
         if (entities == null) return;
 
         Set<String> graphIds = entities.get(entity);
@@ -61,13 +82,13 @@ public class BlueprintEngine {
         }
 
         if (entities.isEmpty()) {
-            eventSubscribers.remove(frequency);
+            subscribers.remove(frequency);
         }
     }
 
-    private static void removeSubscribersForGraph(String graphId) {
+    private void removeSubscribersForGraph(ServerState state, String graphId) {
         String normalizedId = normalizeSubscriptionGraphId(graphId);
-        eventSubscribers.entrySet().removeIf(frequencyEntry -> {
+        state.eventSubscribers.entrySet().removeIf(frequencyEntry -> {
             Map<Entity, Set<String>> entities = frequencyEntry.getValue();
             entities.entrySet().removeIf(entityEntry -> {
                 entityEntry.getValue().remove(normalizedId);
@@ -81,7 +102,7 @@ public class BlueprintEngine {
     // 核心事件派发 API (重构点)
     // ==========================================
 
-    public static void dispatchEvent(@NotNull Entity target, String eventNodeId, @Nullable Map<String, Object> eventData) {
+    public void dispatchEvent(@NotNull Entity target, String eventNodeId, @Nullable Map<String, Object> eventData) {
         if (target.level().isClientSide()) return;
         dispatchEvent((ServerLevel) target.level(), target, eventNodeId, eventData);
     }
@@ -90,15 +111,16 @@ public class BlueprintEngine {
      * [通用事件分发]
      * 逻辑：查找关联的常驻进程 -> 从进程中派发轻量级执行线程
      */
-    public static void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId, @Nullable Map<String, Object> eventData) {
+    public void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId, @Nullable Map<String, Object> eventData) {
         Map<String, Object> eventPayload = snapshotEventData(eventData);
+        ServerState serverState = state(level);
 
         // 处理全局图
         refreshGlobalSubscriptions(level);
         LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
         GlobalGraphStorage globalStorage = GlobalGraphStorage.get(level.getServer().overworld());
 
-        for (EventSubscription subscription : graphSubscriptions.globalSubscriptionsFor(eventNodeId)) {
+        for (EventSubscription subscription : serverState.graphSubscriptions.globalSubscriptionsFor(eventNodeId)) {
             if (!globalStorage.getGraphs().contains(subscription.graphId())) continue;
             triggerSubscriptionOnProcess(level, target, subscription, eventPayload,
                     id -> levelAttachment.getProcess(id),
@@ -117,7 +139,7 @@ public class BlueprintEngine {
                                 entityAttachment.addProcess(process);
                             });
                 }
-                BlueprintEventHandler.markActive(target);
+                activityMarker.accept(target);
             }
         }
     }
@@ -125,7 +147,7 @@ public class BlueprintEngine {
     /**
      * [自定义事件派发] O(1) 广播
      */
-    public static void dispatchCustomEvent(@NotNull ServerLevel currentLevel, String frequency, @Nullable Map<String, Object> eventData) {
+    public void dispatchCustomEvent(@NotNull ServerLevel currentLevel, String frequency, @Nullable Map<String, Object> eventData) {
         if (frequency == null || frequency.trim().isEmpty()) return;
         Map<String, Object> eventPayload = snapshotEventData(eventData);
 
@@ -142,7 +164,7 @@ public class BlueprintEngine {
         }
 
         // 实体作用域
-        Map<Entity, Set<String>> entities = eventSubscribers.get(frequency);
+        Map<Entity, Set<String>> entities = state(currentLevel).eventSubscribers.get(frequency);
         if (entities != null) {
             Entity[] snapshot = entities.keySet().toArray(new Entity[0]);
             for (Entity target : snapshot) {
@@ -158,14 +180,14 @@ public class BlueprintEngine {
                                     id -> entityAttachment.getProcess(id),
                                     entityAttachment::addProcess);
                         }
-                        BlueprintEventHandler.markActive(target);
+                        activityMarker.accept(target);
                     }
                 }
             }
         }
     }
 
-    public static Set<String> getInterestedMultiblockStructureIds(@NotNull ServerLevel level, @Nullable Entity target) {
+    public Set<String> getInterestedMultiblockStructureIds(@NotNull ServerLevel level, @Nullable Entity target) {
         Set<String> structureIds = new HashSet<>();
 
         for (String graphId : getGlobalGraphsForEvent(level, MULTIBLOCK_BUILT_EVENT_TYPE)) {
@@ -184,7 +206,7 @@ public class BlueprintEngine {
         return structureIds.isEmpty() ? Collections.emptySet() : Collections.unmodifiableSet(structureIds);
     }
 
-    public static void dispatchMultiblockBuilt(@NotNull ServerLevel level,
+    public void dispatchMultiblockBuilt(@NotNull ServerLevel level,
                                                @Nullable Entity target,
                                                String structureId,
                                                @Nullable Map<String, Object> eventData) {
@@ -208,7 +230,7 @@ public class BlueprintEngine {
                             id -> entityAttachment.getProcess(id),
                             entityAttachment::addProcess);
                 }
-                BlueprintEventHandler.markActive(target);
+                activityMarker.accept(target);
             }
         }
     }
@@ -220,7 +242,7 @@ public class BlueprintEngine {
     /**
      * 核心逻辑：确保进程存在，并执行指定的事件分支
      */
-    private static void triggerSubscriptionOnProcess(ServerLevel level,
+    private void triggerSubscriptionOnProcess(ServerLevel level,
                                                      @Nullable Entity target,
                                                      EventSubscription subscription,
                                                      @Nullable Map<String, Object> eventData,
@@ -240,7 +262,7 @@ public class BlueprintEngine {
         process.executeEvent(subscription.nodeId(), eventData);
     }
 
-    private static void triggerCustomOnProcess(ServerLevel level, @Nullable Entity target, String graphId,
+    private void triggerCustomOnProcess(ServerLevel level, @Nullable Entity target, String graphId,
                                                String targetFrequency, @Nullable Map<String, Object> eventData,
                                                java.util.function.Function<String, BlueprintProcess> processFinder,
                                                Consumer<BlueprintProcess> mountAction) {
@@ -261,7 +283,7 @@ public class BlueprintEngine {
         }
     }
 
-    private static void triggerMultiblockOnProcess(ServerLevel level, @Nullable Entity target, String graphId, String structureId,
+    private void triggerMultiblockOnProcess(ServerLevel level, @Nullable Entity target, String graphId, String structureId,
                                                    @Nullable Map<String, Object> eventData,
                                                    java.util.function.Function<String, BlueprintProcess> processFinder,
                                                    Consumer<BlueprintProcess> mountAction) {
@@ -283,7 +305,7 @@ public class BlueprintEngine {
         }
     }
 
-    public static void executeEventNode(@NotNull ServerLevel level,
+    public void executeEventNode(@NotNull ServerLevel level,
                                         @Nullable Entity target,
                                         String graphId,
                                         BlueprintPlan index,
@@ -302,11 +324,11 @@ public class BlueprintEngine {
         process.setEnvironment(level, target);
         process.executeEvent(nodeId, snapshotEventData(eventData));
         if (target != null) {
-            BlueprintEventHandler.markActive(target);
+            activityMarker.accept(target);
         }
     }
 
-    private static void collectMultiblockStructureIds(String graphId, Set<String> structureIds) {
+    private void collectMultiblockStructureIds(String graphId, Set<String> structureIds) {
         BlueprintPlan index = getGraphIndex(graphId);
         if (index != null) {
             structureIds.addAll(index.getMultiblockStructureIds());
@@ -321,17 +343,17 @@ public class BlueprintEngine {
         return new LinkedHashMap<>(eventData);
     }
 
-    public static Set<String> getGlobalGraphsForEvent(@NotNull ServerLevel level, String eventType) {
+    public Set<String> getGlobalGraphsForEvent(@NotNull ServerLevel level, String eventType) {
         refreshGlobalSubscriptions(level);
-        return graphSubscriptions.globalGraphsFor(eventType);
+        return state(level).graphSubscriptions.globalGraphsFor(eventType);
     }
 
-    public static Set<String> getEntityGraphsForEvent(@NotNull Entity entity, String eventType) {
+    public Set<String> getEntityGraphsForEvent(@NotNull Entity entity, String eventType) {
         registerEntityListeners(entity);
-        return graphSubscriptions.entityGraphsFor(entity, eventType);
+        return state(entity).graphSubscriptions.entityGraphsFor(entity, eventType);
     }
 
-    public static void dispatchBoundEntityEvent(@NotNull ServerLevel level,
+    public void dispatchBoundEntityEvent(@NotNull ServerLevel level,
                                                 @NotNull Entity target,
                                                 String eventNodeId,
                                                 @Nullable Map<String, Object> eventData) {
@@ -346,7 +368,7 @@ public class BlueprintEngine {
                     entityAttachment::getProcess,
                     entityAttachment::addProcess);
         }
-        BlueprintEventHandler.markActive(target);
+        activityMarker.accept(target);
     }
 
     /**
@@ -354,7 +376,7 @@ public class BlueprintEngine {
      * This is used by graph-owned domains such as quests where broadcasting the
      * same lifecycle event to every bound graph would violate instance ownership.
      */
-    public static void dispatchBoundGraphEvent(@NotNull ServerLevel level,
+    public void dispatchBoundGraphEvent(@NotNull ServerLevel level,
                                                @NotNull Entity target,
                                                String graphId,
                                                String eventNodeId,
@@ -377,12 +399,13 @@ public class BlueprintEngine {
         }
     }
 
-    private static List<EventSubscription> getEntitySubscriptionsForEvent(@NotNull Entity entity, String eventType) {
+    private List<EventSubscription> getEntitySubscriptionsForEvent(@NotNull Entity entity, String eventType) {
         registerEntityListeners(entity);
-        return graphSubscriptions.entitySubscriptionsFor(entity, eventType);
+        return state(entity).graphSubscriptions.entitySubscriptionsFor(entity, eventType);
     }
 
-    private static void refreshGlobalSubscriptions(@NotNull ServerLevel level) {
+    private void refreshGlobalSubscriptions(@NotNull ServerLevel level) {
+        GraphSubscriptionIndex graphSubscriptions = state(level).graphSubscriptions;
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         for (String graphId : storage.getGraphs()) {
             BlueprintPlan index = getGraphIndex(graphId);
@@ -396,7 +419,8 @@ public class BlueprintEngine {
     // 绑定管理 (绑定即预热)
     // ==========================================
 
-    public static void bindGraph(Entity entity, String graphId) {
+    public void bindGraph(Entity entity, String graphId) {
+        graphId = GraphAssetId.require(graphId);
         BlueprintPlan index = getGraphIndex(graphId);
         if (index == null) return;
 
@@ -412,20 +436,21 @@ public class BlueprintEngine {
 
             registerEntityForGraph(entity, graphId);
             if (!index.findNodesByType(OnEntityGainItem.TYPE_ID).isEmpty()) {
-                EntityInventoryGainTracker.beginTracking(entity);
+                inventoryGainTracker.beginTracking(entity);
             }
-            BlueprintEventHandler.markActive(entity);
+            activityMarker.accept(entity);
             DebugRendererSessionManager.markDirty();
         }
     }
 
-    public static void bindGlobalGraph(ServerLevel level, String graphId) {
+    public void bindGlobalGraph(ServerLevel level, String graphId) {
+        graphId = GraphAssetId.require(graphId);
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         storage.addGraph(graphId);
 
         BlueprintPlan index = getGraphIndex(graphId);
         if (index != null) {
-            graphSubscriptions.registerGlobalGraph(graphId, index);
+            state(level).graphSubscriptions.registerGlobalGraph(graphId, index);
             LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
             BlueprintProcess process = attachment.getProcess(graphId);
             if (process == null || process.isDraining()) {
@@ -435,17 +460,18 @@ public class BlueprintEngine {
         DebugRendererSessionManager.markDirty();
     }
 
-    public static void unbindGraph(Entity entity, String graphId) {
+    public void unbindGraph(Entity entity, String graphId) {
         unbindGraph(entity, graphId, GraphCloseMode.IMMEDIATE);
     }
 
-    public static void unbindGraph(Entity entity, String graphId, GraphCloseMode closeMode) {
+    public void unbindGraph(Entity entity, String graphId, GraphCloseMode closeMode) {
+        graphId = GraphAssetId.require(graphId);
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
             attachment.unbindGraph(graphId, closeMode);
             unregisterEntityForGraph(entity, graphId);
             if (getEntityGraphsForEvent(entity, OnEntityGainItem.TYPE_ID).isEmpty()) {
-                EntityInventoryGainTracker.clear(entity);
+                inventoryGainTracker.clear(entity);
             }
             if (entity.level() instanceof ServerLevel level) {
                 DebugRendererSessionManager.removeSourceShapes(level, DebugRendererSessionManager.entitySourceKey(level, entity, graphId));
@@ -454,12 +480,13 @@ public class BlueprintEngine {
         }
     }
 
-    public static void unbindGlobalGraph(ServerLevel level, String graphId) {
+    public void unbindGlobalGraph(ServerLevel level, String graphId) {
         unbindGlobalGraph(level, graphId, GraphCloseMode.IMMEDIATE);
     }
 
-    public static void unbindGlobalGraph(ServerLevel level, String graphId, GraphCloseMode closeMode) {
-        graphSubscriptions.unregisterGlobalGraph(graphId, getGraphIndex(graphId));
+    public void unbindGlobalGraph(ServerLevel level, String graphId, GraphCloseMode closeMode) {
+        graphId = GraphAssetId.require(graphId);
+        state(level).graphSubscriptions.unregisterGlobalGraph(graphId, getGraphIndex(graphId));
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         storage.removeGraph(graphId);
         for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
@@ -469,7 +496,7 @@ public class BlueprintEngine {
         DebugRendererSessionManager.markDirty();
     }
 
-    public static void unbindAllGraphs(Entity entity) {
+    public void unbindAllGraphs(Entity entity) {
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
             for (String graphId : attachment.getBoundGraphs()) {
@@ -479,12 +506,13 @@ public class BlueprintEngine {
                 unregisterEntityForGraph(entity, graphId);
             }
             attachment.clearGraphs();
-            EntityInventoryGainTracker.clear(entity);
+            inventoryGainTracker.clear(entity);
             DebugRendererSessionManager.markDirty();
         }
     }
 
-    public static void unbindAllGlobalGraphs(ServerLevel level) {
+    public void unbindAllGlobalGraphs(ServerLevel level) {
+        GraphSubscriptionIndex graphSubscriptions = state(level).graphSubscriptions;
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         Set<String> graphIds = new HashSet<>(storage.getGraphs());
         for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
@@ -506,12 +534,12 @@ public class BlueprintEngine {
         DebugRendererSessionManager.markDirty();
     }
 
-    public static Set<String> getBoundGraphs(Entity entity) {
+    public Set<String> getBoundGraphs(Entity entity) {
         EntityGraphAttachment attachment = getAttachment(entity);
         return attachment != null ? attachment.getBoundGraphs() : Collections.emptySet();
     }
 
-    public static Set<String> getGlobalBoundGraphs(ServerLevel level) {
+    public Set<String> getGlobalBoundGraphs(ServerLevel level) {
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         return storage.getGraphs();
     }
@@ -520,7 +548,7 @@ public class BlueprintEngine {
     // 监听器注册
     // ==========================================
 
-    public static void registerEntityListeners(Entity entity) {
+    public void registerEntityListeners(Entity entity) {
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment == null || attachment.getBoundGraphs().isEmpty()) return;
         attachment.attachOwner(entity);
@@ -530,22 +558,22 @@ public class BlueprintEngine {
         }
     }
 
-    private static void registerEntityForGraph(Entity entity, String graphId) {
+    private void registerEntityForGraph(Entity entity, String graphId) {
         BlueprintPlan index = getGraphIndex(graphId);
         if (index == null) return;
-        graphSubscriptions.registerEntityGraph(entity, graphId, index);
+        state(entity).graphSubscriptions.registerEntityGraph(entity, graphId, index);
         for (String frequency : index.getReceiveBlueprintFrequencies()) {
             addSubscriber(frequency, entity, graphId);
         }
     }
 
-    private static void unregisterEntityForGraph(Entity entity, String graphId) {
+    private void unregisterEntityForGraph(Entity entity, String graphId) {
         BlueprintPlan index = getGraphIndex(graphId);
         unregisterEntityForGraph(entity, graphId, index);
     }
 
-    private static void unregisterEntityForGraph(Entity entity, String graphId, @Nullable BlueprintPlan index) {
-        graphSubscriptions.unregisterEntityGraph(entity, graphId, index);
+    private void unregisterEntityForGraph(Entity entity, String graphId, @Nullable BlueprintPlan index) {
+        state(entity).graphSubscriptions.unregisterEntityGraph(entity, graphId, index);
         if (index != null) {
             for (String frequency : index.getReceiveBlueprintFrequencies()) {
                 removeSubscriber(frequency, entity, graphId);
@@ -553,8 +581,21 @@ public class BlueprintEngine {
         }
     }
 
-    public static void refreshGraphSubscriptions(@Nullable MinecraftServer server, String graphId,
+    public void refreshGraphSubscriptions(@Nullable MinecraftServer server, String graphId,
                                                  @Nullable BlueprintPlan newIndex) {
+        graphId = GraphAssetId.require(graphId);
+        if (server != null) {
+            refreshGraphSubscriptions(state(server), server, graphId, newIndex);
+            return;
+        }
+        for (Map.Entry<MinecraftServer, ServerState> entry : new ArrayList<>(servers.entrySet())) {
+            refreshGraphSubscriptions(entry.getValue(), entry.getKey(), graphId, newIndex);
+        }
+    }
+
+    private void refreshGraphSubscriptions(ServerState state, MinecraftServer server, String graphId,
+                                           @Nullable BlueprintPlan newIndex) {
+        GraphSubscriptionIndex graphSubscriptions = state.graphSubscriptions;
         boolean registeredGlobal = graphSubscriptions.isGlobalGraphRegistered(graphId);
         Set<Entity> registeredEntities = new HashSet<>(
                 graphSubscriptions.registeredEntitiesForGraph(graphId));
@@ -564,9 +605,9 @@ public class BlueprintEngine {
             EntityGraphAttachment attachment = getAttachment(entity);
             if (attachment != null) attachment.removeProcess(graphId);
         }
-        removeSubscribersForGraph(graphId);
+        removeSubscribersForGraph(state, graphId);
 
-        boolean worldReady = server != null && server.overworld() != null;
+        boolean worldReady = server.overworld() != null;
         if (worldReady) {
             GlobalGraphStorage storage = GlobalGraphStorage.get(server.overworld());
             registeredGlobal = storage.getGraphs().contains(graphId);
@@ -598,29 +639,15 @@ public class BlueprintEngine {
     }
 
     @Nullable
-    public static BlueprintPlan getGraphIndex(String graphId) {
-        if (graphId == null || graphId.isBlank()) return null;
-        String trimmedId = graphId.trim();
-        BlueprintPlan exact = asBlueprintIndex(GraphAssetLifecycleIndex.INSTANCE
-                .getArtifact(trimmedId, GraphKind.BLUEPRINT));
-        if (exact != null) return exact;
-        String normalizedId = GraphPathMapper.normalizeId(trimmedId);
+    public BlueprintPlan getGraphIndex(String graphId) {
+        String normalizedId = GraphAssetId.canonicalize(graphId);
+        if (normalizedId.isEmpty()) return null;
         return asBlueprintIndex(GraphAssetLifecycleIndex.INSTANCE
                 .getArtifact(normalizedId, GraphKind.BLUEPRINT));
     }
 
-    public static String resolveGraphId(@Nullable String graphId) {
-        if (graphId == null || graphId.isBlank()) return "";
-        String trimmedId = graphId.trim();
-        if (GraphAssetLifecycleIndex.INSTANCE
-                .getArtifact(trimmedId, GraphKind.BLUEPRINT) != null) return trimmedId;
-        String normalizedId = GraphPathMapper.normalizeId(trimmedId);
-        if (GraphAssetLifecycleIndex.INSTANCE
-                .getArtifact(normalizedId, GraphKind.BLUEPRINT) != null
-                || GraphAssetLifecycleIndex.INSTANCE.invalidGraphIds().contains(normalizedId)) {
-            return normalizedId;
-        }
-        return trimmedId;
+    public String resolveGraphId(@Nullable String graphId) {
+        return GraphAssetId.canonicalize(graphId);
     }
 
     @Nullable
@@ -628,7 +655,7 @@ public class BlueprintEngine {
         return artifact instanceof BlueprintPlan index ? index : null;
     }
 
-    private static EntityGraphAttachment getAttachment(Entity entity) {
+    private EntityGraphAttachment getAttachment(Entity entity) {
         EntityGraphAttachment attachment = entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
         if (attachment != null) {
             attachment.attachOwner(entity);
@@ -636,7 +663,16 @@ public class BlueprintEngine {
         return attachment;
     }
 
-    private static String normalizeSubscriptionGraphId(String graphId) {
+    private String normalizeSubscriptionGraphId(String graphId) {
         return resolveGraphId(graphId);
+    }
+
+    public void shutdown(MinecraftServer server) {
+        servers.remove(server);
+    }
+
+    private static final class ServerState {
+        private final Map<String, Map<Entity, Set<String>>> eventSubscribers = new HashMap<>();
+        private final GraphSubscriptionIndex graphSubscriptions = new GraphSubscriptionIndex();
     }
 }

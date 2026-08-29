@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.quest;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
@@ -179,7 +179,7 @@ public final class QuestScreenService {
             boolean acceptEnabled,
             long updatedAt,
             @Nullable QuestInstance instance) {
-        BlueprintPlan index = BlueprintEngine.getGraphIndex(taskKey);
+        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(taskKey);
         if (index == null) return null;
         QuestDefinition definition = index.getQuestDefinition();
         return QuestScreenViewFactory.quest(

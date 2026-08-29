@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.quest;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
@@ -25,7 +25,7 @@ public final class QuestConditionService {
     }
 
     public QuestConditionResult evaluate(Entity owner, String taskKey, QuestConditionKind kind) {
-        BlueprintPlan index = BlueprintEngine.getGraphIndex(taskKey);
+        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(taskKey);
         if (index == null || owner == null || kind == null
                 || !(owner.level() instanceof ServerLevel level)) {
             return QuestConditionResult.evaluationFailed();
@@ -66,7 +66,7 @@ public final class QuestConditionService {
 
     /** Evaluates every authored condition for a read-only quest-screen snapshot. */
     public List<QuestConditionCheck> evaluateChecks(Entity owner, String taskKey, QuestConditionKind kind) {
-        BlueprintPlan index = BlueprintEngine.getGraphIndex(taskKey);
+        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(taskKey);
         if (index == null || owner == null || kind == null
                 || !(owner.level() instanceof ServerLevel level)) {
             return List.of();

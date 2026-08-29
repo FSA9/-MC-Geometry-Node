@@ -229,7 +229,8 @@ public class NetworkHandler {
                     context.queue(() -> {
                         if (context.getPlayer() instanceof ServerPlayer player) {
                             // 将数据包直接甩给状态管家处理
-                            com.mine.geometry_node.core.engine.blueprint.event.PlayerInputStateManager.handleInput(player, payload);
+                            com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime.INSTANCE.handlePlayerInput(
+                                    player, payload.keyId(), payload.action(), payload.clientVelocity());
                         }
                     });
                 }

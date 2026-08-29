@@ -4,7 +4,6 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventFields;
-import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
@@ -378,7 +377,7 @@ public final class QuestService {
         if (normalizedKey.isEmpty()) {
             return QuestOperationResult.of(QuestOperationResult.Code.INVALID_TASK_KEY);
         }
-        BlueprintPlan index = BlueprintEngine.getGraphIndex(normalizedKey);
+        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(normalizedKey);
         if (index == null) {
             return QuestOperationResult.of(QuestOperationResult.Code.TASK_NOT_FOUND);
         }
@@ -469,7 +468,7 @@ public final class QuestService {
         }
 
         try {
-            return BlueprintEngine.resolveGraphId(graphPath);
+            return BlueprintRuntime.INSTANCE.resolveGraphId(graphPath);
         } catch (IllegalArgumentException exception) {
             GeometryNode.LOGGER.warn(
                     "Rejected invalid quest graph path: path={}, reason={}",

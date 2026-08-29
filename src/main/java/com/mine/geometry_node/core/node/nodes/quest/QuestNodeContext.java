@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.quest;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import net.minecraft.world.entity.Entity;
@@ -28,7 +28,7 @@ final class QuestNodeContext {
         if (context == null || context.getGraphId() == null || context.getGraphId().isBlank()) {
             return false;
         }
-        BlueprintPlan index = BlueprintEngine.getGraphIndex(context.getGraphId());
+        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(context.getGraphId());
         return index != null && GraphTypeRegistry.QUEST.id().equals(index.getGraphTypeId());
     }
 }

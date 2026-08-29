@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.graph.attachment;
+package com.mine.geometry_node.core.engine.attachment;
 
 import com.mine.geometry_node.core.engine.blueprint.attachment.BlueprintEntityProcessHost;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingSet;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -93,7 +94,7 @@ public class EntityGraphAttachment {
     }
 
     public void selectBehaviorTree(String graphId) {
-        String normalized = graphId != null ? graphId.trim() : "";
+        String normalized = GraphAssetId.require(graphId);
         if (!boundGraphs.contains(GraphBindingKey.behaviorTree(normalized))) {
             throw new IllegalArgumentException("Selected behavior tree must be bound: " + normalized);
         }
@@ -164,7 +165,7 @@ public class EntityGraphAttachment {
                 this.boundGraphs.add(GraphBindingKey.behaviorTree(graphId));
             }
         }
-        String selected = tag.getStringOr("SelectedBehaviorTree", "");
+        String selected = GraphAssetId.canonicalize(tag.getStringOr("SelectedBehaviorTree", ""));
         selectedBehaviorTree = getBoundBehaviorTrees().contains(selected) ? selected : null;
         ownerScopedState.load(tag.getCompoundOrEmpty("OwnerScopedState"), provider);
         blueprints.load(tag, provider);

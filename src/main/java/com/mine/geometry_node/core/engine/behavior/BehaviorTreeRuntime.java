@@ -14,6 +14,7 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -93,8 +94,7 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
 
     public boolean unbind(Mob owner, String graphId) {
         ServerLevel level = requireServerOwner(owner);
-        String normalized = graphId != null ? graphId.trim() : "";
-        if (normalized.isEmpty()) throw new IllegalArgumentException("Behavior graph id cannot be empty");
+        String normalized = GraphAssetId.require(graphId);
         if (!boundGraphs(owner).contains(normalized)) return false;
         BehaviorTreeProcess current = engine.getForOwner(owner);
         if (current != null && current.graphId().equals(normalized)) {
@@ -206,8 +206,7 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     }
 
     private static String requireAvailable(String graphId) {
-        String normalized = graphId != null ? graphId.trim() : "";
-        if (normalized.isEmpty()) throw new IllegalArgumentException("Behavior graph id cannot be empty");
+        String normalized = GraphAssetId.require(graphId);
         if (GraphAssetLifecycleIndex.INSTANCE.getArtifact(
                 normalized, GraphKind.BEHAVIOR_TREE) == null) {
             throw new IllegalArgumentException("Behavior tree is unavailable: " + normalized);

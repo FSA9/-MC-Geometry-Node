@@ -2,8 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventFields;
-import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
-import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputStateManager;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.node.nodes.events.display_entity.OnInteraction;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.inventory.OnContainerOpen;
@@ -31,7 +30,7 @@ public class PlayerDispatcher {
         InteractionEvent.RIGHT_CLICK_BLOCK.register((player, hand, pos, face) -> {
             if (!player.level().isClientSide()) {
                 ServerLevel serverLevel = (ServerLevel) player.level();
-                BlueprintEngine.dispatchEvent(serverLevel, player, EntityInteractBlock.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, player, EntityInteractBlock.TYPE_ID, GraphEventData.of(
                         StandardPorts.TRIGGER_ENTITY.getId(), player,
                         StandardPorts.XYZ.getId(), pos,
                         StandardPorts.BLOCK_STATE.getId(), serverLevel.getBlockState(pos)
@@ -43,7 +42,7 @@ public class PlayerDispatcher {
         InteractionEvent.LEFT_CLICK_BLOCK.register((player, hand, pos, face) -> {
             if (!player.level().isClientSide()) {
                 ServerLevel serverLevel = (ServerLevel) player.level();
-                BlueprintEngine.dispatchEvent(serverLevel, player, OnPlayerLeftClickBlock.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, player, OnPlayerLeftClickBlock.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), player,
                         StandardPorts.XYZ.getId(), pos,
                         StandardPorts.BLOCK_STATE.getId(), serverLevel.getBlockState(pos),
@@ -55,7 +54,7 @@ public class PlayerDispatcher {
 
         InteractionEvent.INTERACT_ENTITY.register((player, entity, hand) -> {
             if (!player.level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) player.level(), player, EntityInteractEntity.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) player.level(), player, EntityInteractEntity.TYPE_ID, GraphEventData.of(
                         StandardPorts.TRIGGER_ENTITY.getId(), player,
                         StandardPorts.ENTITY.getId(), entity
                 ));
@@ -65,7 +64,7 @@ public class PlayerDispatcher {
 
         InteractionEvent.RIGHT_CLICK_ITEM.register((player, hand) -> {
             if (!player.level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) player.level(), player, EntityUseItem.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) player.level(), player, EntityUseItem.TYPE_ID, GraphEventData.of(
                         StandardPorts.TRIGGER_ENTITY.getId(), player,
                         StandardPorts.ITEM.getId(), player.getItemInHand(hand)
                 ));
@@ -76,7 +75,7 @@ public class PlayerDispatcher {
         dev.architectury.event.events.common.PlayerEvent.OPEN_MENU.register((player, menu) -> {
             if (!player.level().isClientSide()) {
                 String containerType = menuTypeId(menu);
-                BlueprintEngine.dispatchEvent((ServerLevel) player.level(), player, OnContainerOpen.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) player.level(), player, OnContainerOpen.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), player,
                         StandardPorts.PLAYER.getId(), player,
                         StandardPorts.TYPE.getId(), containerType,
@@ -91,7 +90,7 @@ public class PlayerDispatcher {
         bus.addListener((PlayerInteractEvent.EntityInteractSpecific event) -> {
             if (!event.getEntity().level().isClientSide() && event.getTarget() instanceof Interaction interaction) {
                 Vec3 hitPos = interaction.position().add(event.getLocalPos());
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnInteraction.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnInteraction.TYPE_ID, GraphEventData.of(
                         StandardPorts.TRIGGER_ENTITY.getId(), event.getEntity(),
                         StandardPorts.ENTITY.getId(), interaction,
                         StandardPorts.TYPE.getId(), "interact",
@@ -103,7 +102,7 @@ public class PlayerDispatcher {
         bus.addListener((AttackEntityEvent event) -> {
             if (!event.getEntity().level().isClientSide() && event.getTarget() instanceof Interaction interaction) {
                 Vec3 hitPos = interaction.position().add(0, interaction.getBbHeight() / 2.0, 0);
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnInteraction.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnInteraction.TYPE_ID, GraphEventData.of(
                         StandardPorts.TRIGGER_ENTITY.getId(), event.getEntity(),
                         StandardPorts.ENTITY.getId(), interaction,
                         StandardPorts.TYPE.getId(), "attack",
@@ -114,7 +113,7 @@ public class PlayerDispatcher {
 
         bus.addListener((ItemTossEvent event) -> {
             if (!event.getPlayer().level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnEntityDropItem.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnEntityDropItem.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getPlayer(),
                         StandardPorts.ITEM.getId(), event.getEntity().getItem()
                 ));
@@ -125,7 +124,7 @@ public class PlayerDispatcher {
             if (player.level().isClientSide()) {
                 return;
             }
-            BlueprintEngine.dispatchEvent((ServerLevel) player.level(), player, OnEntityPickupItem.TYPE_ID, GraphEventData.of(
+            BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) player.level(), player, OnEntityPickupItem.TYPE_ID, GraphEventData.of(
                     StandardPorts.ENTITY.getId(), player,
                     StandardPorts.SOURCE_ENTITY.getId(), itemEntity,
                     StandardPorts.ITEM_STACK.getId(), pickedStack.copy()
@@ -134,7 +133,7 @@ public class PlayerDispatcher {
 
         bus.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerJoin.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerJoin.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity()
                 ));
             }
@@ -142,8 +141,8 @@ public class PlayerDispatcher {
 
         bus.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                PlayerInputStateManager.clearPlayer(event.getEntity().getUUID());
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerQuit.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.clearPlayerInput(event.getEntity());
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerQuit.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity()
                 ));
             }
@@ -151,7 +150,7 @@ public class PlayerDispatcher {
 
         bus.addListener((ServerChatEvent event) -> {
             if (event.getPlayer() != null && !event.getPlayer().level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnPlayerChat.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getPlayer().level(), event.getPlayer(), OnPlayerChat.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getPlayer(),
                         StandardPorts.MESSAGE.getId(), event.getMessage().getString()
                 ));
@@ -160,7 +159,7 @@ public class PlayerDispatcher {
 
         bus.addListener((PlayerEvent.PlayerChangeGameModeEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerChangeGameMode.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerChangeGameMode.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.TYPE.getId(), event.getNewGameMode().getName()
                 ));
@@ -169,7 +168,7 @@ public class PlayerDispatcher {
 
         bus.addListener((AdvancementEvent.AdvancementEarnEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerEarnAdvancement.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerEarnAdvancement.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.NAME.getId(), event.getAdvancement().id().toString()
                 ));
@@ -179,7 +178,7 @@ public class PlayerDispatcher {
         bus.addListener((CommandEvent event) -> {
             Entity sourceEntity = event.getParseResults().getContext().getSource().getEntity();
             if (sourceEntity instanceof Player player && !player.level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) player.level(), player, OnPlayerExecuteCommand.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) player.level(), player, OnPlayerExecuteCommand.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), player,
                         StandardPorts.MESSAGE.getId(), event.getParseResults().getReader().getString()
                 ));
@@ -188,7 +187,7 @@ public class PlayerDispatcher {
 
         bus.addListener((PlayerXpEvent.LevelChange event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerLevelChange.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerLevelChange.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.INT_VALUE.getId(), event.getLevels()
                 ));
@@ -197,7 +196,7 @@ public class PlayerDispatcher {
 
         bus.addListener((PlayerXpEvent.PickupXp event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerPickupXp.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerPickupXp.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.INT_VALUE.getId(), event.getOrb().getValue(),
                         StandardPorts.SOURCE_ENTITY.getId(), event.getOrb()
@@ -207,7 +206,7 @@ public class PlayerDispatcher {
 
         bus.addListener((PlayerEvent.PlayerRespawnEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerRespawn.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerRespawn.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity()
                 ));
             }
@@ -215,7 +214,7 @@ public class PlayerDispatcher {
 
         bus.addListener((CanPlayerSleepEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerSleep.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerSleep.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.XYZ.getId(), event.getPos()
                 ));
@@ -224,7 +223,7 @@ public class PlayerDispatcher {
 
         bus.addListener((PlayerWakeUpEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintEngine.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerWakeUp.TYPE_ID, GraphEventData.of(
+                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnPlayerWakeUp.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), event.getEntity()
                 ));
             }

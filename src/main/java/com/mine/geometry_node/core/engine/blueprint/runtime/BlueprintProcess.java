@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandler;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandlerRegistry;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -126,8 +127,8 @@ public class BlueprintProcess {
     // ================================
 
     public BlueprintProcess(String graphId, BlueprintPlan index) {
-        this.graphId = graphId;
-        this.index = index;
+        this.graphId = GraphAssetId.require(graphId);
+        this.index = Objects.requireNonNull(index, "index");
         int exactSize = index.getRegisterCount() + 8;
         this.variableStack.push(new VariableScope(exactSize));
     }

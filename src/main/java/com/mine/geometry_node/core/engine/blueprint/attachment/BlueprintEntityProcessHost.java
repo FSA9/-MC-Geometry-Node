@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.attachment;
 
-import com.mine.geometry_node.core.engine.blueprint.event.BlueprintEventHandler;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import net.minecraft.core.HolderLookup;
@@ -73,6 +73,6 @@ public final class BlueprintEntityProcessHost {
 
     private void onScheduleChanged() {
         Entity entity = owner.get();
-        if (entity != null) BlueprintEventHandler.markActive(entity);
+        if (entity != null) BlueprintRuntime.INSTANCE.markActive(entity);
     }
 }

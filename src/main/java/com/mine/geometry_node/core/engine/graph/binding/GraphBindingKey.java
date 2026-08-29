@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.binding;
 
 import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 
 import java.util.Objects;
 
@@ -11,10 +12,7 @@ public record GraphBindingKey(GraphKind kind, String graphId) {
         if (kind == GraphKind.UNKNOWN) {
             throw new IllegalArgumentException("Binding kind cannot be unknown");
         }
-        graphId = graphId != null ? graphId.trim() : "";
-        if (graphId.isEmpty()) {
-            throw new IllegalArgumentException("Graph id cannot be empty");
-        }
+        graphId = GraphAssetId.require(graphId);
     }
 
     public static GraphBindingKey blueprint(String graphId) {

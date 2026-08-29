@@ -1,11 +1,12 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
-import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityGainItem;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.util.SlotAccessUtils;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
@@ -16,29 +17,32 @@ import java.util.WeakHashMap;
 
 /** Tracks net primary-storage gains only while a bound graph subscribes to the event. */
 public final class EntityInventoryGainTracker {
-    private static final Map<Entity, List<ItemStack>> SNAPSHOTS = new WeakHashMap<>();
+    private final Map<MinecraftServer, Map<Entity, List<ItemStack>>> servers = new WeakHashMap<>();
 
-    private EntityInventoryGainTracker() {
+    public EntityInventoryGainTracker() {
     }
 
-    public static void beginTracking(Entity entity) {
-        if (entity != null) {
-            SNAPSHOTS.computeIfAbsent(entity, SlotAccessUtils::snapshotPrimaryStorage);
+    public void beginTracking(Entity entity) {
+        if (entity != null && entity.level() instanceof ServerLevel level) {
+            snapshots(level).computeIfAbsent(entity, SlotAccessUtils::snapshotPrimaryStorage);
         }
     }
 
-    public static void clear(Entity entity) {
-        SNAPSHOTS.remove(entity);
+    public void clear(Entity entity) {
+        if (entity != null && entity.level() instanceof ServerLevel level) {
+            Map<Entity, List<ItemStack>> snapshots = servers.get(level.getServer());
+            if (snapshots != null) snapshots.remove(entity);
+        }
     }
 
-    static void tick(ServerLevel level, Entity entity, boolean listening) {
+    public void tick(ServerLevel level, Entity entity, boolean listening) {
         if (!listening) {
             clear(entity);
             return;
         }
 
         List<ItemStack> current = SlotAccessUtils.snapshotPrimaryStorage(entity);
-        List<ItemStack> previous = SNAPSHOTS.put(entity, current);
+        List<ItemStack> previous = snapshots(level).put(entity, current);
         if (previous == null) {
             return;
         }
@@ -55,11 +59,19 @@ public final class EntityInventoryGainTracker {
                 continue;
             }
 
-            BlueprintEngine.dispatchBoundEntityEvent(level, entity, OnEntityGainItem.TYPE_ID, GraphEventData.of(
+            BlueprintRuntime.INSTANCE.dispatchBoundEntityEvent(level, entity, OnEntityGainItem.TYPE_ID, GraphEventData.of(
                     StandardPorts.ENTITY.getId(), entity,
                     StandardPorts.ITEM_STACK.getId(), stack.copyWithCount(gained)
             ));
         }
+    }
+
+    public void shutdown(MinecraftServer server) {
+        servers.remove(server);
+    }
+
+    private Map<Entity, List<ItemStack>> snapshots(ServerLevel level) {
+        return servers.computeIfAbsent(level.getServer(), ignored -> new WeakHashMap<>());
     }
 
     private static int countMatching(List<ItemStack> stacks, ItemStack template) {

@@ -6,8 +6,7 @@ import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
-import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
-import com.mine.geometry_node.core.engine.blueprint.event.BlueprintEventHandler;
+import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
@@ -156,8 +155,6 @@ public class GeometryNode {
         MarkerService.INSTANCE.init();
         EntityChunkLoadingService.INSTANCE.init();
 
-        // 初始化蓝图系统事件引擎
-        BlueprintEventHandler.init();
         SchematicPlacementDebugSync.register();
 
         // 注册蓝图资源管理器

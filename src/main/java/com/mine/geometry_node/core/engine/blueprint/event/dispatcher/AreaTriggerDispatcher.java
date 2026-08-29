@@ -1,12 +1,12 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
-import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
+import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
-import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAnchor;
@@ -17,6 +17,7 @@ import com.mine.geometry_node.core.node.nodes.events.area.AreaTriggerEvent;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -39,49 +40,51 @@ import java.util.function.Function;
 public final class AreaTriggerDispatcher {
     private static final int STALE_STATE_TICKS = 20 * 60;
     private static final int STALE_CLEANUP_INTERVAL = 20 * 10;
-    private static final Map<StateKey, AreaState> STATES = new HashMap<>();
-    private static final Map<BlueprintPlan, List<CompiledAreaNode>> CONFIG_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
-    private static long lastCleanupTick = Long.MIN_VALUE;
+    private final Map<MinecraftServer, ServerState> servers = new WeakHashMap<>();
+    private final Map<BlueprintPlan, List<CompiledAreaNode>> configCache = Collections.synchronizedMap(new WeakHashMap<>());
 
-    private AreaTriggerDispatcher() {
+    public AreaTriggerDispatcher() {
     }
 
-    public static void tickLevel(ServerLevel level) {
+    public void tickLevel(ServerLevel level) {
+        ServerState state = servers.computeIfAbsent(level.getServer(), ignored -> new ServerState());
         long currentTick = level.getGameTime();
-        cleanupStaleStates(currentTick);
+        cleanupStaleStates(state, currentTick);
 
         LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
         ScopeKey scope = ScopeKey.global(level.dimension().identifier());
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
 
-        for (String graphId : BlueprintEngine.getGlobalGraphsForEvent(level, AreaTriggerEvent.TYPE_ID)) {
+        for (String graphId : BlueprintRuntime.INSTANCE.getGlobalGraphsForEvent(level, AreaTriggerEvent.TYPE_ID)) {
             String sourceKey = DebugRendererSessionManager.levelSourceKey(level, graphId);
-            tickGraph(level, null, graphId, BlueprintEngine.getGraphIndex(graphId),
+            tickGraph(state, level, null, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
                     attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates, queryCache);
         }
 
-        pruneScope(scope, seenStates);
+        pruneScope(state, scope, seenStates);
     }
 
-    public static void tickEntity(ServerLevel level, Entity owner, EntityGraphAttachment attachment, long currentTick) {
+    public void tickEntity(ServerLevel level, Entity owner, EntityGraphAttachment attachment, long currentTick) {
         if (owner == null || owner.isRemoved() || attachment == null || attachment.getBoundGraphs().isEmpty()) return;
-        cleanupStaleStates(currentTick);
+        ServerState state = servers.computeIfAbsent(level.getServer(), ignored -> new ServerState());
+        cleanupStaleStates(state, currentTick);
 
         ScopeKey scope = ScopeKey.entity(level.dimension().identifier(), owner.getUUID());
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
 
-        for (String graphId : BlueprintEngine.getEntityGraphsForEvent(owner, AreaTriggerEvent.TYPE_ID)) {
+        for (String graphId : BlueprintRuntime.INSTANCE.getEntityGraphsForEvent(owner, AreaTriggerEvent.TYPE_ID)) {
             String sourceKey = DebugRendererSessionManager.entitySourceKey(level, owner, graphId);
-            tickGraph(level, owner, graphId, BlueprintEngine.getGraphIndex(graphId),
+            tickGraph(state, level, owner, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
                     attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates, queryCache);
         }
 
-        pruneScope(scope, seenStates);
+        pruneScope(state, scope, seenStates);
     }
 
-    private static void tickGraph(ServerLevel level,
+    private void tickGraph(ServerState serverState,
+                                  ServerLevel level,
                                   @Nullable Entity target,
                                   String graphId,
                                   @Nullable BlueprintPlan index,
@@ -112,7 +115,7 @@ public final class AreaTriggerDispatcher {
             StateKey stateKey = new StateKey(scope, graphId, group.configKey);
             seenStates.add(stateKey);
 
-            AreaState state = STATES.computeIfAbsent(stateKey, ignored -> new AreaState());
+            AreaState state = serverState.states.computeIfAbsent(stateKey, ignored -> new AreaState());
             state.lastSeenTick = currentTick;
             if (!group.scheduled) continue;
 
@@ -137,7 +140,7 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private static void collectNodes(BlueprintPlan index,
+    private void collectNodes(BlueprintPlan index,
                                      long currentTick,
                                      Map<AreaConfigKey, AreaGroup> groups) {
         for (CompiledAreaNode node : getCompiledNodes(index)) {
@@ -152,9 +155,9 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private static List<CompiledAreaNode> getCompiledNodes(BlueprintPlan index) {
-        synchronized (CONFIG_CACHE) {
-            return CONFIG_CACHE.computeIfAbsent(index, AreaTriggerDispatcher::compileNodes);
+    private List<CompiledAreaNode> getCompiledNodes(BlueprintPlan index) {
+        synchronized (configCache) {
+            return configCache.computeIfAbsent(index, AreaTriggerDispatcher::compileNodes);
         }
     }
 
@@ -224,7 +227,7 @@ public final class AreaTriggerDispatcher {
         return interval == 1 || Math.floorMod(currentTick, interval) == offset;
     }
 
-    private static void dispatchPhase(ServerLevel level,
+    private void dispatchPhase(ServerLevel level,
                                       @Nullable Entity target,
                                       String graphId,
                                       BlueprintPlan index,
@@ -266,7 +269,7 @@ public final class AreaTriggerDispatcher {
             for (int nodeId : nodes) {
                 Map<String, Object> eventData = new LinkedHashMap<>(baseData);
                 eventData.put(AreaTriggerEvent.TRIGGER_ID_PORT, graphId + ":" + index.getIdToString(nodeId));
-                BlueprintEngine.executeEventNode(level, target, graphId, index, nodeId, eventData, processFinder, mountAction);
+                BlueprintRuntime.INSTANCE.executeEventNode(level, target, graphId, index, nodeId, eventData, processFinder, mountAction);
             }
         }
     }
@@ -343,15 +346,19 @@ public final class AreaTriggerDispatcher {
         return Math.max(0.001D, Math.abs(value));
     }
 
-    private static void pruneScope(ScopeKey scope, Set<StateKey> seenStates) {
-        STATES.entrySet().removeIf(entry -> entry.getKey().scope.equals(scope) && !seenStates.contains(entry.getKey()));
+    private static void pruneScope(ServerState state, ScopeKey scope, Set<StateKey> seenStates) {
+        state.states.entrySet().removeIf(entry -> entry.getKey().scope.equals(scope) && !seenStates.contains(entry.getKey()));
     }
 
-    private static void cleanupStaleStates(long currentTick) {
-        if (currentTick == lastCleanupTick) return;
+    private static void cleanupStaleStates(ServerState state, long currentTick) {
+        if (currentTick == state.lastCleanupTick) return;
         if (Math.floorMod(currentTick, STALE_CLEANUP_INTERVAL) != 0) return;
-        lastCleanupTick = currentTick;
-        STATES.entrySet().removeIf(entry -> currentTick - entry.getValue().lastSeenTick > STALE_STATE_TICKS);
+        state.lastCleanupTick = currentTick;
+        state.states.entrySet().removeIf(entry -> currentTick - entry.getValue().lastSeenTick > STALE_STATE_TICKS);
+    }
+
+    public void shutdown(MinecraftServer server) {
+        servers.remove(server);
     }
 
     private enum AreaPhase {
@@ -481,5 +488,10 @@ public final class AreaTriggerDispatcher {
     private static final class AreaState {
         private Set<UUID> inside = Set.of();
         private long lastSeenTick;
+    }
+
+    private static final class ServerState {
+        private final Map<StateKey, AreaState> states = new HashMap<>();
+        private long lastCleanupTick = Long.MIN_VALUE;
     }
 }

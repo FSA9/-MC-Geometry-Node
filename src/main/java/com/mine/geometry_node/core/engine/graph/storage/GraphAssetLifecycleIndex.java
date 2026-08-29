@@ -75,12 +75,12 @@ public final class GraphAssetLifecycleIndex {
 
     @Nullable
     public synchronized GraphAssetDescriptor getGraph(String graphId) {
-        return snapshot.effective.get(graphId);
+        return snapshot.effective.get(GraphAssetId.canonicalize(graphId));
     }
 
     @Nullable
     public synchronized CompiledGraph getArtifact(String graphId, GraphKind runtimeKind) {
-        GraphAssetDescriptor descriptor = snapshot.effective.get(graphId);
+        GraphAssetDescriptor descriptor = snapshot.effective.get(GraphAssetId.canonicalize(graphId));
         return descriptor != null && descriptor.runtimeKind() == runtimeKind
                 ? descriptor.artifact() : null;
     }
@@ -103,7 +103,7 @@ public final class GraphAssetLifecycleIndex {
     }
 
     public synchronized List<GraphDependencyDiagnostic> diagnostics(String graphId) {
-        return snapshot.diagnostics.getOrDefault(graphId, List.of());
+        return snapshot.diagnostics.getOrDefault(GraphAssetId.canonicalize(graphId), List.of());
     }
 
     public synchronized Map<String, List<GraphDependencyDiagnostic>> diagnostics() {
@@ -111,11 +111,13 @@ public final class GraphAssetLifecycleIndex {
     }
 
     public synchronized Set<String> directDependents(String graphId) {
-        return snapshot.reverseDependencies.getOrDefault(graphId, Set.of());
+        return snapshot.reverseDependencies.getOrDefault(GraphAssetId.canonicalize(graphId), Set.of());
     }
 
     public synchronized Set<String> affectedBy(Set<String> graphIds) {
-        return dependencyClosure(graphIds, snapshot.reverseDependencies);
+        Set<String> canonicalIds = new LinkedHashSet<>();
+        graphIds.forEach(id -> canonicalIds.add(GraphAssetId.require(id)));
+        return dependencyClosure(canonicalIds, snapshot.reverseDependencies);
     }
 
     private void update(@Nullable MinecraftServer server,
@@ -125,15 +127,33 @@ public final class GraphAssetLifecycleIndex {
         Map<GraphKind, Change> changes;
         synchronized (this) {
             Snapshot previous = snapshot;
-            if (packagedReplacement != null) packaged = Map.copyOf(packagedReplacement);
-            if (dynamicReplacement != null) dynamic = Map.copyOf(dynamicReplacement);
+            if (packagedReplacement != null) packaged = canonicalizeDescriptors(packagedReplacement);
+            if (dynamicReplacement != null) dynamic = canonicalizeDescriptors(dynamicReplacement);
             if (invalidDynamicReplacement != null) {
-                invalidDynamicIds = Set.copyOf(invalidDynamicReplacement);
+                invalidDynamicIds = canonicalizeIds(invalidDynamicReplacement);
             }
             snapshot = buildSnapshot(packaged, dynamic, invalidDynamicIds);
             changes = calculateChanges(server, previous, snapshot);
         }
         changes.forEach(this::notifyListeners);
+    }
+
+    private static Map<String, GraphAssetDescriptor> canonicalizeDescriptors(
+            Map<String, GraphAssetDescriptor> descriptors) {
+        Map<String, GraphAssetDescriptor> canonical = new LinkedHashMap<>();
+        for (GraphAssetDescriptor descriptor : descriptors.values()) {
+            GraphAssetDescriptor previous = canonical.putIfAbsent(descriptor.graphId(), descriptor);
+            if (previous != null && previous != descriptor) {
+                throw new IllegalArgumentException("Duplicate canonical graph id: " + descriptor.graphId());
+            }
+        }
+        return Map.copyOf(canonical);
+    }
+
+    private static Set<String> canonicalizeIds(Set<String> graphIds) {
+        Set<String> canonical = new LinkedHashSet<>();
+        graphIds.forEach(id -> canonical.add(GraphAssetId.require(id)));
+        return Set.copyOf(canonical);
     }
 
     private void notifyListeners(GraphKind kind, Change change) {
@@ -281,14 +301,14 @@ public final class GraphAssetLifecycleIndex {
     }
 
     private static Set<String> dependenciesOf(CompiledGraph graph) {
-        return graph instanceof CompiledGraphDependencies dependencies
-                ? dependencies.graphDependencies() : Set.of();
+        if (!(graph instanceof CompiledGraphDependencies dependencies)) return Set.of();
+        return canonicalizeIds(dependencies.graphDependencies());
     }
 
     private static Set<String> requiredDependenciesOf(CompiledGraph graph) {
         return graph instanceof CompiledGraphDependencies dependencies
                 && dependencies.requiresAvailableDependencies()
-                ? dependencies.graphDependencies() : Set.of();
+                ? canonicalizeIds(dependencies.graphDependencies()) : Set.of();
     }
 
     private static void addDiagnostic(

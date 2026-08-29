@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.attachment.GraphContainer;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
@@ -296,7 +297,7 @@ public class BlueprintProcessSerializer {
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag pTag = list.getCompoundOrEmpty(i);
                 String graphId = pTag.getStringOr("GraphId", "");
-                BlueprintPlan index = BlueprintEngine.getGraphIndex(graphId);
+                BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(graphId);
                 if (index != null) {
                     container.putProcessForSerialization(load(pTag, index, provider));
                 }

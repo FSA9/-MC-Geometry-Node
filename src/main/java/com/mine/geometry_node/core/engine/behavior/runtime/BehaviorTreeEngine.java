@@ -10,6 +10,7 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.scheduling.DueTickScheduler;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -40,11 +41,9 @@ public final class BehaviorTreeEngine {
     public BehaviorTreeProcess start(ServerLevel level, Mob owner, String graphId) {
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(owner, "owner");
-        if (graphId == null || graphId.isBlank()) {
-            throw new IllegalArgumentException("Behavior graph id cannot be empty");
-        }
-        BehaviorTreePlan plan = resolvePlan(graphId);
-        if (plan == null) throw new IllegalArgumentException("Behavior tree is unavailable: " + graphId);
+        String canonicalGraphId = GraphAssetId.require(graphId);
+        BehaviorTreePlan plan = resolvePlan(canonicalGraphId);
+        if (plan == null) throw new IllegalArgumentException("Behavior tree is unavailable: " + canonicalGraphId);
         return start(level, owner, plan, true, seed(owner.getUUID(), plan.assetId()));
     }
 

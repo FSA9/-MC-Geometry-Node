@@ -9,7 +9,7 @@ import java.util.Objects;
 /** Compiled graph plus the canonical identity used by storage and runtimes. */
 public record GraphAssetDescriptor(String graphId, GraphType type, CompiledGraph artifact) {
     public GraphAssetDescriptor {
-        graphId = Objects.requireNonNull(graphId, "graphId");
+        graphId = GraphAssetId.require(graphId);
         type = Objects.requireNonNull(type, "type");
         artifact = Objects.requireNonNull(artifact, "artifact");
         if (!type.id().equals(artifact.graphTypeId()) || type.runtimeKind() != artifact.runtimeKind()) {
