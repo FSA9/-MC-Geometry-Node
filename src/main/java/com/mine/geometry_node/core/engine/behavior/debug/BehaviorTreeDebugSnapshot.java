@@ -106,12 +106,9 @@ public record BehaviorTreeDebugSnapshot(
                 instance.stopReason(), instance.lastEvaluationTick(), instance.nextWakeTick(),
                 activePath, nodes, plan.getNodeCount() > nodes.size(),
                 new EvaluationSnapshot(metrics.evaluations(), metrics.totalNanos(), metrics.lastNanos(),
-                        metrics.softTimeBudgetOverruns(), metrics.lastNodeVisits(),
-                        metrics.peakNodeVisits(), metrics.lastImmediateTransitions(),
-                        metrics.peakImmediateTransitions()),
+                        metrics.softTimeBudgetOverruns(), metrics.lastNodeVisits(), metrics.peakNodeVisits()),
                 new BudgetSnapshot(configuredBudget.instanceNanosPerEvaluation(),
                         configuredBudget.maxNodeVisitsPerEvaluation(), configuredBudget.maxTreeDepth(),
-                        configuredBudget.maxImmediateTransitions(),
                         configuredBudget.maxBlackboardEntriesPerInstance(),
                         configuredBudget.maxHistoryEntriesPerInstance()),
                 blackboardRevision, blackboard, history);
@@ -207,13 +204,11 @@ public record BehaviorTreeDebugSnapshot(
 
     public record EvaluationSnapshot(long evaluations, long totalNanos, long lastNanos,
                                      long softTimeBudgetOverruns, int lastNodeVisits,
-                                     int peakNodeVisits, int lastImmediateTransitions,
-                                     int peakImmediateTransitions) {
+                                     int peakNodeVisits) {
     }
 
     public record BudgetSnapshot(long instanceNanosPerEvaluation, int maxNodeVisitsPerEvaluation,
-                                 int maxTreeDepth, int maxImmediateTransitions,
-                                 int maxBlackboardEntries, int maxHistoryEntries) {
+                                 int maxTreeDepth, int maxBlackboardEntries, int maxHistoryEntries) {
     }
 
     public record BlackboardSnapshot(String name, String scope, String providerIdentity, PortType type,

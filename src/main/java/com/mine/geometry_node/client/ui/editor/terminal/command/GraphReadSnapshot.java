@@ -66,10 +66,6 @@ final class GraphReadSnapshot {
                     }
                 });
             }
-            if (node.behaviorOutputs != null) {
-                node.behaviorOutputs.forEach((portId, connection) ->
-                        addEdge(edges, "behavior", sourceId, portId, connection));
-            }
         }
         edges.sort(Edge.ORDER);
         Map<String, List<Edge>> outgoing = new LinkedHashMap<>();

@@ -38,9 +38,6 @@ public final class GraphJsonIO {
             if (el.isJsonObject()) {
                 JsonObject nodeObject = el.getAsJsonObject();
                 nodeObject.addProperty("id", e.getKey());
-                if (e.getValue().behaviorOutputs == null || e.getValue().behaviorOutputs.isEmpty()) {
-                    nodeObject.remove("behavior_outputs");
-                }
             }
             nodes.add(e.getKey(), el);
         }
@@ -136,8 +133,8 @@ public final class GraphJsonIO {
                     }
                 }
             }
-            if (outNode.behaviorOutputs != null) {
-                for (Connection link : outNode.behaviorOutputs.values()) {
+            if (outNode.execOutputs != null) {
+                for (Connection link : outNode.execOutputs.values()) {
                     if (link == null || !link.isValid()) continue;
                     NodeData targetNode = scopeIndex.get(link.targetNodeId());
                     if (targetNode != null) targetNode.setInputConnected(link.targetPortName(), true);

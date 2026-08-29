@@ -130,33 +130,15 @@ public class ConnectionLayer {
                 }
             }
         }
-        for (Map.Entry<String, NodeData> nodeEntry : graph.nodes.entrySet()) {
-            ConnectionNodeVisual outUi = nodeVisuals.get(nodeEntry.getKey());
-            NodeData parent = nodeEntry.getValue();
-            if (outUi == null || parent == null || parent.behaviorOutputs == null) continue;
-            for (Map.Entry<String, Connection> entry : parent.behaviorOutputs.entrySet()) {
-                Connection link = entry.getValue();
-                if (link == null) continue;
-                ConnectionNodeVisual inUi = nodeVisuals.get(link.targetNodeId());
-                if (inUi == null) continue;
-                VisualConnection connection = new VisualConnection(
-                        outUi, entry.getKey(),
-                        inUi, link.targetPortName(),
-                        false, PortType.BEHAVIOR_STRUCTURE.getColor());
-                connection.updateUiCoordinates(mTempOutPos, mTempInPos);
-                mVisualConnections.add(connection);
-                indexVisualConnection(connection);
-            }
-        }
         mViewport.invalidate();
     }
 
     private int resolveConnectionColor(NodeGraph graph, NodeData outNode, String outPortId, boolean isExecution) {
-        if (isExecution) return PortType.EXECUTION.getColor();
         PortType type = graph != null
                 ? RerouteNodeSupport.resolvePortType(graph.nodes, outNode, outPortId, false)
                 : null;
-        return type != null ? type.getColor() : PortType.ANY.getColor();
+        if (type != null) return type.getColor();
+        return isExecution ? PortType.EXECUTION.getColor() : PortType.ANY.getColor();
     }
 
     public void updateConnectionsForNode(String nodeId) {

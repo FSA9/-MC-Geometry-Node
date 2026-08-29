@@ -50,20 +50,6 @@ public final class BehaviorTreeEngine {
         return start(level, owner, plan, true, seed(owner.getUUID(), plan.assetId()));
     }
 
-    public BehaviorTreeProcess start(ServerLevel level, Mob owner, BehaviorTreePlan plan) {
-        Objects.requireNonNull(level, "level");
-        Objects.requireNonNull(owner, "owner");
-        Objects.requireNonNull(plan, "plan");
-        return start(level, owner, plan, false, seed(owner.getUUID(), plan.assetId()));
-    }
-
-    public BehaviorTreeProcess start(ServerLevel level, Mob owner, BehaviorTreePlan plan, long randomSeed) {
-        Objects.requireNonNull(level, "level");
-        Objects.requireNonNull(owner, "owner");
-        Objects.requireNonNull(plan, "plan");
-        return start(level, owner, plan, false, randomSeed);
-    }
-
     private BehaviorTreeProcess start(ServerLevel level, Mob owner, BehaviorTreePlan plan,
                                        boolean managedAsset, long randomSeed) {
         Objects.requireNonNull(level, "level");

@@ -2,7 +2,6 @@ package com.mine.geometry_node.core.engine.behavior.compile;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.mine.geometry_node.core.engine.behavior.structure.BehaviorTreeConnections;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
@@ -18,9 +17,7 @@ import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidati
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorRootNode;
-import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -30,7 +27,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -39,17 +36,10 @@ import java.util.Set;
 
 /** Compiles editable behavior documents into immutable runtime plans. */
 public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePlan> {
-    public static final BehaviorTreeCompiler INSTANCE = new BehaviorTreeCompiler(NodeCatalog.REGISTRY);
+    public static final BehaviorTreeCompiler INSTANCE = new BehaviorTreeCompiler();
     private static final Gson GSON = new Gson();
 
-    private final NodeCatalog nodes;
-
-    private BehaviorTreeCompiler(NodeCatalog nodes) {
-        this.nodes = nodes;
-    }
-
-    static BehaviorTreeCompiler forTesting(NodeCatalog nodes) {
-        return new BehaviorTreeCompiler(nodes);
+    private BehaviorTreeCompiler() {
     }
 
     @Override
@@ -71,10 +61,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         return buildPlan(context, compilation);
     }
 
-    public GraphValidationResult validate(GraphCompileContext context, JsonObject document) {
-        return new GraphValidationResult(inspectDocument(context, document).diagnostics);
-    }
-
     private Compilation inspectDocument(GraphCompileContext context, JsonObject document) {
         String assetId = context != null ? context.diagnosticAssetId() : "<anonymous>";
         if (document == null) {
@@ -83,7 +69,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         }
         try {
             FlattenedGraph flattened = GraphFlattener.flatten(document.getAsJsonObject("nodes"));
-            return inspect(context, readDocument(document, flattened));
+            return inspect(context, document, flattened);
         } catch (RuntimeException exception) {
             String reason = exception.getMessage() != null ? exception.getMessage()
                     : exception.getClass().getSimpleName();
@@ -92,31 +78,32 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         }
     }
 
-    private Compilation inspect(GraphCompileContext context, NodeGraph graph) {
+    private Compilation inspect(GraphCompileContext context, JsonObject document,
+                                FlattenedGraph flattened) {
         String assetId = context != null ? context.diagnosticAssetId() : "<anonymous>";
         List<GraphDiagnostic> diagnostics = new ArrayList<>();
-        List<String> nodeIds = graph.nodes.keySet().stream().sorted().toList();
+        List<String> nodeIds = flattened.nodes().keySet().stream().sorted().toList();
 
         Map<String, NodeInfo> info = new LinkedHashMap<>();
         for (String nodeId : nodeIds) {
-            NodeData node = graph.nodes.get(nodeId);
-            if (node == null || node.type == null || !nodes.has(node.type)) {
+            NodeData node = decodeNode(nodeId, flattened);
+            if (node == null || node.type == null || !NodeRegistry.INSTANCE.has(node.type)) {
                 continue;
             }
-            NodeCapabilities capabilities = nodes.capabilities(node.type);
+            NodeCapabilities capabilities = NodeRegistry.INSTANCE.getCapabilities(node.type);
             if (!capabilities.supports(GraphTypeRegistry.BEHAVIOR_TREE.id())) {
                 continue;
             }
-            NodeDef definition = nodes.definition(node);
+            NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
             if (definition == null) continue;
             PortCatalog ports = PortCatalog.from(definition);
             info.put(nodeId, new NodeInfo(node, capabilities, ports));
         }
 
-        Map<String, List<String>> structure = compileStructure(nodeIds, graph, info);
-        Map<InputKey, DataLink> inbound = compileDataConnections(nodeIds, graph, info);
+        Map<String, List<String>> structure = compileStructure(nodeIds, flattened, info);
+        Map<InputKey, DataLink> inbound = compileDataConnections(flattened, info);
         GraphValidationResult common = GraphDocumentValidator.validate(validationInput(
-                assetId, graph, nodeIds));
+                assetId, document, flattened, nodeIds));
         diagnostics.addAll(common.diagnostics());
         BehaviorTreePlan.RootSchedule rootSchedule = compileRootSchedule(info);
         diagnostics.sort(Comparator.comparing(GraphDiagnostic::code)
@@ -124,42 +111,39 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                 .thenComparing(GraphDiagnostic::portId)
                 .thenComparing(GraphDiagnostic::relatedNodeId)
                 .thenComparing(GraphDiagnostic::message));
-        return new Compilation(graph, nodeIds, info, structure, inbound, rootSchedule,
+        return new Compilation(nodeIds, info, structure, inbound, rootSchedule,
                 List.copyOf(diagnostics));
     }
 
+    private static @Nullable NodeData decodeNode(String nodeId, FlattenedGraph flattened) {
+        NodeData node = GSON.fromJson(flattened.nodes().get(nodeId), NodeData.class);
+        if (node == null) return null;
+        node.id = nodeId;
+        node.restoreDocumentDefaults();
+        node.inputs = new LinkedHashMap<>(flattened.staticInputs().getOrDefault(nodeId, Map.of()));
+        return node;
+    }
+
     private static Map<String, List<String>> compileStructure(
-            List<String> nodeIds, NodeGraph graph, Map<String, NodeInfo> info) {
+            List<String> nodeIds, FlattenedGraph flattened, Map<String, NodeInfo> info) {
         Map<String, List<String>> children = new LinkedHashMap<>();
-        Set<String> claimedChildren = new HashSet<>();
         for (String sourceId : nodeIds) {
-            NodeData source = graph.nodes.get(sourceId);
             NodeInfo sourceInfo = info.get(sourceId);
-            if (source == null || sourceInfo == null || source.behaviorOutputs == null) continue;
+            Map<String, FlattenedGraph.TargetConnection> outputs =
+                    flattened.executionOutputs().get(sourceId);
+            if (sourceInfo == null || outputs == null) continue;
             List<String> accepted = new ArrayList<>();
-            List<String> behaviorPorts = source.behaviorOutputs.keySet().stream()
-                    .sorted(Comparator.comparingInt((String portId) -> {
-                                int index = BehaviorTreeConnections.childPortIndex(portId);
-                                return index >= 0 ? index : Integer.MAX_VALUE;
-                            })
-                            .thenComparing(String::compareTo))
-                    .toList();
-            for (String sourcePortId : behaviorPorts) {
-                Connection link = source.behaviorOutputs.get(sourcePortId);
+            for (String sourcePortId : sourceInfo.ports.outputs.keySet()) {
+                FlattenedGraph.TargetConnection link = outputs.get(sourcePortId);
                 PortDef sourcePort = sourceInfo.ports.outputs.get(sourcePortId);
                 if (sourcePort == null || sourcePort.type() != PortType.BEHAVIOR_STRUCTURE) {
                     continue;
                 }
-                if (link == null || !link.isValid()) continue;
+                if (!isValid(link)) continue;
                 NodeInfo targetInfo = info.get(link.targetNodeId());
                 PortDef targetPort = targetInfo != null
                         ? targetInfo.ports.inputs.get(link.targetPortName()) : null;
                 if (targetPort == null || targetPort.type() != PortType.BEHAVIOR_STRUCTURE) continue;
-                if (!claimedChildren.add(link.targetNodeId())) continue;
-                if (reaches(children, link.targetNodeId(), sourceId)) {
-                    claimedChildren.remove(link.targetNodeId());
-                    continue;
-                }
                 accepted.add(link.targetNodeId());
             }
             if (!accepted.isEmpty()) children.put(sourceId, List.copyOf(accepted));
@@ -167,18 +151,9 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         return Map.copyOf(children);
     }
 
-    private static boolean reaches(Map<String, List<String>> children, String start, String target) {
-        if (start.equals(target)) return true;
-        List<String> pending = new ArrayList<>();
-        pending.add(start);
-        Set<String> visited = new HashSet<>();
-        while (!pending.isEmpty()) {
-            String current = pending.removeLast();
-            if (!visited.add(current)) continue;
-            if (current.equals(target)) return true;
-            pending.addAll(children.getOrDefault(current, List.of()));
-        }
-        return false;
+    private static boolean isValid(@Nullable FlattenedGraph.TargetConnection link) {
+        return link != null && link.targetNodeId() != null && !link.targetNodeId().isBlank()
+                && link.targetPortName() != null && !link.targetPortName().isBlank();
     }
 
     private BehaviorTreePlan buildPlan(GraphCompileContext context, Compilation compilation) {
@@ -290,106 +265,65 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     }
 
     private static Map<InputKey, DataLink> compileDataConnections(
-            List<String> nodeIds, NodeGraph graph, Map<String, NodeInfo> info) {
+            FlattenedGraph flattened, Map<String, NodeInfo> info) {
         Map<InputKey, DataLink> inbound = new LinkedHashMap<>();
-        for (String sourceId : nodeIds) {
-            NodeData source = graph.nodes.get(sourceId);
+        List<Map.Entry<FlattenedGraph.InputKey, FlattenedGraph.DataConnectionSource>> links =
+                flattened.dataInputs().entrySet().stream()
+                .sorted(Comparator.comparing((Map.Entry<FlattenedGraph.InputKey,
+                                FlattenedGraph.DataConnectionSource> entry) -> entry.getKey().nodeId())
+                        .thenComparing(entry -> entry.getKey().portName()))
+                .toList();
+        for (Map.Entry<FlattenedGraph.InputKey, FlattenedGraph.DataConnectionSource> entry : links) {
+            FlattenedGraph.InputKey target = entry.getKey();
+            FlattenedGraph.DataConnectionSource source = entry.getValue();
+            String sourceId = source.sourceNodeId();
             NodeInfo sourceInfo = info.get(sourceId);
-            if (source == null || sourceInfo == null || source.outputs == null) continue;
-            for (String sourcePortId : new java.util.TreeSet<>(source.outputs.keySet())) {
-                List<Connection> links = source.outputs.get(sourcePortId);
-                PortDef sourcePort = sourceInfo.ports.outputs.get(sourcePortId);
-                if (sourcePort == null || sourcePort.type().isFlow() || links == null) continue;
-                List<Connection> ordered = links.stream()
-                        .filter(link -> link != null && link.isValid())
-                        .sorted(Comparator.comparing(Connection::targetNodeId)
-                                .thenComparing(Connection::targetPortName)).toList();
-                for (Connection link : ordered) {
-                    NodeInfo targetInfo = info.get(link.targetNodeId());
-                    if (targetInfo == null) continue;
-                    PortDef targetPort = targetInfo.ports.inputs.get(link.targetPortName());
-                    if (targetPort == null) continue;
-                    if (targetPort.type().isFlow() || !PortType.isCompatible(sourcePort.type(), targetPort.type())) {
-                        continue;
-                    }
-                    InputKey key = new InputKey(link.targetNodeId(), link.targetPortName());
-                    inbound.putIfAbsent(key, new DataLink(sourceId, sourcePortId));
-                }
-            }
+            NodeInfo targetInfo = info.get(target.nodeId());
+            if (sourceInfo == null || targetInfo == null) continue;
+            PortDef sourcePort = sourceInfo.ports.outputs.get(source.sourcePortName());
+            PortDef targetPort = targetInfo.ports.inputs.get(target.portName());
+            if (sourcePort == null || targetPort == null || sourcePort.type().isFlow()
+                    || targetPort.type().isFlow()
+                    || !PortType.isCompatible(sourcePort.type(), targetPort.type())) continue;
+            inbound.putIfAbsent(new InputKey(target.nodeId(), target.portName()),
+                    new DataLink(sourceId, source.sourcePortName()));
         }
         return inbound;
     }
 
-    private static NodeGraph readDocument(JsonObject document, FlattenedGraph flattened) {
-        NodeGraph graph = GSON.fromJson(document, NodeGraph.class);
-        if (graph == null) graph = new NodeGraph();
-        graph.graphKind = document.has("graph_kind") && document.get("graph_kind").isJsonPrimitive()
-                ? document.get("graph_kind").getAsString() : GraphTypeRegistry.BEHAVIOR_TREE.id();
-        graph.nodes = new LinkedHashMap<>();
-        for (String nodeId : new java.util.TreeSet<>(flattened.nodes().keySet())) {
-            NodeData node = GSON.fromJson(flattened.nodes().get(nodeId), NodeData.class);
-            if (node == null) continue;
-            node.id = nodeId;
-            node.restoreDocumentDefaults();
-            node.inputs = new LinkedHashMap<>(flattened.staticInputs()
-                    .getOrDefault(nodeId, Map.of()));
-            node.outputs = new LinkedHashMap<>();
-            node.execOutputs = new LinkedHashMap<>();
-            node.behaviorOutputs = new LinkedHashMap<>();
-            flattened.behaviorOutputs().getOrDefault(nodeId, Map.of()).forEach(
-                    (portId, target) -> node.behaviorOutputs.put(portId,
-                            new Connection(target.targetNodeId(), target.targetPortName())));
-            graph.nodes.put(nodeId, node);
-        }
-        for (Map.Entry<FlattenedGraph.InputKey, FlattenedGraph.DataConnectionSource> entry
-                : flattened.dataInputs().entrySet()) {
-            String targetNodeId = entry.getKey().nodeId();
-            String targetPortId = entry.getKey().portName();
-            FlattenedGraph.DataConnectionSource source = entry.getValue();
-            NodeData sourceNode = graph.nodes.get(source.sourceNodeId());
-            if (sourceNode != null && graph.nodes.containsKey(targetNodeId)) {
-                sourceNode.addDataConnection(source.sourcePortName(), targetNodeId, targetPortId);
-            }
-        }
-        return graph;
-    }
-
-    private static int storedConnectionCount(NodeGraph graph) {
-        long count = 0;
-        count = BehaviorTreeConnections.connectionCountUpTo(
-                graph, GraphDocumentValidator.MAX_CONNECTIONS);
-        if (count > GraphDocumentValidator.MAX_CONNECTIONS) {
-            return GraphDocumentValidator.MAX_CONNECTIONS + 1;
-        }
-        for (NodeData node : graph.nodes.values()) {
-            if (node == null) continue;
-            if (node.execOutputs != null) count += node.execOutputs.size();
-            if (node.outputs != null) {
-                for (List<Connection> connections : node.outputs.values()) {
-                    if (connections != null) count += connections.size();
-                }
-            }
-            if (count > GraphDocumentValidator.MAX_CONNECTIONS) {
-                return GraphDocumentValidator.MAX_CONNECTIONS + 1;
-            }
-        }
-        return (int) count;
-    }
-
     private static GraphDocumentValidator.Input validationInput(
-            String assetId, NodeGraph graph, List<String> nodeIds) {
+            String assetId, JsonObject document, FlattenedGraph flattened, List<String> nodeIds) {
         List<GraphDocumentValidator.Node> nodes = nodeIds.stream()
                 .map(nodeId -> new GraphDocumentValidator.Node(nodeId,
-                        graph.nodes.get(nodeId) != null ? graph.nodes.get(nodeId).type : null))
+                        readNodeType(flattened.nodes().get(nodeId))))
                 .toList();
-        return new GraphDocumentValidator.Input(assetId, graph.getGraphTypeId(), nodes,
-                storedConnectionCount(graph));
+        return new GraphDocumentValidator.Input(assetId, readGraphType(document), nodes,
+                flattenedConnectionCount(flattened));
+    }
+
+    private static @Nullable String readNodeType(@Nullable JsonObject node) {
+        if (node == null || !node.has("node_type") || !node.get("node_type").isJsonPrimitive()) {
+            return null;
+        }
+        return node.get("node_type").getAsString();
+    }
+
+    private static String readGraphType(JsonObject document) {
+        if (document.has("graph_kind") && document.get("graph_kind").isJsonPrimitive()) {
+            return document.get("graph_kind").getAsString();
+        }
+        return GraphTypeRegistry.BEHAVIOR_TREE.id();
+    }
+
+    private static int flattenedConnectionCount(FlattenedGraph flattened) {
+        long count = flattened.dataInputs().size();
+        count += flattened.executionOutputs().values().stream().mapToLong(Map::size).sum();
+        return count > GraphDocumentValidator.MAX_CONNECTIONS
+                ? GraphDocumentValidator.MAX_CONNECTIONS + 1 : (int) count;
     }
 
     private static Compilation failedCompilation(GraphDiagnostic diagnostic) {
-        NodeGraph graph = new NodeGraph();
-        graph.graphKind = GraphTypeRegistry.BEHAVIOR_TREE.id();
-        return new Compilation(graph, List.of(), Map.of(), Map.of(), Map.of(),
+        return new Compilation(List.of(), Map.of(), Map.of(), Map.of(),
                 BehaviorTreePlan.RootSchedule.DEFAULT, List.of(diagnostic));
     }
 
@@ -397,22 +331,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                                               String nodeId, String portId,
                                               String relatedNodeId) {
         return new GraphDiagnostic(assetId, code, message, nodeId, portId, relatedNodeId);
-    }
-
-    interface NodeCatalog {
-        NodeCatalog REGISTRY = new NodeCatalog() {
-            @Override public boolean has(String typeId) { return NodeRegistry.INSTANCE.has(typeId); }
-            @Override public NodeCapabilities capabilities(String typeId) {
-                return NodeRegistry.INSTANCE.getCapabilities(typeId);
-            }
-            @Override public NodeDef definition(NodeData node) {
-                return NodeRegistry.INSTANCE.resolveDefinition(node);
-            }
-        };
-
-        boolean has(String typeId);
-        NodeCapabilities capabilities(String typeId);
-        @Nullable NodeDef definition(NodeData node);
     }
 
     private record InputKey(String nodeId, String portId) {
@@ -424,7 +342,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     private record NodeInfo(NodeData node, NodeCapabilities capabilities, PortCatalog ports) {
     }
 
-    private record Compilation(NodeGraph graph, List<String> nodeIds,
+    private record Compilation(List<String> nodeIds,
                                Map<String, NodeInfo> info, Map<String, List<String>> structure,
                                Map<InputKey, DataLink> inbound,
                                BehaviorTreePlan.RootSchedule rootSchedule,
@@ -439,7 +357,9 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                 addPort(row.leftPort(), inputs);
                 addPort(row.rightPort(), outputs);
             }
-            return new PortCatalog(Map.copyOf(inputs), Map.copyOf(outputs));
+            return new PortCatalog(
+                    Collections.unmodifiableMap(new LinkedHashMap<>(inputs)),
+                    Collections.unmodifiableMap(new LinkedHashMap<>(outputs)));
         }
 
         private static void addPort(@Nullable PortDef port, Map<String, PortDef> target) {

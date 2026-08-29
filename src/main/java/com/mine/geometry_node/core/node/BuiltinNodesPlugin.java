@@ -79,38 +79,25 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
     public void registerNodes(NodeRegistrationContext registry) {
         System.out.println("[BuiltinNodesPlugin] Start to register Nodes...");
 
-        registry.register("behavior/control", new BehaviorRootNode(), behaviorStructureCapabilities(
-                NodeCapabilities.ChildConstraint.SINGLE_CHILD));
-        registry.register("behavior/control", new BehaviorSequenceNode(), behaviorStructureCapabilities(
-                NodeCapabilities.ChildConstraint.UNBOUNDED_CHILDREN));
-        registry.register("behavior/control", new BehaviorSelectorNode(), behaviorStructureCapabilities(
-                NodeCapabilities.ChildConstraint.UNBOUNDED_CHILDREN));
-        registry.register("behavior/condition", new BehaviorConditionNode(), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.LEAF));
-        registry.register("behavior/condition", new BehaviorHasValidTargetNode(), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.LEAF));
-        registry.register("behavior/decorator", new BehaviorGuardNode(), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.SINGLE_CHILD));
-        registry.register("behavior/decorator", new BehaviorInverterNode(), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.SINGLE_CHILD));
-        registry.register("behavior/action", new BehaviorWaitNode(), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.LEAF));
-        registry.register("behavior/action", new BehaviorIdleNode(), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.LEAF));
+        registry.register("behavior/control", new BehaviorRootNode(), behaviorNodeCapabilities());
+        registry.register("behavior/control", new BehaviorSequenceNode(), behaviorNodeCapabilities());
+        registry.register("behavior/control", new BehaviorSelectorNode(), behaviorNodeCapabilities());
+        registry.register("behavior/condition", new BehaviorConditionNode(), behaviorNodeCapabilities());
+        registry.register("behavior/condition", new BehaviorHasValidTargetNode(), behaviorNodeCapabilities());
+        registry.register("behavior/decorator", new BehaviorGuardNode(), behaviorNodeCapabilities());
+        registry.register("behavior/decorator", new BehaviorInverterNode(), behaviorNodeCapabilities());
+        registry.register("behavior/action", new BehaviorWaitNode(), behaviorNodeCapabilities());
+        registry.register("behavior/action", new BehaviorIdleNode(), behaviorNodeCapabilities());
         registry.register("behavior/blackboard", new BehaviorGetBlackboardNode(),
                 behaviorDataCapabilities());
         registry.register("behavior/blackboard", new BehaviorHasBlackboardNode(),
                 behaviorDataCapabilities());
-        registry.register("behavior/blackboard", new BehaviorSetBlackboardNode(), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.LEAF));
-        registry.register("behavior/blackboard", new BehaviorClearBlackboardNode(), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.LEAF));
+        registry.register("behavior/blackboard", new BehaviorSetBlackboardNode(), behaviorNodeCapabilities());
+        registry.register("behavior/blackboard", new BehaviorClearBlackboardNode(), behaviorNodeCapabilities());
         registry.register("behavior/control", new BehaviorCompositeNode(
-                BehaviorCompositeNode.Kind.REACTIVE_SEQUENCE), behaviorStructureCapabilities(
-                NodeCapabilities.ChildConstraint.UNBOUNDED_CHILDREN));
+                BehaviorCompositeNode.Kind.REACTIVE_SEQUENCE), behaviorNodeCapabilities());
         registry.register("behavior/control", new BehaviorCompositeNode(
-                BehaviorCompositeNode.Kind.PRIORITY_SELECTOR), behaviorStructureCapabilities(
-                NodeCapabilities.ChildConstraint.UNBOUNDED_CHILDREN));
+                BehaviorCompositeNode.Kind.PRIORITY_SELECTOR), behaviorNodeCapabilities());
         registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.REPEAT);
         registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.RETRY);
         registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.TIMEOUT);
@@ -118,11 +105,9 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.ALWAYS_SUCCEED);
         registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.ALWAYS_FAIL);
         registry.register("behavior/condition", new BehaviorUtilityConditionNode(
-                BehaviorUtilityConditionNode.Kind.BLACKBOARD_VALUE_CHANGED), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.LEAF));
+                BehaviorUtilityConditionNode.Kind.BLACKBOARD_VALUE_CHANGED), behaviorNodeCapabilities());
         registry.register("behavior/condition", new BehaviorUtilityConditionNode(
-                BehaviorUtilityConditionNode.Kind.CAN_NAVIGATE_TO), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.LEAF));
+                BehaviorUtilityConditionNode.Kind.CAN_NAVIGATE_TO), behaviorNodeCapabilities());
         registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.SELECT_TARGET,
                 Set.of(NodeCapabilities.ResourceUse.TARGET));
         registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.CLEAR_TARGET,
@@ -564,43 +549,35 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         System.out.println("[BuiltinNodesPlugin] Register Finished");
     }
 
-    private static NodeCapabilities behaviorStructureCapabilities(NodeCapabilities.ChildConstraint children) {
-        return behaviorNodeCapabilities(children);
-    }
-
     private static void registerBehaviorDecorator(NodeRegistrationContext registry,
                                                   BehaviorDecoratorNode.Kind kind) {
-        registry.register("behavior/decorator", new BehaviorDecoratorNode(kind), behaviorNodeCapabilities(
-                NodeCapabilities.ChildConstraint.SINGLE_CHILD));
+        registry.register("behavior/decorator", new BehaviorDecoratorNode(kind), behaviorNodeCapabilities());
     }
 
     private static void registerBehaviorAction(NodeRegistrationContext registry,
                                                BehaviorEntityActionNode.Kind kind,
                                                Set<NodeCapabilities.ResourceUse> resources) {
         registry.register("behavior/entity", new BehaviorEntityActionNode(kind),
-                behaviorNodeCapabilities(NodeCapabilities.ChildConstraint.LEAF, resources));
+                behaviorNodeCapabilities(resources));
     }
 
-    private static NodeCapabilities behaviorNodeCapabilities(
-            NodeCapabilities.ChildConstraint children) {
+    private static NodeCapabilities behaviorNodeCapabilities() {
         return new NodeCapabilities(
                 Set.of(GraphTypeRegistry.BEHAVIOR_TREE.id()),
                 NodeCapabilities.Context.BEHAVIOR_EXECUTION,
-                children,
                 Set.of());
     }
 
-    private static NodeCapabilities behaviorNodeCapabilities(
-            NodeCapabilities.ChildConstraint children, Set<NodeCapabilities.ResourceUse> resources) {
+    private static NodeCapabilities behaviorNodeCapabilities(Set<NodeCapabilities.ResourceUse> resources) {
         return new NodeCapabilities(
                 Set.of(GraphTypeRegistry.BEHAVIOR_TREE.id()),
-                NodeCapabilities.Context.BEHAVIOR_EXECUTION, children, resources);
+                NodeCapabilities.Context.BEHAVIOR_EXECUTION, resources);
     }
 
     private static NodeCapabilities behaviorDataCapabilities() {
         return new NodeCapabilities(
                 Set.of(GraphTypeRegistry.BEHAVIOR_TREE.id()), NodeCapabilities.Context.DATA,
-                NodeCapabilities.ChildConstraint.LEAF, Set.of());
+                Set.of());
     }
 
     private static NodeCapabilities sharedDataCapabilities() {
@@ -608,7 +585,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
                 Set.of(GraphTypeRegistry.BLUEPRINT.id(), GraphTypeRegistry.QUEST.id(),
                         GraphTypeRegistry.BEHAVIOR_TREE.id()),
                 NodeCapabilities.Context.DATA,
-                NodeCapabilities.ChildConstraint.LEAF,
                 Set.of());
     }
 

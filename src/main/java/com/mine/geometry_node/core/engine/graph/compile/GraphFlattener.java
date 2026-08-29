@@ -23,8 +23,6 @@ public final class GraphFlattener {
 
     private final Map<String, JsonObject> nodeDataLookup = new HashMap<>();
     private final Map<String, Map<String, TargetConnection>> flowOutputLookup = new HashMap<>();
-    // Behavior-tree-only edge index; kept here so group flattening has one implementation.
-    private final Map<String, Map<String, TargetConnection>> behaviorOutputLookup = new HashMap<>();
     private final Map<InputKey, DataConnectionSource> inputLookup = new HashMap<>();
     private final Map<String, List<String>> typeLookup = new HashMap<>();
     private final Map<String, Map<String, Object>> staticInputLookup = new HashMap<>();
@@ -37,8 +35,6 @@ public final class GraphFlattener {
     private final Set<String> virtualNodeIds = new HashSet<>();
     private final Map<InputKey, DataResolution> dataResolutionCache = new HashMap<>();
     private final Map<InputKey, Optional<TargetConnection>> executionTargetCache = new HashMap<>();
-    // Behavior-tree-only counterpart to executionTargetCache.
-    private final Map<InputKey, Optional<TargetConnection>> behaviorTargetCache = new HashMap<>();
 
     private GraphFlattener() {
     }
@@ -90,7 +86,6 @@ public final class GraphFlattener {
             parseStaticInputs(globalId, instanceDefinition, nodeObj);
             parseExecutionOutputs(globalId, prefix, nodeObj);
             parseDataOutputs(globalId, prefix, nodeObj);
-            parseBehaviorOutputs(globalId, prefix, nodeObj);
 
             if (GroupNodeTypes.NODE_GROUP.equals(type) && nodeObj.has("sub_nodes")) {
                 flattenRecursive(globalId + "/", asObject(nodeObj.get("sub_nodes")));
@@ -189,24 +184,9 @@ public final class GraphFlattener {
         }
     }
 
-    /** Reads behavior-tree child/control edges from the editable graph document. */
-    private void parseBehaviorOutputs(String globalId, String prefix, JsonObject nodeObj) {
-        JsonObject outputs = asObject(nodeObj.get("behavior_outputs"));
-        if (outputs == null) return;
-
-        Map<String, TargetConnection> connections = new LinkedHashMap<>();
-        for (String port : outputs.keySet()) {
-            allPortNames.add(port);
-            TargetConnection target = parseTarget(prefix, outputs.get(port), null);
-            if (target != null) connections.put(port, target);
-        }
-        behaviorOutputLookup.put(globalId, connections);
-    }
-
     private void bridgeGroups() {
         bridgeDataInputs();
         bridgeExecutionOutputs();
-        bridgeBehaviorOutputs();
     }
 
     private void bridgeDataInputs() {
@@ -255,30 +235,6 @@ public final class GraphFlattener {
 
         flowOutputLookup.clear();
         flowOutputLookup.putAll(finalFlowLookup);
-    }
-
-    /** Rewrites behavior-tree-only edges across nested group boundaries. */
-    private void bridgeBehaviorOutputs() {
-        Map<String, Map<String, TargetConnection>> flattened = new HashMap<>();
-        for (Map.Entry<String, Map<String, TargetConnection>> sourceEntry : behaviorOutputLookup.entrySet()) {
-            String sourceId = sourceEntry.getKey();
-            if (isVirtualNode(sourceId)) continue;
-
-            Map<String, TargetConnection> rewritten = new LinkedHashMap<>();
-            sourceEntry.getValue().entrySet().stream()
-                    .sorted(Map.Entry.comparingByKey())
-                    .forEach(entry -> {
-                        TargetConnection target = entry.getValue();
-                        TargetConnection resolved = resolveBehaviorTarget(
-                                target.targetNodeId(), target.targetPortName(), new HashSet<>());
-                        if (resolved != null && !isVirtualNode(resolved.targetNodeId())) {
-                            rewritten.put(entry.getKey(), resolved);
-                        }
-                    });
-            if (!rewritten.isEmpty()) flattened.put(sourceId, rewritten);
-        }
-        behaviorOutputLookup.clear();
-        behaviorOutputLookup.putAll(flattened);
     }
 
     private DataResolution resolveDataSource(DataConnectionSource currentSource, Set<InputKey> visited) {
@@ -386,42 +342,6 @@ public final class GraphFlattener {
         return resolved;
     }
 
-    /** Resolves one behavior-tree-only edge through virtual group nodes. */
-    private TargetConnection resolveBehaviorTarget(String targetId, String targetPort, Set<InputKey> visited) {
-        if (targetId == null || targetPort == null) return null;
-        InputKey cacheKey = new InputKey(targetId, targetPort);
-        Optional<TargetConnection> cached = behaviorTargetCache.get(cacheKey);
-        if (cached != null) return cached.orElse(null);
-        if (!visited.add(cacheKey)) return null;
-
-        TargetConnection resolved;
-        GroupBoundary groupBoundary = groupBoundaries.get(targetId);
-        if (groupBoundary != null) {
-            TargetConnection next = groupBoundary.groupInId != null
-                    ? getBehaviorTarget(groupBoundary.groupInId, targetPort) : null;
-            resolved = next != null
-                    ? resolveBehaviorTarget(next.targetNodeId(), next.targetPortName(), visited) : null;
-        } else if (boundaryToGroupMap.containsKey(targetId)) {
-            String ownerGroupId = boundaryToGroupMap.get(targetId);
-            GroupBoundary owner = groupBoundaries.get(ownerGroupId);
-            if (owner != null && targetId.equals(owner.groupOutId)) {
-                TargetConnection next = getBehaviorTarget(ownerGroupId, targetPort);
-                resolved = next != null
-                        ? resolveBehaviorTarget(next.targetNodeId(), next.targetPortName(), visited) : null;
-            } else {
-                resolved = null;
-            }
-        } else if (isVirtualNode(targetId)) {
-            resolved = null;
-        } else {
-            resolved = new TargetConnection(targetId, targetPort);
-        }
-
-        visited.remove(cacheKey);
-        behaviorTargetCache.put(cacheKey, Optional.ofNullable(resolved));
-        return resolved;
-    }
-
     private DataResolution resolveGroupInputDefault(String groupId, String port) {
         Map<String, Object> groupInputs = staticInputLookup.get(groupId);
         if (groupInputs == null || !groupInputs.containsKey(port)) {
@@ -442,12 +362,6 @@ public final class GraphFlattener {
         return flows.get("flow_out");
     }
 
-    /** Looks up an unflattened behavior-tree-only edge. */
-    private TargetConnection getBehaviorTarget(String sourceId, String port) {
-        Map<String, TargetConnection> connections = behaviorOutputLookup.get(sourceId);
-        return connections != null ? connections.get(port) : null;
-    }
-
     private void setStaticInput(String nodeId, String portName, Object value) {
         if (value == null) return;
         staticInputLookup.computeIfAbsent(nodeId, ignored -> new HashMap<>()).put(portName, value);
@@ -460,7 +374,6 @@ public final class GraphFlattener {
         for (String virtualId : virtualNodeIds) {
             nodeDataLookup.remove(virtualId);
             flowOutputLookup.remove(virtualId);
-            behaviorOutputLookup.remove(virtualId);
             staticInputLookup.remove(virtualId);
             portLookup.remove(virtualId);
         }
@@ -599,7 +512,7 @@ public final class GraphFlattener {
     }
 
     private FlattenedGraph snapshot() {
-        return new FlattenedGraph(nodeDataLookup, flowOutputLookup, behaviorOutputLookup,
+        return new FlattenedGraph(nodeDataLookup, flowOutputLookup,
                 inputLookup, typeLookup, staticInputLookup, portLookup,
                 allPortNames);
     }

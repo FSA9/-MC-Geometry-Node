@@ -11,19 +11,15 @@ import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorRootNode;
 import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorEntityActionNode;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
-import com.mine.geometry_node.core.engine.behavior.structure.BehaviorTreeConnections;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,7 +27,7 @@ import java.util.Set;
 public class GraphController {
     private final EditorContext mContext;
 
-    public enum ConnectionChannel { DATA, EXECUTION, BEHAVIOR }
+    public enum ConnectionChannel { DATA, EXECUTION }
 
     public record ScopedConnectionSnapshot(
             boolean external,
@@ -216,16 +212,6 @@ public class GraphController {
                 removeConnection(nodeId, invalidOut, link.targetNodeId(), link.targetPortName());
             }
         }
-        for (String behaviorPort : new ArrayList<>(node.behaviorOutputs.keySet())) {
-            if (!validOutputs.contains(behaviorPort)) {
-                Connection link = node.behaviorOutputs.get(behaviorPort);
-                if (link != null) {
-                    removeBehaviorConnection(nodeId, behaviorPort,
-                            link.targetNodeId(), link.targetPortName());
-                }
-            }
-        }
-
         // 5. 清理当前节点失效的【执行流】连线
         List<String> invalidExecPorts = new ArrayList<>();
         for (String execPort : node.execOutputs.keySet()) {
@@ -382,102 +368,13 @@ public class GraphController {
 
         PortType outType = getResolvedPortType(outNode, outPortId, false);
         PortType inType = getResolvedPortType(inNode, inPortId, true);
-        if (outType == PortType.BEHAVIOR_STRUCTURE || inType == PortType.BEHAVIOR_STRUCTURE) {
-            return canAddBehaviorChild(outNodeId, outPortId, inNodeId, inPortId);
-        }
         if (isFlowToVirtualAny(outNode, outType, inNode, inType)) return true;
         if (isFlowToUntypedReroute(outNode, outType, inNode, inType)) return true;
         return PortType.isCompatible(outType, inType);
     }
 
-    public boolean isBehaviorStructureConnection(String outNodeId, String outPortId,
-                                                 String inNodeId, String inPortId) {
-        NodeData outNode = mContext.getCurrentGraph().getNode(outNodeId);
-        NodeData inNode = mContext.getCurrentGraph().getNode(inNodeId);
-        PortType outType = getResolvedPortType(outNode, outPortId, false);
-        PortType inType = getResolvedPortType(inNode, inPortId, true);
-        return outType == PortType.BEHAVIOR_STRUCTURE
-                && (inType == PortType.BEHAVIOR_STRUCTURE
-                || inType == PortType.ANY && GroupNodeFactory.isBoundaryNode(inNode))
-                || inType == PortType.BEHAVIOR_STRUCTURE
-                && outType == PortType.ANY && GroupNodeFactory.isBoundaryNode(outNode);
-    }
-
-    public Connection getBehaviorConnection(String parentId, String outPortId) {
-        NodeData parent = mContext.getCurrentGraph().getNode(parentId);
-        return parent != null && parent.behaviorOutputs != null
-                ? parent.behaviorOutputs.get(outPortId) : null;
-    }
-
-    public BehaviorTreeConnections.ParentConnection getBehaviorParent(String childId, String inPortId) {
-        NodeGraph graph = mContext.getCurrentGraph();
-        NodeData child = graph.getNode(childId);
-        return isBehaviorGroupProxy(child)
-                ? BehaviorTreeConnections.parentOfInput(graph, childId, inPortId)
-                : BehaviorTreeConnections.parentOf(graph, childId);
-    }
-
-    public void addBehaviorConnection(String parentId, String outPortId,
-                                      String childId, String inPortId) {
-        if (!canAddBehaviorChild(parentId, outPortId, childId, inPortId)) return;
-        NodeGraph graph = mContext.getCurrentGraph();
-        NodeData parent = graph.getNode(parentId);
-        NodeData child = graph.getNode(childId);
-        if (parent == null || child == null) return;
-
-        Connection displaced = parent.behaviorOutputs.get(outPortId);
-        BehaviorTreeConnections.ParentConnection oldParent = isBehaviorGroupProxy(child)
-                ? BehaviorTreeConnections.parentOfInput(graph, childId, inPortId)
-                : BehaviorTreeConnections.parentOf(graph, childId);
-        Set<BehaviorTreeConnections.ParentConnection> removals = new LinkedHashSet<>();
-        if (displaced != null) {
-            removals.add(new BehaviorTreeConnections.ParentConnection(parentId, outPortId, displaced));
-        }
-        if (oldParent != null) removals.add(oldParent);
-
-        for (BehaviorTreeConnections.ParentConnection removal : removals) {
-            NodeData oldSource = graph.getNode(removal.parentId());
-            Connection current = oldSource != null ? oldSource.behaviorOutputs.get(removal.portId()) : null;
-            if (current == null
-                    || !current.targetNodeId().equals(removal.connection().targetNodeId())
-                    || !current.targetPortName().equals(removal.connection().targetPortName())) continue;
-            oldSource.behaviorOutputs.remove(removal.portId());
-            NodeData oldTarget = graph.getNode(current.targetNodeId());
-            if (oldTarget != null) oldTarget.setInputConnected(current.targetPortName(), false);
-            mContext.notifyConnectionRemoved(removal.parentId(), removal.portId(),
-                    current.targetNodeId(), current.targetPortName());
-        }
-        parent.behaviorOutputs.put(outPortId, new Connection(childId, inPortId));
-        child.setInputConnected(inPortId, true);
-        for (BehaviorTreeConnections.ParentConnection removal : removals) {
-            refreshVirtualGroupPortTypeAfterRemoval(removal.parentId(), removal.portId(),
-                    removal.connection().targetNodeId(), removal.connection().targetPortName());
-        }
-        updateVirtualGroupPortTypeAfterBehaviorConnection(parentId, outPortId, childId, inPortId);
-        mContext.notifyConnectionAdded(parentId, outPortId, childId, inPortId);
-    }
-
-    public void removeBehaviorConnection(String parentId, String outPortId,
-                                         String childId, String inPortId) {
-        NodeData parent = mContext.getCurrentGraph().getNode(parentId);
-        if (parent == null || parent.behaviorOutputs == null) return;
-        Connection connection = parent.behaviorOutputs.get(outPortId);
-        if (connection == null || !childId.equals(connection.targetNodeId())
-                || !inPortId.equals(connection.targetPortName())) return;
-        parent.behaviorOutputs.remove(outPortId);
-        NodeData child = mContext.getCurrentGraph().getNode(childId);
-        if (child != null) child.setInputConnected(inPortId, false);
-        refreshVirtualGroupPortTypeAfterRemoval(parentId, outPortId, childId, inPortId);
-        mContext.notifyConnectionRemoved(parentId, outPortId, childId, inPortId);
-    }
-
     public boolean hasConnection(String outNodeId, String outPortId,
                                  String inNodeId, String inPortId) {
-        if (isBehaviorStructureConnection(outNodeId, outPortId, inNodeId, inPortId)) {
-            Connection connection = getBehaviorConnection(outNodeId, outPortId);
-            return connection != null && inNodeId.equals(connection.targetNodeId())
-                    && inPortId.equals(connection.targetPortName());
-        }
         NodeData outNode = mContext.getCurrentGraph().getNode(outNodeId);
         if (outNode == null) return false;
         PortType outType = getResolvedPortType(outNodeId, outPortId, false);
@@ -493,53 +390,6 @@ public class GraphController {
                         && inPortId.equals(connection.targetPortName()));
     }
 
-    private boolean canAddBehaviorChild(String parentId, String outPortId,
-                                        String childId, String inPortId) {
-        NodeGraph graph = mContext.getCurrentGraph();
-        if (!GraphTypeRegistry.BEHAVIOR_TREE.id().equals(graph.getGraphTypeId())
-                || !isBehaviorEndpoint(parentId, outPortId, false)
-                || !isBehaviorEndpoint(childId, inPortId, true)) return false;
-        NodeData parent = graph.getNode(parentId);
-        NodeData child = graph.getNode(childId);
-        if (parent == null || child == null || parentId.equals(childId)) return false;
-        boolean parentProxy = isBehaviorGroupProxy(parent);
-        boolean childProxy = isBehaviorGroupProxy(child);
-        if (!parentProxy && !BehaviorTreeConnections.isChildPort(outPortId)) return false;
-        if (!childProxy && !StandardPorts.BEHAVIOR_PARENT.getId().equals(inPortId)) return false;
-        if (!parentProxy && NodeRegistry.INSTANCE.getCapabilities(parent.type).children().maximum() == 0) return false;
-        if (!childProxy && BehaviorRootNode.TYPE_ID.equals(child.type)) return false;
-
-        Connection currentOutput = parent.behaviorOutputs.get(outPortId);
-        if (currentOutput != null && childId.equals(currentOutput.targetNodeId())
-                && inPortId.equals(currentOutput.targetPortName())) return false;
-        int currentChildren = parent.behaviorOutputs.size();
-        if (!parentProxy) {
-            int maximum = NodeRegistry.INSTANCE.getCapabilities(parent.type).children().maximum();
-            if (maximum != com.mine.geometry_node.core.node.NodeCapabilities.ChildConstraint.UNBOUNDED
-                    && currentOutput == null && currentChildren >= maximum) return false;
-        }
-        return !isBehaviorDescendant(childId, parentId, new HashSet<>());
-    }
-
-    private static boolean isBehaviorGroupProxy(NodeData node) {
-        return node != null && (node.isGroupNode() || node.isGroupInputNode() || node.isGroupOutputNode());
-    }
-
-    private boolean isBehaviorEndpoint(String nodeId, String portId, boolean inputSide) {
-        NodeData node = mContext.getCurrentGraph().getNode(nodeId);
-        PortType type = getResolvedPortType(node, portId, inputSide);
-        return type == PortType.BEHAVIOR_STRUCTURE
-                || type == PortType.ANY && GroupNodeFactory.isBoundaryNode(node);
-    }
-
-    private boolean isBehaviorDescendant(String nodeId, String targetId, Set<String> visited) {
-        if (!visited.add(nodeId)) return false;
-        for (String childId : BehaviorTreeConnections.childrenOf(mContext.getCurrentGraph(), nodeId)) {
-            if (targetId.equals(childId) || isBehaviorDescendant(childId, targetId, visited)) return true;
-        }
-        return false;
-    }
-
     public void removeDynamicBranch(String nodeId, String propertyKey, int removeIndex, int totalCount) {
         NodeData node = mContext.getCurrentGraph().getNode(nodeId);
         if (node == null) return;
@@ -547,22 +397,12 @@ public class GraphController {
         if (removeIndex < 1 || removeIndex > totalCount) return;
         ensurePortConfig(node);
 
-        if (StaticKeys.DYNAMIC_BRANCH_OUTPUT_COUNT.id().equals(propertyKey)) {
-            String removedPort = BehaviorTreeConnections.childPort(removeIndex);
-            Connection removed = node.behaviorOutputs.get(removedPort);
-            if (removed != null) {
-                removeBehaviorConnection(nodeId, removedPort,
-                        removed.targetNodeId(), removed.targetPortName());
-            }
-        }
-
         for (int i = removeIndex; i < totalCount; i++) {
             String oldSuffix = "_" + (i + 1);
             String newSuffix = "_" + i;
             shiftMapData(node.inputs, oldSuffix, newSuffix);
             shiftMapData(node.outputs, oldSuffix, newSuffix);
             shiftMapData(node.execOutputs, oldSuffix, newSuffix);
-            shiftMapData(node.behaviorOutputs, oldSuffix, newSuffix);
             shiftPortConfig(node.portConfig, oldSuffix, newSuffix);
             shiftConnections(nodeId, oldSuffix, newSuffix);
         }
@@ -571,7 +411,6 @@ public class GraphController {
         node.inputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
         node.outputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
         node.execOutputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
-        node.behaviorOutputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
         removePortConfigSuffix(node.portConfig, lastSuffix);
         shiftConnections(nodeId, lastSuffix, null);
 
@@ -704,25 +543,13 @@ public class GraphController {
 
         if (outNode != null && outNode.isGroupInputNode()) {
             String name = getResolvedPortDisplayName(inNode, inPortId, true);
-            setVirtualGroupPortBinding(outNode, outPortId, PortType.EXECUTION, name);
+            setVirtualGroupPortBinding(outNode, outPortId,
+                    getResolvedPortType(inNode, inPortId, true), name);
         }
         if (inNode != null && inNode.isGroupOutputNode()) {
             String name = getResolvedPortDisplayName(outNode, outPortId, false);
-            setVirtualGroupPortBinding(inNode, inPortId, PortType.EXECUTION, name);
-        }
-    }
-
-    private void updateVirtualGroupPortTypeAfterBehaviorConnection(String outNodeId, String outPortId,
-                                                                  String inNodeId, String inPortId) {
-        NodeData outNode = mContext.getCurrentGraph().getNode(outNodeId);
-        NodeData inNode = mContext.getCurrentGraph().getNode(inNodeId);
-        if (outNode != null && outNode.isGroupInputNode()) {
-            setVirtualGroupPortBinding(outNode, outPortId, PortType.BEHAVIOR_STRUCTURE,
-                    getResolvedPortDisplayName(inNode, inPortId, true));
-        }
-        if (inNode != null && inNode.isGroupOutputNode()) {
-            setVirtualGroupPortBinding(inNode, inPortId, PortType.BEHAVIOR_STRUCTURE,
-                    getResolvedPortDisplayName(outNode, outPortId, false));
+            setVirtualGroupPortBinding(inNode, inPortId,
+                    getResolvedPortType(outNode, outPortId, false), name);
         }
     }
 
@@ -751,14 +578,8 @@ public class GraphController {
         }
         if (groupInputNode.execOutputs != null && groupInputNode.execOutputs.containsKey(portId)) {
             Connection link = groupInputNode.execOutputs.get(portId);
-            inferred = PortType.EXECUTION;
             NodeData targetNode = link != null ? mContext.getCurrentGraph().getNode(link.targetNodeId()) : null;
-            inferredName = link != null ? getResolvedPortDisplayName(targetNode, link.targetPortName(), true) : "";
-        }
-        if (groupInputNode.behaviorOutputs != null && groupInputNode.behaviorOutputs.containsKey(portId)) {
-            Connection link = groupInputNode.behaviorOutputs.get(portId);
-            inferred = PortType.BEHAVIOR_STRUCTURE;
-            NodeData targetNode = link != null ? mContext.getCurrentGraph().getNode(link.targetNodeId()) : null;
+            inferred = link != null ? getResolvedPortType(targetNode, link.targetPortName(), true) : null;
             inferredName = link != null ? getResolvedPortDisplayName(targetNode, link.targetPortName(), true) : "";
         }
         setVirtualGroupPortBinding(groupInputNode, portId, inferred != null ? inferred : PortType.ANY, inferred != null ? inferredName : "");
@@ -789,18 +610,7 @@ public class GraphController {
                 for (Map.Entry<String, Connection> entry : node.execOutputs.entrySet()) {
                     Connection link = entry.getValue();
                     if (link != null && groupOutputNode.id.equals(link.targetNodeId()) && portId.equals(link.targetPortName())) {
-                        inferred = PortType.EXECUTION;
-                        inferredName = getResolvedPortDisplayName(node, entry.getKey(), false);
-                        break;
-                    }
-                }
-            }
-            if (inferred == null && node.behaviorOutputs != null) {
-                for (Map.Entry<String, Connection> entry : node.behaviorOutputs.entrySet()) {
-                    Connection link = entry.getValue();
-                    if (link != null && groupOutputNode.id.equals(link.targetNodeId())
-                            && portId.equals(link.targetPortName())) {
-                        inferred = PortType.BEHAVIOR_STRUCTURE;
+                        inferred = getResolvedPortType(node, entry.getKey(), false);
                         inferredName = getResolvedPortDisplayName(node, entry.getKey(), false);
                         break;
                     }
@@ -849,9 +659,7 @@ public class GraphController {
             NodeData groupInputNode = groupNode.subNodes.get(GroupNodeTypes.GROUP_IN_ID);
             return groupInputNode != null
                     && (!groupInputNode.getConnections(portId).isEmpty()
-                    || groupInputNode.execOutputs != null && groupInputNode.execOutputs.containsKey(portId)
-                    || groupInputNode.behaviorOutputs != null
-                    && groupInputNode.behaviorOutputs.containsKey(portId));
+                    || groupInputNode.execOutputs != null && groupInputNode.execOutputs.containsKey(portId));
         }
 
         NodeData groupOutputNode = groupNode.subNodes.get(GroupNodeTypes.GROUP_OUT_ID);
@@ -873,12 +681,6 @@ public class GraphController {
                     if (link != null && groupOutputNode.id.equals(link.targetNodeId()) && portId.equals(link.targetPortName())) {
                         return true;
                     }
-                }
-            }
-            if (innerNode.behaviorOutputs != null) {
-                for (Connection link : innerNode.behaviorOutputs.values()) {
-                    if (link != null && groupOutputNode.id.equals(link.targetNodeId())
-                            && portId.equals(link.targetPortName())) return true;
                 }
             }
         }
@@ -910,11 +712,6 @@ public class GraphController {
             if (node.execOutputs != null && node.execOutputs.containsKey(portId)) {
                 removeExecutionConnection(nodeId, portId);
             }
-            if (node.behaviorOutputs != null && node.behaviorOutputs.containsKey(portId)) {
-                Connection link = node.behaviorOutputs.get(portId);
-                if (link != null) removeBehaviorConnection(
-                        nodeId, portId, link.targetNodeId(), link.targetPortName());
-            }
         }
 
         for (NodeData otherNode : mContext.getCurrentGraph().nodes.values()) {
@@ -933,16 +730,6 @@ public class GraphController {
                     Connection link = entry.getValue();
                     if (link != null && nodeId.equals(link.targetNodeId()) && portId.equals(link.targetPortName())) {
                         removeExecutionConnection(otherNode.id, entry.getKey());
-                    }
-                }
-            }
-            if (otherNode.behaviorOutputs != null) {
-                for (Map.Entry<String, Connection> entry
-                        : new ArrayList<>(otherNode.behaviorOutputs.entrySet())) {
-                    Connection link = entry.getValue();
-                    if (link != null && nodeId.equals(link.targetNodeId())
-                            && portId.equals(link.targetPortName())) {
-                        removeBehaviorConnection(otherNode.id, entry.getKey(), nodeId, portId);
                     }
                 }
             }
@@ -1000,9 +787,9 @@ public class GraphController {
         PortType outType = getResolvedPortType(outNode, snapshot.outPortId(), false);
         PortType inType = getResolvedPortType(inNode, snapshot.inPortId(), true);
         return switch (snapshot.channel()) {
-            case EXECUTION -> outType == PortType.EXECUTION && inType == PortType.EXECUTION;
-            case BEHAVIOR -> outType == PortType.BEHAVIOR_STRUCTURE
-                    && inType == PortType.BEHAVIOR_STRUCTURE;
+            case EXECUTION -> outType != null && inType != null
+                    && outType.isFlow() && inType.isFlow()
+                    && PortType.isCompatible(outType, inType);
             case DATA -> PortType.isCompatible(outType, inType);
         };
     }
@@ -1052,17 +839,6 @@ public class GraphController {
                     }
                 }
             }
-            if (node.behaviorOutputs != null) {
-                for (Map.Entry<String, Connection> entry : node.behaviorOutputs.entrySet()) {
-                    Connection link = entry.getValue();
-                    if (link != null && isConnectionForPort(
-                            node.id, entry.getKey(), link, nodeId, portId)) {
-                        snapshots.add(new ScopedConnectionSnapshot(external,
-                                ConnectionChannel.BEHAVIOR, node.id, entry.getKey(),
-                                link.targetNodeId(), link.targetPortName()));
-                    }
-                }
-            }
         }
     }
 
@@ -1086,12 +862,6 @@ public class GraphController {
             outNode.addExecutionConnection(snapshot.outPortId(), snapshot.inNodeId(), snapshot.inPortId());
             return;
         }
-        if (snapshot.channel() == ConnectionChannel.BEHAVIOR) {
-            outNode.addBehaviorConnection(snapshot.outPortId(), snapshot.inNodeId(), snapshot.inPortId());
-            NodeData inNode = scopeNodes.get(snapshot.inNodeId());
-            if (inNode != null) inNode.setInputConnected(snapshot.inPortId(), true);
-            return;
-        }
         outNode.addDataConnection(snapshot.outPortId(), snapshot.inNodeId(), snapshot.inPortId());
         NodeData inNode = scopeNodes.get(snapshot.inNodeId());
         if (inNode != null) {
@@ -1107,12 +877,6 @@ public class GraphController {
 
         if (snapshot.channel() == ConnectionChannel.EXECUTION) {
             outNode.removeExecutionConnection(snapshot.outPortId());
-            return;
-        }
-        if (snapshot.channel() == ConnectionChannel.BEHAVIOR) {
-            outNode.removeBehaviorConnection(snapshot.outPortId());
-            NodeData inNode = scopeNodes.get(snapshot.inNodeId());
-            if (inNode != null) inNode.setInputConnected(snapshot.inPortId(), false);
             return;
         }
         outNode.removeDataConnection(snapshot.outPortId(), snapshot.inNodeId(), snapshot.inPortId());

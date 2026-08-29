@@ -27,16 +27,10 @@ public class CmdDisconnect implements ICommand {
     }
 
     private boolean isFlowConnection() {
-        if (isBehaviorConnection()) return false;
         if (outPortId.startsWith("flow_") || inPortId.startsWith("flow_")) return true;
         PortType outType = mController.getResolvedPortType(outNodeId, outPortId, false);
         PortType inType = mController.getResolvedPortType(inNodeId, inPortId, true);
         return (outType != null && outType.isFlow()) || (inType != null && inType.isFlow());
-    }
-
-    private boolean isBehaviorConnection() {
-        return mController != null && mController.isBehaviorStructureConnection(
-                outNodeId, outPortId, inNodeId, inPortId);
     }
 
     private void backupExternalConnections() {
@@ -52,9 +46,7 @@ public class CmdDisconnect implements ICommand {
 
     @Override
     public void execute() {
-        if (isBehaviorConnection()) {
-            mController.removeBehaviorConnection(outNodeId, outPortId, inNodeId, inPortId);
-        } else if (isFlowConnection()) {
+        if (isFlowConnection()) {
             mController.removeExecutionConnection(outNodeId, outPortId);
         } else {
             mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
@@ -64,9 +56,7 @@ public class CmdDisconnect implements ICommand {
     @Override
     public void undo() {
         // 撤销时：恢复连线
-        if (isBehaviorConnection()) {
-            mController.addBehaviorConnection(outNodeId, outPortId, inNodeId, inPortId);
-        } else if (isFlowConnection()) {
+        if (isFlowConnection()) {
             mController.addExecutionConnection(outNodeId, outPortId, inNodeId, inPortId);
         } else {
             mController.addConnection(outNodeId, outPortId, inNodeId, inPortId);

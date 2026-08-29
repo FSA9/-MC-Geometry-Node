@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.node.NodeCapabilities;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /** Immutable, compact behavior-tree artifact shared by all future runtime instances. */
@@ -80,7 +81,7 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
     }
 
     public NodeCapabilities getNodeCapabilities(int nodeId) {
-        return validNode(nodeId) ? capabilities[nodeId] : NodeCapabilities.LEGACY_BLUEPRINT;
+        return capabilities[Objects.checkIndex(nodeId, capabilities.length)];
     }
 
     public int getRootNode() {

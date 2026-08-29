@@ -6,7 +6,6 @@ import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.port.PortType;
-import com.mine.geometry_node.core.engine.behavior.structure.BehaviorTreeConnections;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.List;
@@ -22,8 +21,6 @@ public class CmdConnect implements ICommand {
     private String mDisplacedInboundNodeId;
     private String mDisplacedInboundPortId;
     private Connection mDisplacedExecutionOutput;
-    private Connection mDisplacedBehaviorOutput;
-    private BehaviorTreeConnections.ParentConnection mDisplacedBehaviorParent;
 
     public CmdConnect(GraphController controller, NodeGraph graph, String outNodeId, String outPortId, String inNodeId, String inPortId) {
         this.mController = controller;
@@ -44,18 +41,12 @@ public class CmdConnect implements ICommand {
     }
 
     private boolean isFlowConnection() {
-        if (isBehaviorConnection()) return false;
         if (outPortId.startsWith("flow_") || inPortId.startsWith("flow_")) return true;
         PortType outType = getPortType(outNodeId, outPortId, false);
         PortType inType = getPortType(inNodeId, inPortId, true);
         if ((outType != null && outType.isFlow()) || (inType != null && inType.isFlow())) return true;
         return (isBoundaryVirtualPort(outNodeId) && inType != null && inType.isFlow())
                 || (isBoundaryVirtualPort(inNodeId) && outType != null && outType.isFlow());
-    }
-
-    private boolean isBehaviorConnection() {
-        return mController != null && mController.isBehaviorStructureConnection(
-                outNodeId, outPortId, inNodeId, inPortId);
     }
 
     private PortType getPortType(String nodeId, String portId, boolean inputSide) {
@@ -73,11 +64,6 @@ public class CmdConnect implements ICommand {
      */
     private void snapshotDisplacedConnections() {
         if (mGraph == null) return;
-        if (isBehaviorConnection()) {
-            mDisplacedBehaviorOutput = mController.getBehaviorConnection(outNodeId, outPortId);
-            mDisplacedBehaviorParent = mController.getBehaviorParent(inNodeId, inPortId);
-            return;
-        }
         boolean executionFlow = isFlowConnection();
         if (executionFlow) {
             NodeData outNode = mGraph.getNode(outNodeId);
@@ -129,11 +115,6 @@ public class CmdConnect implements ICommand {
         if (!canExecute()) {
             return;
         }
-        if (isBehaviorConnection()) {
-            mController.addBehaviorConnection(outNodeId, outPortId, inNodeId, inPortId);
-            return;
-        }
-
         // 1. 如果有旧连线，先断开它 (打断旧关系)
         if (mDisplacedInboundNodeId != null && mDisplacedInboundPortId != null) {
             if (isFlowConnection()) {
@@ -154,23 +135,6 @@ public class CmdConnect implements ICommand {
 
     @Override
     public void undo() {
-        if (isBehaviorConnection()) {
-            mController.removeBehaviorConnection(outNodeId, outPortId, inNodeId, inPortId);
-            if (mDisplacedBehaviorOutput != null) {
-                mController.addBehaviorConnection(outNodeId, outPortId,
-                        mDisplacedBehaviorOutput.targetNodeId(),
-                        mDisplacedBehaviorOutput.targetPortName());
-            }
-            if (mDisplacedBehaviorParent != null
-                    && (mDisplacedBehaviorOutput == null
-                    || !mDisplacedBehaviorParent.parentId().equals(outNodeId)
-                    || !mDisplacedBehaviorParent.portId().equals(outPortId))) {
-                mController.addBehaviorConnection(mDisplacedBehaviorParent.parentId(),
-                        mDisplacedBehaviorParent.portId(), inNodeId,
-                        mDisplacedBehaviorParent.connection().targetPortName());
-            }
-            return;
-        }
         // 1. 撤销新连线
         if (isFlowConnection()) {
             mController.removeExecutionConnection(outNodeId, outPortId);

@@ -1,14 +1,17 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
 import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard;
-import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorScopedStateProviders;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorNodeState;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateProviderResolver;
 import com.mine.geometry_node.core.node.NodeCapabilities;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -49,8 +52,6 @@ public final class BehaviorTreeProcess {
     private long evaluationTimeOverruns;
     private int lastNodeVisits;
     private int peakNodeVisits;
-    private int lastImmediateTransitions;
-    private int peakImmediateTransitions;
     private long lastEvaluationTick = Long.MIN_VALUE;
     private long nextWakeTick = Long.MAX_VALUE;
     private long traceSequence;
@@ -91,26 +92,24 @@ public final class BehaviorTreeProcess {
     public EvaluationMetrics evaluationMetrics() {
         return new EvaluationMetrics(evaluationCount, totalEvaluationNanos,
                 lastEvaluationNanos, evaluationTimeOverruns, lastNodeVisits,
-                peakNodeVisits, lastImmediateTransitions, peakImmediateTransitions);
+                peakNodeVisits);
     }
     public long lastEvaluationTick() { return lastEvaluationTick; }
     public long nextWakeTick() { return nextWakeTick; }
     public BehaviorBlackboard blackboard() { return blackboard; }
 
-    BehaviorBlackboard blackboard(int nodeIndex) {
-        return blackboard;
-    }
-
-    private void installPersistentBlackboards(BehaviorBlackboard blackboard) {
-        if (host.level() != null && host.owner() != null) {
-            BehaviorScopedStateProviders.install(blackboard, host.level(), host.owner());
-        }
-    }
-
     private BehaviorBlackboard newBlackboard() {
         BehaviorBlackboard blackboard = new BehaviorBlackboard(
                 budget.maxBlackboardEntriesPerInstance());
-        installPersistentBlackboards(blackboard);
+        ServerLevel level = host.level();
+        Entity owner = host.owner();
+        if (level != null && owner != null) {
+            ScopedStateNamespace namespace = ScopedStateNamespace.PUBLIC;
+            blackboard.installProvider(ScopedStateProviderResolver.owner(owner, namespace));
+            blackboard.installProvider(ScopedStateProviderResolver.shared(level, namespace));
+            blackboard.installProvider(ScopedStateProviderResolver.currentGroup(owner, namespace));
+            blackboard.installProvider(ScopedStateProviderResolver.world(level, namespace));
+        }
         return blackboard;
     }
 
@@ -127,8 +126,10 @@ public final class BehaviorTreeProcess {
 
     public List<Integer> activePath() {
         List<Integer> result = new ArrayList<>();
+        boolean[] visited = new boolean[nodeStates.length];
         int current = plan.getRootNode();
-        while (validNode(current) && nodeStates[current].isActive()) {
+        while (validNode(current) && nodeStates[current].isActive() && !visited[current]) {
+            visited[current] = true;
             result.add(current);
             int activeChild = -1;
             for (int index = 0; index < plan.getChildCount(current); index++) {
@@ -181,8 +182,6 @@ public final class BehaviorTreeProcess {
         evaluationTimeOverruns = 0L;
         lastNodeVisits = 0;
         peakNodeVisits = 0;
-        lastImmediateTransitions = 0;
-        peakImmediateTransitions = 0;
         traceSequence = 0L;
         historyStart = 0;
         historySize = 0;
@@ -238,8 +237,10 @@ public final class BehaviorTreeProcess {
         evaluating = false;
         if (state != BehaviorInstanceState.RUNNING) return;
         if (result != BehaviorResult.RUNNING) {
-            nextWakeTick = nextRootRoundTick(lastEvaluationTick,
+            long scheduled = nextRootRoundTick(lastEvaluationTick,
                     plan.rootSchedule().recheckInterval(), rootScheduleOffset);
+            if (reentrantWakeRequested) scheduled = Math.min(scheduled, defaultWakeTick);
+            nextWakeTick = Math.min(nextWakeTick, scheduled);
             return;
         }
         if (reentrantWakeRequested) requestWakeup(defaultWakeTick);
@@ -273,14 +274,12 @@ public final class BehaviorTreeProcess {
         totalNanos[nodeIndex] = saturatingAdd(totalNanos[nodeIndex], lastNanos[nodeIndex]);
     }
 
-    void recordEvaluationMetrics(long elapsedNanos, int nodeVisits, int immediateTransitions) {
+    void recordEvaluationMetrics(long elapsedNanos, int nodeVisits) {
         if (!debugTracing) return;
         lastEvaluationNanos = Math.max(0L, elapsedNanos);
         totalEvaluationNanos = saturatingAdd(totalEvaluationNanos, lastEvaluationNanos);
         lastNodeVisits = Math.max(0, nodeVisits);
         peakNodeVisits = Math.max(peakNodeVisits, lastNodeVisits);
-        lastImmediateTransitions = Math.max(0, immediateTransitions);
-        peakImmediateTransitions = Math.max(peakImmediateTransitions, lastImmediateTransitions);
         if (lastEvaluationNanos > budget.instanceNanosPerEvaluation()) {
             evaluationTimeOverruns++;
         }
@@ -378,8 +377,7 @@ public final class BehaviorTreeProcess {
 
     public record EvaluationMetrics(long evaluations, long totalNanos, long lastNanos,
                                     long softTimeBudgetOverruns, int lastNodeVisits,
-                                    int peakNodeVisits, int lastImmediateTransitions,
-                                    int peakImmediateTransitions) {
+                                    int peakNodeVisits) {
     }
 
     public record TraceEvent(long sequence, long gameTick, int nodeIndex, String nodeId,

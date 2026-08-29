@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.engine.behavior.runtime.executor;
 
-import com.mine.geometry_node.core.engine.behavior.contract.BehaviorCompositeMode;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeContext;
@@ -11,9 +10,9 @@ import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorComposite
 public final class BehaviorControlExecutors {
     private static final BehaviorNodeExecutor ROOT = context -> context.tickChild(0);
     private static final BehaviorNodeExecutor SEQUENCE =
-            new MemoryCompositeExecutor(BehaviorCompositeMode.MEMORY_SEQUENCE);
+            new MemoryCompositeExecutor(true);
     private static final BehaviorNodeExecutor SELECTOR =
-            new MemoryCompositeExecutor(BehaviorCompositeMode.MEMORY_SELECTOR);
+            new MemoryCompositeExecutor(false);
     private static final BehaviorNodeExecutor REACTIVE_SEQUENCE =
             new ReactiveCompositeExecutor(true);
     private static final BehaviorNodeExecutor PRIORITY_SELECTOR =
@@ -42,10 +41,10 @@ public final class BehaviorControlExecutors {
     }
 
     private static final class MemoryCompositeExecutor implements BehaviorNodeExecutor {
-        private final BehaviorCompositeMode mode;
+        private final boolean sequence;
 
-        private MemoryCompositeExecutor(BehaviorCompositeMode mode) {
-            this.mode = mode;
+        private MemoryCompositeExecutor(boolean sequence) {
+            this.sequence = sequence;
         }
 
         @Override
@@ -55,28 +54,17 @@ public final class BehaviorControlExecutors {
 
         @Override
         public BehaviorResult update(BehaviorNodeContext context) {
+            if (context.childCount() == 0) return BehaviorResult.SUCCESS;
             int childIndex = context.memory() instanceof Integer value ? value : 0;
             while (childIndex < context.childCount()) {
                 BehaviorResult result = context.tickChild(childIndex);
-                BehaviorCompositeMode.ChildDecision decision = mode.decide(
-                        result, childIndex == context.childCount() - 1);
-                switch (decision) {
-                    case ADVANCE -> {
-                        childIndex++;
-                        context.setMemory(childIndex);
-                    }
-                    case RETURN_SUCCESS -> {
-                        return BehaviorResult.SUCCESS;
-                    }
-                    case RETURN_FAILURE -> {
-                        return BehaviorResult.FAILURE;
-                    }
-                    case RETURN_RUNNING -> {
-                        return BehaviorResult.RUNNING;
-                    }
-                }
+                if (result == BehaviorResult.RUNNING) return result;
+                if (sequence && result == BehaviorResult.FAILURE
+                        || !sequence && result == BehaviorResult.SUCCESS) return result;
+                childIndex++;
+                context.setMemory(childIndex);
             }
-            return BehaviorResult.SUCCESS;
+            return sequence ? BehaviorResult.SUCCESS : BehaviorResult.FAILURE;
         }
 
         @Override

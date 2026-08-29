@@ -11,13 +11,12 @@ public record BehaviorRuntimeBudget(int targetLoadedInstances,
                                     long instanceNanosPerEvaluation,
                                     int maxNodeVisitsPerEvaluation,
                                     int maxTreeDepth,
-                                    int maxImmediateTransitions,
                                     int maxQueuedWakeupsPerWorld,
                                     int maxBlackboardEntriesPerInstance,
                                     int maxHistoryEntriesPerInstance) {
     public static final BehaviorRuntimeBudget DEFAULT = new BehaviorRuntimeBudget(
             1_000, 500, 2_000_000L, 1_500_000L, 100_000L,
-            256, 64, 64, 4_096, 256, 128);
+            256, 64, 4_096, 256, 128);
 
     public BehaviorRuntimeBudget {
         requirePositive(targetLoadedInstances, "targetLoadedInstances");
@@ -27,7 +26,6 @@ public record BehaviorRuntimeBudget(int targetLoadedInstances,
         requirePositive(instanceNanosPerEvaluation, "instanceNanosPerEvaluation");
         requirePositive(maxNodeVisitsPerEvaluation, "maxNodeVisitsPerEvaluation");
         requirePositive(maxTreeDepth, "maxTreeDepth");
-        requirePositive(maxImmediateTransitions, "maxImmediateTransitions");
         requirePositive(maxQueuedWakeupsPerWorld, "maxQueuedWakeupsPerWorld");
         requirePositive(maxBlackboardEntriesPerInstance, "maxBlackboardEntriesPerInstance");
         requirePositive(maxHistoryEntriesPerInstance, "maxHistoryEntriesPerInstance");

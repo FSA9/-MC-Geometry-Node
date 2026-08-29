@@ -24,7 +24,7 @@ public final class BehaviorEventHandler {
             if (!(event.getLevel() instanceof ServerLevel) || !(event.getEntity() instanceof net.minecraft.world.entity.Mob mob)) {
                 return;
             }
-            if (BehaviorTreeRuntime.INSTANCE.boundGraph(mob) == null
+            if (BehaviorTreeRuntime.INSTANCE.selectedGraph(mob) == null
                     || BehaviorTreeRuntime.INSTANCE.getForOwner(mob) != null) return;
             try {
                 BehaviorTreeRuntime.INSTANCE.startBound(mob);

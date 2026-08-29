@@ -76,7 +76,7 @@ public final class BehaviorBlackboard {
         ScopedStateProvider provider = requireProvider(scope);
         ScopedStateEntry entry = provider.get(key);
         return new ObservationToken(provider.identity(), entry != null,
-                entry != null ? freeze(entry.value()) : null);
+                entry != null ? entry.value() : null);
     }
 
     public List<EntrySnapshot> snapshot() {
@@ -117,7 +117,8 @@ public final class BehaviorBlackboard {
     public record ObservationToken(String providerIdentity, boolean present, @Nullable Object value) {
         public ObservationToken {
             providerIdentity = providerIdentity != null ? providerIdentity : "";
-            value = present ? freeze(value) : null;
+            // ScopedStateProvider#get already returns a detached read value.
+            value = present ? value : null;
         }
 
         @Override

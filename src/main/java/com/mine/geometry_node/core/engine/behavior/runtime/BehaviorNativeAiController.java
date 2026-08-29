@@ -83,6 +83,14 @@ public final class BehaviorNativeAiController {
     LivingEntity setAttackTarget(@Nullable LivingEntity target) {
         if (target == null) return clearAttackTarget();
 
+        LivingEntity previous = assignedTarget != null ? assignedTarget.get() : null;
+        if (targetAssignmentActive && previous == target
+                && owner.getTargetUnchecked() == target && validAssignedTarget(target)
+                && owner.level() instanceof ServerLevel level
+                && targetAssignmentLevel != null && targetAssignmentLevel.get() == level) {
+            return target;
+        }
+
         boolean acquiredNow = false;
         if (!targetAssignmentActive) {
             if (!acquire(Set.of(NodeCapabilities.ResourceUse.TARGET))) {
@@ -92,7 +100,6 @@ public final class BehaviorNativeAiController {
             acquiredNow = true;
         }
 
-        LivingEntity previous = assignedTarget != null ? assignedTarget.get() : null;
         writeAttackTarget(target);
         LivingEntity actual = owner.getTargetUnchecked();
         if (actual == target) {

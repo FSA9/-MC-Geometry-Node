@@ -148,7 +148,7 @@ public final class RerouteNodeSupport {
                 for (Map.Entry<String, Connection> entry : node.execOutputs.entrySet()) {
                     Connection link = entry.getValue();
                     if (link != null && reroute.id.equals(link.targetNodeId()) && INPUT_PORT.equals(link.targetPortName())) {
-                        return PortType.EXECUTION;
+                        return resolvePortType(scopeNodes, node, entry.getKey(), false, visited);
                     }
                 }
             }
@@ -171,8 +171,12 @@ public final class RerouteNodeSupport {
             }
         }
 
-        if (reroute.execOutputs != null && reroute.execOutputs.containsKey(OUTPUT_PORT)) {
-            return PortType.EXECUTION;
+        if (reroute.execOutputs != null) {
+            Connection link = reroute.execOutputs.get(OUTPUT_PORT);
+            if (link != null) {
+                NodeData target = scopeNodes.get(link.targetNodeId());
+                return resolvePortType(scopeNodes, target, link.targetPortName(), true, visited);
+            }
         }
         return null;
     }

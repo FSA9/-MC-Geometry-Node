@@ -414,10 +414,6 @@ public class ViewportController implements EditorContext.EditorListener,
     @Override
     public void onInsertReroute(ConnectionLayer.ConnectionHit connection) {
         if (mEditorContext == null || connection == null) return;
-        if (mEditorContext.getGraphController().isBehaviorStructureConnection(
-                connection.outNodeId(), connection.outPortId(),
-                connection.inNodeId(), connection.inPortId())) return;
-
         float radius = UIConstants.Node.PORT_VISUAL_RADIUS;
         CmdInsertRerouteOnConnection cmd = new CmdInsertRerouteOnConnection(
                 mEditorContext.getGraphController(),

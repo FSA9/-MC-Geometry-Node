@@ -40,9 +40,6 @@ public class NodeData {
     @SerializedName("outputs")
     public Map<String, List<Connection>> outputs = new HashMap<>();
 
-    @SerializedName("behavior_outputs")
-    public Map<String, Connection> behaviorOutputs = new LinkedHashMap<>();
-
     @SerializedName("port_config")
     public PortsConfig portConfig = new PortsConfig();
 
@@ -153,7 +150,6 @@ public class NodeData {
         if (inputs == null) inputs = new HashMap<>();
         if (execOutputs == null) execOutputs = new HashMap<>();
         if (outputs == null) outputs = new HashMap<>();
-        if (behaviorOutputs == null) behaviorOutputs = new LinkedHashMap<>();
         if (connectedInputs == null) connectedInputs = new HashSet<>();
         ensurePortConfig();
     }
@@ -195,14 +191,6 @@ public class NodeData {
 
     public void removeExecutionConnection(String outPort) {
         this.execOutputs.remove(outPort);
-    }
-
-    public void addBehaviorConnection(String outPort, String targetId, String targetPortName) {
-        this.behaviorOutputs.put(outPort, new Connection(targetId, targetPortName));
-    }
-
-    public void removeBehaviorConnection(String outPort) {
-        this.behaviorOutputs.remove(outPort);
     }
 
     public void addDataConnection(String outPort, String targetId, String targetInPort) {

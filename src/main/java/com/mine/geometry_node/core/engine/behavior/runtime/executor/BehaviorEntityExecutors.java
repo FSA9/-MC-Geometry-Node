@@ -20,13 +20,16 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.level.pathfinder.NodeEvaluator;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.WeakHashMap;
 
 /** Server-side executors for entity target, navigation, and look actions. */
 public final class BehaviorEntityExecutors {
@@ -34,6 +37,7 @@ public final class BehaviorEntityExecutors {
     private static final int WANDER_ATTEMPTS = 10;
     private static final double WANDER_ARRIVAL_DISTANCE = 1.0D;
     private static final long MOVE_REPATH_INTERVAL = 10L;
+    private static final long NAVIGATION_PROBE_CACHE_TICKS = 5L;
 
     private BehaviorEntityExecutors() {
     }
@@ -115,6 +119,8 @@ public final class BehaviorEntityExecutors {
     }
 
     private static final class CanNavigateToExecutor extends InstantBehaviorActionExecutor {
+        private final Map<Mob, NavigationProbe> probes = new WeakHashMap<>();
+
         @Override
         protected BehaviorActionStep<Void> execute(BehaviorNodeContext context) {
             Mob owner = requireOwner(context);
@@ -130,9 +136,22 @@ public final class BehaviorEntityExecutors {
                 return failure(BehaviorActionFailure.INVALID_TARGET,
                         "Navigation target is dead, removed, or in another world");
             }
-            PathNavigation probe = isolatedNavigation(owner);
-            Path path = probe.createPath(target, 1);
-            return path != null && path.canReach()
+            long tick = context.gameTick();
+            BlockPos ownerPosition = owner.blockPosition();
+            BlockPos targetPosition = target.blockPosition();
+            NavigationProbe cached = probes.get(owner);
+            boolean reachable;
+            if (cached != null && cached.matches(owner.level(), target.getUUID(),
+                    ownerPosition, targetPosition, tick)) {
+                reachable = cached.reachable();
+            } else {
+                PathNavigation probe = isolatedNavigation(owner);
+                Path path = probe.createPath(target, 1);
+                reachable = path != null && path.canReach();
+                probes.put(owner, new NavigationProbe(owner.level(), target.getUUID(),
+                        ownerPosition, targetPosition, tick, reachable));
+            }
+            return reachable
                     ? BehaviorActionStep.success()
                     : failure(BehaviorActionFailure.NO_PATH,
                     "No complete path can be created to the target");
@@ -501,5 +520,18 @@ public final class BehaviorEntityExecutors {
     }
 
     private record MoveTarget(@Nullable Object target, boolean supplied) {
+    }
+
+    private record NavigationProbe(Level level, UUID targetId, BlockPos ownerPosition,
+                                   BlockPos targetPosition, long tick, boolean reachable) {
+        private boolean matches(Level currentLevel, UUID currentTargetId,
+                                BlockPos currentOwnerPosition, BlockPos currentTargetPosition,
+                                long currentTick) {
+            return level == currentLevel && targetId.equals(currentTargetId)
+                    && ownerPosition.equals(currentOwnerPosition)
+                    && targetPosition.equals(currentTargetPosition)
+                    && currentTick >= tick
+                    && currentTick - tick < NAVIGATION_PROBE_CACHE_TICKS;
+        }
     }
 }

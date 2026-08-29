@@ -4,7 +4,6 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.behavior.compile.BehaviorTreeCompiler;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
-import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorEventHandler;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutorRegistry;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeEngine;
@@ -122,16 +121,6 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     public String selectedGraph(Entity owner) {
         if (owner == null) return null;
         return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).getSelectedBehaviorTree();
-    }
-
-    /** Compatibility name for callers that previously treated the sole binding as the selection. */
-    @Nullable
-    public String boundGraph(Entity owner) {
-        return selectedGraph(owner);
-    }
-
-    public BehaviorTreeProcess start(ServerLevel level, Mob owner, BehaviorTreePlan plan) {
-        return engine.start(level, owner, plan);
     }
 
     @Nullable

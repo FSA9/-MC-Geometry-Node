@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorLifecycleContract;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorNodeState;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
@@ -22,13 +23,21 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 /** Deterministic lifecycle evaluator for one immutable plan and isolated instance state. */
 public final class BehaviorTreeEvaluator {
+    private static final long NODE_EXCEPTION_LOG_INTERVAL_TICKS = 100L;
+
     private final BehaviorNodeExecutorRegistry executors;
     private final ThreadLocal<EvaluationPass> currentPass = new ThreadLocal<>();
+    private final Map<BehaviorTreeProcess, Map<Integer, Long>> nodeExceptionLogTicks =
+            new WeakHashMap<>();
 
     public BehaviorTreeEvaluator(BehaviorNodeExecutorRegistry executors) {
         this.executors = Objects.requireNonNull(executors, "executors");
@@ -53,12 +62,12 @@ public final class BehaviorTreeEvaluator {
             long nextTick = safeIncrement(tick);
             instance.finishEvaluation(result, nextTick);
             long elapsedNanos = elapsed(instance, started);
-            instance.recordEvaluationMetrics(elapsedNanos, pass.visits, pass.immediateTransitions);
+            instance.recordEvaluationMetrics(elapsedNanos, pass.visits);
             return new EvaluationOutcome(result, null, instance.nextWakeTick(), pass.visits,
                     elapsedNanos, "");
         } catch (EvaluationFault fault) {
             long elapsedNanos = elapsed(instance, started);
-            instance.recordEvaluationMetrics(elapsedNanos, pass.visits, pass.immediateTransitions);
+            instance.recordEvaluationMetrics(elapsedNanos, pass.visits);
             instance.releaseAllResources();
             instance.host().releasePersistentControls();
             instance.failEvaluation(fault.reason);
@@ -131,10 +140,6 @@ public final class BehaviorTreeEvaluator {
                 return result;
             }
 
-            if (++pass.immediateTransitions > instance.budget().maxImmediateTransitions()) {
-                throw new EvaluationFault(BehaviorTerminationReason.BUDGET_EXHAUSTED,
-                        "Behavior immediate-transition budget exceeded");
-            }
             BehaviorTerminationReason reason = executor.completionReason(context, result);
             if (reason == null || (reason.result() != null && reason.result() != result)) {
                 throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA,
@@ -179,6 +184,7 @@ public final class BehaviorTreeEvaluator {
         } catch (Exception exception) {
             String detail = exception.getMessage() != null
                     ? exception.getMessage() : exception.getClass().getSimpleName();
+            logNodeException(instance, nodeIndex, exception);
             if (instance.rawNodeState(nodeIndex).isActive()) {
                 EvaluationFault cleanupFailure = terminateNode(instance, nodeIndex, executor, context,
                         BehaviorTerminationReason.NODE_EXCEPTION, null, detail, true,
@@ -257,11 +263,11 @@ public final class BehaviorTreeEvaluator {
                 if (abortFailure != null) throw abortFailure;
             }
         }
-        transition(instance, nodeIndex, BehaviorNodeState.ENTERING);
         if (!instance.acquireResources(nodeIndex, resources)) {
             throw new EvaluationFault(BehaviorTerminationReason.CAPABILITY_LOST,
                     "Behavior resources are already owned by another active node");
         }
+        transition(instance, nodeIndex, BehaviorNodeState.ENTERING);
         executor.enter(context);
     }
 
@@ -279,7 +285,9 @@ public final class BehaviorTreeEvaluator {
     }
 
     private static boolean isWithinSubtree(BehaviorTreeProcess instance, int nodeIndex, int rootIndex) {
-        for (int current = nodeIndex; current >= 0; current = instance.plan().getParent(current)) {
+        Set<Integer> visited = new HashSet<>();
+        for (int current = nodeIndex; current >= 0 && visited.add(current);
+             current = instance.plan().getParent(current)) {
             if (current == rootIndex) return true;
         }
         return false;
@@ -291,8 +299,20 @@ public final class BehaviorTreeEvaluator {
                                            BehaviorTerminationReason reason,
                                            @Nullable String failureCode, @Nullable String detail,
                                            boolean propagateExitFailure, long elapsedNanos) {
+        return terminateNode(instance, nodeIndex, executor, context, reason, failureCode, detail,
+                propagateExitFailure, elapsedNanos, new HashSet<>());
+    }
+
+    @Nullable
+    private EvaluationFault terminateNode(BehaviorTreeProcess instance, int nodeIndex,
+                                           BehaviorNodeExecutor executor, BehaviorNodeContext context,
+                                           BehaviorTerminationReason reason,
+                                           @Nullable String failureCode, @Nullable String detail,
+                                           boolean propagateExitFailure, long elapsedNanos,
+                                           Set<Integer> cleanupVisited) {
+        cleanupVisited.add(nodeIndex);
         EvaluationFault childFailure = abortChildren(
-                instance, nodeIndex, executor.childTerminationReason(reason));
+                instance, nodeIndex, executor.childTerminationReason(reason), cleanupVisited);
         BehaviorNodeState current = instance.rawNodeState(nodeIndex);
         if (!current.isActive()) return propagateExitFailure ? childFailure : null;
         transition(instance, nodeIndex, BehaviorNodeState.EXITING);
@@ -321,6 +341,7 @@ public final class BehaviorTreeEvaluator {
             finalFailureCode = null;
             finalDetail = exception.getMessage() != null
                     ? exception.getMessage() : exception.getClass().getSimpleName();
+            logNodeException(instance, nodeIndex, exception);
             exitFailure = new EvaluationFault(finalReason, finalDetail);
         }
         try {
@@ -331,6 +352,7 @@ public final class BehaviorTreeEvaluator {
             finalFailureCode = null;
             finalDetail = exception.getMessage() != null
                     ? exception.getMessage() : exception.getClass().getSimpleName();
+            logNodeException(instance, nodeIndex, exception);
             exitFailure = new EvaluationFault(finalReason, finalDetail);
         }
         transition(instance, nodeIndex, BehaviorLifecycleContract.terminalState(finalReason));
@@ -342,11 +364,12 @@ public final class BehaviorTreeEvaluator {
 
     @Nullable
     private EvaluationFault abortChildren(BehaviorTreeProcess instance, int nodeIndex,
-                                          BehaviorTerminationReason reason) {
+                                          BehaviorTerminationReason reason,
+                                          Set<Integer> visited) {
         EvaluationFault firstFailure = null;
         for (int childIndex = instance.plan().getChildCount(nodeIndex) - 1; childIndex >= 0; childIndex--) {
             EvaluationFault failure = abortSubtree(
-                    instance, instance.plan().getChild(nodeIndex, childIndex), reason);
+                    instance, instance.plan().getChild(nodeIndex, childIndex), reason, visited);
             if (firstFailure == null) firstFailure = failure;
         }
         return firstFailure;
@@ -355,9 +378,17 @@ public final class BehaviorTreeEvaluator {
     @Nullable
     private EvaluationFault abortSubtree(BehaviorTreeProcess instance, int nodeIndex,
                                          BehaviorTerminationReason reason) {
+        return abortSubtree(instance, nodeIndex, reason, new HashSet<>());
+    }
+
+    @Nullable
+    private EvaluationFault abortSubtree(BehaviorTreeProcess instance, int nodeIndex,
+                                         BehaviorTerminationReason reason,
+                                         Set<Integer> visited) {
         if (nodeIndex < 0 || nodeIndex >= instance.plan().getNodeCount()) return null;
+        if (!visited.add(nodeIndex)) return null;
         if (!instance.rawNodeState(nodeIndex).isActive()) {
-            return abortChildren(instance, nodeIndex, reason);
+            return abortChildren(instance, nodeIndex, reason, visited);
         }
         BehaviorNodeExecutor executor = executors.get(instance.plan().getNodeType(nodeIndex));
         if (executor == null) {
@@ -381,7 +412,7 @@ public final class BehaviorTreeEvaluator {
                 instance.host().gameTick());
         try {
             return terminateNode(instance, nodeIndex, executor, context,
-                    reason, null, null, true, 0L);
+                    reason, null, null, true, 0L, visited);
         } finally {
             context.close();
         }
@@ -418,6 +449,22 @@ public final class BehaviorTreeEvaluator {
         return value == Long.MAX_VALUE ? Long.MAX_VALUE : value + 1;
     }
 
+    private void logNodeException(BehaviorTreeProcess instance, int nodeIndex,
+                                  Exception exception) {
+        long tick = instance.host().gameTick();
+        Map<Integer, Long> processTicks = nodeExceptionLogTicks.computeIfAbsent(
+                instance, ignored -> new HashMap<>());
+        Long previous = processTicks.get(nodeIndex);
+        if (previous != null && tick >= previous
+                && tick - previous < NODE_EXCEPTION_LOG_INTERVAL_TICKS) return;
+        processTicks.put(nodeIndex, tick);
+        GeometryNode.LOGGER.error(
+                "Behavior node exception: asset={}, owner={}, node={} ({}), instance={}",
+                instance.plan().assetId(), instance.host().identity(),
+                instance.plan().getNodeId(nodeIndex), instance.plan().getNodeType(nodeIndex),
+                instance.instanceId(), exception);
+    }
+
     public record EvaluationOutcome(@Nullable BehaviorResult result,
                                     @Nullable BehaviorTerminationReason failure,
                                     long nextWakeTick, int nodeVisits,
@@ -445,7 +492,6 @@ public final class BehaviorTreeEvaluator {
         private final BehaviorTreeProcess instance;
         @Nullable private PendingPreemption pendingPreemption;
         private int visits;
-        private int immediateTransitions;
 
         private EvaluationPass(BehaviorTreeProcess instance) {
             this.instance = instance;
@@ -493,7 +539,7 @@ public final class BehaviorTreeEvaluator {
         @Override
         public Object getVariable(String name) {
             try {
-                return instance.blackboard(nodeIndex).get(
+                return instance.blackboard().get(
                         ScopedStateScope.INSTANCE, name);
             } catch (ScopedStateAccessException exception) {
                 return null;
@@ -503,7 +549,7 @@ public final class BehaviorTreeEvaluator {
         @Override
         public boolean hasVariable(String name) {
             try {
-                return instance.blackboard(nodeIndex).contains(
+                return instance.blackboard().contains(
                         ScopedStateScope.INSTANCE, name);
             } catch (ScopedStateAccessException exception) {
                 return false;
@@ -514,14 +560,14 @@ public final class BehaviorTreeEvaluator {
         public Object getBlackboard(
                 ScopedStateScope scope,
                 String name) {
-            return instance.blackboard(nodeIndex).get(scope, name);
+            return instance.blackboard().get(scope, name);
         }
 
         @Override
         public boolean hasBlackboard(
                 ScopedStateScope scope,
                 String name) {
-            return instance.blackboard(nodeIndex).contains(scope, name);
+            return instance.blackboard().contains(scope, name);
         }
 
         @Override public Object getInputValue(String portName) {

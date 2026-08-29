@@ -49,7 +49,7 @@ public final class BehaviorNodeContext {
         return instance.host().setAttackTarget(target);
     }
     public Random random() { ensureValid(); return instance.random(); }
-    public BehaviorBlackboard blackboard() { ensureValid(); return instance.blackboard(nodeIndex); }
+    public BehaviorBlackboard blackboard() { ensureValid(); return instance.blackboard(); }
 
     public BehaviorResult tickChild(int childIndex) {
         ensureValid();
@@ -146,18 +146,18 @@ public final class BehaviorNodeContext {
     @Nullable
     public Object getBlackboard(ScopedStateScope scope, String name) {
         ensureValid();
-        return instance.blackboard(nodeIndex).get(scope, name);
+        return instance.blackboard().get(scope, name);
     }
 
     public boolean hasBlackboard(ScopedStateScope scope, String name) {
         ensureValid();
-        return instance.blackboard(nodeIndex).contains(scope, name);
+        return instance.blackboard().contains(scope, name);
     }
 
     public com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard.ObservationToken
     observeBlackboard(ScopedStateScope scope, String name) {
         ensureValid();
-        return instance.blackboard(nodeIndex).observe(scope, name);
+        return instance.blackboard().observe(scope, name);
     }
 
     public ScopedStateScope blackboardScope() {
@@ -175,13 +175,13 @@ public final class BehaviorNodeContext {
 
     public void setBlackboard(ScopedStateScope scope, String name, @Nullable Object value) {
         ensureValid();
-        instance.blackboard(nodeIndex).set(scope, name, value);
+        instance.blackboard().set(scope, name, value);
         instance.dataEvaluation().clearValues();
     }
 
     public boolean clearBlackboard(ScopedStateScope scope, String name) {
         ensureValid();
-        boolean changed = instance.blackboard(nodeIndex).clear(scope, name);
+        boolean changed = instance.blackboard().clear(scope, name);
         if (changed) instance.dataEvaluation().clearValues();
         return changed;
     }

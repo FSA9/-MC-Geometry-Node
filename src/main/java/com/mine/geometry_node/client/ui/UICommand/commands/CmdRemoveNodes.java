@@ -8,7 +8,6 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 public class CmdRemoveNodes implements ICommand {
     private final GraphController mController;
@@ -27,8 +26,6 @@ public class CmdRemoveNodes implements ICommand {
     // 被删节点指向别人的连线 (修复 Bug 1 必须记录这些)
     private final List<ConnectionSnapshot> mBrokenOutgoingLinks = new ArrayList<>();
     private final List<ConnectionSnapshot> mBrokenOutgoingExecs = new ArrayList<>();
-    private final List<ConnectionSnapshot> mBrokenIncomingBehaviors = new ArrayList<>();
-    private final List<ConnectionSnapshot> mBrokenOutgoingBehaviors = new ArrayList<>();
 
     public CmdRemoveNodes(GraphController controller, NodeGraph graph, List<String> nodeIdsToRemove) {
         this.mController = controller;
@@ -48,8 +45,6 @@ public class CmdRemoveNodes implements ICommand {
         mBrokenIncomingExecs.clear();
         mBrokenOutgoingLinks.clear();
         mBrokenOutgoingExecs.clear();
-        mBrokenIncomingBehaviors.clear();
-        mBrokenOutgoingBehaviors.clear();
 
         List<String> targetIds = mRemovedNodes.stream().map(n -> n.id).toList();
 
@@ -79,17 +74,6 @@ public class CmdRemoveNodes implements ICommand {
                     }
                 }
             }
-            if (otherNode.behaviorOutputs != null) {
-                for (Map.Entry<String, Connection> entry : new ArrayList<>(otherNode.behaviorOutputs.entrySet())) {
-                    Connection link = entry.getValue();
-                    if (link != null && targetIds.contains(link.targetNodeId())) {
-                        mBrokenIncomingBehaviors.add(new ConnectionSnapshot(otherNode.id, entry.getKey(),
-                                link.targetNodeId(), link.targetPortName()));
-                        mController.removeBehaviorConnection(otherNode.id, entry.getKey(),
-                                link.targetNodeId(), link.targetPortName());
-                    }
-                }
-            }
         }
 
         // 2. 【核心修复1】正式移除节点前，必须显式斩断它们自己【向外发出】的连线
@@ -114,17 +98,6 @@ public class CmdRemoveNodes implements ICommand {
                     }
                 }
             }
-            if (node.behaviorOutputs != null) {
-                for (Map.Entry<String, Connection> entry : new ArrayList<>(node.behaviorOutputs.entrySet())) {
-                    Connection link = entry.getValue();
-                    if (link != null) {
-                        mBrokenOutgoingBehaviors.add(new ConnectionSnapshot(node.id, entry.getKey(),
-                                link.targetNodeId(), link.targetPortName()));
-                        mController.removeBehaviorConnection(node.id, entry.getKey(),
-                                link.targetNodeId(), link.targetPortName());
-                    }
-                }
-            }
         }
 
         // 3. 一切连线关系都通过正式 API 解除了，安全移除节点
@@ -146,9 +119,6 @@ public class CmdRemoveNodes implements ICommand {
         for (ConnectionSnapshot snap : mBrokenOutgoingExecs) {
             mController.addExecutionConnection(snap.outNodeId, snap.outPortId, snap.inNodeId, snap.inPortId);
         }
-        for (ConnectionSnapshot snap : mBrokenOutgoingBehaviors) {
-            mController.addBehaviorConnection(snap.outNodeId, snap.outPortId, snap.inNodeId, snap.inPortId);
-        }
 
         // 3. 依靠全量快照，恢复外部指向它们的连线
         for (ConnectionSnapshot snap : mBrokenIncomingLinks) {
@@ -156,9 +126,6 @@ public class CmdRemoveNodes implements ICommand {
         }
         for (ConnectionSnapshot snap : mBrokenIncomingExecs) {
             mController.addExecutionConnection(snap.outNodeId, snap.outPortId, snap.inNodeId, snap.inPortId);
-        }
-        for (ConnectionSnapshot snap : mBrokenIncomingBehaviors) {
-            mController.addBehaviorConnection(snap.outNodeId, snap.outPortId, snap.inNodeId, snap.inPortId);
         }
     }
 }

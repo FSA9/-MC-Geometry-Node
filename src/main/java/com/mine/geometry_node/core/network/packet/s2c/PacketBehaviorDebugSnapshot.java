@@ -159,14 +159,12 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
 
     private static Evaluation evaluation(BehaviorTreeDebugSnapshot.EvaluationSnapshot source) {
         return new Evaluation(source.evaluations(), source.totalNanos(), source.lastNanos(),
-                source.softTimeBudgetOverruns(), source.lastNodeVisits(), source.peakNodeVisits(),
-                source.lastImmediateTransitions(), source.peakImmediateTransitions());
+                source.softTimeBudgetOverruns(), source.lastNodeVisits(), source.peakNodeVisits());
     }
 
     private static Budget budget(BehaviorTreeDebugSnapshot.BudgetSnapshot source) {
         return new Budget(source.instanceNanosPerEvaluation(), source.maxNodeVisitsPerEvaluation(),
-                source.maxTreeDepth(), source.maxImmediateTransitions(), source.maxBlackboardEntries(),
-                source.maxHistoryEntries());
+                source.maxTreeDepth(), source.maxBlackboardEntries(), source.maxHistoryEntries());
     }
 
     private static String bounded(@Nullable String value, int maxLength) {
@@ -379,8 +377,7 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
 
     public record Evaluation(long evaluations, long totalNanos, long lastNanos,
                              long softTimeBudgetOverruns, int lastNodeVisits,
-                             int peakNodeVisits, int lastImmediateTransitions,
-                             int peakImmediateTransitions) {
+                             int peakNodeVisits) {
         private void write(RegistryFriendlyByteBuf buffer) {
             buffer.writeLong(evaluations);
             buffer.writeLong(totalNanos);
@@ -388,32 +385,27 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
             buffer.writeLong(softTimeBudgetOverruns);
             buffer.writeVarInt(lastNodeVisits);
             buffer.writeVarInt(peakNodeVisits);
-            buffer.writeVarInt(lastImmediateTransitions);
-            buffer.writeVarInt(peakImmediateTransitions);
         }
 
         private static Evaluation read(RegistryFriendlyByteBuf buffer) {
             return new Evaluation(buffer.readLong(), buffer.readLong(), buffer.readLong(),
-                    buffer.readLong(), buffer.readVarInt(), buffer.readVarInt(),
-                    buffer.readVarInt(), buffer.readVarInt());
+                    buffer.readLong(), buffer.readVarInt(), buffer.readVarInt());
         }
     }
 
     public record Budget(long instanceNanosPerEvaluation, int maxNodeVisitsPerEvaluation,
-                         int maxTreeDepth, int maxImmediateTransitions,
-                         int maxBlackboardEntries, int maxHistoryEntries) {
+                         int maxTreeDepth, int maxBlackboardEntries, int maxHistoryEntries) {
         private void write(RegistryFriendlyByteBuf buffer) {
             buffer.writeLong(instanceNanosPerEvaluation);
             buffer.writeVarInt(maxNodeVisitsPerEvaluation);
             buffer.writeVarInt(maxTreeDepth);
-            buffer.writeVarInt(maxImmediateTransitions);
             buffer.writeVarInt(maxBlackboardEntries);
             buffer.writeVarInt(maxHistoryEntries);
         }
 
         private static Budget read(RegistryFriendlyByteBuf buffer) {
             return new Budget(buffer.readLong(), buffer.readVarInt(), buffer.readVarInt(),
-                    buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt());
+                    buffer.readVarInt(), buffer.readVarInt());
         }
     }
 

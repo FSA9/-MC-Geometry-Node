@@ -98,10 +98,7 @@ public class CmdGroupIntoNodeGroup implements ICommand {
         }
 
         rewriteDataConnections(scopeNodes, selected, groupNode);
-        if (!rewriteExecutionConnections(scopeNodes, selected, groupNode)) {
-            return null;
-        }
-        rewriteBehaviorConnections(scopeNodes, selected, groupNode);
+        rewriteFlowConnections(scopeNodes, selected, groupNode);
 
         after.put(groupNode.id, groupNode);
         return deepCopyNodes(after);
@@ -187,9 +184,9 @@ public class CmdGroupIntoNodeGroup implements ICommand {
         }
     }
 
-    private boolean rewriteExecutionConnections(Map<String, NodeData> scopeNodes, Set<String> selected, NodeData groupNode) {
-        Map<BoundaryInputKey, String> execInputPorts = new HashMap<>();
-        Map<BoundaryOutputKey, String> execOutputPorts = new HashMap<>();
+    private void rewriteFlowConnections(Map<String, NodeData> scopeNodes, Set<String> selected, NodeData groupNode) {
+        Map<BoundaryInputKey, String> flowInputPorts = new HashMap<>();
+        Map<BoundaryOutputKey, String> flowOutputPorts = new HashMap<>();
 
         for (NodeData node : scopeNodes.values()) {
             if (node == null || node.execOutputs == null) continue;
@@ -208,61 +205,23 @@ public class CmdGroupIntoNodeGroup implements ICommand {
                     node.addExecutionConnection(outPortId, link.targetNodeId(), link.targetPortName());
                 } else if (!sourceInside && targetInside) {
                     BoundaryInputKey key = new BoundaryInputKey(link.targetNodeId(), link.targetPortName());
-                    String execInputPort = execInputPorts.computeIfAbsent(
+                    String flowInputPort = flowInputPorts.computeIfAbsent(
                             key,
-                            ignored -> createExecInputPort(groupNode, key.targetNodeId(), key.targetPortId(), scopeNodes)
+                            ignored -> createFlowInputPort(groupNode, key.targetNodeId(), key.targetPortId(), scopeNodes)
                     );
-                    node.addExecutionConnection(outPortId, groupNode.id, execInputPort);
+                    node.addExecutionConnection(outPortId, groupNode.id, flowInputPort);
                     NodeData groupIn = groupNode.subNodes.get(GroupNodeTypes.GROUP_IN_ID);
-                    groupIn.addExecutionConnection(execInputPort, link.targetNodeId(), link.targetPortName());
+                    groupIn.addExecutionConnection(flowInputPort, link.targetNodeId(), link.targetPortName());
                 } else if (sourceInside) {
                     BoundaryOutputKey key = new BoundaryOutputKey(node.id, outPortId);
-                    String groupOutputPort = execOutputPorts.computeIfAbsent(
+                    String groupOutputPort = flowOutputPorts.computeIfAbsent(
                             key,
-                            ignored -> createExecOutputPort(groupNode, key.sourceNodeId(), key.sourcePortId(), scopeNodes)
+                            ignored -> createFlowOutputPort(groupNode, key.sourceNodeId(), key.sourcePortId(), scopeNodes)
                     );
                     node.addExecutionConnection(outPortId, GroupNodeTypes.GROUP_OUT_ID, groupOutputPort);
                     groupNode.addExecutionConnection(groupOutputPort, link.targetNodeId(), link.targetPortName());
                 } else {
                     node.addExecutionConnection(outPortId, link.targetNodeId(), link.targetPortName());
-                }
-            }
-        }
-        return true;
-    }
-
-    private void rewriteBehaviorConnections(Map<String, NodeData> scopeNodes, Set<String> selected,
-                                            NodeData groupNode) {
-        Map<BoundaryInputKey, String> inputPorts = new HashMap<>();
-        Map<BoundaryOutputKey, String> outputPorts = new HashMap<>();
-
-        for (NodeData node : scopeNodes.values()) {
-            if (node == null || node.behaviorOutputs == null) continue;
-            Map<String, Connection> original = node.behaviorOutputs;
-            node.behaviorOutputs = new LinkedHashMap<>();
-            boolean sourceInside = selected.contains(node.id);
-
-            for (Map.Entry<String, Connection> output : original.entrySet()) {
-                Connection link = output.getValue();
-                if (link == null) continue;
-                boolean targetInside = selected.contains(link.targetNodeId());
-                if (sourceInside && targetInside) {
-                    node.addBehaviorConnection(output.getKey(), link.targetNodeId(), link.targetPortName());
-                } else if (!sourceInside && targetInside) {
-                    BoundaryInputKey key = new BoundaryInputKey(link.targetNodeId(), link.targetPortName());
-                    String port = inputPorts.computeIfAbsent(key,
-                            ignored -> createBehaviorInputPort(groupNode, key.targetPortId()));
-                    node.addBehaviorConnection(output.getKey(), groupNode.id, port);
-                    groupNode.subNodes.get(GroupNodeTypes.GROUP_IN_ID)
-                            .addBehaviorConnection(port, link.targetNodeId(), link.targetPortName());
-                } else if (sourceInside) {
-                    BoundaryOutputKey key = new BoundaryOutputKey(node.id, output.getKey());
-                    String port = outputPorts.computeIfAbsent(key,
-                            ignored -> createBehaviorOutputPort(groupNode, key.sourcePortId()));
-                    node.addBehaviorConnection(output.getKey(), GroupNodeTypes.GROUP_OUT_ID, port);
-                    groupNode.addBehaviorConnection(port, link.targetNodeId(), link.targetPortName());
-                } else {
-                    node.addBehaviorConnection(output.getKey(), link.targetNodeId(), link.targetPortName());
                 }
             }
         }
@@ -282,26 +241,24 @@ public class CmdGroupIntoNodeGroup implements ICommand {
         return GroupNodeFactory.addPort(groupNode, GroupNodeTypes.CATEGORY_OUTPUTS, sourcePortId, type, label);
     }
 
-    private String createExecInputPort(NodeData groupNode, String targetNodeId, String targetPortId, Map<String, NodeData> scopeNodes) {
+    private String createFlowInputPort(NodeData groupNode, String targetNodeId, String targetPortId, Map<String, NodeData> scopeNodes) {
         PortDef port = findPort(scopeNodes, groupNode, targetNodeId, targetPortId, true);
         String label = port != null ? port.displayName().getString() : targetPortId;
-        return GroupNodeFactory.addPort(groupNode, GroupNodeTypes.CATEGORY_EXEC_INPUTS, targetPortId, PortType.EXECUTION, label);
+        return GroupNodeFactory.addPort(groupNode, GroupNodeTypes.CATEGORY_EXEC_INPUTS,
+                targetPortId, flowPortType(port), label);
     }
 
-    private String createExecOutputPort(NodeData groupNode, String sourceNodeId, String sourcePortId, Map<String, NodeData> scopeNodes) {
+    private String createFlowOutputPort(NodeData groupNode, String sourceNodeId, String sourcePortId, Map<String, NodeData> scopeNodes) {
         PortDef port = findPort(scopeNodes, groupNode, sourceNodeId, sourcePortId, false);
         String label = port != null ? port.displayName().getString() : sourcePortId;
-        return GroupNodeFactory.addPort(groupNode, GroupNodeTypes.CATEGORY_EXEC_OUTPUTS, sourcePortId, PortType.EXECUTION, label);
-    }
-
-    private String createBehaviorInputPort(NodeData groupNode, String preferredId) {
-        return GroupNodeFactory.addPort(groupNode, GroupNodeTypes.CATEGORY_EXEC_INPUTS,
-                preferredId, PortType.BEHAVIOR_STRUCTURE, preferredId);
-    }
-
-    private String createBehaviorOutputPort(NodeData groupNode, String preferredId) {
         return GroupNodeFactory.addPort(groupNode, GroupNodeTypes.CATEGORY_EXEC_OUTPUTS,
-                preferredId, PortType.BEHAVIOR_STRUCTURE, preferredId);
+                sourcePortId, flowPortType(port), label);
+    }
+
+    private PortType flowPortType(PortDef port) {
+        return port != null && port.type() != null && port.type().isFlow()
+                ? port.type()
+                : PortType.EXECUTION;
     }
 
     private PortType dataPortType(PortDef port) {

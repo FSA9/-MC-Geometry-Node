@@ -12,8 +12,6 @@ import java.util.Set;
 public final class FlattenedGraph {
     private final Map<String, JsonObject> nodes;
     private final Map<String, Map<String, TargetConnection>> executionOutputs;
-    // Behavior-tree-only control edges; blueprint execution uses executionOutputs.
-    private final Map<String, Map<String, TargetConnection>> behaviorOutputs;
     private final Map<InputKey, DataConnectionSource> dataInputs;
     private final Map<String, List<String>> nodesByType;
     private final Map<String, Map<String, Object>> staticInputs;
@@ -22,7 +20,6 @@ public final class FlattenedGraph {
 
     FlattenedGraph(Map<String, JsonObject> nodes,
                    Map<String, Map<String, TargetConnection>> executionOutputs,
-                   Map<String, Map<String, TargetConnection>> behaviorOutputs,
                    Map<InputKey, DataConnectionSource> dataInputs,
                    Map<String, List<String>> nodesByType,
                    Map<String, Map<String, Object>> staticInputs,
@@ -32,7 +29,6 @@ public final class FlattenedGraph {
         nodes.forEach((id, node) -> nodeCopies.put(id, node.deepCopy()));
         this.nodes = Map.copyOf(nodeCopies);
         this.executionOutputs = copyNested(executionOutputs);
-        this.behaviorOutputs = copyNested(behaviorOutputs);
         this.dataInputs = Map.copyOf(dataInputs);
         this.nodesByType = copyLists(nodesByType);
         this.staticInputs = copyNested(staticInputs);
@@ -42,8 +38,6 @@ public final class FlattenedGraph {
 
     public Map<String, JsonObject> nodes() { return nodes; }
     public Map<String, Map<String, TargetConnection>> executionOutputs() { return executionOutputs; }
-    /** Behavior-tree-only child/control edges after group boundaries are flattened. */
-    public Map<String, Map<String, TargetConnection>> behaviorOutputs() { return behaviorOutputs; }
     public Map<InputKey, DataConnectionSource> dataInputs() { return dataInputs; }
     public Map<String, List<String>> nodesByType() { return nodesByType; }
     public Map<String, Map<String, Object>> staticInputs() { return staticInputs; }
