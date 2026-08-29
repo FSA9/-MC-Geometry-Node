@@ -7,10 +7,10 @@ import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePay
 import com.mine.geometry_node.core.engine.system.dialogue.presenter.ChatDialoguePresenter;
 import com.mine.geometry_node.core.engine.system.dialogue.presenter.DialoguePresenter;
 import com.mine.geometry_node.core.engine.system.dialogue.presenter.PacketDialoguePresenter;
-import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
+import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandler;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
+import com.mine.geometry_node.core.engine.runtime.ServerEngine;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -24,7 +24,8 @@ import java.util.UUID;
 /**
  * Minimal server-side facade for dialogue runtime state.
  */
-public class DialogueRuntime implements GraphRuntime {
+public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
+    public static final String ID = "geometry_node:dialogue";
     public static final DialogueRuntime INSTANCE = new DialogueRuntime();
 
     private final DialogueSessionStore sessionStore;
@@ -45,13 +46,13 @@ public class DialogueRuntime implements GraphRuntime {
     }
 
     @Override
-    public GraphKind kind() {
-        return GraphKind.DIALOGUE;
+    public String id() {
+        return ID;
     }
 
     @Override
-    public String id() {
-        return "geometry_node:dialogue";
+    public String externalWaitId() {
+        return ID;
     }
 
     @Override
@@ -123,12 +124,13 @@ public class DialogueRuntime implements GraphRuntime {
     }
 
     @Override
-    public void completeExternalWait(GraphExecutionHandle handle, String outputPortName, GraphRuntime.ExternalWaitCompletion completion) {
+    public void completeExternalWait(GraphExecutionHandle handle, String outputPortName,
+                                     ExternalWaitHandler.Completion completion) {
         DialogueSession match = findSessionByHandle(handle);
         if (match != null) {
             sessionStore.remove(match.getSessionId());
             match.setExecutionHandle(null);
-            match.close(completion == GraphRuntime.ExternalWaitCompletion.NO_TARGET
+            match.close(completion == ExternalWaitHandler.Completion.NO_TARGET
                     ? DialogueSession.CloseReason.CLOSED
                     : DialogueSession.CloseReason.CHOSEN);
         }

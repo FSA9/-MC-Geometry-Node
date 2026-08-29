@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphListRequest;
 
@@ -61,13 +61,13 @@ public final class RemoteAssetRepository implements AssetRepository {
         };
     }
 
-    private static AssetListing toListing(AssetLocation.Remote location, List<RemoteGraphEntry> source,
+    private static AssetListing toListing(AssetLocation.Remote location, List<RemoteAssetEntry> source,
                                           AssetQuery query) {
         if (!query.tag().isEmpty()) return AssetListing.empty(location);
         String nameQuery = query.normalizedName();
         List<AssetEntry> entries = new ArrayList<>();
         Map<String, String> graphTypesByKey = new HashMap<>();
-        for (RemoteGraphEntry remote : source == null ? List.<RemoteGraphEntry>of() : source) {
+        for (RemoteAssetEntry remote : source == null ? List.<RemoteAssetEntry>of() : source) {
             if (!nameQuery.isEmpty() && !remote.name().toLowerCase(Locale.ROOT).contains(nameQuery)) continue;
             AssetEntry entry = AssetEntry.remote(remote.path(), remote.name(), remote.directory(),
                     remote.size(), remote.lastModified());

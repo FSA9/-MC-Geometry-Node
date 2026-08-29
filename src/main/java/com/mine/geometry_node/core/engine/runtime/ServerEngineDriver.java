@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.graph.runtime;
+package com.mine.geometry_node.core.engine.runtime;
 
 import dev.architectury.event.events.common.TickEvent;
 import net.minecraft.server.MinecraftServer;
@@ -8,33 +8,32 @@ import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 
 import java.util.Comparator;
 
-/** Drives graph-family runtime ticks and server shutdown from one shared hook. */
-public final class GraphRuntimeDriver {
-    private static final Comparator<GraphRuntime> TICK_ORDER = Comparator
-            .comparingInt(GraphRuntime::tickOrder)
-            .thenComparing(GraphRuntime::id);
-
+/** Drives all registered server engines from one tick and shutdown hook. */
+public final class ServerEngineDriver {
+    private static final Comparator<ServerEngine> TICK_ORDER = Comparator
+            .comparingInt(ServerEngine::tickOrder)
+            .thenComparing(ServerEngine::id);
     private static boolean registered;
 
-    private GraphRuntimeDriver() {
+    private ServerEngineDriver() {
     }
 
     public static synchronized void init() {
         if (registered) return;
         registered = true;
-        TickEvent.SERVER_LEVEL_POST.register(GraphRuntimeDriver::tickLevel);
+        TickEvent.SERVER_LEVEL_POST.register(ServerEngineDriver::tickLevel);
         NeoForge.EVENT_BUS.addListener((ServerStoppingEvent event) -> shutdown(event.getServer()));
     }
 
     private static void tickLevel(ServerLevel level) {
-        GraphRuntimeRegistry.INSTANCE.all().stream()
+        ServerEngineRegistry.INSTANCE.all().stream()
                 .sorted(TICK_ORDER)
-                .forEach(runtime -> runtime.tickLevel(level));
+                .forEach(engine -> engine.tickLevel(level));
     }
 
     private static void shutdown(MinecraftServer server) {
-        GraphRuntimeRegistry.INSTANCE.all().stream()
+        ServerEngineRegistry.INSTANCE.all().stream()
                 .sorted(TICK_ORDER)
-                .forEach(runtime -> runtime.shutdown(server));
+                .forEach(engine -> engine.shutdown(server));
     }
 }

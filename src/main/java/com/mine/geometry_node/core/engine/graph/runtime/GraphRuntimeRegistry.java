@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.runtime;
 
 import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.runtime.ServerEngineRegistry;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
@@ -30,7 +31,7 @@ public final class GraphRuntimeRegistry {
         if (existing != null && existing != runtime) {
             throw new IllegalStateException("Duplicate graph runtime: " + runtime.kind().id());
         }
-        runtime.init();
+        ServerEngineRegistry.INSTANCE.register(runtime);
         runtimes.put(runtime.kind(), runtime);
     }
 

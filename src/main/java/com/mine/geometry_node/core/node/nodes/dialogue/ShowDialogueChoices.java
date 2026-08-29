@@ -7,8 +7,8 @@ import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueChoicePa
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialoguePagePayload;
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueWaitRequest;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.system.dialogue.richtext.DialogueRoundParser;
-import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
@@ -120,7 +120,8 @@ public class ShowDialogueChoices extends BaseNode {
             ));
         }
 
-        return ExecutionResult.externalWait(GraphKind.DIALOGUE, new DialogueWaitRequest(dialogueContext, pages));
+        return ExecutionResult.externalWait(DialogueRuntime.ID,
+                new DialogueWaitRequest(dialogueContext, pages));
     }
 
     private List<DialogueChoicePayload> resolveChoices(ExecutionContext context) {

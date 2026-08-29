@@ -8,8 +8,6 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetDescriptor;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.VerifiedAssetCommitter;
 import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewAssociations;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
@@ -31,7 +29,7 @@ public final class RemoteAssetFileService {
     private RemoteAssetFileService() {
     }
 
-    public static List<RemoteGraphEntry> list(MinecraftServer server, String directoryPath) throws IOException {
+    public static List<RemoteAssetEntry> list(MinecraftServer server, String directoryPath) throws IOException {
         Path directory = resolveDirectory(server, directoryPath);
         Path root = root(server);
         if (!Files.exists(directory) && directory.equals(root)) {
@@ -41,7 +39,7 @@ public final class RemoteAssetFileService {
             throw new IOException("Remote path is not a directory: " + directoryPath);
         }
 
-        List<RemoteGraphEntry> entries = new ArrayList<>();
+        List<RemoteAssetEntry> entries = new ArrayList<>();
         try (var stream = Files.list(directory)) {
             stream.filter(path -> !Files.isSymbolicLink(path))
                     .filter(path -> Files.isDirectory(path)
@@ -53,14 +51,14 @@ public final class RemoteAssetFileService {
         return entries;
     }
 
-    public static List<RemoteGraphConflict> findUploadConflicts(MinecraftServer server, List<String> targetPaths) {
+    public static List<RemoteAssetConflict> findUploadConflicts(MinecraftServer server, List<String> targetPaths) {
         Path root = root(server);
-        List<RemoteGraphConflict> conflicts = new ArrayList<>();
+        List<RemoteAssetConflict> conflicts = new ArrayList<>();
         for (String targetPath : targetPaths) {
             Path resolved = resolveFile(server, targetPath);
             validateAssetFilePath(resolved);
             if (Files.exists(resolved)) {
-                conflicts.add(new RemoteGraphConflict("", GraphPathMapper.pathToId(root, resolved), Files.isDirectory(resolved)));
+                conflicts.add(new RemoteAssetConflict("", GraphPathMapper.pathToId(root, resolved), Files.isDirectory(resolved)));
             }
         }
         return conflicts;
@@ -121,9 +119,9 @@ public final class RemoteAssetFileService {
         return result;
     }
 
-    public static List<RemoteGraphEntry> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
+    public static List<RemoteAssetEntry> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
         Path root = root(server);
-        List<RemoteGraphEntry> files = new ArrayList<>();
+        List<RemoteAssetEntry> files = new ArrayList<>();
         Set<Path> seen = new HashSet<>();
         for (String selectedPath : selectedPaths) {
             Path path = resolvePath(server, selectedPath, false);
@@ -144,7 +142,7 @@ public final class RemoteAssetFileService {
                 }
             }
         }
-        files.sort(Comparator.comparing(RemoteGraphEntry::path, String.CASE_INSENSITIVE_ORDER));
+        files.sort(Comparator.comparing(RemoteAssetEntry::path, String.CASE_INSENSITIVE_ORDER));
         return files;
     }
 
@@ -365,7 +363,7 @@ public final class RemoteAssetFileService {
         }
     }
 
-    private static RemoteGraphEntry toEntry(Path root, Path path) {
+    private static RemoteAssetEntry toEntry(Path root, Path path) {
         boolean directory = Files.isDirectory(path);
         long size = 0L;
         long lastModified = 0L;
@@ -388,7 +386,7 @@ public final class RemoteAssetFileService {
         String graphTypeId = graph != null ? graph.type().id()
                 : directory || !AssetTransferPolicy.isGraphPath(path.toString())
                 ? "" : readGraphTypeId(path);
-        return new RemoteGraphEntry(
+        return new RemoteAssetEntry(
                 graphId,
                 path.getFileName().toString(),
                 directory,

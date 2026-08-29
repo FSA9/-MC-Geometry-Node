@@ -116,9 +116,9 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
             inputArray[i] = new HashMap<>();
             portArray[i] = flattened.ports().getOrDefault(strId, Set.of());
 
-            Map<String, GraphFlattener.TargetConnection> oldFlow = flattened.executionOutputs().get(strId);
+            Map<String, FlattenedGraph.TargetConnection> oldFlow = flattened.executionOutputs().get(strId);
             if (oldFlow != null) {
-                for (Map.Entry<String, GraphFlattener.TargetConnection> e : oldFlow.entrySet()) {
+                for (Map.Entry<String, FlattenedGraph.TargetConnection> e : oldFlow.entrySet()) {
                     Integer targetInt = stringToId.get(e.getValue().targetNodeId());
                     Integer portId = keyDict.get(e.getKey());
                     if (targetInt != null && portId != null) {
@@ -131,10 +131,10 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
             staticInputArray[i] = flattened.staticInputs().getOrDefault(strId, Map.of());
         }
 
-        for (Map.Entry<String, GraphFlattener.DataConnectionSource> entry : flattened.dataInputs().entrySet()) {
-            String[] parts = entry.getKey().split("#");
-            String targetId = parts[0];
-            String portName = parts[1];
+        for (Map.Entry<FlattenedGraph.InputKey, FlattenedGraph.DataConnectionSource> entry
+                : flattened.dataInputs().entrySet()) {
+            String targetId = entry.getKey().nodeId();
+            String portName = entry.getKey().portName();
 
             Integer targetInt = stringToId.get(targetId);
             Integer sourceInt = stringToId.get(entry.getValue().sourceNodeId());

@@ -11,22 +11,20 @@ import java.util.Set;
 /** Detached graph-family-neutral snapshot produced after node-group expansion. */
 public final class FlattenedGraph {
     private final Map<String, JsonObject> nodes;
-    private final Map<String, Map<String, GraphFlattener.TargetConnection>> executionOutputs;
+    private final Map<String, Map<String, TargetConnection>> executionOutputs;
     // Behavior-tree-only control edges; blueprint execution uses executionOutputs.
-    private final Map<String, Map<String, GraphFlattener.TargetConnection>> behaviorOutputs;
-    private final Map<String, GraphFlattener.DataConnectionSource> dataInputs;
+    private final Map<String, Map<String, TargetConnection>> behaviorOutputs;
+    private final Map<InputKey, DataConnectionSource> dataInputs;
     private final Map<String, List<String>> nodesByType;
-    private final Map<String, Map<String, Object>> properties;
     private final Map<String, Map<String, Object>> staticInputs;
     private final Map<String, Set<String>> ports;
     private final Set<String> portNames;
 
     FlattenedGraph(Map<String, JsonObject> nodes,
-                   Map<String, Map<String, GraphFlattener.TargetConnection>> executionOutputs,
-                   Map<String, Map<String, GraphFlattener.TargetConnection>> behaviorOutputs,
-                   Map<String, GraphFlattener.DataConnectionSource> dataInputs,
+                   Map<String, Map<String, TargetConnection>> executionOutputs,
+                   Map<String, Map<String, TargetConnection>> behaviorOutputs,
+                   Map<InputKey, DataConnectionSource> dataInputs,
                    Map<String, List<String>> nodesByType,
-                   Map<String, Map<String, Object>> properties,
                    Map<String, Map<String, Object>> staticInputs,
                    Map<String, Set<String>> ports,
                    Set<String> portNames) {
@@ -37,19 +35,17 @@ public final class FlattenedGraph {
         this.behaviorOutputs = copyNested(behaviorOutputs);
         this.dataInputs = Map.copyOf(dataInputs);
         this.nodesByType = copyLists(nodesByType);
-        this.properties = copyNested(properties);
         this.staticInputs = copyNested(staticInputs);
         this.ports = copySets(ports);
         this.portNames = Set.copyOf(portNames);
     }
 
     public Map<String, JsonObject> nodes() { return nodes; }
-    public Map<String, Map<String, GraphFlattener.TargetConnection>> executionOutputs() { return executionOutputs; }
+    public Map<String, Map<String, TargetConnection>> executionOutputs() { return executionOutputs; }
     /** Behavior-tree-only child/control edges after group boundaries are flattened. */
-    public Map<String, Map<String, GraphFlattener.TargetConnection>> behaviorOutputs() { return behaviorOutputs; }
-    public Map<String, GraphFlattener.DataConnectionSource> dataInputs() { return dataInputs; }
+    public Map<String, Map<String, TargetConnection>> behaviorOutputs() { return behaviorOutputs; }
+    public Map<InputKey, DataConnectionSource> dataInputs() { return dataInputs; }
     public Map<String, List<String>> nodesByType() { return nodesByType; }
-    public Map<String, Map<String, Object>> properties() { return properties; }
     public Map<String, Map<String, Object>> staticInputs() { return staticInputs; }
     public Map<String, Set<String>> ports() { return ports; }
     public Set<String> portNames() { return portNames; }
@@ -71,5 +67,14 @@ public final class FlattenedGraph {
         Map<String, Set<String>> result = new LinkedHashMap<>();
         source.forEach((key, value) -> result.put(key, Set.copyOf(value)));
         return Map.copyOf(result);
+    }
+
+    public record TargetConnection(String targetNodeId, String targetPortName) {
+    }
+
+    public record DataConnectionSource(String sourceNodeId, String sourcePortName) {
+    }
+
+    public record InputKey(String nodeId, String portName) {
     }
 }

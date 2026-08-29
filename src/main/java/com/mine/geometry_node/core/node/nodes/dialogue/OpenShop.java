@@ -9,9 +9,9 @@ import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueChoicePa
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialoguePagePayload;
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueWaitRequest;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayload;
 import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayloadFactory;
-import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
@@ -152,7 +152,8 @@ public class OpenShop extends BaseNode {
                         DialogueText.EMPTY
                 ))
         );
-        return ExecutionResult.externalWait(GraphKind.DIALOGUE, new DialogueWaitRequest(dialogueContext, page));
+        return ExecutionResult.externalWait(DialogueRuntime.ID,
+                new DialogueWaitRequest(dialogueContext, page));
     }
 
     private Map<String, Boolean> evaluateConditionInputs(ExecutionContext context) {

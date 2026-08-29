@@ -10,7 +10,6 @@ import java.util.Locale;
  */
 public enum GraphKind {
     BLUEPRINT("blueprint"),
-    DIALOGUE("dialogue"),
     BEHAVIOR_TREE("behavior_tree"),
     UNKNOWN("unknown");
 

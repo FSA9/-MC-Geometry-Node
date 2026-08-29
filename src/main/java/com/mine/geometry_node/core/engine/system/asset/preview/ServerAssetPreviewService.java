@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphPermissions;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerImagePreviewGenerator;
@@ -48,7 +48,7 @@ public final class ServerAssetPreviewService implements AutoCloseable {
 
     public void handleRequest(ServerPlayer player, PacketAssetPreviewRequest packet) {
         UUID requestId = packet.request().requestId();
-        if (!RemoteGraphPermissions.canDownloadGraphs(player)) {
+        if (!RemoteAssetPermissions.canDownloadAssets(player)) {
             result(player, requestId, AssetPreviewResultCode.PERMISSION_DENIED, "permission_denied");
             return;
         }

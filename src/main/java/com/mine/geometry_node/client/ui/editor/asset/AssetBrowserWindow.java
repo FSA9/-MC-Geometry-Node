@@ -31,8 +31,8 @@ import com.mine.geometry_node.client.ui.session.DocumentManager;
 import com.mine.geometry_node.client.ui.session.GraphSession;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetConflict;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.AssetTransferPlanKind;
@@ -413,7 +413,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                     return;
                 }
                 List<String> conflictPaths = new ArrayList<>();
-                for (RemoteGraphConflict conflict : response.conflicts()) {
+                for (RemoteAssetConflict conflict : response.conflicts()) {
                     conflictPaths.add(conflict.targetPath());
                 }
                 ConflictResolutionState<LocalAssetService.UploadSource> resolution =
@@ -476,14 +476,14 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         mTransferPlanRequestIds.add(requestId);
     }
 
-    private void finishDownload(List<RemoteGraphEntry> files, File targetDirectory) {
+    private void finishDownload(List<RemoteAssetEntry> files, File targetDirectory) {
         List<String> conflicts = findLocalDownloadConflicts(files, targetDirectory);
         if (conflicts.isEmpty()) {
             submitDownload(files, targetDirectory, false, List.of());
             return;
         }
 
-        ConflictResolutionState<RemoteGraphEntry> resolution =
+        ConflictResolutionState<RemoteAssetEntry> resolution =
                 new ConflictResolutionState<>(files, conflicts, file -> AssetPathUtils.normalizeRemoteFilePath(file.path()));
         new OverwriteConfirmDialog(getContext(), conflicts, decision -> {
             switch (decision) {
@@ -505,13 +505,13 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         }).show(this);
     }
 
-    private void submitDownload(List<RemoteGraphEntry> files, File targetDirectory,
+    private void submitDownload(List<RemoteAssetEntry> files, File targetDirectory,
                                 boolean overwrite, List<String> overwritePaths) {
         if (files.isEmpty()) return;
         Path root = targetDirectory.toPath().toAbsolutePath().normalize();
         Set<String> overwriteSet = new HashSet<>(overwritePaths);
         List<ClientAssetTransferRequest> requests = new ArrayList<>();
-        for (RemoteGraphEntry file : files) {
+        for (RemoteAssetEntry file : files) {
             String remotePath = AssetPathUtils.normalizeRemoteFilePath(file.path());
             Path target = root.resolve(remotePath).normalize();
             if (!target.startsWith(root)) continue;
@@ -528,10 +528,10 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         }));
     }
 
-    private List<String> findLocalDownloadConflicts(List<RemoteGraphEntry> files, File targetDirectory) {
+    private List<String> findLocalDownloadConflicts(List<RemoteAssetEntry> files, File targetDirectory) {
         List<String> conflicts = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (RemoteGraphEntry file : files) {
+        for (RemoteAssetEntry file : files) {
             String path = AssetPathUtils.normalizeRemoteFilePath(file.path());
             if (!seen.add(path)) continue;
             File target = new File(targetDirectory, path);

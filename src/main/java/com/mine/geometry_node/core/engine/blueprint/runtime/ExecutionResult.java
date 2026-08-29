@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
-import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
@@ -16,7 +15,7 @@ public sealed interface ExecutionResult {
 
     record Next(String outputPortName) implements ExecutionResult {}
     record Wait(long ticks, String nextPortName) implements ExecutionResult {}
-    record ExternalWait(GraphKind runtimeKind, ExternalWaitRequest request) implements ExecutionResult {}
+    record ExternalWait(String handlerId, ExternalWaitRequest request) implements ExecutionResult {}
     record Finish() implements ExecutionResult {}
     record Error(String errorMessage) implements ExecutionResult {}
     record Call(List<String> outputPorts) implements ExecutionResult {}
@@ -54,7 +53,9 @@ public sealed interface ExecutionResult {
     }
 
     static ExecutionResult delay(long ticks, String nextPort) { return new Wait(ticks, nextPort); }
-    static ExecutionResult externalWait(GraphKind runtimeKind, ExternalWaitRequest request) { return new ExternalWait(runtimeKind, request); }
+    static ExecutionResult externalWait(String handlerId, ExternalWaitRequest request) {
+        return new ExternalWait(handlerId, request);
+    }
     static ExecutionResult error(String msg) { return new Error(msg); }
     static ExecutionResult call(List<String> ports) { return new Call(ports); }
     static ExecutionResult call(String... ports) { return new Call(List.of(ports)); }

@@ -341,13 +341,11 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                             new Connection(target.targetNodeId(), target.targetPortName())));
             graph.nodes.put(nodeId, node);
         }
-        for (Map.Entry<String, GraphFlattener.DataConnectionSource> entry
+        for (Map.Entry<FlattenedGraph.InputKey, FlattenedGraph.DataConnectionSource> entry
                 : flattened.dataInputs().entrySet()) {
-            int separator = entry.getKey().lastIndexOf('#');
-            if (separator <= 0 || separator >= entry.getKey().length() - 1) continue;
-            String targetNodeId = entry.getKey().substring(0, separator);
-            String targetPortId = entry.getKey().substring(separator + 1);
-            GraphFlattener.DataConnectionSource source = entry.getValue();
+            String targetNodeId = entry.getKey().nodeId();
+            String targetPortId = entry.getKey().portName();
+            FlattenedGraph.DataConnectionSource source = entry.getValue();
             NodeData sourceNode = graph.nodes.get(source.sourceNodeId());
             if (sourceNode != null && graph.nodes.containsKey(targetNodeId)) {
                 sourceNode.addDataConnection(source.sourcePortName(), targetNodeId, targetPortId);

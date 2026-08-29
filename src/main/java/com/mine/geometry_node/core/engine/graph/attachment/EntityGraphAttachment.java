@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.attachment;
 
-import com.mine.geometry_node.core.engine.blueprint.attachment.GraphContainer;
-import com.mine.geometry_node.core.engine.blueprint.event.BlueprintEventHandler;
+import com.mine.geometry_node.core.engine.blueprint.attachment.BlueprintEntityProcessHost;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.graph.scoped.OwnerScopedStateStore;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
@@ -12,10 +11,8 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
-import java.lang.ref.WeakReference;
 import java.util.*;
 
 /**
@@ -29,9 +26,7 @@ public class EntityGraphAttachment {
             new OwnerScopedStateStore();
     // Behavior-tree-only state: blueprints do not select one active asset per owner.
     private String selectedBehaviorTree;
-    private WeakReference<Entity> ownerRef = new WeakReference<>(null);
-
-    private final GraphContainer container = new GraphContainer(() -> {}, this::onScheduleChanged);
+    private final BlueprintEntityProcessHost blueprints = new BlueprintEntityProcessHost();
 
     public EntityGraphAttachment() {}
 
@@ -39,24 +34,11 @@ public class EntityGraphAttachment {
      * [心跳驱动] 委托给底座
      */
     public void tick(Entity entity) {
-        attachOwner(entity);
-        if (entity.level() instanceof ServerLevel serverLevel) {
-            container.tick(serverLevel, entity);
-        }
+        blueprints.tick(entity);
     }
 
     public void attachOwner(Entity entity) {
-        this.ownerRef = new WeakReference<>(entity);
-        for (BlueprintProcess process : container.getProcesses()) {
-            process.setGraphOwner(entity);
-        }
-    }
-
-    private void onScheduleChanged() {
-        Entity owner = this.ownerRef.get();
-        if (owner != null) {
-            BlueprintEventHandler.markActive(owner);
-        }
+        blueprints.attachOwner(entity);
     }
 
     // --- 实体独占绑定逻辑 ---
@@ -75,7 +57,7 @@ public class EntityGraphAttachment {
 
     public void unbindGraph(String graphId, GraphCloseMode closeMode) {
         this.boundGraphs.remove(GraphBindingKey.blueprint(graphId));
-        this.container.removeProcess(graphId, closeMode);
+        this.blueprints.removeProcess(graphId, closeMode);
     }
 
     public Set<String> getBoundGraphs() {
@@ -124,27 +106,19 @@ public class EntityGraphAttachment {
 
     public void clearGraphs() {
         this.boundGraphs.clear(GraphKind.BLUEPRINT);
-        this.container.clear();
+        this.blueprints.clear();
     }
 
     // --- API 委托层 ---
 
     public void addProcess(BlueprintProcess process) {
-        Entity owner = ownerRef.get();
-        process.setGraphOwner(owner);
-        container.addProcess(process);
+        blueprints.addProcess(process);
     }
-    public void removeProcess(String graphId) { container.removeProcess(graphId); }
-    public void removeProcess(String graphId, GraphCloseMode closeMode) { container.removeProcess(graphId, closeMode); }
-    public Collection<BlueprintProcess> getProcesses() { return container.getProcesses(); }
-    public long getNextScheduledTick() { return container.getNextScheduledTick(); }
-    public BlueprintProcess getProcess(String graphId) {
-        BlueprintProcess process = container.getProcess(graphId);
-        if (process != null) {
-            process.setGraphOwner(ownerRef.get());
-        }
-        return process;
-    }
+    public void removeProcess(String graphId) { blueprints.removeProcess(graphId); }
+    public void removeProcess(String graphId, GraphCloseMode closeMode) { blueprints.removeProcess(graphId, closeMode); }
+    public Collection<BlueprintProcess> getProcesses() { return blueprints.processes(); }
+    public long getNextScheduledTick() { return blueprints.nextScheduledTick(); }
+    public BlueprintProcess getProcess(String graphId) { return blueprints.getProcess(graphId); }
     public OwnerScopedStateStore ownerScopedState() { return ownerScopedState; }
 
     // --- 序列化层 ---
@@ -170,7 +144,7 @@ public class EntityGraphAttachment {
             tag.put("OwnerScopedState",
                     ownerScopedState.save(new CompoundTag(), provider));
         }
-        return container.save(tag, provider);
+        return blueprints.save(tag, provider);
     }
 
     public void load(CompoundTag tag, HolderLookup.Provider provider) {
@@ -193,6 +167,6 @@ public class EntityGraphAttachment {
         String selected = tag.getStringOr("SelectedBehaviorTree", "");
         selectedBehaviorTree = getBoundBehaviorTrees().contains(selected) ? selected : null;
         ownerScopedState.load(tag.getCompoundOrEmpty("OwnerScopedState"), provider);
-        container.load(tag, provider);
+        blueprints.load(tag, provider);
     }
 }

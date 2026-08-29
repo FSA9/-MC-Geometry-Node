@@ -12,7 +12,10 @@ import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAtt
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeDriver;
+import com.mine.geometry_node.core.engine.runtime.ServerEngineDriver;
+import com.mine.geometry_node.core.engine.runtime.ServerEngineRegistry;
+import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandlerRegistry;
+import com.mine.geometry_node.core.engine.graph.debug.GraphDebugEngine;
 import com.mine.geometry_node.core.engine.graph.scoped.ServerScopedStateStore;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
@@ -141,10 +144,12 @@ public class GeometryNode {
         GraphEngineServices.INSTANCE.setScopedStateStore(new ServerScopedStateStore());
 
         // 初始化图运行时注册表
-        GraphRuntimeDriver.init();
+        ServerEngineDriver.init();
         GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);
-        GraphRuntimeRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BehaviorTreeRuntime.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(GraphDebugEngine.INSTANCE);
+        ExternalWaitHandlerRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
 
         QuestService.INSTANCE.init();
         QuestScreenService.INSTANCE.init();

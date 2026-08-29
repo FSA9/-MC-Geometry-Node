@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.engine.system.dialogue.DialogueContext;
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialoguePageFactory;
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialoguePagePayload;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueWaitRequest;
-import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -77,7 +77,8 @@ public class ShowDialoguePage extends BaseNode {
         String basePageId = "node:" + context.getCurrentNodeId();
         List<DialoguePagePayload> pages = DialoguePageFactory.textRounds(basePageId, bodyText, styleId);
 
-        return ExecutionResult.externalWait(GraphKind.DIALOGUE, new DialogueWaitRequest(dialogueContext, pages));
+        return ExecutionResult.externalWait(DialogueRuntime.ID,
+                new DialogueWaitRequest(dialogueContext, pages));
     }
 
     private DialogueContext resolveDialogueContext(ExecutionContext context, ServerPlayer player) {

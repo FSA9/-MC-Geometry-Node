@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.transfer.service;
 
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphPermissions;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescriptor;
@@ -406,7 +406,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
 
     private static boolean hasPermission(ServerPlayer player, AssetTransferDirection direction) {
         return direction == AssetTransferDirection.UPLOAD
-                ? RemoteGraphPermissions.canUploadGraphs(player) : RemoteGraphPermissions.canDownloadGraphs(player);
+                ? RemoteAssetPermissions.canUploadAssets(player) : RemoteAssetPermissions.canDownloadAssets(player);
     }
 
     private static void sendFailure(ServerPlayer player, UUID transferId, AssetTransferErrorCode code,

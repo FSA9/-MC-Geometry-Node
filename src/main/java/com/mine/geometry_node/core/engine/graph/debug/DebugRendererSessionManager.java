@@ -90,6 +90,14 @@ public final class DebugRendererSessionManager {
         });
     }
 
+    /** Releases state owned by the stopping server while retaining registered hydrators. */
+    public static void shutdown() {
+        SESSIONS.clear();
+        REQUESTED_PATH_TARGETS.clear();
+        LEVEL_CACHES.clear();
+        dirtyVersion = 0L;
+    }
+
     public static int enableArea(ServerPlayer player, double radius) {
         Session session = enableChannel(player, radius);
         session.areaEnabled = true;

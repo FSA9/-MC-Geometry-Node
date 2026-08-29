@@ -5,9 +5,9 @@ import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataInd
 import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
+import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandler;
+import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandlerRegistry;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -405,7 +405,7 @@ public class BlueprintProcess {
         private int activeNodeId = -1;
         private int externalWaitNodeId = -1;
         @Nullable
-        private GraphRuntime externalWaitRuntime;
+        private ExternalWaitHandler externalWaitHandler;
         public long wakeUpTick = -1; // 仅在 WAITING 状态有效
         private int runDepth = 0;
         private ServerLevel threadLevel;
@@ -446,7 +446,7 @@ public class BlueprintProcess {
             this.currentEntryPort = startPortName;
             this.activeNodeId = -1;
             this.externalWaitNodeId = -1;
-            this.externalWaitRuntime = null;
+            this.externalWaitHandler = null;
             this.wakeUpTick = -1;
             this.runDepth = 0;
             this.parentJoinId = null;
@@ -646,8 +646,9 @@ public class BlueprintProcess {
                     BlueprintProcess.this.notifyTickScheduleChanged();
                 }
                 case ExecutionResult.ExternalWait externalWait -> {
-                    GraphRuntime runtime = GraphRuntimeRegistry.INSTANCE.get(externalWait.runtimeKind());
-                    if (runtime == null) {
+                    ExternalWaitHandler handler = ExternalWaitHandlerRegistry.INSTANCE
+                            .get(externalWait.handlerId());
+                    if (handler == null) {
                         this.state = State.ERROR;
                         this.currentFlowId = -1;
                         this.executionStack.clear();
@@ -655,14 +656,14 @@ public class BlueprintProcess {
                     }
 
                     this.externalWaitNodeId = this.currentFlowId;
-                    this.externalWaitRuntime = runtime;
+                    this.externalWaitHandler = handler;
                     this.currentFlowId = -1;
                     this.state = State.EXTERNAL_WAITING;
                     BlueprintProcess.this.externalWaitingThreads.add(this);
 
                     boolean beganWaiting;
                     try {
-                        beganWaiting = runtime.beginExternalWait(this, externalWait.request());
+                        beganWaiting = handler.beginExternalWait(this, externalWait.request());
                     } catch (RuntimeException | Error exception) {
                         failExternalWait();
                         throw exception;
@@ -686,16 +687,16 @@ public class BlueprintProcess {
             }
 
             BlueprintProcess.this.externalWaitingThreads.remove(this);
-            GraphRuntime runtime = this.externalWaitRuntime;
+            ExternalWaitHandler handler = this.externalWaitHandler;
             BlueprintPlan.IntFlowTarget target = index.findFlowTarget(this.externalWaitNodeId, outputPortName);
-            if (runtime != null) {
-                GraphRuntime.ExternalWaitCompletion completion = target != null
-                        ? GraphRuntime.ExternalWaitCompletion.RESUMED
-                        : GraphRuntime.ExternalWaitCompletion.NO_TARGET;
-                runtime.completeExternalWait(this, outputPortName, completion);
+            if (handler != null) {
+                ExternalWaitHandler.Completion completion = target != null
+                        ? ExternalWaitHandler.Completion.RESUMED
+                        : ExternalWaitHandler.Completion.NO_TARGET;
+                handler.completeExternalWait(this, outputPortName, completion);
             }
             this.externalWaitNodeId = -1;
-            this.externalWaitRuntime = null;
+            this.externalWaitHandler = null;
             this.wakeUpTick = -1;
 
             if (target == null) {
@@ -742,8 +743,9 @@ public class BlueprintProcess {
 
         @Override
         public void abort(String reason) {
-            GraphRuntime runtime = this.state == State.EXTERNAL_WAITING ? this.externalWaitRuntime : null;
-            this.externalWaitRuntime = null;
+            ExternalWaitHandler handler = this.state == State.EXTERNAL_WAITING
+                    ? this.externalWaitHandler : null;
+            this.externalWaitHandler = null;
             BlueprintProcess.this.externalWaitingThreads.remove(this);
             this.externalWaitNodeId = -1;
             this.currentFlowId = -1;
@@ -752,8 +754,8 @@ public class BlueprintProcess {
             if (BlueprintProcess.this.sleepingThreads.remove(this)) {
                 BlueprintProcess.this.notifyTickScheduleChanged();
             }
-            if (runtime != null) {
-                runtime.endExternalWait(this, reason);
+            if (handler != null) {
+                handler.endExternalWait(this, reason);
             }
             BlueprintProcess.this.onThreadFinished(this);
             recycleIfNeeded();
@@ -772,7 +774,7 @@ public class BlueprintProcess {
         private void failExternalWait() {
             BlueprintProcess.this.externalWaitingThreads.remove(this);
             this.externalWaitNodeId = -1;
-            this.externalWaitRuntime = null;
+            this.externalWaitHandler = null;
             this.state = State.ERROR;
             this.executionStack.clear();
         }

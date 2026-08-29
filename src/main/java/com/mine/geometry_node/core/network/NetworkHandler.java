@@ -5,9 +5,9 @@ import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugServic
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphPermissions;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.transfer.service.ServerAssetTransferService;
 import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewService;
 import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferAck;
@@ -140,7 +140,7 @@ public class NetworkHandler {
                             String jsonContent = payload.jsonContent();
 
                             try {
-                                if (!RemoteGraphPermissions.canUploadGraphs(player)) {
+                                if (!RemoteAssetPermissions.canUploadAssets(player)) {
                                     sendToPlayer(player, new PacketSyncResponse(false, graphId, "没有上传服务器图纸的权限。"));
                                     return;
                                 }
@@ -163,10 +163,10 @@ public class NetworkHandler {
                         if (context.getPlayer() instanceof ServerPlayer player) {
                             sendToPlayer(player, new PacketRemoteGraphCapabilitiesResponse(
                                     payload.requestId(),
-                                    RemoteGraphPermissions.canBrowseRemoteGraphs(player),
-                                    RemoteGraphPermissions.canUploadGraphs(player),
-                                    RemoteGraphPermissions.canDownloadGraphs(player),
-                                    RemoteGraphPermissions.canManageGraphs(player)
+                                    RemoteAssetPermissions.canBrowseRemoteAssets(player),
+                                    RemoteAssetPermissions.canUploadAssets(player),
+                                    RemoteAssetPermissions.canDownloadAssets(player),
+                                    RemoteAssetPermissions.canManageAssets(player)
                             ));
                         }
                     });
@@ -180,7 +180,7 @@ public class NetworkHandler {
                 (payload, context) -> {
                     context.queue(() -> {
                         if (!(context.getPlayer() instanceof ServerPlayer player)) return;
-                        if (!RemoteGraphPermissions.canBrowseRemoteGraphs(player)) {
+                        if (!RemoteAssetPermissions.canBrowseRemoteAssets(player)) {
                             sendToPlayer(player, new PacketRemoteGraphListResponse(
                                     payload.requestId(), false, payload.directory(), "没有浏览服务器图纸的权限。", Collections.emptyList()));
                             return;
@@ -188,14 +188,14 @@ public class NetworkHandler {
                         try {
                             String directory = RemoteAssetFileService.normalizeDirectoryPath(payload.directory());
                             if (payload.createIfMissing()) {
-                                if (!RemoteGraphPermissions.canCreateRemoteFolders(player)) {
+                                if (!RemoteAssetPermissions.canCreateRemoteFolders(player)) {
                                     sendToPlayer(player, new PacketRemoteGraphListResponse(
                                             payload.requestId(), false, payload.directory(), "没有创建服务器图纸文件夹的权限。", Collections.emptyList()));
                                     return;
                                 }
                                 Files.createDirectories(RemoteAssetFileService.resolveDirectory(player.level().getServer(), directory));
                             }
-                            List<RemoteGraphEntry> entries = RemoteAssetFileService.list(player.level().getServer(), directory);
+                            List<RemoteAssetEntry> entries = RemoteAssetFileService.list(player.level().getServer(), directory);
                             sendToPlayer(player, new PacketRemoteGraphListResponse(payload.requestId(), true, directory, "", entries));
                         } catch (Exception e) {
                             sendToPlayer(player, new PacketRemoteGraphListResponse(
@@ -412,7 +412,7 @@ public class NetworkHandler {
     }
 
     private static void handleRemoteGraphFileOperation(PacketRemoteGraphFileOperationRequest payload, ServerPlayer player) {
-        if (!RemoteGraphPermissions.canManageGraphs(player)) {
+        if (!RemoteAssetPermissions.canManageAssets(player)) {
             sendToPlayer(player, new PacketRemoteGraphFileOperationResponse(
                     payload.requestId(), false, "没有管理服务器图纸文件的权限。"));
             return;

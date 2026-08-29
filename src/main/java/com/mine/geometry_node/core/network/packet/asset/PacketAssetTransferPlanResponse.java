@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.network.packet.asset;
 
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphConflict;
-import com.mine.geometry_node.core.engine.graph.storage.RemoteGraphEntry;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetConflict;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -15,8 +15,8 @@ public record PacketAssetTransferPlanResponse(
         AssetTransferPlanKind kind,
         boolean success,
         String message,
-        List<RemoteGraphEntry> files,
-        List<RemoteGraphConflict> conflicts
+        List<RemoteAssetEntry> files,
+        List<RemoteAssetConflict> conflicts
 ) implements CustomPacketPayload {
     public static final Type<PacketAssetTransferPlanResponse> TYPE =
             new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "asset_transfer_plan_response"));
@@ -42,7 +42,7 @@ public record PacketAssetTransferPlanResponse(
         buffer.writeBoolean(success);
         buffer.writeUtf(message, AssetTransferPacketCodecs.MAX_DETAIL_LENGTH);
         buffer.writeVarInt(files.size());
-        for (RemoteGraphEntry file : files) {
+        for (RemoteAssetEntry file : files) {
             buffer.writeUtf(file.path(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
             buffer.writeUtf(file.name(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
             buffer.writeBoolean(file.directory());
@@ -51,18 +51,18 @@ public record PacketAssetTransferPlanResponse(
             buffer.writeUtf(file.graphTypeId(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
         }
         buffer.writeVarInt(conflicts.size());
-        for (RemoteGraphConflict conflict : conflicts) {
+        for (RemoteAssetConflict conflict : conflicts) {
             buffer.writeUtf(conflict.sourcePath(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
             buffer.writeUtf(conflict.targetPath(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
             buffer.writeBoolean(conflict.directory());
         }
     }
 
-    private static List<RemoteGraphEntry> readFiles(RegistryFriendlyByteBuf buffer) {
+    private static List<RemoteAssetEntry> readFiles(RegistryFriendlyByteBuf buffer) {
         int size = buffer.readVarInt();
         if (size < 0 || size > 65_536) throw new IllegalArgumentException("Invalid transfer manifest size");
-        List<RemoteGraphEntry> files = new ArrayList<>(size);
-        for (int i = 0; i < size; i++) files.add(new RemoteGraphEntry(
+        List<RemoteAssetEntry> files = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) files.add(new RemoteAssetEntry(
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH),
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH), buffer.readBoolean(), buffer.readLong(),
                 buffer.readLong(),
@@ -70,11 +70,11 @@ public record PacketAssetTransferPlanResponse(
         return files;
     }
 
-    private static List<RemoteGraphConflict> readConflicts(RegistryFriendlyByteBuf buffer) {
+    private static List<RemoteAssetConflict> readConflicts(RegistryFriendlyByteBuf buffer) {
         int size = buffer.readVarInt();
         if (size < 0 || size > 16_384) throw new IllegalArgumentException("Invalid transfer conflict count");
-        List<RemoteGraphConflict> conflicts = new ArrayList<>(size);
-        for (int i = 0; i < size; i++) conflicts.add(new RemoteGraphConflict(
+        List<RemoteAssetConflict> conflicts = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) conflicts.add(new RemoteAssetConflict(
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH),
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH), buffer.readBoolean()));
         return conflicts;
