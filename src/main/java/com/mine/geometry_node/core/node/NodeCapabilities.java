@@ -12,7 +12,7 @@ public record NodeCapabilities(Set<String> graphTypeIds, Context context,
                                ChildConstraint children, Set<ResourceUse> resources) {
     public static final NodeCapabilities LEGACY_BLUEPRINT = new NodeCapabilities(
             Set.of(GraphTypeRegistry.BLUEPRINT.id(), GraphTypeRegistry.QUEST.id()),
-            Context.BLUEPRINT_EXECUTION, ChildConstraint.LEAF, Set.of(ResourceUse.NONE));
+            Context.BLUEPRINT_EXECUTION, ChildConstraint.LEAF, Set.of());
 
     public NodeCapabilities {
         Set<String> normalizedTypes = new LinkedHashSet<>();
@@ -26,43 +26,23 @@ public record NodeCapabilities(Set<String> graphTypeIds, Context context,
         context = Objects.requireNonNull(context, "context");
         children = Objects.requireNonNull(children, "children");
         resources = Set.copyOf(Objects.requireNonNull(resources, "resources"));
-        if (resources.isEmpty()) resources = Set.of(ResourceUse.NONE);
-        if (resources.size() > 1 && resources.contains(ResourceUse.NONE)) {
-            throw new IllegalArgumentException("ResourceUse.NONE cannot be combined with owned resources");
-        }
     }
 
     public boolean supports(String graphTypeId) {
         return graphTypeIds.contains(GraphType.normalizeId(graphTypeId));
     }
 
-    public record ChildConstraint(int minimum, int maximum, boolean ordered) {
+    public record ChildConstraint(int maximum) {
         public static final int UNBOUNDED = -1;
-        public static final ChildConstraint LEAF = exactly(0);
-        public static final ChildConstraint EXACTLY_ONE = exactly(1);
-        public static final ChildConstraint ONE_OR_MORE_ORDERED = range(1, UNBOUNDED, true);
+        public static final ChildConstraint LEAF = new ChildConstraint(0);
+        public static final ChildConstraint SINGLE_CHILD = new ChildConstraint(1);
+        public static final ChildConstraint UNBOUNDED_CHILDREN = new ChildConstraint(UNBOUNDED);
 
         public ChildConstraint {
-            if (minimum < 0) throw new IllegalArgumentException("minimum must be non-negative");
             if (maximum < UNBOUNDED) throw new IllegalArgumentException("maximum must be -1 or non-negative");
-            if (maximum != UNBOUNDED && maximum < minimum) {
-                throw new IllegalArgumentException("maximum must be at least minimum");
-            }
-        }
-
-        public static ChildConstraint exactly(int count) {
-            return new ChildConstraint(count, count, false);
-        }
-
-        public static ChildConstraint range(int minimum, int maximum, boolean ordered) {
-            return new ChildConstraint(minimum, maximum, ordered);
-        }
-
-        public boolean accepts(int count) {
-            return count >= minimum && (maximum == UNBOUNDED || count <= maximum);
         }
     }
 
     public enum Context { DATA, BLUEPRINT_EXECUTION, BEHAVIOR_EXECUTION }
-    public enum ResourceUse { NONE, MOVEMENT, LOOK, TARGET, COMBAT, INTERACTION, ANIMATION, ITEM_USE, CUSTOM }
+    public enum ResourceUse { MOVEMENT, LOOK, TARGET }
 }

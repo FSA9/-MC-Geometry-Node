@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.behavior.compile.BehaviorTreeLinker;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
@@ -73,9 +72,6 @@ public final class BehaviorRuntimeService {
             throw new IllegalArgumentException("Behavior owner must be alive in the target server level");
         }
         requireExecutable(plan);
-        BehaviorTreePlan executablePlan = BehaviorTreeLinker.link(plan,
-                BehaviorRuntimeService::resolvePlan);
-        if (executablePlan != plan) requireExecutable(executablePlan);
         ServerState server = state(level.getServer());
         if (server.instances.size() >= budget.targetLoadedInstances()) {
             throw new IllegalStateException("Behavior instance population limit exceeded");
@@ -89,7 +85,7 @@ public final class BehaviorRuntimeService {
                     + level.dimension().identifier());
         }
 
-        BehaviorTreeInstance instance = new BehaviorTreeInstance(UUID.randomUUID(), executablePlan,
+        BehaviorTreeInstance instance = new BehaviorTreeInstance(UUID.randomUUID(), plan,
                 new EntityHost(owner), budget, randomSeed);
         instance.markRunning();
         InstanceEntry entry = new InstanceEntry(instance, managedAsset, owner.getUUID());
@@ -170,9 +166,11 @@ public final class BehaviorRuntimeService {
         InstanceEntry active = activeId != null ? state.instances.get(activeId) : null;
         if (active != null) return active.instance.stopReason();
         UUID terminalId = state.lastTerminalByOwner.get(ownerId);
-        BehaviorDebugSnapshot terminal = terminalId != null
-                ? state.terminalSnapshots.get(terminalId) : null;
-        return terminal != null ? terminal.stopReason() : null;
+        if (terminalId != null) {
+            BehaviorDebugSnapshot terminal = state.terminalSnapshots.get(terminalId);
+            if (terminal != null) return terminal.stopReason();
+        }
+        return state.lastStopReasons.get(ownerId);
     }
 
     public boolean suspend(MinecraftServer server, UUID instanceId) {
@@ -312,14 +310,17 @@ public final class BehaviorRuntimeService {
     private void removeIndexes(ServerState server, InstanceEntry entry) {
         UUID instanceId = entry.instance.instanceId();
         if (!entry.instance.state().isActive()) {
-            try {
-                entry.refreshOwnerAccess();
-                server.retainTerminalSnapshot(entry.ownerId,
-                        BehaviorDebugSnapshot.capture(entry.instance), entry.access(false));
-            } catch (RuntimeException exception) {
-                GeometryNode.LOGGER.warn(
-                        "[BehaviorRuntime] Failed to capture terminal snapshot for {}; indexes will still be removed",
-                        instanceId, exception);
+            server.retainStopReason(entry.ownerId, entry.instance.stopReason());
+            if (entry.instance.debugTracingEnabled()) {
+                try {
+                    entry.refreshOwnerAccess();
+                    server.retainTerminalSnapshot(entry.ownerId,
+                            BehaviorDebugSnapshot.capture(entry.instance), entry.access(false));
+                } catch (RuntimeException exception) {
+                    GeometryNode.LOGGER.warn(
+                            "[BehaviorRuntime] Failed to capture terminal snapshot for {}; indexes will still be removed",
+                            instanceId, exception);
+                }
             }
         }
         server.instances.remove(instanceId, entry);
@@ -400,6 +401,7 @@ public final class BehaviorRuntimeService {
         private final LinkedHashMap<UUID, BehaviorDebugSnapshot> terminalSnapshots = new LinkedHashMap<>();
         private final Map<UUID, BehaviorDebugAccess> terminalAccess = new HashMap<>();
         private final Map<UUID, UUID> lastTerminalByOwner = new HashMap<>();
+        private final LinkedHashMap<UUID, BehaviorTerminationReason> lastStopReasons = new LinkedHashMap<>();
         private final LinkedHashSet<UUID> pendingAssetReloads = new LinkedHashSet<>();
         private final Map<ResourceKey<Level>, WorldState> worlds = new HashMap<>();
         private long tick = Long.MIN_VALUE;
@@ -465,6 +467,17 @@ public final class BehaviorRuntimeService {
             }
         }
 
+        private void retainStopReason(UUID ownerId, @Nullable BehaviorTerminationReason reason) {
+            if (reason == null) return;
+            lastStopReasons.remove(ownerId);
+            lastStopReasons.put(ownerId, reason);
+            while (lastStopReasons.size() > MAX_RETAINED_TERMINAL_SNAPSHOTS) {
+                Iterator<UUID> iterator = lastStopReasons.keySet().iterator();
+                iterator.next();
+                iterator.remove();
+            }
+        }
+
         private void clear() {
             instances.clear();
             ownerInstances.clear();
@@ -472,6 +485,7 @@ public final class BehaviorRuntimeService {
             terminalSnapshots.clear();
             terminalAccess.clear();
             lastTerminalByOwner.clear();
+            lastStopReasons.clear();
             pendingAssetReloads.clear();
             worlds.values().forEach(world -> world.scheduler.clear());
             worlds.clear();
@@ -628,11 +642,6 @@ public final class BehaviorRuntimeService {
         @Override
         public LivingEntity setAttackTarget(@Nullable LivingEntity target) {
             return nativeAi.setAttackTarget(target);
-        }
-
-        @Override
-        public void maintainPersistentControls() {
-            nativeAi.maintainPersistentControls();
         }
 
         @Override

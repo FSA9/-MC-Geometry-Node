@@ -37,7 +37,7 @@ public final class BehaviorNodeContext {
     }
 
     public UUID instanceId() { return instance.instanceId(); }
-    public String graphId() { return instance.plan().getNodeAssetId(nodeIndex); }
+    public String graphId() { return instance.plan().assetId(); }
     public int nodeIndex() { return nodeIndex; }
     public String nodeId() { return instance.plan().getNodeId(nodeIndex); }
     public long gameTick() { ensureValid(); return epochTick; }
@@ -189,16 +189,6 @@ public final class BehaviorNodeContext {
     public void reportActionFailure(@Nullable BehaviorActionFailure failure) {
         ensureValid();
         actionFailure = failure;
-    }
-
-    public void enterSubtreeCall() {
-        ensureValid();
-        instance.enterSubtreeCall(nodeIndex);
-    }
-
-    public void exitSubtreeCall(BehaviorTerminationReason reason) {
-        ensureValid();
-        instance.exitSubtreeCall(nodeIndex, Objects.requireNonNull(reason, "reason"));
     }
 
     @Nullable

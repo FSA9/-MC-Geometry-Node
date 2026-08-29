@@ -136,16 +136,13 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
 
     private static Node node(BehaviorDebugSnapshot.NodeSnapshot source) {
         return new Node(source.index(), bounded(source.nodeId(), MAX_ID_LENGTH),
-                bounded(source.nodeAssetId(), MAX_ID_LENGTH), bounded(source.nodeType(), MAX_ID_LENGTH),
-                source.parentIndex(), source.state(),
+                bounded(source.nodeType(), MAX_ID_LENGTH), source.parentIndex(), source.state(),
                 source.visits(), source.totalNanos(), source.lastNanos(), source.lastResult(),
                 source.lastReason());
     }
 
     private static BlackboardEntry blackboard(BehaviorDebugSnapshot.BlackboardSnapshot source) {
-        return new BlackboardEntry(source.frameId(), bounded(source.frameAssetId(), MAX_ID_LENGTH),
-                bounded(source.callNodePath(), MAX_ID_LENGTH), source.frameRevision(),
-                bounded(source.name(), MAX_NAME_LENGTH),
+        return new BlackboardEntry(bounded(source.name(), MAX_NAME_LENGTH),
                 bounded(source.scope(), MAX_NAME_LENGTH),
                 bounded(source.providerIdentity(), MAX_ID_LENGTH), source.type(), source.present(),
                 bounded(source.valueKind(), MAX_NAME_LENGTH),
@@ -185,13 +182,11 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
     }
 
     private static int nodeBytes(Node node) {
-        return 64 + stringBytes(node.nodeId()) + stringBytes(node.nodeAssetId())
-                + stringBytes(node.nodeType());
+        return 64 + stringBytes(node.nodeId()) + stringBytes(node.nodeType());
     }
 
     private static int blackboardBytes(BlackboardEntry entry) {
-        return 64 + stringBytes(entry.frameAssetId()) + stringBytes(entry.callNodePath())
-                + stringBytes(entry.name()) + stringBytes(entry.scope())
+        return 64 + stringBytes(entry.name()) + stringBytes(entry.scope())
                 + stringBytes(entry.providerIdentity())
                 + stringBytes(entry.valueKind()) + stringBytes(entry.displayValue());
     }
@@ -357,14 +352,13 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
         }
     }
 
-    public record Node(int index, String nodeId, String nodeAssetId, String nodeType, int parentIndex,
+    public record Node(int index, String nodeId, String nodeType, int parentIndex,
                        BehaviorNodeState state, long visits, long totalNanos, long lastNanos,
                        @Nullable BehaviorResult lastResult,
                        @Nullable BehaviorTerminationReason lastReason) {
         private void write(RegistryFriendlyByteBuf buffer) {
             buffer.writeVarInt(index);
             buffer.writeUtf(nodeId, MAX_ID_LENGTH);
-            buffer.writeUtf(nodeAssetId, MAX_ID_LENGTH);
             buffer.writeUtf(nodeType, MAX_ID_LENGTH);
             buffer.writeVarInt(parentIndex);
             buffer.writeEnum(state);
@@ -377,7 +371,7 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
 
         private static Node read(RegistryFriendlyByteBuf buffer) {
             return new Node(buffer.readVarInt(), buffer.readUtf(MAX_ID_LENGTH),
-                    buffer.readUtf(MAX_ID_LENGTH), buffer.readUtf(MAX_ID_LENGTH), buffer.readVarInt(),
+                    buffer.readUtf(MAX_ID_LENGTH), buffer.readVarInt(),
                     buffer.readEnum(BehaviorNodeState.class), buffer.readLong(), buffer.readLong(),
                     buffer.readLong(), readResult(buffer), readReason(buffer));
         }
@@ -423,17 +417,10 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
         }
     }
 
-    public record BlackboardEntry(int frameId, String frameAssetId, String callNodePath,
-                                  long frameRevision,
-                                  String name, String scope,
-                                  String providerIdentity, PortType type,
+    public record BlackboardEntry(String name, String scope, String providerIdentity, PortType type,
                                   boolean present, String valueKind, String displayValue,
                                   boolean scopeAvailable) {
         private void write(RegistryFriendlyByteBuf buffer) {
-            buffer.writeVarInt(frameId);
-            buffer.writeUtf(frameAssetId, MAX_ID_LENGTH);
-            buffer.writeUtf(callNodePath, MAX_ID_LENGTH);
-            buffer.writeLong(frameRevision);
             buffer.writeUtf(name, MAX_NAME_LENGTH);
             buffer.writeUtf(scope, MAX_NAME_LENGTH);
             buffer.writeUtf(providerIdentity, MAX_ID_LENGTH);
@@ -445,9 +432,8 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
         }
 
         private static BlackboardEntry read(RegistryFriendlyByteBuf buffer) {
-            return new BlackboardEntry(buffer.readVarInt(), buffer.readUtf(MAX_ID_LENGTH),
-                    buffer.readUtf(MAX_ID_LENGTH), buffer.readLong(), buffer.readUtf(MAX_NAME_LENGTH),
-                    buffer.readUtf(MAX_NAME_LENGTH), buffer.readUtf(MAX_ID_LENGTH),
+            return new BlackboardEntry(buffer.readUtf(MAX_NAME_LENGTH), buffer.readUtf(MAX_NAME_LENGTH),
+                    buffer.readUtf(MAX_ID_LENGTH),
                     buffer.readEnum(PortType.class), buffer.readBoolean(), buffer.readUtf(MAX_NAME_LENGTH),
                     buffer.readUtf(MAX_VALUE_LENGTH), buffer.readBoolean());
         }

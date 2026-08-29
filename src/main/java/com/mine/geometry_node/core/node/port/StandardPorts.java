@@ -139,7 +139,6 @@ public enum StandardPorts {
     SIZE_MODE("size_mode", PortType.STRING),
     MARKER_TYPE("marker_type", PortType.STRING),
     ANCHOR_TYPE("anchor_type", PortType.STRING),
-    SUBTREE_ASSET("subtree_asset", PortType.STRING),
     BLACKBOARD_SCOPE("blackboard_scope", PortType.STRING),
     TARGET_MODE("target_mode", PortType.STRING),
 

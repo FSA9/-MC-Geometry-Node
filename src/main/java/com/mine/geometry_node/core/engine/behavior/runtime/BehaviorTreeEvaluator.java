@@ -41,24 +41,23 @@ public final class BehaviorTreeEvaluator {
             stop(instance, BehaviorTerminationReason.OWNER_INVALID);
             return EvaluationOutcome.failed(BehaviorTerminationReason.OWNER_INVALID, "Behavior owner is unavailable");
         }
-        instance.host().maintainPersistentControls();
         if (!instance.beginEvaluation(tick)) {
             return EvaluationOutcome.skipped(instance.nextWakeTick());
         }
 
-        long started = instance.host().nanoTime();
+        long started = startTiming(instance);
         EvaluationPass pass = new EvaluationPass(instance);
         currentPass.set(pass);
         try {
             BehaviorResult result = evaluateNode(instance, instance.plan().getRootNode(), 1, tick);
             long nextTick = safeIncrement(tick);
             instance.finishEvaluation(result, nextTick);
-            long elapsedNanos = elapsed(started, instance.host().nanoTime());
+            long elapsedNanos = elapsed(instance, started);
             instance.recordEvaluationMetrics(elapsedNanos, pass.visits, pass.immediateTransitions);
             return new EvaluationOutcome(result, null, instance.nextWakeTick(), pass.visits,
                     elapsedNanos, "");
         } catch (EvaluationFault fault) {
-            long elapsedNanos = elapsed(started, instance.host().nanoTime());
+            long elapsedNanos = elapsed(instance, started);
             instance.recordEvaluationMetrics(elapsedNanos, pass.visits, pass.immediateTransitions);
             instance.releaseAllResources();
             instance.host().releasePersistentControls();
@@ -110,7 +109,7 @@ public final class BehaviorTreeEvaluator {
                     "No behavior executor is registered for " + instance.plan().getNodeType(nodeIndex));
         }
         BehaviorNodeContext context = new BehaviorNodeContext(this, instance, nodeIndex, depth, epochTick);
-        long started = instance.host().nanoTime();
+        long started = startTiming(instance);
         try {
             BehaviorNodeState state = instance.rawNodeState(nodeIndex);
             if (state == BehaviorNodeState.IDLE) {
@@ -146,14 +145,14 @@ public final class BehaviorTreeEvaluator {
             EvaluationFault exitFailure = terminateNode(instance, nodeIndex, executor, context,
                     reason, actionFailure != null ? actionFailure.code() : null,
                     actionFailure != null ? actionFailure.detail() : null, true,
-                    elapsed(started, instance.host().nanoTime()));
+                    elapsed(instance, started));
             if (exitFailure != null) throw exitFailure;
             return result;
         } catch (EvaluationFault fault) {
             if (instance.rawNodeState(nodeIndex).isActive()) {
                 EvaluationFault cleanupFailure = terminateNode(instance, nodeIndex, executor, context,
                         fault.reason, null, fault.getMessage(), true,
-                        elapsed(started, instance.host().nanoTime()));
+                        elapsed(instance, started));
                 if (cleanupFailure != null) throw cleanupFailure;
             }
             throw fault;
@@ -163,7 +162,7 @@ public final class BehaviorTreeEvaluator {
             if (instance.rawNodeState(nodeIndex).isActive()) {
                 EvaluationFault cleanupFailure = terminateNode(instance, nodeIndex, executor, context,
                         BehaviorTerminationReason.BUDGET_EXHAUSTED, null, detail, true,
-                        elapsed(started, instance.host().nanoTime()));
+                        elapsed(instance, started));
                 if (cleanupFailure != null) throw cleanupFailure;
             }
             throw new EvaluationFault(BehaviorTerminationReason.BUDGET_EXHAUSTED, detail);
@@ -173,7 +172,7 @@ public final class BehaviorTreeEvaluator {
             if (instance.rawNodeState(nodeIndex).isActive()) {
                 EvaluationFault cleanupFailure = terminateNode(instance, nodeIndex, executor, context,
                         BehaviorTerminationReason.INVALID_DATA, null, detail, true,
-                        elapsed(started, instance.host().nanoTime()));
+                        elapsed(instance, started));
                 if (cleanupFailure != null) throw cleanupFailure;
             }
             throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA, detail);
@@ -183,13 +182,13 @@ public final class BehaviorTreeEvaluator {
             if (instance.rawNodeState(nodeIndex).isActive()) {
                 EvaluationFault cleanupFailure = terminateNode(instance, nodeIndex, executor, context,
                         BehaviorTerminationReason.NODE_EXCEPTION, null, detail, true,
-                        elapsed(started, instance.host().nanoTime()));
+                        elapsed(instance, started));
                 if (cleanupFailure != null) throw cleanupFailure;
             }
             throw new EvaluationFault(BehaviorTerminationReason.NODE_EXCEPTION, detail);
         } finally {
             context.close();
-            instance.recordVisit(nodeIndex, elapsed(started, instance.host().nanoTime()));
+            instance.recordVisit(nodeIndex, elapsed(instance, started));
         }
     }
 
@@ -406,8 +405,13 @@ public final class BehaviorTreeEvaluator {
         return pass;
     }
 
-    private static long elapsed(long start, long end) {
-        return Math.max(0L, end - start);
+    private static long startTiming(BehaviorTreeInstance instance) {
+        return instance.debugTracingEnabled() ? instance.host().nanoTime() : 0L;
+    }
+
+    private static long elapsed(BehaviorTreeInstance instance, long start) {
+        return instance.debugTracingEnabled()
+                ? Math.max(0L, instance.host().nanoTime() - start) : 0L;
     }
 
     private static long safeIncrement(long value) {
@@ -484,7 +488,7 @@ public final class BehaviorTreeEvaluator {
         @Override public ServerLevel getLevel() { return instance.host().level(); }
         @Override public Entity getEntity() { return instance.host().owner(); }
         @Override public Entity getGraphOwnerEntity() { return instance.host().owner(); }
-        @Override public String getGraphId() { return instance.plan().getNodeAssetId(nodeIndex); }
+        @Override public String getGraphId() { return instance.plan().assetId(); }
 
         @Override
         public Object getVariable(String name) {

@@ -2,37 +2,15 @@ package com.mine.geometry_node.core.engine.behavior.contract;
 
 import java.util.Objects;
 
-/** Stable, visually distinct composite semantics. */
+/** Child-result decision table shared by memory sequence and selector executors. */
 public enum BehaviorCompositeMode {
-    MEMORY_SEQUENCE(Kind.SEQUENCE, true, false, false),
-    MEMORY_SELECTOR(Kind.SELECTOR, true, false, false),
-    REACTIVE_SEQUENCE(Kind.SEQUENCE, false, true, true),
-    PRIORITY_SELECTOR(Kind.SELECTOR, false, true, true);
+    MEMORY_SEQUENCE(Kind.SEQUENCE),
+    MEMORY_SELECTOR(Kind.SELECTOR);
 
     private final Kind kind;
-    private final boolean resumesRunningChild;
-    private final boolean reevaluatesFromFirstChild;
-    private final boolean abortsDeselectedBranch;
 
-    BehaviorCompositeMode(Kind kind, boolean resumesRunningChild,
-                          boolean reevaluatesFromFirstChild,
-                          boolean abortsDeselectedBranch) {
+    BehaviorCompositeMode(Kind kind) {
         this.kind = kind;
-        this.resumesRunningChild = resumesRunningChild;
-        this.reevaluatesFromFirstChild = reevaluatesFromFirstChild;
-        this.abortsDeselectedBranch = abortsDeselectedBranch;
-    }
-
-    public boolean resumesRunningChild() {
-        return resumesRunningChild;
-    }
-
-    public boolean reevaluatesFromFirstChild() {
-        return reevaluatesFromFirstChild;
-    }
-
-    public boolean abortsDeselectedBranch() {
-        return abortsDeselectedBranch;
     }
 
     public ChildDecision decide(BehaviorResult childResult, boolean lastChild) {

@@ -101,6 +101,7 @@ public class CmdGroupIntoNodeGroup implements ICommand {
         if (!rewriteExecutionConnections(scopeNodes, selected, groupNode)) {
             return null;
         }
+        rewriteBehaviorConnections(scopeNodes, selected, groupNode);
 
         after.put(groupNode.id, groupNode);
         return deepCopyNodes(after);
@@ -230,6 +231,43 @@ public class CmdGroupIntoNodeGroup implements ICommand {
         return true;
     }
 
+    private void rewriteBehaviorConnections(Map<String, NodeData> scopeNodes, Set<String> selected,
+                                            NodeData groupNode) {
+        Map<BoundaryInputKey, String> inputPorts = new HashMap<>();
+        Map<BoundaryOutputKey, String> outputPorts = new HashMap<>();
+
+        for (NodeData node : scopeNodes.values()) {
+            if (node == null || node.behaviorOutputs == null) continue;
+            Map<String, Connection> original = node.behaviorOutputs;
+            node.behaviorOutputs = new LinkedHashMap<>();
+            boolean sourceInside = selected.contains(node.id);
+
+            for (Map.Entry<String, Connection> output : original.entrySet()) {
+                Connection link = output.getValue();
+                if (link == null) continue;
+                boolean targetInside = selected.contains(link.targetNodeId());
+                if (sourceInside && targetInside) {
+                    node.addBehaviorConnection(output.getKey(), link.targetNodeId(), link.targetPortName());
+                } else if (!sourceInside && targetInside) {
+                    BoundaryInputKey key = new BoundaryInputKey(link.targetNodeId(), link.targetPortName());
+                    String port = inputPorts.computeIfAbsent(key,
+                            ignored -> createBehaviorInputPort(groupNode, key.targetPortId()));
+                    node.addBehaviorConnection(output.getKey(), groupNode.id, port);
+                    groupNode.subNodes.get(GroupNodeTypes.GROUP_IN_ID)
+                            .addBehaviorConnection(port, link.targetNodeId(), link.targetPortName());
+                } else if (sourceInside) {
+                    BoundaryOutputKey key = new BoundaryOutputKey(node.id, output.getKey());
+                    String port = outputPorts.computeIfAbsent(key,
+                            ignored -> createBehaviorOutputPort(groupNode, key.sourcePortId()));
+                    node.addBehaviorConnection(output.getKey(), GroupNodeTypes.GROUP_OUT_ID, port);
+                    groupNode.addBehaviorConnection(port, link.targetNodeId(), link.targetPortName());
+                } else {
+                    node.addBehaviorConnection(output.getKey(), link.targetNodeId(), link.targetPortName());
+                }
+            }
+        }
+    }
+
     private String createDataInputPort(NodeData groupNode, String targetNodeId, String targetPortId, Map<String, NodeData> scopeNodes) {
         PortDef port = findPort(scopeNodes, groupNode, targetNodeId, targetPortId, true);
         PortType type = dataPortType(port);
@@ -254,6 +292,16 @@ public class CmdGroupIntoNodeGroup implements ICommand {
         PortDef port = findPort(scopeNodes, groupNode, sourceNodeId, sourcePortId, false);
         String label = port != null ? port.displayName().getString() : sourcePortId;
         return GroupNodeFactory.addPort(groupNode, GroupNodeTypes.CATEGORY_EXEC_OUTPUTS, sourcePortId, PortType.EXECUTION, label);
+    }
+
+    private String createBehaviorInputPort(NodeData groupNode, String preferredId) {
+        return GroupNodeFactory.addPort(groupNode, GroupNodeTypes.CATEGORY_EXEC_INPUTS,
+                preferredId, PortType.BEHAVIOR_STRUCTURE, preferredId);
+    }
+
+    private String createBehaviorOutputPort(NodeData groupNode, String preferredId) {
+        return GroupNodeFactory.addPort(groupNode, GroupNodeTypes.CATEGORY_EXEC_OUTPUTS,
+                preferredId, PortType.BEHAVIOR_STRUCTURE, preferredId);
     }
 
     private PortType dataPortType(PortDef port) {

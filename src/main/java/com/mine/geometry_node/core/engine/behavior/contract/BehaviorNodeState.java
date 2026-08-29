@@ -5,7 +5,6 @@ public enum BehaviorNodeState {
     IDLE,
     ENTERING,
     RUNNING,
-    SUSPENDED,
     EXITING,
     SUCCEEDED,
     FAILED,
@@ -13,10 +12,6 @@ public enum BehaviorNodeState {
     ERROR;
 
     public boolean isActive() {
-        return this == ENTERING || this == RUNNING || this == SUSPENDED || this == EXITING;
-    }
-
-    public boolean isTerminal() {
-        return this == SUCCEEDED || this == FAILED || this == ABORTED || this == ERROR;
+        return this == ENTERING || this == RUNNING || this == EXITING;
     }
 }

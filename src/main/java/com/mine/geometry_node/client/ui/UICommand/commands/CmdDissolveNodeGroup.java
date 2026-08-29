@@ -76,8 +76,13 @@ public class CmdDissolveNodeGroup implements ICommand {
         Map<String, Connection> executionInputBridges = groupInputNode != null && groupInputNode.execOutputs != null
                 ? groupInputNode.execOutputs
                 : Map.of();
+        Map<String, Connection> behaviorInputBridges = groupInputNode != null && groupInputNode.behaviorOutputs != null
+                ? groupInputNode.behaviorOutputs
+                : Map.of();
         Map<String, List<Connection>> dataOutputBridges = groupNode.outputs != null ? groupNode.outputs : Map.of();
         Map<String, Connection> executionOutputBridges = groupNode.execOutputs != null ? groupNode.execOutputs : Map.of();
+        Map<String, Connection> behaviorOutputBridges = groupNode.behaviorOutputs != null
+                ? groupNode.behaviorOutputs : Map.of();
 
         Set<String> groupDataInputsWithExternalConnections = new HashSet<>();
         Map<String, NodeData> after = new LinkedHashMap<>();
@@ -88,6 +93,7 @@ public class CmdDissolveNodeGroup implements ICommand {
             NodeData node = entry.getValue();
             rewriteExternalDataInputConnections(node, groupNode.id, dataInputBridges, groupDataInputsWithExternalConnections);
             rewriteExternalExecutionInputConnections(node, groupNode.id, executionInputBridges);
+            rewriteExternalBehaviorInputConnections(node, groupNode.id, behaviorInputBridges);
             after.put(entry.getKey(), node);
         }
 
@@ -98,6 +104,7 @@ public class CmdDissolveNodeGroup implements ICommand {
             node.parentFrame = groupNode.parentFrame;
             rewritePromotedDataOutputConnections(node, dataOutputBridges);
             rewritePromotedExecutionOutputConnections(node, executionOutputBridges);
+            rewritePromotedBehaviorOutputConnections(node, behaviorOutputBridges);
             after.put(entry.getKey(), node);
         }
 
@@ -207,6 +214,44 @@ public class CmdDissolveNodeGroup implements ICommand {
                 }
             } else if (!isGroupBoundaryId(link.targetNodeId())) {
                 node.addExecutionConnection(entry.getKey(), link.targetNodeId(), link.targetPortName());
+            }
+        }
+    }
+
+    private void rewriteExternalBehaviorInputConnections(NodeData node, String groupNodeId,
+                                                         Map<String, Connection> inputBridges) {
+        if (node == null || node.behaviorOutputs == null) return;
+        Map<String, Connection> original = node.behaviorOutputs;
+        node.behaviorOutputs = new LinkedHashMap<>();
+        for (Map.Entry<String, Connection> entry : original.entrySet()) {
+            Connection link = entry.getValue();
+            if (link == null) continue;
+            if (groupNodeId.equals(link.targetNodeId())) {
+                Connection bridge = inputBridges.get(link.targetPortName());
+                if (bridge != null && !isGroupBoundaryId(bridge.targetNodeId())) {
+                    node.addBehaviorConnection(entry.getKey(), bridge.targetNodeId(), bridge.targetPortName());
+                }
+            } else {
+                node.addBehaviorConnection(entry.getKey(), link.targetNodeId(), link.targetPortName());
+            }
+        }
+    }
+
+    private void rewritePromotedBehaviorOutputConnections(NodeData node,
+                                                          Map<String, Connection> outputBridges) {
+        if (node == null || node.behaviorOutputs == null) return;
+        Map<String, Connection> original = node.behaviorOutputs;
+        node.behaviorOutputs = new LinkedHashMap<>();
+        for (Map.Entry<String, Connection> entry : original.entrySet()) {
+            Connection link = entry.getValue();
+            if (link == null) continue;
+            if (GroupNodeTypes.GROUP_OUT_ID.equals(link.targetNodeId())) {
+                Connection bridge = outputBridges.get(link.targetPortName());
+                if (bridge != null && !mGroupNodeId.equals(bridge.targetNodeId())) {
+                    node.addBehaviorConnection(entry.getKey(), bridge.targetNodeId(), bridge.targetPortName());
+                }
+            } else if (!isGroupBoundaryId(link.targetNodeId())) {
+                node.addBehaviorConnection(entry.getKey(), link.targetNodeId(), link.targetPortName());
             }
         }
     }

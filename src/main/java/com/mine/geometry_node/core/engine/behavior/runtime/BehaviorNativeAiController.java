@@ -24,18 +24,16 @@ import java.util.WeakHashMap;
 
 /** Resource-scoped ownership adapter for vanilla GoalSelector and Brain AI. */
 public final class BehaviorNativeAiController {
-    private static final Map<LivingEntity, EnumMap<NodeCapabilities.ResourceUse, Integer>> ACTIVE_BRAIN_LEASES
-            = new WeakHashMap<>();
-    private static final Map<Brain<?>, WeakReference<LivingEntity>> BRAIN_OWNERS = new WeakHashMap<>();
     private static final ThreadLocal<Brain<?>> ALLOWED_BRAIN_WRITE = new ThreadLocal<>();
-    private static final Set<BehaviorNativeAiController> ACTIVE_TARGET_ASSIGNMENTS =
-            Collections.newSetFromMap(new WeakHashMap<>());
+    private static final Map<ServerLevel, Set<BehaviorNativeAiController>> ACTIVE_TARGET_ASSIGNMENTS =
+            new WeakHashMap<>();
 
     private final Mob owner;
     private final EnumMap<Goal.Flag, GoalLease> goalLeases = new EnumMap<>(Goal.Flag.class);
     private final SelectorLeases goalSelector;
     private final SelectorLeases targetSelector;
     @Nullable private WeakReference<LivingEntity> assignedTarget;
+    @Nullable private WeakReference<ServerLevel> targetAssignmentLevel;
     private boolean targetAssignmentActive;
 
     BehaviorNativeAiController(Mob owner) {
@@ -99,9 +97,7 @@ public final class BehaviorNativeAiController {
         LivingEntity actual = owner.getTargetUnchecked();
         if (actual == target) {
             assignedTarget = new WeakReference<>(target);
-            synchronized (ACTIVE_TARGET_ASSIGNMENTS) {
-                ACTIVE_TARGET_ASSIGNMENTS.add(this);
-            }
+            registerTargetAssignment();
             return actual;
         }
 
@@ -128,13 +124,12 @@ public final class BehaviorNativeAiController {
     }
 
     static void maintainPersistentControls(ServerLevel level) {
-        List<BehaviorNativeAiController> active;
-        synchronized (ACTIVE_TARGET_ASSIGNMENTS) {
-            active = List.copyOf(ACTIVE_TARGET_ASSIGNMENTS);
+        Set<BehaviorNativeAiController> assignments = ACTIVE_TARGET_ASSIGNMENTS.get(level);
+        if (assignments == null || assignments.isEmpty()) return;
+        for (BehaviorNativeAiController controller : List.copyOf(assignments)) {
+            controller.maintainPersistentControls();
         }
-        for (BehaviorNativeAiController controller : active) {
-            if (controller.owner.level() == level) controller.maintainPersistentControls();
-        }
+        if (assignments.isEmpty()) ACTIVE_TARGET_ASSIGNMENTS.remove(level);
     }
 
     void releasePersistentControls() {
@@ -144,9 +139,7 @@ public final class BehaviorNativeAiController {
         } finally {
             assignedTarget = null;
             targetAssignmentActive = false;
-            synchronized (ACTIVE_TARGET_ASSIGNMENTS) {
-                ACTIVE_TARGET_ASSIGNMENTS.remove(this);
-            }
+            unregisterTargetAssignment();
             release(Set.of(NodeCapabilities.ResourceUse.TARGET));
         }
     }
@@ -158,12 +151,28 @@ public final class BehaviorNativeAiController {
         if (actual == null && targetAssignmentActive) {
             assignedTarget = null;
             targetAssignmentActive = false;
-            synchronized (ACTIVE_TARGET_ASSIGNMENTS) {
-                ACTIVE_TARGET_ASSIGNMENTS.remove(this);
-            }
+            unregisterTargetAssignment();
             release(Set.of(NodeCapabilities.ResourceUse.TARGET));
         }
         return actual;
+    }
+
+    private void registerTargetAssignment() {
+        if (!(owner.level() instanceof ServerLevel level)) return;
+        unregisterTargetAssignment();
+        ACTIVE_TARGET_ASSIGNMENTS.computeIfAbsent(level,
+                ignored -> Collections.newSetFromMap(new WeakHashMap<>())).add(this);
+        targetAssignmentLevel = new WeakReference<>(level);
+    }
+
+    private void unregisterTargetAssignment() {
+        ServerLevel level = targetAssignmentLevel != null ? targetAssignmentLevel.get() : null;
+        targetAssignmentLevel = null;
+        if (level == null) return;
+        Set<BehaviorNativeAiController> assignments = ACTIVE_TARGET_ASSIGNMENTS.get(level);
+        if (assignments == null) return;
+        assignments.remove(this);
+        if (assignments.isEmpty()) ACTIVE_TARGET_ASSIGNMENTS.remove(level);
     }
 
     private boolean validAssignedTarget(@Nullable LivingEntity target) {
@@ -230,25 +239,6 @@ public final class BehaviorNativeAiController {
         return ALLOWED_BRAIN_WRITE.get() != brain && isMemoryBlocked(brain, memory);
     }
 
-    /** Associates a replacement Brain with an entity that already owns active leases. */
-    public static void onBrainTick(Brain<?> brain, LivingEntity body) {
-        Set<MemoryModuleType<?>> staleMemories = Set.of();
-        synchronized (ACTIVE_BRAIN_LEASES) {
-            EnumMap<NodeCapabilities.ResourceUse, Integer> leases = ACTIVE_BRAIN_LEASES.get(body);
-            if (leases == null) return;
-            WeakReference<LivingEntity> current = BRAIN_OWNERS.get(brain);
-            if (current != null && current.get() == body) return;
-            BRAIN_OWNERS.put(brain, new WeakReference<>(body));
-            staleMemories = controlledMemories(leases.keySet());
-        }
-        for (MemoryModuleType<?> memory : staleMemories) {
-            if (memory != MemoryModuleType.ATTACK_TARGET
-                    && memory != MemoryModuleType.ATTACK_COOLING_DOWN) {
-                eraseControlledMemory(brain, memory);
-            }
-        }
-    }
-
     public static <U> void setControlledMemory(Brain<?> brain, MemoryModuleType<U> memory, U value) {
         Brain<?> previous = ALLOWED_BRAIN_WRITE.get();
         ALLOWED_BRAIN_WRITE.set(brain);
@@ -272,76 +262,50 @@ public final class BehaviorNativeAiController {
     }
 
     private static boolean isBehaviorBlocked(LivingEntity body, BehaviorControl<?> behavior) {
-        synchronized (ACTIVE_BRAIN_LEASES) {
-            EnumMap<NodeCapabilities.ResourceUse, Integer> leases = ACTIVE_BRAIN_LEASES.get(body);
-            return leases != null && blocksBehavior(leases.keySet(), behavior.getRequiredMemories());
-        }
+        int leaseMask = entityLeaseMask(body);
+        return leaseMask != 0 && blocksBehavior(leaseMask, behavior.getRequiredMemories());
     }
 
     private static boolean isMemoryBlocked(Brain<?> brain, MemoryModuleType<?> memory) {
-        synchronized (ACTIVE_BRAIN_LEASES) {
-            WeakReference<LivingEntity> owner = BRAIN_OWNERS.get(brain);
-            EnumMap<NodeCapabilities.ResourceUse, Integer> leases = owner != null
-                    ? ACTIVE_BRAIN_LEASES.get(owner.get()) : null;
-            return leases != null && controlsMemory(leases.keySet(), memory);
-        }
+        int leaseMask = leaseAccess(brain).geometryNode$getBehaviorLeaseMask();
+        return leaseMask != 0 && controlsMemory(leaseMask, memory);
     }
 
-    private static boolean blocksBehavior(Set<NodeCapabilities.ResourceUse> resources,
+    private static boolean blocksBehavior(int leaseMask,
                                           Set<MemoryModuleType<?>> requiredMemories) {
         for (MemoryModuleType<?> memory : requiredMemories) {
-            if (blocksBehaviorUsing(resources, memory)) return true;
+            if (blocksBehaviorUsing(leaseMask, memory)) return true;
         }
         return false;
     }
 
     private static boolean blocksBehaviorUsing(Set<NodeCapabilities.ResourceUse> resources,
                                                MemoryModuleType<?> memory) {
-        for (NodeCapabilities.ResourceUse resource : resources) {
-            if ((resource == NodeCapabilities.ResourceUse.MOVEMENT
-                    && (memory == MemoryModuleType.WALK_TARGET || memory == MemoryModuleType.PATH))
-                    || (resource == NodeCapabilities.ResourceUse.LOOK
-                    && memory == MemoryModuleType.LOOK_TARGET)
-                    || (resource == NodeCapabilities.ResourceUse.COMBAT
-                    && (memory == MemoryModuleType.WALK_TARGET
-                    || memory == MemoryModuleType.PATH
-                    || memory == MemoryModuleType.LOOK_TARGET
-                    || memory == MemoryModuleType.ATTACK_TARGET
-                    || memory == MemoryModuleType.ATTACK_COOLING_DOWN))) {
-                return true;
-            }
-        }
-        return false;
+        return blocksBehaviorUsing(resourceMask(resources), memory);
     }
 
-    private static boolean controlsMemory(Set<NodeCapabilities.ResourceUse> resources,
+    private static boolean blocksBehaviorUsing(int leaseMask, MemoryModuleType<?> memory) {
+        return hasLease(leaseMask, NodeCapabilities.ResourceUse.MOVEMENT)
+                && (memory == MemoryModuleType.WALK_TARGET || memory == MemoryModuleType.PATH)
+                || hasLease(leaseMask, NodeCapabilities.ResourceUse.LOOK)
+                && memory == MemoryModuleType.LOOK_TARGET;
+    }
+
+    private static boolean controlsMemory(int leaseMask,
                                           MemoryModuleType<?> memory) {
-        for (NodeCapabilities.ResourceUse resource : resources) {
-            if ((resource == NodeCapabilities.ResourceUse.MOVEMENT
-                    && (memory == MemoryModuleType.WALK_TARGET || memory == MemoryModuleType.PATH))
-                    || (resource == NodeCapabilities.ResourceUse.LOOK
-                    && memory == MemoryModuleType.LOOK_TARGET)
-                    || (resource == NodeCapabilities.ResourceUse.TARGET
-                    && memory == MemoryModuleType.ATTACK_TARGET)
-                    || (resource == NodeCapabilities.ResourceUse.COMBAT
-                    && (memory == MemoryModuleType.WALK_TARGET
-                    || memory == MemoryModuleType.PATH
-                    || memory == MemoryModuleType.LOOK_TARGET
-                    || memory == MemoryModuleType.ATTACK_TARGET
-                    || memory == MemoryModuleType.ATTACK_COOLING_DOWN))) {
-                return true;
-            }
-        }
-        return false;
+        return hasLease(leaseMask, NodeCapabilities.ResourceUse.MOVEMENT)
+                && (memory == MemoryModuleType.WALK_TARGET || memory == MemoryModuleType.PATH)
+                || hasLease(leaseMask, NodeCapabilities.ResourceUse.LOOK)
+                && memory == MemoryModuleType.LOOK_TARGET
+                || hasLease(leaseMask, NodeCapabilities.ResourceUse.TARGET)
+                && memory == MemoryModuleType.ATTACK_TARGET;
     }
 
     private static Set<MemoryModuleType<?>> newlyControlledMemories(
             LivingEntity body, Set<NodeCapabilities.ResourceUse> resources) {
         Set<MemoryModuleType<?>> result = controlledMemories(resources);
-        synchronized (ACTIVE_BRAIN_LEASES) {
-            EnumMap<NodeCapabilities.ResourceUse, Integer> leases = ACTIVE_BRAIN_LEASES.get(body);
-            if (leases != null) result.removeIf(memory -> controlsMemory(leases.keySet(), memory));
-        }
+        int leaseMask = entityLeaseMask(body);
+        if (leaseMask != 0) result.removeIf(memory -> controlsMemory(leaseMask, memory));
         return result;
     }
 
@@ -349,51 +313,62 @@ public final class BehaviorNativeAiController {
             LivingEntity body, Set<NodeCapabilities.ResourceUse> resources) {
         Set<MemoryModuleType<?>> result = controlledMemories(resources);
         result.removeIf(memory -> !blocksBehaviorUsing(resources, memory));
-        synchronized (ACTIVE_BRAIN_LEASES) {
-            EnumMap<NodeCapabilities.ResourceUse, Integer> leases = ACTIVE_BRAIN_LEASES.get(body);
-            if (leases != null) {
-                result.removeIf(memory -> blocksBehaviorUsing(leases.keySet(), memory));
-            }
-        }
+        int leaseMask = entityLeaseMask(body);
+        if (leaseMask != 0) result.removeIf(memory -> blocksBehaviorUsing(leaseMask, memory));
         return result;
     }
 
     private static void addBrainLeases(LivingEntity body, Set<NodeCapabilities.ResourceUse> resources) {
         if (resources.isEmpty()) return;
-        synchronized (ACTIVE_BRAIN_LEASES) {
-            EnumMap<NodeCapabilities.ResourceUse, Integer> leases = ACTIVE_BRAIN_LEASES.computeIfAbsent(
-                    body, ignored -> new EnumMap<>(NodeCapabilities.ResourceUse.class));
-            BRAIN_OWNERS.put(body.getBrain(), new WeakReference<>(body));
-            for (NodeCapabilities.ResourceUse resource : resources) {
-                leases.merge(resource, 1, Integer::sum);
-            }
-        }
+        BehaviorEntityLeaseAccess access = entityLeaseAccess(body);
+        access.geometryNode$acquireBehaviorLeases(resources);
+        leaseAccess(body.getBrain()).geometryNode$setBehaviorLeaseMask(
+                access.geometryNode$getBehaviorLeaseMask());
     }
 
     private static void removeBrainLeases(LivingEntity body, Set<NodeCapabilities.ResourceUse> resources) {
         if (resources.isEmpty()) return;
-        synchronized (ACTIVE_BRAIN_LEASES) {
-            EnumMap<NodeCapabilities.ResourceUse, Integer> leases = ACTIVE_BRAIN_LEASES.get(body);
-            if (leases == null) return;
-            for (NodeCapabilities.ResourceUse resource : resources) {
-                Integer references = leases.get(resource);
-                if (references == null) continue;
-                if (references <= 1) leases.remove(resource);
-                else leases.put(resource, references - 1);
-            }
-            if (leases.isEmpty()) {
-                ACTIVE_BRAIN_LEASES.remove(body);
-                BRAIN_OWNERS.entrySet().removeIf(entry -> entry.getValue().get() == body);
-            }
+        BehaviorEntityLeaseAccess access = entityLeaseAccess(body);
+        access.geometryNode$releaseBehaviorLeases(resources);
+        leaseAccess(body.getBrain()).geometryNode$setBehaviorLeaseMask(
+                access.geometryNode$getBehaviorLeaseMask());
+    }
+
+    /** Copies entity-owned leases to a replacement Brain before it begins its tick. */
+    public static void syncBrainLeases(Brain<?> brain, LivingEntity body) {
+        leaseAccess(brain).geometryNode$setBehaviorLeaseMask(entityLeaseMask(body));
+    }
+
+    private static BehaviorBrainLeaseAccess leaseAccess(Brain<?> brain) {
+        return (BehaviorBrainLeaseAccess) (Object) brain;
+    }
+
+    private static BehaviorEntityLeaseAccess entityLeaseAccess(LivingEntity body) {
+        return (BehaviorEntityLeaseAccess) (Object) body;
+    }
+
+    private static int entityLeaseMask(LivingEntity body) {
+        Object candidate = body;
+        return candidate instanceof BehaviorEntityLeaseAccess access
+                ? access.geometryNode$getBehaviorLeaseMask() : 0;
+    }
+
+    private static int resourceMask(Set<NodeCapabilities.ResourceUse> resources) {
+        int mask = 0;
+        for (NodeCapabilities.ResourceUse resource : resources) {
+            mask |= 1 << resource.ordinal();
         }
+        return mask;
+    }
+
+    private static boolean hasLease(int mask, NodeCapabilities.ResourceUse resource) {
+        return (mask & 1 << resource.ordinal()) != 0;
     }
 
     private static EnumSet<NodeCapabilities.ResourceUse> normalizedResources(
             Set<NodeCapabilities.ResourceUse> resources) {
         EnumSet<NodeCapabilities.ResourceUse> result = EnumSet.noneOf(NodeCapabilities.ResourceUse.class);
-        for (NodeCapabilities.ResourceUse resource : resources) {
-            if (resource != NodeCapabilities.ResourceUse.NONE) result.add(resource);
-        }
+        result.addAll(resources);
         return result;
     }
 
@@ -404,9 +379,6 @@ public final class BehaviorNativeAiController {
                 case MOVEMENT -> result.add(Goal.Flag.MOVE);
                 case LOOK -> result.add(Goal.Flag.LOOK);
                 case TARGET -> result.add(Goal.Flag.TARGET);
-                case COMBAT -> result.addAll(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK, Goal.Flag.TARGET));
-                default -> {
-                }
             }
         }
         return result;
@@ -422,15 +394,6 @@ public final class BehaviorNativeAiController {
                 }
                 case LOOK -> result.add(MemoryModuleType.LOOK_TARGET);
                 case TARGET -> result.add(MemoryModuleType.ATTACK_TARGET);
-                case COMBAT -> {
-                    result.add(MemoryModuleType.WALK_TARGET);
-                    result.add(MemoryModuleType.PATH);
-                    result.add(MemoryModuleType.LOOK_TARGET);
-                    result.add(MemoryModuleType.ATTACK_TARGET);
-                    result.add(MemoryModuleType.ATTACK_COOLING_DOWN);
-                }
-                default -> {
-                }
             }
         }
         return result;

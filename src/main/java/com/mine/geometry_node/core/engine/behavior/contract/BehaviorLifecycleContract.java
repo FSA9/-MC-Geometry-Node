@@ -17,8 +17,7 @@ public final class BehaviorLifecycleContract {
     private static final Map<BehaviorNodeState, Set<BehaviorNodeState>> TRANSITIONS = Map.of(
             BehaviorNodeState.IDLE, EnumSet.of(BehaviorNodeState.ENTERING),
             BehaviorNodeState.ENTERING, EnumSet.of(BehaviorNodeState.RUNNING, BehaviorNodeState.EXITING),
-            BehaviorNodeState.RUNNING, EnumSet.of(BehaviorNodeState.SUSPENDED, BehaviorNodeState.EXITING),
-            BehaviorNodeState.SUSPENDED, EnumSet.of(BehaviorNodeState.RUNNING, BehaviorNodeState.EXITING),
+            BehaviorNodeState.RUNNING, EnumSet.of(BehaviorNodeState.EXITING),
             BehaviorNodeState.EXITING, EnumSet.of(BehaviorNodeState.SUCCEEDED, BehaviorNodeState.FAILED,
                     BehaviorNodeState.ABORTED, BehaviorNodeState.ERROR),
             BehaviorNodeState.SUCCEEDED, EnumSet.of(BehaviorNodeState.IDLE),

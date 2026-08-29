@@ -1,8 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.compile;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
@@ -12,6 +10,8 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompiler;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompileContext;
+import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph;
+import com.mine.geometry_node.core.engine.graph.compile.GraphFlattener;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
@@ -79,11 +79,10 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
                 : QuestConditionOverview.EMPTY;
         JsonObject rootNodes = root.getAsJsonObject("nodes");
 
-        GraphFlattener flattener = new GraphFlattener();
-        flattener.flatten(rootNodes);
-        GraphDocumentValidator.requireValid(validationInput(context, graphTypeId, flattener));
+        FlattenedGraph flattened = GraphFlattener.flatten(rootNodes);
+        GraphDocumentValidator.requireValid(validationInput(context, graphTypeId, flattened));
 
-        Set<String> allIds = flattener.nodeDataLookup.keySet();
+        List<String> allIds = flattened.nodes().keySet().stream().sorted().toList();
         int size = allIds.size();
 
         String[] idToString = new String[size];
@@ -98,7 +97,7 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
 
         Map<String, Integer> keyDict = new HashMap<>();
         List<String> dictReverse = new ArrayList<>();
-        for (String key : flattener.allStaticKeys) {
+        for (String key : flattened.portNames().stream().sorted().toList()) {
             if (!keyDict.containsKey(key)) {
                 keyDict.put(key, dictReverse.size());
                 dictReverse.add(key);
@@ -115,14 +114,14 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
         for (int i = 0; i < size; i++) {
             String strId = idToString[i];
 
-            nodeDataArray[i] = flattener.nodeDataLookup.get(strId);
+            nodeDataArray[i] = flattened.nodes().get(strId);
             JsonObject node = nodeDataArray[i];
             typeArray[i] = node != null && node.has("node_type") ? node.get("node_type").getAsString() : "unknown";
             flowOutputArray[i] = new HashMap<>();
             inputArray[i] = new HashMap<>();
-            portArray[i] = flattener.portLookup.getOrDefault(strId, Set.of());
+            portArray[i] = flattened.ports().getOrDefault(strId, Set.of());
 
-            Map<String, GraphFlattener.TargetConnection> oldFlow = flattener.flowOutputLookup.get(strId);
+            Map<String, GraphFlattener.TargetConnection> oldFlow = flattened.executionOutputs().get(strId);
             if (oldFlow != null) {
                 for (Map.Entry<String, GraphFlattener.TargetConnection> e : oldFlow.entrySet()) {
                     Integer targetInt = stringToId.get(e.getValue().targetNodeId());
@@ -134,11 +133,11 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
                 }
             }
 
-            propertyArray[i] = flattener.propertyLookup.getOrDefault(strId, Collections.emptyMap());
-            staticInputArray[i] = flattener.staticInputLookup.getOrDefault(strId, Collections.emptyMap());
+            propertyArray[i] = flattened.properties().getOrDefault(strId, Collections.emptyMap());
+            staticInputArray[i] = flattened.staticInputs().getOrDefault(strId, Collections.emptyMap());
         }
 
-        for (Map.Entry<String, RuntimeGraphIndex.ConnectionSource> entry : flattener.inputLookup.entrySet()) {
+        for (Map.Entry<String, GraphFlattener.DataConnectionSource> entry : flattened.dataInputs().entrySet()) {
             String[] parts = entry.getKey().split("#");
             String targetId = parts[0];
             String portName = parts[1];
@@ -154,7 +153,7 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
         }
 
         Map<String, List<Integer>> typeToIntList = new HashMap<>();
-        for (Map.Entry<String, List<String>> entry : flattener.typeLookup.entrySet()) {
+        for (Map.Entry<String, List<String>> entry : flattened.nodesByType().entrySet()) {
             List<Integer> intList = new ArrayList<>();
             for (String s : entry.getValue()) {
                 Integer id = stringToId.get(s);
@@ -222,65 +221,17 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
         );
     }
 
-    static Map<String, Object> parseValueMap(JsonObject obj) {
-        Map<String, Object> map = new HashMap<>();
-        for (String key : obj.keySet()) {
-            JsonElement val = obj.get(key);
-            Object unwrapped = unwrapJsonElement(val);
-            if (unwrapped != null) {
-                map.put(key, unwrapped);
-            } else {
-                System.err.println("[BlueprintCompiler] Warning: Ignored null/unsupported value for input: " + key);
-            }
-        }
-        return Map.copyOf(map);
-    }
-
-    private static Object unwrapJsonElement(JsonElement element) {
-        if (element.isJsonPrimitive()) {
-            var prim = element.getAsJsonPrimitive();
-            if (prim.isBoolean()) return prim.getAsBoolean();
-            if (prim.isNumber()) return prim.getAsNumber();
-            if (prim.isString()) return prim.getAsString();
-        }
-
-        if (element.isJsonArray()) {
-            JsonArray jsonArray = element.getAsJsonArray();
-            List<Object> list = new ArrayList<>();
-            for (JsonElement item : jsonArray) {
-                Object value = unwrapJsonElement(item);
-                if (value != null) {
-                    list.add(value);
-                }
-            }
-            return list;
-        }
-
-        if (element.isJsonObject()) {
-            JsonObject jsonObject = element.getAsJsonObject();
-            Map<String, Object> map = new HashMap<>();
-            for (String key : jsonObject.keySet()) {
-                Object value = unwrapJsonElement(jsonObject.get(key));
-                if (value != null) {
-                    map.put(key, value);
-                }
-            }
-            return Map.copyOf(map);
-        }
-        return null;
-    }
-
     private static GraphDocumentValidator.Input validationInput(
-            GraphCompileContext context, String graphTypeId, GraphFlattener flattener) {
-        List<GraphDocumentValidator.Node> nodes = flattener.nodeDataLookup.entrySet().stream()
+            GraphCompileContext context, String graphTypeId, FlattenedGraph flattened) {
+        List<GraphDocumentValidator.Node> nodes = flattened.nodes().entrySet().stream()
                 .map(entry -> new GraphDocumentValidator.Node(entry.getKey(),
                         entry.getValue() != null && entry.getValue().has("node_type")
                                 ? entry.getValue().get("node_type").getAsString() : null))
                 .toList();
-        int flowConnections = flattener.flowOutputLookup.values().stream()
+        int flowConnections = flattened.executionOutputs().values().stream()
                 .mapToInt(Map::size).sum();
         return new GraphDocumentValidator.Input(
                 context != null ? context.diagnosticAssetId() : "<anonymous>",
-                graphTypeId, nodes, flowConnections + flattener.inputLookup.size());
+                graphTypeId, nodes, flowConnections + flattened.dataInputs().size());
     }
 }

@@ -10,7 +10,7 @@ Creators can build and iterate on gameplay systems without writing a dedicated m
 
 - **Visual graph editor** — Create and organize graphs with node search, typed ports, connections, groups, properties, reusable assets, undo/redo, and in-editor previews.
 - **Blueprint runtime** — Drive gameplay through events, execution flow, variables, conditions, delays, functions, and nodes for players, entities, blocks, items, inventories, worlds, and visual effects.
-- **Behavior trees and entity AI** — Build independent behavior-tree assets with selectors, sequences, decorators, conditions, actions, subtrees, blackboards, runtime debugging, and controlled coordination with Minecraft's native `Goal` and `Brain` AI.
+- **Behavior trees and entity AI** — Build independent behavior-tree assets with selectors, sequences, decorators, conditions, actions, same-asset node groups, blackboards, runtime debugging, and controlled coordination with Minecraft's native `Goal` and `Brain` AI.
 - **Quest system** — Define quest metadata, objectives, conditions, counters, rewards, and status transitions, with persistent player progress and an in-game quest interface.
 - **Dialogue and shops** — Create branching conversations with rich text and selectable choices, manage server-side dialogue sessions, and connect dialogue flow to shop transactions and graph execution.
 - **AI-assisted editing and MCP** — Expose authenticated, loopback-only MCP tools that let compatible AI clients inspect editor and graph state, query node contracts, and propose reversible graph patches. Changes are dry-run validated and presented for approval before being committed as one undoable edit.

@@ -1,21 +1,17 @@
 package com.mine.geometry_node.core.engine.behavior.compile;
 
-import com.mine.geometry_node.core.node.port.StandardPorts;
-
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
-import com.mine.geometry_node.core.node.document.behavior.BehaviorSubtreeCall;
-import com.mine.geometry_node.core.node.document.behavior.BehaviorSubtreeParameter;
-import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructure;
-import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructureConnections;
+import com.mine.geometry_node.core.engine.behavior.structure.BehaviorTreeConnections;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
+import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompileContext;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompiler;
+import com.mine.geometry_node.core.engine.graph.compile.GraphFlattener;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDiagnostic;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationException;
@@ -23,7 +19,6 @@ import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidati
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorRootNode;
-import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorSubtreeNode;
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
@@ -42,7 +37,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 
 /** Compiles editable behavior documents into immutable runtime plans. */
 public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePlan> {
@@ -89,7 +83,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                     "Behavior tree document is missing", "", "", ""));
         }
         try {
-            return inspect(context, readDocument(document));
+            FlattenedGraph flattened = GraphFlattener.flatten(document.getAsJsonObject("nodes"));
+            return inspect(context, readDocument(document, flattened));
         } catch (RuntimeException exception) {
             String reason = exception.getMessage() != null ? exception.getMessage()
                     : exception.getClass().getSimpleName();
@@ -125,18 +120,12 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                 assetId, graph, nodeIds));
         diagnostics.addAll(common.diagnostics());
         BehaviorTreePlan.RootSchedule rootSchedule = compileRootSchedule(info);
-        BehaviorTreePlan.SubtreeSignature signature = compileSubtreeSignature(
-                graph.behaviorTree);
-        BehaviorTreePlan.DependencyManifest dependencies = compileDependencies(
-                context, info);
-
         diagnostics.sort(Comparator.comparing(GraphDiagnostic::code)
                 .thenComparing(GraphDiagnostic::nodeId)
                 .thenComparing(GraphDiagnostic::portId)
                 .thenComparing(GraphDiagnostic::relatedNodeId)
                 .thenComparing(GraphDiagnostic::message));
-        return new Compilation(graph, nodeIds, info, structure, inbound, signature, dependencies,
-                rootSchedule,
+        return new Compilation(graph, nodeIds, info, structure, inbound, rootSchedule,
                 List.copyOf(diagnostics));
     }
 
@@ -149,7 +138,14 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             NodeInfo sourceInfo = info.get(sourceId);
             if (source == null || sourceInfo == null || source.behaviorOutputs == null) continue;
             List<String> accepted = new ArrayList<>();
-            for (String sourcePortId : new java.util.TreeSet<>(source.behaviorOutputs.keySet())) {
+            List<String> behaviorPorts = source.behaviorOutputs.keySet().stream()
+                    .sorted(Comparator.comparingInt((String portId) -> {
+                                int index = BehaviorTreeConnections.childPortIndex(portId);
+                                return index >= 0 ? index : Integer.MAX_VALUE;
+                            })
+                            .thenComparing(String::compareTo))
+                    .toList();
+            for (String sourcePortId : behaviorPorts) {
                 Connection link = source.behaviorOutputs.get(sourcePortId);
                 PortDef sourcePort = sourceInfo.ports.outputs.get(sourcePortId);
                 if (sourcePort == null || sourcePort.type() != PortType.BEHAVIOR_STRUCTURE) {
@@ -200,16 +196,20 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         @SuppressWarnings("unchecked") Map<String, Object>[] staticInputs = new Map[size];
         @SuppressWarnings("unchecked") Map<String, CompiledDataIndex.DataConnectionSource>[] dataInputs = new Map[size];
         @SuppressWarnings("unchecked") Set<String>[] ports = new Set[size];
-        Map<String, List<Integer>> nodesByType = new LinkedHashMap<>();
         Set<String> allPortNames = new java.util.TreeSet<>();
         int root = -1;
+
+        Map<String, Map<String, DataLink>> inboundByNode = new LinkedHashMap<>();
+        for (Map.Entry<InputKey, DataLink> entry : compilation.inbound.entrySet()) {
+            inboundByNode.computeIfAbsent(entry.getKey().nodeId, ignored -> new LinkedHashMap<>())
+                    .put(entry.getKey().portId, entry.getValue());
+        }
 
         for (int nodeIndex = 0; nodeIndex < size; nodeIndex++) {
             String nodeId = ids[nodeIndex];
             NodeInfo nodeInfo = compilation.info.get(nodeId);
             types[nodeIndex] = nodeInfo.node.type;
             capabilities[nodeIndex] = nodeInfo.capabilities;
-            nodesByType.computeIfAbsent(nodeInfo.node.type, ignored -> new ArrayList<>()).add(nodeIndex);
             if (root < 0 && BehaviorRootNode.TYPE_ID.equals(nodeInfo.node.type)) root = nodeIndex;
 
             List<String> childIds = compilation.structure.getOrDefault(nodeId, List.of());
@@ -233,10 +233,10 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             staticInputs[nodeIndex] = Map.copyOf(effectiveInputs);
 
             Map<String, CompiledDataIndex.DataConnectionSource> inputIndex = new LinkedHashMap<>();
-            for (Map.Entry<InputKey, DataLink> entry : compilation.inbound.entrySet()) {
-                if (!entry.getKey().nodeId.equals(nodeId)) continue;
+            for (Map.Entry<String, DataLink> entry
+                    : inboundByNode.getOrDefault(nodeId, Map.of()).entrySet()) {
                 DataLink link = entry.getValue();
-                inputIndex.put(entry.getKey().portId,
+                inputIndex.put(entry.getKey(),
                         new CompiledDataIndex.DataConnectionSource(indexes.get(link.sourceNodeId), link.sourcePortId));
             }
             dataInputs[nodeIndex] = Map.copyOf(inputIndex);
@@ -251,10 +251,9 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         Map<String, Integer> portKeys = new LinkedHashMap<>();
         for (int i = 0; i < portNames.size(); i++) portKeys.put(portNames.get(i), i);
         return BehaviorTreePlan.createCompiled(
-                context != null ? context.assetId() : "", ids, indexes, types, capabilities,
-                root, parents, children, staticInputs, dataInputs, ports, portKeys, portNames,
-                nodesByType, compilation.dependencies,
-                compilation.subtreeSignature, compilation.rootSchedule);
+                context != null ? context.assetId() : "", ids, types, capabilities,
+                root, parents, children, staticInputs, dataInputs, ports, portKeys,
+                compilation.rootSchedule);
     }
 
     private static BehaviorTreePlan.RootSchedule compileRootSchedule(Map<String, NodeInfo> info) {
@@ -314,89 +313,45 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         return inbound;
     }
 
-    private static BehaviorTreePlan.SubtreeSignature compileSubtreeSignature(
-            @Nullable BehaviorTreeStructure structure) {
-        if (structure == null) return BehaviorTreePlan.SubtreeSignature.EMPTY;
-        List<BehaviorTreePlan.SubtreeParameter> compiled = new ArrayList<>();
-        Set<String> names = new HashSet<>();
-        for (BehaviorSubtreeParameter declaration : structure.parameters()) {
-            String name = text(declaration.name).trim();
-            String key = text(declaration.blackboardKey).trim();
-            if (name.isEmpty() || key.isEmpty() || !names.add(name)) continue;
-            PortType type = declaration.type != null ? declaration.type : PortType.ANY;
-            if (type.isFlow()) type = PortType.ANY;
-            compiled.add(new BehaviorTreePlan.SubtreeParameter(name, declaration.direction,
-                    type, key));
-        }
-        compiled.sort(Comparator.comparing(BehaviorTreePlan.SubtreeParameter::name));
-        return new BehaviorTreePlan.SubtreeSignature(compiled);
-    }
-
-    private static BehaviorTreePlan.DependencyManifest compileDependencies(
-            GraphCompileContext context, Map<String, NodeInfo> info) {
-        List<BehaviorTreePlan.SubtreeDependency> compiled = new ArrayList<>();
-        for (Map.Entry<String, NodeInfo> entry : info.entrySet()) {
-            if (!BehaviorSubtreeNode.TYPE_ID.equals(entry.getValue().node.type)) continue;
-            String callNodeId = entry.getKey();
-            NodeData node = entry.getValue().node;
-            Object rawDependencyId = node.inputs.get(StandardPorts.SUBTREE_ASSET.getId());
-            String dependencyId = text(rawDependencyId instanceof String value ? value : "");
-            BehaviorSubtreeCall call = node.behaviorSubtree != null
-                    ? node.behaviorSubtree : new BehaviorSubtreeCall();
-            call.restoreDocumentDefaults();
-            if (dependencyId.isEmpty()) continue;
-            if (context != null && !context.assetId().isEmpty()
-                    && context.assetId().equals(dependencyId)) {
-                continue;
-            }
-            compiled.add(new BehaviorTreePlan.SubtreeDependency(callNodeId, dependencyId,
-                    cleanMapping(call.inputMapping), cleanMapping(call.outputMapping)));
-        }
-        compiled.sort(Comparator.comparing(BehaviorTreePlan.SubtreeDependency::callNodeId));
-        return new BehaviorTreePlan.DependencyManifest(compiled);
-    }
-
-    private static Map<String, String> cleanMapping(Map<String, String> mapping) {
-        Map<String, String> cleaned = new TreeMap<>();
-        if (mapping == null) return cleaned;
-        mapping.forEach((key, value) -> {
-            String normalizedKey = text(key);
-            String normalizedValue = text(value);
-            if (!normalizedKey.isEmpty() && !normalizedValue.isEmpty()) {
-                cleaned.put(normalizedKey, normalizedValue);
-            }
-        });
-        return cleaned;
-    }
-
-    private static NodeGraph readDocument(JsonObject document) {
+    private static NodeGraph readDocument(JsonObject document, FlattenedGraph flattened) {
         NodeGraph graph = GSON.fromJson(document, NodeGraph.class);
         if (graph == null) graph = new NodeGraph();
         graph.graphKind = document.has("graph_kind") && document.get("graph_kind").isJsonPrimitive()
-                ? document.get("graph_kind").getAsString() : GraphTypeRegistry.BLUEPRINT.id();
-        if (graph.nodes == null) graph.nodes = new LinkedHashMap<>();
-        JsonElement nodesElement = document.get("nodes");
-        if (nodesElement != null && nodesElement.isJsonObject()) {
-            graph.nodes = new LinkedHashMap<>();
-            for (String nodeId : new java.util.TreeSet<>(nodesElement.getAsJsonObject().keySet())) {
-                NodeData node = GSON.fromJson(nodesElement.getAsJsonObject().get(nodeId), NodeData.class);
-                if (node == null) continue;
-                node.id = nodeId;
-                node.restoreDocumentDefaults();
-                graph.nodes.put(nodeId, node);
+                ? document.get("graph_kind").getAsString() : GraphTypeRegistry.BEHAVIOR_TREE.id();
+        graph.nodes = new LinkedHashMap<>();
+        for (String nodeId : new java.util.TreeSet<>(flattened.nodes().keySet())) {
+            NodeData node = GSON.fromJson(flattened.nodes().get(nodeId), NodeData.class);
+            if (node == null) continue;
+            node.id = nodeId;
+            node.restoreDocumentDefaults();
+            node.inputs = new LinkedHashMap<>(flattened.staticInputs()
+                    .getOrDefault(nodeId, Map.of()));
+            node.outputs = new LinkedHashMap<>();
+            node.execOutputs = new LinkedHashMap<>();
+            node.behaviorOutputs = new LinkedHashMap<>();
+            flattened.behaviorOutputs().getOrDefault(nodeId, Map.of()).forEach(
+                    (portId, target) -> node.behaviorOutputs.put(portId,
+                            new Connection(target.targetNodeId(), target.targetPortName())));
+            graph.nodes.put(nodeId, node);
+        }
+        for (Map.Entry<String, GraphFlattener.DataConnectionSource> entry
+                : flattened.dataInputs().entrySet()) {
+            int separator = entry.getKey().lastIndexOf('#');
+            if (separator <= 0 || separator >= entry.getKey().length() - 1) continue;
+            String targetNodeId = entry.getKey().substring(0, separator);
+            String targetPortId = entry.getKey().substring(separator + 1);
+            GraphFlattener.DataConnectionSource source = entry.getValue();
+            NodeData sourceNode = graph.nodes.get(source.sourceNodeId());
+            if (sourceNode != null && graph.nodes.containsKey(targetNodeId)) {
+                sourceNode.addDataConnection(source.sourcePortName(), targetNodeId, targetPortId);
             }
         }
-        if (graph.behaviorTree != null) graph.behaviorTree.restoreDocumentDefaults();
         return graph;
-    }
-
-    private static String text(@Nullable String value) {
-        return value != null ? value.trim() : "";
     }
 
     private static int storedConnectionCount(NodeGraph graph) {
         long count = 0;
-        count = BehaviorTreeStructureConnections.connectionCountUpTo(
+        count = BehaviorTreeConnections.connectionCountUpTo(
                 graph, GraphDocumentValidator.MAX_CONNECTIONS);
         if (count > GraphDocumentValidator.MAX_CONNECTIONS) {
             return GraphDocumentValidator.MAX_CONNECTIONS + 1;
@@ -430,8 +385,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         NodeGraph graph = new NodeGraph();
         graph.graphKind = GraphTypeRegistry.BEHAVIOR_TREE.id();
         return new Compilation(graph, List.of(), Map.of(), Map.of(), Map.of(),
-                BehaviorTreePlan.SubtreeSignature.EMPTY,
-                BehaviorTreePlan.DependencyManifest.EMPTY,
                 BehaviorTreePlan.RootSchedule.DEFAULT, List.of(diagnostic));
     }
 
@@ -469,8 +422,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     private record Compilation(NodeGraph graph, List<String> nodeIds,
                                Map<String, NodeInfo> info, Map<String, List<String>> structure,
                                Map<InputKey, DataLink> inbound,
-                               BehaviorTreePlan.SubtreeSignature subtreeSignature,
-                               BehaviorTreePlan.DependencyManifest dependencies,
                                BehaviorTreePlan.RootSchedule rootSchedule,
                                List<GraphDiagnostic> diagnostics) {
     }

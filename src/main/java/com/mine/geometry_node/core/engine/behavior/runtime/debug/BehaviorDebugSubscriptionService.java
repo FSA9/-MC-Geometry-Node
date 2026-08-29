@@ -16,6 +16,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 
@@ -86,6 +87,7 @@ public final class BehaviorDebugSubscriptionService {
         }
 
         subscriptions.add(instanceId);
+        updateDebugTracing(server, state, instanceId);
         BehaviorDebugSnapshot snapshot = BehaviorTreeRuntime.INSTANCE.debugSnapshot(server, instanceId);
         if (snapshot == null) {
             removeSubscription(player, instanceId);
@@ -104,7 +106,11 @@ public final class BehaviorDebugSubscriptionService {
         MinecraftServer server = player.level().getServer();
         ServerSubscriptions state = servers.get(server);
         if (state != null) {
+            Set<UUID> affectedInstances = state.subscriptionsFor(player.getUUID());
             state.removePlayer(player.getUUID());
+            for (UUID instanceId : affectedInstances) {
+                updateDebugTracing(server, state, instanceId);
+            }
             if (state.isEmpty()) servers.remove(server, state);
         }
     }
@@ -120,16 +126,22 @@ public final class BehaviorDebugSubscriptionService {
         }
         if (Math.floorMod(tick, SAMPLE_INTERVAL_TICKS) != 0L) return;
 
+        Map<UUID, PacketBehaviorDebugSnapshot> packetCache = new java.util.HashMap<>();
         Iterator<Map.Entry<UUID, LinkedHashSet<UUID>>> players = state.byPlayer.entrySet().iterator();
         while (players.hasNext()) {
             Map.Entry<UUID, LinkedHashSet<UUID>> playerEntry = players.next();
             ServerPlayer player = server.getPlayerList().getPlayer(playerEntry.getKey());
             if (player == null || player.isRemoved()) {
+                Set<UUID> affectedInstances = Set.copyOf(playerEntry.getValue());
                 state.nextInitialSnapshotByPlayer.remove(playerEntry.getKey());
                 players.remove();
+                for (UUID instanceId : affectedInstances) {
+                    updateDebugTracing(server, state, instanceId);
+                }
                 continue;
             }
             if (!hasPermission(player)) {
+                Set<UUID> affectedInstances = Set.copyOf(playerEntry.getValue());
                 for (UUID instanceId : playerEntry.getValue()) {
                     sendStatus(player, instanceId,
                             PacketBehaviorDebugSnapshot.Status.PERMISSION_DENIED,
@@ -137,6 +149,9 @@ public final class BehaviorDebugSubscriptionService {
                 }
                 state.nextInitialSnapshotByPlayer.remove(playerEntry.getKey());
                 players.remove();
+                for (UUID instanceId : affectedInstances) {
+                    updateDebugTracing(server, state, instanceId);
+                }
                 continue;
             }
 
@@ -151,17 +166,25 @@ public final class BehaviorDebugSubscriptionService {
                     sendStatus(player, instanceId, visibility,
                             visibility.name().toLowerCase(Locale.ROOT));
                     subscriptions.remove();
+                    updateDebugTracing(server, state, instanceId);
                     continue;
                 }
-                BehaviorDebugSnapshot snapshot = BehaviorTreeRuntime.INSTANCE.debugSnapshot(server, instanceId);
-                if (snapshot == null) {
+                PacketBehaviorDebugSnapshot packet = packetCache.computeIfAbsent(instanceId, ignored -> {
+                    BehaviorDebugSnapshot snapshot = BehaviorTreeRuntime.INSTANCE.debugSnapshot(server, instanceId);
+                    return snapshot != null ? PacketBehaviorDebugSnapshot.snapshot(snapshot) : null;
+                });
+                if (packet == null) {
                     sendStatus(player, instanceId, PacketBehaviorDebugSnapshot.Status.NOT_FOUND,
                             "not_found");
                     subscriptions.remove();
+                    updateDebugTracing(server, state, instanceId);
                     continue;
                 }
-                NetworkHandler.sendToPlayer(player, PacketBehaviorDebugSnapshot.snapshot(snapshot));
-                if (!access.active()) subscriptions.remove();
+                NetworkHandler.sendToPlayer(player, packet);
+                if (!access.active()) {
+                    subscriptions.remove();
+                    updateDebugTracing(server, state, instanceId);
+                }
             }
             if (playerEntry.getValue().isEmpty()) {
                 state.nextInitialSnapshotByPlayer.remove(playerEntry.getKey());
@@ -186,6 +209,7 @@ public final class BehaviorDebugSubscriptionService {
             if (subscriptions != null) {
                 subscriptions.remove(instanceId);
             }
+            updateDebugTracing(server, state, instanceId);
             prune(server, state, player.getUUID());
         }
     }
@@ -215,6 +239,12 @@ public final class BehaviorDebugSubscriptionService {
                                    PacketBehaviorDebugSnapshot.Status status, String detail) {
         NetworkHandler.sendToPlayer(player,
                 PacketBehaviorDebugSnapshot.status(instanceId, status, detail));
+    }
+
+    private static void updateDebugTracing(MinecraftServer server, ServerSubscriptions state,
+                                           UUID instanceId) {
+        var instance = BehaviorTreeRuntime.INSTANCE.get(server, instanceId);
+        if (instance != null) instance.setDebugTracingEnabled(state.hasSubscription(instanceId));
     }
 
     private static long safeAdd(long value, long increment) {
@@ -247,6 +277,18 @@ public final class BehaviorDebugSubscriptionService {
 
         private boolean isEmpty() {
             return byPlayer.isEmpty() && requestBuckets.isEmpty();
+        }
+
+        private boolean hasSubscription(UUID instanceId) {
+            for (Set<UUID> subscriptions : byPlayer.values()) {
+                if (subscriptions.contains(instanceId)) return true;
+            }
+            return false;
+        }
+
+        private Set<UUID> subscriptionsFor(UUID playerId) {
+            Set<UUID> subscriptions = byPlayer.get(playerId);
+            return subscriptions != null ? Set.copyOf(subscriptions) : Set.of();
         }
 
         private void removePlayer(UUID playerId) {

@@ -206,9 +206,7 @@ public final class BehaviorEntityExecutors {
                             BehaviorTerminationReason reason) {
             Mob owner = owner(context);
             if (owner != null) owner.getNavigation().stop();
-            if (owner != null && reason != BehaviorTerminationReason.COMPLETED_FAILURE) {
-                DebugRendererSessionManager.clearRequestedPathTarget(owner);
-            }
+            if (owner != null) DebugRendererSessionManager.clearRequestedPathTarget(owner);
         }
     }
 
@@ -223,9 +221,8 @@ public final class BehaviorEntityExecutors {
                         "Wander range exceeds 128 horizontal / 64 vertical");
             }
             double speed = positiveFloat(context, StandardPorts.SPEED.getId());
-            Mob navigator = navigationOwner(owner);
             PathNavigation probe = isolatedNavigation(owner);
-            BlockPos origin = navigator.blockPosition();
+            BlockPos origin = owner.blockPosition();
             for (int attempt = 0; attempt < WANDER_ATTEMPTS; attempt++) {
                 BlockPos candidate = origin.offset(
                         context.random().nextInt(horizontal * 2 + 1) - horizontal,
@@ -236,10 +233,10 @@ public final class BehaviorEntityExecutors {
                 if (path == null || !path.canReach()
                         || !owner.getNavigation().moveTo(path, speed)) continue;
                 Vec3 destination = path.getEntityPosAtNode(
-                        navigator, path.getNodeCount() - 1);
+                        owner, path.getNodeCount() - 1);
                 context.requestWakeupAfter(1);
-                return BehaviorActionStep.running(new WanderState(navigator, destination,
-                        Math.max(WANDER_ARRIVAL_DISTANCE, navigator.getBbWidth())));
+                return BehaviorActionStep.running(new WanderState(owner, destination,
+                        Math.max(WANDER_ARRIVAL_DISTANCE, owner.getBbWidth())));
             }
             return failure(BehaviorActionFailure.NO_DESTINATION,
                     "No reachable wander destination was found");
@@ -409,10 +406,9 @@ public final class BehaviorEntityExecutors {
     }
 
     private static PathNavigation isolatedNavigation(Mob owner) {
-        Mob navigator = navigationOwner(owner);
-        PathNavigation live = navigator.getNavigation();
-        PathNavigation probe = ((MobNavigationInvoker) (Object) navigator)
-                .geometryNode$createNavigation(navigator.level());
+        PathNavigation live = owner.getNavigation();
+        PathNavigation probe = ((MobNavigationInvoker) (Object) owner)
+                .geometryNode$createNavigation(owner.level());
         NodeEvaluator source = live.getNodeEvaluator();
         NodeEvaluator target = probe.getNodeEvaluator();
         target.setCanFloat(source.canFloat());
@@ -423,10 +419,6 @@ public final class BehaviorEntityExecutors {
         probe.setMaxVisitedNodesMultiplier(tuning.geometryNode$getMaxVisitedNodesMultiplier());
         probe.setRequiredPathLength(tuning.geometryNode$getRequiredPathLength());
         return probe;
-    }
-
-    private static Mob navigationOwner(Mob owner) {
-        return owner.getControlledVehicle() instanceof Mob riding ? riding : owner;
     }
 
     private static boolean validUuid(String value) {

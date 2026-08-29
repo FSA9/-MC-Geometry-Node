@@ -22,7 +22,7 @@ public final class BehaviorBlackboard {
     public BehaviorBlackboard(int maxEntries) {
         if (maxEntries <= 0) throw new IllegalArgumentException("maxEntries must be positive");
         this.maxEntries = maxEntries;
-        installProvider(new MemoryProvider(ScopedStateScope.INSTANCE, maxEntries));
+        installProvider(new MemoryProvider(ScopedStateScope.INSTANCE));
     }
 
     public void installProvider(ScopedStateProvider provider) {
@@ -87,13 +87,6 @@ public final class BehaviorBlackboard {
         return List.copyOf(result);
     }
 
-    public List<EntrySnapshot> snapshot(ScopedStateScope scope) {
-        List<EntrySnapshot> result = new ArrayList<>();
-        ScopedStateProvider provider = providers.get(Objects.requireNonNull(scope, "scope"));
-        if (provider != null) appendSnapshots(result, scope, provider);
-        return List.copyOf(result);
-    }
-
     private static void appendSnapshots(List<EntrySnapshot> result, ScopedStateScope scope,
                                         ScopedStateProvider provider) {
         if (!provider.available()) return;
@@ -150,7 +143,7 @@ public final class BehaviorBlackboard {
         private final Map<String, ScopedStateEntry> values = new LinkedHashMap<>();
         private long revision;
 
-        private MemoryProvider(ScopedStateScope scope, int maxEntries) {
+        private MemoryProvider(ScopedStateScope scope) {
             this.scope = scope;
         }
 

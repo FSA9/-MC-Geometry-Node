@@ -49,6 +49,26 @@ public final class GraphValueSnapshot {
         return value;
     }
 
+    /** Whether a frozen value still contains a mutable leaf that must be copied for readers. */
+    public static boolean requiresReadCopy(Object value) {
+        if (value instanceof ItemStack) return true;
+        if (value instanceof Map<?, ?> map) {
+            return map.entrySet().stream().anyMatch(entry ->
+                    requiresReadCopy(entry.getKey()) || requiresReadCopy(entry.getValue()));
+        }
+        if (value instanceof Iterable<?> values) {
+            for (Object entry : values) {
+                if (requiresReadCopy(entry)) return true;
+            }
+        }
+        if (value != null && value.getClass().isArray()) {
+            for (int index = 0; index < Array.getLength(value); index++) {
+                if (requiresReadCopy(Array.get(value, index))) return true;
+            }
+        }
+        return false;
+    }
+
     /** Compares detached graph values without relying on mutable-object identity. */
     public static boolean equivalent(Object first, Object second) {
         if (first == second) return true;

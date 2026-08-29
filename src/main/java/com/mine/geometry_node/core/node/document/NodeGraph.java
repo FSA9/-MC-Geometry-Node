@@ -4,7 +4,6 @@ import com.google.gson.annotations.SerializedName;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructure;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,10 +26,6 @@ public class NodeGraph {
 
     @SerializedName("quest")
     public QuestDefinition quest = QuestDefinition.EMPTY;
-
-    /** Present only for behavior-tree assets; execution and data links remain on nodes. */
-    @SerializedName("behavior_tree")
-    public BehaviorTreeStructure behaviorTree;
 
     @SerializedName("version")
     public String version;          // 版本
@@ -92,10 +87,4 @@ public class NodeGraph {
         this.nodes.remove(id);
     }
 
-    public BehaviorTreeStructure ensureBehaviorTree() {
-        if (behaviorTree == null) {
-            behaviorTree = new BehaviorTreeStructure();
-        }
-        return behaviorTree;
-    }
 }

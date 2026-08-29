@@ -74,21 +74,17 @@ public record BehaviorDebugSnapshot(
         for (int index : selectedNodes) {
             if (index < 0 || index >= plan.getNodeCount()) continue;
             BehaviorTreeInstance.NodeMetrics metrics = instance.nodeMetrics(index);
-            nodes.add(new NodeSnapshot(index, plan.getNodeId(index), plan.getNodeAssetId(index),
-                    plan.getNodeType(index), plan.getParent(index), instance.nodeState(index), metrics.visits(),
+            nodes.add(new NodeSnapshot(index, plan.getNodeId(index), plan.getNodeType(index),
+                    plan.getParent(index), instance.nodeState(index), metrics.visits(),
                     metrics.totalNanos(), metrics.lastNanos(), metrics.lastResult(),
                     metrics.lastReason()));
         }
 
-        List<BehaviorTreeInstance.BlackboardFrameSnapshot> frames = instance.blackboardFrameSnapshots();
+        BehaviorBlackboard instanceBlackboard = instance.blackboard();
         List<BlackboardSnapshot> blackboard = new ArrayList<>();
-        long blackboardRevision = 1L;
-        for (BehaviorTreeInstance.BlackboardFrameSnapshot frame : frames) {
-            blackboardRevision = 31L * blackboardRevision + frame.frameId();
-            blackboardRevision = 31L * blackboardRevision + frame.revision();
-            for (BehaviorBlackboard.EntrySnapshot entry : frame.entries()) {
-                blackboard.add(blackboardSnapshot(frame, entry));
-            }
+        long blackboardRevision = instanceBlackboard.revision();
+        for (BehaviorBlackboard.EntrySnapshot entry : instanceBlackboard.snapshot()) {
+            blackboard.add(blackboardSnapshot(entry));
         }
         List<TraceSnapshot> history = instance.history().stream()
                 .map(event -> new TraceSnapshot(event.sequence(), event.gameTick(), event.nodeIndex(),
@@ -121,12 +117,9 @@ public record BehaviorDebugSnapshot(
                 blackboardRevision, blackboard, history);
     }
 
-    private static BlackboardSnapshot blackboardSnapshot(
-            BehaviorTreeInstance.BlackboardFrameSnapshot frame,
-            BehaviorBlackboard.EntrySnapshot entry) {
+    private static BlackboardSnapshot blackboardSnapshot(BehaviorBlackboard.EntrySnapshot entry) {
         Object value = entry.value();
-        return new BlackboardSnapshot(frame.frameId(), frame.assetId(), frame.callNodePath(), frame.revision(),
-                entry.name(), entry.scope().name(), entry.providerIdentity(), entry.type(),
+        return new BlackboardSnapshot(entry.name(), entry.scope().name(), entry.providerIdentity(), entry.type(),
                 value != null, valueKind(value), observedText(value), entry.scopeAvailable());
     }
 
@@ -206,7 +199,7 @@ public record BehaviorDebugSnapshot(
         return value.substring(0, Math.max(0, maxLength - 3)) + "...";
     }
 
-    public record NodeSnapshot(int index, String nodeId, String nodeAssetId, String nodeType, int parentIndex,
+    public record NodeSnapshot(int index, String nodeId, String nodeType, int parentIndex,
                                BehaviorNodeState state, long visits, long totalNanos,
                                long lastNanos, @Nullable BehaviorResult lastResult,
                                @Nullable BehaviorTerminationReason lastReason) {
@@ -223,10 +216,7 @@ public record BehaviorDebugSnapshot(
                                  int maxBlackboardEntries, int maxHistoryEntries) {
     }
 
-    public record BlackboardSnapshot(int frameId, String frameAssetId, String callNodePath,
-                                     long frameRevision,
-                                     String name, String scope,
-                                     String providerIdentity, PortType type,
+    public record BlackboardSnapshot(String name, String scope, String providerIdentity, PortType type,
                                      boolean present, String valueKind, String displayValue,
                                      boolean scopeAvailable) {
     }

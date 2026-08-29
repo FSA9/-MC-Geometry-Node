@@ -5,7 +5,6 @@ import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.node.document.Connection;
-import com.mine.geometry_node.core.node.document.behavior.BehaviorTreeStructure;
 import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
@@ -29,9 +28,6 @@ public final class GraphJsonIO {
         QuestDefinition quest = g.quest != null ? g.quest : QuestDefinition.EMPTY;
         if (GraphTypeRegistry.QUEST.id().equals(g.getGraphTypeId()) || !quest.isEmpty()) {
             root.add("quest", quest.toJson());
-        }
-        if (g.behaviorTree != null) {
-            root.add("behavior_tree", GSON.toJsonTree(g.behaviorTree));
         }
         root.addProperty("version", g.version != null ? g.version : "1.0");
 
@@ -74,11 +70,6 @@ public final class GraphJsonIO {
                 ? root.get("comment").getAsString()
                 : "";
         g.quest = QuestDefinition.fromJson(root.get("quest"));
-        if (root.has("behavior_tree") && root.get("behavior_tree").isJsonObject()) {
-            g.behaviorTree = GSON.fromJson(root.get("behavior_tree"), BehaviorTreeStructure.class);
-            if (g.behaviorTree != null) g.behaviorTree.restoreDocumentDefaults();
-        }
-
         JsonElement nodesElement = root.get("nodes");
         if (nodesElement != null && !nodesElement.isJsonNull()) {
             if (!nodesElement.isJsonObject()) {

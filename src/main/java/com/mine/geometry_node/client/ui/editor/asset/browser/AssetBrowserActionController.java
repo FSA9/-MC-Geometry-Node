@@ -703,7 +703,7 @@ final class AssetBrowserActionController {
         GraphFileReference reference = GraphFileRegistry.INSTANCE.reference(file.toPath());
         GraphSession existing = DocumentManager.INSTANCE.findSession(reference);
         if (existing != null) {
-            DocumentManager.INSTANCE.switchSession(existing);
+            DocumentManager.INSTANCE.openSession(existing);
             return;
         }
         mIoTasks.run("打开图纸",

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.document.behavior;
+package com.mine.geometry_node.core.engine.behavior.structure;
 
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -10,19 +10,22 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Reads the behavior hierarchy directly from explicit structure-port connections. */
-public final class BehaviorTreeStructureConnections {
-    private BehaviorTreeStructureConnections() {
+/** Queries ordered behavior-tree relationships stored in one editable graph scope. */
+public final class BehaviorTreeConnections {
+    private BehaviorTreeConnections() {
     }
 
     public static List<String> childrenOf(NodeGraph graph, String parentId) {
         NodeData parent = graph != null ? graph.getNode(parentId) : null;
         if (parent == null || parent.behaviorOutputs == null) return List.of();
         return parent.behaviorOutputs.entrySet().stream()
-                .filter(entry -> isChildPort(entry.getKey()))
                 .filter(entry -> entry.getValue() != null && entry.getValue().isValid())
-                .sorted(Comparator.comparingInt(entry ->
-                        childPortIndex(entry.getKey())))
+                .sorted(Comparator
+                        .comparingInt((Map.Entry<String, Connection> entry) -> {
+                            int index = childPortIndex(entry.getKey());
+                            return index >= 0 ? index : Integer.MAX_VALUE;
+                        })
+                        .thenComparing(Map.Entry::getKey))
                 .map(entry -> entry.getValue().targetNodeId())
                 .toList();
     }
@@ -38,14 +41,24 @@ public final class BehaviorTreeStructureConnections {
     }
 
     public static ParentConnection parentOf(NodeGraph graph, String childId) {
+        return findParent(graph, childId, null, false);
+    }
+
+    public static ParentConnection parentOfInput(NodeGraph graph, String childId, String inputPortId) {
+        return findParent(graph, childId, inputPortId, true);
+    }
+
+    private static ParentConnection findParent(NodeGraph graph, String childId,
+                                               String inputPortId, boolean matchInputPort) {
         if (graph == null || graph.nodes == null || childId == null) return null;
         for (String parentId : graph.nodes.keySet().stream().sorted().toList()) {
             NodeData parent = graph.nodes.get(parentId);
             if (parent == null || parent.behaviorOutputs == null) continue;
             for (Map.Entry<String, Connection> entry : parent.behaviorOutputs.entrySet()) {
                 Connection connection = entry.getValue();
-                if (isChildPort(entry.getKey()) && connection != null
-                        && childId.equals(connection.targetNodeId())) {
+                if (connection != null && childId.equals(connection.targetNodeId())
+                        && (!matchInputPort || java.util.Objects.equals(
+                        inputPortId, connection.targetPortName()))) {
                     return new ParentConnection(parentId, entry.getKey(), connection);
                 }
             }

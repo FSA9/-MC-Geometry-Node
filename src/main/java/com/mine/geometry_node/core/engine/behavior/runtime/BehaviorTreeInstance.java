@@ -2,25 +2,18 @@ package com.mine.geometry_node.core.engine.behavior.runtime;
 
 import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard;
 import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorScopedStateProviders;
-import com.mine.geometry_node.core.engine.behavior.contract.BehaviorLifecycleContract;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorNodeState;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
-import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
-import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
-import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.node.NodeCapabilities;
-import com.mine.geometry_node.core.node.port.TypeConverter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
@@ -34,17 +27,17 @@ public final class BehaviorTreeInstance {
     private final BehaviorRuntimeBudget budget;
     private final BehaviorNodeState[] nodeStates;
     private final Object[] nodeMemory;
-    private final BehaviorResult[] lastResults;
-    private final BehaviorTerminationReason[] lastReasons;
-    private final long[] visitCounts;
-    private final long[] totalNanos;
-    private final long[] lastNanos;
+    @Nullable private BehaviorResult[] lastResults;
+    @Nullable private BehaviorTerminationReason[] lastReasons;
+    @Nullable private long[] visitCounts;
+    @Nullable private long[] totalNanos;
+    @Nullable private long[] lastNanos;
     private final int[] resourceOwners;
     private final boolean[] resourcesAcquired;
-    private final BehaviorBlackboard[] blackboards;
+    private final BehaviorBlackboard blackboard;
     private final GraphDataEvaluationSession dataEvaluation;
     private final Random random;
-    private final TraceEvent[] history;
+    @Nullable private TraceEvent[] history;
     private final int rootScheduleOffset;
 
     private BehaviorInstanceState state = BehaviorInstanceState.CREATED;
@@ -65,6 +58,7 @@ public final class BehaviorTreeInstance {
     private int historySize;
     private boolean evaluating;
     private boolean reentrantWakeRequested;
+    private boolean debugTracing;
 
     public BehaviorTreeInstance(UUID instanceId, BehaviorTreePlan plan, BehaviorRuntimeHost host,
                                 BehaviorRuntimeBudget budget, long randomSeed) {
@@ -76,21 +70,12 @@ public final class BehaviorTreeInstance {
         this.nodeStates = new BehaviorNodeState[nodeCount];
         Arrays.fill(nodeStates, BehaviorNodeState.IDLE);
         this.nodeMemory = new Object[nodeCount];
-        this.lastResults = new BehaviorResult[nodeCount];
-        this.lastReasons = new BehaviorTerminationReason[nodeCount];
-        this.visitCounts = new long[nodeCount];
-        this.totalNanos = new long[nodeCount];
-        this.lastNanos = new long[nodeCount];
         this.resourceOwners = new int[NodeCapabilities.ResourceUse.values().length];
         Arrays.fill(resourceOwners, -1);
         this.resourcesAcquired = new boolean[nodeCount];
-        this.blackboards = new BehaviorBlackboard[plan.blackboardFrameInfos().size()];
-        for (int frame = 0; frame < blackboards.length; frame++) {
-            blackboards[frame] = newBlackboard(frame);
-        }
+        this.blackboard = newBlackboard();
         this.dataEvaluation = new GraphDataEvaluationSession(plan);
         this.random = new Random(randomSeed);
-        this.history = new TraceEvent[budget.maxHistoryEntriesPerInstance()];
         this.rootScheduleOffset = plan.rootSchedule().resolveOffset(host.identity(), plan.assetId());
     }
 
@@ -110,40 +95,10 @@ public final class BehaviorTreeInstance {
     }
     public long lastEvaluationTick() { return lastEvaluationTick; }
     public long nextWakeTick() { return nextWakeTick; }
-    public BehaviorBlackboard blackboard() { return blackboards[0]; }
-
-    /** Read-only copies of all call-frame blackboards for diagnostics. */
-    public List<BlackboardFrameSnapshot> blackboardFrameSnapshots() {
-        List<BlackboardFrameSnapshot> result = new ArrayList<>(blackboards.length);
-        for (int frame = 0; frame < blackboards.length; frame++) {
-            BehaviorTreePlan.BlackboardFrameInfo info = plan.blackboardFrameInfos().get(frame);
-            result.add(new BlackboardFrameSnapshot(frame, info.assetId(), info.callNodePath(),
-                    blackboards[frame].revision(), frame == 0 ? blackboards[frame].snapshot()
-                    : blackboards[frame].snapshot(
-                            ScopedStateScope.INSTANCE)));
-        }
-        return List.copyOf(result);
-    }
+    public BehaviorBlackboard blackboard() { return blackboard; }
 
     BehaviorBlackboard blackboard(int nodeIndex) {
-        return blackboards[plan.blackboardFrame(nodeIndex)];
-    }
-
-    void enterSubtreeCall(int nodeIndex) {
-        BehaviorTreePlan.SubtreeCallBoundary call = requireSubtreeCall(nodeIndex);
-        blackboards[call.childFrame()] = newBlackboard(call.childFrame());
-        BehaviorBlackboard parent = blackboards[call.parentFrame()];
-        BehaviorBlackboard child = blackboards[call.childFrame()];
-        for (BehaviorTreePlan.SubtreeParameterTransfer transfer : call.inputTransfers()) {
-            Object value = parent.get(
-                    ScopedStateScope.INSTANCE,
-                    transfer.sourceKey());
-            if (value != null) {
-                child.set(ScopedStateScope.INSTANCE,
-                        transfer.targetKey(), validateSubtreeTransfer(nodeIndex, transfer, value, "input"));
-            }
-        }
-        dataEvaluation.clearValues();
+        return blackboard;
     }
 
     private void installPersistentBlackboards(BehaviorBlackboard blackboard) {
@@ -152,55 +107,11 @@ public final class BehaviorTreeInstance {
         }
     }
 
-    private BehaviorBlackboard newBlackboard(int frame) {
+    private BehaviorBlackboard newBlackboard() {
         BehaviorBlackboard blackboard = new BehaviorBlackboard(
                 budget.maxBlackboardEntriesPerInstance());
         installPersistentBlackboards(blackboard);
         return blackboard;
-    }
-
-    void exitSubtreeCall(int nodeIndex, BehaviorTerminationReason reason) {
-        BehaviorTreePlan.SubtreeCallBoundary call = requireSubtreeCall(nodeIndex);
-        if (reason == BehaviorTerminationReason.COMPLETED_SUCCESS
-                || reason == BehaviorTerminationReason.COMPLETED_FAILURE) {
-            BehaviorBlackboard parent = blackboards[call.parentFrame()];
-            BehaviorBlackboard child = blackboards[call.childFrame()];
-            Map<BehaviorTreePlan.SubtreeParameterTransfer, Object> outputs = new LinkedHashMap<>();
-            for (BehaviorTreePlan.SubtreeParameterTransfer transfer : call.outputTransfers()) {
-                Object value = child.get(
-                        ScopedStateScope.INSTANCE,
-                        transfer.sourceKey());
-                if (value != null) {
-                    outputs.put(transfer, validateSubtreeTransfer(
-                            nodeIndex, transfer, value, "output"));
-                }
-            }
-            for (Map.Entry<BehaviorTreePlan.SubtreeParameterTransfer, Object> output : outputs.entrySet()) {
-                parent.set(ScopedStateScope.INSTANCE,
-                        output.getKey().targetKey(), output.getValue());
-            }
-        }
-        dataEvaluation.clearValues();
-    }
-
-    private BehaviorTreePlan.SubtreeCallBoundary requireSubtreeCall(int nodeIndex) {
-        BehaviorTreePlan.SubtreeCallBoundary call = plan.subtreeCall(nodeIndex);
-        if (call == null) throw new IllegalStateException(
-                "Linked plan has no subtree call boundary for " + plan.getNodeId(nodeIndex));
-        return call;
-    }
-
-    private Object validateSubtreeTransfer(int nodeIndex,
-                                           BehaviorTreePlan.SubtreeParameterTransfer transfer,
-                                           Object value, String direction) {
-        Object converted = TypeConverter.convertForPort(value, transfer.type());
-        if (converted == null) {
-            throw new BehaviorContractViolation("Subtree " + direction + " type mismatch at "
-                    + plan.getNodeId(nodeIndex) + ": " + transfer.sourceKey() + " -> "
-                    + transfer.targetKey() + " requires " + transfer.type() + " but received "
-                    + (value != null ? value.getClass().getSimpleName() : "null"));
-        }
-        return GraphValueSnapshot.snapshot(converted);
     }
 
     public BehaviorNodeState nodeState(int nodeIndex) {
@@ -208,7 +119,8 @@ public final class BehaviorTreeInstance {
     }
 
     public NodeMetrics nodeMetrics(int nodeIndex) {
-        if (!validNode(nodeIndex)) return NodeMetrics.EMPTY;
+        if (!validNode(nodeIndex) || visitCounts == null || totalNanos == null || lastNanos == null
+                || lastResults == null || lastReasons == null) return NodeMetrics.EMPTY;
         return new NodeMetrics(visitCounts[nodeIndex], totalNanos[nodeIndex], lastNanos[nodeIndex],
                 lastResults[nodeIndex], lastReasons[nodeIndex]);
     }
@@ -231,20 +143,49 @@ public final class BehaviorTreeInstance {
         return List.copyOf(result);
     }
 
-    public List<Integer> activeNodes() {
-        List<Integer> result = new ArrayList<>();
-        for (int index = 0; index < nodeStates.length; index++) {
-            if (nodeStates[index].isActive()) result.add(index);
-        }
-        return List.copyOf(result);
-    }
-
     public List<TraceEvent> history() {
+        if (history == null || historySize == 0) return List.of();
         List<TraceEvent> result = new ArrayList<>(historySize);
         for (int index = 0; index < historySize; index++) {
             result.add(history[(historyStart + index) % history.length]);
         }
         return List.copyOf(result);
+    }
+
+    public boolean debugTracingEnabled() {
+        return debugTracing;
+    }
+
+    public void setDebugTracingEnabled(boolean enabled) {
+        if (debugTracing == enabled) return;
+        debugTracing = enabled;
+        if (enabled) {
+            int nodeCount = plan.getNodeCount();
+            lastResults = new BehaviorResult[nodeCount];
+            lastReasons = new BehaviorTerminationReason[nodeCount];
+            visitCounts = new long[nodeCount];
+            totalNanos = new long[nodeCount];
+            lastNanos = new long[nodeCount];
+            history = new TraceEvent[budget.maxHistoryEntriesPerInstance()];
+            return;
+        }
+        lastResults = null;
+        lastReasons = null;
+        visitCounts = null;
+        totalNanos = null;
+        lastNanos = null;
+        history = null;
+        evaluationCount = 0L;
+        totalEvaluationNanos = 0L;
+        lastEvaluationNanos = 0L;
+        evaluationTimeOverruns = 0L;
+        lastNodeVisits = 0;
+        peakNodeVisits = 0;
+        lastImmediateTransitions = 0;
+        peakImmediateTransitions = 0;
+        traceSequence = 0L;
+        historyStart = 0;
+        historySize = 0;
     }
 
     void markRunning() {
@@ -287,7 +228,7 @@ public final class BehaviorTreeInstance {
         reentrantWakeRequested = false;
         nextWakeTick = Long.MAX_VALUE;
         lastEvaluationTick = gameTick;
-        evaluationCount++;
+        if (debugTracing) evaluationCount++;
         dataEvaluation.beginEpoch();
         return true;
     }
@@ -326,12 +267,14 @@ public final class BehaviorTreeInstance {
     void setNodeMemory(int nodeIndex, @Nullable Object value) { nodeMemory[nodeIndex] = value; }
 
     void recordVisit(int nodeIndex, long elapsedNanos) {
+        if (!debugTracing || visitCounts == null || lastNanos == null || totalNanos == null) return;
         visitCounts[nodeIndex]++;
         lastNanos[nodeIndex] = Math.max(0L, elapsedNanos);
         totalNanos[nodeIndex] = saturatingAdd(totalNanos[nodeIndex], lastNanos[nodeIndex]);
     }
 
     void recordEvaluationMetrics(long elapsedNanos, int nodeVisits, int immediateTransitions) {
+        if (!debugTracing) return;
         lastEvaluationNanos = Math.max(0L, elapsedNanos);
         totalEvaluationNanos = saturatingAdd(totalEvaluationNanos, lastEvaluationNanos);
         lastNodeVisits = Math.max(0, nodeVisits);
@@ -345,6 +288,7 @@ public final class BehaviorTreeInstance {
 
     void recordTermination(int nodeIndex, BehaviorTerminationReason reason, long elapsedNanos,
                            @Nullable String failureCode, @Nullable String detail) {
+        if (!debugTracing || lastResults == null || lastReasons == null || history == null) return;
         BehaviorResult result = reason.result();
         lastResults[nodeIndex] = result;
         lastReasons[nodeIndex] = reason;
@@ -352,7 +296,6 @@ public final class BehaviorTreeInstance {
                 plan.getNodeId(nodeIndex), plan.getNodeType(nodeIndex), reason, result,
                 Math.max(0L, elapsedNanos),
                 failureCode, detail != null ? detail : "");
-        if (history.length == 0) return;
         int insertion = (historyStart + historySize) % history.length;
         history[insertion] = event;
         if (historySize < history.length) {
@@ -363,13 +306,11 @@ public final class BehaviorTreeInstance {
     }
 
     boolean acquireResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
-        boolean requiresLease = resources.stream().anyMatch(resource ->
-                resource != NodeCapabilities.ResourceUse.NONE);
-        if (!requiresLease) return true;
+        if (resources.isEmpty()) return true;
         if (conflictingResourceOwner(nodeIndex, resources) >= 0) return false;
         if (!host.acquireResources(nodeIndex, resources)) return false;
         for (NodeCapabilities.ResourceUse resource : resources) {
-            if (resource != NodeCapabilities.ResourceUse.NONE) resourceOwners[resource.ordinal()] = nodeIndex;
+            resourceOwners[resource.ordinal()] = nodeIndex;
         }
         resourcesAcquired[nodeIndex] = true;
         return true;
@@ -377,31 +318,14 @@ public final class BehaviorTreeInstance {
 
     int conflictingResourceOwner(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
         for (NodeCapabilities.ResourceUse requested : resources) {
-            if (requested == NodeCapabilities.ResourceUse.NONE) continue;
             for (NodeCapabilities.ResourceUse held : NodeCapabilities.ResourceUse.values()) {
                 int owner = resourceOwners[held.ordinal()];
-                if (owner != -1 && owner != nodeIndex && resourcesConflict(requested, held)) {
+                if (owner != -1 && owner != nodeIndex && requested == held) {
                     return owner;
                 }
             }
         }
         return -1;
-    }
-
-    private static boolean resourcesConflict(NodeCapabilities.ResourceUse first,
-                                             NodeCapabilities.ResourceUse second) {
-        if (first == NodeCapabilities.ResourceUse.NONE || second == NodeCapabilities.ResourceUse.NONE) {
-            return false;
-        }
-        if (first == second) return true;
-        return first == NodeCapabilities.ResourceUse.COMBAT
-                && (second == NodeCapabilities.ResourceUse.MOVEMENT
-                || second == NodeCapabilities.ResourceUse.LOOK
-                || second == NodeCapabilities.ResourceUse.TARGET)
-                || second == NodeCapabilities.ResourceUse.COMBAT
-                && (first == NodeCapabilities.ResourceUse.MOVEMENT
-                || first == NodeCapabilities.ResourceUse.LOOK
-                || first == NodeCapabilities.ResourceUse.TARGET);
     }
 
     void releaseResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
@@ -411,8 +335,7 @@ public final class BehaviorTreeInstance {
             host.releaseResources(nodeIndex, resources);
         } finally {
             for (NodeCapabilities.ResourceUse resource : resources) {
-                if (resource != NodeCapabilities.ResourceUse.NONE
-                        && resourceOwners[resource.ordinal()] == nodeIndex) {
+                if (resourceOwners[resource.ordinal()] == nodeIndex) {
                     resourceOwners[resource.ordinal()] = -1;
                 }
             }
@@ -429,15 +352,6 @@ public final class BehaviorTreeInstance {
 
     private boolean validNode(int nodeIndex) {
         return nodeIndex >= 0 && nodeIndex < nodeStates.length;
-    }
-
-    private void transitionNode(int nodeIndex, BehaviorNodeState target) {
-        BehaviorNodeState current = nodeStates[nodeIndex];
-        if (!BehaviorLifecycleContract.allows(current, target)) {
-            throw new IllegalStateException("Illegal behavior lifecycle transition: "
-                    + current + " -> " + target);
-        }
-        nodeStates[nodeIndex] = target;
     }
 
     private static long safeIncrement(long value) {
@@ -474,11 +388,4 @@ public final class BehaviorTreeInstance {
                              long elapsedNanos, @Nullable String failureCode, String detail) {
     }
 
-    public record BlackboardFrameSnapshot(int frameId, String assetId, String callNodePath,
-                                          long revision,
-                                          List<BehaviorBlackboard.EntrySnapshot> entries) {
-        public BlackboardFrameSnapshot {
-            entries = List.copyOf(entries);
-        }
-    }
 }

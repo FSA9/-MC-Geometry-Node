@@ -65,7 +65,7 @@ public class DocumentManager {
         return mOpenSessionSerial;
     }
 
-    // 打开或新建一个图纸
+    // Opens a new document or focuses the existing document in the active viewport.
     public void openSession(GraphSession session) {
         if (session == null || session.fileReference().isDeleted()) return;
         for (GraphSession s : mSessions) {

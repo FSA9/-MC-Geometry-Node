@@ -2,7 +2,6 @@ package com.mine.geometry_node.core.node.document;
 
 import com.google.gson.annotations.SerializedName;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
-import com.mine.geometry_node.core.node.document.behavior.BehaviorSubtreeCall;
 import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
@@ -43,9 +42,6 @@ public class NodeData {
 
     @SerializedName("behavior_outputs")
     public Map<String, Connection> behaviorOutputs = new LinkedHashMap<>();
-
-    @SerializedName("behavior_subtree")
-    public BehaviorSubtreeCall behaviorSubtree;
 
     @SerializedName("port_config")
     public PortsConfig portConfig = new PortsConfig();
@@ -158,7 +154,6 @@ public class NodeData {
         if (execOutputs == null) execOutputs = new HashMap<>();
         if (outputs == null) outputs = new HashMap<>();
         if (behaviorOutputs == null) behaviorOutputs = new LinkedHashMap<>();
-        if (behaviorSubtree != null) behaviorSubtree.restoreDocumentDefaults();
         if (connectedInputs == null) connectedInputs = new HashSet<>();
         ensurePortConfig();
     }
@@ -200,6 +195,14 @@ public class NodeData {
 
     public void removeExecutionConnection(String outPort) {
         this.execOutputs.remove(outPort);
+    }
+
+    public void addBehaviorConnection(String outPort, String targetId, String targetPortName) {
+        this.behaviorOutputs.put(outPort, new Connection(targetId, targetPortName));
+    }
+
+    public void removeBehaviorConnection(String outPort) {
+        this.behaviorOutputs.remove(outPort);
     }
 
     public void addDataConnection(String outPort, String targetId, String targetInPort) {

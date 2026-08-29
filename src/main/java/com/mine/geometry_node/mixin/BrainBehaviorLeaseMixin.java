@@ -1,12 +1,14 @@
 package com.mine.geometry_node.mixin;
 
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNativeAiController;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorBrainLeaseAccess;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.Brain;
 import net.minecraft.world.entity.ai.behavior.BehaviorControl;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -15,10 +17,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.Optional;
 
 @Mixin(Brain.class)
-public abstract class BrainBehaviorLeaseMixin {
+public abstract class BrainBehaviorLeaseMixin implements BehaviorBrainLeaseAccess {
+    @Unique private int geometryNode$behaviorLeaseMask;
+
+    @Override
+    public int geometryNode$getBehaviorLeaseMask() {
+        return geometryNode$behaviorLeaseMask;
+    }
+
+    @Override
+    public void geometryNode$setBehaviorLeaseMask(int mask) {
+        geometryNode$behaviorLeaseMask = mask;
+    }
+
     @Inject(method = "tick", at = @At("HEAD"))
-    private void geometryNode$associateBrain(ServerLevel level, LivingEntity body, CallbackInfo ci) {
-        BehaviorNativeAiController.onBrainTick((Brain<?>) (Object) this, body);
+    private void geometryNode$syncBehaviorLeases(ServerLevel level, LivingEntity body,
+                                                  CallbackInfo ci) {
+        BehaviorNativeAiController.syncBrainLeases((Brain<?>) (Object) this, body);
     }
 
     @Redirect(

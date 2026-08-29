@@ -1,10 +1,9 @@
-package com.mine.geometry_node.core.engine.blueprint.compile;
+package com.mine.geometry_node.core.engine.graph.compile;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.Gson;
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -15,33 +14,38 @@ import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.*;
 
-/**
- * [图展平器]
- * 负责将新版嵌套节点组递归展开为扁平运行时图，并在编译期消除
- * node_group / group_in / group_out 这些 UI 边界节点。
- */
-class GraphFlattener {
+/** Expands nested node groups into a graph-family-neutral compiler input. */
+public final class GraphFlattener {
     private static final Gson GSON = new Gson();
 
-    public record TargetConnection(String targetNodeId, String targetPortName) {}
+    private final Map<String, JsonObject> nodeDataLookup = new HashMap<>();
+    private final Map<String, Map<String, TargetConnection>> flowOutputLookup = new HashMap<>();
+    private final Map<String, Map<String, TargetConnection>> behaviorOutputLookup = new HashMap<>();
+    private final Map<String, DataConnectionSource> inputLookup = new HashMap<>();
+    private final Map<String, List<String>> typeLookup = new HashMap<>();
+    private final Map<String, Map<String, Object>> propertyLookup = new HashMap<>();
+    private final Map<String, Map<String, Object>> staticInputLookup = new HashMap<>();
+    private final Map<String, Set<String>> portLookup = new HashMap<>();
 
-    final Map<String, JsonObject> nodeDataLookup = new HashMap<>();
-    final Map<String, Map<String, TargetConnection>> flowOutputLookup = new HashMap<>();
-    final Map<String, RuntimeGraphIndex.ConnectionSource> inputLookup = new HashMap<>();
-    final Map<String, List<String>> typeLookup = new HashMap<>();
-    final Map<String, Map<String, Object>> propertyLookup = new HashMap<>();
-    final Map<String, Map<String, Object>> staticInputLookup = new HashMap<>();
-    final Map<String, Set<String>> portLookup = new HashMap<>();
-
-    final Set<String> allStaticKeys = new HashSet<>();
+    private final Set<String> allStaticKeys = new HashSet<>();
 
     private final Map<String, GroupBoundary> groupBoundaries = new HashMap<>();
     private final Map<String, String> boundaryToGroupMap = new HashMap<>();
     private final Set<String> virtualNodeIds = new HashSet<>();
     private final Map<String, DataResolution> dataResolutionCache = new HashMap<>();
     private final Map<String, Optional<TargetConnection>> executionTargetCache = new HashMap<>();
+    private final Map<String, Optional<TargetConnection>> behaviorTargetCache = new HashMap<>();
 
-    void flatten(JsonObject rootNodes) {
+    private GraphFlattener() {
+    }
+
+    public static FlattenedGraph flatten(JsonObject rootNodes) {
+        GraphFlattener flattener = new GraphFlattener();
+        flattener.flattenInternal(rootNodes);
+        return flattener.snapshot();
+    }
+
+    private void flattenInternal(JsonObject rootNodes) {
         if (rootNodes == null) return;
 
         flattenRecursive("", rootNodes);
@@ -83,6 +87,7 @@ class GraphFlattener {
             parseStaticInputs(globalId, instanceDefinition, nodeObj);
             parseExecutionOutputs(globalId, prefix, nodeObj);
             parseDataOutputs(globalId, prefix, nodeObj);
+            parseBehaviorOutputs(globalId, prefix, nodeObj);
 
             if (GroupNodeTypes.NODE_GROUP.equals(type) && nodeObj.has("sub_nodes")) {
                 flattenRecursive(globalId + "/", asObject(nodeObj.get("sub_nodes")));
@@ -94,7 +99,7 @@ class GraphFlattener {
         JsonObject properties = asObject(nodeObj.get("properties"));
         if (properties == null) return;
 
-        Map<String, Object> props = BlueprintCompiler.parseValueMap(properties);
+        Map<String, Object> props = parseValueMap(properties);
         propertyLookup.put(globalId, props);
         for (Object val : props.values()) {
             if (val instanceof String s) allStaticKeys.add(s);
@@ -116,7 +121,7 @@ class GraphFlattener {
 
         JsonObject inputs = asObject(nodeObj.get("inputs"));
         if (inputs != null) {
-            bakedInputs.putAll(BlueprintCompiler.parseValueMap(inputs));
+            bakedInputs.putAll(parseValueMap(inputs));
         }
 
         staticInputLookup.put(globalId, bakedInputs);
@@ -186,21 +191,35 @@ class GraphFlattener {
                 allStaticKeys.add(target.targetPortName);
                 inputLookup.put(
                         makeKey(target.targetNodeId, target.targetPortName),
-                        new RuntimeGraphIndex.ConnectionSource(globalId, sourcePort)
+                        new DataConnectionSource(globalId, sourcePort)
                 );
             }
         }
     }
 
+    private void parseBehaviorOutputs(String globalId, String prefix, JsonObject nodeObj) {
+        JsonObject outputs = asObject(nodeObj.get("behavior_outputs"));
+        if (outputs == null) return;
+
+        Map<String, TargetConnection> connections = new LinkedHashMap<>();
+        for (String port : outputs.keySet()) {
+            allStaticKeys.add(port);
+            TargetConnection target = parseTarget(prefix, outputs.get(port), null);
+            if (target != null) connections.put(port, target);
+        }
+        behaviorOutputLookup.put(globalId, connections);
+    }
+
     private void bridgeGroups() {
         bridgeDataInputs();
         bridgeExecutionOutputs();
+        bridgeBehaviorOutputs();
     }
 
     private void bridgeDataInputs() {
-        Map<String, RuntimeGraphIndex.ConnectionSource> finalInputLookup = new HashMap<>();
+        Map<String, DataConnectionSource> finalInputLookup = new HashMap<>();
 
-        for (Map.Entry<String, RuntimeGraphIndex.ConnectionSource> entry : inputLookup.entrySet()) {
+        for (Map.Entry<String, DataConnectionSource> entry : inputLookup.entrySet()) {
             NodePortKey target = parseKey(entry.getKey());
             if (target == null || isVirtualNode(target.nodeId)) continue;
 
@@ -245,7 +264,30 @@ class GraphFlattener {
         flowOutputLookup.putAll(finalFlowLookup);
     }
 
-    private DataResolution resolveDataSource(RuntimeGraphIndex.ConnectionSource currentSource, Set<String> visited) {
+    private void bridgeBehaviorOutputs() {
+        Map<String, Map<String, TargetConnection>> flattened = new HashMap<>();
+        for (Map.Entry<String, Map<String, TargetConnection>> sourceEntry : behaviorOutputLookup.entrySet()) {
+            String sourceId = sourceEntry.getKey();
+            if (isVirtualNode(sourceId)) continue;
+
+            Map<String, TargetConnection> rewritten = new LinkedHashMap<>();
+            sourceEntry.getValue().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> {
+                        TargetConnection target = entry.getValue();
+                        TargetConnection resolved = resolveBehaviorTarget(
+                                target.targetNodeId, target.targetPortName, new HashSet<>());
+                        if (resolved != null && !isVirtualNode(resolved.targetNodeId)) {
+                            rewritten.put(entry.getKey(), resolved);
+                        }
+                    });
+            if (!rewritten.isEmpty()) flattened.put(sourceId, rewritten);
+        }
+        behaviorOutputLookup.clear();
+        behaviorOutputLookup.putAll(flattened);
+    }
+
+    private DataResolution resolveDataSource(DataConnectionSource currentSource, Set<String> visited) {
         if (currentSource == null) return DataResolution.empty();
 
         String nodeId = currentSource.sourceNodeId();
@@ -255,7 +297,7 @@ class GraphFlattener {
         if (cached != null) return cached;
 
         if (!visited.add(cacheKey)) {
-            throw new IllegalStateException("[BlueprintCompiler] Data flow cycle crosses node_group boundary at " + cacheKey);
+            return DataResolution.empty();
         }
 
         DataResolution resolved;
@@ -264,7 +306,7 @@ class GraphFlattener {
             if (groupBoundary.groupOutId == null) {
                 resolved = DataResolution.empty();
             } else {
-                RuntimeGraphIndex.ConnectionSource internalProvider = inputLookup.get(makeKey(groupBoundary.groupOutId, port));
+                DataConnectionSource internalProvider = inputLookup.get(makeKey(groupBoundary.groupOutId, port));
                 resolved = internalProvider != null
                         ? resolveDataSource(internalProvider, visited)
                         : DataResolution.empty();
@@ -274,7 +316,7 @@ class GraphFlattener {
             String ownerGroupId = boundaryToGroupMap.get(nodeId);
             GroupBoundary ownerBoundary = groupBoundaries.get(ownerGroupId);
             if (ownerBoundary != null && nodeId.equals(ownerBoundary.groupInId)) {
-                RuntimeGraphIndex.ConnectionSource externalProvider = inputLookup.get(makeKey(ownerGroupId, port));
+                DataConnectionSource externalProvider = inputLookup.get(makeKey(ownerGroupId, port));
                 resolved = externalProvider != null
                         ? resolveDataSource(externalProvider, visited)
                         : resolveGroupInputDefault(ownerGroupId, port);
@@ -283,7 +325,7 @@ class GraphFlattener {
             }
 
         } else if (isRerouteNode(nodeId)) {
-            RuntimeGraphIndex.ConnectionSource rerouteProvider = inputLookup.get(makeKey(nodeId, RerouteNodeSupport.INPUT_PORT));
+            DataConnectionSource rerouteProvider = inputLookup.get(makeKey(nodeId, RerouteNodeSupport.INPUT_PORT));
             resolved = rerouteProvider != null
                     ? resolveDataSource(rerouteProvider, visited)
                     : DataResolution.empty();
@@ -348,6 +390,41 @@ class GraphFlattener {
         return resolved;
     }
 
+    private TargetConnection resolveBehaviorTarget(String targetId, String targetPort, Set<String> visited) {
+        if (targetId == null || targetPort == null) return null;
+        String cacheKey = makeKey(targetId, targetPort);
+        Optional<TargetConnection> cached = behaviorTargetCache.get(cacheKey);
+        if (cached != null) return cached.orElse(null);
+        if (!visited.add(cacheKey)) return null;
+
+        TargetConnection resolved;
+        GroupBoundary groupBoundary = groupBoundaries.get(targetId);
+        if (groupBoundary != null) {
+            TargetConnection next = groupBoundary.groupInId != null
+                    ? getBehaviorTarget(groupBoundary.groupInId, targetPort) : null;
+            resolved = next != null
+                    ? resolveBehaviorTarget(next.targetNodeId, next.targetPortName, visited) : null;
+        } else if (boundaryToGroupMap.containsKey(targetId)) {
+            String ownerGroupId = boundaryToGroupMap.get(targetId);
+            GroupBoundary owner = groupBoundaries.get(ownerGroupId);
+            if (owner != null && targetId.equals(owner.groupOutId)) {
+                TargetConnection next = getBehaviorTarget(ownerGroupId, targetPort);
+                resolved = next != null
+                        ? resolveBehaviorTarget(next.targetNodeId, next.targetPortName, visited) : null;
+            } else {
+                resolved = null;
+            }
+        } else if (isVirtualNode(targetId)) {
+            resolved = null;
+        } else {
+            resolved = new TargetConnection(targetId, targetPort);
+        }
+
+        visited.remove(cacheKey);
+        behaviorTargetCache.put(cacheKey, Optional.ofNullable(resolved));
+        return resolved;
+    }
+
     private DataResolution resolveGroupInputDefault(String groupId, String port) {
         Map<String, Object> groupInputs = staticInputLookup.get(groupId);
         if (groupInputs == null || !groupInputs.containsKey(port)) {
@@ -368,6 +445,11 @@ class GraphFlattener {
         return flows.get("flow_out");
     }
 
+    private TargetConnection getBehaviorTarget(String sourceId, String port) {
+        Map<String, TargetConnection> connections = behaviorOutputLookup.get(sourceId);
+        return connections != null ? connections.get(port) : null;
+    }
+
     private void setStaticInput(String nodeId, String portName, Object value) {
         if (value == null) return;
         staticInputLookup.computeIfAbsent(nodeId, ignored -> new HashMap<>()).put(portName, value);
@@ -380,6 +462,7 @@ class GraphFlattener {
         for (String virtualId : virtualNodeIds) {
             nodeDataLookup.remove(virtualId);
             flowOutputLookup.remove(virtualId);
+            behaviorOutputLookup.remove(virtualId);
             propertyLookup.remove(virtualId);
             staticInputLookup.remove(virtualId);
             portLookup.remove(virtualId);
@@ -466,6 +549,42 @@ class GraphFlattener {
         }
     }
 
+    private static Map<String, Object> parseValueMap(JsonObject object) {
+        Map<String, Object> result = new HashMap<>();
+        for (String key : object.keySet()) {
+            Object value = unwrapJsonElement(object.get(key));
+            if (value != null) result.put(key, value);
+        }
+        return Map.copyOf(result);
+    }
+
+    private static Object unwrapJsonElement(JsonElement element) {
+        if (element == null || element.isJsonNull()) return null;
+        if (element.isJsonPrimitive()) {
+            var primitive = element.getAsJsonPrimitive();
+            if (primitive.isBoolean()) return primitive.getAsBoolean();
+            if (primitive.isNumber()) return primitive.getAsNumber();
+            if (primitive.isString()) return primitive.getAsString();
+        }
+        if (element.isJsonArray()) {
+            List<Object> values = new ArrayList<>();
+            for (JsonElement item : element.getAsJsonArray()) {
+                Object value = unwrapJsonElement(item);
+                if (value != null) values.add(value);
+            }
+            return List.copyOf(values);
+        }
+        if (element.isJsonObject()) {
+            Map<String, Object> values = new HashMap<>();
+            for (String key : element.getAsJsonObject().keySet()) {
+                Object value = unwrapJsonElement(element.getAsJsonObject().get(key));
+                if (value != null) values.put(key, value);
+            }
+            return Map.copyOf(values);
+        }
+        return null;
+    }
+
     private boolean isVirtualNode(String nodeId) {
         return virtualNodeIds.contains(nodeId);
     }
@@ -492,16 +611,28 @@ class GraphFlattener {
         return new NodePortKey(key.substring(0, separator), key.substring(separator + 1));
     }
 
+    private FlattenedGraph snapshot() {
+        return new FlattenedGraph(nodeDataLookup, flowOutputLookup, behaviorOutputLookup,
+                inputLookup, typeLookup, propertyLookup, staticInputLookup, portLookup,
+                allStaticKeys);
+    }
+
+    public record TargetConnection(String targetNodeId, String targetPortName) {
+    }
+
+    public record DataConnectionSource(String sourceNodeId, String sourcePortName) {
+    }
+
     private record GroupBoundary(String groupId, String groupInId, String groupOutId) {}
 
     private record NodePortKey(String nodeId, String portName) {}
 
     private record DataResolution(
-            RuntimeGraphIndex.ConnectionSource source,
+            DataConnectionSource source,
             Object staticValue,
             boolean hasStaticValue
     ) {
-        static DataResolution source(RuntimeGraphIndex.ConnectionSource source) {
+        static DataResolution source(DataConnectionSource source) {
             return new DataResolution(source, null, false);
         }
 

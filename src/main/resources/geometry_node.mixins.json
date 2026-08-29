@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "BrainBehaviorLeaseMixin",
+    "MobBehaviorLeaseMixin",
     "MobNavigationInvoker",
     "PathNavigationAccessor",
     "ProjectileHitMixin"

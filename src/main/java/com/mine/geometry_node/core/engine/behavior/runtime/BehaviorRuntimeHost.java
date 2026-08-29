@@ -35,9 +35,6 @@ public interface BehaviorRuntimeHost {
         return null;
     }
 
-    default void maintainPersistentControls() {
-    }
-
     default void releasePersistentControls() {
     }
 }

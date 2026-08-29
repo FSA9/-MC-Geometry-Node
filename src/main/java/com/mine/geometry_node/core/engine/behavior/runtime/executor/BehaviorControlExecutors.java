@@ -7,25 +7,9 @@ import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeContext;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorCompositeNode;
 
-/** Executors for behavior roots, subtree calls, and composite control nodes. */
+/** Executors for behavior roots and composite control nodes. */
 public final class BehaviorControlExecutors {
     private static final BehaviorNodeExecutor ROOT = context -> context.tickChild(0);
-    private static final BehaviorNodeExecutor SUBTREE = new BehaviorNodeExecutor() {
-        @Override
-        public void enter(BehaviorNodeContext context) {
-            context.enterSubtreeCall();
-        }
-
-        @Override
-        public BehaviorResult update(BehaviorNodeContext context) {
-            return context.tickChild(0);
-        }
-
-        @Override
-        public void exit(BehaviorNodeContext context, BehaviorTerminationReason reason) {
-            context.exitSubtreeCall(reason);
-        }
-    };
     private static final BehaviorNodeExecutor SEQUENCE =
             new MemoryCompositeExecutor(BehaviorCompositeMode.MEMORY_SEQUENCE);
     private static final BehaviorNodeExecutor SELECTOR =
@@ -40,10 +24,6 @@ public final class BehaviorControlExecutors {
 
     public static BehaviorNodeExecutor root() {
         return ROOT;
-    }
-
-    public static BehaviorNodeExecutor subtree() {
-        return SUBTREE;
     }
 
     public static BehaviorNodeExecutor sequence() {
