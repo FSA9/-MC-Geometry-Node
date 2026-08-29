@@ -3,13 +3,12 @@ package com.mine.geometry_node.core.engine.blueprint.event;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
-import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.BlockDispatcher;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.AreaTriggerDispatcher;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityDispatcher;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.PlayerDispatcher;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.WorldDispatcher;
-import dev.architectury.event.events.common.TickEvent;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -24,7 +23,7 @@ import java.util.*;
  * 1. 驱动每 Tick 的蓝图逻辑更新。
  * 2. 初始化各个领域的物理事件分发器。
  */
-public class GraphEventHandler {
+public final class BlueprintEventHandler {
 
     private static final Comparator<ScheduledEntity> ENTITY_SCHEDULE_ORDER = Comparator.comparingLong(ScheduledEntity::nextTick);
     private static final Map<ResourceKey<Level>, PriorityQueue<ScheduledEntity>> ACTIVE_ENTITY_QUEUES = new HashMap<>();
@@ -32,10 +31,10 @@ public class GraphEventHandler {
 
     private record ScheduledEntity(UUID entityId, ResourceKey<Level> levelKey, WeakReference<Entity> entityRef, long nextTick) {}
 
-    public static void init() {
-        // 注册核心 Tick 驱动
-        TickEvent.SERVER_LEVEL_POST.register(GraphEventHandler::onLevelTick);
+    private BlueprintEventHandler() {
+    }
 
+    public static void init() {
         // 初始化领域分发器
         EntityDispatcher.register();
         BlockDispatcher.register();
@@ -57,7 +56,7 @@ public class GraphEventHandler {
         }
     }
 
-    private static void onLevelTick(ServerLevel level) {
+    public static void tickLevel(ServerLevel level) {
         // 1. 驱动全局蓝图
         LevelGraphAttachment.get(level).tick(level);
         AreaTriggerDispatcher.tickLevel(level);
@@ -65,6 +64,11 @@ public class GraphEventHandler {
 
         // 2. 驱动到期实体的局部蓝图
         tickScheduledEntities(level);
+    }
+
+    public static void shutdown() {
+        ACTIVE_ENTITY_QUEUES.clear();
+        ACTIVE_ENTITY_SCHEDULES.clear();
     }
 
     private static void tickScheduledEntities(ServerLevel level) {

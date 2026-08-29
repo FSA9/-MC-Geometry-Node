@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.blueprint.debug;
+package com.mine.geometry_node.core.engine.graph.debug;
 
 import net.minecraft.world.phys.Vec3;
 

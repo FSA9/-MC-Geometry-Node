@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.engine.system.schematic;
 
-import com.mine.geometry_node.core.engine.blueprint.debug.DebugRenderShape;
-import com.mine.geometry_node.core.engine.blueprint.debug.DebugRenderChannel;
-import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.SchematicPlacementRecord;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import net.minecraft.server.level.ServerLevel;
@@ -12,7 +13,7 @@ import java.util.Map;
  * [执行上下文接口]
  * <p>
  * 定义了节点在执行期间可以访问的“环境能力”。
- * 这是一个 {@code Facade} (外观模式) 接口，用于向节点隐藏 {@link GraphProcess} 的底层复杂性（如指针操作、序列化逻辑）。
+ * 这是一个 {@code Facade} (外观模式) 接口，用于向节点隐藏 {@link BlueprintProcess} 的底层复杂性（如指针操作、序列化逻辑）。
  * 节点只能通过此接口与世界交互或读写变量。
  */
 public interface ExecutionContext extends GraphDataContext {
@@ -75,7 +76,7 @@ public interface ExecutionContext extends GraphDataContext {
     /**
      * [数据拉取] 获取连接到指定输入端口的上游数据。
      * <p>
-     * 该方法会根据 {@link RuntimeGraphIndex} 自动查找是谁连到了当前节点的 portName 端口，
+     * 该方法会根据 {@link BlueprintPlan} 自动查找是谁连到了当前节点的 portName 端口，
      * 并递归触发上游节点的求值逻辑。
      *
      * @param portName 当前节点的输入端口名

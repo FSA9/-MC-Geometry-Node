@@ -7,10 +7,10 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationR
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorEventHandler;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutorRegistry;
-import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorRuntimeService;
-import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeInstance;
-import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugAccess;
-import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugSnapshot;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeEngine;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeProcess;
+import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugAccess;
+import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugSnapshot;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
@@ -29,7 +29,7 @@ import java.util.Set;
 public final class BehaviorTreeRuntime implements GraphRuntime {
     public static final BehaviorTreeRuntime INSTANCE = new BehaviorTreeRuntime();
 
-    private final BehaviorRuntimeService service = new BehaviorRuntimeService(
+    private final BehaviorTreeEngine engine = new BehaviorTreeEngine(
             BehaviorNodeExecutorRegistry.INSTANCE, BehaviorRuntimeBudget.DEFAULT);
 
     private BehaviorTreeRuntime() {
@@ -53,8 +53,13 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         BehaviorEventHandler.init();
     }
 
-    public BehaviorTreeInstance start(ServerLevel level, Mob owner, String graphId) {
-        return service.start(level, owner, graphId);
+    @Override
+    public int tickOrder() {
+        return 200;
+    }
+
+    public BehaviorTreeProcess start(ServerLevel level, Mob owner, String graphId) {
+        return engine.start(level, owner, graphId);
     }
 
     public boolean bind(Mob owner, String graphId) {
@@ -63,28 +68,28 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).bindBehaviorTree(normalized);
     }
 
-    public BehaviorTreeInstance startBound(Mob owner) {
+    public BehaviorTreeProcess startBound(Mob owner) {
         ServerLevel level = requireServerOwner(owner);
-        if (service.getForOwner(owner) != null) {
+        if (engine.getForOwner(owner) != null) {
             throw new IllegalStateException("Owner already has a running behavior tree");
         }
         String graphId = selectedGraph(owner);
         if (graphId == null) throw new IllegalStateException("Owner has no selected behavior tree");
-        return service.start(level, owner, graphId);
+        return engine.start(level, owner, graphId);
     }
 
-    public BehaviorTreeInstance switchTo(Mob owner, String graphId) {
+    public BehaviorTreeProcess switchTo(Mob owner, String graphId) {
         ServerLevel level = requireServerOwner(owner);
         String normalized = requireAvailable(graphId);
         if (!boundGraphs(owner).contains(normalized)) {
             throw new IllegalStateException("Behavior tree is not bound: " + normalized);
         }
-        BehaviorTreeInstance current = service.getForOwner(owner);
+        BehaviorTreeProcess current = engine.getForOwner(owner);
         if (current != null) {
-            service.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.TREE_STOPPED);
+            engine.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.TREE_STOPPED);
         }
         owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).selectBehaviorTree(normalized);
-        return service.start(level, owner, normalized);
+        return engine.start(level, owner, normalized);
     }
 
     public boolean unbind(Mob owner, String graphId) {
@@ -92,18 +97,18 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         String normalized = graphId != null ? graphId.trim() : "";
         if (normalized.isEmpty()) throw new IllegalArgumentException("Behavior graph id cannot be empty");
         if (!boundGraphs(owner).contains(normalized)) return false;
-        BehaviorTreeInstance current = service.getForOwner(owner);
+        BehaviorTreeProcess current = engine.getForOwner(owner);
         if (current != null && current.graphId().equals(normalized)) {
-            service.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.UNBOUND);
+            engine.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.UNBOUND);
         }
         return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).unbindBehaviorTree(normalized);
     }
 
     public boolean unbindAll(Mob owner) {
         ServerLevel level = requireServerOwner(owner);
-        BehaviorTreeInstance current = service.getForOwner(owner);
+        BehaviorTreeProcess current = engine.getForOwner(owner);
         if (current != null) {
-            service.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.UNBOUND);
+            engine.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.UNBOUND);
         }
         return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).clearBehaviorTrees();
     }
@@ -125,80 +130,82 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         return selectedGraph(owner);
     }
 
-    public BehaviorTreeInstance start(ServerLevel level, Mob owner, BehaviorTreePlan plan) {
-        return service.start(level, owner, plan);
+    public BehaviorTreeProcess start(ServerLevel level, Mob owner, BehaviorTreePlan plan) {
+        return engine.start(level, owner, plan);
     }
 
     @Nullable
-    public BehaviorTreeInstance getForOwner(Entity owner) {
-        return service.getForOwner(owner);
+    public BehaviorTreeProcess getForOwner(Entity owner) {
+        return engine.getForOwner(owner);
     }
 
     @Nullable
-    public BehaviorTreeInstance get(MinecraftServer server, UUID instanceId) {
-        return service.get(server, instanceId);
+    public BehaviorTreeProcess get(MinecraftServer server, UUID instanceId) {
+        return engine.get(server, instanceId);
     }
 
     @Nullable
-    public BehaviorDebugSnapshot debugSnapshot(MinecraftServer server, UUID instanceId) {
-        return service.debugSnapshot(server, instanceId);
+    public BehaviorTreeDebugSnapshot debugSnapshot(MinecraftServer server, UUID instanceId) {
+        return engine.debugSnapshot(server, instanceId);
     }
 
     @Nullable
-    public BehaviorDebugAccess debugAccess(MinecraftServer server, UUID instanceId) {
-        return service.debugAccess(server, instanceId);
+    public BehaviorTreeDebugAccess debugAccess(MinecraftServer server, UUID instanceId) {
+        return engine.debugAccess(server, instanceId);
     }
 
     @Nullable
-    public BehaviorDebugSnapshot debugSnapshotForOwner(MinecraftServer server, UUID ownerId) {
-        return service.debugSnapshotForOwner(server, ownerId);
+    public BehaviorTreeDebugSnapshot debugSnapshotForOwner(MinecraftServer server, UUID ownerId) {
+        return engine.debugSnapshotForOwner(server, ownerId);
     }
 
-    public List<BehaviorDebugSnapshot> debugSnapshotsForAsset(MinecraftServer server, String assetId) {
-        return service.debugSnapshotsForAsset(server, assetId);
+    public List<BehaviorTreeDebugSnapshot> debugSnapshotsForAsset(MinecraftServer server, String assetId) {
+        return engine.debugSnapshotsForAsset(server, assetId);
     }
 
     @Nullable
     public BehaviorTerminationReason lastStopReasonForOwner(MinecraftServer server, UUID ownerId) {
-        return service.lastStopReasonForOwner(server, ownerId);
+        return engine.lastStopReasonForOwner(server, ownerId);
     }
 
     public boolean suspend(MinecraftServer server, UUID instanceId) {
-        return service.suspend(server, instanceId);
+        return engine.suspend(server, instanceId);
     }
 
     public boolean resume(MinecraftServer server, UUID instanceId) {
-        return service.resume(server, instanceId);
+        return engine.resume(server, instanceId);
     }
 
     public boolean wake(MinecraftServer server, UUID instanceId) {
-        return service.wake(server, instanceId);
+        return engine.wake(server, instanceId);
     }
 
     public boolean wake(Entity owner) {
-        BehaviorTreeInstance instance = service.getForOwner(owner);
+        BehaviorTreeProcess instance = engine.getForOwner(owner);
         return instance != null && owner.level() instanceof ServerLevel level
-                && service.wake(level.getServer(), instance.instanceId());
+                && engine.wake(level.getServer(), instance.instanceId());
     }
 
     public boolean stop(MinecraftServer server, UUID instanceId, BehaviorTerminationReason reason) {
-        return service.stop(server, instanceId, reason);
+        return engine.stop(server, instanceId, reason);
     }
 
+    @Override
     public void tickLevel(ServerLevel level) {
-        service.tickLevel(level);
+        engine.tickLevel(level);
     }
 
     public void ownerUnavailable(Entity owner, BehaviorTerminationReason reason) {
-        service.ownerUnavailable(owner, reason);
+        engine.ownerUnavailable(owner, reason);
     }
 
+    @Override
     public void shutdown(MinecraftServer server) {
-        service.shutdown(server);
+        engine.shutdown(server);
     }
 
     public int activeCount(MinecraftServer server) {
-        return service.activeCount(server);
+        return engine.activeCount(server);
     }
 
     private static ServerLevel requireServerOwner(Mob owner) {
@@ -220,6 +227,6 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     }
 
     private void onGraphAssetsChanged(GraphAssetLifecycleIndex.Change change) {
-        service.graphAssetsChanged(change.server(), change.affectedAssetIds());
+        engine.graphAssetsChanged(change.server(), change.affectedAssetIds());
     }
 }

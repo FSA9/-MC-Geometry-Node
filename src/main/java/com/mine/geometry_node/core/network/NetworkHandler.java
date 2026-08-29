@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateTargetResolvers;
-import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugSubscriptionService;
+import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugService;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
@@ -63,12 +63,12 @@ public class NetworkHandler {
         GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
         ServerAssetTransferService.INSTANCE.init();
         ServerAssetPreviewService.INSTANCE.init();
-        BehaviorDebugSubscriptionService.INSTANCE.init();
+        BehaviorTreeDebugService.INSTANCE.init();
 
         NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketBehaviorDebugSubscription.TYPE,
                 PacketBehaviorDebugSubscription.STREAM_CODEC, (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() instanceof ServerPlayer player) {
-                        BehaviorDebugSubscriptionService.INSTANCE.handle(
+                        BehaviorTreeDebugService.INSTANCE.handle(
                                 player, payload.instanceId(), payload.subscribe());
                     }
                 }));

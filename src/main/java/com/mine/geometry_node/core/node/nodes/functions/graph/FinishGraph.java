@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.node.nodes.functions.graph;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -48,7 +48,7 @@ public class FinishGraph extends BaseNode {
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
-    private void terminateMatchingProcesses(Iterable<GraphProcess> processes, String targetGraphId) {
+    private void terminateMatchingProcesses(Iterable<BlueprintProcess> processes, String targetGraphId) {
 
     }
 }

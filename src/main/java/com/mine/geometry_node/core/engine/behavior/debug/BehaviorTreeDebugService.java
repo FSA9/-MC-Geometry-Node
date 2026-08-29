@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.behavior.runtime.debug;
+package com.mine.geometry_node.core.engine.behavior.debug;
 
 import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -21,9 +21,9 @@ import java.util.UUID;
 import java.util.WeakHashMap;
 
 /** Server-thread subscription registry for sampled behavior debug snapshots. */
-public final class BehaviorDebugSubscriptionService {
-    public static final BehaviorDebugSubscriptionService INSTANCE =
-            new BehaviorDebugSubscriptionService();
+public final class BehaviorTreeDebugService {
+    public static final BehaviorTreeDebugService INSTANCE =
+            new BehaviorTreeDebugService();
 
     public static final int SAMPLE_INTERVAL_TICKS = 5;
     public static final int MAX_SUBSCRIPTIONS_PER_PLAYER = 4;
@@ -37,7 +37,7 @@ public final class BehaviorDebugSubscriptionService {
             Collections.synchronizedMap(new WeakHashMap<>());
     private boolean initialized;
 
-    private BehaviorDebugSubscriptionService() {
+    private BehaviorTreeDebugService() {
     }
 
     public synchronized void init() {
@@ -76,7 +76,7 @@ public final class BehaviorDebugSubscriptionService {
             return;
         }
 
-        BehaviorDebugAccess access = BehaviorTreeRuntime.INSTANCE.debugAccess(server, instanceId);
+        BehaviorTreeDebugAccess access = BehaviorTreeRuntime.INSTANCE.debugAccess(server, instanceId);
         PacketBehaviorDebugSnapshot.Status visibility = access == null || !access.active()
                 ? PacketBehaviorDebugSnapshot.Status.NOT_FOUND : validateVisible(player, access);
         if (visibility != null) {
@@ -88,7 +88,7 @@ public final class BehaviorDebugSubscriptionService {
 
         subscriptions.add(instanceId);
         updateDebugTracing(server, state, instanceId);
-        BehaviorDebugSnapshot snapshot = BehaviorTreeRuntime.INSTANCE.debugSnapshot(server, instanceId);
+        BehaviorTreeDebugSnapshot snapshot = BehaviorTreeRuntime.INSTANCE.debugSnapshot(server, instanceId);
         if (snapshot == null) {
             removeSubscription(player, instanceId);
             sendStatus(player, instanceId, PacketBehaviorDebugSnapshot.Status.NOT_FOUND, "not_found");
@@ -158,7 +158,7 @@ public final class BehaviorDebugSubscriptionService {
             Iterator<UUID> subscriptions = playerEntry.getValue().iterator();
             while (subscriptions.hasNext()) {
                 UUID instanceId = subscriptions.next();
-                BehaviorDebugAccess access = BehaviorTreeRuntime.INSTANCE.debugAccess(server, instanceId);
+                BehaviorTreeDebugAccess access = BehaviorTreeRuntime.INSTANCE.debugAccess(server, instanceId);
                 PacketBehaviorDebugSnapshot.Status visibility = access == null
                         ? PacketBehaviorDebugSnapshot.Status.NOT_FOUND
                         : validateVisible(player, access);
@@ -170,7 +170,7 @@ public final class BehaviorDebugSubscriptionService {
                     continue;
                 }
                 PacketBehaviorDebugSnapshot packet = packetCache.computeIfAbsent(instanceId, ignored -> {
-                    BehaviorDebugSnapshot snapshot = BehaviorTreeRuntime.INSTANCE.debugSnapshot(server, instanceId);
+                    BehaviorTreeDebugSnapshot snapshot = BehaviorTreeRuntime.INSTANCE.debugSnapshot(server, instanceId);
                     return snapshot != null ? PacketBehaviorDebugSnapshot.snapshot(snapshot) : null;
                 });
                 if (packet == null) {
@@ -215,7 +215,7 @@ public final class BehaviorDebugSubscriptionService {
     }
 
     private static PacketBehaviorDebugSnapshot.Status validateVisible(
-            ServerPlayer player, BehaviorDebugAccess access) {
+            ServerPlayer player, BehaviorTreeDebugAccess access) {
         String playerDimension = player.level().dimension().identifier().toString();
         if (!access.positionKnown() || !playerDimension.equals(access.dimension())
                 || player.distanceToSqr(access.ownerX(), access.ownerY(), access.ownerZ())

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.event.subscription;
 
 import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckRegistry;
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
@@ -16,7 +16,7 @@ import java.util.WeakHashMap;
 
 /**
  * Event subscription index for bound blueprint graphs.
- * RuntimeGraphIndex owns graph-local node lookup; this class expands bound graphs
+ * BlueprintPlan owns graph-local node lookup; this class expands bound graphs
  * into cached event-node subscriptions and keeps graph-level lookups for
  * stateful/special dispatchers.
  */
@@ -25,8 +25,8 @@ public final class GraphSubscriptionIndex {
     private final Map<String, Map<Entity, Set<String>>> entityEventGraphs = new HashMap<>();
     private final Map<String, List<EventSubscription>> globalEventSubscriptions = new HashMap<>();
     private final Map<String, Map<Entity, List<EventSubscription>>> entityEventSubscriptions = new HashMap<>();
-    private final Map<String, RuntimeGraphIndex> registeredGlobalGraphs = new HashMap<>();
-    private final Map<Entity, Map<String, RuntimeGraphIndex>> registeredEntityGraphs = new WeakHashMap<>();
+    private final Map<String, BlueprintPlan> registeredGlobalGraphs = new HashMap<>();
+    private final Map<Entity, Map<String, BlueprintPlan>> registeredEntityGraphs = new WeakHashMap<>();
 
     public boolean isGlobalGraphRegistered(String graphId) {
         return registeredGlobalGraphs.containsKey(graphId);
@@ -40,8 +40,8 @@ public final class GraphSubscriptionIndex {
         return Set.copyOf(result);
     }
 
-    public void registerGlobalGraph(String graphId, RuntimeGraphIndex index) {
-        RuntimeGraphIndex previous = registeredGlobalGraphs.get(graphId);
+    public void registerGlobalGraph(String graphId, BlueprintPlan index) {
+        BlueprintPlan previous = registeredGlobalGraphs.get(graphId);
         if (previous == index) return;
         if (previous != null) {
             removeGraphFromLookup(globalEventGraphs, graphId, previous);
@@ -51,9 +51,9 @@ public final class GraphSubscriptionIndex {
         addGraphSubscriptions(globalEventGraphs, globalEventSubscriptions, graphId, index);
     }
 
-    public void unregisterGlobalGraph(String graphId, @Nullable RuntimeGraphIndex index) {
-        RuntimeGraphIndex registeredIndex = registeredGlobalGraphs.remove(graphId);
-        RuntimeGraphIndex cleanupIndex = registeredIndex != null ? registeredIndex : index;
+    public void unregisterGlobalGraph(String graphId, @Nullable BlueprintPlan index) {
+        BlueprintPlan registeredIndex = registeredGlobalGraphs.remove(graphId);
+        BlueprintPlan cleanupIndex = registeredIndex != null ? registeredIndex : index;
         if (cleanupIndex == null) {
             removeGraphFromLookup(globalEventGraphs, graphId);
             removeGraphSubscriptionsFromLookup(globalEventSubscriptions, graphId);
@@ -65,9 +65,9 @@ public final class GraphSubscriptionIndex {
         }
     }
 
-    public void registerEntityGraph(Entity entity, String graphId, RuntimeGraphIndex index) {
-        Map<String, RuntimeGraphIndex> entityIndexes = registeredEntityGraphs.computeIfAbsent(entity, ignored -> new HashMap<>());
-        RuntimeGraphIndex previous = entityIndexes.get(graphId);
+    public void registerEntityGraph(Entity entity, String graphId, BlueprintPlan index) {
+        Map<String, BlueprintPlan> entityIndexes = registeredEntityGraphs.computeIfAbsent(entity, ignored -> new HashMap<>());
+        BlueprintPlan previous = entityIndexes.get(graphId);
         if (previous == index) return;
         if (previous != null) {
             removeEntityGraphFromLookup(entity, graphId, previous);
@@ -77,14 +77,14 @@ public final class GraphSubscriptionIndex {
         addEntityGraphSubscriptions(entity, graphId, index);
     }
 
-    public void unregisterEntityGraph(Entity entity, String graphId, @Nullable RuntimeGraphIndex index) {
-        Map<String, RuntimeGraphIndex> entityIndexes = registeredEntityGraphs.get(entity);
-        RuntimeGraphIndex registeredIndex = entityIndexes != null ? entityIndexes.remove(graphId) : null;
+    public void unregisterEntityGraph(Entity entity, String graphId, @Nullable BlueprintPlan index) {
+        Map<String, BlueprintPlan> entityIndexes = registeredEntityGraphs.get(entity);
+        BlueprintPlan registeredIndex = entityIndexes != null ? entityIndexes.remove(graphId) : null;
         if (entityIndexes != null && entityIndexes.isEmpty()) {
             registeredEntityGraphs.remove(entity);
         }
 
-        RuntimeGraphIndex cleanupIndex = registeredIndex != null ? registeredIndex : index;
+        BlueprintPlan cleanupIndex = registeredIndex != null ? registeredIndex : index;
         if (cleanupIndex == null) {
             removeEntityGraphFromLookup(entity, graphId);
             removeEntityGraphSubscriptionsFromLookup(entity, graphId);
@@ -120,7 +120,7 @@ public final class GraphSubscriptionIndex {
         return subscriptions != null ? List.copyOf(subscriptions) : Collections.emptyList();
     }
 
-    private void addEntityGraphSubscriptions(Entity entity, String graphId, RuntimeGraphIndex index) {
+    private void addEntityGraphSubscriptions(Entity entity, String graphId, BlueprintPlan index) {
         for (String eventType : index.getNodeTypes()) {
             List<EventSubscription> subscriptions = buildSubscriptions(graphId, index, eventType);
             if (subscriptions.isEmpty()) continue;
@@ -139,7 +139,7 @@ public final class GraphSubscriptionIndex {
     private static void addGraphSubscriptions(Map<String, Set<String>> graphLookup,
                                               Map<String, List<EventSubscription>> subscriptionLookup,
                                               String graphId,
-                                              RuntimeGraphIndex index) {
+                                              BlueprintPlan index) {
         for (String eventType : index.getNodeTypes()) {
             List<EventSubscription> subscriptions = buildSubscriptions(graphId, index, eventType);
             if (subscriptions.isEmpty()) continue;
@@ -149,7 +149,7 @@ public final class GraphSubscriptionIndex {
         }
     }
 
-    private static List<EventSubscription> buildSubscriptions(String graphId, RuntimeGraphIndex index, String eventType) {
+    private static List<EventSubscription> buildSubscriptions(String graphId, BlueprintPlan index, String eventType) {
         List<Integer> nodeIds = index.findNodesByType(eventType);
         if (nodeIds.isEmpty()) {
             return Collections.emptyList();
@@ -171,7 +171,7 @@ public final class GraphSubscriptionIndex {
         });
     }
 
-    private static void removeGraphFromLookup(Map<String, Set<String>> lookup, String graphId, RuntimeGraphIndex index) {
+    private static void removeGraphFromLookup(Map<String, Set<String>> lookup, String graphId, BlueprintPlan index) {
         for (String eventType : index.getNodeTypes()) {
             removeGraph(lookup, eventType, graphId);
         }
@@ -184,7 +184,7 @@ public final class GraphSubscriptionIndex {
         });
     }
 
-    private static void removeGraphSubscriptionsFromLookup(Map<String, List<EventSubscription>> lookup, String graphId, RuntimeGraphIndex index) {
+    private static void removeGraphSubscriptionsFromLookup(Map<String, List<EventSubscription>> lookup, String graphId, BlueprintPlan index) {
         for (String eventType : index.getNodeTypes()) {
             removeGraphSubscriptions(lookup, eventType, graphId);
         }
@@ -204,7 +204,7 @@ public final class GraphSubscriptionIndex {
         });
     }
 
-    private void removeEntityGraphFromLookup(Entity entity, String graphId, RuntimeGraphIndex index) {
+    private void removeEntityGraphFromLookup(Entity entity, String graphId, BlueprintPlan index) {
         for (String eventType : index.getNodeTypes()) {
             removeEntityGraph(eventType, entity, graphId);
         }
@@ -224,7 +224,7 @@ public final class GraphSubscriptionIndex {
         });
     }
 
-    private void removeEntityGraphSubscriptionsFromLookup(Entity entity, String graphId, RuntimeGraphIndex index) {
+    private void removeEntityGraphSubscriptionsFromLookup(Entity entity, String graphId, BlueprintPlan index) {
         for (String eventType : index.getNodeTypes()) {
             removeEntityGraphSubscription(eventType, entity, graphId);
         }

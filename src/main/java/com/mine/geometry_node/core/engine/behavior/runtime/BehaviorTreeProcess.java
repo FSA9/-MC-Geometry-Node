@@ -20,7 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /** Mutable state for one owner running one immutable behavior-tree plan. */
-public final class BehaviorTreeInstance {
+public final class BehaviorTreeProcess {
     private final UUID instanceId;
     private final BehaviorTreePlan plan;
     private final BehaviorRuntimeHost host;
@@ -60,7 +60,7 @@ public final class BehaviorTreeInstance {
     private boolean reentrantWakeRequested;
     private boolean debugTracing;
 
-    public BehaviorTreeInstance(UUID instanceId, BehaviorTreePlan plan, BehaviorRuntimeHost host,
+    public BehaviorTreeProcess(UUID instanceId, BehaviorTreePlan plan, BehaviorRuntimeHost host,
                                 BehaviorRuntimeBudget budget, long randomSeed) {
         this.instanceId = Objects.requireNonNull(instanceId, "instanceId");
         this.plan = Objects.requireNonNull(plan, "plan");

@@ -16,23 +16,39 @@ public final class DueTickScheduler<K, V> {
     private static final int MIN_COMPACTION_QUEUE_SIZE = 64;
     private static final int STALE_ENTRY_FACTOR = 4;
 
-    private final PriorityQueue<Scheduled<K, V>> queue =
-            new PriorityQueue<>(Comparator.comparingLong(Scheduled::dueTick));
-    private final Map<K, Scheduled<K, V>> active = new HashMap<>();
+    private final PriorityQueue<QueueEntry<K, V>> queue = new PriorityQueue<>(Comparator
+            .comparingLong((QueueEntry<K, V> entry) -> entry.scheduled().dueTick())
+            .thenComparingLong(QueueEntry::sequence));
+    private final Map<K, QueueEntry<K, V>> active = new HashMap<>();
+    private long sequence;
 
     public boolean schedule(K key, V value, long dueTick) {
+        return schedule(key, value, dueTick, false);
+    }
+
+    /**
+     * Replaces the active entry even when its value and due tick are unchanged,
+     * moving it behind entries already scheduled for the same tick.
+     */
+    public void scheduleReplacing(K key, V value, long dueTick) {
+        schedule(key, value, dueTick, true);
+    }
+
+    private boolean schedule(K key, V value, long dueTick, boolean replaceUnchanged) {
         if (key == null || value == null) {
             throw new IllegalArgumentException("Scheduler input and value cannot be null");
         }
 
-        Scheduled<K, V> current = active.get(key);
-        if (current != null && current.value() == value && current.dueTick() == dueTick) {
+        QueueEntry<K, V> current = active.get(key);
+        if (!replaceUnchanged && current != null
+                && current.scheduled().value() == value && current.scheduled().dueTick() == dueTick) {
             return false;
         }
 
         Scheduled<K, V> scheduled = new Scheduled<>(key, value, dueTick);
-        active.put(key, scheduled);
-        queue.offer(scheduled);
+        QueueEntry<K, V> entry = new QueueEntry<>(scheduled, ++sequence);
+        active.put(key, entry);
+        queue.offer(entry);
         compactIfNeeded();
         return true;
     }
@@ -46,20 +62,21 @@ public final class DueTickScheduler<K, V> {
     @Nullable
     public Scheduled<K, V> pollDue(long currentTick) {
         discardStaleEntries();
-        Scheduled<K, V> scheduled = queue.peek();
+        QueueEntry<K, V> entry = queue.peek();
+        Scheduled<K, V> scheduled = entry != null ? entry.scheduled() : null;
         if (scheduled == null || scheduled.dueTick() > currentTick) {
             return null;
         }
 
         queue.poll();
-        active.remove(scheduled.key(), scheduled);
+        active.remove(scheduled.key(), entry);
         return scheduled;
     }
 
     public long nextDueTick() {
         discardStaleEntries();
-        Scheduled<K, V> scheduled = queue.peek();
-        return scheduled != null ? scheduled.dueTick() : Long.MAX_VALUE;
+        QueueEntry<K, V> entry = queue.peek();
+        return entry != null ? entry.scheduled().dueTick() : Long.MAX_VALUE;
     }
 
     public boolean clear() {
@@ -73,14 +90,22 @@ public final class DueTickScheduler<K, V> {
         return active.size();
     }
 
+    public boolean contains(K key) {
+        return active.containsKey(key);
+    }
+
+    public boolean isEmpty() {
+        return active.isEmpty();
+    }
+
     int queuedEntryCount() {
         return queue.size();
     }
 
     private void discardStaleEntries() {
         while (!queue.isEmpty()) {
-            Scheduled<K, V> scheduled = queue.peek();
-            if (active.get(scheduled.key()) == scheduled) {
+            QueueEntry<K, V> entry = queue.peek();
+            if (active.get(entry.scheduled().key()) == entry) {
                 return;
             }
             queue.poll();
@@ -97,5 +122,8 @@ public final class DueTickScheduler<K, V> {
     }
 
     public record Scheduled<K, V>(K key, V value, long dueTick) {
+    }
+
+    private record QueueEntry<K, V>(Scheduled<K, V> scheduled, long sequence) {
     }
 }

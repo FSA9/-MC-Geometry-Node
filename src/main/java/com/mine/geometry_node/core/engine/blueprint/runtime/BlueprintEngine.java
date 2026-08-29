@@ -2,12 +2,13 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.attachment.*;
-import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.blueprint.event.BlueprintEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityInventoryGainTracker;
 import com.mine.geometry_node.core.engine.blueprint.attachment.GlobalGraphStorage;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.EventSubscription;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.GraphSubscriptionIndex;
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
@@ -30,7 +31,7 @@ import java.util.function.Function;
  * * 经过重构，支持“常驻进程 (Persistent VM)”架构。
  * 负责协调事件派发，将事件注入到已经存在的进程中，通过轻量级线程执行。
  */
-public class GraphEngine {
+public class BlueprintEngine {
 
     // ==========================================
     // 高性能事件订阅字典 (保持现状)
@@ -116,7 +117,7 @@ public class GraphEngine {
                                 entityAttachment.addProcess(process);
                             });
                 }
-                GraphEventHandler.markActive(target);
+                BlueprintEventHandler.markActive(target);
             }
         }
     }
@@ -157,7 +158,7 @@ public class GraphEngine {
                                     id -> entityAttachment.getProcess(id),
                                     entityAttachment::addProcess);
                         }
-                        GraphEventHandler.markActive(target);
+                        BlueprintEventHandler.markActive(target);
                     }
                 }
             }
@@ -207,7 +208,7 @@ public class GraphEngine {
                             id -> entityAttachment.getProcess(id),
                             entityAttachment::addProcess);
                 }
-                GraphEventHandler.markActive(target);
+                BlueprintEventHandler.markActive(target);
             }
         }
     }
@@ -223,15 +224,15 @@ public class GraphEngine {
                                                      @Nullable Entity target,
                                                      EventSubscription subscription,
                                                      @Nullable Map<String, Object> eventData,
-                                                     Function<String, GraphProcess> processFinder,
-                                                     Consumer<GraphProcess> mountAction) {
+                                                     Function<String, BlueprintProcess> processFinder,
+                                                     Consumer<BlueprintProcess> mountAction) {
         if (subscription == null || !subscription.shouldDispatch(level, target, eventData)) return;
 
         String graphId = subscription.graphId();
-        RuntimeGraphIndex index = subscription.index();
-        GraphProcess process = processFinder.apply(graphId);
+        BlueprintPlan index = subscription.index();
+        BlueprintProcess process = processFinder.apply(graphId);
         if (process == null || process.getIndex() != index) {
-            process = new GraphProcess(graphId, index);
+            process = new BlueprintProcess(graphId, index);
             mountAction.accept(process);
         }
 
@@ -241,16 +242,16 @@ public class GraphEngine {
 
     private static void triggerCustomOnProcess(ServerLevel level, @Nullable Entity target, String graphId,
                                                String targetFrequency, @Nullable Map<String, Object> eventData,
-                                               java.util.function.Function<String, GraphProcess> processFinder,
-                                               Consumer<GraphProcess> mountAction) {
+                                               java.util.function.Function<String, BlueprintProcess> processFinder,
+                                               Consumer<BlueprintProcess> mountAction) {
 
-        RuntimeGraphIndex index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(graphId);
         if (index == null) return;
 
         List<Integer> startNodeIds = index.findReceiveBlueprintNodes(targetFrequency);
-        GraphProcess process = processFinder.apply(graphId);
+        BlueprintProcess process = processFinder.apply(graphId);
         if (process == null || process.getIndex() != index) {
-            process = new GraphProcess(graphId, index);
+            process = new BlueprintProcess(graphId, index);
             mountAction.accept(process);
         }
 
@@ -262,17 +263,17 @@ public class GraphEngine {
 
     private static void triggerMultiblockOnProcess(ServerLevel level, @Nullable Entity target, String graphId, String structureId,
                                                    @Nullable Map<String, Object> eventData,
-                                                   java.util.function.Function<String, GraphProcess> processFinder,
-                                                   Consumer<GraphProcess> mountAction) {
-        RuntimeGraphIndex index = getGraphIndex(graphId);
+                                                   java.util.function.Function<String, BlueprintProcess> processFinder,
+                                                   Consumer<BlueprintProcess> mountAction) {
+        BlueprintPlan index = getGraphIndex(graphId);
         if (index == null) return;
 
         List<Integer> startNodeIds = index.findMultiblockBuiltNodes(structureId);
         if (startNodeIds.isEmpty()) return;
 
-        GraphProcess process = processFinder.apply(graphId);
+        BlueprintProcess process = processFinder.apply(graphId);
         if (process == null || process.getIndex() != index) {
-            process = new GraphProcess(graphId, index);
+            process = new BlueprintProcess(graphId, index);
             mountAction.accept(process);
         }
 
@@ -285,28 +286,28 @@ public class GraphEngine {
     public static void executeEventNode(@NotNull ServerLevel level,
                                         @Nullable Entity target,
                                         String graphId,
-                                        RuntimeGraphIndex index,
+                                        BlueprintPlan index,
                                         int nodeId,
                                         @Nullable Map<String, Object> eventData,
-                                        Function<String, GraphProcess> processFinder,
-                                        Consumer<GraphProcess> mountAction) {
+                                        Function<String, BlueprintProcess> processFinder,
+                                        Consumer<BlueprintProcess> mountAction) {
         if (index == null || nodeId < 0 || nodeId >= index.getNodeCount()) return;
 
-        GraphProcess process = processFinder.apply(graphId);
+        BlueprintProcess process = processFinder.apply(graphId);
         if (process == null || process.getIndex() != index) {
-            process = new GraphProcess(graphId, index);
+            process = new BlueprintProcess(graphId, index);
             mountAction.accept(process);
         }
 
         process.setEnvironment(level, target);
         process.executeEvent(nodeId, snapshotEventData(eventData));
         if (target != null) {
-            GraphEventHandler.markActive(target);
+            BlueprintEventHandler.markActive(target);
         }
     }
 
     private static void collectMultiblockStructureIds(String graphId, Set<String> structureIds) {
-        RuntimeGraphIndex index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(graphId);
         if (index != null) {
             structureIds.addAll(index.getMultiblockStructureIds());
         }
@@ -345,7 +346,7 @@ public class GraphEngine {
                     entityAttachment::getProcess,
                     entityAttachment::addProcess);
         }
-        GraphEventHandler.markActive(target);
+        BlueprintEventHandler.markActive(target);
     }
 
     /**
@@ -364,7 +365,7 @@ public class GraphEngine {
         EntityGraphAttachment attachment = getAttachment(target);
         if (attachment == null || !attachment.getBoundGraphs().contains(resolvedGraphId)) return;
 
-        RuntimeGraphIndex index = getGraphIndex(resolvedGraphId);
+        BlueprintPlan index = getGraphIndex(resolvedGraphId);
         if (index == null) return;
 
         Map<String, Object> eventPayload = snapshotEventData(eventData);
@@ -384,7 +385,7 @@ public class GraphEngine {
     private static void refreshGlobalSubscriptions(@NotNull ServerLevel level) {
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         for (String graphId : storage.getGraphs()) {
-            RuntimeGraphIndex index = getGraphIndex(graphId);
+            BlueprintPlan index = getGraphIndex(graphId);
             if (index != null) {
                 graphSubscriptions.registerGlobalGraph(graphId, index);
             }
@@ -396,7 +397,7 @@ public class GraphEngine {
     // ==========================================
 
     public static void bindGraph(Entity entity, String graphId) {
-        RuntimeGraphIndex index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(graphId);
         if (index == null) return;
 
         EntityGraphAttachment attachment = getAttachment(entity);
@@ -404,16 +405,16 @@ public class GraphEngine {
             attachment.attachOwner(entity);
             attachment.bindGraph(graphId);
 
-            GraphProcess process = attachment.getProcess(graphId);
+            BlueprintProcess process = attachment.getProcess(graphId);
             if (process == null || process.isDraining()) {
-                attachment.addProcess(new GraphProcess(graphId, index));
+                attachment.addProcess(new BlueprintProcess(graphId, index));
             }
 
             registerEntityForGraph(entity, graphId);
             if (!index.findNodesByType(OnEntityGainItem.TYPE_ID).isEmpty()) {
                 EntityInventoryGainTracker.beginTracking(entity);
             }
-            GraphEventHandler.markActive(entity);
+            BlueprintEventHandler.markActive(entity);
             DebugRendererSessionManager.markDirty();
         }
     }
@@ -422,13 +423,13 @@ public class GraphEngine {
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         storage.addGraph(graphId);
 
-        RuntimeGraphIndex index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(graphId);
         if (index != null) {
             graphSubscriptions.registerGlobalGraph(graphId, index);
             LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
-            GraphProcess process = attachment.getProcess(graphId);
+            BlueprintProcess process = attachment.getProcess(graphId);
             if (process == null || process.isDraining()) {
-                attachment.addProcess(new GraphProcess(graphId, index));
+                attachment.addProcess(new BlueprintProcess(graphId, index));
             }
         }
         DebugRendererSessionManager.markDirty();
@@ -487,7 +488,7 @@ public class GraphEngine {
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         Set<String> graphIds = new HashSet<>(storage.getGraphs());
         for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
-            for (GraphProcess process : LevelGraphAttachment.get(loadedLevel).getProcesses()) {
+            for (BlueprintProcess process : LevelGraphAttachment.get(loadedLevel).getProcesses()) {
                 graphIds.add(process.getGraphId());
             }
         }
@@ -530,7 +531,7 @@ public class GraphEngine {
     }
 
     private static void registerEntityForGraph(Entity entity, String graphId) {
-        RuntimeGraphIndex index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(graphId);
         if (index == null) return;
         graphSubscriptions.registerEntityGraph(entity, graphId, index);
         for (String frequency : index.getReceiveBlueprintFrequencies()) {
@@ -539,11 +540,11 @@ public class GraphEngine {
     }
 
     private static void unregisterEntityForGraph(Entity entity, String graphId) {
-        RuntimeGraphIndex index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(graphId);
         unregisterEntityForGraph(entity, graphId, index);
     }
 
-    private static void unregisterEntityForGraph(Entity entity, String graphId, @Nullable RuntimeGraphIndex index) {
+    private static void unregisterEntityForGraph(Entity entity, String graphId, @Nullable BlueprintPlan index) {
         graphSubscriptions.unregisterEntityGraph(entity, graphId, index);
         if (index != null) {
             for (String frequency : index.getReceiveBlueprintFrequencies()) {
@@ -553,7 +554,7 @@ public class GraphEngine {
     }
 
     public static void refreshGraphSubscriptions(@Nullable MinecraftServer server, String graphId,
-                                                 @Nullable RuntimeGraphIndex newIndex) {
+                                                 @Nullable BlueprintPlan newIndex) {
         boolean registeredGlobal = graphSubscriptions.isGlobalGraphRegistered(graphId);
         Set<Entity> registeredEntities = new HashSet<>(
                 graphSubscriptions.registeredEntitiesForGraph(graphId));
@@ -597,10 +598,10 @@ public class GraphEngine {
     }
 
     @Nullable
-    public static RuntimeGraphIndex getGraphIndex(String graphId) {
+    public static BlueprintPlan getGraphIndex(String graphId) {
         if (graphId == null || graphId.isBlank()) return null;
         String trimmedId = graphId.trim();
-        RuntimeGraphIndex exact = asBlueprintIndex(GraphAssetLifecycleIndex.INSTANCE
+        BlueprintPlan exact = asBlueprintIndex(GraphAssetLifecycleIndex.INSTANCE
                 .getArtifact(trimmedId, GraphKind.BLUEPRINT));
         if (exact != null) return exact;
         String normalizedId = GraphPathMapper.normalizeId(trimmedId);
@@ -623,8 +624,8 @@ public class GraphEngine {
     }
 
     @Nullable
-    private static RuntimeGraphIndex asBlueprintIndex(@Nullable CompiledGraph artifact) {
-        return artifact instanceof RuntimeGraphIndex index ? index : null;
+    private static BlueprintPlan asBlueprintIndex(@Nullable CompiledGraph artifact) {
+        return artifact instanceof BlueprintPlan index ? index : null;
     }
 
     private static EntityGraphAttachment getAttachment(Entity entity) {

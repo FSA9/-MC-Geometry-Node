@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.attachment;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mojang.serialization.Codec;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -43,11 +43,11 @@ public class LevelGraphAttachment extends SavedData {
 
     // --- API 委托层 ---
 
-    public void addProcess(GraphProcess process) { container.addProcess(process); }
+    public void addProcess(BlueprintProcess process) { container.addProcess(process); }
     public void removeProcess(String graphId) { container.removeProcess(graphId); }
     public void removeProcess(String graphId, GraphCloseMode closeMode) { container.removeProcess(graphId, closeMode); }
-    public Collection<GraphProcess> getProcesses() { return container.getProcesses(); }
-    public GraphProcess getProcess(String graphId) { return container.getProcess(graphId); }
+    public Collection<BlueprintProcess> getProcesses() { return container.getProcesses(); }
+    public BlueprintProcess getProcess(String graphId) { return container.getProcess(graphId); }
     // --- 序列化层 ---
 
     private static Codec<LevelGraphAttachment> codec(ServerLevel level) {

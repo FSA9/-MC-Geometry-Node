@@ -4,10 +4,11 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
-import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugSnapshot;
-import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugAccess;
+import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugSnapshot;
+import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugAccess;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
+import com.mine.geometry_node.core.engine.graph.scheduling.DueTickScheduler;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import net.minecraft.resources.ResourceKey;
@@ -23,7 +24,7 @@ import java.lang.ref.WeakReference;
 import java.util.*;
 
 /** Server-authoritative instance repository and fair per-world scheduler. */
-public final class BehaviorRuntimeService {
+public final class BehaviorTreeEngine {
     private static final int MAX_RETAINED_TERMINAL_SNAPSHOTS = 128;
     private static final int MAX_ASSET_RELOADS_PER_SERVER_TICK = 64;
 
@@ -32,13 +33,13 @@ public final class BehaviorRuntimeService {
     private final BehaviorRuntimeBudget budget;
     private final Map<MinecraftServer, ServerState> servers = new WeakHashMap<>();
 
-    public BehaviorRuntimeService(BehaviorNodeExecutorRegistry executors, BehaviorRuntimeBudget budget) {
+    public BehaviorTreeEngine(BehaviorNodeExecutorRegistry executors, BehaviorRuntimeBudget budget) {
         this.executors = Objects.requireNonNull(executors, "executors");
         this.evaluator = new BehaviorTreeEvaluator(executors);
         this.budget = Objects.requireNonNull(budget, "budget");
     }
 
-    public BehaviorTreeInstance start(ServerLevel level, Mob owner, String graphId) {
+    public BehaviorTreeProcess start(ServerLevel level, Mob owner, String graphId) {
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(owner, "owner");
         if (graphId == null || graphId.isBlank()) {
@@ -49,21 +50,21 @@ public final class BehaviorRuntimeService {
         return start(level, owner, plan, true, seed(owner.getUUID(), plan.assetId()));
     }
 
-    public BehaviorTreeInstance start(ServerLevel level, Mob owner, BehaviorTreePlan plan) {
+    public BehaviorTreeProcess start(ServerLevel level, Mob owner, BehaviorTreePlan plan) {
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(owner, "owner");
         Objects.requireNonNull(plan, "plan");
         return start(level, owner, plan, false, seed(owner.getUUID(), plan.assetId()));
     }
 
-    public BehaviorTreeInstance start(ServerLevel level, Mob owner, BehaviorTreePlan plan, long randomSeed) {
+    public BehaviorTreeProcess start(ServerLevel level, Mob owner, BehaviorTreePlan plan, long randomSeed) {
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(owner, "owner");
         Objects.requireNonNull(plan, "plan");
         return start(level, owner, plan, false, randomSeed);
     }
 
-    private BehaviorTreeInstance start(ServerLevel level, Mob owner, BehaviorTreePlan plan,
+    private BehaviorTreeProcess start(ServerLevel level, Mob owner, BehaviorTreePlan plan,
                                        boolean managedAsset, long randomSeed) {
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(owner, "owner");
@@ -80,12 +81,12 @@ public final class BehaviorRuntimeService {
             throw new IllegalStateException("Owner already has an active behavior tree: " + owner.getUUID());
         }
         WorldState world = server.world(level.dimension());
-        if (world.scheduler.size() >= budget.maxQueuedWakeupsPerWorld()) {
+        if (world.scheduler.activeCount() >= budget.maxQueuedWakeupsPerWorld()) {
             throw new IllegalStateException("Behavior wakeup queue limit exceeded in "
                     + level.dimension().identifier());
         }
 
-        BehaviorTreeInstance instance = new BehaviorTreeInstance(UUID.randomUUID(), plan,
+        BehaviorTreeProcess instance = new BehaviorTreeProcess(UUID.randomUUID(), plan,
                 new EntityHost(owner), budget, randomSeed);
         instance.markRunning();
         InstanceEntry entry = new InstanceEntry(instance, managedAsset, owner.getUUID());
@@ -98,14 +99,14 @@ public final class BehaviorRuntimeService {
     }
 
     @Nullable
-    public BehaviorTreeInstance get(MinecraftServer server, UUID instanceId) {
+    public BehaviorTreeProcess get(MinecraftServer server, UUID instanceId) {
         ServerState state = servers.get(server);
         InstanceEntry entry = state != null ? state.instances.get(instanceId) : null;
         return entry != null ? entry.instance : null;
     }
 
     @Nullable
-    public BehaviorTreeInstance getForOwner(Entity owner) {
+    public BehaviorTreeProcess getForOwner(Entity owner) {
         if (owner == null || !(owner.level() instanceof ServerLevel level)) return null;
         ServerState state = servers.get(level.getServer());
         if (state == null) return null;
@@ -116,17 +117,17 @@ public final class BehaviorRuntimeService {
 
     /** Read-only server-thread query. A missing instance produces no side effects. */
     @Nullable
-    public BehaviorDebugSnapshot debugSnapshot(MinecraftServer server, UUID instanceId) {
+    public BehaviorTreeDebugSnapshot debugSnapshot(MinecraftServer server, UUID instanceId) {
         ServerState state = servers.get(server);
         if (state == null) return null;
         InstanceEntry entry = state.instances.get(instanceId);
-        return entry != null ? BehaviorDebugSnapshot.capture(entry.instance)
+        return entry != null ? BehaviorTreeDebugSnapshot.capture(entry.instance)
                 : state.terminalSnapshots.get(instanceId);
     }
 
     /** Lightweight server-thread access query that never captures nodes, blackboard or history. */
     @Nullable
-    public BehaviorDebugAccess debugAccess(MinecraftServer server, UUID instanceId) {
+    public BehaviorTreeDebugAccess debugAccess(MinecraftServer server, UUID instanceId) {
         ServerState state = servers.get(server);
         if (state == null) return null;
         InstanceEntry entry = state.instances.get(instanceId);
@@ -136,7 +137,7 @@ public final class BehaviorRuntimeService {
 
     /** Read-only server-thread query by stable owner UUID. */
     @Nullable
-    public BehaviorDebugSnapshot debugSnapshotForOwner(MinecraftServer server, UUID ownerId) {
+    public BehaviorTreeDebugSnapshot debugSnapshotForOwner(MinecraftServer server, UUID ownerId) {
         ServerState state = servers.get(server);
         UUID instanceId = state != null ? state.ownerInstances.get(ownerId) : null;
         if (instanceId == null && state != null) instanceId = state.lastTerminalByOwner.get(ownerId);
@@ -144,15 +145,15 @@ public final class BehaviorRuntimeService {
     }
 
     /** Read-only indexed query; ordering is stable for the lifetime of the active entries. */
-    public List<BehaviorDebugSnapshot> debugSnapshotsForAsset(MinecraftServer server, String assetId) {
+    public List<BehaviorTreeDebugSnapshot> debugSnapshotsForAsset(MinecraftServer server, String assetId) {
         ServerState state = servers.get(server);
         if (state == null || assetId == null) return List.of();
         Set<UUID> instanceIds = state.assetInstances.get(assetId);
         if (instanceIds == null || instanceIds.isEmpty()) return List.of();
-        List<BehaviorDebugSnapshot> result = new ArrayList<>(instanceIds.size());
+        List<BehaviorTreeDebugSnapshot> result = new ArrayList<>(instanceIds.size());
         for (UUID instanceId : instanceIds) {
             InstanceEntry entry = state.instances.get(instanceId);
-            if (entry != null) result.add(BehaviorDebugSnapshot.capture(entry.instance));
+            if (entry != null) result.add(BehaviorTreeDebugSnapshot.capture(entry.instance));
         }
         return List.copyOf(result);
     }
@@ -167,7 +168,7 @@ public final class BehaviorRuntimeService {
         if (active != null) return active.instance.stopReason();
         UUID terminalId = state.lastTerminalByOwner.get(ownerId);
         if (terminalId != null) {
-            BehaviorDebugSnapshot terminal = state.terminalSnapshots.get(terminalId);
+            BehaviorTreeDebugSnapshot terminal = state.terminalSnapshots.get(terminalId);
             if (terminal != null) return terminal.stopReason();
         }
         return state.lastStopReasons.get(ownerId);
@@ -226,11 +227,11 @@ public final class BehaviorRuntimeService {
         while (evaluated < budget.maxDueInstancesPerTick()
                 && System.nanoTime() - started < budget.worldNanosPerTick()
                 && server.spentNanos < budget.globalNanosPerTick()) {
-            ScheduledEntry scheduled = world.scheduler.pollDue(tick);
+            DueTickScheduler.Scheduled<UUID, InstanceEntry> scheduled = world.scheduler.pollDue(tick);
             if (scheduled == null) break;
-            InstanceEntry entry = server.instances.get(scheduled.instanceId);
-            if (entry == null || entry != scheduled.entry) continue;
-            BehaviorTreeInstance instance = entry.instance;
+            InstanceEntry entry = server.instances.get(scheduled.key());
+            if (entry == null || entry != scheduled.value()) continue;
+            BehaviorTreeProcess instance = entry.instance;
             if (instance.state() != BehaviorInstanceState.RUNNING) continue;
             if (!instance.host().isValid()) {
                 stopAndRemove(server, entry, BehaviorTerminationReason.OWNER_INVALID);
@@ -315,7 +316,7 @@ public final class BehaviorRuntimeService {
                 try {
                     entry.refreshOwnerAccess();
                     server.retainTerminalSnapshot(entry.ownerId,
-                            BehaviorDebugSnapshot.capture(entry.instance), entry.access(false));
+                            BehaviorTreeDebugSnapshot.capture(entry.instance), entry.access(false));
                 } catch (RuntimeException exception) {
                     GeometryNode.LOGGER.warn(
                             "[BehaviorRuntime] Failed to capture terminal snapshot for {}; indexes will still be removed",
@@ -347,11 +348,11 @@ public final class BehaviorRuntimeService {
             return;
         }
         if (!world.scheduler.contains(entry.instance.instanceId())
-                && world.scheduler.size() >= budget.maxQueuedWakeupsPerWorld()) {
+                && world.scheduler.activeCount() >= budget.maxQueuedWakeupsPerWorld()) {
             stopAndRemove(server, entry, BehaviorTerminationReason.BUDGET_EXHAUSTED);
             return;
         }
-        world.scheduler.schedule(entry, dueTick);
+        world.scheduler.scheduleReplacing(entry.instance.instanceId(), entry, dueTick);
     }
 
     private void requireExecutable(BehaviorTreePlan plan) {
@@ -398,8 +399,8 @@ public final class BehaviorRuntimeService {
         private final Map<UUID, InstanceEntry> instances = new HashMap<>();
         private final Map<UUID, UUID> ownerInstances = new HashMap<>();
         private final Map<String, LinkedHashSet<UUID>> assetInstances = new HashMap<>();
-        private final LinkedHashMap<UUID, BehaviorDebugSnapshot> terminalSnapshots = new LinkedHashMap<>();
-        private final Map<UUID, BehaviorDebugAccess> terminalAccess = new HashMap<>();
+        private final LinkedHashMap<UUID, BehaviorTreeDebugSnapshot> terminalSnapshots = new LinkedHashMap<>();
+        private final Map<UUID, BehaviorTreeDebugAccess> terminalAccess = new HashMap<>();
         private final Map<UUID, UUID> lastTerminalByOwner = new HashMap<>();
         private final LinkedHashMap<UUID, BehaviorTerminationReason> lastStopReasons = new LinkedHashMap<>();
         private final LinkedHashSet<UUID> pendingAssetReloads = new LinkedHashSet<>();
@@ -425,7 +426,7 @@ public final class BehaviorRuntimeService {
             }
         }
 
-        private void processAssetReloadsOnce(long currentTick, BehaviorRuntimeService service) {
+        private void processAssetReloadsOnce(long currentTick, BehaviorTreeEngine service) {
             if (assetReloadTick == currentTick) return;
             assetReloadTick = currentTick;
             int processed = 0;
@@ -447,15 +448,15 @@ public final class BehaviorRuntimeService {
             }
         }
 
-        private void retainTerminalSnapshot(UUID ownerId, BehaviorDebugSnapshot snapshot,
-                                            BehaviorDebugAccess access) {
+        private void retainTerminalSnapshot(UUID ownerId, BehaviorTreeDebugSnapshot snapshot,
+                                            BehaviorTreeDebugAccess access) {
             terminalSnapshots.put(snapshot.instanceId(), snapshot);
             terminalAccess.put(snapshot.instanceId(), access);
             lastTerminalByOwner.put(ownerId, snapshot.instanceId());
             while (terminalSnapshots.size() > MAX_RETAINED_TERMINAL_SNAPSHOTS) {
-                Iterator<Map.Entry<UUID, BehaviorDebugSnapshot>> iterator =
+                Iterator<Map.Entry<UUID, BehaviorTreeDebugSnapshot>> iterator =
                         terminalSnapshots.entrySet().iterator();
-                Map.Entry<UUID, BehaviorDebugSnapshot> oldest = iterator.next();
+                Map.Entry<UUID, BehaviorTreeDebugSnapshot> oldest = iterator.next();
                 iterator.remove();
                 terminalAccess.remove(oldest.getKey());
                 UUID oldOwnerId = oldest.getValue().ownerId();
@@ -493,11 +494,11 @@ public final class BehaviorRuntimeService {
     }
 
     private static final class WorldState {
-        private final FairScheduler scheduler = new FairScheduler();
+        private final DueTickScheduler<UUID, InstanceEntry> scheduler = new DueTickScheduler<>();
     }
 
     private static final class InstanceEntry {
-        private final BehaviorTreeInstance instance;
+        private final BehaviorTreeProcess instance;
         private final boolean managedAsset;
         private final ResourceKey<Level> levelKey;
         private final UUID ownerId;
@@ -507,7 +508,7 @@ public final class BehaviorRuntimeService {
         private double lastOwnerZ;
         private boolean positionKnown;
 
-        private InstanceEntry(BehaviorTreeInstance instance, boolean managedAsset, UUID ownerId) {
+        private InstanceEntry(BehaviorTreeProcess instance, boolean managedAsset, UUID ownerId) {
             this.instance = instance;
             this.managedAsset = managedAsset;
             this.ownerId = ownerId;
@@ -534,66 +535,11 @@ public final class BehaviorRuntimeService {
             return true;
         }
 
-        private BehaviorDebugAccess access(boolean active) {
+        private BehaviorTreeDebugAccess access(boolean active) {
             boolean confirmedPosition = active ? refreshOwnerAccess() : positionKnown;
-            return new BehaviorDebugAccess(instance.instanceId(), ownerId, lastOwnerDimension,
+            return new BehaviorTreeDebugAccess(instance.instanceId(), ownerId, lastOwnerDimension,
                     lastOwnerX, lastOwnerY, lastOwnerZ, confirmedPosition, active);
         }
-    }
-
-    private static final class FairScheduler {
-        private static final Comparator<ScheduledEntry> ORDER = Comparator
-                .comparingLong((ScheduledEntry value) -> value.dueTick)
-                .thenComparingLong(value -> value.sequence);
-        private final PriorityQueue<ScheduledEntry> queue = new PriorityQueue<>(ORDER);
-        private final Map<UUID, ScheduledEntry> active = new HashMap<>();
-        private long sequence;
-
-        private void schedule(InstanceEntry entry, long dueTick) {
-            ScheduledEntry scheduled = new ScheduledEntry(entry.instance.instanceId(), entry,
-                    dueTick, ++sequence);
-            active.put(scheduled.instanceId, scheduled);
-            queue.offer(scheduled);
-            compactIfNeeded();
-        }
-
-        @Nullable
-        private ScheduledEntry pollDue(long tick) {
-            discardStale();
-            ScheduledEntry scheduled = queue.peek();
-            if (scheduled == null || scheduled.dueTick > tick) return null;
-            queue.poll();
-            active.remove(scheduled.instanceId, scheduled);
-            return scheduled;
-        }
-
-        private boolean cancel(UUID instanceId) {
-            boolean changed = active.remove(instanceId) != null;
-            if (changed) compactIfNeeded();
-            return changed;
-        }
-
-        private boolean contains(UUID instanceId) { return active.containsKey(instanceId); }
-        private int size() { return active.size(); }
-        private boolean isEmpty() { return active.isEmpty(); }
-
-        private void clear() {
-            active.clear();
-            queue.clear();
-        }
-
-        private void discardStale() {
-            while (!queue.isEmpty() && active.get(queue.peek().instanceId) != queue.peek()) queue.poll();
-        }
-
-        private void compactIfNeeded() {
-            if (queue.size() <= Math.max(64, active.size() * 4 + 16)) return;
-            queue.clear();
-            queue.addAll(active.values());
-        }
-    }
-
-    private record ScheduledEntry(UUID instanceId, InstanceEntry entry, long dueTick, long sequence) {
     }
 
     private static final class EntityHost implements BehaviorRuntimeHost {

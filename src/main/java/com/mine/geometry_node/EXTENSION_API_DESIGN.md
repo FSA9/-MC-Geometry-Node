@@ -37,11 +37,11 @@ geometry_node
     BaseNode / NodeDef / NodeType
     PortDef / PortRow / PortType / StandardPorts / UIHint
 
-  core/engine/blueprint/execution/
+  core/engine/blueprint/runtime/
     ExecutionContext
     ExecutionResult
-    GraphEngine
-    GraphProcess
+    BlueprintEngine
+    BlueprintProcess
 
 addon
   - 实现 GeometryNodePlugin
@@ -54,8 +54,8 @@ addon
 
 ```text
 Addon 只依赖 api 和节点定义/执行契约。
-Addon 不直接接触 GraphProcess.ExecutionThread。
-Addon 不直接操作 RuntimeGraphIndex / GraphFlattener。
+Addon 不直接接触 BlueprintProcess.ExecutionThread。
+Addon 不直接操作 BlueprintPlan / GraphFlattener。
 ```
 
 ## 插件入口
@@ -314,7 +314,7 @@ public final class OnMachineTick extends BaseEventNode {
 
 ## 事件派发 API
 
-Addon 不应直接调用 `GraphEngine.dispatchEvent(... Consumer<ExecutionThread>)`。
+Addon 不应直接调用 `BlueprintEngine.dispatchEvent(... Consumer<ExecutionThread>)`。
 
 标准入口：
 
@@ -350,7 +350,7 @@ EventPayload.builder()
 
 ## 内部事件入口状态
 
-`GraphEngine.dispatchEvent(... Consumer<GraphProcess.ExecutionThread>)` 已标记为 deprecated。
+`BlueprintEngine.dispatchEvent(... Consumer<BlueprintProcess.ExecutionThread>)` 已标记为 deprecated。
 
 保留原因：
 
@@ -361,7 +361,7 @@ EventPayload.builder()
 
 - Addon 使用 `GeometryNodeEvents`。
 - 后续核心内部 dispatcher 可以逐步迁移到 `GeometryNodeEvents`。
-- 最终再考虑收紧 `GraphEngine` 的 public API。
+- 最终再考虑收紧 `BlueprintEngine` 的 public API。
 
 当前已迁移示例：
 
@@ -394,7 +394,7 @@ EventPayload.builder()
 2. 蓝图等待能力：
 
 - 新增通用 `ExecutionResult.ExternalWait(GraphKind, ExternalWaitRequest)`。
-- `GraphProcess.ExecutionThread` 执行到等待结果时暂停，不回收线程。
+- `BlueprintProcess.ExecutionThread` 执行到等待结果时暂停，不回收线程。
 - 等待线程通过中性的 `GraphExecutionHandle` 暴露 `resume(outputPortName)`。
 - 玩家选择后，Dialogue Runtime 根据 choice 恢复线程，并让执行流从对应输出端口继续。
 - MVP 不持久化等待中的 session；玩家下线、服务器关闭、图热更新时直接关闭。
@@ -573,10 +573,10 @@ EventPayload.builder()
   - 使用新 `NodeRegistrationContext`
   - `addonId()` 返回 `geometry_node`
 
-- `core/engine/blueprint/execution/GraphEngine.java`
+- `core/engine/blueprint/runtime/BlueprintEngine.java`
   - 旧 thread-consumer 事件入口标记 deprecated
 
-- `core/engine/blueprint/execution/state/PlayerInputStateManager.java`
+- `core/engine/blueprint/event/PlayerInputStateManager.java`
   - 改用 `GeometryNodeEvents`
 
 - `core/node/nodes/events/player/OnPlayerKeyEvent.java`
@@ -592,7 +592,7 @@ EventPayload.builder()
 4. 第三方裸 ID 会 warning，但不阻断。
 5. `NodeType.EVENT` 节点会进入事件定义表。
 6. Addon 可通过 `GeometryNodeEvents.dispatch(...)` 派发事件。
-7. Addon 不需要引用 `GraphProcess.ExecutionThread`。
+7. Addon 不需要引用 `BlueprintProcess.ExecutionThread`。
 8. 玩家按键事件仍能触发 `OnPlayerKeyEvent`。
 
 ## 后续建议

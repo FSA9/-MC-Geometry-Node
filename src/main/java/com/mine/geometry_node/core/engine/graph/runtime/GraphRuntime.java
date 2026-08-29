@@ -2,6 +2,8 @@ package com.mine.geometry_node.core.engine.graph.runtime;
 
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -14,6 +16,17 @@ public interface GraphRuntime {
     String id();
 
     default void init() {
+    }
+
+    /** Ascending order used by the shared server-level tick driver. */
+    default int tickOrder() {
+        return 0;
+    }
+
+    default void tickLevel(ServerLevel level) {
+    }
+
+    default void shutdown(MinecraftServer server) {
     }
 
     default boolean beginExternalWait(GraphExecutionHandle handle, ExternalWaitRequest request) {

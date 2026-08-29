@@ -1,9 +1,9 @@
 package com.mine.geometry_node.core.engine.blueprint.attachment;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcessSerializer;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcessSerializer;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
 import com.mine.geometry_node.core.engine.graph.scheduling.DueTickScheduler;
 import net.minecraft.core.HolderLookup;
@@ -24,8 +24,8 @@ import java.util.Map;
  */
 public class GraphContainer {
 
-    private final Map<String, GraphProcess> processes = new HashMap<>();
-    private final DueTickScheduler<String, GraphProcess> tickScheduler = new DueTickScheduler<>();
+    private final Map<String, BlueprintProcess> processes = new HashMap<>();
+    private final DueTickScheduler<String, BlueprintProcess> tickScheduler = new DueTickScheduler<>();
 
     // 脏标记回调 (用于通知 Level 保存存档)
     private final Runnable dirtyMarker;
@@ -46,10 +46,10 @@ public class GraphContainer {
     public void tick(ServerLevel level, @Nullable Entity target) {
         long currentTime = level.getGameTime();
 
-        DueTickScheduler.Scheduled<String, GraphProcess> scheduled;
+        DueTickScheduler.Scheduled<String, BlueprintProcess> scheduled;
         while ((scheduled = tickScheduler.pollDue(currentTime)) != null) {
 
-            GraphProcess process = processes.get(scheduled.key());
+            BlueprintProcess process = processes.get(scheduled.key());
             if (process != scheduled.value()) {
                 continue;
             }
@@ -68,14 +68,14 @@ public class GraphContainer {
     /**
      * [智能获取进程] 自带热更新比对机制。
      */
-    public GraphProcess getProcess(String graphId) {
-        GraphProcess process = this.processes.get(graphId);
-        RuntimeGraphIndex latestIndex = GraphEngine.getGraphIndex(graphId);
+    public BlueprintProcess getProcess(String graphId) {
+        BlueprintProcess process = this.processes.get(graphId);
+        BlueprintPlan latestIndex = BlueprintEngine.getGraphIndex(graphId);
 
         if (latestIndex != null) {
             // 如果内存没进程，或者图纸版本更新了，强行重建
             if (process == null || process.getIndex() != latestIndex) {
-                process = new GraphProcess(graphId, latestIndex);
+                process = new BlueprintProcess(graphId, latestIndex);
                 addProcess(process);
             }
         }
@@ -85,8 +85,8 @@ public class GraphContainer {
     /**
      * [挂载进程]
      */
-    public void addProcess(GraphProcess process) {
-        GraphProcess previous = this.processes.put(process.getGraphId(), process);
+    public void addProcess(BlueprintProcess process) {
+        BlueprintProcess previous = this.processes.put(process.getGraphId(), process);
         if (previous != null && previous != process) {
             previous.setTickScheduleCallback(null);
             previous.shutdown("graph_replaced");
@@ -106,7 +106,7 @@ public class GraphContainer {
     }
 
     public void removeProcess(String graphId, GraphCloseMode closeMode) {
-        GraphProcess process = this.processes.get(graphId);
+        BlueprintProcess process = this.processes.get(graphId);
         if (process == null) return;
 
         GraphCloseMode mode = closeMode != null ? closeMode : GraphCloseMode.IMMEDIATE;
@@ -118,7 +118,7 @@ public class GraphContainer {
         removeProcessNow(graphId, process, "graph_unloaded");
     }
 
-    public Collection<GraphProcess> getProcesses() {
+    public Collection<BlueprintProcess> getProcesses() {
         return this.processes.values();
     }
 
@@ -130,7 +130,7 @@ public class GraphContainer {
      * [清理全部]
      */
     public void clear() {
-        for (GraphProcess process : this.processes.values()) {
+        for (BlueprintProcess process : this.processes.values()) {
             process.setTickScheduleCallback(null);
             process.shutdown("graph_unloaded");
         }
@@ -142,7 +142,7 @@ public class GraphContainer {
     }
 
     public void clearProcessesForSerialization() {
-        for (GraphProcess process : this.processes.values()) {
+        for (BlueprintProcess process : this.processes.values()) {
             process.setTickScheduleCallback(null);
             process.shutdown("graph_reloaded");
         }
@@ -152,8 +152,8 @@ public class GraphContainer {
         }
     }
 
-    public void putProcessForSerialization(GraphProcess process) {
-        GraphProcess previous = this.processes.put(process.getGraphId(), process);
+    public void putProcessForSerialization(BlueprintProcess process) {
+        BlueprintProcess previous = this.processes.put(process.getGraphId(), process);
         if (previous != null && previous != process) {
             previous.setTickScheduleCallback(null);
             previous.shutdown("graph_reloaded");
@@ -168,21 +168,21 @@ public class GraphContainer {
      * [序列化] 将进程和属性保存到 NBT
      */
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
-        return GraphProcessSerializer.saveContainer(this, tag, provider);
+        return BlueprintProcessSerializer.saveContainer(this, tag, provider);
     }
 
     /**
      * [反序列化] 从 NBT 恢复进程和属性
      */
     public void load(CompoundTag tag, HolderLookup.Provider provider) {
-        GraphProcessSerializer.loadContainer(this, tag, provider);
+        BlueprintProcessSerializer.loadContainer(this, tag, provider);
     }
 
-    public Map<String, GraphProcess> getProcessesMap() {
+    public Map<String, BlueprintProcess> getProcessesMap() {
         return this.processes;
     }
 
-    private void attachProcess(GraphProcess process) {
+    private void attachProcess(BlueprintProcess process) {
         process.setTickScheduleCallback(() -> scheduleProcessTick(process));
         scheduleProcessTick(process);
         if (process.isDraining()) {
@@ -190,11 +190,11 @@ public class GraphContainer {
         }
     }
 
-    private void completeDrainingProcess(String graphId, GraphProcess process) {
+    private void completeDrainingProcess(String graphId, BlueprintProcess process) {
         removeProcessNow(graphId, process, "graph_drain_finished");
     }
 
-    private void removeProcessNow(String graphId, GraphProcess process, String reason) {
+    private void removeProcessNow(String graphId, BlueprintProcess process, String reason) {
         if (!this.processes.remove(graphId, process)) return;
         process.setTickScheduleCallback(null);
         process.shutdown(reason);
@@ -204,11 +204,11 @@ public class GraphContainer {
         this.dirtyMarker.run();
     }
 
-    private void scheduleProcessTick(GraphProcess process) {
+    private void scheduleProcessTick(BlueprintProcess process) {
         scheduleProcessTick(process, process.getNextRequiredTick());
     }
 
-    private void scheduleProcessTick(GraphProcess process, long nextTick) {
+    private void scheduleProcessTick(BlueprintProcess process, long nextTick) {
         String graphId = process.getGraphId();
         if (this.processes.get(graphId) != process) {
             return;

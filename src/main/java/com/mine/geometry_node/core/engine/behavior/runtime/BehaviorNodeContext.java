@@ -20,14 +20,14 @@ import java.util.UUID;
 /** Node-scoped view of one deterministic evaluation epoch. */
 public final class BehaviorNodeContext {
     private final BehaviorTreeEvaluator evaluator;
-    private final BehaviorTreeInstance instance;
+    private final BehaviorTreeProcess instance;
     private final int nodeIndex;
     private final int depth;
     private final long epochTick;
     @Nullable private BehaviorActionFailure actionFailure;
     private boolean valid = true;
 
-    BehaviorNodeContext(BehaviorTreeEvaluator evaluator, BehaviorTreeInstance instance,
+    BehaviorNodeContext(BehaviorTreeEvaluator evaluator, BehaviorTreeProcess instance,
                         int nodeIndex, int depth, long epochTick) {
         this.evaluator = evaluator;
         this.instance = instance;

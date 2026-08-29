@@ -2,7 +2,6 @@ package com.mine.geometry_node.core.engine.behavior.compile;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.engine.behavior.structure.BehaviorTreeConnections;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
@@ -194,7 +193,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         java.util.Arrays.fill(parents, -1);
         int[][] children = new int[size][];
         @SuppressWarnings("unchecked") Map<String, Object>[] staticInputs = new Map[size];
-        @SuppressWarnings("unchecked") Map<String, CompiledDataIndex.DataConnectionSource>[] dataInputs = new Map[size];
+        @SuppressWarnings("unchecked") Map<String, CompiledDataIndex.DataConnectionSource>[] dataInputsByName = new Map[size];
         @SuppressWarnings("unchecked") Set<String>[] ports = new Set[size];
         Set<String> allPortNames = new java.util.TreeSet<>();
         int root = -1;
@@ -223,10 +222,10 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                 if (value != null) {
                     Object converted = TypeConverter.convertForPort(value, input.type());
                     if (converted != null) {
-                        effectiveInputs.put(input.id(), GraphValueSnapshot.snapshot(converted));
+                        effectiveInputs.put(input.id(), converted);
                     } else if (PortType.isCompatible(PortType.getTypeOf(value), input.type())) {
                         // Resolution that requires a world (for example UUID -> entity) is deferred.
-                        effectiveInputs.put(input.id(), GraphValueSnapshot.snapshot(value));
+                        effectiveInputs.put(input.id(), value);
                     }
                 }
             }
@@ -239,7 +238,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                 inputIndex.put(entry.getKey(),
                         new CompiledDataIndex.DataConnectionSource(indexes.get(link.sourceNodeId), link.sourcePortId));
             }
-            dataInputs[nodeIndex] = Map.copyOf(inputIndex);
+            dataInputsByName[nodeIndex] = Map.copyOf(inputIndex);
             Set<String> nodePorts = new LinkedHashSet<>();
             nodePorts.addAll(nodeInfo.ports.inputs.keySet());
             nodePorts.addAll(nodeInfo.ports.outputs.keySet());
@@ -250,6 +249,14 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         List<String> portNames = List.copyOf(allPortNames);
         Map<String, Integer> portKeys = new LinkedHashMap<>();
         for (int i = 0; i < portNames.size(); i++) portKeys.put(portNames.get(i), i);
+        @SuppressWarnings("unchecked")
+        Map<Integer, CompiledDataIndex.DataConnectionSource>[] dataInputs = new Map[size];
+        for (int nodeIndex = 0; nodeIndex < size; nodeIndex++) {
+            Map<Integer, CompiledDataIndex.DataConnectionSource> indexedInputs = new LinkedHashMap<>();
+            dataInputsByName[nodeIndex].forEach((portName, source) ->
+                    indexedInputs.put(portKeys.get(portName), source));
+            dataInputs[nodeIndex] = Map.copyOf(indexedInputs);
+        }
         return BehaviorTreePlan.createCompiled(
                 context != null ? context.assetId() : "", ids, types, capabilities,
                 root, parents, children, staticInputs, dataInputs, ports, portKeys,

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.event.precheck;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,7 +24,7 @@ public final class EventPrecheckRegistry {
         }
     }
 
-    public static EventPrecheck build(String graphId, RuntimeGraphIndex index, int nodeId, String eventType) {
+    public static EventPrecheck build(String graphId, BlueprintPlan index, int nodeId, String eventType) {
         EventPrecheckContext context = new EventPrecheckContext(graphId, index, nodeId, eventType);
         EventPrecheck specPrecheck = EventPrecheckCompiler.compile(context);
 

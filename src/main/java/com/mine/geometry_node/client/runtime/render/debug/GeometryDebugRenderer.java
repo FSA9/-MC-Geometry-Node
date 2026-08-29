@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.runtime.render.debug;
 
-import com.mine.geometry_node.core.engine.blueprint.debug.GeometryDebugType;
+import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugType;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;

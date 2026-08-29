@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
-import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import org.jetbrains.annotations.Nullable;
 
@@ -14,37 +14,26 @@ import java.util.Set;
 /** Immutable, compact behavior-tree artifact shared by all future runtime instances. */
 public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex {
     private final String assetId;
-    private final String[] nodeIds;
-    private final String[] nodeTypes;
+    private final CompiledNodeIndex nodes;
     private final NodeCapabilities[] capabilities;
     private final int rootNode;
     private final int[] parents;
     private final int[][] children;
-    private final Map<String, Object>[] staticInputs;
-    private final Set<String>[] copiedStaticInputs;
-    private final Map<String, DataConnectionSource>[] dataInputs;
-    private final Set<String>[] ports;
-    private final Map<String, Integer> portKeys;
     private final RootSchedule rootSchedule;
 
     private BehaviorTreePlan(String assetId, String[] nodeIds,
                              String[] nodeTypes, NodeCapabilities[] capabilities, int rootNode,
                              int[] parents, int[][] children, Map<String, Object>[] staticInputs,
-                             Map<String, DataConnectionSource>[] dataInputs, Set<String>[] ports,
+                             Map<Integer, DataConnectionSource>[] dataInputs, Set<String>[] ports,
                              Map<String, Integer> portKeys,
                              RootSchedule rootSchedule) {
         this.assetId = assetId != null ? assetId : "";
-        this.nodeIds = nodeIds.clone();
-        this.nodeTypes = nodeTypes.clone();
+        this.nodes = new CompiledNodeIndex(nodeIds, nodeTypes, staticInputs,
+                dataInputs, ports, portKeys);
         this.capabilities = capabilities.clone();
         this.rootNode = rootNode;
         this.parents = parents.clone();
         this.children = copyChildren(children);
-        this.staticInputs = copyMapArray(staticInputs);
-        this.copiedStaticInputs = mutableInputKeys(this.staticInputs);
-        this.dataInputs = copyMapArray(dataInputs);
-        this.ports = copySetArray(ports);
-        this.portKeys = Map.copyOf(portKeys);
         this.rootSchedule = rootSchedule != null ? rootSchedule : RootSchedule.DEFAULT;
     }
 
@@ -52,7 +41,7 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
             String assetId, String[] nodeIds,
             String[] nodeTypes, NodeCapabilities[] capabilities, int rootNode,
             int[] parents, int[][] children, Map<String, Object>[] staticInputs,
-            Map<String, DataConnectionSource>[] dataInputs, Set<String>[] ports,
+            Map<Integer, DataConnectionSource>[] dataInputs, Set<String>[] ports,
             Map<String, Integer> portKeys,
             RootSchedule rootSchedule) {
         return new BehaviorTreePlan(assetId, nodeIds, nodeTypes, capabilities,
@@ -76,18 +65,18 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
 
     @Override
     public int getNodeCount() {
-        return nodeIds.length;
+        return nodes.getNodeCount();
     }
 
     @Override
     @Nullable
     public String getNodeId(int nodeId) {
-        return validNode(nodeId) ? nodeIds[nodeId] : null;
+        return nodes.getNodeId(nodeId);
     }
 
     @Override
     public String getNodeType(int nodeId) {
-        return validNode(nodeId) ? nodeTypes[nodeId] : "";
+        return nodes.getNodeType(nodeId);
     }
 
     public NodeCapabilities getNodeCapabilities(int nodeId) {
@@ -113,27 +102,24 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
 
     @Override
     public int getPortKey(String portName) {
-        return portKeys.getOrDefault(portName, -1);
+        return nodes.getPortKey(portName);
     }
 
     @Override
     @Nullable
     public DataConnectionSource findDataInput(int targetNodeId, String inputPortName) {
-        return validNode(targetNodeId) ? dataInputs[targetNodeId].get(inputPortName) : null;
+        return nodes.findDataInput(targetNodeId, inputPortName);
     }
 
     @Override
     @Nullable
     public Object getStaticInput(int nodeId, String portName) {
-        if (!validNode(nodeId)) return null;
-        Object value = staticInputs[nodeId].get(portName);
-        return copiedStaticInputs[nodeId].contains(portName)
-                ? GraphValueSnapshot.snapshot(value) : value;
+        return nodes.getStaticInput(nodeId, portName);
     }
 
     @Override
     public boolean hasPort(int nodeId, String portName) {
-        return validNode(nodeId) && ports[nodeId].contains(portName);
+        return nodes.hasPort(nodeId, portName);
     }
 
     public RootSchedule rootSchedule() {
@@ -141,41 +127,13 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
     }
 
     private boolean validNode(int nodeId) {
-        return nodeId >= 0 && nodeId < nodeIds.length;
+        return nodeId >= 0 && nodeId < nodes.getNodeCount();
     }
 
     private static int[][] copyChildren(int[][] source) {
         int[][] result = new int[source.length][];
         for (int i = 0; i < source.length; i++) {
             result[i] = source[i] != null ? source[i].clone() : new int[0];
-        }
-        return result;
-    }
-
-    private static <T> Map<String, T>[] copyMapArray(Map<String, T>[] source) {
-        @SuppressWarnings("unchecked") Map<String, T>[] result = new Map[source.length];
-        for (int i = 0; i < source.length; i++) {
-            result[i] = source[i] != null ? Map.copyOf(source[i]) : Map.of();
-        }
-        return result;
-    }
-
-    private static Set<String>[] copySetArray(Set<String>[] source) {
-        @SuppressWarnings("unchecked") Set<String>[] result = new Set[source.length];
-        for (int i = 0; i < source.length; i++) {
-            result[i] = source[i] != null ? Set.copyOf(source[i]) : Set.of();
-        }
-        return result;
-    }
-
-    private static Set<String>[] mutableInputKeys(Map<String, Object>[] inputs) {
-        @SuppressWarnings("unchecked") Set<String>[] result = new Set[inputs.length];
-        for (int index = 0; index < inputs.length; index++) {
-            Set<String> keys = new java.util.HashSet<>();
-            inputs[index].forEach((key, value) -> {
-                if (GraphValueSnapshot.requiresReadCopy(value)) keys.add(key);
-            });
-            result[index] = Set.copyOf(keys);
         }
         return result;
     }

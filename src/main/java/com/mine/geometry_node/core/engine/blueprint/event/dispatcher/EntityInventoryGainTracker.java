@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityGainItem;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.util.SlotAccessUtils;
@@ -55,7 +55,7 @@ public final class EntityInventoryGainTracker {
                 continue;
             }
 
-            GraphEngine.dispatchBoundEntityEvent(level, entity, OnEntityGainItem.TYPE_ID, GraphEventData.of(
+            BlueprintEngine.dispatchBoundEntityEvent(level, entity, OnEntityGainItem.TYPE_ID, GraphEventData.of(
                     StandardPorts.ENTITY.getId(), entity,
                     StandardPorts.ITEM_STACK.getId(), stack.copyWithCount(gained)
             ));

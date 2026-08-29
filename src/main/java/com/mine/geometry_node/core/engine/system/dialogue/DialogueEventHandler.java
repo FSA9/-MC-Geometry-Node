@@ -1,13 +1,11 @@
 package com.mine.geometry_node.core.engine.system.dialogue;
 
-import dev.architectury.event.events.common.TickEvent;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
-import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 
 /**
  * Bridges game lifecycle events into DialogueRuntime.
@@ -23,8 +21,6 @@ public final class DialogueEventHandler {
             return;
         }
         registered = true;
-
-        TickEvent.SERVER_LEVEL_POST.register(level -> DialogueRuntime.INSTANCE.onServerLevelTick(level));
 
         var bus = NeoForge.EVENT_BUS;
         bus.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
@@ -43,6 +39,5 @@ public final class DialogueEventHandler {
             }
         });
         bus.addListener((ServerStartingEvent event) -> DialogueRuntime.INSTANCE.onServerStarting());
-        bus.addListener((ServerStoppingEvent event) -> DialogueRuntime.INSTANCE.onServerStopping());
     }
 }

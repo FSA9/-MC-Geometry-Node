@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.world;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.variables.VariableRegistry;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
@@ -196,7 +196,8 @@ public class TargetSelector extends BaseNode {
                 case "nbt" -> {
                     Map<String, Object> dict = getInputDict(context, StandardPorts.DICT.getIdWithIndex(i));
                     if (!dict.isEmpty() && context.getLevel() != null) {
-                        Tag gnTag = VariableRegistry.toTag(dict, context.getLevel().registryAccess());
+                        Tag gnTag = GraphValueCodecRegistry.toTag(
+                                dict, context.getLevel().registryAccess());
                         if (gnTag instanceof CompoundTag c && c.contains("data")) {
                             arguments.add("nbt=" + c.getCompoundOrEmpty("data"));
                         }

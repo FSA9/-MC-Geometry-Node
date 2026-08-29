@@ -1,5 +1,7 @@
-package com.mine.geometry_node.core.engine.blueprint.debug;
+package com.mine.geometry_node.core.engine.graph.debug.geometry;
 
+import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import it.unimi.dsi.fastutil.floats.FloatArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrayList;

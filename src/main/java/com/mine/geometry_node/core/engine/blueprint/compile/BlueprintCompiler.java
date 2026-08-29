@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
@@ -12,6 +12,7 @@ import com.mine.geometry_node.core.engine.graph.compile.GraphCompiler;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompileContext;
 import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphFlattener;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
@@ -21,7 +22,6 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 
 import java.io.Reader;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +30,7 @@ import java.util.Set;
 /**
  * Compiles blueprint JSON into the immutable runtime index used by the VM.
  */
-public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex> {
+public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
     private static final Gson GSON = new Gson();
     public static final BlueprintCompiler INSTANCE = new BlueprintCompiler();
 
@@ -38,7 +38,7 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
     }
 
     @SuppressWarnings("unchecked")
-    public static RuntimeGraphIndex compile(Reader jsonReader) {
+    public static BlueprintPlan compile(Reader jsonReader) {
         JsonObject root = JsonParser.parseReader(jsonReader).getAsJsonObject();
         return compileDocument(GraphCompileContext.ANONYMOUS, root);
     }
@@ -49,17 +49,17 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
     }
 
     @Override
-    public RuntimeGraphIndex compile(JsonObject document) {
+    public BlueprintPlan compile(JsonObject document) {
         return compileDocument(GraphCompileContext.ANONYMOUS, document);
     }
 
     @Override
-    public RuntimeGraphIndex compile(GraphCompileContext context, JsonObject document) {
+    public BlueprintPlan compile(GraphCompileContext context, JsonObject document) {
         return compileDocument(context, document);
     }
 
     @SuppressWarnings("unchecked")
-    private static RuntimeGraphIndex compileDocument(GraphCompileContext context, JsonObject root) {
+    private static BlueprintPlan compileDocument(GraphCompileContext context, JsonObject root) {
         String graphTypeId = root.has("graph_kind")
                 ? GraphType.normalizeId(root.get("graph_kind").getAsString())
                 : GraphTypeRegistry.BLUEPRINT.id();
@@ -96,26 +96,21 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
         }
 
         Map<String, Integer> keyDict = new HashMap<>();
-        List<String> dictReverse = new ArrayList<>();
         for (String key : flattened.portNames().stream().sorted().toList()) {
             if (!keyDict.containsKey(key)) {
-                keyDict.put(key, dictReverse.size());
-                dictReverse.add(key);
+                keyDict.put(key, keyDict.size());
             }
         }
-        JsonObject[] nodeDataArray = new JsonObject[size];
         String[] typeArray = new String[size];
-        Map<Integer, RuntimeGraphIndex.IntFlowTarget>[] flowOutputArray = new Map[size];
-        Map<Integer, RuntimeGraphIndex.IntConnectionSource>[] inputArray = new Map[size];
+        Map<Integer, BlueprintPlan.IntFlowTarget>[] flowOutputArray = new Map[size];
+        Map<Integer, CompiledDataIndex.DataConnectionSource>[] inputArray = new Map[size];
         Set<String>[] portArray = new Set[size];
-        Map<String, Object>[] propertyArray = new Map[size];
         Map<String, Object>[] staticInputArray = new Map[size];
 
         for (int i = 0; i < size; i++) {
             String strId = idToString[i];
 
-            nodeDataArray[i] = flattened.nodes().get(strId);
-            JsonObject node = nodeDataArray[i];
+            JsonObject node = flattened.nodes().get(strId);
             typeArray[i] = node != null && node.has("node_type") ? node.get("node_type").getAsString() : "unknown";
             flowOutputArray[i] = new HashMap<>();
             inputArray[i] = new HashMap<>();
@@ -128,13 +123,12 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
                     Integer portId = keyDict.get(e.getKey());
                     if (targetInt != null && portId != null) {
                         flowOutputArray[i].put(portId,
-                                new RuntimeGraphIndex.IntFlowTarget(targetInt, e.getValue().targetPortName()));
+                                new BlueprintPlan.IntFlowTarget(targetInt, e.getValue().targetPortName()));
                     }
                 }
             }
 
-            propertyArray[i] = flattened.properties().getOrDefault(strId, Collections.emptyMap());
-            staticInputArray[i] = flattened.staticInputs().getOrDefault(strId, Collections.emptyMap());
+            staticInputArray[i] = flattened.staticInputs().getOrDefault(strId, Map.of());
         }
 
         for (Map.Entry<String, GraphFlattener.DataConnectionSource> entry : flattened.dataInputs().entrySet()) {
@@ -148,7 +142,8 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
 
             if (targetInt != null && sourceInt != null && portId != null) {
                 inputArray[targetInt].put(portId,
-                        new RuntimeGraphIndex.IntConnectionSource(sourceInt, entry.getValue().sourcePortName()));
+                        new CompiledDataIndex.DataConnectionSource(
+                                sourceInt, entry.getValue().sourcePortName()));
             }
         }
 
@@ -200,13 +195,11 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
             multiblockLookupImmutable.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
 
-        return RuntimeGraphIndex.createCompiled(
+        return BlueprintPlan.createCompiled(
                 graphTypeId,
                 questDefinition,
                 questConditionOverview,
                 idToString,
-                stringToId,
-                nodeDataArray,
                 typeArray,
                 portArray,
                 flowOutputArray,
@@ -214,10 +207,8 @@ public final class BlueprintCompiler implements GraphCompiler<RuntimeGraphIndex>
                 typeToIntList,
                 Map.copyOf(receiveLookupImmutable),
                 Map.copyOf(multiblockLookupImmutable),
-                propertyArray,
                 staticInputArray,
-                keyDict,
-                dictReverse
+                keyDict
         );
     }
 

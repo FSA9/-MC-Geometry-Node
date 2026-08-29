@@ -1,25 +1,23 @@
-package com.mine.geometry_node.core.engine.blueprint.runtime;
+package com.mine.geometry_node.core.engine.blueprint.plan;
 
-import com.google.gson.JsonObject;
-import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.Reader;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * [运行时图索引 / 蓝图字节码载体] (Immutable Graph Index)
+ * [蓝图编译计划 / 蓝图字节码载体] (Immutable Blueprint Plan)
  */
-public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
+public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
 
     // ====================================================
     // 1. 数据结构定义
@@ -27,14 +25,7 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
 
     public record IntFlowTarget(int targetNodeId, String targetPortName) {}
 
-    /** 编译期内部使用：表示数据流连接的源头信息 (基于 String) */
-    public record ConnectionSource(String sourceNodeId, String sourcePortName) {}
-
-    /** 运行时核心结构：表示数据流连接的源头信息 (基于 Int 寄存器/索引) */
-    public record IntConnectionSource(int sourceNodeId, String sourcePortName) {}
-
-    private final Map<String, Integer> keyDictionary;
-    private final List<String> dictionaryReverse;
+    private final CompiledNodeIndex nodes;
     private final String graphTypeId;
     private final QuestDefinition questDefinition;
     private final QuestConditionOverview questConditionOverview;
@@ -43,18 +34,8 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
     // 2. 核心索引结构
     // ====================================================
 
-    // --- ID 双向映射表 ---
-    private final String[] idToString;
-    private final Map<String, Integer> stringToId;
-
     // --- 节点数据核心数组 (数组下标即为 int nodeId) ---
-    private final JsonObject[] nodeDataArray;                               // 节点原始配置数据 (只读透传)
-    private final String[] typeArray;                                       // 节点类型标识 (如 "math_add")
-    private final Set<String>[] portArray;
     private final Map<Integer, IntFlowTarget>[] flowOutputArray;
-    private final Map<Integer, IntConnectionSource>[] inputArray;
-    private final Map<String, Object>[] propertyArray;                      // 节点静态属性 (Properties)
-    private final Map<String, Object>[] staticInputArray;                   // 节点静态默认输入 (Static Inputs)
 
     // --- 分类与查询辅助 ---
     private final Map<String, List<Integer>> typeLookup;                  // 按节点类型归类 (常用于查找事件起始节点)
@@ -65,42 +46,30 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
     // 3. 构造与工厂方法 (Constructors & Factory)
     // ====================================================
 
-    private RuntimeGraphIndex(String graphTypeId,
+    private BlueprintPlan(String graphTypeId,
                               QuestDefinition questDefinition,
                               QuestConditionOverview questConditionOverview,
                               String[] idToString,
-                              Map<String, Integer> stringToId,
-                              JsonObject[] nodeDataArray,
                               String[] typeArray,
                               Set<String>[] portArray,
                               Map<Integer, IntFlowTarget>[] flowOutputArray,
-                              Map<Integer, IntConnectionSource>[] inputArray,
+                              Map<Integer, DataConnectionSource>[] inputArray,
                               Map<String, List<Integer>> typeLookup,
                               Map<String, List<Integer>> receiveBlueprintLookup,
                               Map<String, List<Integer>> multiblockStructureLookup,
-                              Map<String, Object>[] propertyArray,
                               Map<String, Object>[] staticInputArray,
-                              Map<String, Integer> keyDictionary,
-                              List<String> dictionaryReverse) {
+                              Map<String, Integer> keyDictionary) {
         this.graphTypeId = graphTypeId;
         this.questDefinition = questDefinition != null ? questDefinition : QuestDefinition.EMPTY;
         this.questConditionOverview = questConditionOverview != null
                 ? questConditionOverview
                 : QuestConditionOverview.EMPTY;
-        this.idToString = idToString.clone();
-        this.stringToId = Map.copyOf(stringToId);
-        this.nodeDataArray = nodeDataArray.clone();
-        this.typeArray = typeArray.clone();
-        this.portArray = copySetArray(portArray);
+        this.nodes = new CompiledNodeIndex(idToString, typeArray, staticInputArray,
+                inputArray, portArray, keyDictionary);
         this.flowOutputArray = copyMapArray(flowOutputArray);
-        this.inputArray = copyMapArray(inputArray);
         this.typeLookup = copyLookup(typeLookup);
         this.receiveBlueprintLookup = copyLookup(receiveBlueprintLookup);
         this.multiblockStructureLookup = copyLookup(multiblockStructureLookup);
-        this.propertyArray = copyObjectMapArray(propertyArray);
-        this.staticInputArray = copyObjectMapArray(staticInputArray);
-        this.keyDictionary = Map.copyOf(keyDictionary);
-        this.dictionaryReverse = List.copyOf(dictionaryReverse);
     }
 
     private static Map<String, List<Integer>> copyLookup(Map<String, List<Integer>> lookup) {
@@ -120,52 +89,28 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
         return copy;
     }
 
-    @SuppressWarnings("unchecked")
-    private static Set<String>[] copySetArray(Set<String>[] source) {
-        Set<String>[] copy = new Set[source.length];
-        for (int i = 0; i < source.length; i++) {
-            copy[i] = source[i] != null ? Set.copyOf(source[i]) : Set.of();
-        }
-        return copy;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object>[] copyObjectMapArray(Map<String, Object>[] source) {
-        Map<String, Object>[] copy = new Map[source.length];
-        for (int i = 0; i < source.length; i++) {
-            copy[i] = source[i] != null ? Map.copyOf(source[i]) : Map.of();
-        }
-        return copy;
-    }
-
     /**
      * Compiler-facing factory. Runtime code should use the query API on the
-     * returned immutable index rather than constructing indexes directly.
+     * returned immutable plan rather than constructing plans directly.
      */
-    public static RuntimeGraphIndex createCompiled(String graphTypeId,
+    public static BlueprintPlan createCompiled(String graphTypeId,
                                                    QuestDefinition questDefinition,
                                                    QuestConditionOverview questConditionOverview,
                                                    String[] idToString,
-                                                   Map<String, Integer> stringToId,
-                                                   JsonObject[] nodeDataArray,
                                                    String[] typeArray,
                                                    Set<String>[] portArray,
                                                    Map<Integer, IntFlowTarget>[] flowOutputArray,
-                                                   Map<Integer, IntConnectionSource>[] inputArray,
+                                                   Map<Integer, DataConnectionSource>[] inputArray,
                                                    Map<String, List<Integer>> typeLookup,
                                                    Map<String, List<Integer>> receiveBlueprintLookup,
                                                    Map<String, List<Integer>> multiblockStructureLookup,
-                                                   Map<String, Object>[] propertyArray,
                                                    Map<String, Object>[] staticInputArray,
-                                                   Map<String, Integer> keyDictionary,
-                                                   List<String> dictionaryReverse) {
-        return new RuntimeGraphIndex(
+                                                   Map<String, Integer> keyDictionary) {
+        return new BlueprintPlan(
                 graphTypeId,
                 questDefinition,
                 questConditionOverview,
                 idToString,
-                stringToId,
-                nodeDataArray,
                 typeArray,
                 portArray,
                 flowOutputArray,
@@ -173,19 +118,9 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
                 typeLookup,
                 receiveBlueprintLookup,
                 multiblockStructureLookup,
-                propertyArray,
                 staticInputArray,
-                keyDictionary,
-                dictionaryReverse
+                keyDictionary
         );
-    }
-
-    /**
-     * @deprecated Use {@link BlueprintCompiler#compile(Reader)}.
-     */
-    @Deprecated
-    public static RuntimeGraphIndex build(Reader jsonReader) {
-        return BlueprintCompiler.compile(jsonReader);
     }
 
     // ====================================================
@@ -194,7 +129,7 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
 
     /** 通过 String ID 获取运行时的 Int 索引 (常用于读档恢复) */
     public int getStringToId(String strId) {
-        return stringToId.getOrDefault(strId, -1);
+        return nodes.getNodeKey(strId);
     }
 
     public String getGraphTypeId() {
@@ -221,7 +156,7 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
 
     /** 通过 Int 索引还原原始的 String ID (常用于报错日志与存档持久化) */
     public String getIdToString(int id) {
-        return (id >= 0 && id < idToString.length) ? idToString[id] : null;
+        return nodes.getNodeId(id);
     }
 
     @Override
@@ -231,7 +166,7 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
     }
 
     public int getKeyId(String key) {
-        return keyDictionary.getOrDefault(key, -1);
+        return nodes.getPortKey(key);
     }
 
     @Override
@@ -242,10 +177,7 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
     /** 将 Int 寄存器 ID 翻译回原始的 String (用于序列化保存) */
     @Nullable
     public String getKeyFromId(int id) {
-        if (id >= 0 && id < dictionaryReverse.size()) {
-            return dictionaryReverse.get(id);
-        }
-        return null;
+        return nodes.getPortName(id);
     }
 
 
@@ -254,12 +186,12 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
     // ====================================================
 
     public String getNodeType(int nodeId) {
-        if (nodeId < 0 || nodeId >= typeArray.length) return "unknown";
-        return typeArray[nodeId];
+        String type = nodes.getNodeType(nodeId);
+        return type.isEmpty() ? "unknown" : type;
     }
 
     public boolean hasPort(int nodeId, String portName) {
-        return nodeId >= 0 && nodeId < portArray.length && portArray[nodeId].contains(portName);
+        return nodes.hasPort(nodeId, portName);
     }
 
     @SuppressWarnings("unchecked")
@@ -293,8 +225,7 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
 
     @Nullable
     public Object getNodeStaticInput(int nodeId, String portName) {
-        if (nodeId < 0 || nodeId >= staticInputArray.length) return null;
-        return staticInputArray[nodeId].get(portName);
+        return nodes.getStaticInput(nodeId, portName);
     }
 
     @Override
@@ -319,19 +250,14 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
      * @return 包装了源节点 ID 与端口名的记录类，若未连接则返回 null
      */
     @Nullable
-    public IntConnectionSource findInputSource(int targetNodeId, String inputPortName) {
-        if (targetNodeId < 0 || targetNodeId >= inputArray.length) return null;
-        int portId = getKeyId(inputPortName);
-        return portId >= 0 ? inputArray[targetNodeId].get(portId) : null;
+    public DataConnectionSource findInputSource(int targetNodeId, String inputPortName) {
+        return nodes.findDataInput(targetNodeId, inputPortName);
     }
 
     @Override
     @Nullable
     public DataConnectionSource findDataInput(int targetNodeId, String inputPortName) {
-        IntConnectionSource source = findInputSource(targetNodeId, inputPortName);
-        return source != null
-                ? new DataConnectionSource(source.sourceNodeId(), source.sourcePortName())
-                : null;
+        return nodes.findDataInput(targetNodeId, inputPortName);
     }
 
     /**
@@ -379,10 +305,10 @@ public class RuntimeGraphIndex implements CompiledGraph, CompiledDataIndex {
 
 
     public int getRegisterCount() {
-        return dictionaryReverse.size();
+        return nodes.getPortCount();
     }
 
     public int getNodeCount() {
-        return nodeDataArray.length;
+        return nodes.getNodeCount();
     }
 }

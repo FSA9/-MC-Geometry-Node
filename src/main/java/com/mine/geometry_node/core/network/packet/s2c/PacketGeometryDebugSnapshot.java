@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
-import com.mine.geometry_node.core.engine.blueprint.debug.GeometryDebugType;
+import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugType;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;

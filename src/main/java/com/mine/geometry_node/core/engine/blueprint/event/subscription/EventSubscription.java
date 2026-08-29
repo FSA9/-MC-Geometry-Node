@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.event.subscription;
 
 import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheck;
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -9,7 +9,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Map;
 
 public record EventSubscription(String graphId,
-                                RuntimeGraphIndex index,
+                                BlueprintPlan index,
                                 int nodeId,
                                 String eventType,
                                 EventPrecheck precheck) {

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.blueprint.debug;
+package com.mine.geometry_node.core.engine.graph.debug;
 
 public enum DebugRenderChannel {
     AREA("area:", 0xFF4FC3E8),

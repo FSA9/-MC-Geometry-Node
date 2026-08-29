@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -56,6 +57,21 @@ public class DialogueRuntime implements GraphRuntime {
     @Override
     public void init() {
         DialogueEventHandler.init();
+    }
+
+    @Override
+    public int tickOrder() {
+        return 100;
+    }
+
+    @Override
+    public void tickLevel(ServerLevel level) {
+        onServerLevelTick(level);
+    }
+
+    @Override
+    public void shutdown(MinecraftServer server) {
+        onServerStopping();
     }
 
     @Override

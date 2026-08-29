@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
@@ -29,14 +31,14 @@ import java.util.*;
  * 它不再直接持有指令指针，而是作为“内存黑板”管理变量和环境。
  * 具体的执行逻辑由内部类 ExecutionThread 承担。
  */
-public class GraphProcess {
+public class BlueprintProcess {
 
     // ================================
     // 1. 核心持久化状态
     // ================================
 
     private final String graphId;
-    private final RuntimeGraphIndex index;
+    private final BlueprintPlan index;
 
     // --- 环境上下文 ---
     private ServerLevel level;
@@ -123,7 +125,7 @@ public class GraphProcess {
     // 2. 构造与环境
     // ================================
 
-    public GraphProcess(String graphId, RuntimeGraphIndex index) {
+    public BlueprintProcess(String graphId, BlueprintPlan index) {
         this.graphId = graphId;
         this.index = index;
         int exactSize = index.getRegisterCount() + 8;
@@ -140,7 +142,7 @@ public class GraphProcess {
     }
 
     public String getGraphId() { return graphId; }
-    public RuntimeGraphIndex getIndex() { return index; }
+    public BlueprintPlan getIndex() { return index; }
     @Nullable
     public Entity getEntity() {
         return entity != null && !entity.isRemoved() ? entity : null;
@@ -372,7 +374,7 @@ public class GraphProcess {
             return;
         }
 
-        RuntimeGraphIndex.IntFlowTarget completedTarget = index.findFlowTarget(join.ownerNodeId, join.completedPortName);
+        BlueprintPlan.IntFlowTarget completedTarget = index.findFlowTarget(join.ownerNodeId, join.completedPortName);
         if (completedTarget == null) {
             return;
         }
@@ -414,11 +416,11 @@ public class GraphProcess {
         private String parentJoinId;
 
         // --- 线程私有寄存器 (Zero-Allocation 核心) ---
-        final List<RuntimeGraphIndex.IntFlowTarget> executionStack = new ArrayList<>();
-        Object[] eventRegisters = new Object[GraphProcess.this.index.getRegisterCount() + 8];
+        final List<BlueprintPlan.IntFlowTarget> executionStack = new ArrayList<>();
+        Object[] eventRegisters = new Object[BlueprintProcess.this.index.getRegisterCount() + 8];
         Map<String, Object> dynamicEventData = null;
         private final GraphDataEvaluationSession dataEvaluation =
-                new GraphDataEvaluationSession(GraphProcess.this.index);
+                new GraphDataEvaluationSession(BlueprintProcess.this.index);
         private final GraphDataEvaluationSession.NodeEvaluator dataNodeEvaluator = this::computeDataNode;
         // ✨ 新增：线程私有的临时黑板
         public final Map<String, Object> tempData = new HashMap<>();
@@ -457,9 +459,9 @@ public class GraphProcess {
         }
 
         void captureEnvironment() {
-            this.threadLevel = GraphProcess.this.level;
+            this.threadLevel = BlueprintProcess.this.level;
             this.threadDimensionId = this.threadLevel != null ? this.threadLevel.dimension().identifier().toString() : null;
-            this.threadEntityUuid = GraphProcess.this.entity != null ? GraphProcess.this.entity.getUUID() : null;
+            this.threadEntityUuid = BlueprintProcess.this.entity != null ? BlueprintProcess.this.entity.getUUID() : null;
         }
 
         public void restoreEnvironment(@Nullable ServerLevel level, @Nullable UUID entityUuid) {
@@ -494,7 +496,7 @@ public class GraphProcess {
             return currentEntryPort;
         }
 
-        public List<RuntimeGraphIndex.IntFlowTarget> getExecutionStackForSerialization() {
+        public List<BlueprintPlan.IntFlowTarget> getExecutionStackForSerialization() {
             return executionStack;
         }
 
@@ -540,7 +542,7 @@ public class GraphProcess {
             try {
                 while ((currentFlowId != -1 || !executionStack.isEmpty()) && state == State.RUNNING) {
                     if (currentFlowId == -1) {
-                        RuntimeGraphIndex.IntFlowTarget frame = executionStack.remove(executionStack.size() - 1);
+                        BlueprintPlan.IntFlowTarget frame = executionStack.remove(executionStack.size() - 1);
                         currentFlowId = frame.targetNodeId();
                         currentEntryPort = frame.targetPortName();
                     }
@@ -569,7 +571,7 @@ public class GraphProcess {
                         ExecutionResult result = logic.execute(this);
 
                         this.activeNodeId = previousActive;
-                        if (GraphProcess.this.shutDown) {
+                        if (BlueprintProcess.this.shutDown) {
                             this.currentFlowId = -1;
                             this.executionStack.clear();
                             this.state = State.FINISHED;
@@ -593,7 +595,7 @@ public class GraphProcess {
                     if (this.state != State.ERROR) {
                         this.state = State.FINISHED;
                     }
-                    GraphProcess.this.onThreadFinished(this);
+                    BlueprintProcess.this.onThreadFinished(this);
                     recycleIfNeeded();
                 }
             }
@@ -602,7 +604,7 @@ public class GraphProcess {
         private void handleExecutionResult(ExecutionResult result) {
             switch (result) {
                 case ExecutionResult.Next next -> {
-                    RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(currentFlowId, next.outputPortName());
+                    BlueprintPlan.IntFlowTarget target = index.findFlowTarget(currentFlowId, next.outputPortName());
                     if (target != null) {
                         this.currentFlowId = target.targetNodeId();
                         this.currentEntryPort = target.targetPortName();
@@ -613,14 +615,14 @@ public class GraphProcess {
                 case ExecutionResult.Call call -> {
                     List<String> ports = call.outputPorts();
                     for (int i = ports.size() - 1; i >= 0; i--) {
-                        RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(currentFlowId, ports.get(i));
+                        BlueprintPlan.IntFlowTarget target = index.findFlowTarget(currentFlowId, ports.get(i));
                         if (target != null) this.executionStack.add(target);
                     }
                     if (executionStack.isEmpty()) {
                         this.currentFlowId = -1;
                     } else {
                         // 从尾部弹出
-                        RuntimeGraphIndex.IntFlowTarget frame = executionStack.remove(executionStack.size() - 1);
+                        BlueprintPlan.IntFlowTarget frame = executionStack.remove(executionStack.size() - 1);
                         this.currentFlowId = frame.targetNodeId();
                         this.currentEntryPort = frame.targetPortName();
                     }
@@ -635,13 +637,13 @@ public class GraphProcess {
                     }
 
                     this.wakeUpTick = currentLevel.getGameTime() + wait.ticks();
-                    RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(currentFlowId, wait.nextPortName());
+                    BlueprintPlan.IntFlowTarget target = index.findFlowTarget(currentFlowId, wait.nextPortName());
                     if (target != null) this.executionStack.add(target);
 
                     this.currentFlowId = -1;
                     this.state = State.WAITING;
-                    GraphProcess.this.sleepingThreads.add(this);
-                    GraphProcess.this.notifyTickScheduleChanged();
+                    BlueprintProcess.this.sleepingThreads.add(this);
+                    BlueprintProcess.this.notifyTickScheduleChanged();
                 }
                 case ExecutionResult.ExternalWait externalWait -> {
                     GraphRuntime runtime = GraphRuntimeRegistry.INSTANCE.get(externalWait.runtimeKind());
@@ -656,7 +658,7 @@ public class GraphProcess {
                     this.externalWaitRuntime = runtime;
                     this.currentFlowId = -1;
                     this.state = State.EXTERNAL_WAITING;
-                    GraphProcess.this.externalWaitingThreads.add(this);
+                    BlueprintProcess.this.externalWaitingThreads.add(this);
 
                     boolean beganWaiting;
                     try {
@@ -683,9 +685,9 @@ public class GraphProcess {
                 return false;
             }
 
-            GraphProcess.this.externalWaitingThreads.remove(this);
+            BlueprintProcess.this.externalWaitingThreads.remove(this);
             GraphRuntime runtime = this.externalWaitRuntime;
-            RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(this.externalWaitNodeId, outputPortName);
+            BlueprintPlan.IntFlowTarget target = index.findFlowTarget(this.externalWaitNodeId, outputPortName);
             if (runtime != null) {
                 GraphRuntime.ExternalWaitCompletion completion = target != null
                         ? GraphRuntime.ExternalWaitCompletion.RESUMED
@@ -700,7 +702,7 @@ public class GraphProcess {
                 this.currentFlowId = -1;
                 this.executionStack.clear();
                 this.state = State.FINISHED;
-                GraphProcess.this.onThreadFinished(this);
+                BlueprintProcess.this.onThreadFinished(this);
                 recycleIfNeeded();
                 return false;
             }
@@ -729,7 +731,7 @@ public class GraphProcess {
 
         @Override
         public boolean isActive() {
-            return !GraphProcess.this.shutDown
+            return !BlueprintProcess.this.shutDown
                     && (this.state == State.RUNNING || this.state == State.WAITING || this.state == State.EXTERNAL_WAITING);
         }
 
@@ -742,18 +744,18 @@ public class GraphProcess {
         public void abort(String reason) {
             GraphRuntime runtime = this.state == State.EXTERNAL_WAITING ? this.externalWaitRuntime : null;
             this.externalWaitRuntime = null;
-            GraphProcess.this.externalWaitingThreads.remove(this);
+            BlueprintProcess.this.externalWaitingThreads.remove(this);
             this.externalWaitNodeId = -1;
             this.currentFlowId = -1;
             this.executionStack.clear();
             this.state = State.FINISHED;
-            if (GraphProcess.this.sleepingThreads.remove(this)) {
-                GraphProcess.this.notifyTickScheduleChanged();
+            if (BlueprintProcess.this.sleepingThreads.remove(this)) {
+                BlueprintProcess.this.notifyTickScheduleChanged();
             }
             if (runtime != null) {
                 runtime.endExternalWait(this, reason);
             }
-            GraphProcess.this.onThreadFinished(this);
+            BlueprintProcess.this.onThreadFinished(this);
             recycleIfNeeded();
         }
 
@@ -768,7 +770,7 @@ public class GraphProcess {
         }
 
         private void failExternalWait() {
-            GraphProcess.this.externalWaitingThreads.remove(this);
+            BlueprintProcess.this.externalWaitingThreads.remove(this);
             this.externalWaitNodeId = -1;
             this.externalWaitRuntime = null;
             this.state = State.ERROR;
@@ -783,7 +785,7 @@ public class GraphProcess {
         private void recycleIfNeeded() {
             if (!this.pooled) {
                 this.pooled = true;
-                GraphProcess.this.recycleThread(this);
+                BlueprintProcess.this.recycleThread(this);
             }
         }
 
@@ -831,18 +833,18 @@ public class GraphProcess {
         @Override
         public ServerLevel getLevel() {
             if (this.threadLevel != null) return this.threadLevel;
-            if (this.threadDimensionId != null && GraphProcess.this.level != null) {
+            if (this.threadDimensionId != null && BlueprintProcess.this.level != null) {
                 Identifier dimensionLocation = Identifier.tryParse(this.threadDimensionId);
                 if (dimensionLocation != null) {
                     ResourceKey<Level> dimensionKey = ResourceKey.create(Registries.DIMENSION, dimensionLocation);
-                    ServerLevel resolved = GraphProcess.this.level.getServer().getLevel(dimensionKey);
+                    ServerLevel resolved = BlueprintProcess.this.level.getServer().getLevel(dimensionKey);
                     if (resolved != null) {
                         this.threadLevel = resolved;
                         return resolved;
                     }
                 }
             }
-            return GraphProcess.this.level;
+            return BlueprintProcess.this.level;
         }
 
         @Override
@@ -858,7 +860,7 @@ public class GraphProcess {
         @Override
         public Entity getGraphOwnerEntity() {
             ServerLevel currentLevel = getLevel();
-            UUID ownerUuid = GraphProcess.this.graphOwnerEntityUuid;
+            UUID ownerUuid = BlueprintProcess.this.graphOwnerEntityUuid;
             if (ownerUuid != null && currentLevel != null) {
                 Entity owner = currentLevel.getEntity(ownerUuid);
                 return owner == null || owner.isRemoved() ? null : owner;
@@ -867,12 +869,12 @@ public class GraphProcess {
         }
 
         @Override
-        public String getGraphId() { return GraphProcess.this.graphId; }
+        public String getGraphId() { return BlueprintProcess.this.graphId; }
 
         @Override
         public Object getVariable(String name) {
             int id = index.getKeyId(name);
-            for (VariableScope scope : GraphProcess.this.variableStack) {
+            for (VariableScope scope : BlueprintProcess.this.variableStack) {
                 Object val = null;
                 if (id != -1 && id < scope.statics.length && scope.statics[id] != null) {
                     val = scope.statics[id];
@@ -894,7 +896,7 @@ public class GraphProcess {
 
         @Override
         public void setVariable(String name, Object value) {
-            VariableScope scope = GraphProcess.this.variableStack.peek();
+            VariableScope scope = BlueprintProcess.this.variableStack.peek();
             if (scope == null) return;
 
             int id = index.getKeyId(name);
@@ -951,7 +953,7 @@ public class GraphProcess {
         @Override
         public Object getInputValue(String portName) {
             if (activeNodeId == -1) return null;
-            RuntimeGraphIndex.IntConnectionSource src = index.findInputSource(activeNodeId, portName);
+            CompiledDataIndex.DataConnectionSource src = index.findInputSource(activeNodeId, portName);
             if (src == null) return null;
             return executeDataNode(src.sourceNodeId(), src.sourcePortName());
         }
@@ -1000,12 +1002,12 @@ public class GraphProcess {
         @Override
         public void executeBranchSync(String portName) {
             if (activeNodeId == -1) return;
-            RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(activeNodeId, portName);
+            BlueprintPlan.IntFlowTarget target = index.findFlowTarget(activeNodeId, portName);
             if (target == null) return;
 
             int savedId = this.currentFlowId;
             String savedPort = this.currentEntryPort;
-            List<RuntimeGraphIndex.IntFlowTarget> savedStack = new ArrayList<>(this.executionStack);
+            List<BlueprintPlan.IntFlowTarget> savedStack = new ArrayList<>(this.executionStack);
 
             this.currentFlowId = target.targetNodeId();
             this.currentEntryPort = target.targetPortName();
@@ -1029,7 +1031,7 @@ public class GraphProcess {
                     this.dynamicEventData,
                     this.tempData
             );
-            GraphProcess.this.branchJoins.put(joinId, join);
+            BlueprintProcess.this.branchJoins.put(joinId, join);
             return joinId;
         }
 
@@ -1038,20 +1040,20 @@ public class GraphProcess {
             if (activeNodeId == -1) {
                 return false;
             }
-            RuntimeGraphIndex.IntFlowTarget target = index.findFlowTarget(activeNodeId, portName);
+            BlueprintPlan.IntFlowTarget target = index.findFlowTarget(activeNodeId, portName);
             if (target == null) {
                 return false;
             }
 
             if (joinId != null && !joinId.isBlank()) {
-                BranchJoin join = GraphProcess.this.branchJoins.get(joinId);
+                BranchJoin join = BlueprintProcess.this.branchJoins.get(joinId);
                 if (join == null) {
                     return false;
                 }
                 join.pendingChildren++;
             }
 
-            ExecutionThread child = GraphProcess.this.borrowThread(target.targetNodeId(), target.targetPortName());
+            ExecutionThread child = BlueprintProcess.this.borrowThread(target.targetNodeId(), target.targetPortName());
             child.restoreEnvironment(getLevel(), getThreadEntityUuid());
             child.parentJoinId = joinId;
             child.eventRegisters = Arrays.copyOf(this.eventRegisters, this.eventRegisters.length);
@@ -1066,7 +1068,7 @@ public class GraphProcess {
 
         @Override
         public void finishBranchJoin(String joinId) {
-            GraphProcess.this.finishBranchJoin(joinId);
+            BlueprintProcess.this.finishBranchJoin(joinId);
         }
 
         @Override
@@ -1092,7 +1094,7 @@ public class GraphProcess {
             if (currentLevel == null) return;
 
             ExecutionThread delayThread = new ExecutionThread(nodeId, entryPortName);
-            GraphProcess.this.activateThread(delayThread);
+            BlueprintProcess.this.activateThread(delayThread);
             delayThread.restoreEnvironment(currentLevel, getThreadEntityUuid());
             delayThread.wakeUpTick = currentLevel.getGameTime() + delayTicks;
             delayThread.state = State.WAITING;
@@ -1104,8 +1106,8 @@ public class GraphProcess {
             }
 
             delayThread.tempData.putAll(this.tempData);
-            GraphProcess.this.sleepingThreads.add(delayThread);
-            GraphProcess.this.notifyTickScheduleChanged();
+            BlueprintProcess.this.sleepingThreads.add(delayThread);
+            BlueprintProcess.this.notifyTickScheduleChanged();
         }
 
         @Override
@@ -1158,10 +1160,10 @@ public class GraphProcess {
     public ServerLevel getLevel() { return this.level; }
 
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
-        return GraphProcessSerializer.save(this, tag, provider);
+        return BlueprintProcessSerializer.save(this, tag, provider);
     }
 
-    public static GraphProcess load(CompoundTag tag, RuntimeGraphIndex index, HolderLookup.Provider provider) {
-        return GraphProcessSerializer.load(tag, index, provider);
+    public static BlueprintProcess load(CompoundTag tag, BlueprintPlan index, HolderLookup.Provider provider) {
+        return BlueprintProcessSerializer.load(tag, index, provider);
     }
 }

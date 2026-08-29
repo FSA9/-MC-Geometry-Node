@@ -1,5 +1,8 @@
-package com.mine.geometry_node.core.engine.blueprint.debug;
+package com.mine.geometry_node.core.engine.graph.debug;
 
+import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
+import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMeshFactory;
+import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugType;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
 import net.minecraft.core.BlockPos;

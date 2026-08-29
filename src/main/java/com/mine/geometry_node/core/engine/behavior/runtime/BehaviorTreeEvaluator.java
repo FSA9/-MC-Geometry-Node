@@ -34,7 +34,7 @@ public final class BehaviorTreeEvaluator {
         this.executors = Objects.requireNonNull(executors, "executors");
     }
 
-    public EvaluationOutcome evaluate(BehaviorTreeInstance instance) {
+    public EvaluationOutcome evaluate(BehaviorTreeProcess instance) {
         Objects.requireNonNull(instance, "instance");
         long tick = instance.host().gameTick();
         if (!instance.host().isValid()) {
@@ -68,7 +68,7 @@ public final class BehaviorTreeEvaluator {
         }
     }
 
-    public void stop(BehaviorTreeInstance instance, BehaviorTerminationReason reason) {
+    public void stop(BehaviorTreeProcess instance, BehaviorTerminationReason reason) {
         Objects.requireNonNull(instance, "instance");
         Objects.requireNonNull(reason, "reason");
         int root = instance.plan().getRootNode();
@@ -79,7 +79,7 @@ public final class BehaviorTreeEvaluator {
     }
 
     /** Exits the active branch while retaining the instance for a later root restart. */
-    public void suspend(BehaviorTreeInstance instance) {
+    public void suspend(BehaviorTreeProcess instance) {
         Objects.requireNonNull(instance, "instance");
         int root = instance.plan().getRootNode();
         if (root >= 0) abortSubtree(instance, root, BehaviorTerminationReason.TREE_SUSPENDED);
@@ -88,7 +88,7 @@ public final class BehaviorTreeEvaluator {
         instance.markSuspended();
     }
 
-    BehaviorResult evaluateNode(BehaviorTreeInstance instance, int nodeIndex, int depth, long epochTick) {
+    BehaviorResult evaluateNode(BehaviorTreeProcess instance, int nodeIndex, int depth, long epochTick) {
         EvaluationPass pass = requirePass(instance);
         if (depth > instance.budget().maxTreeDepth()) {
             throw new EvaluationFault(BehaviorTerminationReason.BUDGET_EXHAUSTED,
@@ -192,7 +192,7 @@ public final class BehaviorTreeEvaluator {
         }
     }
 
-    BehaviorResult evaluateNodeReplacing(BehaviorTreeInstance instance, int candidateNodeIndex,
+    BehaviorResult evaluateNodeReplacing(BehaviorTreeProcess instance, int candidateNodeIndex,
                                          int previousNodeIndex, BehaviorTerminationReason reason,
                                          int depth, long epochTick) {
         EvaluationPass pass = requirePass(instance);
@@ -205,13 +205,13 @@ public final class BehaviorTreeEvaluator {
         }
     }
 
-    void abortChild(BehaviorTreeInstance instance, int nodeIndex, BehaviorTerminationReason reason) {
+    void abortChild(BehaviorTreeProcess instance, int nodeIndex, BehaviorTerminationReason reason) {
         EvaluationFault failure = abortSubtree(instance, nodeIndex, reason);
         if (failure != null) throw failure;
     }
 
     @Nullable
-    Object resolveInput(BehaviorTreeInstance instance, int targetNodeIndex, String portName) {
+    Object resolveInput(BehaviorTreeProcess instance, int targetNodeIndex, String portName) {
         CompiledDataIndex.DataConnectionSource source = instance.plan()
                 .findDataInput(targetNodeIndex, portName);
         if (source == null) return instance.plan().getStaticInput(targetNodeIndex, portName);
@@ -220,20 +220,20 @@ public final class BehaviorTreeEvaluator {
     }
 
     @Nullable
-    <T> T resolveInput(BehaviorTreeInstance instance, int targetNodeIndex,
+    <T> T resolveInput(BehaviorTreeProcess instance, int targetNodeIndex,
                        String portName, Class<T> type) {
         return TypeConverter.convert(resolveInput(instance, targetNodeIndex, portName),
                 type, new BehaviorDataContext(instance, targetNodeIndex));
     }
 
     @Nullable
-    <T> T convertInput(BehaviorTreeInstance instance, int targetNodeIndex,
+    <T> T convertInput(BehaviorTreeProcess instance, int targetNodeIndex,
                        Object value, Class<T> type) {
         return TypeConverter.convert(value, type,
                 new BehaviorDataContext(instance, targetNodeIndex));
     }
 
-    private Object computeDataNode(BehaviorTreeInstance instance, int nodeIndex, String outputPort) {
+    private Object computeDataNode(BehaviorTreeProcess instance, int nodeIndex, String outputPort) {
         BaseNode node = NodeRegistry.INSTANCE.get(instance.plan().getNodeType(nodeIndex));
         if (node == null) {
             throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA,
@@ -242,7 +242,7 @@ public final class BehaviorTreeEvaluator {
         return node.compute(new BehaviorDataContext(instance, nodeIndex), outputPort);
     }
 
-    private void enterNode(BehaviorTreeInstance instance, int nodeIndex, BehaviorNodeExecutor executor,
+    private void enterNode(BehaviorTreeProcess instance, int nodeIndex, BehaviorNodeExecutor executor,
                            BehaviorNodeContext context) throws Exception {
         Set<NodeCapabilities.ResourceUse> resources = instance.plan()
                 .getNodeCapabilities(nodeIndex).resources();
@@ -267,7 +267,7 @@ public final class BehaviorTreeEvaluator {
 
     @Nullable
     private static PendingPreemption matchingPreemption(@Nullable PendingPreemption pending,
-                                                        BehaviorTreeInstance instance,
+                                                        BehaviorTreeProcess instance,
                                                         int conflictOwner) {
         for (PendingPreemption candidate = pending; candidate != null; candidate = candidate.outer) {
             if (!candidate.consumed && isWithinSubtree(
@@ -278,7 +278,7 @@ public final class BehaviorTreeEvaluator {
         return null;
     }
 
-    private static boolean isWithinSubtree(BehaviorTreeInstance instance, int nodeIndex, int rootIndex) {
+    private static boolean isWithinSubtree(BehaviorTreeProcess instance, int nodeIndex, int rootIndex) {
         for (int current = nodeIndex; current >= 0; current = instance.plan().getParent(current)) {
             if (current == rootIndex) return true;
         }
@@ -286,7 +286,7 @@ public final class BehaviorTreeEvaluator {
     }
 
     @Nullable
-    private EvaluationFault terminateNode(BehaviorTreeInstance instance, int nodeIndex,
+    private EvaluationFault terminateNode(BehaviorTreeProcess instance, int nodeIndex,
                                            BehaviorNodeExecutor executor, BehaviorNodeContext context,
                                            BehaviorTerminationReason reason,
                                            @Nullable String failureCode, @Nullable String detail,
@@ -341,7 +341,7 @@ public final class BehaviorTreeEvaluator {
     }
 
     @Nullable
-    private EvaluationFault abortChildren(BehaviorTreeInstance instance, int nodeIndex,
+    private EvaluationFault abortChildren(BehaviorTreeProcess instance, int nodeIndex,
                                           BehaviorTerminationReason reason) {
         EvaluationFault firstFailure = null;
         for (int childIndex = instance.plan().getChildCount(nodeIndex) - 1; childIndex >= 0; childIndex--) {
@@ -353,7 +353,7 @@ public final class BehaviorTreeEvaluator {
     }
 
     @Nullable
-    private EvaluationFault abortSubtree(BehaviorTreeInstance instance, int nodeIndex,
+    private EvaluationFault abortSubtree(BehaviorTreeProcess instance, int nodeIndex,
                                          BehaviorTerminationReason reason) {
         if (nodeIndex < 0 || nodeIndex >= instance.plan().getNodeCount()) return null;
         if (!instance.rawNodeState(nodeIndex).isActive()) {
@@ -387,7 +387,7 @@ public final class BehaviorTreeEvaluator {
         }
     }
 
-    private static void transition(BehaviorTreeInstance instance, int nodeIndex,
+    private static void transition(BehaviorTreeProcess instance, int nodeIndex,
                                    BehaviorNodeState target) {
         BehaviorNodeState current = instance.rawNodeState(nodeIndex);
         if (!BehaviorLifecycleContract.allows(current, target)) {
@@ -397,7 +397,7 @@ public final class BehaviorTreeEvaluator {
         instance.setNodeState(nodeIndex, target);
     }
 
-    private EvaluationPass requirePass(BehaviorTreeInstance instance) {
+    private EvaluationPass requirePass(BehaviorTreeProcess instance) {
         EvaluationPass pass = currentPass.get();
         if (pass == null || pass.instance != instance) {
             throw new IllegalStateException("Behavior child evaluation escaped its evaluation epoch");
@@ -405,11 +405,11 @@ public final class BehaviorTreeEvaluator {
         return pass;
     }
 
-    private static long startTiming(BehaviorTreeInstance instance) {
+    private static long startTiming(BehaviorTreeProcess instance) {
         return instance.debugTracingEnabled() ? instance.host().nanoTime() : 0L;
     }
 
-    private static long elapsed(BehaviorTreeInstance instance, long start) {
+    private static long elapsed(BehaviorTreeProcess instance, long start) {
         return instance.debugTracingEnabled()
                 ? Math.max(0L, instance.host().nanoTime() - start) : 0L;
     }
@@ -442,12 +442,12 @@ public final class BehaviorTreeEvaluator {
     }
 
     private static final class EvaluationPass {
-        private final BehaviorTreeInstance instance;
+        private final BehaviorTreeProcess instance;
         @Nullable private PendingPreemption pendingPreemption;
         private int visits;
         private int immediateTransitions;
 
-        private EvaluationPass(BehaviorTreeInstance instance) {
+        private EvaluationPass(BehaviorTreeProcess instance) {
             this.instance = instance;
         }
     }
@@ -477,10 +477,10 @@ public final class BehaviorTreeEvaluator {
 
     private final class BehaviorDataContext implements GraphDataContext,
             com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboardView {
-        private final BehaviorTreeInstance instance;
+        private final BehaviorTreeProcess instance;
         private final int nodeIndex;
 
-        private BehaviorDataContext(BehaviorTreeInstance instance, int nodeIndex) {
+        private BehaviorDataContext(BehaviorTreeProcess instance, int nodeIndex) {
             this.instance = instance;
             this.nodeIndex = nodeIndex;
         }

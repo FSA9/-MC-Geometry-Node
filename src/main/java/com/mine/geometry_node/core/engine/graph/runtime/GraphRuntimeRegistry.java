@@ -4,8 +4,8 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -35,11 +35,11 @@ public final class GraphRuntimeRegistry {
     }
 
     @Nullable
-    public GraphRuntime get(GraphKind kind) {
+    public synchronized GraphRuntime get(GraphKind kind) {
         return runtimes.get(kind);
     }
 
-    public Collection<GraphRuntime> all() {
-        return Collections.unmodifiableCollection(runtimes.values());
+    public synchronized Collection<GraphRuntime> all() {
+        return List.copyOf(runtimes.values());
     }
 }

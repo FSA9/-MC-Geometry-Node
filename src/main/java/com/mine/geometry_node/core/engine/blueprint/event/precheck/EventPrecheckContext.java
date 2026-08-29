@@ -1,12 +1,12 @@
 package com.mine.geometry_node.core.engine.blueprint.event.precheck;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public record EventPrecheckContext(String graphId, RuntimeGraphIndex index, int nodeId, String eventType) {
+public record EventPrecheckContext(String graphId, BlueprintPlan index, int nodeId, String eventType) {
     public EventPrecheckContext {
         graphId = graphId == null ? "" : graphId;
         Objects.requireNonNull(index, "index");

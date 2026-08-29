@@ -6,7 +6,7 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * 标准事件派发入口。
- * Addon 不应直接接触 GraphProcess.ExecutionThread。
+ * Addon 不应直接接触 BlueprintProcess.ExecutionThread。
  */
 public interface GeometryEventDispatcher {
     void dispatch(ServerLevel level, @Nullable Entity target, String eventTypeId, EventPayload payload);

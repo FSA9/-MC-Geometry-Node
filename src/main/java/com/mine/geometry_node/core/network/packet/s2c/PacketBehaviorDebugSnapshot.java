@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorNodeState;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorInstanceState;
-import com.mine.geometry_node.core.engine.behavior.runtime.debug.BehaviorDebugSnapshot;
+import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugSnapshot;
 import com.mine.geometry_node.core.node.port.PortType;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -53,7 +53,7 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
         return new PacketBehaviorDebugSnapshot(instanceId, status, detail, null);
     }
 
-    public static PacketBehaviorDebugSnapshot snapshot(BehaviorDebugSnapshot source) {
+    public static PacketBehaviorDebugSnapshot snapshot(BehaviorTreeDebugSnapshot source) {
         List<Integer> activePath = source.activePath().stream().limit(MAX_ACTIVE_PATH).toList();
         ContentBudget totalBudget = new ContentBudget(MAX_CONTENT_BYTES);
         totalBudget.consume(512 + stringBytes(bounded(source.assetId(), MAX_ID_LENGTH))
@@ -68,13 +68,13 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
         Set<Integer> activeIndexes = new HashSet<>(activePath);
         Set<Integer> consideredIndexes = new HashSet<>();
         List<Node> nodes = new ArrayList<>(Math.min(source.nodes().size(), MAX_NODES));
-        for (BehaviorDebugSnapshot.NodeSnapshot node : source.nodes()) {
+        for (BehaviorTreeDebugSnapshot.NodeSnapshot node : source.nodes()) {
             if (!activeIndexes.contains(node.index())) continue;
             consideredIndexes.add(node.index());
             Node candidate = node(node);
             if (fits(totalBudget, nodeBudget, nodeBytes(candidate))) nodes.add(candidate);
         }
-        for (BehaviorDebugSnapshot.NodeSnapshot node : source.nodes()) {
+        for (BehaviorTreeDebugSnapshot.NodeSnapshot node : source.nodes()) {
             if (nodes.size() >= MAX_NODES) break;
             if (!consideredIndexes.add(node.index())) continue;
             Node candidate = node(node);
@@ -82,7 +82,7 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
         }
 
         List<BlackboardEntry> blackboard = new ArrayList<>();
-        for (BehaviorDebugSnapshot.BlackboardSnapshot entry : source.blackboard()) {
+        for (BehaviorTreeDebugSnapshot.BlackboardSnapshot entry : source.blackboard()) {
             if (blackboard.size() >= MAX_BLACKBOARD) break;
             BlackboardEntry candidate = blackboard(entry);
             if (fits(totalBudget, blackboardBudget, blackboardBytes(candidate))) {
@@ -134,14 +134,14 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
         return new PacketBehaviorDebugSnapshot(instanceId, status, detail, snapshot);
     }
 
-    private static Node node(BehaviorDebugSnapshot.NodeSnapshot source) {
+    private static Node node(BehaviorTreeDebugSnapshot.NodeSnapshot source) {
         return new Node(source.index(), bounded(source.nodeId(), MAX_ID_LENGTH),
                 bounded(source.nodeType(), MAX_ID_LENGTH), source.parentIndex(), source.state(),
                 source.visits(), source.totalNanos(), source.lastNanos(), source.lastResult(),
                 source.lastReason());
     }
 
-    private static BlackboardEntry blackboard(BehaviorDebugSnapshot.BlackboardSnapshot source) {
+    private static BlackboardEntry blackboard(BehaviorTreeDebugSnapshot.BlackboardSnapshot source) {
         return new BlackboardEntry(bounded(source.name(), MAX_NAME_LENGTH),
                 bounded(source.scope(), MAX_NAME_LENGTH),
                 bounded(source.providerIdentity(), MAX_ID_LENGTH), source.type(), source.present(),
@@ -149,7 +149,7 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
                 bounded(source.displayValue(), MAX_VALUE_LENGTH), source.scopeAvailable());
     }
 
-    private static Trace trace(BehaviorDebugSnapshot.TraceSnapshot source) {
+    private static Trace trace(BehaviorTreeDebugSnapshot.TraceSnapshot source) {
         return new Trace(source.sequence(), source.gameTick(), source.nodeIndex(),
                 bounded(source.nodeId(), MAX_ID_LENGTH), bounded(source.nodeType(), MAX_ID_LENGTH),
                 source.reason(), source.result(), source.elapsedNanos(),
@@ -157,13 +157,13 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
                 bounded(source.detail(), MAX_DETAIL_LENGTH));
     }
 
-    private static Evaluation evaluation(BehaviorDebugSnapshot.EvaluationSnapshot source) {
+    private static Evaluation evaluation(BehaviorTreeDebugSnapshot.EvaluationSnapshot source) {
         return new Evaluation(source.evaluations(), source.totalNanos(), source.lastNanos(),
                 source.softTimeBudgetOverruns(), source.lastNodeVisits(), source.peakNodeVisits(),
                 source.lastImmediateTransitions(), source.peakImmediateTransitions());
     }
 
-    private static Budget budget(BehaviorDebugSnapshot.BudgetSnapshot source) {
+    private static Budget budget(BehaviorTreeDebugSnapshot.BudgetSnapshot source) {
         return new Budget(source.instanceNanosPerEvaluation(), source.maxNodeVisitsPerEvaluation(),
                 source.maxTreeDepth(), source.maxImmediateTransitions(), source.maxBlackboardEntries(),
                 source.maxHistoryEntries());

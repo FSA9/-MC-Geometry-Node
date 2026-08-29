@@ -7,11 +7,12 @@ import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventHandler;
+import com.mine.geometry_node.core.engine.blueprint.event.BlueprintEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeDriver;
 import com.mine.geometry_node.core.engine.graph.scoped.ServerScopedStateStore;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
@@ -140,6 +141,7 @@ public class GeometryNode {
         GraphEngineServices.INSTANCE.setScopedStateStore(new ServerScopedStateStore());
 
         // 初始化图运行时注册表
+        GraphRuntimeDriver.init();
         GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BehaviorTreeRuntime.INSTANCE);
@@ -150,7 +152,7 @@ public class GeometryNode {
         EntityChunkLoadingService.INSTANCE.init();
 
         // 初始化蓝图系统事件引擎
-        GraphEventHandler.init();
+        BlueprintEventHandler.init();
         SchematicPlacementDebugSync.register();
 
         // 注册蓝图资源管理器

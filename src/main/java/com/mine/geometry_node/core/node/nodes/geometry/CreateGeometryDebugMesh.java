@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.node.nodes.geometry;
 
-import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
-import com.mine.geometry_node.core.engine.blueprint.debug.GeometryDebugElement;
-import com.mine.geometry_node.core.engine.blueprint.debug.GeometryDebugMeshFactory;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
+import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMeshFactory;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.BaseNode;

@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.command.server;
 
 import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
-import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeInstance;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeProcess;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -70,7 +70,7 @@ public final class BehaviorTreeCommand {
     private static int switchTree(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         String graphId = StringArgumentType.getString(context, "graph_id");
         return runTargets(context, (source, mob) -> {
-            BehaviorTreeInstance instance = BehaviorTreeRuntime.INSTANCE.switchTo(mob, graphId);
+            BehaviorTreeProcess instance = BehaviorTreeRuntime.INSTANCE.switchTo(mob, graphId);
             source.sendSuccess(() -> Component.literal("Switched " + mob.getName().getString()
                     + " to " + graphId + " (" + instance.instanceId() + ")"), false);
             return true;
@@ -78,7 +78,7 @@ public final class BehaviorTreeCommand {
     }
 
     private static boolean status(CommandSourceStack source, Mob mob) {
-        BehaviorTreeInstance instance = BehaviorTreeRuntime.INSTANCE.getForOwner(mob);
+        BehaviorTreeProcess instance = BehaviorTreeRuntime.INSTANCE.getForOwner(mob);
         Set<String> bindings = BehaviorTreeRuntime.INSTANCE.boundGraphs(mob);
         String selected = BehaviorTreeRuntime.INSTANCE.selectedGraph(mob);
         BehaviorTerminationReason lastStop = BehaviorTreeRuntime.INSTANCE.lastStopReasonForOwner(
@@ -93,14 +93,14 @@ public final class BehaviorTreeCommand {
     }
 
     private static boolean start(CommandSourceStack source, Mob mob) {
-        BehaviorTreeInstance instance = BehaviorTreeRuntime.INSTANCE.startBound(mob);
+        BehaviorTreeProcess instance = BehaviorTreeRuntime.INSTANCE.startBound(mob);
         source.sendSuccess(() -> Component.literal("Started " + instance.graphId() + " on "
                 + mob.getName().getString() + " (" + instance.instanceId() + ")"), false);
         return true;
     }
 
     private static boolean suspend(CommandSourceStack source, Mob mob) {
-        BehaviorTreeInstance instance = BehaviorTreeRuntime.INSTANCE.getForOwner(mob);
+        BehaviorTreeProcess instance = BehaviorTreeRuntime.INSTANCE.getForOwner(mob);
         boolean changed = instance != null && BehaviorTreeRuntime.INSTANCE.suspend(
                 source.getServer(), instance.instanceId());
         if (changed) sendLifecycle(source, mob, "Suspended");
@@ -108,7 +108,7 @@ public final class BehaviorTreeCommand {
     }
 
     private static boolean resume(CommandSourceStack source, Mob mob) {
-        BehaviorTreeInstance instance = BehaviorTreeRuntime.INSTANCE.getForOwner(mob);
+        BehaviorTreeProcess instance = BehaviorTreeRuntime.INSTANCE.getForOwner(mob);
         boolean changed = instance != null && BehaviorTreeRuntime.INSTANCE.resume(
                 source.getServer(), instance.instanceId());
         if (changed) sendLifecycle(source, mob, "Resumed");
@@ -116,7 +116,7 @@ public final class BehaviorTreeCommand {
     }
 
     private static boolean stop(CommandSourceStack source, Mob mob) {
-        BehaviorTreeInstance instance = BehaviorTreeRuntime.INSTANCE.getForOwner(mob);
+        BehaviorTreeProcess instance = BehaviorTreeRuntime.INSTANCE.getForOwner(mob);
         boolean changed = instance != null && BehaviorTreeRuntime.INSTANCE.stop(source.getServer(),
                 instance.instanceId(), BehaviorTerminationReason.TREE_STOPPED);
         if (changed) sendLifecycle(source, mob, "Stopped");

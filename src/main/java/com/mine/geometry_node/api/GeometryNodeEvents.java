@@ -11,7 +11,7 @@ import java.util.Map;
 
 /**
  * 事件派发 facade。
- * 这是给 Addon 使用的稳定入口，内部再桥接到 GraphEngine。
+ * 这是给 Addon 使用的稳定入口，内部再桥接到 BlueprintEngine。
  */
 public final class GeometryNodeEvents {
     private static final GeometryEventDispatcher DISPATCHER = new GeometryEventDispatcher() {

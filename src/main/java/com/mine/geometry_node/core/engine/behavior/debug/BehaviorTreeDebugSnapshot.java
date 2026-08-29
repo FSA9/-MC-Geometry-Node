@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.behavior.runtime.debug;
+package com.mine.geometry_node.core.engine.behavior.debug;
 
 import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorNodeState;
@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorInstanceState;
-import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeInstance;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeProcess;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.node.port.PortType;
 import net.minecraft.server.level.ServerLevel;
@@ -23,7 +23,7 @@ import java.util.UUID;
  * Immutable, transport-safe observation of one server-authoritative behavior instance.
  * It deliberately contains no runtime object references and cannot mutate the instance.
  */
-public record BehaviorDebugSnapshot(
+public record BehaviorTreeDebugSnapshot(
         UUID instanceId,
         String assetId,
         String ownerIdentity,
@@ -51,7 +51,7 @@ public record BehaviorDebugSnapshot(
     private static final int MAX_COLLECTION_ENTRIES = 32;
     private static final int MAX_SNAPSHOT_NODES = 256;
 
-    public BehaviorDebugSnapshot {
+    public BehaviorTreeDebugSnapshot {
         activePath = List.copyOf(activePath);
         nodes = List.copyOf(nodes);
         blackboard = List.copyOf(blackboard);
@@ -59,7 +59,7 @@ public record BehaviorDebugSnapshot(
     }
 
     /** Must be called on the owning server thread so the copied view has one snapshot boundary. */
-    public static BehaviorDebugSnapshot capture(BehaviorTreeInstance instance) {
+    public static BehaviorTreeDebugSnapshot capture(BehaviorTreeProcess instance) {
         BehaviorTreePlan plan = instance.plan();
         Entity owner = instance.host().owner();
         ServerLevel level = instance.host().level();
@@ -73,7 +73,7 @@ public record BehaviorDebugSnapshot(
         List<NodeSnapshot> nodes = new ArrayList<>(selectedNodes.size());
         for (int index : selectedNodes) {
             if (index < 0 || index >= plan.getNodeCount()) continue;
-            BehaviorTreeInstance.NodeMetrics metrics = instance.nodeMetrics(index);
+            BehaviorTreeProcess.NodeMetrics metrics = instance.nodeMetrics(index);
             nodes.add(new NodeSnapshot(index, plan.getNodeId(index), plan.getNodeType(index),
                     plan.getParent(index), instance.nodeState(index), metrics.visits(),
                     metrics.totalNanos(), metrics.lastNanos(), metrics.lastResult(),
@@ -93,12 +93,12 @@ public record BehaviorDebugSnapshot(
                         bounded(event.detail(), MAX_DETAIL_TEXT)))
                 .toList();
 
-        BehaviorTreeInstance.EvaluationMetrics metrics = instance.evaluationMetrics();
+        BehaviorTreeProcess.EvaluationMetrics metrics = instance.evaluationMetrics();
         BehaviorRuntimeBudget configuredBudget = instance.budget();
         long hostTick = instance.host().gameTick();
         long captureTick = instance.lastEvaluationTick() != Long.MIN_VALUE
                 ? Math.max(hostTick, instance.lastEvaluationTick()) : hostTick;
-        return new BehaviorDebugSnapshot(instance.instanceId(), instance.graphId(),
+        return new BehaviorTreeDebugSnapshot(instance.instanceId(), instance.graphId(),
                 instance.host().identity(), owner != null ? owner.getUUID() : null,
                 owner != null ? bounded(owner.getName().getString(), 256) : "",
                 level != null ? level.dimension().identifier().toString() : "",

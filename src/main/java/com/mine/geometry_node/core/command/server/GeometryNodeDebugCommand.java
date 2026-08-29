@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.command.server;
 
-import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.context.CommandContext;

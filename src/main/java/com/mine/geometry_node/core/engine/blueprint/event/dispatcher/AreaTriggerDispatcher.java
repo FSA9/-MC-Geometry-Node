@@ -2,13 +2,13 @@ package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
 import com.mine.geometry_node.core.engine.graph.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
-import com.mine.geometry_node.core.engine.blueprint.debug.DebugRenderShape;
-import com.mine.geometry_node.core.engine.blueprint.debug.DebugRenderChannel;
-import com.mine.geometry_node.core.engine.blueprint.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAnchor;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaEntityQuery;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
@@ -40,7 +40,7 @@ public final class AreaTriggerDispatcher {
     private static final int STALE_STATE_TICKS = 20 * 60;
     private static final int STALE_CLEANUP_INTERVAL = 20 * 10;
     private static final Map<StateKey, AreaState> STATES = new HashMap<>();
-    private static final Map<RuntimeGraphIndex, List<CompiledAreaNode>> CONFIG_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<BlueprintPlan, List<CompiledAreaNode>> CONFIG_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
     private static long lastCleanupTick = Long.MIN_VALUE;
 
     private AreaTriggerDispatcher() {
@@ -55,9 +55,9 @@ public final class AreaTriggerDispatcher {
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
 
-        for (String graphId : GraphEngine.getGlobalGraphsForEvent(level, AreaTriggerEvent.TYPE_ID)) {
+        for (String graphId : BlueprintEngine.getGlobalGraphsForEvent(level, AreaTriggerEvent.TYPE_ID)) {
             String sourceKey = DebugRendererSessionManager.levelSourceKey(level, graphId);
-            tickGraph(level, null, graphId, GraphEngine.getGraphIndex(graphId),
+            tickGraph(level, null, graphId, BlueprintEngine.getGraphIndex(graphId),
                     attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates, queryCache);
         }
 
@@ -72,9 +72,9 @@ public final class AreaTriggerDispatcher {
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
 
-        for (String graphId : GraphEngine.getEntityGraphsForEvent(owner, AreaTriggerEvent.TYPE_ID)) {
+        for (String graphId : BlueprintEngine.getEntityGraphsForEvent(owner, AreaTriggerEvent.TYPE_ID)) {
             String sourceKey = DebugRendererSessionManager.entitySourceKey(level, owner, graphId);
-            tickGraph(level, owner, graphId, GraphEngine.getGraphIndex(graphId),
+            tickGraph(level, owner, graphId, BlueprintEngine.getGraphIndex(graphId),
                     attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates, queryCache);
         }
 
@@ -84,9 +84,9 @@ public final class AreaTriggerDispatcher {
     private static void tickGraph(ServerLevel level,
                                   @Nullable Entity target,
                                   String graphId,
-                                  @Nullable RuntimeGraphIndex index,
-                                  Function<String, GraphProcess> processFinder,
-                                  Consumer<GraphProcess> mountAction,
+                                  @Nullable BlueprintPlan index,
+                                  Function<String, BlueprintProcess> processFinder,
+                                  Consumer<BlueprintProcess> mountAction,
                                   ScopeKey scope,
                                   String sourceKey,
                                   long currentTick,
@@ -137,7 +137,7 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private static void collectNodes(RuntimeGraphIndex index,
+    private static void collectNodes(BlueprintPlan index,
                                      long currentTick,
                                      Map<AreaConfigKey, AreaGroup> groups) {
         for (CompiledAreaNode node : getCompiledNodes(index)) {
@@ -152,13 +152,13 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private static List<CompiledAreaNode> getCompiledNodes(RuntimeGraphIndex index) {
+    private static List<CompiledAreaNode> getCompiledNodes(BlueprintPlan index) {
         synchronized (CONFIG_CACHE) {
             return CONFIG_CACHE.computeIfAbsent(index, AreaTriggerDispatcher::compileNodes);
         }
     }
 
-    private static List<CompiledAreaNode> compileNodes(RuntimeGraphIndex index) {
+    private static List<CompiledAreaNode> compileNodes(BlueprintPlan index) {
         List<Integer> nodeIds = index.findNodesByType(AreaTriggerEvent.TYPE_ID);
         if (nodeIds.isEmpty()) {
             return List.of();
@@ -176,7 +176,7 @@ public final class AreaTriggerDispatcher {
         return List.copyOf(nodes);
     }
 
-    private static AreaPhase readPhase(RuntimeGraphIndex index, int nodeId) {
+    private static AreaPhase readPhase(BlueprintPlan index, int nodeId) {
         String rawPhase = index.getNodeStaticInput(nodeId, AreaTriggerEvent.PHASE_PORT, String.class, AreaTriggerEvent.PHASE_ENTER);
         return AreaPhase.fromPayloadName(rawPhase);
     }
@@ -189,7 +189,7 @@ public final class AreaTriggerDispatcher {
                 DebugRenderChannel.AREA.color());
     }
 
-    private static AreaConfig readConfig(RuntimeGraphIndex index, int nodeId) {
+    private static AreaConfig readConfig(BlueprintPlan index, int nodeId) {
         AreaAnchor anchor = AreaAnchor.fromId(index.getNodeStaticInput(nodeId, AreaTriggerEvent.ANCHOR_PORT, String.class, AreaAnchor.WORLD.id()));
         AreaShape shape = AreaShape.fromId(index.getNodeStaticInput(nodeId, AreaTriggerEvent.SHAPE_PORT, String.class, AreaShape.BOX.id()));
         AreaTargetType targetType = AreaTargetType.fromId(index.getNodeStaticInput(nodeId, AreaTriggerEvent.TARGET_PORT, String.class, AreaTargetType.ALL.id()));
@@ -203,7 +203,7 @@ public final class AreaTriggerDispatcher {
         return new AreaConfig(anchor, shape, targetType, center, size, rotation, interval, offset);
     }
 
-    private static Vec3 readSize(RuntimeGraphIndex index, int nodeId, AreaShape shape) {
+    private static Vec3 readSize(BlueprintPlan index, int nodeId, AreaShape shape) {
         return switch (shape) {
             case SPHERE -> {
                 double radius = readPositiveDouble(index.getNodeStaticInput(nodeId, StandardPorts.RADIUS.getId()), AreaTriggerEvent.DEFAULT_RADIUS);
@@ -227,13 +227,13 @@ public final class AreaTriggerDispatcher {
     private static void dispatchPhase(ServerLevel level,
                                       @Nullable Entity target,
                                       String graphId,
-                                      RuntimeGraphIndex index,
+                                      BlueprintPlan index,
                                       AreaGroup group,
                                       AreaPhase phase,
                                       Set<UUID> entityIds,
                                       AreaQueryResult result,
-                                      Function<String, GraphProcess> processFinder,
-                                      Consumer<GraphProcess> mountAction) {
+                                      Function<String, BlueprintProcess> processFinder,
+                                      Consumer<BlueprintProcess> mountAction) {
         List<Integer> nodes = group.nodes.get(phase);
         if (nodes == null || nodes.isEmpty() || entityIds.isEmpty()) return;
 
@@ -266,7 +266,7 @@ public final class AreaTriggerDispatcher {
             for (int nodeId : nodes) {
                 Map<String, Object> eventData = new LinkedHashMap<>(baseData);
                 eventData.put(AreaTriggerEvent.TRIGGER_ID_PORT, graphId + ":" + index.getIdToString(nodeId));
-                GraphEngine.executeEventNode(level, target, graphId, index, nodeId, eventData, processFinder, mountAction);
+                BlueprintEngine.executeEventNode(level, target, graphId, index, nodeId, eventData, processFinder, mountAction);
             }
         }
     }

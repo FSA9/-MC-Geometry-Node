@@ -2,16 +2,14 @@ package com.mine.geometry_node.core.engine.behavior.runtime;
 
 import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
-import dev.architectury.event.events.common.TickEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 
-/** Bridges server lifecycle events into the behavior runtime service. */
+/** Bridges server lifecycle events into the behavior-tree engine. */
 public final class BehaviorEventHandler {
     private static boolean registered;
 
@@ -21,7 +19,6 @@ public final class BehaviorEventHandler {
     public static synchronized void init() {
         if (registered) return;
         registered = true;
-        TickEvent.SERVER_LEVEL_POST.register(BehaviorTreeRuntime.INSTANCE::tickLevel);
         var bus = NeoForge.EVENT_BUS;
         bus.addListener((EntityJoinLevelEvent event) -> {
             if (!(event.getLevel() instanceof ServerLevel) || !(event.getEntity() instanceof net.minecraft.world.entity.Mob mob)) {
@@ -46,7 +43,5 @@ public final class BehaviorEventHandler {
                         event.getEntity(), BehaviorTerminationReason.CHUNK_UNLOADED);
             }
         });
-        bus.addListener((ServerStoppingEvent event) ->
-                BehaviorTreeRuntime.INSTANCE.shutdown(event.getServer()));
     }
 }

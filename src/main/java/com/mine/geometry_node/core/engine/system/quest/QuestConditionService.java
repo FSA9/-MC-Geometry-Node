@@ -1,9 +1,10 @@
 package com.mine.geometry_node.core.engine.system.quest;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphEngine;
-import com.mine.geometry_node.core.engine.blueprint.runtime.GraphProcess;
-import com.mine.geometry_node.core.engine.blueprint.runtime.RuntimeGraphIndex;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionCheck;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionResult;
@@ -24,7 +25,7 @@ public final class QuestConditionService {
     }
 
     public QuestConditionResult evaluate(Entity owner, String taskKey, QuestConditionKind kind) {
-        RuntimeGraphIndex index = GraphEngine.getGraphIndex(taskKey);
+        BlueprintPlan index = BlueprintEngine.getGraphIndex(taskKey);
         if (index == null || owner == null || kind == null
                 || !(owner.level() instanceof ServerLevel level)) {
             return QuestConditionResult.evaluationFailed();
@@ -43,7 +44,7 @@ public final class QuestConditionService {
             return QuestConditionResult.evaluationFailed();
         }
 
-        GraphProcess process = new GraphProcess(taskKey, index);
+        BlueprintProcess process = new BlueprintProcess(taskKey, index);
         process.setGraphOwner(owner);
         process.setEnvironment(level, owner);
         try {
@@ -65,7 +66,7 @@ public final class QuestConditionService {
 
     /** Evaluates every authored condition for a read-only quest-screen snapshot. */
     public List<QuestConditionCheck> evaluateChecks(Entity owner, String taskKey, QuestConditionKind kind) {
-        RuntimeGraphIndex index = GraphEngine.getGraphIndex(taskKey);
+        BlueprintPlan index = BlueprintEngine.getGraphIndex(taskKey);
         if (index == null || owner == null || kind == null
                 || !(owner.level() instanceof ServerLevel level)) {
             return List.of();
@@ -88,12 +89,12 @@ public final class QuestConditionService {
                         conditionNodeId,
                         StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id()));
         List<QuestConditionCheck> checks = new ArrayList<>(conditionCount);
-        GraphProcess process = new GraphProcess(taskKey, index);
+        BlueprintProcess process = new BlueprintProcess(taskKey, index);
         process.setGraphOwner(owner);
         process.setEnvironment(level, owner);
         try {
             for (int i = 1; i <= conditionCount; i++) {
-                RuntimeGraphIndex.IntConnectionSource source = index.findInputSource(
+                CompiledDataIndex.DataConnectionSource source = index.findInputSource(
                         conditionNodeId,
                         BaseQuestConditionsNode.conditionPort(i));
                 if (source == null) continue;
