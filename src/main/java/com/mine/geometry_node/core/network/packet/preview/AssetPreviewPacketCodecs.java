@@ -22,7 +22,7 @@ public final class AssetPreviewPacketCodecs {
                 b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readUtf(64));
     }
     public static <E extends Enum<E>> E readEnum(RegistryFriendlyByteBuf b, E[] values) {
-        int i = b.readVarInt(); if (i < 0 || i >= values.length) throw new IllegalArgumentException("Invalid preview enum ordinal");
+        int i = b.readVarInt(); if (i < 0 || i >= values.length) throw new IllegalArgumentException("Invalid nativepreview enum ordinal");
         return values[i];
     }
 }

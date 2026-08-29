@@ -15,12 +15,12 @@ public record AssetPreviewDescriptor(
         revision = Objects.requireNonNull(revision, "revision");
         format = Objects.requireNonNull(format, "format");
         if (!AssetPreviewLimits.validDimensions(width, height)) {
-            throw new IllegalArgumentException("Invalid preview dimensions: " + width + "x" + height);
+            throw new IllegalArgumentException("Invalid nativepreview dimensions: " + width + "x" + height);
         }
         if (!AssetPreviewLimits.validEncodedSize(encodedBytes)) {
-            throw new IllegalArgumentException("Invalid preview encoded size: " + encodedBytes);
+            throw new IllegalArgumentException("Invalid nativepreview encoded size: " + encodedBytes);
         }
         sha256 = Objects.requireNonNullElse(sha256, "").toLowerCase(Locale.ROOT);
-        if (!sha256.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Invalid preview SHA-256");
+        if (!sha256.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Invalid nativepreview SHA-256");
     }
 }

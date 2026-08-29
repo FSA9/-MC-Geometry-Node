@@ -3,8 +3,8 @@ package com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.
 import com.mine.geometry_node.client.runtime.quest.ui.QuestHintView;
 import com.mine.geometry_node.client.ui.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ExpandedTextInputOverlay;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.VanillaInventoryPicker;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ExpandedTextInputOverlay;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.VanillaInventoryPicker;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestRewardDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
 import com.mine.geometry_node.core.node.value.RichTextValue;

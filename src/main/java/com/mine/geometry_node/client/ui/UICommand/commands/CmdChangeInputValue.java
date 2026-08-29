@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.UICommand.commands;
 
 import com.mine.geometry_node.client.ui.UICommand.ICommand;
-import com.mine.geometry_node.client.ui.viewport.GraphController;
+import com.mine.geometry_node.client.ui.editor.graph.GraphController;
 
 public class CmdChangeInputValue implements ICommand {
     private final GraphController mController;

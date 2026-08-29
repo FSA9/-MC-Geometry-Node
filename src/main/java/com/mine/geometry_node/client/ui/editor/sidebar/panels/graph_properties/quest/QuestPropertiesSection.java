@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.sidebar.panels.graph_properties.quest;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.ExpandedTextInputOverlay;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ExpandedTextInputOverlay;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.node.value.RichTextValue;
@@ -61,8 +61,8 @@ public final class QuestPropertiesSection extends LinearLayout {
         addView(sectionTitle, sectionTitleParams);
 
         TextView preview = actionButton(
-                tr("geometry_node.button.preview"),
-                tr("geometry_node.graph_properties.quest.preview"));
+                tr("geometry_node.button.nativepreview"),
+                tr("geometry_node.graph_properties.quest.nativepreview"));
         preview.setOnClickListener(v -> {
             if (mOnPreview != null) mOnPreview.run();
         });

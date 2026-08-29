@@ -207,12 +207,12 @@ public final class ServerAssetTransferService implements AutoCloseable {
         }
         if (!packet.hasPreview() || packet.previewFormat()
                 != com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewFormat.PNG) {
-            throw new java.io.IOException("Schematic upload requires a PNG preview");
+            throw new java.io.IOException("Schematic upload requires a PNG nativepreview");
         }
         byte[] content = packet.previewContent();
         Path directory = RemoteAssetFileService.transferTemporaryDirectory(player.level().getServer());
         Files.createDirectories(directory);
-        Path temporary = directory.resolve(session.transferId + ".preview.tmp");
+        Path temporary = directory.resolve(session.transferId + ".nativepreview.tmp");
         Files.write(temporary, content);
         try {
             validatePreviewImage(temporary, packet.previewFormat(),
@@ -228,13 +228,13 @@ public final class ServerAssetTransferService implements AutoCloseable {
                                              com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewFormat format,
                                              int expectedWidth, int expectedHeight) throws Exception {
         try (ImageInputStream input = ImageIO.createImageInputStream(source.toFile())) {
-            if (input == null) throw new java.io.IOException("Cannot inspect schematic preview image");
+            if (input == null) throw new java.io.IOException("Cannot inspect schematic nativepreview image");
             java.util.Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
-            if (!readers.hasNext()) throw new java.io.IOException("Unsupported schematic preview image");
+            if (!readers.hasNext()) throw new java.io.IOException("Unsupported schematic nativepreview image");
             ImageReader reader = readers.next();
             try {
                 if (!format.name().equalsIgnoreCase(reader.getFormatName())) {
-                    throw new java.io.IOException("Schematic preview encoding does not match its descriptor");
+                    throw new java.io.IOException("Schematic nativepreview encoding does not match its descriptor");
                 }
                 reader.setInput(input, true, true);
                 int width = reader.getWidth(0);
@@ -242,7 +242,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
                 if (width != expectedWidth || height != expectedHeight
                         || !com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewLimits
                         .validDimensions(width, height)) {
-                    throw new java.io.IOException("Invalid schematic preview dimensions");
+                    throw new java.io.IOException("Invalid schematic nativepreview dimensions");
                 }
             } finally {
                 reader.dispose();

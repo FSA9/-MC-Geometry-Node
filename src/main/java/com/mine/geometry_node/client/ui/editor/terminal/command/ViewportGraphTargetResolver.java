@@ -2,10 +2,10 @@ package com.mine.geometry_node.client.ui.editor.terminal.command;
 
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ui.session.GraphSession;
-import com.mine.geometry_node.client.ui.surface.UiSurfaceId;
-import com.mine.geometry_node.client.ui.surface.UiSurfaceRegistry;
-import com.mine.geometry_node.client.ui.surface.UiSurfaceType;
-import com.mine.geometry_node.client.ui.surface.ViewportSurface;
+import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
+import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
+import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;
+import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
 
 import java.util.HashMap;
 import java.util.List;

@@ -121,7 +121,7 @@ public final class ClientAssetPreviewCache {
 
     private static AssetPreviewDescriptor readMetadata(Path source) throws IOException {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(source)))) {
-            if (input.readInt() != METADATA_MAGIC) throw new IOException("Invalid preview metadata");
+            if (input.readInt() != METADATA_MAGIC) throw new IOException("Invalid nativepreview metadata");
             String remotePath = input.readUTF();
             int kind = input.readInt();
             long size = input.readLong();
@@ -130,14 +130,14 @@ public final class ClientAssetPreviewCache {
             int format = input.readInt();
             if (kind < 0 || kind >= AssetPreviewKind.values().length
                     || format < 0 || format >= AssetPreviewFormat.values().length) {
-                throw new IOException("Invalid preview metadata enum");
+                throw new IOException("Invalid nativepreview metadata enum");
             }
             AssetPreviewRevision revision = new AssetPreviewRevision(
                     new AssetPreviewIdentity(remotePath, AssetPreviewKind.values()[kind]), size, modified, version);
             return new AssetPreviewDescriptor(revision, AssetPreviewFormat.values()[format],
                     input.readInt(), input.readInt(), input.readInt(), input.readUTF());
         } catch (IllegalArgumentException exception) {
-            throw new IOException("Invalid preview metadata", exception);
+            throw new IOException("Invalid nativepreview metadata", exception);
         }
     }
 
@@ -159,7 +159,7 @@ public final class ClientAssetPreviewCache {
         Path owner = ClientAssetPreviewPaths.root();
         Path root = requestedRoot.toAbsolutePath().normalize();
         if (!root.startsWith(owner) || root.getNameCount() < owner.getNameCount()) {
-            throw new IOException("Refusing to clear a path outside the preview cache");
+            throw new IOException("Refusing to clear a path outside the nativepreview cache");
         }
         if (!Files.exists(root)) return;
         try (var paths = Files.walk(root)) {

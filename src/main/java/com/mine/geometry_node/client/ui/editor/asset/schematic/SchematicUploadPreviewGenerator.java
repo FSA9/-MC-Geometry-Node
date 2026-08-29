@@ -26,7 +26,7 @@ public final class SchematicUploadPreviewGenerator {
 
     public static SchematicUploadPreview render(SchematicThumbnail thumbnail) throws IOException {
         if (thumbnail == null || !thumbnail.hasPreview()) {
-            throw new IOException(thumbnail == null ? "Schematic preview is unavailable" : thumbnail.message());
+            throw new IOException(thumbnail == null ? "Schematic nativepreview is unavailable" : thumbnail.message());
         }
         int width = AssetPreviewLimits.TARGET_WIDTH;
         int height = AssetPreviewLimits.TARGET_HEIGHT;
@@ -48,7 +48,7 @@ public final class SchematicUploadPreviewGenerator {
         BufferedImage cropped = cropTransparentBounds(image);
         byte[] encoded = encodePng(cropped);
         if (!AssetPreviewLimits.validEncodedSize(encoded.length)) {
-            throw new IOException("Encoded schematic preview exceeds the protocol limit");
+            throw new IOException("Encoded schematic nativepreview exceeds the protocol limit");
         }
         return new SchematicUploadPreview(AssetPreviewFormat.PNG,
                 cropped.getWidth(), cropped.getHeight(), encoded);

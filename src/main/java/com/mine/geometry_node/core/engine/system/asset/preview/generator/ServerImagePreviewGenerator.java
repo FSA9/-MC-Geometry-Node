@@ -23,7 +23,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Iterator;
 
-/** Dedicated-server-safe image decoder, scaler, and preview publisher. */
+/** Dedicated-server-safe image decoder, scaler, and nativepreview publisher. */
 public final class ServerImagePreviewGenerator {
     private final ServerAssetPreviewStore store;
 
@@ -36,7 +36,7 @@ public final class ServerImagePreviewGenerator {
         BasicFileAttributes before = attributes(source);
         verifyRevision(before, revision);
         if (before.size() > AssetPreviewLimits.MAX_IMAGE_SOURCE_BYTES) {
-            throw new PreviewUnavailableException("Image source exceeds preview limit");
+            throw new PreviewUnavailableException("Image source exceeds nativepreview limit");
         }
         BufferedImage decoded = decode(source);
         BufferedImage scaled = scale(decoded);
@@ -45,13 +45,13 @@ public final class ServerImagePreviewGenerator {
         try {
             Files.createDirectories(staging.getParent());
             if (!ImageIO.write(scaled, "png", staging.toFile())) {
-                throw new IOException("PNG preview encoder is unavailable");
+                throw new IOException("PNG nativepreview encoder is unavailable");
             }
             BasicFileAttributes after = attributes(source);
             verifyRevision(after, revision);
             int encodedBytes = Math.toIntExact(Files.size(staging));
             if (!AssetPreviewLimits.validEncodedSize(encodedBytes)) {
-                throw new PreviewUnavailableException("Encoded image preview exceeds protocol limit");
+                throw new PreviewUnavailableException("Encoded image nativepreview exceeds protocol limit");
             }
             AssetPreviewDescriptor descriptor = new AssetPreviewDescriptor(revision, AssetPreviewFormat.PNG,
                     scaled.getWidth(), scaled.getHeight(), encodedBytes, AssetTransferHashing.sha256(staging));
@@ -75,7 +75,7 @@ public final class ServerImagePreviewGenerator {
                 int width = reader.getWidth(0);
                 int height = reader.getHeight(0);
                 if (!AssetPreviewLimits.validImageSourceDimensions(width, height)) {
-                    throw new PreviewUnavailableException("Image dimensions exceed preview limit");
+                    throw new PreviewUnavailableException("Image dimensions exceed nativepreview limit");
                 }
                 BufferedImage image = reader.read(0);
                 if (image == null) throw new PreviewUnavailableException("Image decoder returned no pixels");
@@ -130,7 +130,7 @@ public final class ServerImagePreviewGenerator {
 
     public static final class SourceChangedException extends IOException {
         public SourceChangedException() {
-            super("Image source revision changed while generating preview");
+            super("Image source revision changed while generating nativepreview");
         }
     }
 }

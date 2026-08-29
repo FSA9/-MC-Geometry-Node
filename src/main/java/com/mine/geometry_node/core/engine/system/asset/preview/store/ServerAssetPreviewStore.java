@@ -10,7 +10,7 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.Optional;
 
-/** Persistent immutable preview artifacts owned by one server world. */
+/** Persistent immutable nativepreview artifacts owned by one server world. */
 public final class ServerAssetPreviewStore {
     private static final int METADATA_MAGIC = 0x474E5052;
 
@@ -85,18 +85,18 @@ public final class ServerAssetPreviewStore {
 
     private static AssetPreviewDescriptor readMetadata(Path source) throws IOException {
         try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(source)))) {
-            if (in.readInt() != METADATA_MAGIC) throw new IOException("Invalid preview metadata");
+            if (in.readInt() != METADATA_MAGIC) throw new IOException("Invalid nativepreview metadata");
             String path = in.readUTF(); int kind = in.readInt(); long size = in.readLong(); long modified = in.readLong();
             int version = in.readInt(); int format = in.readInt();
             if (kind < 0 || kind >= AssetPreviewKind.values().length || format < 0 || format >= AssetPreviewFormat.values().length) {
-                throw new IOException("Invalid preview metadata enum");
+                throw new IOException("Invalid nativepreview metadata enum");
             }
             AssetPreviewRevision revision = new AssetPreviewRevision(
                     new AssetPreviewIdentity(path, AssetPreviewKind.values()[kind]), size, modified, version);
             return new AssetPreviewDescriptor(revision, AssetPreviewFormat.values()[format],
                     in.readInt(), in.readInt(), in.readInt(), in.readUTF());
         } catch (IllegalArgumentException exception) {
-            throw new IOException("Invalid preview metadata", exception);
+            throw new IOException("Invalid nativepreview metadata", exception);
         }
     }
 

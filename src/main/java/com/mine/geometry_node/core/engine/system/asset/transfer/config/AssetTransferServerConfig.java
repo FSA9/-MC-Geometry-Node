@@ -62,8 +62,8 @@ public final class AssetTransferServerConfig {
                 .defineInRange(AssetTransferConfigKeys.IDLE_TIMEOUT_SECONDS,
                         Math.toIntExact(defaults.idleTimeout().toSeconds()), 1, 3600);
         PREVIEW_CACHE_MAX_SIZE_MIB = BUILDER
-                .comment("Maximum persistent preview-cache size in MiB. The cache directory is the sibling "
-                        + "'.geometrynode-preview-cache' beside the server geometry-nodes asset root.")
+                .comment("Maximum persistent nativepreview-cache size in MiB. The cache directory is the sibling "
+                        + "'.geometrynode-nativepreview-cache' beside the server geometry-nodes asset root.")
                 .defineInRange("previewCacheMaxSizeMiB", 512, 64, 65_536);
         BUILDER.pop();
         ScopedStateServerConfig.register(BUILDER);

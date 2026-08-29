@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.shell;
 
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.area.AreaLayoutRoot;
+import com.mine.geometry_node.client.ui.workspace.area.AreaLayoutRoot;
 import com.mine.geometry_node.client.ui.shell.layer.MainUiLayerHost;
 import com.mine.geometry_node.client.ui.shell.layer.MainUiLayerManager;
 import com.mine.geometry_node.client.ui.shell.menu.MainMenuController;

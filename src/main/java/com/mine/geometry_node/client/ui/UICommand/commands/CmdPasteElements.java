@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.UICommand.commands;
 
 import com.mine.geometry_node.client.ui.UICommand.ICommand;
-import com.mine.geometry_node.client.ui.viewport.GraphController;
+import com.mine.geometry_node.client.ui.editor.graph.GraphController;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.FrameData;

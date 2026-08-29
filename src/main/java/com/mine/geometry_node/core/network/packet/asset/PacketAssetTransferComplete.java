@@ -28,7 +28,7 @@ public record PacketAssetTransferComplete(UUID transferId, AssetPreviewFormat pr
             previewHeight = 0;
         } else if (previewFormat == null || !AssetPreviewLimits.validDimensions(previewWidth, previewHeight)
                 || !AssetPreviewLimits.validEncodedSize(previewContent.length)) {
-            throw new IllegalArgumentException("Invalid asset preview attachment");
+            throw new IllegalArgumentException("Invalid asset nativepreview attachment");
         }
     }
 
@@ -54,7 +54,7 @@ public record PacketAssetTransferComplete(UUID transferId, AssetPreviewFormat pr
         if (encoded == 0) return null;
         int ordinal = encoded - 1;
         if (ordinal < 0 || ordinal >= AssetPreviewFormat.values().length) {
-            throw new IllegalArgumentException("Invalid preview format");
+            throw new IllegalArgumentException("Invalid nativepreview format");
         }
         return AssetPreviewFormat.values()[ordinal];
     }

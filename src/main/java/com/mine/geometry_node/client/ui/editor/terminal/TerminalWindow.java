@@ -9,7 +9,7 @@ import com.mine.geometry_node.client.terminal.shell.PowerShellProfile;
 import com.mine.geometry_node.client.terminal.shell.ShellTerminalCoordinator;
 import com.mine.geometry_node.client.terminal.pty.pty4j.Pty4jProcessFactory;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
+import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ui.editor.terminal.command.MinecraftClientMcpGateway;
 import icyllis.modernui.core.Context;

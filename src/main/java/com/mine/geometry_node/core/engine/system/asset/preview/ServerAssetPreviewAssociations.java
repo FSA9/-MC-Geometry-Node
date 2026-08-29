@@ -12,7 +12,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Captures immutable preview revisions before asset copy/move and rekeys them after the file operation. */
+/** Captures immutable nativepreview revisions before asset copy/move and rekeys them after the file operation. */
 public final class ServerAssetPreviewAssociations {
     private static final ServerAssetPreviewStore STORE = new ServerAssetPreviewStore();
 
@@ -57,7 +57,7 @@ public final class ServerAssetPreviewAssociations {
                             attributes.lastModifiedTime().toMillis());
                     STORE.copyAssociation(server, entry.sourceRevision, targetRevision);
                 } catch (IOException | RuntimeException exception) {
-                    System.err.println("[AssetPreview] Failed to migrate preview for " + entry.target
+                    System.err.println("[AssetPreview] Failed to migrate nativepreview for " + entry.target
                             + ": " + exception.getMessage());
                 }
             }

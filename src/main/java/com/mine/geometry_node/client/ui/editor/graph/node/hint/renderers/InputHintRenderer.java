@@ -1,0 +1,169 @@
+package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
+
+import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.NumericInputSpec;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ExpandedTextInputOverlay;
+import com.mine.geometry_node.core.node.document.NodeData;
+import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.value.RichTextValue;
+
+import icyllis.modernui.core.Context;
+import icyllis.modernui.view.Gravity;
+import icyllis.modernui.view.View;
+import icyllis.modernui.widget.EditText;
+import icyllis.modernui.widget.FrameLayout;
+import icyllis.modernui.widget.LinearLayout;
+
+public class InputHintRenderer implements UIHintRenderer {
+    private static final float COLOR_SWATCH_WIDTH = 34.0f;
+
+    @Override
+    public float getRequiredExtraRows(PortRow row) {
+        if (row != null && row.leftPort() != null
+                && (NumericInputSpec.supports(row.leftPort().type()) || row.leftPort().type() == PortType.COLOR)) {
+            return 0.0f;
+        }
+        return 1.0f;
+    }
+
+    @Override
+    public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
+        String portId = row.leftPort().id();
+        PortType expectedType = row.leftPort().type();
+
+        if (NumericInputSpec.supports(expectedType)) {
+            return new NumericInputView(
+                    context,
+                    nodeData,
+                    row.leftPort(),
+                    NumericInputSpec.from(row, expectedType),
+                    editorContext
+            );
+        }
+
+        if (expectedType == PortType.COLOR) {
+            return new ColorInputView(context, nodeData, row.leftPort(), editorContext);
+        }
+
+        Object val = UIHintValueBinder.getValue(nodeData, row.leftPort());
+        final Object finalOldVal = val;
+
+        EditText et = new EditText(context);
+        et.setText(displayText(val, expectedType));
+
+        UIHintUtils.applyStandardInputStyle(et, expectedType);
+
+        et.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus && editorContext != null) {
+                Object parsedValue;
+                if (expectedType == PortType.RICH_TEXT) {
+                    parsedValue = richTextValueAfterInlineEdit(finalOldVal, et.getText().toString());
+                    if (parsedValue == null) {
+                        return;
+                    }
+                } else {
+                    parsedValue = UIHintValueBinder.parseText(et.getText().toString(), expectedType);
+                }
+                if (parsedValue == null && UIHintValueBinder.requiresNumericValue(expectedType)) {
+                    et.setText(finalOldVal != null ? finalOldVal.toString() : "");
+                    return;
+                }
+
+                UIHintValueBinder.commit(editorContext, nodeData, portId, parsedValue);
+            }
+        });
+
+        LinearLayout wrapper = new LinearLayout(context);
+        wrapper.setOrientation(LinearLayout.HORIZONTAL);
+        wrapper.setGravity(Gravity.CENTER_VERTICAL);
+
+        wrapper.addView(et, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f));
+        wrapper.addView(createExpandButton(context, et, nodeData, portId, expectedType, editorContext, val),
+                new LinearLayout.LayoutParams(InlineActionButton.widthPx(), InlineActionButton.heightPx()));
+        return wrapper;
+    }
+
+    @Override
+    public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
+        float startX = UIConstants.Node.LABEL_MARGIN_PORT;
+        float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
+
+        boolean isColorInput = row.leftPort() != null && row.leftPort().type() == PortType.COLOR;
+        boolean isInlineInput = row.leftPort() != null
+                && (NumericInputSpec.supports(row.leftPort().type()) || isColorInput);
+        boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
+        float topOffset = isInlineInput ? 0.0f : (hasLabel ? UIConstants.Node.ROW_HEIGHT : 0.0f);
+
+        // 直接调用工具类获取高度
+        float inputBoxHeight = UIHintUtils.getStandardInputHeight();
+        // 居中偏移也基于工具类的高度来算
+        float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
+
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
+        int widthPx = UIUtils.dp2pxInt(isColorInput ? COLOR_SWATCH_WIDTH : endX - startX);
+        int heightPx = UIUtils.dp2pxInt(inputBoxHeight);
+
+        if (lp == null) {
+            lp = new FrameLayout.LayoutParams(widthPx, heightPx);
+        } else {
+            lp.width = widthPx;
+            lp.height = heightPx;
+        }
+
+        lp.gravity = Gravity.LEFT | Gravity.TOP;
+        lp.leftMargin = UIUtils.dp2pxInt(isColorInput ? endX - COLOR_SWATCH_WIDTH : startX);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
+
+        view.setLayoutParams(lp);
+    }
+
+    private View createExpandButton(Context context, EditText input, NodeData nodeData, String portId, PortType expectedType,
+                                    EditorContext editorContext, Object currentValue) {
+        InlineActionButton button = new InlineActionButton(context, "...");
+
+        button.setOnClickListener(v -> ExpandedTextInputOverlay.show(
+                context,
+                    button,
+                    editorContext,
+                    nodeData,
+                    portId,
+                    expectedType,
+                    expectedType == PortType.RICH_TEXT
+                            ? richTextValueForEditor(currentValue, input.getText().toString())
+                            : input.getText().toString()
+        ));
+        return button;
+    }
+
+    private static String displayText(Object value, PortType expectedType) {
+        if (expectedType == PortType.RICH_TEXT) {
+            return RichTextValue.from(value).plain();
+        }
+        return value != null ? value.toString() : "";
+    }
+
+    private static Object richTextValueForEditor(Object value, String currentText) {
+        RichTextValue richText = RichTextValue.from(value);
+        String text = currentText == null ? "" : currentText;
+        if (text.equals(richText.plain())) {
+            return value;
+        }
+        return RichTextValue.plain(text).toMap();
+    }
+
+    private static Object richTextValueAfterInlineEdit(Object value, String currentText) {
+        RichTextValue richText = RichTextValue.from(value);
+        String text = currentText == null ? "" : currentText;
+        if (text.equals(richText.plain())) {
+            return null;
+        }
+        return RichTextValue.plain(text).toMap();
+    }
+
+}

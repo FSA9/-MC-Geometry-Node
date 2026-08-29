@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.ToIntFunction;
 
-/** Converts authored shop maps into the immutable page model shared by runtime and preview. */
+/** Converts authored shop maps into the immutable page model shared by runtime and nativepreview. */
 public final class ShopPagePayloadFactory {
     private static final String OFFERS = "offers";
     private static final String MAX_USES = "max_uses";

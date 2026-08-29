@@ -49,7 +49,7 @@ public class ShowDialoguePage extends BaseNode {
                         UIHint.BUTTON,
                         null,
                         Map.of(
-                                PortMetaKeys.BUTTON_LABEL, "geometry_node.button.preview",
+                                PortMetaKeys.BUTTON_LABEL, "geometry_node.button.nativepreview",
                                 PortMetaKeys.BUTTON_ACTION, ACTION_PREVIEW,
                                 PortMetaKeys.BUTTON_COLOR, 0xFF3D6EA8,
                                 PortMetaKeys.BUTTON_TEXT_COLOR, 0xFFFFFFFF

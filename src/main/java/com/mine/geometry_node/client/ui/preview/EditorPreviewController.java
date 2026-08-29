@@ -41,7 +41,7 @@ public final class EditorPreviewController {
         }
         RichTextValue body = RichTextValue.from(input(node, ShowDialoguePage.TEXT));
         List<DialoguePagePayload> pages = DialoguePageFactory.textRounds(
-                "preview:dialogue:" + safeNodeId(node),
+                "nativepreview:dialogue:" + safeNodeId(node),
                 body,
                 DialogueStyleRegistry.RPG
         );
@@ -58,7 +58,7 @@ public final class EditorPreviewController {
         String title = stringValue(input(node, OpenShop.TITLE), "");
         String shopId = stringValue(input(node, OpenShop.SHOP_ID), "").trim();
         if (shopId.isEmpty()) {
-            shopId = "preview:" + safeNodeId(node);
+            shopId = "nativepreview:" + safeNodeId(node);
         }
         Map<String, Boolean> conditions = previewShopConditions(node);
         Object rawShopData = input(node, OpenShop.SHOP_DATA);
@@ -70,7 +70,7 @@ public final class EditorPreviewController {
                 ignored -> 0
         );
         DialoguePagePayload page = DialoguePagePayload.shop(
-                "preview:shop:" + safeNodeId(node),
+                "nativepreview:shop:" + safeNodeId(node),
                 shop,
                 List.of(new DialogueChoicePayload(
                         StandardPorts.FLOW_OUT.getId(),
@@ -89,7 +89,7 @@ public final class EditorPreviewController {
         String safeTaskKey = normalizeTaskKey(taskKey);
         PacketQuestScreenSnapshot.QuestView quest = QuestScreenViewFactory.quest(
                 safeTaskKey,
-                "preview",
+                "nativepreview",
                 QuestStatusRegistry.IN_PROGRESS.id(),
                 false,
                 0L,
@@ -161,6 +161,6 @@ public final class EditorPreviewController {
         if (value.toLowerCase(Locale.ROOT).endsWith(".json")) {
             value = value.substring(0, value.length() - 5);
         }
-        return value.isBlank() ? "preview" : value;
+        return value.isBlank() ? "nativepreview" : value;
     }
 }

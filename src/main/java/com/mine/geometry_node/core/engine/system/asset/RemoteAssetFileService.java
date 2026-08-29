@@ -78,7 +78,7 @@ public final class RemoteAssetFileService {
     }
 
     public static Path previewCacheRoot(MinecraftServer server) {
-        return root(server).resolveSibling(".geometrynode-preview-cache").toAbsolutePath().normalize();
+        return root(server).resolveSibling(".geometrynode-nativepreview-cache").toAbsolutePath().normalize();
     }
 
     public static CompletableFuture<VerifiedAssetCommitter.CommitResult> commitVerifiedUpload(

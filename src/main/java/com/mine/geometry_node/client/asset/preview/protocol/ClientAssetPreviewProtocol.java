@@ -18,7 +18,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Validates and assembles bounded preview packets; persistence is owned by the client preview service. */
+/** Validates and assembles bounded nativepreview packets; persistence is owned by the client nativepreview service. */
 public final class ClientAssetPreviewProtocol {
     private static final Map<UUID, Pending> PENDING = new ConcurrentHashMap<>();
 
@@ -116,7 +116,7 @@ public final class ClientAssetPreviewProtocol {
         private void complete() {
             byte[] bytes = output.toByteArray();
             if (descriptor == null || bytes.length != descriptor.encodedBytes()) {
-                throw new IllegalStateException("Incomplete preview response");
+                throw new IllegalStateException("Incomplete nativepreview response");
             }
             String sha256 = AssetTransferHashing.toHex(AssetTransferHashing.newSha256().digest(bytes));
             if (!sha256.equals(descriptor.sha256())) throw new IllegalStateException("Preview SHA-256 mismatch");
