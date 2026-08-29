@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.input;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputKeys;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
@@ -29,15 +30,13 @@ public class KeyBindings {
             MAIN_CATEGORY
     );
 
-    // 统一定义技能按键的数量
-    public static final int SKILL_COUNT = 10;
-
-    public static final KeyMapping[] BLUEPRINT_KEYS = new KeyMapping[SKILL_COUNT];
+    // Minecraft key mappings for the shared blueprint skill identifiers.
+    public static final KeyMapping[] BLUEPRINT_KEYS = new KeyMapping[PlayerInputKeys.skillCount()];
 
     static {
-        for (int i = 0; i < SKILL_COUNT; i++) {
+        for (int i = 0; i < PlayerInputKeys.skillCount(); i++) {
             BLUEPRINT_KEYS[i] = new KeyMapping(
-                    "input.geometry_node.blueprint_skill_" + (i + 1),
+                    "input.geometry_node.blueprint_" + PlayerInputKeys.skillId(i),
                     InputConstants.Type.KEYSYM,
                     InputConstants.UNKNOWN.getValue(),
                     SKILLS_CATEGORY

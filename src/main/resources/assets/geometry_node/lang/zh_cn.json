@@ -72,6 +72,7 @@
   "geometry_node.port.color": "颜色",
 
   "geometry_node.port.bool": "Bool",
+  "geometry_node.port.intercept": "拦截原版输入",
   "geometry_node.port.show_distance": "显示距离",
   "geometry_node.port.condition": "条件",
   "geometry_node.port.debug": "调试",

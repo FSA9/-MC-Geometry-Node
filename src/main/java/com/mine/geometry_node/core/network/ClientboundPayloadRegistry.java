@@ -14,6 +14,7 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerRemove;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerSnapshot;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerUpsert;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
+import com.mine.geometry_node.core.network.packet.s2c.PacketPlayerInputInterceptions;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
 import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphCapabilitiesResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphFileOperationResponse;
@@ -60,6 +61,7 @@ public final class ClientboundPayloadRegistry {
         add(PacketRemoteGraphListResponse.TYPE, PacketRemoteGraphListResponse.STREAM_CODEC);
         add(PacketRemoteGraphFileOperationResponse.TYPE, PacketRemoteGraphFileOperationResponse.STREAM_CODEC);
         add(PacketOpenDialogue.TYPE, PacketOpenDialogue.STREAM_CODEC);
+        add(PacketPlayerInputInterceptions.TYPE, PacketPlayerInputInterceptions.STREAM_CODEC);
         add(PacketCloseDialogue.TYPE, PacketCloseDialogue.STREAM_CODEC);
         add(PacketQuestScreenSnapshot.TYPE, PacketQuestScreenSnapshot.STREAM_CODEC);
         add(PacketMarkerSnapshot.TYPE, PacketMarkerSnapshot.STREAM_CODEC);

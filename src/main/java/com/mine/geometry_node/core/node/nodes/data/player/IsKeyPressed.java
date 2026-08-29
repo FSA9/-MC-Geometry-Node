@@ -1,7 +1,8 @@
 package com.mine.geometry_node.core.node.nodes.data.player;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
+import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputKeys;
+import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -18,23 +19,15 @@ public class IsKeyPressed extends BaseNode {
 
     public static final String TYPE_ID = "is_key_pressed";
 
-    // 查询服务端记录的当前按键状态
-    public static final String[] VALID_KEYS = {
-            "space", "tab", "enter", "ctrl", "shift", "alt",
-            "skill_1", "skill_2", "skill_3", "skill_4", "skill_5",
-            "skill_6", "skill_7", "skill_8", "skill_9", "skill_10"
-    };
-
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.is_key_pressed"))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                // 限制为下拉框
                 .addRow(new PortRow(
                         StandardPorts.NAME.toInput("ctrl"), null,
                         UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, VALID_KEYS)
+                        Map.of(PortMetaKeys.OPTIONS, PlayerInputKeys.options())
                 ))
                 .build();
     }
@@ -45,13 +38,8 @@ public class IsKeyPressed extends BaseNode {
 
         Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
         String keyId = getInput(context, StandardPorts.NAME.getId(), String.class);
+        if (entity == null || keyId == null) return false;
 
-        // 如果连线不完整，或者实体不是有效实体，返回 false
-        if (entity == null || keyId == null) {
-            return false;
-        }
-
-        // 瞬间 O(1) 性能查询服务端的内存字典
         return BlueprintRuntime.INSTANCE.isKeyPressed(entity, keyId);
     }
 }

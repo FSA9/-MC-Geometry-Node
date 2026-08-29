@@ -1,6 +1,7 @@
 package com.mine.geometry_node.mixin;
 
 import com.mine.geometry_node.client.ui.MainUI;
+import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.ui.viewport.node.UIHints.overlays.EntityTemplatePickerController;
 import com.mojang.blaze3d.platform.InputConstants;
 import icyllis.modernui.mc.MuiScreen;
@@ -35,6 +36,13 @@ public abstract class KeyboardHandlerMixin {
     @Shadow
     @Final
     private Minecraft minecraft;
+
+    @Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
+    private void geometryNode$interceptBlueprintKey(long handle, int action, KeyEvent event, CallbackInfo ci) {
+        if (ClientBlueprintInputManager.interceptKeyboard(action, event)) {
+            ci.cancel();
+        }
+    }
 
     @Inject(
             method = "keyPress",

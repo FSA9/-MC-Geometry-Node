@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.network;
 
+import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.runtime.behavior.ClientBehaviorDebugStore;
 import com.mine.geometry_node.client.runtime.marker.ClientMarkerStore;
@@ -28,6 +29,7 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerRemove;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerSnapshot;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerUpsert;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
+import com.mine.geometry_node.core.network.packet.s2c.PacketPlayerInputInterceptions;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
 import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphCapabilitiesResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphFileOperationResponse;
@@ -97,6 +99,8 @@ public final class ClientNetworkReceiverRegistry {
                 (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketOpenDialogue.TYPE,
                 (payload, context) -> context.queue(() -> ClientDialogueState.handleOpen(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketPlayerInputInterceptions.TYPE,
+                (payload, context) -> context.queue(() -> ClientBlueprintInputManager.setInterceptionMask(payload.mask())));
         ClientboundPayloadRegistry.registerClientReceiver(PacketCloseDialogue.TYPE,
                 (payload, context) -> context.queue(() -> ClientDialogueState.handleClose(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketQuestScreenSnapshot.TYPE,

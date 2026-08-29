@@ -55,6 +55,7 @@
   "geometry_node.port.world_time": "World Time",
   "geometry_node.port.color": "Color",
   "geometry_node.port.bool": "Boolean",
+  "geometry_node.port.intercept": "Intercept vanilla input",
   "geometry_node.port.condition": "Condition",
   "geometry_node.port.debug": "Debug",
   "geometry_node.port.case": "Case",

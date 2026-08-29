@@ -74,6 +74,7 @@ public enum StandardPorts {
     AFFECT_ENTITIES("affect_entities", PortType.BOOLEAN),
     UNIQUE_IF_EXISTS("unique_if_exists", PortType.BOOLEAN),
     SHOW_DISTANCE("show_distance", PortType.BOOLEAN),
+    INTERCEPT("intercept", PortType.BOOLEAN),
 
     // Float
     FLOAT_VALUE("value", PortType.FLOAT),

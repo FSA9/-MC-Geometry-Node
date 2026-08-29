@@ -7,8 +7,11 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.blueprint.event.BlueprintEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputStateManager;
+import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputKeys;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityInventoryGainTracker;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
+import com.mine.geometry_node.core.node.nodes.events.player.OnPlayerKeyEvent;
+import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
@@ -22,6 +25,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Set;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -72,6 +76,7 @@ public final class BlueprintRuntime implements GraphRuntime {
     @Override
     public void tickLevel(ServerLevel level) {
         eventHandler.tickLevel(level);
+        syncPlayerInputInterceptions(level);
     }
 
     @Override
@@ -205,6 +210,32 @@ public final class BlueprintRuntime implements GraphRuntime {
 
     public void clearPlayerInput(Entity player) {
         playerInput.clearPlayer(player);
+    }
+
+    private void syncPlayerInputInterceptions(ServerLevel level) {
+        Set<String> globalGraphs = engine.getGlobalGraphsForEvent(level, OnPlayerKeyEvent.TYPE_ID);
+        for (ServerPlayer player : level.players()) {
+            Set<String> interceptedKeys = new HashSet<>();
+            collectInterceptedKeys(globalGraphs, interceptedKeys);
+            collectInterceptedKeys(engine.getEntityGraphsForEvent(player, OnPlayerKeyEvent.TYPE_ID), interceptedKeys);
+            playerInput.syncInterceptions(player, interceptedKeys);
+        }
+    }
+
+    private void collectInterceptedKeys(Set<String> graphIds, Set<String> destination) {
+        for (String graphId : graphIds) {
+            BlueprintPlan plan = engine.getGraphIndex(graphId);
+            if (plan == null) continue;
+            for (int nodeId : plan.findNodesByType(OnPlayerKeyEvent.TYPE_ID)) {
+                if (!plan.getNodeStaticInput(nodeId, StandardPorts.INTERCEPT.getId(), Boolean.class, false)) continue;
+                String keyId = plan.getNodeStaticInput(nodeId, StandardPorts.NAME.getId(), String.class, "");
+                if (keyId == null || keyId.isBlank()) {
+                    destination.addAll(PlayerInputKeys.ALL_KEYS);
+                } else {
+                    destination.add(keyId);
+                }
+            }
+        }
     }
 
     public void tickEntityInventory(ServerLevel level, Entity entity, boolean listening) {

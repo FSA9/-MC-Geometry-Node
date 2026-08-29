@@ -102,6 +102,7 @@ public class GeometryNodeClient {
     }
 
     private void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        ClientBlueprintInputManager.reset();
         ClientQuestScreenState.reset();
         ClientDialogueState.reset();
         RemoteGraphClientState.reset();

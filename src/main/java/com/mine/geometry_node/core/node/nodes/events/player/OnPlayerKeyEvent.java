@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.events.player;
 
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventFields;
+import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputKeys;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.event.EventPrecheckSpec;
@@ -19,11 +20,6 @@ public class OnPlayerKeyEvent extends BaseEventNode {
 
     public static final String TYPE_ID = "on_player_key_event";
 
-    public static final String[] VALID_KEYS = {
-            "space", "tab", "enter", "ctrl", "shift", "alt",
-            "skill_1", "skill_2", "skill_3", "skill_4", "skill_5",
-            "skill_6", "skill_7", "skill_8", "skill_9", "skill_10"
-    };
     public static final String[] VALID_ACTIONS = {"PRESS", "RELEASE"};
 
     @Override
@@ -47,12 +43,16 @@ public class OnPlayerKeyEvent extends BaseEventNode {
                 .addRow(new PortRow(
                         StandardPorts.NAME.toInput(""), null,
                         UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(VALID_KEYS)) // 注入按键选项
+                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(PlayerInputKeys.ALL_KEYS)) // 注入按键选项
                 ))
                 .addRow(new PortRow(
                         StandardPorts.TYPE.toInput(""), null,
                         UIHint.SELECT, null,
                         Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(VALID_ACTIONS)) // 注入动作选项
+                ))
+                .addRow(new PortRow(
+                        StandardPorts.INTERCEPT.toInput(false), null,
+                        UIHint.CHECKBOX, null, null
                 ))
                 .build();
     }

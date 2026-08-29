@@ -4,6 +4,8 @@ import com.mine.geometry_node.api.EventPayload;
 import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.node.nodes.events.player.OnPlayerKeyEvent;
 import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.network.NetworkHandler;
+import com.mine.geometry_node.core.network.packet.s2c.PacketPlayerInputInterceptions;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
@@ -18,7 +20,7 @@ import java.util.HashSet;
 
 /** Server-authoritative player input state and blueprint-event dispatcher. */
 public final class PlayerInputStateManager {
-    private static final Set<String> VALID_KEY_IDS = Set.of(OnPlayerKeyEvent.VALID_KEYS);
+    private static final Set<String> VALID_KEY_IDS = Set.copyOf(PlayerInputKeys.ALL_KEYS);
     private static final int MAX_TRANSITIONS_PER_TICK = VALID_KEY_IDS.size() * 2;
 
     private final Map<MinecraftServer, ServerState> servers = new WeakHashMap<>();
@@ -82,6 +84,19 @@ public final class PlayerInputStateManager {
         return keys != null && keys.contains(keyId);
     }
 
+    public void syncInterceptions(ServerPlayer player, Set<String> interceptedKeys) {
+        if (player == null) return;
+        ServerState state = servers.computeIfAbsent(player.level().getServer(), ignored -> new ServerState());
+        int mask = 0;
+        for (int i = 0; i < PlayerInputKeys.ALL_KEYS.size(); i++) {
+            if (interceptedKeys.contains(PlayerInputKeys.ALL_KEYS.get(i))) mask |= 1 << i;
+        }
+        Integer previous = state.interceptionMasks.put(player.getUUID(), mask);
+        if (previous == null || previous != mask) {
+            NetworkHandler.sendToPlayer(player, new PacketPlayerInputInterceptions(mask));
+        }
+    }
+
     public void clearPlayer(Entity player) {
         ServerState state = player != null && player.level() instanceof net.minecraft.server.level.ServerLevel level
                 ? servers.get(level.getServer()) : null;
@@ -90,6 +105,7 @@ public final class PlayerInputStateManager {
         state.activeKeys.remove(playerId);
         state.pressStartTicks.remove(playerId);
         state.transitionBudgets.remove(playerId);
+        state.interceptionMasks.remove(playerId);
     }
 
     private boolean tryConsumeTransition(ServerState state, UUID playerId, long gameTime) {
@@ -105,6 +121,7 @@ public final class PlayerInputStateManager {
         private final Map<UUID, Set<String>> activeKeys = new HashMap<>();
         private final Map<UUID, Map<String, Long>> pressStartTicks = new HashMap<>();
         private final Map<UUID, TransitionBudget> transitionBudgets = new HashMap<>();
+        private final Map<UUID, Integer> interceptionMasks = new HashMap<>();
     }
 
     private static final class TransitionBudget {
