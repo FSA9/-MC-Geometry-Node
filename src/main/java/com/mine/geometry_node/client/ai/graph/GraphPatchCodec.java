@@ -27,7 +27,6 @@ public final class GraphPatchCodec {
         root.addProperty("scope_id", patch.scope().id());
         root.addProperty("expected_revision", patch.expectedRevision().value());
         root.addProperty("idempotency_key", patch.idempotencyKey());
-        if (patch.approvalId() != null) root.addProperty("approval_id", patch.approvalId());
         JsonArray operations = new JsonArray();
         for (GraphPatch.Operation operation : patch.operations()) operations.add(writeOperation(operation));
         root.add("operations", operations);
@@ -43,8 +42,7 @@ public final class GraphPatchCodec {
     }
 
     public static GraphPatch fromJsonTree(JsonObject root) {
-        requireOnly(root, "session_id", "scope_id", "expected_revision",
-                "idempotency_key", "approval_id", "operations");
+        requireOnly(root, "session_id", "scope_id", "expected_revision", "idempotency_key", "operations");
         JsonArray array = array(root, "operations");
         List<GraphPatch.Operation> operations = new ArrayList<>(array.size());
         for (int index = 0; index < array.size(); index++) {
@@ -56,7 +54,7 @@ public final class GraphPatchCodec {
                 new GraphPatch.SessionRef(string(root, "session_id")),
                 new GraphPatch.ScopeRef(string(root, "scope_id")),
                 new GraphPatch.GraphRevision(longInteger(root, "expected_revision")),
-                string(root, "idempotency_key"), optionalString(root, "approval_id"), operations);
+                string(root, "idempotency_key"), operations);
     }
 
     private static JsonObject writeOperation(GraphPatch.Operation operation) {

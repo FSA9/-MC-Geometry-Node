@@ -28,6 +28,7 @@ final class McpResultMapper {
         envelope.add("diagnostics", diagnostics);
 
         JsonObject result = new JsonObject();
+        result.addProperty("resultType", "complete");
         JsonArray content = new JsonArray();
         JsonObject text = new JsonObject();
         text.addProperty("type", "text");

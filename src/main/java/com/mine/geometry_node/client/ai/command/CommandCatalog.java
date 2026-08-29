@@ -107,10 +107,10 @@ public final class CommandCatalog {
                 argument("surface_ref", "可选的 Viewport 引用，例如 V1；为空时使用最近交互或唯一 Viewport",
                         false, new JsonPrimitive(""), stringSchema(0), null));
         JsonObject output = CommandSpec.objectSchema(properties(
-                property("approval_id", stringSchema(1)), property("patch_hash", stringSchema(64)),
-                property("change_id", stringSchema(1)), property("revision", integerSchema(0)),
+                property("patch_hash", stringSchema(64)), property("change_id", stringSchema(1)),
+                property("revision", integerSchema(0)),
                 property("operation_count", integerSchema(1))),
-                "approval_id", "patch_hash", "change_id", "revision", "operation_count");
+                "patch_hash", "change_id", "revision", "operation_count");
         return new CommandSpec("apply_graph_patch", List.of(),
                 "提交 GraphPatch JSON 字符串。根字段: session_id, scope_id, "
                         + "expected_revision, idempotency_key, operations。当前支持 add_node(alias,type_id,position,properties={}), "
@@ -121,7 +121,7 @@ public final class CommandCatalog {
                         + "connect.to 必须是输入端口；不要猜端口 ID。"
                         + "session/scope/revision 来自 get_graph_stats 或 get_graph_context；创建前 SELECT token 来自 "
                         + "get_node_type_port_options，已有实例 token 来自 get_port_options。"
-                        + "服务端先 dry-run，GeometryNode 原生 Diff 批准后原子提交为一次 Undo；不要提供 approval_id",
+                        + "调用由 MCP 客户端授权；GeometryNode 完成事务预检后原子提交为一次 Undo",
                 "apply_graph_patch <patch_json>", arguments, output,
                 ToolContract.CommandEffect.GRAPH_WRITE, ToolContract.RiskLevel.REVERSIBLE_EDIT,
                 true, true, CommandSpec.Exposure.MODEL_VISIBLE, (context, values) -> {

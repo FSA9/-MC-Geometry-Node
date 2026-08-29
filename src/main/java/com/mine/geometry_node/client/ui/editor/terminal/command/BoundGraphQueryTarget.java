@@ -21,28 +21,25 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
     private final String surfaceRef;
     private final java.util.function.BooleanSupplier targetValidator;
 
-    public BoundGraphQueryTarget(GraphSession session, BoundGraphScope scope,
-                                 GraphPatchApprovalPresenter approvalPresenter) {
-        this(session, scope, approvalPresenter, "", () -> true);
+    public BoundGraphQueryTarget(GraphSession session, BoundGraphScope scope) {
+        this(session, scope, "", () -> true);
     }
 
     public BoundGraphQueryTarget(GraphSession session, BoundGraphScope scope,
-                                 GraphPatchApprovalPresenter approvalPresenter,
                                  String surfaceRef,
                                  java.util.function.BooleanSupplier targetValidator) {
-        this(session, scope, approvalPresenter, surfaceRef, targetValidator, new GraphPatchIdempotencyStore());
+        this(session, scope, surfaceRef, targetValidator, new GraphPatchIdempotencyStore());
     }
 
     BoundGraphQueryTarget(GraphSession session, BoundGraphScope scope,
-                          GraphPatchApprovalPresenter approvalPresenter, String surfaceRef,
+                          String surfaceRef,
                           java.util.function.BooleanSupplier targetValidator,
                           GraphPatchIdempotencyStore idempotencyStore) {
         this.session = Objects.requireNonNull(session, "session");
         this.scope = Objects.requireNonNull(scope, "scope");
         this.surfaceRef = surfaceRef == null ? "" : surfaceRef;
         this.targetValidator = Objects.requireNonNull(targetValidator, "targetValidator");
-        this.transactions = new GraphPatchTransactionService(
-                session, scope, approvalPresenter, targetValidator, idempotencyStore);
+        this.transactions = new GraphPatchTransactionService(session, scope, targetValidator, idempotencyStore);
     }
 
     @Override public boolean hasGraph() { return DocumentManager.INSTANCE.getSessions().contains(session) && resolve() != null; }

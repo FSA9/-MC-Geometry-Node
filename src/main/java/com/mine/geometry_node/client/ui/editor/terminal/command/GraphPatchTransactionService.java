@@ -49,38 +49,31 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
-/** P5 dry-run, approval, revision revalidation and one-command commit pipeline. */
+/** Plans a patch against a snapshot, revalidates its revision, and commits it as one undoable command. */
 public final class GraphPatchTransactionService {
-    private static final Duration APPROVAL_TIMEOUT = Duration.ofMinutes(5);
     private static final Duration UI_HANDOFF_TIMEOUT = Duration.ofSeconds(30);
     private static final Gson GSON = new Gson();
 
     private final GraphSession session;
     private final BoundGraphScope scope;
-    private final GraphPatchApprovalPresenter approvalPresenter;
     private final java.util.function.BooleanSupplier targetValidator;
     private final GraphPatchIdempotencyStore idempotencyStore;
 
-    public GraphPatchTransactionService(GraphSession session, BoundGraphScope scope,
-                                        GraphPatchApprovalPresenter approvalPresenter) {
-        this(session, scope, approvalPresenter, () -> true, new GraphPatchIdempotencyStore());
+    public GraphPatchTransactionService(GraphSession session, BoundGraphScope scope) {
+        this(session, scope, () -> true, new GraphPatchIdempotencyStore());
     }
 
     public GraphPatchTransactionService(GraphSession session, BoundGraphScope scope,
-                                        GraphPatchApprovalPresenter approvalPresenter,
                                         java.util.function.BooleanSupplier targetValidator,
                                         GraphPatchIdempotencyStore idempotencyStore) {
         this.session = Objects.requireNonNull(session, "session");
         this.scope = Objects.requireNonNull(scope, "scope");
-        this.approvalPresenter = Objects.requireNonNull(approvalPresenter, "approvalPresenter");
         this.targetValidator = Objects.requireNonNull(targetValidator, "targetValidator");
         this.idempotencyStore = Objects.requireNonNull(idempotencyStore, "idempotencyStore");
     }
@@ -93,7 +86,7 @@ public final class GraphPatchTransactionService {
 
     private CommandResult applySerialized(GraphPatch patch, CommandInvocationContext.CancellationToken cancellation) {
         if (Minecraft.getInstance().isSameThread() || Core.isOnUiThread()) {
-            return CommandResult.failure("THREAD_VIOLATION", "GraphPatch 审批不能阻塞客户端或 UI 线程");
+            return CommandResult.failure("THREAD_VIOLATION", "GraphPatch 事务预检不能阻塞客户端或 UI 线程");
         }
         cancellation = cancellation == null ? CommandInvocationContext.CancellationToken.NONE : cancellation;
         try {
@@ -110,16 +103,7 @@ public final class GraphPatchTransactionService {
             }
             PlanSnapshot snapshot = awaitUi(onUi(() -> capturePlanSnapshot(patch)), cancellation);
             PlannedPatch plan = plan(patch, requestedHash, snapshot);
-            if (cancellation.isCancelled()) return CommandResult.failure("CANCELLED", "GraphPatch 在审批前已取消");
-            CompletionStage<GraphPatchApprovalPresenter.ApprovalOutcome> decision =
-                    awaitUi(onUi(() -> approvalPresenter.requestApproval(plan.summary)), cancellation);
-            ApprovalDecision approved = awaitDecision(decision.toCompletableFuture(), cancellation);
-            if (approved == ApprovalDecision.CANCELLED) return CommandResult.failure("CANCELLED", "GraphPatch 在审批期间被取消");
-            if (approved == ApprovalDecision.TIMED_OUT) return CommandResult.failure("APPROVAL_TIMEOUT", "GraphPatch 原生审批已超时");
-            if (approved == ApprovalDecision.REJECTED) return CommandResult.failure("APPROVAL_REJECTED", "用户拒绝了 GraphPatch");
-            if (approved == ApprovalDecision.DISMISSED) return CommandResult.failure("APPROVAL_DISMISSED", "GraphPatch 审批窗口已关闭");
-            if (approved == ApprovalDecision.UI_UNAVAILABLE) return CommandResult.failure("APPROVAL_UI_UNAVAILABLE", "无法显示 GraphPatch 原生审批窗口");
-            if (approved == ApprovalDecision.ALREADY_PENDING) return CommandResult.failure("APPROVAL_ALREADY_PENDING", "当前 Terminal Run 已有 GraphPatch 等待审批");
+            if (cancellation.isCancelled()) return CommandResult.failure("CANCELLED", "GraphPatch 在提交前已取消");
             CommandInvocationContext.CancellationToken commitCancellation = cancellation;
             CommandResult result = awaitUi(onUi(() -> commit(plan, commitCancellation)), cancellation);
             if (result.ok()) {
@@ -148,7 +132,6 @@ public final class GraphPatchTransactionService {
     }
 
     private PlannedPatch plan(GraphPatch patch, String patchHash, PlanSnapshot snapshot) {
-        if (patch.approvalId() != null) throw fail("APPROVAL_ID_FORBIDDEN", "approval_id 由 GeometryNode 生成，调用方不得提供");
         List<GraphPatchContractValidator.Diagnostic> contract = GraphPatchContractValidator.validate(patch);
         if (!contract.isEmpty()) throw fail(contract.getFirst().code(), contract.getFirst().message());
 
@@ -175,14 +158,9 @@ public final class GraphPatchTransactionService {
         try {
             BlueprintCompiler.compile(new StringReader(afterJson));
         } catch (RuntimeException failure) {
-            throw fail("GRAPH_COMPILE_FAILED", "GraphPatch dry-run 编译失败: " + safeMessage(failure));
+            throw fail("GRAPH_COMPILE_FAILED", "GraphPatch 事务预检编译失败: " + safeMessage(failure));
         }
-        String approvalId = UUID.randomUUID().toString();
-        List<String> actualDiff = graphDiff(beforeJson, afterJson);
-        actualDiff.add("Undo 历史: 批准后本次事务成为新的历史基线，较早的 Undo/Redo 记录将清空");
-        GraphPatchApprovalPresenter.ApprovalSummary summary = new GraphPatchApprovalPresenter.ApprovalSummary(
-                approvalId, patchHash, patch.expectedRevision().value(), patch.operations().size(), actualDiff);
-        return new PlannedPatch(patch, patchHash, beforeJson, afterJson, summary);
+        return new PlannedPatch(patch, patchHash, beforeJson, afterJson);
     }
 
     private void applyOperation(GraphPatch patch, int index, GraphPatch.Operation operation,
@@ -282,10 +260,9 @@ public final class GraphPatchTransactionService {
         boolean executed = session.editorContext.getCommandManager().executeAsNewBaseline(new CmdReplaceGraphState(
                 session.editorContext, plan.beforeJson, plan.afterJson, changeId));
         if (!executed) throw fail("PATCH_NO_CHANGES", "GraphPatch 提交未产生变化");
-        GeometryNode.LOGGER.info("Graph patch committed: approval={}, change={}, revision={}, operations={}",
-                plan.summary.approvalId(), changeId, session.revision(), plan.patch.operations().size());
+        GeometryNode.LOGGER.info("Graph patch committed: change={}, revision={}, operations={}",
+                changeId, session.revision(), plan.patch.operations().size());
         JsonObject data = new JsonObject();
-        data.addProperty("approval_id", plan.summary.approvalId());
         data.addProperty("patch_hash", plan.patchHash);
         data.addProperty("change_id", changeId);
         data.addProperty("revision", session.revision());
@@ -406,36 +383,6 @@ public final class GraphPatchTransactionService {
         return UUID.nameUUIDFromBytes((idempotencyKey + "\u0000" + alias).getBytes(StandardCharsets.UTF_8)).toString();
     }
 
-    private static ApprovalDecision awaitDecision(
-                                                   CompletableFuture<GraphPatchApprovalPresenter.ApprovalOutcome> decision,
-                                                   CommandInvocationContext.CancellationToken cancellation) throws InterruptedException {
-        long deadline = System.nanoTime() + APPROVAL_TIMEOUT.toNanos();
-        while (System.nanoTime() < deadline) {
-            if (cancellation.isCancelled()) {
-                decision.cancel(false);
-                return ApprovalDecision.CANCELLED;
-            }
-            try {
-                GraphPatchApprovalPresenter.ApprovalOutcome outcome = decision.get(100, TimeUnit.MILLISECONDS);
-                return switch (outcome) {
-                    case APPROVED -> ApprovalDecision.APPROVED;
-                    case REJECTED -> ApprovalDecision.REJECTED;
-                    case DISMISSED -> ApprovalDecision.DISMISSED;
-                    case CANCELLED, HOST_DESTROYED -> ApprovalDecision.CANCELLED;
-                    case UI_UNAVAILABLE -> ApprovalDecision.UI_UNAVAILABLE;
-                    case ALREADY_PENDING -> ApprovalDecision.ALREADY_PENDING;
-                };
-            } catch (TimeoutException ignored) {
-            } catch (CancellationException cancelled) {
-                return ApprovalDecision.CANCELLED;
-            } catch (ExecutionException failure) {
-                return ApprovalDecision.UI_UNAVAILABLE;
-            }
-        }
-        decision.cancel(false);
-        return ApprovalDecision.TIMED_OUT;
-    }
-
     private static boolean hasInbound(NodeGraph graph, String nodeId, String portId) {
         for (NodeData source : graph.nodes.values()) {
             if (source.outputs != null) for (List<Connection> connections : source.outputs.values()) {
@@ -525,40 +472,6 @@ public final class GraphPatchTransactionService {
         return value.deepCopy();
     }
 
-    private static List<String> graphDiff(String beforeJson, String afterJson) {
-        ArrayList<String> changes = new ArrayList<>();
-        collectDiff("$", JsonParser.parseString(beforeJson), JsonParser.parseString(afterJson), changes);
-        if (changes.size() > 512) throw fail("DIFF_TOO_LARGE", "GraphPatch Diff 超过 512 项，请缩小 Patch");
-        return changes;
-    }
-
-    private static void collectDiff(String path, JsonElement before, JsonElement after, List<String> changes) {
-        if (Objects.equals(before, after)) return;
-        if (before != null && after != null && before.isJsonObject() && after.isJsonObject()) {
-            java.util.TreeSet<String> keys = new java.util.TreeSet<>();
-            keys.addAll(before.getAsJsonObject().keySet());
-            keys.addAll(after.getAsJsonObject().keySet());
-            for (String key : keys) {
-                collectDiff(path + "." + key, before.getAsJsonObject().get(key), after.getAsJsonObject().get(key), changes);
-                if (changes.size() > 512) return;
-            }
-            return;
-        }
-        if (before != null && after != null && before.isJsonArray() && after.isJsonArray()) {
-            int size = Math.max(before.getAsJsonArray().size(), after.getAsJsonArray().size());
-            for (int index = 0; index < size; index++) {
-                JsonElement oldItem = index < before.getAsJsonArray().size() ? before.getAsJsonArray().get(index) : null;
-                JsonElement newItem = index < after.getAsJsonArray().size() ? after.getAsJsonArray().get(index) : null;
-                collectDiff(path + "[" + index + "]", oldItem, newItem, changes);
-                if (changes.size() > 512) return;
-            }
-            return;
-        }
-        String oldValue = before == null ? "<missing>" : abbreviate(before);
-        String newValue = after == null ? "<missing>" : abbreviate(after);
-        changes.add(path + ": " + oldValue + " -> " + newValue);
-    }
-
     private static String sha256(String value) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
@@ -577,13 +490,7 @@ public final class GraphPatchTransactionService {
         return failure.getMessage() == null || failure.getMessage().isBlank() ? failure.getClass().getSimpleName() : failure.getMessage();
     }
 
-    private static String abbreviate(Object value) {
-        String text = value instanceof JsonElement json ? GSON.toJson(json) : String.valueOf(value);
-        return text.length() <= 160 ? text : text.substring(0, 157) + "...";
-    }
-
-    private record PlannedPatch(GraphPatch patch, String patchHash, String beforeJson, String afterJson,
-                                GraphPatchApprovalPresenter.ApprovalSummary summary) {}
+    private record PlannedPatch(GraphPatch patch, String patchHash, String beforeJson, String afterJson) {}
     private record PlanSnapshot(String beforeJson, RegistryAccess registryAccess) {}
     private enum UiHandoffState { PENDING, RUNNING, COMPLETED, CANCELLED }
     private static final class UiHandoff<T> {
@@ -611,9 +518,6 @@ public final class GraphPatchTransactionService {
             if (!state.compareAndSet(UiHandoffState.PENDING, UiHandoffState.COMPLETED)) return;
             future.completeExceptionally(failure);
         }
-    }
-    private enum ApprovalDecision {
-        APPROVED, REJECTED, DISMISSED, CANCELLED, TIMED_OUT, UI_UNAVAILABLE, ALREADY_PENDING
     }
     private static final class PatchFailure extends RuntimeException {
         private final String code;

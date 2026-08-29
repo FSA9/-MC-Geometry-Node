@@ -19,9 +19,9 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
     private final ViewportGraphTargetResolver targetResolver;
     private final NodeCatalogQueryTarget catalogTarget = new NodeCatalogQueryTarget();
 
-    public MinecraftClientMcpGateway(CommandRegistry registry, GraphPatchApprovalPresenter approvals) {
+    public MinecraftClientMcpGateway(CommandRegistry registry) {
         this.registry = Objects.requireNonNull(registry, "registry");
-        this.targetResolver = new ViewportGraphTargetResolver(Objects.requireNonNull(approvals, "approvals"));
+        this.targetResolver = new ViewportGraphTargetResolver();
     }
 
     @Override

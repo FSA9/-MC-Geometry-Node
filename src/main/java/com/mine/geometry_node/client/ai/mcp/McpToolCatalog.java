@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Deterministic projection of read tools and dry-run-approved reversible writes. */
+/** Deterministic projection of read tools and transaction-planned reversible writes. */
 public final class McpToolCatalog {
     private static final int MAX_TOOLS = 128;
 
@@ -27,10 +27,10 @@ public final class McpToolCatalog {
         for (CommandSpec command : registry.commands()) {
             boolean readOnly = command.effect() == ToolContract.CommandEffect.READ_ONLY
                     && command.riskLevel() == ToolContract.RiskLevel.READ_ONLY;
-            boolean approvedWrite = command.effect() == ToolContract.CommandEffect.GRAPH_WRITE
+            boolean transactionPlannedWrite = command.effect() == ToolContract.CommandEffect.GRAPH_WRITE
                     && command.riskLevel() == ToolContract.RiskLevel.REVERSIBLE_EDIT
-                    && command.supportsDryRun();
-            if (command.exposure() != CommandSpec.Exposure.MODEL_VISIBLE || !readOnly && !approvedWrite) {
+                    && command.supportsTransactionPlanning();
+            if (command.exposure() != CommandSpec.Exposure.MODEL_VISIBLE || !readOnly && !transactionPlannedWrite) {
                 continue;
             }
             if (selected.size() >= MAX_TOOLS) throw new IllegalArgumentException("MCP tool catalog is too large");
@@ -62,7 +62,7 @@ public final class McpToolCatalog {
             boolean readOnly = command.effect() == ToolContract.CommandEffect.READ_ONLY;
             annotations.addProperty("readOnlyHint", readOnly);
             annotations.addProperty("destructiveHint", !readOnly);
-            annotations.addProperty("idempotentHint", readOnly || command.supportsDryRun());
+            annotations.addProperty("idempotentHint", readOnly || command.supportsTransactionPlanning());
             annotations.addProperty("openWorldHint", false);
             tool.add("annotations", annotations);
             result.add(tool);

@@ -152,13 +152,12 @@ public final class McpHttpServer implements AutoCloseable {
                 try {
                     switch (exchange.getRequestMethod().toUpperCase(Locale.ROOT)) {
                         case "POST" -> handlePost(exchange, binding.dispatcher);
-                        case "DELETE" -> handleDelete(exchange, binding.dispatcher);
-                        case "GET" -> {
-                            exchange.getResponseHeaders().set("Allow", "POST, DELETE");
+                        case "GET", "DELETE" -> {
+                            exchange.getResponseHeaders().set("Allow", "POST");
                             sendText(exchange, 405, "Standalone SSE is not supported");
                         }
                         default -> {
-                            exchange.getResponseHeaders().set("Allow", "POST, DELETE");
+                            exchange.getResponseHeaders().set("Allow", "POST");
                             sendText(exchange, 405, "Method not allowed");
                         }
                     }
@@ -204,42 +203,44 @@ public final class McpHttpServer implements AutoCloseable {
         try {
             String json = new String(body, StandardCharsets.UTF_8);
             if (!McpJsonLimits.accepts(json)) {
-                sendJson(exchange, 400, jsonRpcError(-32600, "JSON structure exceeds MCP limits"), "");
+                sendJson(exchange, 400, jsonRpcError(-32600, "JSON structure exceeds MCP limits"));
                 return;
             }
             request = GSON.fromJson(json, JsonObject.class);
             if (request == null) throw new JsonParseException("request must be a JSON object");
         } catch (JsonParseException | IllegalStateException malformed) {
-            sendJson(exchange, 400, jsonRpcError(-32700, "Parse error"), "");
+            sendJson(exchange, 400, jsonRpcError(-32700, "Parse error"));
             return;
         }
-        String sessionId = normalize(header(exchange, "Mcp-Session-Id"));
-        boolean initialize = "initialize".equals(request.has("method") && request.get("method").isJsonPrimitive()
-                ? request.get("method").getAsString() : "");
-        if (!initialize && !dispatcher.acceptsProtocolVersion(
-                sessionId, header(exchange, "MCP-Protocol-Version"))) {
-            sendText(exchange, 400, "Invalid MCP protocol version or session");
+        String requestedVersion = normalize(header(exchange, "MCP-Protocol-Version"));
+        if (headerValues(exchange, "MCP-Protocol-Version").size() != 1) {
+            sendJson(exchange, 400, jsonRpcError(-32020, "MCP-Protocol-Version header is missing or repeated"));
             return;
         }
-        McpRequestDispatcher.Reply reply = dispatcher.dispatch(request, sessionId);
-        if (reply.notification()) {
-            exchange.sendResponseHeaders(202, -1);
+        if (!McpRequestDispatcher.MCP_PROTOCOL_VERSION.equals(requestedVersion)) {
+            sendJson(exchange, 400, unsupportedProtocolVersion(requestedVersion));
             return;
         }
-        sendJson(exchange, 200, reply.body(), reply.newSessionId());
-    }
-
-    private static void handleDelete(HttpExchange exchange, McpRequestDispatcher dispatcher) throws IOException {
-        String sessionId = normalize(header(exchange, "Mcp-Session-Id"));
-        if (sessionId.isBlank()) {
-            sendText(exchange, 400, "Mcp-Session-Id is required");
+        String method = string(request, "method");
+        String bodyVersion = requestMetadataString(request, "io.modelcontextprotocol/protocolVersion");
+        if (headerValues(exchange, "Mcp-Method").size() != 1
+                || !requestedVersion.equals(bodyVersion)
+                || !method.equals(normalize(header(exchange, "Mcp-Method")))) {
+            sendJson(exchange, 400, jsonRpcError(-32020, "MCP request headers do not match the body"));
             return;
         }
-        if (!dispatcher.removeSession(sessionId)) {
-            sendText(exchange, 404, "MCP session not found");
+        String bodyName = requestName(request, method);
+        if (bodyName != null && (headerValues(exchange, "Mcp-Name").size() != 1
+                || !bodyName.equals(decodeHeaderValue(header(exchange, "Mcp-Name"))))) {
+            sendJson(exchange, 400, jsonRpcError(-32020, "Mcp-Name header does not match the body"));
             return;
         }
-        exchange.sendResponseHeaders(204, -1);
+        if (!isSupportedMethod(method)) {
+            sendJson(exchange, 404, jsonRpcError(-32601, "Method not found: " + method));
+            return;
+        }
+        McpRequestDispatcher.Reply reply = dispatcher.dispatch(request);
+        sendJson(exchange, 200, reply.body());
     }
 
     private static boolean validHost(HttpExchange exchange) {
@@ -279,12 +280,10 @@ public final class McpHttpServer implements AutoCloseable {
         return output.toByteArray();
     }
 
-    private static void sendJson(HttpExchange exchange, int status, JsonObject json, String sessionId)
-            throws IOException {
+    private static void sendJson(HttpExchange exchange, int status, JsonObject json) throws IOException {
         byte[] body = GSON.toJson(json).getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
         exchange.getResponseHeaders().set("Cache-Control", "no-store");
-        if (!sessionId.isBlank()) exchange.getResponseHeaders().set("Mcp-Session-Id", sessionId);
         exchange.sendResponseHeaders(status, body.length);
         exchange.getResponseBody().write(body);
     }
@@ -306,6 +305,57 @@ public final class McpHttpServer implements AutoCloseable {
         error.addProperty("message", message);
         response.add("error", error);
         return response;
+    }
+
+    private static JsonObject unsupportedProtocolVersion(String requested) {
+        JsonObject response = jsonRpcError(-32022, "Unsupported MCP protocol version");
+        JsonObject data = new JsonObject();
+        com.google.gson.JsonArray supported = new com.google.gson.JsonArray();
+        supported.add(McpRequestDispatcher.MCP_PROTOCOL_VERSION);
+        data.add("supported", supported);
+        data.addProperty("requested", requested);
+        response.getAsJsonObject("error").add("data", data);
+        return response;
+    }
+
+    private static boolean isSupportedMethod(String method) {
+        return switch (method) {
+            case "server/discover", "resources/list", "resources/templates/list", "resources/read",
+                    "tools/list", "tools/call" -> true;
+            default -> false;
+        };
+    }
+
+    private static String requestMetadataString(JsonObject request, String key) {
+        JsonObject params = request.has("params") && request.get("params").isJsonObject()
+                ? request.getAsJsonObject("params") : null;
+        JsonObject metadata = params != null && params.has("_meta") && params.get("_meta").isJsonObject()
+                ? params.getAsJsonObject("_meta") : null;
+        return metadata == null ? "" : string(metadata, key);
+    }
+
+    private static String requestName(JsonObject request, String method) {
+        if (!"tools/call".equals(method) && !"resources/read".equals(method)) return null;
+        JsonObject params = request.has("params") && request.get("params").isJsonObject()
+                ? request.getAsJsonObject("params") : null;
+        return params == null ? "" : string(params, "tools/call".equals(method) ? "name" : "uri");
+    }
+
+    private static String string(JsonObject object, String key) {
+        if (object == null || !object.has(key) || !object.get(key).isJsonPrimitive()
+                || !object.getAsJsonPrimitive(key).isString()) return "";
+        return object.get(key).getAsString();
+    }
+
+    private static String decodeHeaderValue(String value) {
+        value = normalize(value);
+        if (!value.startsWith("=?base64?") || !value.endsWith("?=")) return value;
+        try {
+            String encoded = value.substring(9, value.length() - 2);
+            return new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException malformed) {
+            return "";
+        }
     }
 
     private static String header(HttpExchange exchange, String name) {

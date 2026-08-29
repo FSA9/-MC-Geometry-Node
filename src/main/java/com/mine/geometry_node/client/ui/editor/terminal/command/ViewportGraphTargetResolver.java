@@ -13,13 +13,10 @@ import java.util.Map;
 
 /** Resolves a viewport for one MCP call and caches fixed transaction targets for the run. */
 public final class ViewportGraphTargetResolver implements AutoCloseable {
-    private final GraphPatchApprovalPresenter approvalPresenter;
     private final Map<TargetKey, BoundGraphQueryTarget> targets = new HashMap<>();
     private final GraphPatchIdempotencyStore idempotencyStore = new GraphPatchIdempotencyStore();
 
-    public ViewportGraphTargetResolver(GraphPatchApprovalPresenter approvalPresenter) {
-        this.approvalPresenter = approvalPresenter;
-    }
+    public ViewportGraphTargetResolver() {}
 
     public Resolution resolve(String surfaceRef) {
         List<UiSurfaceRegistry.Lease<ViewportSurface>> candidates = UiSurfaceRegistry.INSTANCE
@@ -62,7 +59,7 @@ public final class ViewportGraphTargetResolver implements AutoCloseable {
         UiSurfaceRegistry.Lease<ViewportSurface> fixedLease = selected;
         String fixedSurfaceRef = selected.id().ref();
         BoundGraphQueryTarget target = targets.computeIfAbsent(key, ignored -> new BoundGraphQueryTarget(
-                session, scope, approvalPresenter, fixedSurfaceRef,
+                session, scope, fixedSurfaceRef,
                 () -> fixedLease.isCurrent()
                         && fixedLease.owner().currentGraphSession() == session
                         && BoundGraphScope.capture(session.editorContext).equals(scope), idempotencyStore));

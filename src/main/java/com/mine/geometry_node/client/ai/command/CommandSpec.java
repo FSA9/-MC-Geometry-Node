@@ -25,7 +25,7 @@ public record CommandSpec(
         ToolContract.CommandEffect effect,
         ToolContract.RiskLevel riskLevel,
         boolean requiresGraph,
-        boolean supportsDryRun,
+        boolean supportsTransactionPlanning,
         Exposure exposure,
         CommandHandler handler
 ) {

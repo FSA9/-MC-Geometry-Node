@@ -13,7 +13,6 @@ public record GraphPatch(
         ScopeRef scope,
         GraphRevision expectedRevision,
         String idempotencyKey,
-        String approvalId,
         List<Operation> operations
 ) {
     public static final int MAX_OPERATIONS = 256;
@@ -23,7 +22,6 @@ public record GraphPatch(
         scope = Objects.requireNonNull(scope, "scope");
         expectedRevision = Objects.requireNonNull(expectedRevision, "expectedRevision");
         idempotencyKey = requireNonBlank(idempotencyKey, "idempotencyKey");
-        approvalId = normalizeOptional(approvalId);
         operations = List.copyOf(Objects.requireNonNull(operations, "operations"));
         if (operations.isEmpty()) throw new IllegalArgumentException("operations cannot be empty");
         if (operations.size() > MAX_OPERATIONS) throw new IllegalArgumentException("too many operations");

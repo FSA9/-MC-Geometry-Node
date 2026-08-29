@@ -12,8 +12,6 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ui.editor.terminal.command.MinecraftClientMcpGateway;
-import com.mine.geometry_node.client.ui.shell.MainUiServices;
-import com.mine.geometry_node.client.ui.shell.layer.MainUiLayerManager;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -41,7 +39,6 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     private final EditorSessionState.TerminalState mSessionState;
     private final Runnable mSessionChanged;
     private boolean mInitializing;
-    private MainUiLayerManager mLayerManager;
 
     public TerminalWindow(Context context) {
         this(context, new EditorSessionState.TerminalState(), null);
@@ -163,8 +160,6 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     @Override public View getView() { return this; }
     @Override
     public void onShow() {
-        mLayerManager = MainUiServices.require(this).layerManager();
-        for (TerminalTab tab : mTabs) tab.approvals.bind(mLayerManager);
         if (mCurrentIndex >= 0) mTabs.get(mCurrentIndex).requestInputFocus();
     }
     @Override
@@ -183,7 +178,6 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         }
         mTabs.clear();
         mContainer.removeAllViews();
-        mLayerManager = null;
     }
 
     private TerminalTab createTerminalTab(EditorSessionState.TerminalTabState saved) {
@@ -199,17 +193,12 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
                 new TerminalSize(80, 24), new Pty4jProcessFactory());
         TerminalSession session = new TerminalSession(id, title, mode, profileId, coordinator);
         coordinator.bind(session);
-        GraphPatchApprovalController approvals = new GraphPatchApprovalController(getContext(), id.toString());
-        if (mLayerManager != null) approvals.bind(mLayerManager);
         ShellTerminalView[] viewHolder = new ShellTerminalView[1];
         ShellTerminalView shellView = new ShellTerminalView(getContext(), coordinator,
                 (size, generation) -> startMcpPowerShell(
-                        coordinator, viewHolder[0], approvals, size, generation));
+                        coordinator, viewHolder[0], size, generation));
         viewHolder[0] = shellView;
-        approvals.setFocusRestorer(() -> {
-            if (shellView.isAttachedToWindow()) shellView.requestInputFocus();
-        });
-        return new TerminalTab(session, new ConsoleView(getContext()), shellView, approvals);
+        return new TerminalTab(session, new ConsoleView(getContext()), shellView);
     }
 
     private void captureSessionState() {
@@ -266,9 +255,9 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     }
 
     private static void startMcpPowerShell(ShellTerminalCoordinator coordinator,
-                                           ShellTerminalView view, GraphPatchApprovalController approvals,
+                                           ShellTerminalView view,
                                            TerminalSize size, long generation) {
-        var gateway = new MinecraftClientMcpGateway(CommandCatalog.registry(), approvals);
+        var gateway = new MinecraftClientMcpGateway(CommandCatalog.registry());
         Thread.ofVirtual().name("geometry-node-mcp-powershell-start").start(() -> {
             McpPowerShellRun run = null;
             try {
@@ -311,14 +300,11 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         private final TerminalSession session;
         private final ConsoleView commandView;
         private final ShellTerminalView shellView;
-        private final GraphPatchApprovalController approvals;
 
-        private TerminalTab(TerminalSession session, ConsoleView commandView, ShellTerminalView shellView,
-                            GraphPatchApprovalController approvals) {
+        private TerminalTab(TerminalSession session, ConsoleView commandView, ShellTerminalView shellView) {
             this.session = session;
             this.commandView = commandView;
             this.shellView = shellView;
-            this.approvals = approvals;
         }
 
         private View activeView() { return session.mode() == TerminalMode.COMMAND ? commandView : shellView; }
@@ -330,7 +316,6 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
 
         @Override
         public void close() {
-            approvals.close();
             shellView.dispose();
             session.close();
         }
