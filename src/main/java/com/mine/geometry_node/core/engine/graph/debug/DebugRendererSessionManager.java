@@ -218,6 +218,10 @@ public final class DebugRendererSessionManager {
         return changed ? 1 : 0;
     }
 
+    /**
+     * Behavior-tree-only producer hook at present. The shared pathfinding channel also renders
+     * vanilla navigation state, so the channel itself is not behavior-tree-specific.
+     */
     public static void recordRequestedPathTarget(Mob mob, Vec3 position) {
         if (mob == null || position == null || !hasPathfindingSessions()) return;
         REQUESTED_PATH_TARGETS.put(mob.getUUID(), new RequestedPathTarget(
@@ -226,6 +230,7 @@ public final class DebugRendererSessionManager {
         ));
     }
 
+    /** Clears the requested target written through the behavior-tree producer hook above. */
     public static void clearRequestedPathTarget(Mob mob) {
         if (mob != null && REQUESTED_PATH_TARGETS.remove(mob.getUUID()) != null) markDirty();
     }

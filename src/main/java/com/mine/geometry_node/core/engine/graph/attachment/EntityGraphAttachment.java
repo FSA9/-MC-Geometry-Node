@@ -27,6 +27,7 @@ public class EntityGraphAttachment {
     private final GraphBindingSet boundGraphs = new GraphBindingSet();
     private final OwnerScopedStateStore ownerScopedState =
             new OwnerScopedStateStore();
+    // Behavior-tree-only state: blueprints do not select one active asset per owner.
     private String selectedBehaviorTree;
     private WeakReference<Entity> ownerRef = new WeakReference<>(null);
 
@@ -85,6 +86,7 @@ public class EntityGraphAttachment {
         return boundGraphs.all();
     }
 
+    // Behavior-tree-only binding and active-tree selection API.
     public boolean bindBehaviorTree(String graphId) {
         return boundGraphs.add(GraphBindingKey.behaviorTree(graphId));
     }
@@ -153,6 +155,7 @@ public class EntityGraphAttachment {
             for (String graphId : getBoundGraphs()) boundList.add(StringTag.valueOf(graphId));
             tag.put("BoundGraphs", boundList);
         }
+        // Behavior-tree-only persistence for bound candidates and the selected active tree.
         if (!getBoundBehaviorTrees().isEmpty()) {
             ListTag behaviorList = new ListTag();
             for (String graphId : getBoundBehaviorTrees()) {
@@ -179,6 +182,7 @@ public class EntityGraphAttachment {
                 this.boundGraphs.add(GraphBindingKey.blueprint(graphId));
             }
         }
+        // Behavior-tree-only persistence counterpart to the save block above.
         ListTag behaviorList = tag.getListOrEmpty("BehaviorTrees");
         for (int i = 0; i < behaviorList.size(); i++) {
             String graphId = behaviorList.getStringOr(i, "");

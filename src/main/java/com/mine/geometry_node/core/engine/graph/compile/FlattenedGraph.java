@@ -12,6 +12,7 @@ import java.util.Set;
 public final class FlattenedGraph {
     private final Map<String, JsonObject> nodes;
     private final Map<String, Map<String, GraphFlattener.TargetConnection>> executionOutputs;
+    // Behavior-tree-only control edges; blueprint execution uses executionOutputs.
     private final Map<String, Map<String, GraphFlattener.TargetConnection>> behaviorOutputs;
     private final Map<String, GraphFlattener.DataConnectionSource> dataInputs;
     private final Map<String, List<String>> nodesByType;
@@ -44,6 +45,7 @@ public final class FlattenedGraph {
 
     public Map<String, JsonObject> nodes() { return nodes; }
     public Map<String, Map<String, GraphFlattener.TargetConnection>> executionOutputs() { return executionOutputs; }
+    /** Behavior-tree-only child/control edges after group boundaries are flattened. */
     public Map<String, Map<String, GraphFlattener.TargetConnection>> behaviorOutputs() { return behaviorOutputs; }
     public Map<String, GraphFlattener.DataConnectionSource> dataInputs() { return dataInputs; }
     public Map<String, List<String>> nodesByType() { return nodesByType; }

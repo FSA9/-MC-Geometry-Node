@@ -21,6 +21,7 @@ public record GraphBindingKey(GraphKind kind, String graphId) {
         return new GraphBindingKey(GraphKind.BLUEPRINT, graphId);
     }
 
+    /** Behavior-tree-only convenience factory; generic storage still uses this common key type. */
     public static GraphBindingKey behaviorTree(String graphId) {
         return new GraphBindingKey(GraphKind.BEHAVIOR_TREE, graphId);
     }

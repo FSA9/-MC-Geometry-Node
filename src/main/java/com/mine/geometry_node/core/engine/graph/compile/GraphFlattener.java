@@ -20,6 +20,7 @@ public final class GraphFlattener {
 
     private final Map<String, JsonObject> nodeDataLookup = new HashMap<>();
     private final Map<String, Map<String, TargetConnection>> flowOutputLookup = new HashMap<>();
+    // Behavior-tree-only edge index; kept here so group flattening has one implementation.
     private final Map<String, Map<String, TargetConnection>> behaviorOutputLookup = new HashMap<>();
     private final Map<String, DataConnectionSource> inputLookup = new HashMap<>();
     private final Map<String, List<String>> typeLookup = new HashMap<>();
@@ -34,6 +35,7 @@ public final class GraphFlattener {
     private final Set<String> virtualNodeIds = new HashSet<>();
     private final Map<String, DataResolution> dataResolutionCache = new HashMap<>();
     private final Map<String, Optional<TargetConnection>> executionTargetCache = new HashMap<>();
+    // Behavior-tree-only counterpart to executionTargetCache.
     private final Map<String, Optional<TargetConnection>> behaviorTargetCache = new HashMap<>();
 
     private GraphFlattener() {
@@ -197,6 +199,7 @@ public final class GraphFlattener {
         }
     }
 
+    /** Reads behavior-tree child/control edges from the editable graph document. */
     private void parseBehaviorOutputs(String globalId, String prefix, JsonObject nodeObj) {
         JsonObject outputs = asObject(nodeObj.get("behavior_outputs"));
         if (outputs == null) return;
@@ -264,6 +267,7 @@ public final class GraphFlattener {
         flowOutputLookup.putAll(finalFlowLookup);
     }
 
+    /** Rewrites behavior-tree-only edges across nested group boundaries. */
     private void bridgeBehaviorOutputs() {
         Map<String, Map<String, TargetConnection>> flattened = new HashMap<>();
         for (Map.Entry<String, Map<String, TargetConnection>> sourceEntry : behaviorOutputLookup.entrySet()) {
@@ -390,6 +394,7 @@ public final class GraphFlattener {
         return resolved;
     }
 
+    /** Resolves one behavior-tree-only edge through virtual group nodes. */
     private TargetConnection resolveBehaviorTarget(String targetId, String targetPort, Set<String> visited) {
         if (targetId == null || targetPort == null) return null;
         String cacheKey = makeKey(targetId, targetPort);
@@ -445,6 +450,7 @@ public final class GraphFlattener {
         return flows.get("flow_out");
     }
 
+    /** Looks up an unflattened behavior-tree-only edge. */
     private TargetConnection getBehaviorTarget(String sourceId, String port) {
         Map<String, TargetConnection> connections = behaviorOutputLookup.get(sourceId);
         return connections != null ? connections.get(port) : null;
