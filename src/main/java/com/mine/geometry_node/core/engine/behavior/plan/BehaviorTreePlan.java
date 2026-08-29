@@ -8,7 +8,6 @@ import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeInd
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -16,22 +15,19 @@ import java.util.Set;
 public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex {
     private final String assetId;
     private final CompiledNodeIndex nodes;
-    private final NodeCapabilities[] capabilities;
+    private final Set<NodeCapabilities.ResourceUse>[] resources;
     private final int rootNode;
     private final int[] parents;
     private final int[][] children;
     private final RootSchedule rootSchedule;
 
-    private BehaviorTreePlan(String assetId, String[] nodeIds,
-                             String[] nodeTypes, NodeCapabilities[] capabilities, int rootNode,
-                             int[] parents, int[][] children, Map<String, Object>[] staticInputs,
-                             Map<Integer, DataConnectionSource>[] dataInputs, Set<String>[] ports,
-                             Map<String, Integer> portKeys,
+    private BehaviorTreePlan(String assetId, CompiledNodeIndex nodes,
+                             Set<NodeCapabilities.ResourceUse>[] resources, int rootNode,
+                             int[] parents, int[][] children,
                              RootSchedule rootSchedule) {
         this.assetId = assetId != null ? assetId : "";
-        this.nodes = new CompiledNodeIndex(nodeIds, nodeTypes, staticInputs,
-                dataInputs, ports, portKeys);
-        this.capabilities = capabilities.clone();
+        this.nodes = Objects.requireNonNull(nodes, "nodes");
+        this.resources = copyResources(resources);
         this.rootNode = rootNode;
         this.parents = parents.clone();
         this.children = copyChildren(children);
@@ -39,15 +35,12 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
     }
 
     public static BehaviorTreePlan createCompiled(
-            String assetId, String[] nodeIds,
-            String[] nodeTypes, NodeCapabilities[] capabilities, int rootNode,
-            int[] parents, int[][] children, Map<String, Object>[] staticInputs,
-            Map<Integer, DataConnectionSource>[] dataInputs, Set<String>[] ports,
-            Map<String, Integer> portKeys,
+            String assetId, CompiledNodeIndex nodes,
+            Set<NodeCapabilities.ResourceUse>[] resources, int rootNode,
+            int[] parents, int[][] children,
             RootSchedule rootSchedule) {
-        return new BehaviorTreePlan(assetId, nodeIds, nodeTypes, capabilities,
-                rootNode, parents, children, staticInputs, dataInputs, ports,
-                portKeys, rootSchedule);
+        return new BehaviorTreePlan(assetId, nodes, resources,
+                rootNode, parents, children, rootSchedule);
     }
 
     @Override
@@ -80,8 +73,8 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
         return nodes.getNodeType(nodeId);
     }
 
-    public NodeCapabilities getNodeCapabilities(int nodeId) {
-        return capabilities[Objects.checkIndex(nodeId, capabilities.length)];
+    public Set<NodeCapabilities.ResourceUse> getNodeResources(int nodeId) {
+        return resources[Objects.checkIndex(nodeId, resources.length)];
     }
 
     public int getRootNode() {
@@ -135,6 +128,16 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
         int[][] result = new int[source.length][];
         for (int i = 0; i < source.length; i++) {
             result[i] = source[i] != null ? source[i].clone() : new int[0];
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<NodeCapabilities.ResourceUse>[] copyResources(
+            Set<NodeCapabilities.ResourceUse>[] source) {
+        Set<NodeCapabilities.ResourceUse>[] result = new Set[source.length];
+        for (int index = 0; index < source.length; index++) {
+            result[index] = source[index] != null ? Set.copyOf(source[index]) : Set.of();
         }
         return result;
     }

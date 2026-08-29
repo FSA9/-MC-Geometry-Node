@@ -1,7 +1,9 @@
 package com.mine.geometry_node.core.engine.graph.compile.validation;
 
+import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
 
 import java.util.ArrayList;
@@ -50,6 +52,23 @@ public final class GraphDocumentValidator {
     public static void requireValid(Input input) {
         GraphValidationResult result = validate(input);
         if (!result.isValid()) throw new GraphValidationException(result.diagnostics());
+    }
+
+    public static Input input(String assetId, String graphTypeId, FlattenedGraph flattened) {
+        List<Node> nodes = flattened.nodes().entrySet().stream()
+                .map(entry -> new Node(entry.getKey(), readNodeType(entry.getValue())))
+                .toList();
+        long connectionCount = flattened.dataInputs().size();
+        connectionCount += flattened.executionOutputs().values().stream()
+                .mapToLong(java.util.Map::size).sum();
+        int boundedCount = connectionCount > MAX_CONNECTIONS
+                ? MAX_CONNECTIONS + 1 : (int) connectionCount;
+        return new Input(assetId, graphTypeId, nodes, boundedCount);
+    }
+
+    private static String readNodeType(JsonObject node) {
+        return node != null && node.has("node_type") && node.get("node_type").isJsonPrimitive()
+                ? node.get("node_type").getAsString() : null;
     }
 
     private static GraphDiagnostic diagnostic(String assetId, String code,

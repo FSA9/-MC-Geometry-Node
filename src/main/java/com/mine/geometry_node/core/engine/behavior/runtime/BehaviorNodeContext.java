@@ -163,13 +163,10 @@ public final class BehaviorNodeContext {
     public ScopedStateScope blackboardScope() {
         ensureValid();
         Object raw = staticInput(StandardPorts.BLACKBOARD_SCOPE.getId());
-        if (!(raw instanceof String text)) {
-            throw new BehaviorContractViolation("Blackboard scope is missing");
-        }
         try {
-            return ScopedStateScope.valueOf(text.trim().toUpperCase(java.util.Locale.ROOT));
+            return ScopedStateScope.resolve(raw, ScopedStateScope.INSTANCE, ScopedStateScope.ALL);
         } catch (IllegalArgumentException exception) {
-            throw new BehaviorContractViolation("Blackboard scope is invalid: " + text);
+            throw new BehaviorContractViolation(exception.getMessage());
         }
     }
 

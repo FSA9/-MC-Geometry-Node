@@ -251,7 +251,7 @@ public final class BehaviorTreeEvaluator {
     private void enterNode(BehaviorTreeProcess instance, int nodeIndex, BehaviorNodeExecutor executor,
                            BehaviorNodeContext context) throws Exception {
         Set<NodeCapabilities.ResourceUse> resources = instance.plan()
-                .getNodeCapabilities(nodeIndex).resources();
+                .getNodeResources(nodeIndex);
         int conflictOwner = instance.conflictingResourceOwner(nodeIndex, resources);
         if (conflictOwner >= 0) {
             PendingPreemption pending = matchingPreemption(
@@ -346,7 +346,7 @@ public final class BehaviorTreeEvaluator {
         }
         try {
             instance.releaseResources(nodeIndex,
-                    instance.plan().getNodeCapabilities(nodeIndex).resources());
+                    instance.plan().getNodeResources(nodeIndex));
         } catch (Exception exception) {
             finalReason = BehaviorTerminationReason.NODE_EXCEPTION;
             finalFailureCode = null;
@@ -397,7 +397,7 @@ public final class BehaviorTreeEvaluator {
             transition(instance, nodeIndex, BehaviorNodeState.EXITING);
             try {
                 instance.releaseResources(nodeIndex,
-                        instance.plan().getNodeCapabilities(nodeIndex).resources());
+                        instance.plan().getNodeResources(nodeIndex));
             } catch (Exception exception) {
                 detail = exception.getMessage() != null
                         ? exception.getMessage() : exception.getClass().getSimpleName();

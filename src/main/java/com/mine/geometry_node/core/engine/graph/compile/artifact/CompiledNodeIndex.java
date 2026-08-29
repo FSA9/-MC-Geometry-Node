@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.compile.artifact;
 
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
+import com.mine.geometry_node.core.node.port.TypeConverter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -92,6 +93,11 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
         Object value = staticInputs[nodeId].get(portName);
         return copiedStaticInputs[nodeId].contains(portName)
                 ? GraphValueSnapshot.snapshot(value) : value;
+    }
+
+    public <T> T getStaticInput(int nodeId, String portName, Class<T> type, T defaultValue) {
+        T converted = TypeConverter.convert(getStaticInput(nodeId, portName), type, null);
+        return converted != null ? converted : defaultValue;
     }
 
     @Override

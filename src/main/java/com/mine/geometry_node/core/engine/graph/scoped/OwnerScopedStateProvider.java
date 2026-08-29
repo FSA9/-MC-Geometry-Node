@@ -46,8 +46,8 @@ public final class OwnerScopedStateProvider implements ScopedStateProvider {
     @Override public long revision() { return store().revision(); }
     @Override public boolean hasRecord(String name) { return store().hasRecord(namespace, name); }
     @Override public int size() { return store().size(namespace); }
-    @Override public Map<String, ScopedStateEntry> entries() {
-        return store().entries(namespace, registries());
+    @Override public Map<String, ScopedStateEntry> entries(int limit) {
+        return store().entries(namespace, registries(), limit);
     }
 
     private OwnerScopedStateStore store() {

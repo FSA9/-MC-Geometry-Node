@@ -79,18 +79,26 @@ public final class BehaviorBlackboard {
                 entry != null ? entry.value() : null);
     }
 
-    public List<EntrySnapshot> snapshot() {
+    public Snapshot snapshot(int limit) {
+        int boundedLimit = Math.max(0, limit);
         List<EntrySnapshot> result = new ArrayList<>();
         for (Map.Entry<ScopedStateScope, ScopedStateProvider> installed : providers.entrySet()) {
-            appendSnapshots(result, installed.getKey(), installed.getValue());
+            if (result.size() >= boundedLimit) break;
+            appendSnapshots(result, installed.getKey(), installed.getValue(),
+                    boundedLimit - result.size());
         }
-        return List.copyOf(result);
+        int availableEntries = 0;
+        for (ScopedStateProvider provider : providers.values()) {
+            if (provider.available()) availableEntries += provider.size();
+            if (availableEntries > result.size()) break;
+        }
+        return new Snapshot(result, availableEntries > result.size());
     }
 
     private static void appendSnapshots(List<EntrySnapshot> result, ScopedStateScope scope,
-                                        ScopedStateProvider provider) {
-        if (!provider.available()) return;
-        for (Map.Entry<String, ScopedStateEntry> stored : provider.entries().entrySet()) {
+                                        ScopedStateProvider provider, int limit) {
+        if (!provider.available() || limit <= 0) return;
+        for (Map.Entry<String, ScopedStateEntry> stored : provider.entries(limit).entrySet()) {
             ScopedStateEntry entry = stored.getValue();
             result.add(new EntrySnapshot(stored.getKey(), scope,
                     provider.identity(), entry.type(), freeze(entry.value()), true));
@@ -139,6 +147,12 @@ public final class BehaviorBlackboard {
                                 PortType type, @Nullable Object value, boolean scopeAvailable) {
     }
 
+    public record Snapshot(List<EntrySnapshot> entries, boolean truncated) {
+        public Snapshot {
+            entries = List.copyOf(entries);
+        }
+    }
+
     private static final class MemoryProvider implements ScopedStateProvider {
         private final ScopedStateScope scope;
         private final Map<String, ScopedStateEntry> values = new LinkedHashMap<>();
@@ -167,7 +181,15 @@ public final class BehaviorBlackboard {
             return true;
         }
         @Override public boolean hasRecord(String name) { return values.containsKey(name); }
-        @Override public Map<String, ScopedStateEntry> entries() { return Map.copyOf(values); }
+        @Override public Map<String, ScopedStateEntry> entries(int limit) {
+            if (limit <= 0 || values.isEmpty()) return Map.of();
+            Map<String, ScopedStateEntry> result = new LinkedHashMap<>();
+            for (Map.Entry<String, ScopedStateEntry> entry : values.entrySet()) {
+                result.put(entry.getKey(), entry.getValue());
+                if (result.size() >= limit) break;
+            }
+            return Map.copyOf(result);
+        }
         @Override public long revision() { return revision; }
         @Override public int size() { return values.size(); }
     }

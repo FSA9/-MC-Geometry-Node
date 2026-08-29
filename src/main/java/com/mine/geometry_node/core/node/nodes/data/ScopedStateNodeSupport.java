@@ -20,12 +20,7 @@ final class ScopedStateNodeSupport {
     static final ScopedStateScope DEFAULT_SCOPE = ScopedStateScope.OWNER;
     static final String DEFAULT_DIMENSION = "minecraft:overworld";
 
-    private static final String[] SCOPES = {
-            ScopedStateScope.OWNER.name(),
-            ScopedStateScope.SHARED.name(),
-            ScopedStateScope.GROUP.name(),
-            ScopedStateScope.WORLD.name()
-    };
+    private static final String[] SCOPES = ScopedStateScope.optionIds(ScopedStateScope.PERSISTENT);
     private ScopedStateNodeSupport() {
     }
 
@@ -44,7 +39,7 @@ final class ScopedStateNodeSupport {
 
     static PortRow scopeRow(@Nullable PortDef output) {
         PortDef input = PortDef.create(SCOPE_PORT, "geometry_node.port.state_scope",
-                PortType.STRING, DEFAULT_SCOPE.name()).hiddenPin();
+                PortType.STRING, DEFAULT_SCOPE.id()).hiddenPin();
         return new PortRow(input, output, UIHint.SELECT, null, Map.of(
                 PortMetaKeys.OPTIONS, SCOPES
         ));
@@ -86,15 +81,10 @@ final class ScopedStateNodeSupport {
     }
 
     private static ScopedStateScope normalizeScope(@Nullable Object value) {
-        if (value instanceof String scope) {
-            try {
-                ScopedStateScope parsed = ScopedStateScope.valueOf(scope.trim().toUpperCase(java.util.Locale.ROOT));
-                if (parsed != ScopedStateScope.INSTANCE) return parsed;
-            } catch (IllegalArgumentException ignored) {
-                // Report the invalid persisted/manual value instead of silently changing its target.
-            }
-            if (!scope.isBlank()) throw new IllegalStateException("Unsupported blueprint scoped state scope: " + scope);
+        try {
+            return ScopedStateScope.resolve(value, DEFAULT_SCOPE, ScopedStateScope.PERSISTENT);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException(exception.getMessage(), exception);
         }
-        return DEFAULT_SCOPE;
     }
 }

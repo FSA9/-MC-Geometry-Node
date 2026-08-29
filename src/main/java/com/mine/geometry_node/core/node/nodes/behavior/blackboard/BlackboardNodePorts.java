@@ -8,11 +8,10 @@ import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.UIHint;
 
-import java.util.Locale;
 import java.util.Map;
 
 public final class BlackboardNodePorts {
-    private static final String[] OPTIONS = {"instance", "owner", "shared", "group", "world"};
+    private static final String[] OPTIONS = ScopedStateScope.optionIds(ScopedStateScope.ALL);
 
     private BlackboardNodePorts() {
     }
@@ -37,11 +36,6 @@ public final class BlackboardNodePorts {
     }
 
     public static ScopedStateScope scope(Object value) {
-        if (!(value instanceof String text)) return null;
-        try {
-            return ScopedStateScope.valueOf(text.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
+        return ScopedStateScope.parse(value);
     }
 }

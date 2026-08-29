@@ -43,6 +43,7 @@ public record BehaviorTreeDebugSnapshot(
         BudgetSnapshot budget,
         long blackboardRevision,
         List<BlackboardSnapshot> blackboard,
+        boolean blackboardTruncated,
         List<TraceSnapshot> history
 ) {
     private static final int MAX_VALUE_TEXT = 2_048;
@@ -50,6 +51,7 @@ public record BehaviorTreeDebugSnapshot(
     private static final int MAX_VALUE_DEPTH = 4;
     private static final int MAX_COLLECTION_ENTRIES = 32;
     private static final int MAX_SNAPSHOT_NODES = 256;
+    private static final int MAX_SNAPSHOT_BLACKBOARD = 128;
 
     public BehaviorTreeDebugSnapshot {
         activePath = List.copyOf(activePath);
@@ -83,7 +85,9 @@ public record BehaviorTreeDebugSnapshot(
         BehaviorBlackboard instanceBlackboard = instance.blackboard();
         List<BlackboardSnapshot> blackboard = new ArrayList<>();
         long blackboardRevision = instanceBlackboard.revision();
-        for (BehaviorBlackboard.EntrySnapshot entry : instanceBlackboard.snapshot()) {
+        BehaviorBlackboard.Snapshot blackboardSource =
+                instanceBlackboard.snapshot(MAX_SNAPSHOT_BLACKBOARD);
+        for (BehaviorBlackboard.EntrySnapshot entry : blackboardSource.entries()) {
             blackboard.add(blackboardSnapshot(entry));
         }
         List<TraceSnapshot> history = instance.history().stream()
@@ -111,7 +115,7 @@ public record BehaviorTreeDebugSnapshot(
                         configuredBudget.maxNodeVisitsPerEvaluation(), configuredBudget.maxTreeDepth(),
                         configuredBudget.maxBlackboardEntriesPerInstance(),
                         configuredBudget.maxHistoryEntriesPerInstance()),
-                blackboardRevision, blackboard, history);
+                blackboardRevision, blackboard, blackboardSource.truncated(), history);
     }
 
     private static BlackboardSnapshot blackboardSnapshot(BehaviorBlackboard.EntrySnapshot entry) {

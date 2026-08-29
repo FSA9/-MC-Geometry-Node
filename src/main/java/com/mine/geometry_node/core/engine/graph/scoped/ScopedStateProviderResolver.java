@@ -121,7 +121,9 @@ public final class ScopedStateProviderResolver {
         @Override public ScopedStateEntry put(String name, Object value) { return delegate().put(name, value); }
         @Override public boolean remove(String name) { return delegate().remove(name); }
         @Override public boolean hasRecord(String name) { return delegate().hasRecord(name); }
-        @Override public Map<String, ScopedStateEntry> entries() { return delegate().entries(); }
+        @Override public Map<String, ScopedStateEntry> entries(int limit) {
+            return delegate().entries(limit);
+        }
         @Override public long revision() { return available() ? delegate().revision() : 0L; }
         @Override public int size() { return delegate().size(); }
 

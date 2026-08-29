@@ -205,7 +205,6 @@ public class TypeConverter {
             return null;
         }
 
-        System.err.println("[TypeConverter] Failed to convert " + val.getClass().getSimpleName() + " to " + type.getSimpleName());
         return null;
     }
 

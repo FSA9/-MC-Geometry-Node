@@ -12,7 +12,8 @@ import com.mine.geometry_node.core.engine.graph.compile.GraphCompiler;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompileContext;
 import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphFlattener;
-import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
+import com.mine.geometry_node.core.engine.graph.compile.CompiledNodeTable;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
@@ -25,7 +26,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Compiles blueprint JSON into the immutable runtime index used by the VM.
@@ -80,70 +80,32 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
         JsonObject rootNodes = root.getAsJsonObject("nodes");
 
         FlattenedGraph flattened = GraphFlattener.flatten(rootNodes);
-        GraphDocumentValidator.requireValid(validationInput(context, graphTypeId, flattened));
+        GraphDocumentValidator.requireValid(GraphDocumentValidator.input(
+                context != null ? context.diagnosticAssetId() : "<anonymous>",
+                graphTypeId, flattened));
+        CompiledNodeTable nodeTable = CompiledNodeTable.build(flattened);
+        CompiledNodeIndex nodes = nodeTable.index();
 
-        List<String> allIds = flattened.nodes().keySet().stream().sorted().toList();
+        List<String> allIds = nodeTable.nodeIds();
         int size = allIds.size();
-
-        String[] idToString = new String[size];
         Map<String, Integer> stringToId = new HashMap<>(size);
-
-        int indexCounter = 0;
-        for (String id : allIds) {
-            idToString[indexCounter] = id;
-            stringToId.put(id, indexCounter);
-            indexCounter++;
-        }
-
-        Map<String, Integer> keyDict = new HashMap<>();
-        for (String key : flattened.portNames().stream().sorted().toList()) {
-            if (!keyDict.containsKey(key)) {
-                keyDict.put(key, keyDict.size());
-            }
-        }
-        String[] typeArray = new String[size];
+        for (int index = 0; index < size; index++) stringToId.put(allIds.get(index), index);
         Map<Integer, BlueprintPlan.IntFlowTarget>[] flowOutputArray = new Map[size];
-        Map<Integer, CompiledDataIndex.DataConnectionSource>[] inputArray = new Map[size];
-        Set<String>[] portArray = new Set[size];
-        Map<String, Object>[] staticInputArray = new Map[size];
 
         for (int i = 0; i < size; i++) {
-            String strId = idToString[i];
-
-            JsonObject node = flattened.nodes().get(strId);
-            typeArray[i] = node != null && node.has("node_type") ? node.get("node_type").getAsString() : "unknown";
+            String strId = allIds.get(i);
             flowOutputArray[i] = new HashMap<>();
-            inputArray[i] = new HashMap<>();
-            portArray[i] = flattened.ports().getOrDefault(strId, Set.of());
 
             Map<String, FlattenedGraph.TargetConnection> oldFlow = flattened.executionOutputs().get(strId);
             if (oldFlow != null) {
                 for (Map.Entry<String, FlattenedGraph.TargetConnection> e : oldFlow.entrySet()) {
                     Integer targetInt = stringToId.get(e.getValue().targetNodeId());
-                    Integer portId = keyDict.get(e.getKey());
-                    if (targetInt != null && portId != null) {
+                    int portId = nodes.getPortKey(e.getKey());
+                    if (targetInt != null && portId >= 0) {
                         flowOutputArray[i].put(portId,
                                 new BlueprintPlan.IntFlowTarget(targetInt, e.getValue().targetPortName()));
                     }
                 }
-            }
-
-            staticInputArray[i] = flattened.staticInputs().getOrDefault(strId, Map.of());
-        }
-
-        for (Map.Entry<FlattenedGraph.InputKey, FlattenedGraph.DataConnectionSource> entry
-                : flattened.dataInputs().entrySet()) {
-            String targetId = entry.getKey().nodeId();
-            String portName = entry.getKey().portName();
-
-            Integer targetInt = stringToId.get(targetId);
-            Integer sourceInt = stringToId.get(entry.getValue().sourceNodeId());
-            Integer portId = keyDict.get(portName);
-
-            if (targetInt != null && sourceInt != null && portId != null) {
-                inputArray[targetInt].put(portId,
-                        new CompiledDataIndex.DataConnectionSource(
-                                sourceInt, entry.getValue().sourcePortName()));
             }
         }
 
@@ -162,7 +124,7 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
         Map<String, List<Integer>> receiveLookup = new HashMap<>();
         List<Integer> receiveNodes = typeToIntList.getOrDefault("receive_blueprint", List.of());
         for (int nodeId : receiveNodes) {
-            Object frequency = staticInputArray[nodeId].get("frequency");
+            Object frequency = nodes.getStaticInput(nodeId, "frequency");
             if (frequency == null) {
                 continue;
             }
@@ -182,7 +144,7 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
         Map<String, List<Integer>> multiblockLookup = new HashMap<>();
         List<Integer> multiblockNodes = typeToIntList.getOrDefault(OnMultiblockBuilt.TYPE_ID, List.of());
         for (int nodeId : multiblockNodes) {
-            Object configuredId = staticInputArray[nodeId].get(StandardPorts.TYPE.getId());
+            Object configuredId = nodes.getStaticInput(nodeId, StandardPorts.TYPE.getId());
             String structureId = configuredId != null ? String.valueOf(configuredId).trim() : "";
             if (structureId.isEmpty()) {
                 structureId = MultiblockStructureManager.ANY_STRUCTURE_ID;
@@ -199,30 +161,11 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
                 graphTypeId,
                 questDefinition,
                 questConditionOverview,
-                idToString,
-                typeArray,
-                portArray,
+                nodes,
                 flowOutputArray,
-                inputArray,
                 typeToIntList,
                 Map.copyOf(receiveLookupImmutable),
-                Map.copyOf(multiblockLookupImmutable),
-                staticInputArray,
-                keyDict
+                Map.copyOf(multiblockLookupImmutable)
         );
-    }
-
-    private static GraphDocumentValidator.Input validationInput(
-            GraphCompileContext context, String graphTypeId, FlattenedGraph flattened) {
-        List<GraphDocumentValidator.Node> nodes = flattened.nodes().entrySet().stream()
-                .map(entry -> new GraphDocumentValidator.Node(entry.getKey(),
-                        entry.getValue() != null && entry.getValue().has("node_type")
-                                ? entry.getValue().get("node_type").getAsString() : null))
-                .toList();
-        int flowConnections = flattened.executionOutputs().values().stream()
-                .mapToInt(Map::size).sum();
-        return new GraphDocumentValidator.Input(
-                context != null ? context.diagnosticAssetId() : "<anonymous>",
-                graphTypeId, nodes, flowConnections + flattened.dataInputs().size());
     }
 }

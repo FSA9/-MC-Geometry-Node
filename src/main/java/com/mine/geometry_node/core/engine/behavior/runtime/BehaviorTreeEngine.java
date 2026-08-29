@@ -29,13 +29,11 @@ public final class BehaviorTreeEngine {
     private static final int MAX_ASSET_RELOADS_PER_SERVER_TICK = 64;
 
     private final BehaviorTreeEvaluator evaluator;
-    private final BehaviorNodeExecutorRegistry executors;
     private final BehaviorRuntimeBudget budget;
     private final Map<MinecraftServer, ServerState> servers = new WeakHashMap<>();
 
     public BehaviorTreeEngine(BehaviorNodeExecutorRegistry executors, BehaviorRuntimeBudget budget) {
-        this.executors = Objects.requireNonNull(executors, "executors");
-        this.evaluator = new BehaviorTreeEvaluator(executors);
+        this.evaluator = new BehaviorTreeEvaluator(Objects.requireNonNull(executors, "executors"));
         this.budget = Objects.requireNonNull(budget, "budget");
     }
 
@@ -343,13 +341,6 @@ public final class BehaviorTreeEngine {
 
     private void requireExecutable(BehaviorTreePlan plan) {
         if (plan.getRootNode() < 0) throw new IllegalArgumentException("Behavior plan has no root");
-        for (int nodeIndex = 0; nodeIndex < plan.getNodeCount(); nodeIndex++) {
-            NodeCapabilities capabilities = plan.getNodeCapabilities(nodeIndex);
-            if (capabilities.context() == NodeCapabilities.Context.BEHAVIOR_EXECUTION
-                    && !executors.has(plan.getNodeType(nodeIndex))) {
-                throw new IllegalStateException("Missing behavior executor: " + plan.getNodeType(nodeIndex));
-            }
-        }
     }
 
     @Nullable

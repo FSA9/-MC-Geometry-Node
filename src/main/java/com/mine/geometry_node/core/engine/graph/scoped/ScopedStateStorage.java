@@ -228,7 +228,8 @@ public final class ScopedStateStorage extends SavedData {
             return bucket != null ? ScopedStateStorage.size(bucket) : 0;
         }
 
-        @Override public Map<String, ScopedStateEntry> entries() {
+        @Override public Map<String, ScopedStateEntry> entries(int limit) {
+            if (limit <= 0) return Map.of();
             Bucket bucket = buckets.get(storageKey);
             if (bucket == null || bucket.entries.isEmpty()) return Map.of();
             Map<String, ScopedStateEntry> result = new LinkedHashMap<>();
@@ -239,6 +240,7 @@ public final class ScopedStateStorage extends SavedData {
                 } catch (RuntimeException ignored) {
                     // Snapshot enumeration is best-effort; direct get keeps the diagnostic failure.
                 }
+                if (result.size() >= limit) break;
             }
             return Map.copyOf(result);
         }

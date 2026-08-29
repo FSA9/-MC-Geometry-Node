@@ -344,7 +344,7 @@ public final class BehaviorTreeProcess {
     void releaseAllResources() {
         for (int nodeIndex = 0; nodeIndex < resourcesAcquired.length; nodeIndex++) {
             if (resourcesAcquired[nodeIndex]) {
-                releaseResources(nodeIndex, plan.getNodeCapabilities(nodeIndex).resources());
+                releaseResources(nodeIndex, plan.getNodeResources(nodeIndex));
             }
         }
     }

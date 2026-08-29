@@ -49,23 +49,17 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
     private BlueprintPlan(String graphTypeId,
                               QuestDefinition questDefinition,
                               QuestConditionOverview questConditionOverview,
-                              String[] idToString,
-                              String[] typeArray,
-                              Set<String>[] portArray,
+                              CompiledNodeIndex nodes,
                               Map<Integer, IntFlowTarget>[] flowOutputArray,
-                              Map<Integer, DataConnectionSource>[] inputArray,
                               Map<String, List<Integer>> typeLookup,
                               Map<String, List<Integer>> receiveBlueprintLookup,
-                              Map<String, List<Integer>> multiblockStructureLookup,
-                              Map<String, Object>[] staticInputArray,
-                              Map<String, Integer> keyDictionary) {
+                              Map<String, List<Integer>> multiblockStructureLookup) {
         this.graphTypeId = graphTypeId;
         this.questDefinition = questDefinition != null ? questDefinition : QuestDefinition.EMPTY;
         this.questConditionOverview = questConditionOverview != null
                 ? questConditionOverview
                 : QuestConditionOverview.EMPTY;
-        this.nodes = new CompiledNodeIndex(idToString, typeArray, staticInputArray,
-                inputArray, portArray, keyDictionary);
+        this.nodes = nodes;
         this.flowOutputArray = copyMapArray(flowOutputArray);
         this.typeLookup = copyLookup(typeLookup);
         this.receiveBlueprintLookup = copyLookup(receiveBlueprintLookup);
@@ -96,30 +90,20 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
     public static BlueprintPlan createCompiled(String graphTypeId,
                                                    QuestDefinition questDefinition,
                                                    QuestConditionOverview questConditionOverview,
-                                                   String[] idToString,
-                                                   String[] typeArray,
-                                                   Set<String>[] portArray,
+                                                   CompiledNodeIndex nodes,
                                                    Map<Integer, IntFlowTarget>[] flowOutputArray,
-                                                   Map<Integer, DataConnectionSource>[] inputArray,
                                                    Map<String, List<Integer>> typeLookup,
                                                    Map<String, List<Integer>> receiveBlueprintLookup,
-                                                   Map<String, List<Integer>> multiblockStructureLookup,
-                                                   Map<String, Object>[] staticInputArray,
-                                                   Map<String, Integer> keyDictionary) {
+                                                   Map<String, List<Integer>> multiblockStructureLookup) {
         return new BlueprintPlan(
                 graphTypeId,
                 questDefinition,
                 questConditionOverview,
-                idToString,
-                typeArray,
-                portArray,
+                nodes,
                 flowOutputArray,
-                inputArray,
                 typeLookup,
                 receiveBlueprintLookup,
-                multiblockStructureLookup,
-                staticInputArray,
-                keyDictionary
+                multiblockStructureLookup
         );
     }
 
@@ -196,31 +180,7 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
 
     @SuppressWarnings("unchecked")
     public <T> T getNodeStaticInput(int nodeId, String portId, Class<T> type, T defaultValue) {
-        Object raw = getNodeStaticInput(nodeId, portId);
-        if (raw == null) return defaultValue;
-
-        // 如果类型直接匹配，直接强转
-        if (type.isInstance(raw)) {
-            return (T) raw;
-        }
-
-        // 针对 Number 的通用处理 (解决 Integer 和 Double 在 JSON 里的互转问题)
-        if (raw instanceof Number n) {
-            if (type == Integer.class) return (T) Integer.valueOf(n.intValue());
-            if (type == Float.class) return (T) Float.valueOf(n.floatValue());
-            if (type == Double.class) return (T) Double.valueOf(n.doubleValue());
-            if (type == Long.class) return (T) Long.valueOf(n.longValue());
-        }
-
-        // 针对 String 强转数字的容错处理
-        if (raw instanceof String s) {
-            try {
-                if (type == Integer.class) return (T) Integer.valueOf(s);
-                if (type == Double.class) return (T) Double.valueOf(s);
-            } catch (NumberFormatException ignored) {}
-        }
-
-        return defaultValue;
+        return nodes.getStaticInput(nodeId, portId, type, defaultValue);
     }
 
     @Nullable

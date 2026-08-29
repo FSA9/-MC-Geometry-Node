@@ -104,11 +104,17 @@ public final class OwnerScopedStateStore {
     public boolean isEmpty() { return entries.isEmpty(); }
 
     public Map<String, ScopedStateEntry> entries(HolderLookup.Provider registries) {
-        return entries(ScopedStateNamespace.PUBLIC, registries);
+        return entries(ScopedStateNamespace.PUBLIC, registries, Integer.MAX_VALUE);
     }
 
     public Map<String, ScopedStateEntry> entries(ScopedStateNamespace namespace,
                                                   HolderLookup.Provider registries) {
+        return entries(namespace, registries, Integer.MAX_VALUE);
+    }
+
+    public Map<String, ScopedStateEntry> entries(ScopedStateNamespace namespace,
+                                                 HolderLookup.Provider registries, int limit) {
+        if (limit <= 0) return Map.of();
         Map<String, ScopedStateEntry> result = new LinkedHashMap<>();
         for (StateKey key : entries.keySet()) {
             if (key.namespace() != namespace) continue;
@@ -118,6 +124,7 @@ public final class OwnerScopedStateStore {
             } catch (RuntimeException ignored) {
                 // Snapshot enumeration is best-effort; direct get keeps the diagnostic failure.
             }
+            if (result.size() >= limit) break;
         }
         return Map.copyOf(result);
     }

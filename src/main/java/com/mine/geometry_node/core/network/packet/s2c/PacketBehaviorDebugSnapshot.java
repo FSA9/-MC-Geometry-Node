@@ -106,7 +106,7 @@ public record PacketBehaviorDebugSnapshot(UUID instanceId, Status status, String
                 source.nodesTruncated() || source.nodes().size() > nodes.size(),
                 evaluation(source.evaluation()),
                 budget(source.budget()), source.blackboardRevision(), blackboard,
-                source.blackboard().size() > blackboard.size(), history,
+                source.blackboardTruncated() || source.blackboard().size() > blackboard.size(), history,
                 source.history().size() > history.size());
         return new PacketBehaviorDebugSnapshot(source.instanceId(), Status.SNAPSHOT, "", snapshot);
     }

@@ -14,7 +14,8 @@ public interface ScopedStateProvider {
     ScopedStateEntry put(String name, Object value);
     boolean remove(String name);
     boolean hasRecord(String name);
-    Map<String, ScopedStateEntry> entries();
+    default Map<String, ScopedStateEntry> entries() { return entries(Integer.MAX_VALUE); }
+    Map<String, ScopedStateEntry> entries(int limit);
     long revision();
     int size();
 }
