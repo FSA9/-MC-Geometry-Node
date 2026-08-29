@@ -33,8 +33,8 @@ import java.util.Map;
 import java.util.Objects;
 
 final class NumericInputView extends FrameLayout {
-    private static final Map<String, Object> DRAGGED_FLOAT_VALUES = new HashMap<>();
-    private static final Map<String, Boolean> PERSISTED_HOVER = new HashMap<>();
+    private static final Map<NumericControlKey, Object> DRAGGED_FLOAT_VALUES = new HashMap<>();
+    private static final Map<NumericControlKey, Boolean> PERSISTED_HOVER = new HashMap<>();
 
     private static final int COLOR_BG = 0xFF252525;
     private static final int COLOR_BG_HOVER = 0xFF30343B;
@@ -101,7 +101,7 @@ final class NumericInputView extends FrameLayout {
 
         syncFromNode();
         setInlineLabelText(inlineLabel);
-        mHovered = PERSISTED_HOVER.getOrDefault(formatKey(), false);
+        mHovered = PERSISTED_HOVER.getOrDefault(controlKey(), false);
     }
 
     void refreshFromBinding() {
@@ -437,14 +437,14 @@ final class NumericInputView extends FrameLayout {
     }
 
     private boolean shouldUseDraggedFloatFormat(Object value) {
-        return mSpec.type() == PortType.FLOAT && Objects.equals(DRAGGED_FLOAT_VALUES.get(formatKey()), value);
+        return mSpec.type() == PortType.FLOAT && Objects.equals(DRAGGED_FLOAT_VALUES.get(controlKey()), value);
     }
 
     private void rememberDraggedFloatFormat(Object value, boolean draggedFormat) {
         if (mSpec.type() != PortType.FLOAT) {
             return;
         }
-        String key = formatKey();
+        NumericControlKey key = controlKey();
         if (draggedFormat) {
             DRAGGED_FLOAT_VALUES.put(key, value);
         } else {
@@ -452,12 +452,12 @@ final class NumericInputView extends FrameLayout {
         }
     }
 
-    private String formatKey() {
-        return mBinding.formatKey();
+    private NumericControlKey controlKey() {
+        return mBinding.controlKey();
     }
 
     private void persistHover(boolean hovered) {
-        String key = formatKey();
+        NumericControlKey key = controlKey();
         if (hovered) {
             PERSISTED_HOVER.put(key, true);
         } else {
@@ -488,7 +488,15 @@ final class NumericInputView extends FrameLayout {
         Object currentCommitValue();
         Object defaultValue();
         boolean commit(Object oldValue, Object newValue);
-        String formatKey();
+        NumericControlKey controlKey();
+    }
+
+    record NumericControlKey(String nodeId, String portId, String controlId) {
+        NumericControlKey {
+            nodeId = Objects.requireNonNullElse(nodeId, "");
+            portId = Objects.requireNonNullElse(portId, "");
+            controlId = Objects.requireNonNullElse(controlId, "");
+        }
     }
 
     private record PortNumericBinding(NodeData nodeData, PortDef port, EditorContext editorContext) implements NumericValueBinding {
@@ -516,10 +524,10 @@ final class NumericInputView extends FrameLayout {
         }
 
         @Override
-        public String formatKey() {
+        public NumericControlKey controlKey() {
             String nodeId = nodeData != null ? nodeData.id : "";
             String portId = port != null ? port.id() : "";
-            return nodeId + "#" + portId;
+            return new NumericControlKey(nodeId, portId, "value");
         }
 
         private boolean hasStoredInput() {
@@ -559,10 +567,10 @@ final class NumericInputView extends FrameLayout {
         }
 
         @Override
-        public String formatKey() {
+        public NumericControlKey controlKey() {
             String nodeId = nodeData != null ? nodeData.id : "";
             String portId = port != null ? port.id() : "";
-            return nodeId + "#" + portId + "[" + componentIndex + "]";
+            return new NumericControlKey(nodeId, portId, "vector_component_" + componentIndex);
         }
 
         private Object effectiveValue() {

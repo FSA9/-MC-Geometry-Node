@@ -25,7 +25,7 @@ final class ConnectionInteraction {
 
     private final List<Float> mCutPath = new ArrayList<>();
     private final Paint mCutLinePaint = new Paint();
-    private final Set<String> mHandledInsertKeys = new HashSet<>();
+    private final Set<ConnectionKey> mHandledInsertKeys = new HashSet<>();
     private boolean mInsertRerouteMode;
 
     ConnectionInteraction(InteractionContext context) {
@@ -152,11 +152,16 @@ final class ConnectionInteraction {
         if (mListener == null) return;
 
         for (ConnectionLayer.ConnectionHit hit : mContext.findIntersectingConnections(lastUiX, lastUiY, currentUiX, currentUiY)) {
-            String key = hit.outNodeId() + "#" + hit.outPortId() + ">" + hit.inNodeId() + "#" + hit.inPortId();
+            ConnectionKey key = new ConnectionKey(
+                    hit.outNodeId(), hit.outPortId(), hit.inNodeId(), hit.inPortId());
             if (mHandledInsertKeys.add(key)) {
                 mListener.onInsertReroute(hit);
             }
         }
+    }
+
+    private record ConnectionKey(String outNodeId, String outPortId,
+                                 String inNodeId, String inPortId) {
     }
 
     void drawDraftLine(Canvas canvas) {

@@ -261,9 +261,9 @@ final class ColorRampView extends LinearLayout {
         return mNodeData != null ? mNodeData.inputs.get(ColorRamp.GRADIENT_INPUT) : null;
     }
 
-    private String numericFormatKey(String suffix) {
+    private NumericInputView.NumericControlKey numericControlKey(String controlId) {
         String nodeId = mNodeData != null ? mNodeData.id : "";
-        return nodeId + "#" + ColorRamp.GRADIENT_INPUT + suffix;
+        return new NumericInputView.NumericControlKey(nodeId, ColorRamp.GRADIENT_INPUT, controlId);
     }
 
     private final class StopIndexBinding implements NumericInputView.NumericValueBinding {
@@ -291,8 +291,8 @@ final class ColorRampView extends LinearLayout {
         }
 
         @Override
-        public String formatKey() {
-            return numericFormatKey("[stop_index]");
+        public NumericInputView.NumericControlKey controlKey() {
+            return numericControlKey("stop_index");
         }
     }
 
@@ -321,8 +321,8 @@ final class ColorRampView extends LinearLayout {
         }
 
         @Override
-        public String formatKey() {
-            return numericFormatKey("[stop_position]");
+        public NumericInputView.NumericControlKey controlKey() {
+            return numericControlKey("stop_position");
         }
     }
 
