@@ -1,4 +1,4 @@
-{
+﻿{
   "--- 一级菜单 ---": "",
   "geometry_node.menu.actions": "动作",
   "geometry_node.menu.data": "数据",
@@ -39,7 +39,6 @@
   "geometry_node.menu.visual": "视觉",
   "geometry_node.menu.world": "世界",
 
-
   "--- 端口 (Ports) ---": "",
   "geometry_node.port.flow_in": "输入",
   "geometry_node.port.flow_out": "输出",
@@ -50,8 +49,8 @@
   "geometry_node.port.flow_false": "False",
   "geometry_node.port.reroute_in": "输入",
   "geometry_node.port.reroute_out": "输出",
-
   "geometry_node.port.int": "Int",
+  "geometry_node.port.limit": "数量上限",
   "geometry_node.port.index": "索引",
   "geometry_node.port.iteration": "迭代次数",
   "geometry_node.port.tick": "Tick",
@@ -70,7 +69,6 @@
   "geometry_node.port.game_time": "底层游戏时间",
   "geometry_node.port.world_time": "世界时间",
   "geometry_node.port.color": "颜色",
-
   "geometry_node.port.bool": "Bool",
   "geometry_node.port.intercept": "拦截原版输入",
   "geometry_node.port.show_distance": "显示距离",
@@ -83,7 +81,6 @@
   "geometry_node.port.penetrate_solid": "穿透不透明方块",
   "geometry_node.port.penetrate_trans": "穿透透明方块",
   "geometry_node.port.penetrate_entities": "穿透实体",
-
   "geometry_node.port.value": "值",
   "geometry_node.port.float": "Float",
   "geometry_node.port.min_float": "最小值(F)",
@@ -101,13 +98,13 @@
   "geometry_node.port.alpha": "Alpha",
   "geometry_node.port.fac": "系数",
   "geometry_node.port.color_ramp": "颜色渐变",
-
   "geometry_node.port.name": "名称",
   "geometry_node.port.input": "输入",
   "geometry_node.port.title": "标题",
   "geometry_node.port.string": "String",
   "geometry_node.port.path": "路径",
   "geometry_node.port.type": "类型",
+  "geometry_node.port.sort": "排序方式",
   "geometry_node.port.marker_type": "标记类型",
   "geometry_node.port.entity_chunk_loading_mode": "强加载",
   "geometry_node.port.anchor_type": "锚点类型",
@@ -154,7 +151,6 @@
   "geometry_node.port.comparator_mode": "比较器模式",
   "geometry_node.port.chest_type": "箱子类型",
   "geometry_node.port.shape": "形状",
-
   "geometry_node.port.entity": "实体",
   "geometry_node.port.projectile": "投射物",
   "geometry_node.port.hit_entity": "击中实体",
@@ -167,7 +163,6 @@
   "geometry_node.port.target_entity": "目标实体",
   "geometry_node.port.attack_source": "攻击源",
   "geometry_node.port.direct_source": "直接来源",
-
   "geometry_node.port.block_state": "方块状态",
   "geometry_node.port.geometry": "几何",
   "geometry_node.port.item": "物品",
@@ -181,7 +176,6 @@
   "geometry_node.port.rewards": "奖励",
   "geometry_node.port.shop_data": "商店数据",
   "geometry_node.port.shop_id": "商店 ID",
-
   "geometry_node.port.xyz": "坐标",
   "geometry_node.port.spread": "扩散范围",
   "geometry_node.port.start_pos": "起点",
@@ -192,7 +186,7 @@
   "geometry_node.port.mirror": "镜像",
   "geometry_node.port.size_3": "三维尺寸",
   "geometry_node.port.velocity": "速度",
-  "geometry_node.port.translation": "平移",
+  "geometry_node.port.translation": "偏移",
   "geometry_node.port.vertices": "顶点",
   "geometry_node.port.rings": "环数",
   "geometry_node.port.vertices_x": "顶点 X",
@@ -212,14 +206,12 @@
   "geometry_node.port.repair_air": "修复空气",
   "geometry_node.port.affect_entities": "影响实体",
   "geometry_node.port.unique_if_exists": "重名时自动后缀",
-
   "geometry_node.port.any_value": "任意",
   "geometry_node.port.tag": "标签",
   "geometry_node.port.tags": "标签列表",
   "geometry_node.port.container": "容器",
   "geometry_node.port.count_mode": "数量模式",
   "geometry_node.port.include_empty": "包含空槽",
-
   "geometry_node.port.dict": "Dict",
   "geometry_node.port.block_stats": "方块统计",
 
@@ -227,13 +219,8 @@
   "geometry_node.comment.section.outputs": "Outputs：",
   "geometry_node.comment.section.inputs": "Inputs：",
   "geometry_node.comment.port_line": "  • %s：%s",
-
-
-
-
-
   "menu.node.search": "搜索...",
-  "menu.node.back": "<- 返回",
+  "menu.node.back": "\u003c- 返回",
   "menu.node.category.input": "输入",
   "menu.node.category.geometry": "几何体",
   "menu.node.category.math": "数学",
@@ -244,7 +231,6 @@
   "menu.node.item.sphere": "球体",
   "menu.node.item.add": "加法",
   "menu.node.item.subtract": "减法",
-
 
   "--- ACTIONS ---": "--- 动作类 ---",
   "geometry_node.node.box_overlap_with_rotation": "旋转盒体相交检测",
@@ -382,7 +368,6 @@
   "geometry_node.node.set_walk_speed": "设置走路速度",
   "geometry_node.node.show_title": "显示标题",
   "geometry_node.node.teleport_player": "传送玩家",
-
 
   "--- ACTIONS/WORLD ---": "--- 世界动作 ---",
   "geometry_node.node.create_explosion": "创建爆炸",
@@ -601,10 +586,7 @@
   "geometry_node.node.remove_schematic_projection": "删除结构投影",
   "geometry_node.node.revert_schematic_placement": "移除结构放置",
   "geometry_node.node.repair_schematic_placement": "复原结构放置",
-
-
   "geometry_node.node.get_input_data_type": "获取输入数据类型",
-
   "geometry_node.node.string_value": "字符串",
   "geometry_node.node.string_expression": "字符串表达式",
   "geometry_node.node.path_selection": "路径选择",
@@ -641,8 +623,6 @@
   "geometry_node.node.on_interaction": "交互触发",
   "geometry_node.node.shoot_projectile": "发射投掷物",
   "geometry_node.node.combine_flow": "合流",
-
-
   "geometry_node.port.gravity": "重力",
   "geometry_node.port.invisible": "隐形",
   "geometry_node.port.responsive": "反馈",
@@ -658,11 +638,9 @@
   "geometry_node.port.shadow_radius": "阴影半径",
   "geometry_node.port.shadow_strength": "阴影浓度",
   "geometry_node.port.view_range": "视距倍率",
-  "geometry_node.port.translation": "偏移",
   "geometry_node.port.width": "宽",
   "geometry_node.port.height": "高",
   "geometry_node.port.glow_color": "发光轮廓色",
-
   "geometry_node.node.begin_dialogue": "开始对话",
   "geometry_node.node.create_dialogue_choice": "创建选项",
   "geometry_node.node.show_dialogue_page": "显示对话页",
@@ -676,7 +654,6 @@
   "geometry_node.button.preview": "预览",
   "geometry_node.preview.dialogue.speaker": "预览",
   "geometry_node.graph_properties.quest.preview": "预览当前任务界面",
-
   "geometry_node.port.player": "玩家",
   "geometry_node.port.speaker_entity": "对话实体",
   "geometry_node.port.graph_id": "图 ID",
@@ -772,7 +749,6 @@
   "geometry_node.node.group_out": "组输出",
   "geometry_node.node.reroute": "连接点",
   "geometry_node.port.count": "数量",
-  "geometry_node.port.enabled": "启用",
   "geometry_node.port.hit_pos": "命中位置",
   "geometry_node.port.hit_normal": "命中法线",
   "geometry_node.port.previous_pos": "上一位置",
@@ -1141,7 +1117,6 @@
   "geometry_node.node.draw_image_visual.comment.visibility_range": "只有图片中心此范围内的玩家会收到显示请求。",
   "geometry_node.image.size_mode.stretch": "自由尺寸",
   "geometry_node.image.size_mode.fit": "保持比例",
-
   "geometry_node.marker.type.default": "默认标记",
   "geometry_node.marker.type.objective": "任务目标",
   "geometry_node.marker.type.danger": "危险目标",
