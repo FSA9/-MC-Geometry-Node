@@ -1,30 +1,27 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
+import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
-import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
-import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
-import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
-import com.mine.geometry_node.core.engine.graph.debug.DebugSourceId;
-import com.mine.geometry_node.core.engine.graph.debug.DebugSourceIdCodec;
+import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
+import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAddress;
+import com.mine.geometry_node.core.engine.blueprint.spatial.AreaEntityQuery;
+import com.mine.geometry_node.core.engine.blueprint.spatial.AreaResource;
+import com.mine.geometry_node.core.engine.blueprint.spatial.AreaResourceStore;
+import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceSelector;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
-import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
-import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
-import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAnchor;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaEntityQuery;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
-import com.mine.geometry_node.core.node.nodes.events.area.AreaTriggerEvent;
+import com.mine.geometry_node.core.node.nodes.events.area.OnAreaEvent;
+import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.port.StandardPorts;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -45,262 +42,205 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+/** Polls live Area resources and dispatches listeners without creating Areas implicitly. */
 public final class AreaTriggerDispatcher {
     private static final int STALE_STATE_TICKS = 20 * 60;
     private static final int STALE_CLEANUP_INTERVAL = 20 * 10;
+
     private final Map<MinecraftServer, ServerState> servers = new WeakHashMap<>();
-    private final Map<BlueprintPlan, List<CompiledAreaNode>> configCache = Collections.synchronizedMap(new WeakHashMap<>());
+    private final Map<BlueprintPlan, List<CompiledListener>> configCache =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     public AreaTriggerDispatcher() {
-        GraphResourceLifecycleManager.INSTANCE.registerStore("blueprint_area_state", this::removeGraphResources);
+        GraphResourceLifecycleManager.INSTANCE.registerStore("blueprint_area_listener_state",
+                this::removeGraphResources);
     }
 
-    public void tickLevel(ServerLevel level) {
-        ServerState state = servers.computeIfAbsent(level.getServer(), ignored -> new ServerState());
-        long currentTick = level.getGameTime();
+    public void tickLevel(ServerLevel hostLevel) {
+        ServerState state = servers.computeIfAbsent(hostLevel.getServer(), ignored -> new ServerState());
+        long currentTick = hostLevel.getGameTime();
         cleanupStaleStates(state, currentTick);
 
-        LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
-        GraphResourceScope scope = new GraphResourceScope.LevelScope(level.dimension());
+        LevelGraphAttachment attachment = LevelGraphAttachment.get(hostLevel);
+        GraphResourceScope scope = new GraphResourceScope.LevelScope(hostLevel.dimension());
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
-
-        for (String graphId : BlueprintRuntime.INSTANCE.getGlobalGraphsForEvent(level, AreaTriggerEvent.TYPE_ID)) {
-            GraphResourceId resourceId = areaResource(scope, graphId, GraphResourceTypeRegistry.AREA_STATE);
-            tickGraph(state, level, null, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
-                    attachment::getProcess, attachment::addProcess, resourceId, currentTick, seenStates, queryCache);
+        for (String graphId : BlueprintRuntime.INSTANCE.getGlobalGraphsForEvent(hostLevel, OnAreaEvent.TYPE_ID)) {
+            tickGraph(state, hostLevel, null, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
+                    attachment::getProcess, attachment::addProcess, stateResource(scope, graphId),
+                    currentTick, seenStates, queryCache);
         }
-
         pruneScope(state, scope, seenStates);
     }
 
-    public void tickEntity(ServerLevel level, Entity owner, EntityGraphAttachment attachment, long currentTick) {
+    public void tickEntity(ServerLevel hostLevel, Entity owner, EntityGraphAttachment attachment, long currentTick) {
         if (owner == null || owner.isRemoved() || attachment == null || attachment.getBoundGraphs().isEmpty()) return;
-        ServerState state = servers.computeIfAbsent(level.getServer(), ignored -> new ServerState());
+        ServerState state = servers.computeIfAbsent(hostLevel.getServer(), ignored -> new ServerState());
         cleanupStaleStates(state, currentTick);
 
-        GraphResourceScope scope = new GraphResourceScope.EntityScope(level.dimension(), owner.getUUID());
+        GraphResourceScope scope = new GraphResourceScope.EntityScope(hostLevel.dimension(), owner.getUUID());
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
-
-        for (String graphId : BlueprintRuntime.INSTANCE.getEntityGraphsForEvent(owner, AreaTriggerEvent.TYPE_ID)) {
-            GraphResourceId resourceId = areaResource(scope, graphId, GraphResourceTypeRegistry.AREA_STATE);
-            tickGraph(state, level, owner, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
-                    attachment::getProcess, attachment::addProcess, resourceId, currentTick, seenStates, queryCache);
+        for (String graphId : BlueprintRuntime.INSTANCE.getEntityGraphsForEvent(owner, OnAreaEvent.TYPE_ID)) {
+            tickGraph(state, hostLevel, owner, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
+                    attachment::getProcess, attachment::addProcess, stateResource(scope, graphId),
+                    currentTick, seenStates, queryCache);
         }
-
         pruneScope(state, scope, seenStates);
     }
 
-    private void tickGraph(ServerState serverState,
-                                  ServerLevel level,
-                                  @Nullable Entity target,
-                                  String graphId,
-                                  @Nullable BlueprintPlan index,
-                                  Function<String, BlueprintProcess> processFinder,
-                                  Consumer<BlueprintProcess> mountAction,
-                                  GraphResourceId resourceId,
-                                  long currentTick,
-                                  Set<StateKey> seenStates,
-                                  Map<QueryCacheKey, AreaQueryResult> queryCache) {
-        if (index == null) {
-            DebugRendererSessionManager.removeSourceShapes(level,
-                    areaDebugSource(resourceId));
-            return;
+    private void tickGraph(ServerState serverState, ServerLevel hostLevel, @Nullable Entity owner,
+                           String graphId, @Nullable BlueprintPlan plan,
+                           Function<String, BlueprintProcess> processFinder,
+                           Consumer<BlueprintProcess> mountAction,
+                           GraphResourceId stateResource, long currentTick,
+                           Set<StateKey> seenStates,
+                           Map<QueryCacheKey, AreaQueryResult> queryCache) {
+        if (plan == null) return;
+
+        Map<ListenerKey, ListenerGroup> groups = new LinkedHashMap<>();
+        for (CompiledListener listener : getCompiledListeners(plan)) {
+            ListenerGroup group = groups.computeIfAbsent(listener.key(), ListenerGroup::new);
+            group.nodes.computeIfAbsent(listener.phase(), ignored -> new ArrayList<>()).add(listener.nodeId());
         }
 
-        Map<AreaConfigKey, AreaGroup> groups = new LinkedHashMap<>();
-        collectNodes(index, currentTick, groups);
-        List<DebugRenderShape> debugShapes = DebugRendererSessionManager.hasAreaSessions()
-                ? new ArrayList<>(groups.size())
-                : null;
-
-        for (AreaGroup group : groups.values()) {
-            ResolvedArea resolved = null;
-            if (debugShapes != null) {
-                resolved = group.config.resolve(target);
-                debugShapes.add(toDebugShape(resourceId, graphId, group, resolved));
-            }
-            StateKey stateKey = new StateKey(resourceId, group.configKey);
+        for (ListenerGroup group : groups.values()) {
+            StateKey stateKey = new StateKey(stateResource, plan, group.key);
             seenStates.add(stateKey);
+            ListenerState listenerState = serverState.states.computeIfAbsent(stateKey,
+                    ignored -> new ListenerState());
+            listenerState.lastSeenTick = currentTick;
+            if (!shouldTick(currentTick, group.key.interval(), group.key.offset())) continue;
 
-            AreaState state = serverState.states.computeIfAbsent(stateKey, ignored -> new AreaState());
-            state.lastSeenTick = currentTick;
-            if (!group.scheduled) continue;
-
-            if (resolved == null) {
-                resolved = group.config.resolve(target);
+            ServerLevel areaLevel = RegistryDataManager.resolveDimension(hostLevel.getServer(),
+                    group.key.dimensionId());
+            if (areaLevel == null || group.key.areaId().isBlank()) {
+                listenerState.reset();
+                continue;
             }
-            AreaQueryResult result = findEntities(level, resolved, group.config.targetType, queryCache);
-            Set<UUID> previous = state.inside;
-            Set<UUID> current = result.hitsById.keySet();
+            AreaAddress address = AreaAddress.tryCreate(areaLevel.dimension(), group.key.areaId());
+            if (address == null) {
+                listenerState.reset();
+                continue;
+            }
+            AreaResource resource = AreaResourceStore.INSTANCE.get(hostLevel.getServer(), address);
+            AreaResource.Resolved area = resource != null ? resource.resolve(areaLevel) : null;
+            if (resource == null || area == null) {
+                listenerState.reset();
+                continue;
+            }
+            if (listenerState.generation != resource.generation()) {
+                listenerState.inside = Set.of();
+                listenerState.generation = resource.generation();
+            }
 
-            dispatchPhase(level, target, graphId, index, group, AreaPhase.ENTER,
+            AreaQueryResult result = findEntities(areaLevel, resource, area, group.key.targetType(), queryCache);
+            Set<UUID> previous = listenerState.inside;
+            Set<UUID> current = result.hitsById().keySet();
+            dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group, AreaPhase.ENTER,
                     difference(current, previous), result, processFinder, mountAction);
-            dispatchPhase(level, target, graphId, index, group, AreaPhase.STAY,
+            dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group, AreaPhase.STAY,
                     intersection(current, previous), result, processFinder, mountAction);
-            dispatchPhase(level, target, graphId, index, group, AreaPhase.EXIT,
+            dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group, AreaPhase.EXIT,
                     difference(previous, current), result, processFinder, mountAction);
-
-            state.inside = new LinkedHashSet<>(current);
-        }
-        if (debugShapes != null) {
-            DebugRendererSessionManager.replaceSourceShapes(level,
-                    areaDebugSource(resourceId), debugShapes, currentTick);
+            listenerState.inside = new LinkedHashSet<>(current);
         }
     }
 
-    private void collectNodes(BlueprintPlan index,
-                                     long currentTick,
-                                     Map<AreaConfigKey, AreaGroup> groups) {
-        for (CompiledAreaNode node : getCompiledNodes(index)) {
-            AreaConfig config = node.config;
-            AreaPhase phase = node.phase;
-            AreaGroup group = groups.computeIfAbsent(config.key(), key -> new AreaGroup(key, config));
-            group.nodes.computeIfAbsent(phase, ignored -> new ArrayList<>()).add(node.nodeId);
-            if (group.debugNodeId == null) {
-                group.debugNodeId = node.nodeIdString;
-            }
-            group.scheduled = group.scheduled || shouldTick(currentTick, config.interval, config.offset);
-        }
-    }
-
-    private List<CompiledAreaNode> getCompiledNodes(BlueprintPlan index) {
+    private List<CompiledListener> getCompiledListeners(BlueprintPlan plan) {
         synchronized (configCache) {
-            return configCache.computeIfAbsent(index, AreaTriggerDispatcher::compileNodes);
+            return configCache.computeIfAbsent(plan, AreaTriggerDispatcher::compileListeners);
         }
     }
 
-    private static List<CompiledAreaNode> compileNodes(BlueprintPlan index) {
-        List<Integer> nodeIds = index.findNodesByType(AreaTriggerEvent.TYPE_ID);
-        if (nodeIds.isEmpty()) {
-            return List.of();
-        }
-
-        List<CompiledAreaNode> nodes = new ArrayList<>(nodeIds.size());
+    private static List<CompiledListener> compileListeners(BlueprintPlan plan) {
+        List<Integer> nodeIds = plan.findNodesByType(OnAreaEvent.TYPE_ID);
+        if (nodeIds.isEmpty()) return List.of();
+        List<CompiledListener> listeners = new ArrayList<>(nodeIds.size());
         for (int nodeId : nodeIds) {
-            nodes.add(new CompiledAreaNode(
-                    nodeId,
-                    index.getIdToString(nodeId),
-                    readConfig(index, nodeId),
-                    readPhase(index, nodeId)
-            ));
+            String dimension = plan.getNodeStaticInput(nodeId, StandardPorts.DIMENSION.getId(), String.class,
+                    RegistryDataManager.DEFAULT_DIMENSION);
+            String areaId = plan.getNodeStaticInput(nodeId, StandardPorts.AREA_ID.getId(), String.class, "");
+            AreaTargetType target = AreaTargetType.fromId(plan.getNodeStaticInput(nodeId,
+                    OnAreaEvent.TARGET_PORT, String.class, AreaTargetType.ALL.id()));
+            int interval = Math.max(1, plan.getNodeStaticInput(nodeId,
+                    OnAreaEvent.INTERVAL_TICK_PORT, Integer.class, 1));
+            int offset = Math.floorMod(plan.getNodeStaticInput(nodeId,
+                    OnAreaEvent.OFFSET_TICK_PORT, Integer.class, 0), interval);
+            ListenerKey key = new ListenerKey(dimension == null ? "" : dimension.trim(),
+                    areaId == null ? "" : areaId.trim(), target, interval, offset);
+            AreaPhase phase = AreaPhase.fromId(plan.getNodeStaticInput(nodeId,
+                    OnAreaEvent.PHASE_PORT, String.class, OnAreaEvent.PHASE_ENTER));
+            listeners.add(new CompiledListener(nodeId, key, phase));
         }
-        return List.copyOf(nodes);
+        return List.copyOf(listeners);
     }
 
-    private static AreaPhase readPhase(BlueprintPlan index, int nodeId) {
-        String rawPhase = index.getNodeStaticInput(nodeId, AreaTriggerEvent.PHASE_PORT, String.class, AreaTriggerEvent.PHASE_ENTER);
-        return AreaPhase.fromPayloadName(rawPhase);
-    }
-
-    private static DebugRenderShape toDebugShape(GraphResourceId resourceId, String graphId,
-                                                  AreaGroup group, ResolvedArea resolved) {
-        String localId = group.debugNodeId != null ? group.debugNodeId : group.configKey.toString();
-        DebugSourceId sourceId = areaDebugSource(resourceId);
-        return new DebugRenderShape(DebugSourceIdCodec.element(sourceId, localId), graphId,
-                group.config.shape.id(),
-                resolved.center, group.config.size, group.config.rotation,
-                DebugRenderChannel.AREA.color());
-    }
-
-    private static AreaConfig readConfig(BlueprintPlan index, int nodeId) {
-        AreaAnchor anchor = AreaAnchor.fromId(index.getNodeStaticInput(nodeId, AreaTriggerEvent.ANCHOR_PORT, String.class, AreaAnchor.WORLD.id()));
-        AreaShape shape = AreaShape.fromId(index.getNodeStaticInput(nodeId, AreaTriggerEvent.SHAPE_PORT, String.class, AreaShape.BOX.id()));
-        AreaTargetType targetType = AreaTargetType.fromId(index.getNodeStaticInput(nodeId, AreaTriggerEvent.TARGET_PORT, String.class, AreaTargetType.ALL.id()));
-        Vec3 center = readVec3(index.getNodeStaticInput(nodeId, StandardPorts.CENTER.getId()), Vec3.ZERO);
-        Vec3 size = readSize(index, nodeId, shape);
-        Vec3 rotation = shape == AreaShape.SPHERE
-                ? Vec3.ZERO
-                : readVec3(index.getNodeStaticInput(nodeId, StandardPorts.ROTATION.getId()), Vec3.ZERO);
-        int interval = Math.max(1, index.getNodeStaticInput(nodeId, AreaTriggerEvent.INTERVAL_TICK_PORT, Integer.class, 1));
-        int offset = Math.floorMod(index.getNodeStaticInput(nodeId, AreaTriggerEvent.OFFSET_TICK_PORT, Integer.class, 0), interval);
-        return new AreaConfig(anchor, shape, targetType, center, size, rotation, interval, offset);
-    }
-
-    private static Vec3 readSize(BlueprintPlan index, int nodeId, AreaShape shape) {
-        return switch (shape) {
-            case SPHERE -> {
-                double radius = readPositiveDouble(index.getNodeStaticInput(nodeId, StandardPorts.RADIUS.getId()), AreaTriggerEvent.DEFAULT_RADIUS);
-                double diameter = radius * 2.0D;
-                yield new Vec3(diameter, diameter, diameter);
-            }
-            case CYLINDER -> {
-                double radius = readPositiveDouble(index.getNodeStaticInput(nodeId, StandardPorts.RADIUS.getId()), AreaTriggerEvent.DEFAULT_RADIUS);
-                double height = readPositiveDouble(index.getNodeStaticInput(nodeId, AreaTriggerEvent.HEIGHT_PORT), AreaTriggerEvent.DEFAULT_HEIGHT);
-                double diameter = radius * 2.0D;
-                yield new Vec3(diameter, height, diameter);
-            }
-            case BOX -> AreaEntityQuery.sanitizeSize(readVec3(index.getNodeStaticInput(nodeId, StandardPorts.SIZE_3.getId()), new Vec3(1, 1, 1)));
-        };
-    }
-
-    private static boolean shouldTick(long currentTick, int interval, int offset) {
-        return interval == 1 || Math.floorMod(currentTick, interval) == offset;
-    }
-
-    private void dispatchPhase(ServerLevel level,
-                                      @Nullable Entity target,
-                                      String graphId,
-                                      BlueprintPlan index,
-                                      AreaGroup group,
-                                      AreaPhase phase,
-                                      Set<UUID> entityIds,
-                                      AreaQueryResult result,
-                                      Function<String, BlueprintProcess> processFinder,
-                                      Consumer<BlueprintProcess> mountAction) {
+    private void dispatchPhase(ServerLevel hostLevel, ServerLevel areaLevel, @Nullable Entity owner,
+                               String graphId, BlueprintPlan plan, ListenerGroup group, AreaPhase phase,
+                               Set<UUID> entityIds, AreaQueryResult result,
+                               Function<String, BlueprintProcess> processFinder,
+                               Consumer<BlueprintProcess> mountAction) {
         List<Integer> nodes = group.nodes.get(phase);
         if (nodes == null || nodes.isEmpty() || entityIds.isEmpty()) return;
 
-        int insideCount = result.hitsById.size();
+        AreaResource resource = result.resource();
+        AreaResource.Resolved area = result.area();
+        int insideCount = result.hitsById().size();
+        double radius = switch (area.shape()) {
+            case SPHERE -> Math.max(area.size().x, Math.max(area.size().y, area.size().z)) * 0.5D;
+            case CYLINDER -> Math.max(area.size().x, area.size().z) * 0.5D;
+            case BOX -> 0.0D;
+        };
+        double height = area.shape() == com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape.CYLINDER
+                ? area.size().y : 0.0D;
+
         for (UUID entityId : entityIds) {
-            AreaEntityQuery.Hit hit = result.hitsById.get(entityId);
-            Entity triggerEntity = hit != null ? hit.entity() : null;
-            if (triggerEntity == null) {
-                triggerEntity = level.getEntity(entityId);
-            }
-            if (triggerEntity == null || triggerEntity.isRemoved()) continue;
-
-            Entity ownerEntity = target != null ? target : triggerEntity;
-
-            Map<String, Object> baseData = GraphEventData.of(
-                    StandardPorts.ENTITY.getId(), ownerEntity,
-                    StandardPorts.TRIGGER_ENTITY.getId(), triggerEntity,
-                    StandardPorts.HIT_POS.getId(), hit != null ? hit.hitPos() : triggerEntity.position(),
-                    StandardPorts.VECTOR.getId(), hit != null ? hit.velocity() : triggerEntity.getDeltaMovement(),
-                    StandardPorts.CENTER.getId(), result.area.center,
-                    StandardPorts.SIZE_3.getId(), group.config.size,
-                    StandardPorts.RADIUS.getId(), (float) group.config.radius(),
-                    AreaTriggerEvent.HEIGHT_PORT, (float) group.config.height(),
-                    StandardPorts.ROTATION.getId(), group.config.rotation,
-                    StandardPorts.TYPE.getId(), phase.payloadName,
-                    AreaTriggerEvent.INSIDE_COUNT_PORT, insideCount,
-                    AreaTriggerEvent.TARGET_PORT, group.config.targetType.id()
+            AreaEntityQuery.Hit hit = result.hitsById().get(entityId);
+            Entity trigger = hit != null ? hit.entity() : areaLevel.getEntity(entityId);
+            if (trigger == null || trigger.isRemoved()) continue;
+            Entity eventEntity = owner != null ? owner : trigger;
+            Map<String, Object> eventData = GraphEventData.of(
+                    StandardPorts.ENTITY.getId(), eventEntity,
+                    StandardPorts.TRIGGER_ENTITY.getId(), trigger,
+                    StandardPorts.HIT_POS.getId(), hit != null ? hit.hitPos() : trigger.position(),
+                    StandardPorts.VECTOR.getId(), hit != null ? hit.velocity() : trigger.getDeltaMovement(),
+                    StandardPorts.TYPE.getId(), phase.id,
+                    StandardPorts.SHAPE.getId(), area.shape().id(),
+                    StandardPorts.CENTER.getId(), area.center(),
+                    StandardPorts.SIZE_3.getId(), area.size(),
+                    StandardPorts.RADIUS.getId(), (float) radius,
+                    StandardPorts.HEIGHT.getId(), (float) height,
+                    StandardPorts.ROTATION.getId(), area.rotation(),
+                    StandardPorts.AREA_ID.getId(), resource.address().id(),
+                    StandardPorts.DIMENSION.getId(), resource.address().dimension().identifier().toString(),
+                    OnAreaEvent.INSIDE_COUNT_PORT, insideCount,
+                    OnAreaEvent.TARGET_PORT, group.key.targetType().id()
             );
-
             for (int nodeId : nodes) {
-                Map<String, Object> eventData = new LinkedHashMap<>(baseData);
-                eventData.put(AreaTriggerEvent.TRIGGER_ID_PORT, graphId + ":" + index.getIdToString(nodeId));
-                BlueprintRuntime.INSTANCE.executeEventNode(level, target, graphId, index, nodeId, eventData, processFinder, mountAction);
+                // The process keeps its host level; the selected dimension only controls Area lookup and querying.
+                BlueprintRuntime.INSTANCE.executeEventNode(hostLevel, owner, graphId, plan, nodeId,
+                        eventData, processFinder, mountAction);
             }
         }
     }
 
-    private static AreaQueryResult findEntities(ServerLevel level,
-                                                ResolvedArea area,
-                                                AreaTargetType targetType,
-                                                Map<QueryCacheKey, AreaQueryResult> queryCache) {
-        QueryCacheKey key = QueryCacheKey.of(area, targetType);
-        return queryCache.computeIfAbsent(key, ignored -> queryEntities(level, area, targetType));
+    private static AreaQueryResult findEntities(ServerLevel level, AreaResource resource,
+                                                AreaResource.Resolved area, AreaTargetType target,
+                                                Map<QueryCacheKey, AreaQueryResult> cache) {
+        QueryCacheKey key = QueryCacheKey.of(resource, area, target);
+        return cache.computeIfAbsent(key, ignored -> {
+            Map<UUID, AreaEntityQuery.Hit> hits = new LinkedHashMap<>();
+            for (AreaEntityQuery.Hit hit : AreaEntityQuery.findHits(level, area.shape(), area.center(),
+                    area.size(), area.rotation(), target, entity -> !entity.isSpectator())) {
+                hits.put(hit.entity().getUUID(), hit);
+            }
+            return new AreaQueryResult(resource, area, hits);
+        });
     }
 
-    private static AreaQueryResult queryEntities(ServerLevel level, ResolvedArea area, AreaTargetType targetType) {
-        Map<UUID, AreaEntityQuery.Hit> hits = new LinkedHashMap<>();
-        for (AreaEntityQuery.Hit hit : AreaEntityQuery.findHits(level, area.shape, area.center, area.size, area.rotation, targetType, e -> !e.isSpectator())) {
-            hits.put(hit.entity().getUUID(), hit);
-        }
-
-        return new AreaQueryResult(area, hits);
+    private static boolean shouldTick(long tick, int interval, int offset) {
+        return interval == 1 || Math.floorMod(tick, interval) == offset;
     }
 
     private static Set<UUID> difference(Set<UUID> left, Set<UUID> right) {
@@ -315,205 +255,95 @@ public final class AreaTriggerDispatcher {
         return result;
     }
 
-    private static Vec3 readVec3(@Nullable Object raw, Vec3 fallback) {
-        if (raw instanceof Vec3 vec) {
-            return vec;
-        }
-        if (raw instanceof List<?> list && list.size() >= 3
-                && list.get(0) instanceof Number x
-                && list.get(1) instanceof Number y
-                && list.get(2) instanceof Number z) {
-            return new Vec3(x.doubleValue(), y.doubleValue(), z.doubleValue());
-        }
-        if (raw instanceof Map<?, ?> map) {
-            Double x = readDouble(map.get("x"));
-            Double y = readDouble(map.get("y"));
-            Double z = readDouble(map.get("z"));
-            if (x != null && y != null && z != null) {
-                return new Vec3(x, y, z);
-            }
-        }
-        return fallback;
+    private static GraphResourceId stateResource(GraphResourceScope scope, String graphId) {
+        return new GraphResourceId(GraphResourceTypeRegistry.AREA_STATE, scope,
+                GraphBindingKey.blueprint(graphId), GraphResourceSelector.Graph.INSTANCE, null, null);
     }
 
-    @Nullable
-    private static Double readDouble(@Nullable Object value) {
-        if (value instanceof Number number) {
-            return number.doubleValue();
-        }
-        if (value instanceof String string) {
-            try {
-                return Double.parseDouble(string);
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        return null;
+    private static void pruneScope(ServerState state, GraphResourceScope scope, Set<StateKey> seen) {
+        state.states.entrySet().removeIf(entry -> entry.getKey().resourceId().scope().equals(scope)
+                && !seen.contains(entry.getKey()));
     }
 
-    private static double readPositiveDouble(@Nullable Object raw, double fallback) {
-        Double value = readDouble(raw);
-        if (value == null || !Double.isFinite(value)) {
-            return fallback;
-        }
-        return Math.max(0.001D, Math.abs(value));
-    }
-
-    private static void pruneScope(ServerState state, GraphResourceScope scope, Set<StateKey> seenStates) {
-        state.states.entrySet().removeIf(entry -> entry.getKey().resourceId.scope().equals(scope)
-                && !seenStates.contains(entry.getKey()));
-    }
-
-    private static void cleanupStaleStates(ServerState state, long currentTick) {
-        if (currentTick == state.lastCleanupTick) return;
-        if (Math.floorMod(currentTick, STALE_CLEANUP_INTERVAL) != 0) return;
-        state.lastCleanupTick = currentTick;
-        state.states.entrySet().removeIf(entry -> currentTick - entry.getValue().lastSeenTick > STALE_STATE_TICKS);
+    private static void cleanupStaleStates(ServerState state, long tick) {
+        if (state.lastCleanupTick == tick || Math.floorMod(tick, STALE_CLEANUP_INTERVAL) != 0) return;
+        state.lastCleanupTick = tick;
+        state.states.entrySet().removeIf(entry -> tick - entry.getValue().lastSeenTick > STALE_STATE_TICKS);
     }
 
     public void shutdown(MinecraftServer server) {
         servers.remove(server);
     }
 
-    private static GraphResourceId areaResource(GraphResourceScope scope, String graphId,
-                                                com.mine.geometry_node.core.engine.graph.resource.GraphResourceType type) {
-        return new GraphResourceId(type, scope,
-                GraphBindingKey.blueprint(graphId), GraphResourceSelector.Graph.INSTANCE, null, null);
-    }
-
-    private static DebugSourceId areaDebugSource(GraphResourceId stateResource) {
-        GraphResourceId debugResource = areaResource(stateResource.scope(), stateResource.binding().graphId(),
-                GraphResourceTypeRegistry.AREA_DEBUG);
-        return DebugSourceId.graph(DebugRenderChannel.AREA, debugResource);
-    }
-
     private void removeGraphResources(MinecraftServer server, Predicate<GraphResourceId> predicate) {
         ServerState state = servers.get(server);
-        if (state != null) {
-            state.states.keySet().removeIf(key -> predicate.test(key.resourceId()));
-        }
+        if (state != null) state.states.keySet().removeIf(key -> predicate.test(key.resourceId()));
     }
 
     private enum AreaPhase {
-        ENTER("enter"),
-        STAY("stay"),
-        EXIT("exit");
+        ENTER(OnAreaEvent.PHASE_ENTER),
+        STAY(OnAreaEvent.PHASE_STAY),
+        EXIT(OnAreaEvent.PHASE_EXIT);
 
-        private final String payloadName;
+        private final String id;
 
-        AreaPhase(String payloadName) {
-            this.payloadName = payloadName;
+        AreaPhase(String id) {
+            this.id = id;
         }
 
-        private static AreaPhase fromPayloadName(@Nullable String payloadName) {
-            if (payloadName != null) {
-                for (AreaPhase phase : values()) {
-                    if (phase.payloadName.equals(payloadName)) {
-                        return phase;
-                    }
-                }
+        private static AreaPhase fromId(@Nullable String id) {
+            for (AreaPhase phase : values()) {
+                if (phase.id.equals(id)) return phase;
             }
             return ENTER;
         }
     }
 
-    private record AreaQueryResult(ResolvedArea area, Map<UUID, AreaEntityQuery.Hit> hitsById) {
+    private record ListenerKey(String dimensionId, String areaId, AreaTargetType targetType,
+                               int interval, int offset) {
     }
 
-    private record CompiledAreaNode(int nodeId, String nodeIdString, AreaConfig config, AreaPhase phase) {
+    private record CompiledListener(int nodeId, ListenerKey key, AreaPhase phase) {
     }
 
-    private record StateKey(GraphResourceId resourceId, AreaConfigKey configKey) {
+    private record StateKey(GraphResourceId resourceId, BlueprintPlan plan, ListenerKey listener) {
     }
 
-    private record AreaConfigKey(AreaAnchor anchor,
-                                 AreaShape shape,
-                                 AreaTargetType targetType,
-                                 double centerX, double centerY, double centerZ,
-                                 double sizeX, double sizeY, double sizeZ,
-                                 double rotationX, double rotationY, double rotationZ,
-                                 int interval, int offset) {
+    private record AreaQueryResult(AreaResource resource, AreaResource.Resolved area,
+                                   Map<UUID, AreaEntityQuery.Hit> hitsById) {
     }
 
-    private record AreaConfig(AreaAnchor anchor,
-                              AreaShape shape,
-                              AreaTargetType targetType,
-                              Vec3 center,
-                              Vec3 size,
-                              Vec3 rotation,
-                              int interval,
-                              int offset) {
-        AreaConfigKey key() {
-            return new AreaConfigKey(
-                    anchor,
-                    shape,
-                    targetType,
-                    center.x, center.y, center.z,
-                    size.x, size.y, size.z,
-                    rotation.x, rotation.y, rotation.z,
-                    interval, offset
-            );
-        }
-
-        ResolvedArea resolve(@Nullable Entity owner) {
-            Vec3 resolvedCenter = anchor == AreaAnchor.OWNER && owner != null && !owner.isRemoved()
-                    ? owner.position().add(center)
-                    : center;
-            return new ResolvedArea(shape, resolvedCenter, size, rotation);
-        }
-
-        double radius() {
-            return switch (shape) {
-                case SPHERE -> Math.max(size.x, Math.max(size.y, size.z)) * 0.5D;
-                case CYLINDER -> Math.max(size.x, size.z) * 0.5D;
-                case BOX -> 0.0D;
-            };
-        }
-
-        double height() {
-            return shape == AreaShape.CYLINDER ? size.y : 0.0D;
+    private record QueryCacheKey(AreaAddress address, long generation, AreaTargetType targetType,
+                                 double centerX, double centerY, double centerZ) {
+        private static QueryCacheKey of(AreaResource resource, AreaResource.Resolved area,
+                                        AreaTargetType target) {
+            return new QueryCacheKey(resource.address(), resource.generation(), target,
+                    area.center().x, area.center().y, area.center().z);
         }
     }
 
-    private record ResolvedArea(AreaShape shape, Vec3 center, Vec3 size, Vec3 rotation) {
-    }
-
-    private record QueryCacheKey(AreaShape shape,
-                                 AreaTargetType targetType,
-                                 double centerX, double centerY, double centerZ,
-                                 double sizeX, double sizeY, double sizeZ,
-                                 double rotationX, double rotationY, double rotationZ) {
-        static QueryCacheKey of(ResolvedArea area, AreaTargetType targetType) {
-            return new QueryCacheKey(
-                    area.shape,
-                    targetType,
-                    area.center.x, area.center.y, area.center.z,
-                    area.size.x, area.size.y, area.size.z,
-                    area.rotation.x, area.rotation.y, area.rotation.z
-            );
-        }
-    }
-
-    private static final class AreaGroup {
-        private final AreaConfigKey configKey;
-        private final AreaConfig config;
+    private static final class ListenerGroup {
+        private final ListenerKey key;
         private final EnumMap<AreaPhase, List<Integer>> nodes = new EnumMap<>(AreaPhase.class);
-        private boolean scheduled;
-        @Nullable
-        private String debugNodeId;
 
-        private AreaGroup(AreaConfigKey configKey, AreaConfig config) {
-            this.configKey = configKey;
-            this.config = config;
+        private ListenerGroup(ListenerKey key) {
+            this.key = key;
         }
     }
 
-    private static final class AreaState {
+    private static final class ListenerState {
         private Set<UUID> inside = Set.of();
+        private long generation = Long.MIN_VALUE;
         private long lastSeenTick;
+
+        private void reset() {
+            inside = Set.of();
+            generation = Long.MIN_VALUE;
+        }
     }
 
     private static final class ServerState {
-        private final Map<StateKey, AreaState> states = new HashMap<>();
+        private final Map<StateKey, ListenerState> states = new HashMap<>();
         private long lastCleanupTick = Long.MIN_VALUE;
     }
 }

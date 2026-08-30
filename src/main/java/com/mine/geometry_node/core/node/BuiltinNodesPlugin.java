@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import com.mine.geometry_node.core.node.nodes.actions.block.*;
+import com.mine.geometry_node.core.node.nodes.actions.area.*;
 import com.mine.geometry_node.core.node.nodes.behavior.action.*;
 import com.mine.geometry_node.core.node.nodes.behavior.blackboard.*;
 import com.mine.geometry_node.core.node.nodes.behavior.condition.*;
@@ -138,6 +139,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/visual", new DrawImageVisual());
         registry.register("actions/marker", new CreateMarker());
         registry.register("actions/marker", new RemoveMarker());
+        registry.register("actions/area", new CreateArea());
+        registry.register("actions/area", new RemoveArea());
         registry.register("actions/entity", new SetEntityChunkLoading());
 
 //        registry.register("actions", new SpawnHitbox());
@@ -431,7 +434,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // --- EVENTS ---
 
         // Events/Area
-        registry.register("events/area", new AreaTriggerEvent());
+        registry.register("events/area", new OnAreaEvent());
 
         // Events/Dialogue
         registry.register("events/dialogue", new OnShopTradeSuccess());

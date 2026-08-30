@@ -9,8 +9,8 @@ import java.util.Set;
 
 /** Registry of resource identity contracts. It never stores live business resources. */
 public final class GraphResourceTypeRegistry {
-    public static final GraphResourceType AREA_DEBUG = type("area_debug",
-            Set.of(GraphResourceSelector.Kind.GRAPH), GraphResourceType.TargetEntityPolicy.NONE);
+    public static final GraphResourceType AREA = type("area",
+            Set.of(GraphResourceSelector.Kind.NAMED), GraphResourceType.TargetEntityPolicy.NONE);
     public static final GraphResourceType AREA_STATE = type("area_state",
             Set.of(GraphResourceSelector.Kind.GRAPH), GraphResourceType.TargetEntityPolicy.NONE);
     public static final GraphResourceType AREA_QUERY = type("area_query",
@@ -27,7 +27,7 @@ public final class GraphResourceTypeRegistry {
     private final Map<Identifier, GraphResourceType> types = new LinkedHashMap<>();
 
     private GraphResourceTypeRegistry() {
-        registerBuiltin(AREA_DEBUG);
+        registerBuiltin(AREA);
         registerBuiltin(AREA_STATE);
         registerBuiltin(AREA_QUERY);
         registerBuiltin(GEOMETRY_DEBUG);

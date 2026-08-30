@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.document.NodeData;
+import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -18,7 +19,7 @@ import java.util.Map;
 final class ScopedStateNodeSupport {
     static final String SCOPE_PORT = "state_scope";
     static final ScopedStateScope DEFAULT_SCOPE = ScopedStateScope.OWNER;
-    static final String DEFAULT_DIMENSION = "minecraft:overworld";
+    static final String DEFAULT_DIMENSION = RegistryDataManager.DEFAULT_DIMENSION;
 
     private static final String[] SCOPES = ScopedStateScope.optionIds(ScopedStateScope.PERSISTENT);
     private ScopedStateNodeSupport() {
@@ -46,10 +47,9 @@ final class ScopedStateNodeSupport {
     }
 
     static PortRow dimensionRow(@Nullable PortDef output) {
-        PortDef input = PortDef.create(StandardPorts.DIMENSION.getId(), "geometry_node.port.dimension",
-                PortType.STRING, DEFAULT_DIMENSION).hiddenPin();
-        return new PortRow(input, output, UIHint.SELECT, null,
-                Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:dimension"));
+        return new PortRow(StandardPorts.DIMENSION.toInput(DEFAULT_DIMENSION), output,
+                UIHint.SELECT, null,
+                Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, RegistryDataManager.DIMENSION_REGISTRY_ID));
     }
 
     @Nullable

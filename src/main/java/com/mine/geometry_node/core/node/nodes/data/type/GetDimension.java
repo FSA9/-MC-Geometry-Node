@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.type;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -23,7 +24,7 @@ public class GetDimension extends BaseNode {
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:dimension")
+                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, RegistryDataManager.DIMENSION_REGISTRY_ID)
                 ))
                 .build();
     }
@@ -32,7 +33,7 @@ public class GetDimension extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.DIMENSION.getId().equals(portName)) {
             String selectedDimension = getInput(context, StandardPorts.STRING.getId(), String.class);
-            return selectedDimension != null ? selectedDimension : "minecraft:overworld";
+            return selectedDimension != null ? selectedDimension : RegistryDataManager.DEFAULT_DIMENSION;
         }
         return null;
     }

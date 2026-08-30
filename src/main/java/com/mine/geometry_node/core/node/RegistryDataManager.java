@@ -7,12 +7,19 @@ import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
 
 public class RegistryDataManager {
+    public static final String DIMENSION_REGISTRY_ID = "minecraft:dimension";
+    public static final String DEFAULT_DIMENSION = "minecraft:overworld";
 
     private RegistryDataManager() {}
 
@@ -141,9 +148,6 @@ public class RegistryDataManager {
     public static List<String> getDimensions(RegistryAccess access) {
         List<String> dims = new java.util.ArrayList<>();
 
-        // 1. 注入我们的特殊作用域
-        dims.add("global");
-
         try {
             if (net.minecraft.client.Minecraft.getInstance().getConnection() != null) {
                 List<String> dynamicDims = net.minecraft.client.Minecraft.getInstance().getConnection().levels()
@@ -161,6 +165,17 @@ public class RegistryDataManager {
         return dims;
     }
 
+    @Nullable
+    public static ServerLevel resolveDimension(MinecraftServer server, @Nullable Object value) {
+        if (server == null) return null;
+        String raw = value instanceof String text && !text.isBlank()
+                ? text.trim()
+                : DEFAULT_DIMENSION;
+        Identifier id = Identifier.tryParse(raw);
+        if (id == null) return null;
+        return server.getLevel(ResourceKey.create(Registries.DIMENSION, id));
+    }
+
     /**
      * [UI 专用路由] 根据传入的 Registry ID 动态分发并获取数据
      */
@@ -169,7 +184,7 @@ public class RegistryDataManager {
 
         return switch (registryId) {
             case MultiblockStructureManager.DYNAMIC_REGISTRY_ID -> MultiblockStructureManager.getInstance().getAllIds();
-            case "minecraft:dimension" -> access != null ? getDimensions(access) : List.of();
+            case DIMENSION_REGISTRY_ID -> access != null ? getDimensions(access) : List.of();
             case "minecraft:enchantment" -> access != null ? getEnchantments(access) : List.of();
             case "minecraft:damage_type" -> access != null ? getDamageTypes(access) : List.of();
             case "minecraft:attribute" -> access != null ? getAttributes(access) : List.of();

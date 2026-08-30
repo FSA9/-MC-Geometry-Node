@@ -129,6 +129,7 @@ public enum StandardPorts {
     KEY("key", PortType.STRING),
     BILLBOARD("billboard", PortType.STRING),
     ENTRY_ID("entry_id", PortType.STRING),
+    AREA_ID("area_id", PortType.STRING),
     SHOP_ID("shop_id", PortType.STRING),
     OFFER_ID("offer_id", PortType.STRING),
     GRAPH_ID("graph_id", PortType.STRING),
