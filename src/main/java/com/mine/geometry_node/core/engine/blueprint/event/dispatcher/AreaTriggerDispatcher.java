@@ -5,6 +5,14 @@ import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachm
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.graph.debug.DebugSourceId;
+import com.mine.geometry_node.core.engine.graph.debug.DebugSourceIdCodec;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceSelector;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
@@ -15,7 +23,6 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
 import com.mine.geometry_node.core.node.nodes.events.area.AreaTriggerEvent;
 import com.mine.geometry_node.core.node.port.StandardPorts;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
@@ -36,6 +43,7 @@ import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 public final class AreaTriggerDispatcher {
     private static final int STALE_STATE_TICKS = 20 * 60;
@@ -44,6 +52,7 @@ public final class AreaTriggerDispatcher {
     private final Map<BlueprintPlan, List<CompiledAreaNode>> configCache = Collections.synchronizedMap(new WeakHashMap<>());
 
     public AreaTriggerDispatcher() {
+        GraphResourceLifecycleManager.INSTANCE.registerStore("blueprint_area_state", this::removeGraphResources);
     }
 
     public void tickLevel(ServerLevel level) {
@@ -52,14 +61,14 @@ public final class AreaTriggerDispatcher {
         cleanupStaleStates(state, currentTick);
 
         LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
-        ScopeKey scope = ScopeKey.global(level.dimension().identifier());
+        GraphResourceScope scope = new GraphResourceScope.LevelScope(level.dimension());
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
 
         for (String graphId : BlueprintRuntime.INSTANCE.getGlobalGraphsForEvent(level, AreaTriggerEvent.TYPE_ID)) {
-            String sourceKey = DebugRendererSessionManager.levelSourceKey(level, graphId);
+            GraphResourceId resourceId = areaResource(scope, graphId, GraphResourceTypeRegistry.AREA_STATE);
             tickGraph(state, level, null, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
-                    attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates, queryCache);
+                    attachment::getProcess, attachment::addProcess, resourceId, currentTick, seenStates, queryCache);
         }
 
         pruneScope(state, scope, seenStates);
@@ -70,14 +79,14 @@ public final class AreaTriggerDispatcher {
         ServerState state = servers.computeIfAbsent(level.getServer(), ignored -> new ServerState());
         cleanupStaleStates(state, currentTick);
 
-        ScopeKey scope = ScopeKey.entity(level.dimension().identifier(), owner.getUUID());
+        GraphResourceScope scope = new GraphResourceScope.EntityScope(level.dimension(), owner.getUUID());
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
 
         for (String graphId : BlueprintRuntime.INSTANCE.getEntityGraphsForEvent(owner, AreaTriggerEvent.TYPE_ID)) {
-            String sourceKey = DebugRendererSessionManager.entitySourceKey(level, owner, graphId);
+            GraphResourceId resourceId = areaResource(scope, graphId, GraphResourceTypeRegistry.AREA_STATE);
             tickGraph(state, level, owner, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
-                    attachment::getProcess, attachment::addProcess, scope, sourceKey, currentTick, seenStates, queryCache);
+                    attachment::getProcess, attachment::addProcess, resourceId, currentTick, seenStates, queryCache);
         }
 
         pruneScope(state, scope, seenStates);
@@ -90,13 +99,13 @@ public final class AreaTriggerDispatcher {
                                   @Nullable BlueprintPlan index,
                                   Function<String, BlueprintProcess> processFinder,
                                   Consumer<BlueprintProcess> mountAction,
-                                  ScopeKey scope,
-                                  String sourceKey,
+                                  GraphResourceId resourceId,
                                   long currentTick,
                                   Set<StateKey> seenStates,
                                   Map<QueryCacheKey, AreaQueryResult> queryCache) {
         if (index == null) {
-            DebugRendererSessionManager.removeSourceShapes(level, sourceKey);
+            DebugRendererSessionManager.removeSourceShapes(level,
+                    areaDebugSource(resourceId));
             return;
         }
 
@@ -110,9 +119,9 @@ public final class AreaTriggerDispatcher {
             ResolvedArea resolved = null;
             if (debugShapes != null) {
                 resolved = group.config.resolve(target);
-                debugShapes.add(toDebugShape(sourceKey, graphId, group, resolved));
+                debugShapes.add(toDebugShape(resourceId, graphId, group, resolved));
             }
-            StateKey stateKey = new StateKey(scope, graphId, group.configKey);
+            StateKey stateKey = new StateKey(resourceId, group.configKey);
             seenStates.add(stateKey);
 
             AreaState state = serverState.states.computeIfAbsent(stateKey, ignored -> new AreaState());
@@ -136,7 +145,8 @@ public final class AreaTriggerDispatcher {
             state.inside = new LinkedHashSet<>(current);
         }
         if (debugShapes != null) {
-            DebugRendererSessionManager.replaceSourceShapes(level, sourceKey, debugShapes, currentTick);
+            DebugRendererSessionManager.replaceSourceShapes(level,
+                    areaDebugSource(resourceId), debugShapes, currentTick);
         }
     }
 
@@ -184,9 +194,11 @@ public final class AreaTriggerDispatcher {
         return AreaPhase.fromPayloadName(rawPhase);
     }
 
-    private static DebugRenderShape toDebugShape(String sourceKey, String graphId, AreaGroup group, ResolvedArea resolved) {
+    private static DebugRenderShape toDebugShape(GraphResourceId resourceId, String graphId,
+                                                  AreaGroup group, ResolvedArea resolved) {
         String localId = group.debugNodeId != null ? group.debugNodeId : group.configKey.toString();
-        return new DebugRenderShape(sourceKey + ":" + localId, graphId,
+        DebugSourceId sourceId = areaDebugSource(resourceId);
+        return new DebugRenderShape(DebugSourceIdCodec.element(sourceId, localId), graphId,
                 group.config.shape.id(),
                 resolved.center, group.config.size, group.config.rotation,
                 DebugRenderChannel.AREA.color());
@@ -346,8 +358,9 @@ public final class AreaTriggerDispatcher {
         return Math.max(0.001D, Math.abs(value));
     }
 
-    private static void pruneScope(ServerState state, ScopeKey scope, Set<StateKey> seenStates) {
-        state.states.entrySet().removeIf(entry -> entry.getKey().scope.equals(scope) && !seenStates.contains(entry.getKey()));
+    private static void pruneScope(ServerState state, GraphResourceScope scope, Set<StateKey> seenStates) {
+        state.states.entrySet().removeIf(entry -> entry.getKey().resourceId.scope().equals(scope)
+                && !seenStates.contains(entry.getKey()));
     }
 
     private static void cleanupStaleStates(ServerState state, long currentTick) {
@@ -359,6 +372,25 @@ public final class AreaTriggerDispatcher {
 
     public void shutdown(MinecraftServer server) {
         servers.remove(server);
+    }
+
+    private static GraphResourceId areaResource(GraphResourceScope scope, String graphId,
+                                                com.mine.geometry_node.core.engine.graph.resource.GraphResourceType type) {
+        return new GraphResourceId(type, scope,
+                GraphBindingKey.blueprint(graphId), GraphResourceSelector.Graph.INSTANCE, null, null);
+    }
+
+    private static DebugSourceId areaDebugSource(GraphResourceId stateResource) {
+        GraphResourceId debugResource = areaResource(stateResource.scope(), stateResource.binding().graphId(),
+                GraphResourceTypeRegistry.AREA_DEBUG);
+        return DebugSourceId.graph(DebugRenderChannel.AREA, debugResource);
+    }
+
+    private void removeGraphResources(MinecraftServer server, Predicate<GraphResourceId> predicate) {
+        ServerState state = servers.get(server);
+        if (state != null) {
+            state.states.keySet().removeIf(key -> predicate.test(key.resourceId()));
+        }
     }
 
     private enum AreaPhase {
@@ -390,17 +422,7 @@ public final class AreaTriggerDispatcher {
     private record CompiledAreaNode(int nodeId, String nodeIdString, AreaConfig config, AreaPhase phase) {
     }
 
-    private record ScopeKey(String kind, Identifier dimension, @Nullable UUID ownerId) {
-        static ScopeKey global(Identifier dimension) {
-            return new ScopeKey("level", dimension, null);
-        }
-
-        static ScopeKey entity(Identifier dimension, UUID ownerId) {
-            return new ScopeKey("entity", dimension, ownerId);
-        }
-    }
-
-    private record StateKey(ScopeKey scope, String graphId, AreaConfigKey configKey) {
+    private record StateKey(GraphResourceId resourceId, AreaConfigKey configKey) {
     }
 
     private record AreaConfigKey(AreaAnchor anchor,

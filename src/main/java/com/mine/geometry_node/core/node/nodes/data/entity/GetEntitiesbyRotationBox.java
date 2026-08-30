@@ -1,6 +1,8 @@
 package com.mine.geometry_node.core.node.nodes.data.entity;
 
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
@@ -65,9 +67,16 @@ public class GetEntitiesbyRotationBox extends BaseNode {
                 entity -> !entity.isSpectator()
         );
         DebugRendererSessionManager.showTransientQueryArea(
-                context.getLevel(), context.getGraphId(), context.getCurrentNodeStableId(),
+                context.getLevel(), GraphResourceIds.node(context, stableNodeId(context),
+                        GraphResourceTypeRegistry.AREA_QUERY),
                 AreaShape.BOX.id(), center, size, rotation
         );
         return result;
+    }
+
+    private static String stableNodeId(ExecutionContext context) {
+        String stableId = context.getCurrentNodeStableId();
+        return stableId == null || stableId.isBlank()
+                ? Integer.toString(context.getCurrentNodeId()) : stableId;
     }
 }

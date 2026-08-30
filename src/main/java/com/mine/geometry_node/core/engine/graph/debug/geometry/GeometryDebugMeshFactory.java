@@ -2,6 +2,8 @@ package com.mine.geometry_node.core.engine.graph.debug.geometry;
 
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
+import com.mine.geometry_node.core.engine.graph.debug.DebugSourceId;
+import com.mine.geometry_node.core.engine.graph.debug.DebugSourceIdCodec;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import it.unimi.dsi.fastutil.floats.FloatArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
@@ -25,7 +27,7 @@ public final class GeometryDebugMeshFactory {
     private GeometryDebugMeshFactory() {
     }
 
-    public static List<GeometryDebugElement> buildMeshes(String sourceKey,
+    public static List<GeometryDebugElement> buildMeshes(DebugSourceId sourceId,
                                                       String graphId,
                                                       String localId,
                                                       GeometryValue geometry,
@@ -40,7 +42,8 @@ public final class GeometryDebugMeshFactory {
         Vec3 safeTranslation = translation != null ? translation : Vec3.ZERO;
         String safeLocalId = localId != null && !localId.isBlank() ? localId : "geometry";
         for (int i = 0; i < primitives.length && meshes.size() < limit; i++) {
-            String id = sourceKey + ":" + safeLocalId + (primitives.length > 1 ? ":" + i : "");
+            String elementId = primitives.length > 1 ? safeLocalId + ":" + i : safeLocalId;
+            String id = DebugSourceIdCodec.element(sourceId, elementId);
             meshes.add(buildPrimitiveMesh(id, graphId, primitives[i], safeTranslation));
         }
         return meshes;

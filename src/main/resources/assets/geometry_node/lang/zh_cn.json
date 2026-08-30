@@ -119,6 +119,7 @@
   "geometry_node.port.item_type": "物品类型",
   "geometry_node.port.predicate": "谓词",
   "geometry_node.port.key": "关键字",
+  "geometry_node.port.resource_id": "资源 ID",
   "geometry_node.port.facing": "朝向",
   "geometry_node.port.axis": "轴向",
   "geometry_node.port.powered": "红石激活",

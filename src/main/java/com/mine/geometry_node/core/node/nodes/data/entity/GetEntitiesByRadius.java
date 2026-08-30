@@ -2,6 +2,8 @@ package com.mine.geometry_node.core.node.nodes.data.entity;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaEntityQuery;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
 import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
@@ -72,10 +74,17 @@ public class GetEntitiesByRadius extends BaseNode {
         );
         if (context instanceof ExecutionContext blueprintContext) {
             DebugRendererSessionManager.showTransientQueryArea(
-                    context.getLevel(), context.getGraphId(), blueprintContext.getCurrentNodeStableId(),
+                    context.getLevel(), GraphResourceIds.node(blueprintContext,
+                            stableNodeId(blueprintContext), GraphResourceTypeRegistry.AREA_QUERY),
                     AreaShape.SPHERE.id(), center, size, Vec3.ZERO
             );
         }
         return result;
+    }
+
+    private static String stableNodeId(ExecutionContext context) {
+        String stableId = context.getCurrentNodeStableId();
+        return stableId == null || stableId.isBlank()
+                ? Integer.toString(context.getCurrentNodeId()) : stableId;
     }
 }

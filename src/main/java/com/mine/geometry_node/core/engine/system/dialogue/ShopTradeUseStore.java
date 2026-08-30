@@ -13,8 +13,6 @@ import java.util.Map;
 public final class ShopTradeUseStore {
     public static final String SHOP_ID = "shop_id";
     private static final String LEGACY_SHOP_NODE_ID = "shop_node_id";
-    private static final String KEY_PREFIX = "geometry_node.shop_trade_uses";
-
     private ShopTradeUseStore() {
     }
 
@@ -45,7 +43,7 @@ public final class ShopTradeUseStore {
 
     public static int getUses(ServerLevel level, @Nullable Entity owner, String graphId, String shopId, String offerId) {
         int epoch = getEpoch(level, owner, graphId, shopId);
-        Object value = getAttribute(level, owner, usesKey(graphId, shopId, offerId));
+        Object value = getAttribute(level, owner, new ShopTradeStateKey.Uses(graphId, shopId, offerId));
         return Math.max(0, usesValue(value, epoch));
     }
 
@@ -68,52 +66,33 @@ public final class ShopTradeUseStore {
         int epoch = getEpoch(level, owner, graphId, shopId);
         int current = getUses(level, owner, graphId, shopId, offerId);
         int next = clampUses((long) current + delta, maxUses);
-        setAttribute(level, owner, usesKey(graphId, shopId, offerId), epoch + ":" + next);
+        setAttribute(level, owner, new ShopTradeStateKey.Uses(graphId, shopId, offerId), epoch + ":" + next);
         return next;
     }
 
     private static int getEpoch(ServerLevel level, @Nullable Entity owner, String graphId, String shopId) {
-        Object value = getAttribute(level, owner, epochKey(graphId, shopId));
+        Object value = getAttribute(level, owner, new ShopTradeStateKey.Epoch(graphId, shopId));
         return Math.max(0, intValue(value, 0));
     }
 
-    private static String usesKey(String graphId, String shopId, String offerId) {
-        return baseKey(graphId, shopId)
-                + ":offer:" + sanitizeKeyPart(offerId);
-    }
-
-    private static String epochKey(String graphId, String shopId) {
-        return baseKey(graphId, shopId) + ":epoch";
-    }
-
-    private static String baseKey(String graphId, String shopId) {
-        return KEY_PREFIX + ":" + sanitizeKeyPart(graphId) + ":" + sanitizeKeyPart(shopId);
-    }
-
-    private static Object getAttribute(ServerLevel level, @Nullable Entity owner, String key) {
+    private static Object getAttribute(ServerLevel level, @Nullable Entity owner, ShopTradeStateKey key) {
         return GraphEngineServices.INSTANCE.scopedState().get(
                 new GraphRuntimeContext(level, owner),
                 ScopedStateNamespace.SHOP,
                 ScopedStateTarget.shared(),
-                key
+                ShopTradeStateKeyCodec.encode(key)
         );
     }
 
-    private static void setAttribute(ServerLevel level, @Nullable Entity owner, String key, Object value) {
+    private static void setAttribute(ServerLevel level, @Nullable Entity owner,
+                                     ShopTradeStateKey key, Object value) {
         GraphEngineServices.INSTANCE.scopedState().set(
                 new GraphRuntimeContext(level, owner),
                 ScopedStateNamespace.SHOP,
                 ScopedStateTarget.shared(),
-                key,
+                ShopTradeStateKeyCodec.encode(key),
                 value
         );
-    }
-
-    private static String sanitizeKeyPart(String value) {
-        if (value == null || value.isBlank()) {
-            return "unknown";
-        }
-        return value.replace(':', '_');
     }
 
     private static int intValue(Object value, int fallback) {

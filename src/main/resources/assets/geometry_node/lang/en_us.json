@@ -119,6 +119,7 @@
   "geometry_node.port.item_type": "Item Type",
   "geometry_node.port.predicate": "Predicate",
   "geometry_node.port.key": "Key",
+  "geometry_node.port.resource_id": "Resource ID",
   "geometry_node.port.facing": "Facing",
   "geometry_node.port.axis": "Axis",
   "geometry_node.port.powered": "Powered",

@@ -3,8 +3,11 @@ package com.mine.geometry_node.core.node.nodes.actions.schematic;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -19,6 +22,7 @@ import com.mine.geometry_node.core.schematic.LegacySchematicBlockStateMapper;
 import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementDebugSync;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager;
+import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionService;
 import com.mine.geometry_node.core.schematic.SchematicPaths;
 import com.mine.geometry_node.core.schematic.SchematicReader;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.BlockSnapshot;
@@ -52,7 +56,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class CreateSchematicProjection extends BaseNode {
     public static final String TYPE_ID = "create_schematic_projection";
@@ -61,7 +64,6 @@ public class CreateSchematicProjection extends BaseNode {
     private static final float DEFAULT_VIEW_RANGE = 128.0f;
     private static final int DEFAULT_DURATION_TICKS = 200;
     private static final int DIRECT_SET_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
-    private static final AtomicLong SEQUENCE = new AtomicLong();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -78,20 +80,21 @@ public class CreateSchematicProjection extends BaseNode {
                 .text("summary")
                 .output(StandardPorts.FLOW_OUT, "flow_out")
                 .output(StandardPorts.PATH, "path_out")
-                .output(StandardPorts.KEY, "key_out")
                 .input(StandardPorts.FLOW_IN, "flow_in")
                 .input(StandardPorts.PATH, "path")
-                .input(StandardPorts.KEY, "input")
+                .input(StandardPorts.KEY, "key")
                 .input(StandardPorts.XYZ, "xyz")
                 .input(StandardPorts.DEBUG, "debug");
 
         if (debugMode) {
-            comment.input(StandardPorts.ONLY_SELF_VISIBLE, "only_self_visible")
+            comment.output(StandardPorts.RESOURCE_ID, "resource_id")
+                    .input(StandardPorts.ONLY_SELF_VISIBLE, "only_self_visible")
                     .input(StandardPorts.ALPHA, "alpha")
                     .input(StandardPorts.TICK, "tick")
                     .input(StandardPorts.RADIUS, "radius");
         } else {
-            comment.input(StandardPorts.UNIQUE_IF_EXISTS, "unique_if_exists")
+            comment.output(StandardPorts.KEY, "key_out")
+                    .input(StandardPorts.UNIQUE_IF_EXISTS, "unique_if_exists")
                     .input(StandardPorts.REPLACE_AIR, "replace_air")
                     .input(StandardPorts.REPLACE_BLOCKS, "replace_blocks")
                     .input(StandardPorts.ROTATION, "rotation")
@@ -103,7 +106,9 @@ public class CreateSchematicProjection extends BaseNode {
 
         builder.addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
         builder.addRow(new PortRow(StandardPorts.PATH.toInput(""), StandardPorts.PATH.toOutput(), UIHint.PATH, null, null));
-        builder.addRow(new PortRow(StandardPorts.KEY.toInput(""), StandardPorts.KEY.toOutput(), UIHint.INPUT, null, null));
+        builder.addRow(new PortRow(StandardPorts.KEY.toInput(""),
+                debugMode ? StandardPorts.RESOURCE_ID.toOutput() : StandardPorts.KEY.toOutput(),
+                UIHint.INPUT, null, null));
         builder.addRow(new PortRow(StandardPorts.XYZ.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
         builder.addRow(new PortRow(StandardPorts.DEBUG.toInput(debugMode), null, UIHint.CHECKBOX, null, null));
 
@@ -148,18 +153,23 @@ public class CreateSchematicProjection extends BaseNode {
         }
 
         boolean debugMode = boolOrDefault(getInput(context, StandardPorts.DEBUG.getId(), Boolean.class), true);
-        String key = resolveKey(context, level);
+        String configuredKey = getInput(context, StandardPorts.KEY.getId(), String.class);
+        configuredKey = configuredKey == null ? "" : configuredKey.trim();
 
         try {
             Path path = SchematicPaths.resolveServerPath(level.getServer(), pathValue);
-            String actualKey = key;
+            String actualKey;
             if (debugMode) {
+                GraphResourceId resourceId = GraphResourceIds.forKey(context, stableNodeId(context),
+                        GraphResourceTypeRegistry.SCHEMATIC_PROJECTION, configuredKey);
+                actualKey = GraphResourceIdCodec.encode(resourceId);
                 SchematicData data = SchematicReader.read(path, false);
-                createDebugProjection(context, level, data, originValue, key);
+                createDebugProjection(context, level, data, originValue, resourceId);
             } else {
+                String placementKey = configuredKey.isEmpty() ? defaultPlacementKey(context) : configuredKey;
                 boolean replaceAir = boolOrDefault(getInput(context, StandardPorts.REPLACE_AIR.getId(), Boolean.class), false);
                 boolean uniqueIfExists = boolOrDefault(getInput(context, StandardPorts.UNIQUE_IF_EXISTS.getId(), Boolean.class), true);
-                actualKey = SchematicPlacementManager.resolveKey(level, key, uniqueIfExists);
+                actualKey = SchematicPlacementManager.resolveKey(level, placementKey, uniqueIfExists);
                 SchematicData data = SchematicReader.read(path, replaceAir);
                 actualKey = placeSchematic(context, level, data, originValue, actualKey, replaceAir);
             }
@@ -173,7 +183,7 @@ public class CreateSchematicProjection extends BaseNode {
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (StandardPorts.KEY.getId().equals(portName)) {
+        if (StandardPorts.KEY.getId().equals(portName) || StandardPorts.RESOURCE_ID.getId().equals(portName)) {
             return context.getTempData(tempKey(context));
         }
         if (StandardPorts.PATH.getId().equals(portName)) {
@@ -186,7 +196,7 @@ public class CreateSchematicProjection extends BaseNode {
                                        ServerLevel level,
                                        SchematicData data,
                                        Vec3 originValue,
-                                       String key) {
+                                       GraphResourceId resourceId) {
         if (data.isEmpty()) {
             return;
         }
@@ -199,7 +209,7 @@ public class CreateSchematicProjection extends BaseNode {
         BlockPos origin = BlockPos.containing(originValue);
         PacketPayloadData payloadData = toPacketPayload(data.blocks());
         PacketSchematicProjection packet = new PacketSchematicProjection(
-                key,
+                GraphResourceIdCodec.encode(resourceId),
                 context.getGraphId(),
                 level.dimension().identifier().toString(),
                 origin.getX(),
@@ -217,8 +227,11 @@ public class CreateSchematicProjection extends BaseNode {
                 toPacketEntities(data.entities())
         );
 
-        if (!sendProjection(context, level, origin.getCenter(), viewRange, onlySelfVisible, packet)) {
-            GeometryNode.LOGGER.warn("[GeometryNode] Schematic projection '{}' was created but no target player was available.", key);
+        List<ServerPlayer> targets = projectionTargets(context, level, origin.getCenter(), viewRange, onlySelfVisible);
+        if (!SchematicProjectionService.INSTANCE.upsert(level.getServer(), resourceId, packet, targets,
+                level.getGameTime())) {
+            GeometryNode.LOGGER.warn("[GeometryNode] Schematic projection '{}' was created but no target player was available.",
+                    GraphResourceIdCodec.encode(resourceId));
         }
     }
 
@@ -416,24 +429,18 @@ public class CreateSchematicProjection extends BaseNode {
         return packetEntities;
     }
 
-    private static boolean sendProjection(ExecutionContext context,
-                                          ServerLevel level,
-                                          Vec3 origin,
-                                          float viewRange,
-                                          boolean onlySelfVisible,
-                                          PacketSchematicProjection packet) {
+    private static List<ServerPlayer> projectionTargets(ExecutionContext context,
+                                                        ServerLevel level,
+                                                        Vec3 origin,
+                                                        float viewRange,
+                                                        boolean onlySelfVisible) {
         if (onlySelfVisible) {
             ServerPlayer player = resolveSelfVisiblePlayer(context);
             if (player != null && player.level() == level) {
-                NetworkHandler.sendToPlayer(player, packet);
-                return true;
+                return List.of(player);
             }
-            return false;
+            return List.of();
         }
-        return sendToNearbyPlayers(level, origin, viewRange, packet);
-    }
-
-    private static boolean sendToNearbyPlayers(ServerLevel level, Vec3 origin, float viewRange, PacketSchematicProjection packet) {
         double radiusSqr = (double) viewRange * viewRange;
         List<ServerPlayer> targets = new ArrayList<>();
         for (ServerPlayer player : level.players()) {
@@ -441,11 +448,7 @@ public class CreateSchematicProjection extends BaseNode {
                 targets.add(player);
             }
         }
-        if (!targets.isEmpty()) {
-            NetworkHandler.sendToPlayers(targets, packet);
-            return true;
-        }
-        return false;
+        return targets;
     }
 
     private static ServerPlayer resolveSelfVisiblePlayer(ExecutionContext context) {
@@ -467,19 +470,14 @@ public class CreateSchematicProjection extends BaseNode {
         return null;
     }
 
-    private String resolveKey(ExecutionContext context, ServerLevel level) {
-        String configured = getInput(context, StandardPorts.KEY.getId(), String.class);
-        String baseKey = configured != null ? configured.trim() : "";
-        if (baseKey.isEmpty()) {
-            return uniqueKey(context, level, "schematic_projection");
-        }
-        return baseKey;
+    private static String defaultPlacementKey(ExecutionContext context) {
+        return "schematic_projection/" + stableNodeId(context);
     }
 
-    private static String uniqueKey(ExecutionContext context, ServerLevel level, String prefix) {
+    private static String stableNodeId(ExecutionContext context) {
         String stableId = context.getCurrentNodeStableId();
-        String nodePart = stableId != null && !stableId.isBlank() ? stableId : Integer.toString(context.getCurrentNodeId());
-        return prefix + ":" + nodePart + ":" + level.getGameTime() + ":" + SEQUENCE.incrementAndGet();
+        return stableId != null && !stableId.isBlank()
+                ? stableId : Integer.toString(context.getCurrentNodeId());
     }
 
     private static String formatPos(BlockPos pos) {

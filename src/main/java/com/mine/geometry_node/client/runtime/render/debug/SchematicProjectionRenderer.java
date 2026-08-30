@@ -90,8 +90,6 @@ public final class SchematicProjectionRenderer {
     private static final int FALLBACK_EDGE_ALPHA_SCALE = 210;
     private static final float EDGE_WIDTH = 1.2f;
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final String PROJECTION_SOURCE_PREFIX = "schematic:projection:";
-
     private static final Map<String, Projection> PROJECTIONS = new HashMap<>();
     private static ModelBlockRenderer modelRenderer;
     private static FluidRenderer fluidRenderer;
@@ -101,10 +99,10 @@ public final class SchematicProjectionRenderer {
     }
 
     public static void handleProjection(PacketSchematicProjection packet) {
-        if (packet == null || packet.key().isBlank()) {
+        if (packet == null || packet.resourceId().isBlank()) {
             return;
         }
-        String cacheKey = projectionCacheKey(packet.dimension(), packet.key());
+        String cacheKey = packet.resourceId();
         if (packet.blocks().isEmpty() && packet.blockEntities().isEmpty() && packet.entities().isEmpty()) {
             Projection removed = PROJECTIONS.remove(cacheKey);
             if (removed != null) {
@@ -116,13 +114,6 @@ public final class SchematicProjectionRenderer {
         if (previous != null) {
             previous.close();
         }
-    }
-
-    private static String projectionCacheKey(String dimension, String key) {
-        return PROJECTION_SOURCE_PREFIX
-                + (dimension == null ? "" : dimension.trim())
-                + ":"
-                + (key == null ? "" : key.trim());
     }
 
     public static void clear() {

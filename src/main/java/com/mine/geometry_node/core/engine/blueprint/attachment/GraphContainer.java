@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.attachment;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcessSerializer;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
@@ -18,6 +19,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * [蓝图运行容器核心] (组合模式)
@@ -31,14 +33,21 @@ public class GraphContainer {
     // 脏标记回调 (用于通知 Level 保存存档)
     private final Runnable dirtyMarker;
     private final Runnable scheduleChangedCallback;
+    private final Consumer<BlueprintProcess> processRemovedCallback;
 
     public GraphContainer(Runnable dirtyMarker) {
-        this(dirtyMarker, () -> {});
+        this(dirtyMarker, () -> {}, ignored -> {});
     }
 
     public GraphContainer(Runnable dirtyMarker, Runnable scheduleChangedCallback) {
+        this(dirtyMarker, scheduleChangedCallback, ignored -> {});
+    }
+
+    public GraphContainer(Runnable dirtyMarker, Runnable scheduleChangedCallback,
+                          Consumer<BlueprintProcess> processRemovedCallback) {
         this.dirtyMarker = dirtyMarker != null ? dirtyMarker : () -> {};
         this.scheduleChangedCallback = scheduleChangedCallback != null ? scheduleChangedCallback : () -> {};
+        this.processRemovedCallback = processRemovedCallback != null ? processRemovedCallback : ignored -> {};
     }
 
     /**
@@ -92,6 +101,7 @@ public class GraphContainer {
         if (previous != null && previous != process) {
             previous.setTickScheduleCallback(null);
             previous.shutdown("graph_replaced");
+            notifyProcessRemoved(previous);
             if (this.tickScheduler.cancel(previous.getGraphId())) {
                 notifyScheduleChanged();
             }
@@ -136,6 +146,7 @@ public class GraphContainer {
         for (BlueprintProcess process : this.processes.values()) {
             process.setTickScheduleCallback(null);
             process.shutdown("graph_unloaded");
+            notifyProcessRemoved(process);
         }
         this.processes.clear();
         if (clearTickSchedule()) {
@@ -148,6 +159,7 @@ public class GraphContainer {
         for (BlueprintProcess process : this.processes.values()) {
             process.setTickScheduleCallback(null);
             process.shutdown("graph_reloaded");
+            notifyProcessRemoved(process);
         }
         this.processes.clear();
         if (clearTickSchedule()) {
@@ -160,6 +172,7 @@ public class GraphContainer {
         if (previous != null && previous != process) {
             previous.setTickScheduleCallback(null);
             previous.shutdown("graph_reloaded");
+            notifyProcessRemoved(previous);
             if (this.tickScheduler.cancel(previous.getGraphId())) {
                 notifyScheduleChanged();
             }
@@ -201,6 +214,7 @@ public class GraphContainer {
         if (!this.processes.remove(graphId, process)) return;
         process.setTickScheduleCallback(null);
         process.shutdown(reason);
+        notifyProcessRemoved(process);
         if (this.tickScheduler.cancel(graphId)) {
             notifyScheduleChanged();
         }
@@ -234,5 +248,14 @@ public class GraphContainer {
 
     private void notifyScheduleChanged() {
         this.scheduleChangedCallback.run();
+    }
+
+    private void notifyProcessRemoved(BlueprintProcess process) {
+        try {
+            processRemovedCallback.accept(process);
+        } catch (RuntimeException exception) {
+            GeometryNode.LOGGER.error("Blueprint process resource cleanup failed: graph={}",
+                    process.getGraphId(), exception);
+        }
     }
 }

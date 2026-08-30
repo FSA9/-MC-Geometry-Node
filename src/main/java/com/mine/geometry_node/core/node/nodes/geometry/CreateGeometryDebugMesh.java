@@ -1,8 +1,14 @@
 package com.mine.geometry_node.core.node.nodes.geometry;
 
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
+import com.mine.geometry_node.core.engine.graph.debug.DebugSourceId;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMeshFactory;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -17,21 +23,18 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class CreateGeometryDebugMesh extends BaseNode {
     public static final String TYPE_ID = "create_geometry_debug_mesh";
 
     private static final int MAX_MESHES_PER_EXECUTION = 128;
-    private static final AtomicLong SEQUENCE = new AtomicLong();
-
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.create_geometry_debug_mesh"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.GEOMETRY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.KEY.toInput(""), StandardPorts.KEY.toOutput(), UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.KEY.toInput(""), StandardPorts.RESOURCE_ID.toOutput(), UIHint.INPUT, null, null))
                 .build();
     }
 
@@ -47,11 +50,13 @@ public class CreateGeometryDebugMesh extends BaseNode {
         }
 
         Vec3 translation = getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class);
-        String key = resolveKey(context, level);
-        String sourceKey = DebugRendererSessionManager.geometryMeshSourceKey(level, key);
+        String key = getInput(context, StandardPorts.KEY.getId(), String.class);
+        GraphResourceId resourceId = GraphResourceIds.forKey(context, stableNodeId(context),
+                GraphResourceTypeRegistry.GEOMETRY_DEBUG, key);
+        DebugSourceId sourceId = DebugSourceId.graph(DebugRenderChannel.GEOMETRY, resourceId);
 
         List<GeometryDebugElement> meshes = GeometryDebugMeshFactory.buildMeshes(
-                sourceKey,
+                sourceId,
                 context.getGraphId(),
                 "created",
                 geometry,
@@ -59,37 +64,28 @@ public class CreateGeometryDebugMesh extends BaseNode {
                 translation
         );
         if (!meshes.isEmpty()) {
-            DebugRendererSessionManager.replaceSourceGeometry(level, sourceKey, meshes);
-            context.setTempData(tempKey(context), key);
+            DebugRendererSessionManager.replaceSourceGeometry(level, sourceId, meshes);
+            context.setTempData(tempKey(context), GraphResourceIdCodec.encode(resourceId));
         }
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (StandardPorts.KEY.getId().equals(portName)) {
+        if (StandardPorts.RESOURCE_ID.getId().equals(portName)) {
             return context.getTempData(tempKey(context));
         }
         return null;
     }
 
-    private String resolveKey(ExecutionContext context, ServerLevel level) {
-        String configured = getInput(context, StandardPorts.KEY.getId(), String.class);
-        String baseKey = configured != null ? configured.trim() : "";
-        if (baseKey.isEmpty()) {
-            return uniqueKey(context, level, "mesh");
-        }
-        return baseKey;
-    }
-
-    private static String uniqueKey(ExecutionContext context, ServerLevel level, String prefix) {
-        String stableId = context.getCurrentNodeStableId();
-        String nodePart = stableId != null && !stableId.isBlank() ? stableId : Integer.toString(context.getCurrentNodeId());
-        return prefix + ":" + nodePart + ":" + level.getGameTime() + ":" + SEQUENCE.incrementAndGet();
-    }
-
     private static String tempKey(ExecutionContext context) {
         return TYPE_ID + ":input:" + context.getCurrentNodeId();
+    }
+
+    private static String stableNodeId(ExecutionContext context) {
+        String stableId = context.getCurrentNodeStableId();
+        return stableId == null || stableId.isBlank()
+                ? Integer.toString(context.getCurrentNodeId()) : stableId;
     }
 
 }

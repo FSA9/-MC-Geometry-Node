@@ -3,6 +3,8 @@ package com.mine.geometry_node.core.engine.system.schematic;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
+import com.mine.geometry_node.core.engine.graph.debug.DebugSourceId;
+import com.mine.geometry_node.core.engine.graph.debug.DebugSourceIdCodec;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.SchematicPlacementRecord;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -50,26 +52,26 @@ public final class SchematicPlacementDebugSync {
     }
 
     public static void syncRecord(ServerLevel level, String key, SchematicPlacementRecord record, long currentTick) {
-        String sourceKey = boundsSourceKey(level, key);
-        if (level == null || sourceKey == null) {
+        DebugSourceId sourceId = boundsSourceId(level, key);
+        if (level == null || sourceId == null) {
             return;
         }
         if (record == null) {
-            DebugRendererSessionManager.removeSourceShapes(level, sourceKey);
+            DebugRendererSessionManager.removeSourceShapes(level, sourceId);
             return;
         }
 
         DebugRendererSessionManager.replacePersistentSourceShapes(
                 level,
-                sourceKey,
-                List.of(toDebugShape(sourceKey, record)),
+                sourceId,
+                List.of(toDebugShape(sourceId, record)),
                 currentTick
         );
     }
 
-    private static DebugRenderShape toDebugShape(String sourceKey, SchematicPlacementRecord record) {
+    private static DebugRenderShape toDebugShape(DebugSourceId sourceId, SchematicPlacementRecord record) {
         return new DebugRenderShape(
-                sourceKey + ":bounds",
+                DebugSourceIdCodec.element(sourceId, "bounds"),
                 record.graphId(),
                 "box",
                 record.boundsCenter(),
@@ -79,10 +81,10 @@ public final class SchematicPlacementDebugSync {
         );
     }
 
-    private static String boundsSourceKey(ServerLevel level, String key) {
+    private static DebugSourceId boundsSourceId(ServerLevel level, String key) {
         if (level == null || key == null || key.isBlank()) {
             return null;
         }
-        return DebugRendererSessionManager.schematicPlacementSourceKey(level, key);
+        return DebugSourceId.schematicPlacement(level.dimension(), key);
     }
 }

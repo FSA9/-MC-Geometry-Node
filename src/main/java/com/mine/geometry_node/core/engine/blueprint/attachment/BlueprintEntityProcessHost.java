@@ -3,6 +3,9 @@ package com.mine.geometry_node.core.engine.blueprint.attachment;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -14,7 +17,8 @@ import java.util.Collection;
 
 /** Owns blueprint process state attached to one entity. */
 public final class BlueprintEntityProcessHost {
-    private final GraphContainer container = new GraphContainer(() -> {}, this::onScheduleChanged);
+    private final GraphContainer container = new GraphContainer(
+            () -> {}, this::onScheduleChanged, this::onProcessRemoved);
     private WeakReference<Entity> owner = new WeakReference<>(null);
 
     public void attachOwner(Entity entity) {
@@ -74,5 +78,14 @@ public final class BlueprintEntityProcessHost {
     private void onScheduleChanged() {
         Entity entity = owner.get();
         if (entity != null) BlueprintRuntime.INSTANCE.markActive(entity);
+    }
+
+    private void onProcessRemoved(BlueprintProcess process) {
+        Entity entity = owner.get();
+        if (entity != null && entity.level() instanceof ServerLevel level) {
+            GraphResourceLifecycleManager.INSTANCE.releaseBinding(level.getServer(),
+                    new GraphResourceScope.EntityScope(level.dimension(), entity.getUUID()),
+                    GraphBindingKey.blueprint(process.getGraphId()));
+        }
     }
 }

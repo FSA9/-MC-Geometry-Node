@@ -1,9 +1,12 @@
 package com.mine.geometry_node.core.engine.graph.data;
 
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.UUID;
 
 /** Read-mostly capabilities required by graph data nodes, without control-flow APIs. */
 public interface GraphDataContext {
@@ -14,6 +17,12 @@ public interface GraphDataContext {
     @Nullable Entity getGraphOwnerEntity();
 
     String getGraphId();
+
+    GraphBindingKey getGraphBindingKey();
+
+    default @Nullable UUID getGraphProcessInstanceId() {
+        return null;
+    }
 
     @Nullable Object getVariable(String name);
 

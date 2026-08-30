@@ -6,6 +6,11 @@ import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceSelector;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceType;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionFailure;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import net.minecraft.server.level.ServerLevel;
@@ -40,6 +45,16 @@ public final class BehaviorNodeContext {
     public String graphId() { return instance.plan().assetId(); }
     public int nodeIndex() { return nodeIndex; }
     public String nodeId() { return instance.plan().getNodeId(nodeIndex); }
+    public GraphBindingKey graphBindingKey() { return GraphBindingKey.behaviorTree(graphId()); }
+    public GraphResourceId resourceId(GraphResourceType type, @Nullable String key) {
+        ensureValid();
+        ServerLevel level = Objects.requireNonNull(instance.host().level(), "Behavior resource requires a level");
+        Entity owner = Objects.requireNonNull(instance.host().owner(), "Behavior resource requires an owner");
+        GraphResourceSelector selector = key == null || key.isBlank()
+                ? new GraphResourceSelector.Node(nodeId())
+                : new GraphResourceSelector.Named(key);
+        return GraphResourceIds.create(level, owner, graphBindingKey(), instanceId(), type, selector, null);
+    }
     public long gameTick() { ensureValid(); return epochTick; }
     public int childCount() { ensureValid(); return instance.plan().getChildCount(nodeIndex); }
     @Nullable public ServerLevel level() { ensureValid(); return instance.host().level(); }

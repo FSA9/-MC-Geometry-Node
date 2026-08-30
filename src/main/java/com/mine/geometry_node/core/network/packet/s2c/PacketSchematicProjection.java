@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record PacketSchematicProjection(
-        String key,
+        String resourceId,
         String graphId,
         String dimension,
         double originX,
@@ -39,7 +39,7 @@ public record PacketSchematicProjection(
     private static final int MAX_STATE_LENGTH = 2048;
 
     public PacketSchematicProjection {
-        key = key == null ? "" : key;
+        resourceId = resourceId == null ? "" : resourceId;
         graphId = graphId == null ? "" : graphId;
         dimension = dimension == null ? "" : dimension;
         durationTicks = Math.max(1, durationTicks);
@@ -83,7 +83,7 @@ public record PacketSchematicProjection(
     }
 
     private void write(RegistryFriendlyByteBuf buf) {
-        buf.writeUtf(key, 32767);
+        buf.writeUtf(resourceId, 32767);
         buf.writeUtf(graphId, 32767);
         buf.writeUtf(dimension, 32767);
         buf.writeDouble(originX);
@@ -111,6 +111,12 @@ public record PacketSchematicProjection(
         for (Entity entity : entities) {
             entity.write(buf);
         }
+    }
+
+    public static PacketSchematicProjection removal(String resourceId, String graphId, String dimension) {
+        return new PacketSchematicProjection(resourceId, graphId, dimension,
+                0.0D, 0.0D, 0.0D, 0, 0, 0, 1, 0.0F,
+                false, List.of(), List.of(), List.of(), List.of());
     }
 
     private static List<String> readStates(RegistryFriendlyByteBuf buf) {

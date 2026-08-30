@@ -10,6 +10,7 @@ import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorBudget
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
@@ -28,6 +29,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.WeakHashMap;
 
 /** Deterministic lifecycle evaluator for one immutable plan and isolated instance state. */
@@ -535,6 +537,8 @@ public final class BehaviorTreeEvaluator {
         @Override public Entity getEntity() { return instance.host().owner(); }
         @Override public Entity getGraphOwnerEntity() { return instance.host().owner(); }
         @Override public String getGraphId() { return instance.plan().assetId(); }
+        @Override public GraphBindingKey getGraphBindingKey() { return GraphBindingKey.behaviorTree(instance.plan().assetId()); }
+        @Override public UUID getGraphProcessInstanceId() { return instance.instanceId(); }
 
         @Override
         public Object getVariable(String name) {

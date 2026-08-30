@@ -10,6 +10,7 @@ import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
 import com.mine.geometry_node.core.engine.runtime.ServerEngineDriver;
 import com.mine.geometry_node.core.engine.runtime.ServerEngineRegistry;
@@ -26,6 +27,7 @@ import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttach
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementDebugSync;
+import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionService;
 import dev.architectury.registry.ReloadListenerRegistry;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -141,6 +143,7 @@ public class GeometryNode {
         NodeRegistry.INSTANCE.init();
 
         GraphEngineServices.INSTANCE.setScopedStateStore(new ServerScopedStateStore());
+        GraphResourceLifecycleManager.INSTANCE.init();
 
         // 初始化图运行时注册表
         ServerEngineDriver.init();
@@ -156,6 +159,7 @@ public class GeometryNode {
         EntityChunkLoadingService.INSTANCE.init();
 
         SchematicPlacementDebugSync.register();
+        SchematicProjectionService.INSTANCE.init();
 
         // 注册蓝图资源管理器
         ReloadListenerRegistry.register(

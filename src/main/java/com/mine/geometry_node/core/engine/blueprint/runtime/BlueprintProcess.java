@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandler;
@@ -873,6 +874,11 @@ public class BlueprintProcess {
 
         @Override
         public String getGraphId() { return BlueprintProcess.this.graphId; }
+
+        @Override
+        public GraphBindingKey getGraphBindingKey() {
+            return new GraphBindingKey(BlueprintProcess.this.index.runtimeKind(), BlueprintProcess.this.graphId);
+        }
 
         @Override
         public Object getVariable(String name) {

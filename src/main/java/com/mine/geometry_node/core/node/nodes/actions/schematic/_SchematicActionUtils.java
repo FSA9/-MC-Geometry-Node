@@ -1,14 +1,11 @@
 package com.mine.geometry_node.core.node.nodes.actions.schematic;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
-import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.SchematicPlacementRecord;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -59,36 +56,6 @@ final class _SchematicActionUtils {
             return BlockPos.containing(x.doubleValue(), y.doubleValue(), z.doubleValue());
         }
         return null;
-    }
-
-    static boolean sendProjectionRemoval(ExecutionContext context,
-                                         ServerLevel level,
-                                         String key) {
-        PacketSchematicProjection packet = new PacketSchematicProjection(
-                key,
-                context.getGraphId(),
-                level.dimension().identifier().toString(),
-                0.0D,
-                0.0D,
-                0.0D,
-                0,
-                0,
-                0,
-                1,
-                0.0f,
-                false,
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of()
-        );
-
-        List<ServerPlayer> targets = level.getServer().getPlayerList().getPlayers();
-        if (targets.isEmpty()) {
-            return false;
-        }
-        NetworkHandler.sendToPlayers(targets, packet);
-        return true;
     }
 
     record PlacementLookup(SchematicPlacementRecord record, String requestedKey, boolean resolvedByPosition) {

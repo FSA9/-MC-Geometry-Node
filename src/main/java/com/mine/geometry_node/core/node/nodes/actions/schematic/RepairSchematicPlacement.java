@@ -35,7 +35,7 @@ public class RepairSchematicPlacement extends BaseNode {
                         .output(StandardPorts.COUNT, "count")
                         .output(StandardPorts.BLOCK_STATS, "block_stats")
                         .input(StandardPorts.FLOW_IN, "flow_in")
-                        .input(StandardPorts.KEY, "input")
+                        .input(StandardPorts.KEY, "key")
                         .input(StandardPorts.REPAIR_AIR, "repair_air")
                         .input(StandardPorts.AFFECT_ENTITIES, "affect_entities")
                         .build())

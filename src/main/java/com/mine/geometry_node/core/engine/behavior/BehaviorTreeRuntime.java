@@ -15,6 +15,9 @@ import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -100,16 +103,31 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         if (current != null && current.graphId().equals(normalized)) {
             engine.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.UNBOUND);
         }
-        return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).unbindBehaviorTree(normalized);
+        boolean removed = owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).unbindBehaviorTree(normalized);
+        if (removed) {
+            GraphResourceLifecycleManager.INSTANCE.releaseBinding(level.getServer(),
+                    new GraphResourceScope.EntityScope(level.dimension(), owner.getUUID()),
+                    GraphBindingKey.behaviorTree(normalized));
+        }
+        return removed;
     }
 
     public boolean unbindAll(Mob owner) {
         ServerLevel level = requireServerOwner(owner);
+        Set<String> bindings = Set.copyOf(boundGraphs(owner));
         BehaviorTreeProcess current = engine.getForOwner(owner);
         if (current != null) {
             engine.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.UNBOUND);
         }
-        return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).clearBehaviorTrees();
+        boolean removed = owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).clearBehaviorTrees();
+        if (removed) {
+            GraphResourceScope scope = new GraphResourceScope.EntityScope(level.dimension(), owner.getUUID());
+            for (String graphId : bindings) {
+                GraphResourceLifecycleManager.INSTANCE.releaseBinding(level.getServer(), scope,
+                        GraphBindingKey.behaviorTree(graphId));
+            }
+        }
+        return removed;
     }
 
     public Set<String> boundGraphs(Entity owner) {

@@ -35,7 +35,7 @@ public class RevertSchematicPlacement extends BaseNode {
                         .output(StandardPorts.COUNT, "count")
                         .output(StandardPorts.BLOCK_STATS, "block_stats")
                         .input(StandardPorts.FLOW_IN, "flow_in")
-                        .input(StandardPorts.KEY, "input")
+                        .input(StandardPorts.KEY, "key")
                         .input(StandardPorts.AFFECT_ENTITIES, "affect_entities")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
@@ -68,9 +68,6 @@ public class RevertSchematicPlacement extends BaseNode {
                 result = SchematicPlacementManager.revert(level, safeKey, DIRECT_SET_FLAGS, affectEntities);
                 SchematicPlacementRecord currentRecord = SchematicPlacementManager.get(level, safeKey).orElse(null);
                 SchematicPlacementDebugSync.syncRecord(level, safeKey, currentRecord);
-                if (result.found()) {
-                    _SchematicActionUtils.sendProjectionRemoval(context, level, safeKey);
-                }
                 logResult(level, safeKey, previousRecord, result);
             }
         }

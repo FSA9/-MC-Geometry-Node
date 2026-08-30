@@ -3,6 +3,8 @@ package com.mine.geometry_node.core.engine.graph.debug;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMeshFactory;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugType;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
 import net.minecraft.core.BlockPos;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 public final class DebugRendererSessionManager {
     public static final double DEFAULT_RADIUS = 256.0D;
@@ -60,6 +63,7 @@ public final class DebugRendererSessionManager {
     public static void register() {
         if (registered) return;
         registered = true;
+        GraphResourceLifecycleManager.INSTANCE.registerStore("graph_debug", DebugRendererSessionManager::removeGraphResources);
         var bus = NeoForge.EVENT_BUS;
         bus.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
             if (event.getEntity() instanceof ServerPlayer player) {
@@ -302,44 +306,40 @@ public final class DebugRendererSessionManager {
     }
 
     public static void replaceSourceShapes(ServerLevel level,
-                                           String sourceKey,
+                                           DebugSourceId sourceId,
                                            List<DebugRenderShape> shapes,
                                            long seenTick) {
-        replaceSourceShapes(level, sourceKey, shapes, seenTick, -1L);
+        replaceSourceShapes(level, sourceId, shapes, seenTick, -1L);
     }
 
     public static void replacePersistentSourceShapes(ServerLevel level,
-                                                     String sourceKey,
+                                                     DebugSourceId sourceId,
                                                      List<DebugRenderShape> shapes,
                                                      long seenTick) {
-        replaceSourceShapes(level, sourceKey, shapes, seenTick, Long.MAX_VALUE);
+        replaceSourceShapes(level, sourceId, shapes, seenTick, Long.MAX_VALUE);
     }
 
     public static void showTransientQueryArea(ServerLevel level,
-                                              String graphId,
-                                              String nodeId,
+                                              GraphResourceId resourceId,
                                               String shape,
                                               Vec3 center,
                                               Vec3 size,
                                               Vec3 rotation) {
         if (level == null || center == null || size == null || !hasAreaSessions()) return;
 
-        String safeGraphId = graphId == null || graphId.isBlank() ? "unknown" : graphId;
-        String safeNodeId = nodeId == null || nodeId.isBlank() ? "unknown" : nodeId;
         String safeShape = shape == null || shape.isBlank() ? "box" : shape;
         Vec3 safeRotation = rotation != null ? rotation : Vec3.ZERO;
-        int queryHash = java.util.Objects.hash(safeShape, center, size, safeRotation);
-        String sourceKey = DebugRenderChannel.AREA.sourcePrefix() + "query:" + level.dimension().identifier() + ":"
-                + safeGraphId + ":" + safeNodeId + ":" + Integer.toUnsignedString(queryHash, 16);
+        DebugSourceId sourceId = DebugSourceId.graph(DebugRenderChannel.AREA, resourceId);
         long currentTick = level.getGameTime();
         DebugRenderShape renderShape = new DebugRenderShape(
-                sourceKey, safeGraphId, safeShape, center, size, safeRotation, DebugRenderChannel.AREA.color());
-        replaceSourceShapes(level, sourceKey, List.of(renderShape), currentTick,
+                DebugSourceIdCodec.element(sourceId, "query"), resourceId.binding().graphId(),
+                safeShape, center, size, safeRotation, DebugRenderChannel.AREA.color());
+        replaceSourceShapes(level, sourceId, List.of(renderShape), currentTick,
                 currentTick + TRANSIENT_QUERY_DURATION_TICKS);
     }
 
     private static void replaceSourceShapes(ServerLevel level,
-                                            String sourceKey,
+                                            DebugSourceId sourceId,
                                             List<DebugRenderShape> shapes,
                                             long seenTick,
                                             long expiresAt) {
@@ -349,15 +349,15 @@ public final class DebugRendererSessionManager {
                 meshes.add(GeometryDebugMeshFactory.buildShapeMesh(shape));
             }
         }
-        replaceSourceMeshes(level, sourceKey, meshes, seenTick, expiresAt);
+        replaceSourceMeshes(level, sourceId, meshes, seenTick, expiresAt);
     }
 
-    public static void removeSourceShapes(ServerLevel level, String sourceKey) {
-        removeSource(level, sourceKey);
+    public static void removeSourceShapes(ServerLevel level, DebugSourceId sourceId) {
+        removeSource(level, sourceId);
     }
 
     public static void replaceSourceGeometry(ServerLevel level,
-                                             String sourceKey,
+                                             DebugSourceId sourceId,
                                              List<GeometryDebugElement> meshes) {
         List<GeometryDebugElement> whiteMeshes = new ArrayList<>(meshes.size());
         for (GeometryDebugElement mesh : meshes) {
@@ -365,11 +365,11 @@ public final class DebugRendererSessionManager {
                 whiteMeshes.add(withColor(mesh, DebugRenderChannel.GEOMETRY.color()));
             }
         }
-        replaceSourceMeshes(level, sourceKey, whiteMeshes, level.getGameTime(), Long.MAX_VALUE);
+        replaceSourceMeshes(level, sourceId, whiteMeshes, level.getGameTime(), Long.MAX_VALUE);
     }
 
-    public static void removeSourceGeometry(ServerLevel level, String sourceKey) {
-        removeSource(level, sourceKey);
+    public static void removeSourceGeometry(ServerLevel level, DebugSourceId sourceId) {
+        removeSource(level, sourceId);
     }
 
     private static GeometryDebugElement withColor(GeometryDebugElement mesh, int color) {
@@ -382,12 +382,12 @@ public final class DebugRendererSessionManager {
     }
 
     private static void replaceSourceMeshes(ServerLevel level,
-                                            String sourceKey,
+                                            DebugSourceId sourceId,
                                             List<GeometryDebugElement> meshes,
                                             long seenTick,
                                             long expiresAt) {
         LevelCache cache = LEVEL_CACHES.computeIfAbsent(level, ignored -> new LevelCache());
-        SourceCache source = cache.sources.get(sourceKey);
+        SourceCache source = cache.sources.get(sourceId);
         long signature = sourceSignature(meshes);
         if (source != null && source.lastSeenTick == seenTick
                 && source.signature == signature && source.expiresAt == expiresAt) {
@@ -397,15 +397,30 @@ public final class DebugRendererSessionManager {
             source.lastSeenTick = seenTick;
             return;
         }
-        cache.sources.put(sourceKey, new SourceCache(List.copyOf(meshes), seenTick, signature, expiresAt));
+        cache.sources.put(sourceId, new SourceCache(List.copyOf(meshes), seenTick, signature, expiresAt));
         dirtyVersion++;
     }
 
-    private static void removeSource(ServerLevel level, String sourceKey) {
+    private static void removeSource(ServerLevel level, DebugSourceId sourceId) {
         LevelCache cache = LEVEL_CACHES.get(level);
-        if (cache != null && cache.sources.remove(sourceKey) != null) {
+        if (cache != null && cache.sources.remove(sourceId) != null) {
             dirtyVersion++;
         }
+    }
+
+    private static void removeGraphResources(net.minecraft.server.MinecraftServer server,
+                                             Predicate<GraphResourceId> predicate) {
+        boolean changed = false;
+        var levelIterator = LEVEL_CACHES.entrySet().iterator();
+        while (levelIterator.hasNext()) {
+            Map.Entry<ServerLevel, LevelCache> levelEntry = levelIterator.next();
+            if (levelEntry.getKey().getServer() != server) continue;
+            changed |= levelEntry.getValue().sources.keySet().removeIf(sourceId ->
+                    sourceId.owner() instanceof DebugSourceId.Owner.Graph graph
+                            && predicate.test(graph.resourceId()));
+            if (levelEntry.getValue().sources.isEmpty()) levelIterator.remove();
+        }
+        if (changed) dirtyVersion++;
     }
 
     public static void markDirty() {
@@ -437,23 +452,6 @@ public final class DebugRendererSessionManager {
         if (!hasPathfindingSessions()) REQUESTED_PATH_TARGETS.clear();
     }
 
-    public static String levelSourceKey(ServerLevel level, String graphId) {
-        return DebugRenderChannel.AREA.sourcePrefix() + "level:" + level.dimension().identifier() + ":" + graphId;
-    }
-
-    public static String entitySourceKey(ServerLevel level, net.minecraft.world.entity.Entity entity, String graphId) {
-        return DebugRenderChannel.AREA.sourcePrefix() + "entity:" + level.dimension().identifier() + ":"
-                + entity.getUUID() + ":" + graphId;
-    }
-
-    public static String geometryMeshSourceKey(ServerLevel level, String key) {
-        return DebugRenderChannel.GEOMETRY.sourcePrefix() + "mesh:" + level.dimension().identifier() + ":" + key.trim();
-    }
-
-    public static String schematicPlacementSourceKey(ServerLevel level, String key) {
-        return DebugRenderChannel.SCHEMATIC.sourcePrefix() + "placement:" + level.dimension().identifier() + ":" + key.trim();
-    }
-
     private static MeshSnapshot collectSnapshot(ServerPlayer player, Session session) {
         if (!session.hasAnyChannel()) return new MeshSnapshot(List.of(), 1L);
 
@@ -468,7 +466,7 @@ public final class DebugRendererSessionManager {
         if (cache != null && !cache.sources.isEmpty()) {
             var iterator = cache.sources.entrySet().iterator();
             while (iterator.hasNext()) {
-                Map.Entry<String, SourceCache> entry = iterator.next();
+                Map.Entry<DebugSourceId, SourceCache> entry = iterator.next();
                 SourceCache source = entry.getValue();
                 if (source.isExpired(currentTick)) {
                     iterator.remove();
@@ -535,7 +533,7 @@ public final class DebugRendererSessionManager {
             Vec3 center = bounds.getCenter();
             if (center.distanceToSqr(origin) > radiusSqr) continue;
             DebugRenderShape shape = new DebugRenderShape(
-                    DebugRenderChannel.INTERACTION.sourcePrefix() + interaction.getStringUUID(),
+                    DebugRenderChannel.INTERACTION.id() + ":" + interaction.getStringUUID(),
                     "interaction",
                     "box",
                     center,
@@ -617,7 +615,7 @@ public final class DebugRendererSessionManager {
             edges[i * 2 + 1] = i + 1;
         }
 
-        String id = DebugRenderChannel.PATHFINDING.sourcePrefix() + mob.getStringUUID() + ":path";
+        String id = DebugRenderChannel.PATHFINDING.id() + ":" + mob.getStringUUID() + ":path";
         GeometryDebugElement mesh = new GeometryDebugElement(
                 id, "pathfinding", GeometryDebugType.MESH, PATH_COLOR, true,
                 center, Vec3.ZERO, Vec3.ZERO, vertices, edges, new int[0]
@@ -640,7 +638,7 @@ public final class DebugRendererSessionManager {
                                       int color,
                                       List<Candidate> candidates,
                                       Vec3 origin) {
-        String id = DebugRenderChannel.PATHFINDING.sourcePrefix() + mob.getStringUUID() + ":" + markerName;
+        String id = DebugRenderChannel.PATHFINDING.id() + ":" + mob.getStringUUID() + ":" + markerName;
         DebugRenderShape shape = new DebugRenderShape(
                 id, "pathfinding", "box", position, new Vec3(1.0D, 1.0D, 1.0D), Vec3.ZERO, color
         );
@@ -772,7 +770,7 @@ public final class DebugRendererSessionManager {
     }
 
     private static final class LevelCache {
-        private final Map<String, SourceCache> sources = new HashMap<>();
+        private final Map<DebugSourceId, SourceCache> sources = new HashMap<>();
     }
 
     private static final class SourceCache {
@@ -815,12 +813,14 @@ public final class DebugRendererSessionManager {
             return areaEnabled || schematicEnabled || geometryEnabled || interactionEnabled || pathfindingEnabled;
         }
 
-        private boolean isSourceVisible(String sourceKey) {
-            if (DebugRenderChannel.AREA.owns(sourceKey)) return areaEnabled;
-            if (DebugRenderChannel.GEOMETRY.owns(sourceKey)) return geometryEnabled;
-            if (DebugRenderChannel.SCHEMATIC.owns(sourceKey)) return schematicEnabled;
-            if (DebugRenderChannel.PATHFINDING.owns(sourceKey)) return pathfindingEnabled;
-            return false;
+        private boolean isSourceVisible(DebugSourceId sourceId) {
+            return switch (sourceId.channel()) {
+                case AREA -> areaEnabled;
+                case GEOMETRY -> geometryEnabled;
+                case SCHEMATIC -> schematicEnabled;
+                case PATHFINDING -> pathfindingEnabled;
+                case INTERACTION -> interactionEnabled;
+            };
         }
 
         private void forceRefresh() {

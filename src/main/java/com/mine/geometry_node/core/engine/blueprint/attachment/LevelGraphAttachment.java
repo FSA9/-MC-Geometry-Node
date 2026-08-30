@@ -4,6 +4,9 @@ import com.mine.geometry_node.GeometryNode;
 import com.mojang.serialization.Codec;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
@@ -13,6 +16,7 @@ import net.minecraft.world.level.saveddata.SavedDataType;
 
 import java.util.Collection;
 import java.util.stream.Stream;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * [世界级运行容器 - 组合版]
@@ -26,10 +30,14 @@ public class LevelGraphAttachment extends SavedData {
             LevelGraphAttachment::codec
     );
 
-    private final GraphContainer container = new GraphContainer(this::setDirty);
+    @Nullable private ServerLevel level;
+    private final GraphContainer container = new GraphContainer(
+            this::setDirty, () -> {}, this::onProcessRemoved);
 
     public static LevelGraphAttachment get(ServerLevel level) {
-        return level.getDataStorage().computeIfAbsent(TYPE);
+        LevelGraphAttachment attachment = level.getDataStorage().computeIfAbsent(TYPE);
+        attachment.level = level;
+        return attachment;
     }
 
     public LevelGraphAttachment() {}
@@ -55,18 +63,32 @@ public class LevelGraphAttachment extends SavedData {
                 ? level.registryAccess()
                 : HolderLookup.Provider.create(Stream.<HolderLookup.RegistryLookup<?>>empty());
         return CompoundTag.CODEC.xmap(
-                tag -> load(tag, provider),
+                tag -> load(tag, provider, level),
                 attachment -> attachment.saveToTag(new CompoundTag(), provider)
         );
     }
 
     public static LevelGraphAttachment load(CompoundTag tag, HolderLookup.Provider provider) {
+        return load(tag, provider, null);
+    }
+
+    private static LevelGraphAttachment load(CompoundTag tag, HolderLookup.Provider provider,
+                                             @Nullable ServerLevel level) {
         LevelGraphAttachment attachment = new LevelGraphAttachment();
+        attachment.level = level;
         attachment.container.load(tag, provider);
         return attachment;
     }
 
     private CompoundTag saveToTag(CompoundTag tag, HolderLookup.Provider provider) {
         return container.save(tag, provider);
+    }
+
+    private void onProcessRemoved(BlueprintProcess process) {
+        if (level != null) {
+            GraphResourceLifecycleManager.INSTANCE.releaseBinding(level.getServer(),
+                    new GraphResourceScope.LevelScope(level.dimension()),
+                    GraphBindingKey.blueprint(process.getGraphId()));
+        }
     }
 }

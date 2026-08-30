@@ -473,9 +473,6 @@ public final class BlueprintEngine {
             if (getEntityGraphsForEvent(entity, OnEntityGainItem.TYPE_ID).isEmpty()) {
                 inventoryGainTracker.clear(entity);
             }
-            if (entity.level() instanceof ServerLevel level) {
-                DebugRendererSessionManager.removeSourceShapes(level, DebugRendererSessionManager.entitySourceKey(level, entity, graphId));
-            }
             DebugRendererSessionManager.markDirty();
         }
     }
@@ -491,7 +488,6 @@ public final class BlueprintEngine {
         storage.removeGraph(graphId);
         for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
             LevelGraphAttachment.get(loadedLevel).removeProcess(graphId, closeMode);
-            DebugRendererSessionManager.removeSourceShapes(loadedLevel, DebugRendererSessionManager.levelSourceKey(loadedLevel, graphId));
         }
         DebugRendererSessionManager.markDirty();
     }
@@ -500,9 +496,6 @@ public final class BlueprintEngine {
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
             for (String graphId : attachment.getBoundGraphs()) {
-                if (entity.level() instanceof ServerLevel level) {
-                    DebugRendererSessionManager.removeSourceShapes(level, DebugRendererSessionManager.entitySourceKey(level, entity, graphId));
-                }
                 unregisterEntityForGraph(entity, graphId);
             }
             attachment.clearGraphs();
@@ -528,7 +521,6 @@ public final class BlueprintEngine {
             LevelGraphAttachment attachment = LevelGraphAttachment.get(loadedLevel);
             for (String graphId : graphIds) {
                 attachment.removeProcess(graphId);
-                DebugRendererSessionManager.removeSourceShapes(loadedLevel, DebugRendererSessionManager.levelSourceKey(loadedLevel, graphId));
             }
         }
         DebugRendererSessionManager.markDirty();

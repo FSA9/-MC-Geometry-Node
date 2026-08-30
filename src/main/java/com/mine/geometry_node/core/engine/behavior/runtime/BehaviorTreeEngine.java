@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.scheduling.DueTickScheduler;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -293,6 +294,7 @@ public final class BehaviorTreeEngine {
 
     private void removeIndexes(ServerState server, InstanceEntry entry) {
         UUID instanceId = entry.instance.instanceId();
+        GraphResourceLifecycleManager.INSTANCE.releaseProcess(server.server, instanceId);
         if (!entry.instance.state().isActive()) {
             server.retainStopReason(entry.ownerId, entry.instance.stopReason());
             if (entry.instance.debugTracingEnabled()) {
@@ -354,7 +356,7 @@ public final class BehaviorTreeEngine {
     }
 
     private ServerState state(MinecraftServer server) {
-        return servers.computeIfAbsent(server, ignored -> new ServerState());
+        return servers.computeIfAbsent(server, ServerState::new);
     }
 
     private static long seed(UUID ownerId, String graphId) {
@@ -372,6 +374,7 @@ public final class BehaviorTreeEngine {
     }
 
     private static final class ServerState {
+        private final MinecraftServer server;
         private final Map<UUID, InstanceEntry> instances = new HashMap<>();
         private final Map<UUID, UUID> ownerInstances = new HashMap<>();
         private final Map<String, LinkedHashSet<UUID>> assetInstances = new HashMap<>();
@@ -384,6 +387,10 @@ public final class BehaviorTreeEngine {
         private long tick = Long.MIN_VALUE;
         private long assetReloadTick = Long.MIN_VALUE;
         private long spentNanos;
+
+        private ServerState(MinecraftServer server) {
+            this.server = server;
+        }
 
         private WorldState world(ResourceKey<Level> levelKey) {
             return worlds.computeIfAbsent(levelKey, ignored -> new WorldState());
