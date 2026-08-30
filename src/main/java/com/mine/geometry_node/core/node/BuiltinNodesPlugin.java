@@ -127,7 +127,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("layout", new RerouteNode());
 
         // --- ACTIONS ---
-//        registry.register("actions", new CreateForceField());
 //        registry.register("actions", new ExecuteCommand());
 //        registry.register("actions", new LaunchProjectile());
 //        registry.register("actions/visual", new Raycast());
@@ -141,6 +140,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/marker", new RemoveMarker());
         registry.register("actions/area", new CreateArea());
         registry.register("actions/area", new RemoveArea());
+        registry.register("actions/area", new CreateForceField());
+        registry.register("actions/area", new RemoveForceField());
         registry.register("actions/entity", new SetEntityChunkLoading());
 
 //        registry.register("actions", new SpawnHitbox());
@@ -204,23 +205,22 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // Actions/Entity
         registry.register("actions/entity", new AddForce());
+        registry.register("actions/entity", new DamageEntity());
+        registry.register("actions/entity", new HealEntity());
         registry.register("actions/entity", new AddEffect());
         registry.register("actions/entity", new ClearEffect());
         registry.register("actions/entity", new ClearAllEffects());
-        registry.register("actions/entity", new ClearInvulnerableTicks());
-        registry.register("actions/entity", new DamageEntity());
-//        registry.register("actions/entity", new _DismountEntity());
+        registry.register("actions/entity", new IgniteEntity());
         registry.register("actions/entity", new ExtinguishEntity());
+        registry.register("actions/entity", new ClearInvulnerableTicks());
+//        registry.register("actions/entity", new _DismountEntity());
 //        registry.register("actions/entity", new GetInvulnerableTicks());
         registry.register("actions/entity", new GrantDamageTypeImmunity());
-        registry.register("actions/entity", new HealEntity());
-        registry.register("actions/entity", new IgniteEntity());
         registry.register("actions/entity", new KillEntity());
         registry.register("actions/entity", new LeashEntity());
         registry.register("actions/entity", new MountEntity());
         registry.register("actions/entity", new RevokeDamageTypeImmunity());
         registry.register("actions/entity", new SetCustomName());
-//        registry.register("actions/entity", new SetEntityOnFire());
         registry.register("actions/entity", new SetEntityRotation());
         registry.register("actions/entity", new SetEntitySize());
         registry.register("actions/entity", new SetEntityVelocity());
@@ -231,11 +231,11 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/entity", new TeleportEntityToPos());
 //        registry.register("actions/entity", new _UnleashEntity());
 //        registry.register("actions/entity", new _UseItem());
+        registry.register("actions/entity", new SetEntityInvisible());
         registry.register("actions/entity", new SetEntityGlowing());
         registry.register("actions/entity", new SetEntitySilent());
         registry.register("actions/entity", new SetEntityMoveSpeed());
         registry.register("actions/entity", new SetEntityStepHeight());
-        registry.register("actions/entity", new SetEntityInvisible());
         registry.register("actions/entity", new AddEntityTag());
         registry.register("actions/entity", new ClearEntityTags());
         registry.register("actions/entity", new RemoveEntityTag());
@@ -268,21 +268,21 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // Actions/Item
         registry.register("actions/item", new DamageItemStack());
         registry.register("actions/item", new RepairItemStack());
-        registry.register("actions/item", new AddEnchantment());
-        registry.register("actions/item", new RemoveEnchantment());
-        registry.register("actions/item", new ClearAllEnchantments());
-        registry.register("actions/item", new GiveItemStackToPlayer());
-        registry.register("actions/item", new SetItemName());
-        registry.register("actions/item", new AddAttributeModifier());
-        registry.register("actions/item", new AddStoredEnchantment());
-        registry.register("actions/item", new ClearAllStoredEnchantments());
         registry.register("actions/item", new SetDamage());
         registry.register("actions/item", new SetItemCount());
-        registry.register("actions/item", new SetEnchantmentGlintOverride());
         registry.register("actions/item", new SetMaxDamage());
         registry.register("actions/item", new SetMaxStackSize());
         registry.register("actions/item", new SetRepairCost());
         registry.register("actions/item", new SetUnbreakable());
+        registry.register("actions/item", new AddEnchantment());
+        registry.register("actions/item", new RemoveEnchantment());
+        registry.register("actions/item", new ClearAllEnchantments());
+        registry.register("actions/item", new AddStoredEnchantment());
+        registry.register("actions/item", new ClearAllStoredEnchantments());
+        registry.register("actions/item", new AddAttributeModifier());
+        registry.register("actions/item", new GiveItemStackToPlayer());
+        registry.register("actions/item", new SetItemName());
+        registry.register("actions/item", new SetEnchantmentGlintOverride());
 
 
         // Actions/Player
@@ -307,7 +307,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // Client/Visual
 
         // --- DATA ---
-        registry.register("data/entity", new TargetSelector());
+        registry.register("data/world", new TargetSelector());
         registry.register("data", new GetScopedState());
         registry.register("data", new SetScopedState());
         registry.register("data", new HasScopedState());

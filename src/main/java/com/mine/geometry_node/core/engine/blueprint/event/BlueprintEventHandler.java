@@ -8,7 +8,9 @@ import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.AreaTrigger
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityDispatcher;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.PlayerDispatcher;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.WorldDispatcher;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaResourceStore;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResourceStore;
+import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldResourceStore;
+import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldTickService;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -62,7 +64,9 @@ public final class BlueprintEventHandler {
     public void tickLevel(ServerLevel level) {
         // 1. 驱动全局蓝图
         LevelGraphAttachment.get(level).tick(level);
+        ForceFieldTickService.INSTANCE.tickLevel(level);
         AreaResourceStore.INSTANCE.tickDebug(level);
+        ForceFieldResourceStore.INSTANCE.tickDebug(level);
         areaTriggers.tickLevel(level);
         // 2. 驱动到期实体的局部蓝图
         tickScheduledEntities(level);
@@ -76,6 +80,7 @@ public final class BlueprintEventHandler {
         servers.remove(server);
         areaTriggers.shutdown(server);
         AreaResourceStore.INSTANCE.shutdown(server);
+        ForceFieldResourceStore.INSTANCE.shutdown(server);
     }
 
     private void tickScheduledEntities(ServerLevel level) {

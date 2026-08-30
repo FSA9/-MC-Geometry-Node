@@ -6,11 +6,11 @@ import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachm
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAddress;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaEntityQuery;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaResource;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaResourceStore;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.*;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaTargetType;
+import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldAddress;
+import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldResource;
+import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldResourceStore;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
@@ -23,7 +23,6 @@ import com.mine.geometry_node.core.node.port.StandardPorts;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -114,35 +113,32 @@ public final class AreaTriggerDispatcher {
 
             ServerLevel areaLevel = RegistryDataManager.resolveDimension(hostLevel.getServer(),
                     group.key.dimensionId());
-            if (areaLevel == null || group.key.areaId().isBlank()) {
+            if (areaLevel == null || group.key.sourceId().isBlank()) {
                 listenerState.reset();
                 continue;
             }
-            AreaAddress address = AreaAddress.tryCreate(areaLevel.dimension(), group.key.areaId());
-            if (address == null) {
+            ResolvedAreaSource source = resolveSource(hostLevel.getServer(), areaLevel, group.key);
+            if (source == null) {
                 listenerState.reset();
                 continue;
             }
-            AreaResource resource = AreaResourceStore.INSTANCE.get(hostLevel.getServer(), address);
-            AreaResource.Resolved area = resource != null ? resource.resolve(areaLevel) : null;
-            if (resource == null || area == null) {
-                listenerState.reset();
-                continue;
-            }
-            if (listenerState.generation != resource.generation()) {
+            if (listenerState.areaGeneration != source.areaResource().generation()
+                    || listenerState.forceFieldGeneration != source.forceFieldGeneration()) {
                 listenerState.inside = Set.of();
-                listenerState.generation = resource.generation();
+                listenerState.areaGeneration = source.areaResource().generation();
+                listenerState.forceFieldGeneration = source.forceFieldGeneration();
             }
 
-            AreaQueryResult result = findEntities(areaLevel, resource, area, group.key.targetType(), queryCache);
+            AreaQueryResult result = findEntities(areaLevel, source.areaResource(), source.area(),
+                    group.key.targetType(), source.excludedEntityId(), queryCache);
             Set<UUID> previous = listenerState.inside;
             Set<UUID> current = result.hitsById().keySet();
             dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group, AreaPhase.ENTER,
-                    difference(current, previous), result, processFinder, mountAction);
+                    difference(current, previous), source, result, processFinder, mountAction);
             dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group, AreaPhase.STAY,
-                    intersection(current, previous), result, processFinder, mountAction);
+                    intersection(current, previous), source, result, processFinder, mountAction);
             dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group, AreaPhase.EXIT,
-                    difference(previous, current), result, processFinder, mountAction);
+                    difference(previous, current), source, result, processFinder, mountAction);
             listenerState.inside = new LinkedHashSet<>(current);
         }
     }
@@ -160,15 +156,19 @@ public final class AreaTriggerDispatcher {
         for (int nodeId : nodeIds) {
             String dimension = plan.getNodeStaticInput(nodeId, StandardPorts.DIMENSION.getId(), String.class,
                     RegistryDataManager.DEFAULT_DIMENSION);
-            String areaId = plan.getNodeStaticInput(nodeId, StandardPorts.AREA_ID.getId(), String.class, "");
+            AreaSource source = AreaSource.fromId(plan.getNodeStaticInput(nodeId,
+                    OnAreaEvent.SOURCE_PORT, String.class, OnAreaEvent.SOURCE_AREA));
+            String sourceId = source == AreaSource.FORCE_FIELD
+                    ? plan.getNodeStaticInput(nodeId, StandardPorts.FORCE_FIELD_ID.getId(), String.class, "")
+                    : plan.getNodeStaticInput(nodeId, StandardPorts.AREA_ID.getId(), String.class, "");
             AreaTargetType target = AreaTargetType.fromId(plan.getNodeStaticInput(nodeId,
                     OnAreaEvent.TARGET_PORT, String.class, AreaTargetType.ALL.id()));
             int interval = Math.max(1, plan.getNodeStaticInput(nodeId,
                     OnAreaEvent.INTERVAL_TICK_PORT, Integer.class, 1));
             int offset = Math.floorMod(plan.getNodeStaticInput(nodeId,
                     OnAreaEvent.OFFSET_TICK_PORT, Integer.class, 0), interval);
-            ListenerKey key = new ListenerKey(dimension == null ? "" : dimension.trim(),
-                    areaId == null ? "" : areaId.trim(), target, interval, offset);
+            ListenerKey key = new ListenerKey(dimension == null ? "" : dimension.trim(), source,
+                    sourceId == null ? "" : sourceId.trim(), target, interval, offset);
             AreaPhase phase = AreaPhase.fromId(plan.getNodeStaticInput(nodeId,
                     OnAreaEvent.PHASE_PORT, String.class, OnAreaEvent.PHASE_ENTER));
             listeners.add(new CompiledListener(nodeId, key, phase));
@@ -178,7 +178,7 @@ public final class AreaTriggerDispatcher {
 
     private void dispatchPhase(ServerLevel hostLevel, ServerLevel areaLevel, @Nullable Entity owner,
                                String graphId, BlueprintPlan plan, ListenerGroup group, AreaPhase phase,
-                               Set<UUID> entityIds, AreaQueryResult result,
+                               Set<UUID> entityIds, ResolvedAreaSource source, AreaQueryResult result,
                                Function<String, BlueprintProcess> processFinder,
                                Consumer<BlueprintProcess> mountAction) {
         List<Integer> nodes = group.nodes.get(phase);
@@ -192,7 +192,7 @@ public final class AreaTriggerDispatcher {
             case CYLINDER -> Math.max(area.size().x, area.size().z) * 0.5D;
             case BOX -> 0.0D;
         };
-        double height = area.shape() == com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape.CYLINDER
+        double height = area.shape() == AreaShape.CYLINDER
                 ? area.size().y : 0.0D;
 
         for (UUID entityId : entityIds) {
@@ -213,6 +213,8 @@ public final class AreaTriggerDispatcher {
                     StandardPorts.HEIGHT.getId(), (float) height,
                     StandardPorts.ROTATION.getId(), area.rotation(),
                     StandardPorts.AREA_ID.getId(), resource.address().id(),
+                    StandardPorts.FORCE_FIELD_ID.getId(), source.forceFieldId(),
+                    OnAreaEvent.SOURCE_PORT, group.key.source().id,
                     StandardPorts.DIMENSION.getId(), resource.address().dimension().identifier().toString(),
                     OnAreaEvent.INSIDE_COUNT_PORT, insideCount,
                     OnAreaEvent.TARGET_PORT, group.key.targetType().id()
@@ -227,16 +229,43 @@ public final class AreaTriggerDispatcher {
 
     private static AreaQueryResult findEntities(ServerLevel level, AreaResource resource,
                                                 AreaResource.Resolved area, AreaTargetType target,
+                                                @Nullable UUID excludedEntityId,
                                                 Map<QueryCacheKey, AreaQueryResult> cache) {
-        QueryCacheKey key = QueryCacheKey.of(resource, area, target);
+        QueryCacheKey key = QueryCacheKey.of(resource, area, target, excludedEntityId);
         return cache.computeIfAbsent(key, ignored -> {
             Map<UUID, AreaEntityQuery.Hit> hits = new LinkedHashMap<>();
             for (AreaEntityQuery.Hit hit : AreaEntityQuery.findHits(level, area.shape(), area.center(),
-                    area.size(), area.rotation(), target, entity -> !entity.isSpectator())) {
+                    area.size(), area.rotation(), target, entity -> !entity.isSpectator()
+                            && (excludedEntityId == null || !excludedEntityId.equals(entity.getUUID())))) {
                 hits.put(hit.entity().getUUID(), hit);
             }
             return new AreaQueryResult(resource, area, hits);
         });
+    }
+
+    @Nullable
+    private static ResolvedAreaSource resolveSource(MinecraftServer server, ServerLevel areaLevel,
+                                                    ListenerKey key) {
+        ForceFieldResource forceField = null;
+        AreaAddress areaAddress;
+        if (key.source() == AreaSource.FORCE_FIELD) {
+            ForceFieldAddress forceAddress = ForceFieldAddress.tryCreate(
+                    areaLevel.dimension(), key.sourceId());
+            if (forceAddress == null) return null;
+            forceField = ForceFieldResourceStore.INSTANCE.get(server, forceAddress);
+            if (forceField == null) return null;
+            areaAddress = forceField.area();
+        } else {
+            areaAddress = AreaAddress.tryCreate(areaLevel.dimension(), key.sourceId());
+        }
+        if (areaAddress == null) return null;
+        AreaResource areaResource = AreaResourceStore.INSTANCE.get(server, areaAddress);
+        AreaResource.Resolved area = areaResource != null ? areaResource.resolve(areaLevel) : null;
+        if (areaResource == null || area == null) return null;
+        return new ResolvedAreaSource(areaResource, area,
+                forceField != null ? forceField.address().id() : "",
+                forceField != null ? forceField.generation() : Long.MIN_VALUE,
+                forceField != null ? areaResource.anchorEntityId() : null);
     }
 
     private static boolean shouldTick(long tick, int interval, int offset) {
@@ -299,7 +328,23 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private record ListenerKey(String dimensionId, String areaId, AreaTargetType targetType,
+    private enum AreaSource {
+        AREA(OnAreaEvent.SOURCE_AREA),
+        FORCE_FIELD(OnAreaEvent.SOURCE_FORCE_FIELD);
+
+        private final String id;
+
+        AreaSource(String id) {
+            this.id = id;
+        }
+
+        private static AreaSource fromId(@Nullable String id) {
+            return OnAreaEvent.SOURCE_FORCE_FIELD.equals(id) ? FORCE_FIELD : AREA;
+        }
+    }
+
+    private record ListenerKey(String dimensionId, AreaSource source, String sourceId,
+                               AreaTargetType targetType,
                                int interval, int offset) {
     }
 
@@ -313,11 +358,17 @@ public final class AreaTriggerDispatcher {
                                    Map<UUID, AreaEntityQuery.Hit> hitsById) {
     }
 
+    private record ResolvedAreaSource(AreaResource areaResource, AreaResource.Resolved area,
+                                      String forceFieldId, long forceFieldGeneration,
+                                      @Nullable UUID excludedEntityId) {
+    }
+
     private record QueryCacheKey(AreaAddress address, long generation, AreaTargetType targetType,
+                                 @Nullable UUID excludedEntityId,
                                  double centerX, double centerY, double centerZ) {
         private static QueryCacheKey of(AreaResource resource, AreaResource.Resolved area,
-                                        AreaTargetType target) {
-            return new QueryCacheKey(resource.address(), resource.generation(), target,
+                                        AreaTargetType target, @Nullable UUID excludedEntityId) {
+            return new QueryCacheKey(resource.address(), resource.generation(), target, excludedEntityId,
                     area.center().x, area.center().y, area.center().z);
         }
     }
@@ -333,12 +384,14 @@ public final class AreaTriggerDispatcher {
 
     private static final class ListenerState {
         private Set<UUID> inside = Set.of();
-        private long generation = Long.MIN_VALUE;
+        private long areaGeneration = Long.MIN_VALUE;
+        private long forceFieldGeneration = Long.MIN_VALUE;
         private long lastSeenTick;
 
         private void reset() {
             inside = Set.of();
-            generation = Long.MIN_VALUE;
+            areaGeneration = Long.MIN_VALUE;
+            forceFieldGeneration = Long.MIN_VALUE;
         }
     }
 

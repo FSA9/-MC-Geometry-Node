@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.blueprint.spatial;
+package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;

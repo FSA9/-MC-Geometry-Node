@@ -103,6 +103,7 @@ public enum StandardPorts {
     FAC("fac", PortType.FLOAT),
     ARRIVAL_DISTANCE("arrival_distance", PortType.FLOAT),
     TARGET_RANGE("target_range", PortType.FLOAT),
+    STRENGTH("strength", PortType.FLOAT),
 
 
     // String
@@ -130,6 +131,7 @@ public enum StandardPorts {
     BILLBOARD("billboard", PortType.STRING),
     ENTRY_ID("entry_id", PortType.STRING),
     AREA_ID("area_id", PortType.STRING),
+    FORCE_FIELD_ID("force_field_id", PortType.STRING),
     SHOP_ID("shop_id", PortType.STRING),
     OFFER_ID("offer_id", PortType.STRING),
     GRAPH_ID("graph_id", PortType.STRING),

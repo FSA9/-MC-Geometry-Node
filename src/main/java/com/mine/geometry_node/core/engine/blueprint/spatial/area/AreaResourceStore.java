@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.blueprint.spatial;
+package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;

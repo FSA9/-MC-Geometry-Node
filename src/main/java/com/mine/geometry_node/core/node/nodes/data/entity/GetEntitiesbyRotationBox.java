@@ -4,8 +4,8 @@ import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManage
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaTargetType;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaShape;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaTargetType;
 import com.mine.geometry_node.core.engine.blueprint.spatial.RotatedBoxEntityQuery;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;

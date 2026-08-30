@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.blueprint.spatial;
+package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 
 import org.jetbrains.annotations.Nullable;
 

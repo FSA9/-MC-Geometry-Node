@@ -1,5 +1,8 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial;
 
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaEntityQuery;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaShape;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaTargetType;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;

@@ -2,11 +2,11 @@ package com.mine.geometry_node.core.node.nodes.actions.area;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAddress;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaAnchor;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaEntityQuery;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaResourceStore;
-import com.mine.geometry_node.core.engine.blueprint.spatial.AreaShape;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAnchor;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaEntityQuery;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResourceStore;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaShape;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;

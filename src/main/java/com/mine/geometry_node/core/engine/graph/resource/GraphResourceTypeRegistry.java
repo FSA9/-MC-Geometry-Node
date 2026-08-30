@@ -15,6 +15,8 @@ public final class GraphResourceTypeRegistry {
             Set.of(GraphResourceSelector.Kind.GRAPH), GraphResourceType.TargetEntityPolicy.NONE);
     public static final GraphResourceType AREA_QUERY = type("area_query",
             Set.of(GraphResourceSelector.Kind.NODE), GraphResourceType.TargetEntityPolicy.NONE);
+    public static final GraphResourceType FORCE_FIELD = type("force_field",
+            Set.of(GraphResourceSelector.Kind.NAMED), GraphResourceType.TargetEntityPolicy.NONE);
     public static final GraphResourceType GEOMETRY_DEBUG = type("geometry_debug",
             Set.of(GraphResourceSelector.Kind.NODE, GraphResourceSelector.Kind.NAMED),
             GraphResourceType.TargetEntityPolicy.NONE);
@@ -30,6 +32,7 @@ public final class GraphResourceTypeRegistry {
         registerBuiltin(AREA);
         registerBuiltin(AREA_STATE);
         registerBuiltin(AREA_QUERY);
+        registerBuiltin(FORCE_FIELD);
         registerBuiltin(GEOMETRY_DEBUG);
         registerBuiltin(SCHEMATIC_PROJECTION);
     }
