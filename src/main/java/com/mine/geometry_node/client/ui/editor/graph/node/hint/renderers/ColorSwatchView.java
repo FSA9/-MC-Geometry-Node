@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.common.ColorPickerDialog;
+import com.mine.geometry_node.client.ui.components.common.ColorPickerDialog;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import icyllis.modernui.core.Context;

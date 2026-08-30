@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
 import com.mine.geometry_node.client.ai.command.CommandRegistry;
-import com.mine.geometry_node.client.ui.session.DocumentManager;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.DocumentManager;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;

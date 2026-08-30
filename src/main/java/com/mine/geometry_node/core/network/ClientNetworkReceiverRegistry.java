@@ -11,7 +11,7 @@ import com.mine.geometry_node.client.runtime.render.debug.SchematicProjectionRen
 import com.mine.geometry_node.client.runtime.render.image.ClientImageAssetManager;
 import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.EntityTemplatePickerController;
+import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
 import com.mine.geometry_node.client.asset.preview.protocol.ClientAssetPreviewProtocol;

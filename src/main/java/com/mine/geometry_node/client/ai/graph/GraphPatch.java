@@ -18,7 +18,7 @@ public record GraphPatch(
     public static final int MAX_OPERATIONS = 256;
 
     public GraphPatch {
-        session = Objects.requireNonNull(session, "session");
+        session = Objects.requireNonNull(session, "document");
         scope = Objects.requireNonNull(scope, "scope");
         expectedRevision = Objects.requireNonNull(expectedRevision, "expectedRevision");
         idempotencyKey = requireNonBlank(idempotencyKey, "idempotencyKey");
@@ -28,7 +28,7 @@ public record GraphPatch(
     }
 
     public record SessionRef(String id) {
-        public SessionRef { id = requireNonBlank(id, "session.id"); }
+        public SessionRef { id = requireNonBlank(id, "document.id"); }
     }
 
     /** Scope remains fixed even if the user changes the currently visible group. */

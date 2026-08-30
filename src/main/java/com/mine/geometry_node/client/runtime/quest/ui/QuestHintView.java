@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.runtime.quest.ui;
 
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers.UIItemSlot;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers.UIEntityTemplatePreview;
+import com.mine.geometry_node.client.ui.components.valuepreview.EntityTemplatePreviewView;
+import com.mine.geometry_node.client.ui.components.valuepreview.ItemSlotView;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
@@ -17,19 +17,18 @@ import net.minecraft.world.level.block.Block;
 import java.util.function.Consumer;
 
 public final class QuestHintView extends FrameLayout {
-    private final UIItemSlot itemView;
-    private final UIEntityTemplatePreview entityView;
+    private final ItemSlotView itemView;
+    private final EntityTemplatePreviewView entityView;
     private QuestHintType hintType = QuestHintType.NONE;
 
     public QuestHintView(Context context) {
         super(context);
         setClipChildren(false);
 
-        itemView = new UIItemSlot(context);
+        itemView = new ItemSlotView(context);
         addView(itemView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
-        entityView = new UIEntityTemplatePreview(
-                context, null, "", null, UIEntityTemplatePreview.RotationMode.HORIZONTAL);
+        entityView = new EntityTemplatePreviewView(context, EntityTemplatePreviewView.RotationMode.HORIZONTAL);
         entityView.setVisibility(View.GONE);
         addView(entityView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
     }

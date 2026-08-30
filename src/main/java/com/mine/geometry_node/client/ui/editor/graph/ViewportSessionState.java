@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ai.command.CliCommandParser;
 import com.mine.geometry_node.client.ai.command.CommandInvocationContext;
 import com.mine.geometry_node.client.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ai.command.CommandResult;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 
 import java.util.List;
 import java.util.Objects;

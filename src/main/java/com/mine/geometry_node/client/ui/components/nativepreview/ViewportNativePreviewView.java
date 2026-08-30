@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.components.nativepreview;
 
-import com.mine.geometry_node.client.ui.editor.graph.Viewport;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.mc.MinecraftSurfaceView;
 import icyllis.modernui.view.View;
@@ -15,7 +14,7 @@ import javax.annotation.Nonnull;
 public abstract class ViewportNativePreviewView extends FrameLayout implements ViewportNativePreview {
     private final Object mTransformLock = new Object();
 
-    private ViewportNativePreviewLayer mPreviewLayer;
+    private NativePreviewHost.Registration mPreviewRegistration;
     private MinecraftSurfaceView mFallbackSurface;
     private float mViewportScale = 1.0f;
     private float mWindowLeftPx;
@@ -51,9 +50,9 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
             mPreviewOrder = previewOrder;
             mHasViewportTransform = true;
         }
-        ViewportNativePreviewLayer layer = mPreviewLayer;
-        if (orderChanged && layer != null) {
-            layer.notifyPreviewOrderChanged();
+        NativePreviewHost.Registration registration = mPreviewRegistration;
+        if (orderChanged && registration != null) {
+            registration.notifyOrderChanged();
         } else {
             requestNativePreviewRender();
         }
@@ -148,8 +147,8 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
     );
 
     protected final void requestNativePreviewRender() {
-        ViewportNativePreviewLayer layer = mPreviewLayer;
-        if (layer != null) layer.requestPreviewRender();
+        NativePreviewHost.Registration registration = mPreviewRegistration;
+        if (registration != null) registration.requestRender();
         if (mFallbackSurface != null) mFallbackSurface.invalidate();
     }
 
@@ -174,11 +173,11 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         mAggregatedVisible = isShown();
-        Viewport viewport = findViewportAncestor();
-        if (viewport != null) {
+        releaseNativePreviewRegistration();
+        NativePreviewHost host = findNativePreviewHost();
+        if (host != null) {
             removeFallbackSurface();
-            mPreviewLayer = viewport.getNativePreviewLayer();
-            mPreviewLayer.registerPreview(this);
+            mPreviewRegistration = host.registerNativePreview(this);
         } else {
             ensureFallbackSurface();
         }
@@ -186,19 +185,23 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
 
     @Override
     protected void onDetachedFromWindow() {
-        ViewportNativePreviewLayer layer = mPreviewLayer;
-        mPreviewLayer = null;
-        if (layer != null) layer.unregisterPreview(this);
+        releaseNativePreviewRegistration();
         super.onDetachedFromWindow();
     }
 
-    private Viewport findViewportAncestor() {
+    private NativePreviewHost findNativePreviewHost() {
         View current = this;
         while (current.getParent() instanceof View parent) {
-            if (parent instanceof Viewport viewport) return viewport;
+            if (parent instanceof NativePreviewHost host) return host;
             current = parent;
         }
         return null;
+    }
+
+    private void releaseNativePreviewRegistration() {
+        NativePreviewHost.Registration registration = mPreviewRegistration;
+        mPreviewRegistration = null;
+        if (registration != null) registration.close();
     }
 
     private void ensureFallbackSurface() {

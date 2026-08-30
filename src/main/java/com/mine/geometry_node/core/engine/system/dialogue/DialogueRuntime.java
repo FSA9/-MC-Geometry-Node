@@ -434,7 +434,7 @@ public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
     private void replaceShopPage(DialogueSession session, ShopPagePayload shop) {
         DialoguePagePayload page = session.getCurrentPage();
         if (page == null) {
-            throw new IllegalStateException("Dialogue session has no current page");
+            throw new IllegalStateException("Dialogue document has no current page");
         }
         session.replaceCurrentPage(page.withShop(shop));
     }

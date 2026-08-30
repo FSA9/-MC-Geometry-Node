@@ -119,7 +119,7 @@ public final class CommandCatalog {
                         + "connect(from,to)。position 必须是 {x:number,y:number}；node 使用 {id:string} 或此前 "
                         + "add_node 的 {alias:string}；port 使用 {node:{id|alias},port_id:string}。connect.from 必须是输出端口，"
                         + "connect.to 必须是输入端口；不要猜端口 ID。"
-                        + "session/scope/revision 来自 get_graph_stats 或 get_graph_context；创建前 SELECT token 来自 "
+                        + "document/scope/revision 来自 get_graph_stats 或 get_graph_context；创建前 SELECT token 来自 "
                         + "get_node_type_port_options，已有实例 token 来自 get_port_options。"
                         + "调用由 MCP 客户端授权；GeometryNode 完成事务预检后原子提交为一次 Undo",
                 "apply_graph_patch <patch_json>", arguments, output,

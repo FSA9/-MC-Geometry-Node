@@ -58,7 +58,7 @@ public final class AssetTransferServerConfig {
                 .defineInRange(AssetTransferConfigKeys.MAX_CONCURRENT_DOWNLOADS_PER_PLAYER,
                         defaults.maxConcurrentDownloadsPerPlayer(), 1, 64);
         IDLE_TIMEOUT_SECONDS = BUILDER
-                .comment("Seconds before an inactive transfer session is closed.")
+                .comment("Seconds before an inactive transfer document is closed.")
                 .defineInRange(AssetTransferConfigKeys.IDLE_TIMEOUT_SECONDS,
                         Math.toIntExact(defaults.idleTimeout().toSeconds()), 1, 3600);
         PREVIEW_CACHE_MAX_SIZE_MIB = BUILDER

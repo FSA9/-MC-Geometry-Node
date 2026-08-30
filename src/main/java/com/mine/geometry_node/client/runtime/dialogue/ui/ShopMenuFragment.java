@@ -2,10 +2,10 @@ package com.mine.geometry_node.client.runtime.dialogue.ui;
 
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.runtime.dialogue.ModernDialogueText;
-import com.mine.geometry_node.client.ui.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.InventoryItemPickerOverlay;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ItemStackTooltipOverlay;
+import com.mine.geometry_node.client.ui.components.overlay.InventoryItemPickerOverlay;
+import com.mine.geometry_node.client.ui.components.overlay.ItemStackTooltipOverlay;
 import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayload;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;

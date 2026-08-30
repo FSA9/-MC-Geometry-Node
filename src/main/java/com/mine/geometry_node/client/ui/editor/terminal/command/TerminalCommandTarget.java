@@ -7,7 +7,7 @@ import com.mine.geometry_node.client.ai.command.GraphQueryTarget;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdAddNode;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdConnect;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveNodes;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
-/** Adapts the editor session to the runtime-neutral graph command target. */
+/** Adapts the editor document to the runtime-neutral graph command target. */
 public record TerminalCommandTarget(GraphSession session) implements GraphCommandTarget, GraphQueryTarget {
     @Override public boolean hasGraph() { return session != null; }
 

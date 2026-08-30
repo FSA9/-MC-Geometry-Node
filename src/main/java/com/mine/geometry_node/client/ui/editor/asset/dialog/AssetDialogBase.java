@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
 import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragDropRegistry;
-import com.mine.geometry_node.client.ui.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.shell.MainUiServices;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
 import com.mine.geometry_node.client.ui.shell.layer.modal.ModalOptions;

@@ -9,6 +9,8 @@ import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Owns the single Minecraft raw-render surface used by all previews in one viewport.
@@ -49,19 +51,21 @@ public final class ViewportNativePreviewLayer extends MinecraftSurfaceView {
         });
     }
 
-    public void registerPreview(ViewportNativePreview preview) {
-        if (preview == null) return;
+    public NativePreviewHost.Registration registerPreview(ViewportNativePreview preview) {
+        Objects.requireNonNull(preview, "preview");
         synchronized (mPreviewLock) {
-            if (mPreviews.contains(preview)) return;
+            if (mPreviews.contains(preview)) {
+                throw new IllegalStateException("Native preview is already registered");
+            }
             mPreviews.add(preview);
             rebuildRenderOrderLocked();
         }
         setVisibility(View.VISIBLE);
         invalidate();
+        return new PreviewRegistration(preview);
     }
 
-    public void unregisterPreview(ViewportNativePreview preview) {
-        if (preview == null) return;
+    private void unregisterPreview(ViewportNativePreview preview) {
         boolean empty;
         synchronized (mPreviewLock) {
             if (!mPreviews.remove(preview)) return;
@@ -72,14 +76,14 @@ public final class ViewportNativePreviewLayer extends MinecraftSurfaceView {
         invalidate();
     }
 
-    public void notifyPreviewOrderChanged() {
+    private void notifyPreviewOrderChanged() {
         synchronized (mPreviewLock) {
             rebuildRenderOrderLocked();
         }
         invalidate();
     }
 
-    public void requestPreviewRender() {
+    private void requestPreviewRender() {
         invalidate();
     }
 
@@ -87,5 +91,29 @@ public final class ViewportNativePreviewLayer extends MinecraftSurfaceView {
         List<ViewportNativePreview> ordered = new ArrayList<>(mPreviews);
         ordered.sort(Comparator.comparingLong(ViewportNativePreview::getNativePreviewOrder));
         mRenderOrder = List.copyOf(ordered);
+    }
+
+    private final class PreviewRegistration implements NativePreviewHost.Registration {
+        private final ViewportNativePreview mPreview;
+        private final AtomicBoolean mClosed = new AtomicBoolean();
+
+        private PreviewRegistration(ViewportNativePreview preview) {
+            mPreview = preview;
+        }
+
+        @Override
+        public void requestRender() {
+            if (!mClosed.get()) requestPreviewRender();
+        }
+
+        @Override
+        public void notifyOrderChanged() {
+            if (!mClosed.get()) notifyPreviewOrderChanged();
+        }
+
+        @Override
+        public void close() {
+            if (mClosed.compareAndSet(false, true)) unregisterPreview(mPreview);
+        }
     }
 }

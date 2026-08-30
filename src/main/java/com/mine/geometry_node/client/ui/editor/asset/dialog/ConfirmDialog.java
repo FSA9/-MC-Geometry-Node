@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
-import com.mine.geometry_node.client.ui.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.preview.EditorPreviewController;
+import com.mine.geometry_node.client.ui.editor.graph.preview.EditorPreviewController;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorOverlay;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.dialogue.OpenShop;

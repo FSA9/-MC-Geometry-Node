@@ -50,7 +50,7 @@ public final class ShellTerminalCoordinator implements TerminalSessionListener {
 
     public void bind(TerminalSession session) {
         if (this.session != null) throw new IllegalStateException("Coordinator is already bound");
-        this.session = Objects.requireNonNull(session, "session");
+        this.session = Objects.requireNonNull(session, "document");
     }
 
     public void setObserver(ShellTerminalObserver observer) {

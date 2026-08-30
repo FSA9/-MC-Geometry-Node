@@ -6,7 +6,7 @@ import icyllis.modernui.core.Context;
 
 import java.util.Objects;
 
-/** Owns the single settings-window session for one MainUI instance. */
+/** Owns the single settings-window document for one MainUI instance. */
 public final class SettingsWindowController implements AutoCloseable {
     private final Context context;
     private final MainUiServices services;

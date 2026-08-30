@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
-import com.mine.geometry_node.client.ui.common.SvgIconView;
-import com.mine.geometry_node.client.ui.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetPreviewKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;

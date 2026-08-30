@@ -7,13 +7,13 @@ import com.mine.geometry_node.client.ai.command.GraphQueryTarget;
 import com.mine.geometry_node.client.ai.command.GraphPatchCommandTarget;
 import com.mine.geometry_node.client.ai.graph.GraphPatch;
 import com.mine.geometry_node.client.ai.command.CommandInvocationContext;
-import com.mine.geometry_node.client.ui.session.DocumentManager;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.DocumentManager;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 
 import java.util.Objects;
 
-/** Graph target pinned for one resolved viewport/session/scope context. */
+/** Graph target pinned for one resolved viewport/document/scope context. */
 public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatchCommandTarget {
     private final GraphSession session;
     private final BoundGraphScope scope;
@@ -35,7 +35,7 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
                           String surfaceRef,
                           java.util.function.BooleanSupplier targetValidator,
                           GraphPatchIdempotencyStore idempotencyStore) {
-        this.session = Objects.requireNonNull(session, "session");
+        this.session = Objects.requireNonNull(session, "document");
         this.scope = Objects.requireNonNull(scope, "scope");
         this.surfaceRef = surfaceRef == null ? "" : surfaceRef;
         this.targetValidator = Objects.requireNonNull(targetValidator, "targetValidator");

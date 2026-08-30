@@ -124,7 +124,7 @@ public final class TerminalSession implements AutoCloseable {
             }
             if (cancelled) {
                 closeQuietly(newBackend);
-                throw new IOException("Terminal session was stopped while the backend was starting");
+                throw new IOException("Terminal document was stopped while the backend was starting");
             }
             return newRunId;
         } catch (IOException | RuntimeException error) {
@@ -282,7 +282,7 @@ public final class TerminalSession implements AutoCloseable {
 
     private void requireNotDisposed() {
         if (state == TerminalRunState.DISPOSED) {
-            throw new IllegalStateException("Terminal session is disposed");
+            throw new IllegalStateException("Terminal document is disposed");
         }
     }
 

@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.VanillaInventoryPicker;
+import com.mine.geometry_node.client.ui.editor.graph.picker.VanillaInventoryPicker;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.value.SlotRef;

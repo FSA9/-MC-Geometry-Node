@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.navigation;
 
-import com.mine.geometry_node.client.ui.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;

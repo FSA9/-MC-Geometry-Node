@@ -6,7 +6,7 @@ import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphDocumentStore;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 
 import java.io.File;

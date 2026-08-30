@@ -95,7 +95,7 @@ public final class QuestScreenService {
             }
             default -> result = QuestOperationResult.of(QuestOperationResult.Code.INVALID_TASK_KEY);
         }
-        // Keep the view stable for the lifetime of this open session. Actions return
+        // Keep the view stable for the lifetime of this open document. Actions return
         // their result, but changed quest data is read only when the screen is reopened.
         sendSnapshot(player, snapshot, result, false);
     }

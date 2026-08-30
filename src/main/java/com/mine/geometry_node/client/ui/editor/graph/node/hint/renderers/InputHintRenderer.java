@@ -7,7 +7,7 @@ import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButto
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.NumericInputSpec;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ExpandedTextInputOverlay;
+import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.PortType;
@@ -127,17 +127,28 @@ public class InputHintRenderer implements UIHintRenderer {
                                     EditorContext editorContext, Object currentValue) {
         InlineActionButton button = new InlineActionButton(context, "...");
 
-        button.setOnClickListener(v -> ExpandedTextInputOverlay.show(
-                context,
+        button.setOnClickListener(v -> {
+            if (editorContext == null) {
+                return;
+            }
+            ExpandedTextInputOverlay.show(
+                    context,
                     button,
-                    editorContext,
-                    nodeData,
-                    portId,
                     expectedType,
                     expectedType == PortType.RICH_TEXT
                             ? richTextValueForEditor(currentValue, input.getText().toString())
-                            : input.getText().toString()
-        ));
+                            : input.getText().toString(),
+                    text -> expectedType == PortType.RICH_TEXT
+                            ? ExpandedTextInputOverlay.parseRichText(text)
+                            : UIHintValueBinder.parseText(text.toString(), expectedType),
+                    parsedValue -> parsedValue != null || !UIHintValueBinder.requiresNumericValue(expectedType),
+                    parsedValue -> UIHintValueBinder.commit(
+                            editorContext,
+                            nodeData,
+                            portId,
+                            parsedValue instanceof RichTextValue richText ? richText.toMap() : parsedValue)
+            );
+        });
         return button;
     }
 

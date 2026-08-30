@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
-import com.mine.geometry_node.client.ui.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigDraft;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigRegistry;
@@ -19,7 +19,6 @@ import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;

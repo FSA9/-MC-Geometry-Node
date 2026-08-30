@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.terminal.command;
 
 import com.mine.geometry_node.client.ai.command.CommandResult;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;

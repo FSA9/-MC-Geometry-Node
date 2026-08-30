@@ -16,8 +16,8 @@ import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdConnect;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdReplaceGraphState;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
-import com.mine.geometry_node.client.ui.session.DocumentManager;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.DocumentManager;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -72,7 +72,7 @@ public final class GraphPatchTransactionService {
     public GraphPatchTransactionService(GraphSession session, BoundGraphScope scope,
                                         java.util.function.BooleanSupplier targetValidator,
                                         GraphPatchIdempotencyStore idempotencyStore) {
-        this.session = Objects.requireNonNull(session, "session");
+        this.session = Objects.requireNonNull(session, "document");
         this.scope = Objects.requireNonNull(scope, "scope");
         this.targetValidator = Objects.requireNonNull(targetValidator, "targetValidator");
         this.idempotencyStore = Objects.requireNonNull(idempotencyStore, "idempotencyStore");

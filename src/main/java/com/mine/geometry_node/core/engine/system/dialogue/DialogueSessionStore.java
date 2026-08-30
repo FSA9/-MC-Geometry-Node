@@ -18,7 +18,7 @@ final class DialogueSessionStore {
 
     DialogueSession create(UUID playerId, String graphId) {
         if (findForPlayer(playerId) != null) {
-            throw new IllegalStateException("Player already has an active dialogue session: " + playerId);
+            throw new IllegalStateException("Player already has an active dialogue document: " + playerId);
         }
         DialogueSession session = new DialogueSession(UUID.randomUUID(), playerId, graphId);
         sessions.put(session.getSessionId(), session);

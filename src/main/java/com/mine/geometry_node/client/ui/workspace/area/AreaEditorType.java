@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
-import com.mine.geometry_node.client.ui.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 
 public enum AreaEditorType {
     GRAPH_EDITOR("图编辑器", SvgIconView.Icon.GRAPH_EDITOR),

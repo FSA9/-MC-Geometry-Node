@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
-import com.mine.geometry_node.client.ui.common.ResizableDivider;
+import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;

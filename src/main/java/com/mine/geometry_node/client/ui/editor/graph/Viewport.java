@@ -1,10 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
+import com.mine.geometry_node.client.ui.components.nativepreview.NativePreviewHost;
+import com.mine.geometry_node.client.ui.components.nativepreview.ViewportNativePreview;
 import com.mine.geometry_node.client.ui.editor.graph.interaction.*;
 import com.mine.geometry_node.client.ui.editor.graph.connection.ConnectionLayer;
 import com.mine.geometry_node.client.ui.editor.graph.frame.FrameLayer;
 import com.mine.geometry_node.client.ui.editor.graph.layers.BackgroundLayer;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.InventoryItemPickerOverlay;
+import com.mine.geometry_node.client.ui.components.overlay.InventoryItemPickerOverlay;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorOverlay;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers.InteractiveHintTarget;
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeLayer;
@@ -19,7 +21,7 @@ import com.mine.geometry_node.client.ui.editor.graph.toolbar.ViewportToolbar;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import icyllis.modernui.core.Context;
@@ -35,7 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class Viewport extends FrameLayout implements InteractionContext {
+public class Viewport extends FrameLayout implements InteractionContext, NativePreviewHost {
 
     // ==========================================
     // 1. 模块状态
@@ -259,8 +261,9 @@ public class Viewport extends FrameLayout implements InteractionContext {
     @Override
     public ViewportCamera getCamera() { return mCamera; }
 
-    public ViewportNativePreviewLayer getNativePreviewLayer() {
-        return mNativePreviewLayer;
+    @Override
+    public NativePreviewHost.Registration registerNativePreview(ViewportNativePreview preview) {
+        return mNativePreviewLayer.registerPreview(preview);
     }
 
     public void updateTransform() {

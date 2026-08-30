@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
 import com.mine.geometry_node.client.ui.persistence.PathUtils;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.arc3d.core.ColorInfo;
 import icyllis.arc3d.core.ColorSpaces;

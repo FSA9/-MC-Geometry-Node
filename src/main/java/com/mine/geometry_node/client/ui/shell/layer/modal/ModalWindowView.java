@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.shell.layer.modal;
 
-import com.mine.geometry_node.client.ui.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
 import com.mine.geometry_node.client.ui.utils.UIUtils;

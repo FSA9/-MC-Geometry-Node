@@ -45,7 +45,7 @@ public final class EditorSessionStore {
             loaded.layout = sanitizeArea(loaded.layout, 0, leafCount);
             return loaded;
         } catch (Exception exception) {
-            System.err.println("[EditorSession] Failed to load editor session: " + exception.getMessage());
+            System.err.println("[EditorSession] Failed to load editor document: " + exception.getMessage());
             return new EditorSessionState();
         }
     }
@@ -69,7 +69,7 @@ public final class EditorSessionStore {
                 Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException exception) {
-            System.err.println("[EditorSession] Failed to save editor session: " + exception.getMessage());
+            System.err.println("[EditorSession] Failed to save editor document: " + exception.getMessage());
         }
     }
 

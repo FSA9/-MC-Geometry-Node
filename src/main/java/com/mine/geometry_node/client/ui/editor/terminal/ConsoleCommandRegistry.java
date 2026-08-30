@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.editor.terminal;
 import com.mine.geometry_node.client.ai.command.CommandCatalog;
 import com.mine.geometry_node.client.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ui.editor.terminal.command.ConsoleCommandAdapter;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 
 import java.util.List;
 

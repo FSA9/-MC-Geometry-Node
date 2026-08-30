@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.ai.command.GraphQueryTarget;
 import com.mine.geometry_node.client.ai.command.UiSurfaceQueryTarget;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.mine.geometry_node.client.ui.session.GraphSession;
+import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;

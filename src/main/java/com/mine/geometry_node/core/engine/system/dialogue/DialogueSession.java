@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Runtime state for one server-side dialogue session.
+ * Runtime state for one server-side dialogue document.
  * Lifecycle mutation is package-private and owned by {@link DialogueRuntime}.
  */
 public final class DialogueSession {
@@ -149,7 +149,7 @@ public final class DialogueSession {
     }
 
     /**
-     * Lifecycle policy copied from BeginDialogue into each runtime session.
+     * Lifecycle policy copied from BeginDialogue into each runtime document.
      */
     public record Policy(boolean allowMultiPlayer) {
         public static final Policy DEFAULT = new Policy(true);

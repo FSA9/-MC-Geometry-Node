@@ -2,7 +2,7 @@ package com.mine.geometry_node.mixin;
 
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.EntityTemplatePickerController;
+import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mojang.blaze3d.platform.InputConstants;
 import icyllis.modernui.mc.MuiScreen;
 import net.minecraft.CrashReport;

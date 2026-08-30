@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.settings.editor;
 
-import com.mine.geometry_node.client.ui.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigDraft;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigEntry;
 import com.mine.geometry_node.client.ui.persistence.config.InputBinding;

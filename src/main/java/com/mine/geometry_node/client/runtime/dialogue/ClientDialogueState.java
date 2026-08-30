@@ -23,7 +23,7 @@ public final class ClientDialogueState {
     public static void handleOpen(PacketOpenDialogue packet) {
         if (!DialogueStyleRenderer.supports(packet.styleId())) {
             GeometryNode.LOGGER.warn(
-                    "[ClientDialogueState] No renderer is registered for dialogue style '{}'; closing session {}.",
+                    "[ClientDialogueState] No renderer is registered for dialogue style '{}'; closing document {}.",
                     packet.styleId(),
                     packet.sessionId()
             );

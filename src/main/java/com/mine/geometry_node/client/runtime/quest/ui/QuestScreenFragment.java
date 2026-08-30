@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.runtime.quest.ui;
 import com.mine.geometry_node.client.runtime.dialogue.ModernDialogueText;
 import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.runtime.quest.ClientQuestScreenState;
-import com.mine.geometry_node.client.ui.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
