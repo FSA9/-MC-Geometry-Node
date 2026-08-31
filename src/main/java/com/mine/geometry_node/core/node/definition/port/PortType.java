@@ -15,50 +15,44 @@ import java.util.List;
  * 定义节点端口可以传递的数据类型。
  */
 public enum PortType {
-    EXECUTION("执行", 0xFFFFFFFF, null, true),
-    BEHAVIOR_STRUCTURE("行为结构", 0xFF5C9E72, null, true),
+    EXECUTION(0xFFFFFFFF, null, true),
+    BEHAVIOR_STRUCTURE(0xFF5C9E72, null, true),
 
-    INTEGER("整数", 0xFF4A90E2, 0),
-    LONG("长整数", 0xFF3F7DC2, 0L),
-    FLOAT("浮点数", 0xFF50C878, 0.0f),
-    BOOLEAN("布尔", 0xFFE74C3C, false),
-    STRING("字符串", 0xFF9B59B6, ""),
-    PATH("路径", 0xFF5F6670, ""),
-    RICH_TEXT("富文本", 0xFFD56BE8, RichTextValue.EMPTY),
-    ENTITY("实体", 0xFFE91E63, null),
-    ENTITY_TEMPLATE("实体模板", 0xFFFF5C8A, EntityTemplateValue.EMPTY),
-    ITEM("物品", 0xFFFF8A65, null),
-    ITEM_STACK("物品栈", 0xFFFF7043, null),
-    SLOT("槽位", 0xFFB0BEC5, SlotRef.DEFAULT.serialize()),
-    BLOCK("方块", 0xFF8D6E63, null),
-    GEOMETRY("几何", 0xFF26A69A, GeometryValue.EMPTY),
-    XYZ("XYZ", 0xFF00BCD4, List.of(0.0f, 0.0f, 0.0f)),
-    COLOR("颜色", 0xFFFFD54F, ColorValue.WHITE),
-    LIST("列表", 0xFFFF9800, List.of()),
-    DIALOGUE_CHOICE("对话选项", 0xFFFF80AB, null),
-    QUEST_CONDITION("任务条件", 0xFFFFA726, null),
-    DICT("字典", 0xFFE67E22, java.util.Map.of()),
-    SHOP("商店", 0xFFFFB74D, java.util.Map.of("offers", List.of())),
-    ANY("任意", 0xFF95A5A6, null);
+    INTEGER(0xFF4A90E2, 0),
+    LONG(0xFF3F7DC2, 0L),
+    FLOAT(0xFF50C878, 0.0f),
+    BOOLEAN(0xFFE74C3C, false),
+    STRING(0xFF9B59B6, ""),
+    PATH(0xFF5F6670, ""),
+    RICH_TEXT(0xFFD56BE8, RichTextValue.EMPTY),
+    ENTITY(0xFFE91E63, null),
+    ENTITY_TEMPLATE(0xFFFF5C8A, EntityTemplateValue.EMPTY),
+    ITEM(0xFFFF8A65, null),
+    ITEM_STACK(0xFFFF7043, null),
+    SLOT(0xFFB0BEC5, SlotRef.DEFAULT.serialize()),
+    BLOCK(0xFF8D6E63, null),
+    GEOMETRY(0xFF26A69A, GeometryValue.EMPTY),
+    XYZ(0xFF00BCD4, List.of(0.0f, 0.0f, 0.0f)),
+    COLOR(0xFFFFD54F, ColorValue.WHITE),
+    LIST(0xFFFF9800, List.of()),
+    DIALOGUE_CHOICE(0xFFFF80AB, null),
+    QUEST_CONDITION(0xFFFFA726, null),
+    DICT(0xFFE67E22, java.util.Map.of()),
+    SHOP(0xFFFFB74D, java.util.Map.of("offers", List.of())),
+    ANY(0xFF95A5A6, null);
 
-    private final String displayName;
     private final int color;
     private final Object defaultValue;
     private final boolean flow;
 
-    PortType(String displayName, int color, Object defaultValue) {
-        this(displayName, color, defaultValue, false);
+    PortType(int color, Object defaultValue) {
+        this(color, defaultValue, false);
     }
 
-    PortType(String displayName, int color, Object defaultValue, boolean flow) {
-        this.displayName = displayName;
+    PortType(int color, Object defaultValue, boolean flow) {
         this.color = color;
         this.defaultValue = defaultValue;
         this.flow = flow;
-    }
-
-    public String getDisplayName() {
-        return displayName;
     }
 
     public int getColor() {
