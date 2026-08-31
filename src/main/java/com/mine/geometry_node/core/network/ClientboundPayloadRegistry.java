@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAccepted;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferQueued;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadChunk;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadComplete;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanResponse;
@@ -43,6 +44,7 @@ public final class ClientboundPayloadRegistry {
 
     static {
         add(PacketAssetTransferAccepted.TYPE, PacketAssetTransferAccepted.STREAM_CODEC);
+        add(PacketAssetTransferQueued.TYPE, PacketAssetTransferQueued.STREAM_CODEC);
         add(PacketAssetTransferPlanResponse.TYPE, PacketAssetTransferPlanResponse.STREAM_CODEC);
         add(PacketAssetTransferDownloadChunk.TYPE, PacketAssetTransferDownloadChunk.STREAM_CODEC);
         add(PacketAssetTransferUploadAck.TYPE, PacketAssetTransferUploadAck.STREAM_CODEC);

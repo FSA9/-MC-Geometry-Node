@@ -29,14 +29,16 @@ import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
+import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetConflict;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
+import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.transfer.AssetTransferPlanKind;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetCapabilitiesRequest;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
@@ -49,6 +51,8 @@ import net.minecraft.network.chat.Component;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -215,6 +219,50 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 targetDirectory -> startDownload(remoteEntries, targetDirectory)
         );
         dialog.show(this);
+    }
+
+    @Override
+    public void createRemoteGraph(String targetPath, Runnable onSuccess) {
+        if (targetPath == null || targetPath.isBlank() || mBrowserPanel == null
+                || !mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.UPLOAD)) return;
+        mIoTasks.runSilent(context -> {
+            Path temporary = Files.createTempFile("geometry-node-new-graph-", ".json");
+            try {
+                Files.writeString(temporary, GraphJsonIO.toJson(new NodeGraph()), StandardCharsets.UTF_8);
+                return temporary;
+            } catch (Exception exception) {
+                Files.deleteIfExists(temporary);
+                throw exception;
+            }
+        }, temporary -> {
+            java.util.UUID jobId;
+            try {
+                jobId = ClientAssetTransferService.INSTANCE.submit(List.of(ClientAssetTransferRequest.upload(
+                        temporary, targetPath, AssetTransferConflictPolicy.FAIL_IF_EXISTS)));
+            } catch (RuntimeException exception) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (java.io.IOException cleanupException) {
+                    exception.addSuppressed(cleanupException);
+                }
+                System.err.println("[AssetBrowser] Failed to submit generated graph: " + exception.getMessage());
+                return;
+            }
+            ClientAssetTransferService.INSTANCE.completion(jobId).thenAccept(result -> {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (java.io.IOException exception) {
+                    System.err.println("[AssetBrowser] Failed to remove generated graph temporary file: "
+                            + temporary);
+                }
+                if (result.completedFileCount() == result.files().size()) {
+                    post(() -> {
+                        if (mBrowserPanel != null) mBrowserPanel.refreshFileList(onSuccess);
+                    });
+                }
+            });
+        }, exception -> System.err.println("[AssetBrowser] Failed to create remote graph: "
+                + exception.getMessage()));
     }
 
     /**
@@ -476,14 +524,14 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         mTransferPlanRequestIds.add(requestId);
     }
 
-    private void finishDownload(List<RemoteAssetEntry> files, File targetDirectory) {
+    private void finishDownload(List<AssetDescriptor> files, File targetDirectory) {
         List<String> conflicts = findLocalDownloadConflicts(files, targetDirectory);
         if (conflicts.isEmpty()) {
             submitDownload(files, targetDirectory, false, List.of());
             return;
         }
 
-        ConflictResolutionState<RemoteAssetEntry> resolution =
+        ConflictResolutionState<AssetDescriptor> resolution =
                 new ConflictResolutionState<>(files, conflicts, file -> AssetPathUtils.normalizeRemoteFilePath(file.path()));
         new OverwriteConfirmDialog(getContext(), conflicts, decision -> {
             switch (decision) {
@@ -505,13 +553,13 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         }).show(this);
     }
 
-    private void submitDownload(List<RemoteAssetEntry> files, File targetDirectory,
+    private void submitDownload(List<AssetDescriptor> files, File targetDirectory,
                                 boolean overwrite, List<String> overwritePaths) {
         if (files.isEmpty()) return;
         Path root = targetDirectory.toPath().toAbsolutePath().normalize();
         Set<String> overwriteSet = new HashSet<>(overwritePaths);
         List<ClientAssetTransferRequest> requests = new ArrayList<>();
-        for (RemoteAssetEntry file : files) {
+        for (AssetDescriptor file : files) {
             String remotePath = AssetPathUtils.normalizeRemoteFilePath(file.path());
             Path target = root.resolve(remotePath).normalize();
             if (!target.startsWith(root)) continue;
@@ -528,10 +576,10 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         }));
     }
 
-    private List<String> findLocalDownloadConflicts(List<RemoteAssetEntry> files, File targetDirectory) {
+    private List<String> findLocalDownloadConflicts(List<AssetDescriptor> files, File targetDirectory) {
         List<String> conflicts = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (RemoteAssetEntry file : files) {
+        for (AssetDescriptor file : files) {
             String path = AssetPathUtils.normalizeRemoteFilePath(file.path());
             if (!seen.add(path)) continue;
             File target = new File(targetDirectory, path);

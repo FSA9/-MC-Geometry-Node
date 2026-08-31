@@ -11,6 +11,9 @@ public final class AssetTransferConfigKeys {
 
     public static final String MAX_CONCURRENT_UPLOADS_PER_PLAYER = "maxConcurrentUploadsPerPlayer";
     public static final String MAX_CONCURRENT_DOWNLOADS_PER_PLAYER = "maxConcurrentDownloadsPerPlayer";
+    public static final String MAX_CONCURRENT_UPLOADS_GLOBAL = "maxConcurrentUploadsGlobal";
+    public static final String MAX_CONCURRENT_DOWNLOADS_GLOBAL = "maxConcurrentDownloadsGlobal";
+    public static final String MAX_QUEUED_TRANSFERS = "maxQueuedTransfers";
     public static final String IDLE_TIMEOUT_SECONDS = "idleTimeoutSeconds";
 
     private AssetTransferConfigKeys() {

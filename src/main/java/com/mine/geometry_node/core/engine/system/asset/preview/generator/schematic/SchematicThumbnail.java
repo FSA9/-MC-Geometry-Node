@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.asset.schematic;
+package com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic;
 
 import java.util.List;
 

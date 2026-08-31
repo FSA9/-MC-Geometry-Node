@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.schematic;
 
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic.SchematicThumbnail;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic.SchematicThumbnailReader;
 import icyllis.modernui.view.View;
 
 import java.io.File;
@@ -204,7 +206,7 @@ final class SchematicThumbnailCache {
 
             SchematicThumbnail decoded;
             try {
-                decoded = SchematicThumbnailReader.read(file);
+                decoded = SchematicThumbnailReader.read(file.toPath());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 removeIfCurrent(this);

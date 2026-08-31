@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.network.packet.asset.transfer;
 
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetConflict;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
+import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.network.packet.asset.AssetPacketCodecs;
 import com.mine.geometry_node.core.network.packet.asset.AssetPacketLimits;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -17,7 +17,7 @@ public record PacketAssetTransferPlanResponse(
         AssetTransferPlanKind kind,
         boolean success,
         String message,
-        List<RemoteAssetEntry> files,
+        List<AssetDescriptor> files,
         List<RemoteAssetConflict> conflicts
 ) implements CustomPacketPayload {
     public static final Type<PacketAssetTransferPlanResponse> TYPE =
@@ -47,7 +47,7 @@ public record PacketAssetTransferPlanResponse(
         buffer.writeVarInt(kind.ordinal());
         buffer.writeBoolean(success);
         buffer.writeUtf(message, AssetTransferPacketCodecs.MAX_DETAIL_LENGTH);
-        AssetPacketCodecs.writeRemoteAssetEntries(
+        AssetPacketCodecs.writeAssetDescriptors(
                 buffer, files, AssetPacketLimits.MAX_TRANSFER_MANIFEST_ENTRIES);
         AssetPacketCodecs.writeBoundedCount(
                 buffer, conflicts.size(), AssetPacketLimits.MAX_TRANSFER_CONFLICTS, "transfer conflict");
@@ -58,8 +58,8 @@ public record PacketAssetTransferPlanResponse(
         }
     }
 
-    private static List<RemoteAssetEntry> readFiles(RegistryFriendlyByteBuf buffer) {
-        return AssetPacketCodecs.readRemoteAssetEntries(
+    private static List<AssetDescriptor> readFiles(RegistryFriendlyByteBuf buffer) {
+        return AssetPacketCodecs.readAssetDescriptors(
                 buffer, AssetPacketLimits.MAX_TRANSFER_MANIFEST_ENTRIES);
     }
 

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.model;
 
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
+
 import java.util.EnumSet;
 import java.util.Set;
 

@@ -463,13 +463,12 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public void createRemoteDirectoryFromInput() {
-        navigateToRemote(AssetPathUtils.remotePathFromInput(mPathInput.getText().toString()), true);
+        mActionController.createRemoteDirectory(
+                AssetPathUtils.remotePathFromInput(mPathInput.getText().toString()), true);
     }
 
     public void createRemoteFolderInCurrentDirectory() {
-        String name = "新建文件夹";
-        String target = mRemoteDirectory.isEmpty() ? name : mRemoteDirectory + "/" + name;
-        navigateToRemote(target, true);
+        mActionController.triggerNewItem(true);
     }
 
     public void createLocalFolderInCurrentDirectory() {
@@ -565,7 +564,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         }
     }
 
-    void refreshFileList(Runnable afterRender) {
+    public void refreshFileList(Runnable afterRender) {
         refreshFileList(false, afterRender);
     }
 
@@ -850,6 +849,10 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
             }
         }
         return result;
+    }
+
+    List<AssetEntry> visibleEntriesSnapshot() {
+        return List.copyOf(mVisibleEntries);
     }
 
     List<File> getSelectedLocalFiles() {

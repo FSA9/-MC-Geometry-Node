@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.model;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
 
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -25,21 +26,21 @@ public final class AssetTypeRegistry {
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.COPY, AssetTypeAction.MOVE,
                         AssetTypeAction.DELETE, AssetTypeAction.RENAME,
                         AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD)));
-        register(new AssetType(
-                GRAPH_ID, 0xFF88CCFF, false, true, AssetPreviewKind.NONE,
+        register(assetType(
+                GRAPH_ID, 0xFF88CCFF, false, true,
                 EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.OPEN, AssetTypeAction.PICK, AssetTypeAction.FAVORITE,
                         AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD, AssetTypeAction.COPY,
                         AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME)));
-        register(new AssetType(
-                SCHEMATIC_ID, 0xFF86B8FF, false, true, AssetPreviewKind.SCHEMATIC,
+        register(assetType(
+                SCHEMATIC_ID, 0xFF86B8FF, false, true,
                 EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.FAVORITE,
                         AssetTypeAction.COPY,
                         AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME,
                         AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD)));
-        register(new AssetType(
-                IMAGE_ID, 0xFF77C99D, false, true, AssetPreviewKind.IMAGE,
+        register(assetType(
+                IMAGE_ID, 0xFF77C99D, false, true,
                 EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.FAVORITE,
                         AssetTypeAction.COPY,
@@ -58,6 +59,16 @@ public final class AssetTypeRegistry {
             throw new IllegalArgumentException("duplicate asset type: " + type.id());
         }
         mTypes.put(type.id(), type);
+    }
+
+    private static AssetType assetType(String id, int defaultColor, boolean directory, boolean displayInBrowser,
+                                       java.util.Set<AssetSourceKind> sources,
+                                       java.util.Set<AssetTypeAction> actions) {
+        if (AssetTypeCatalog.definition(id) == null) {
+            throw new IllegalArgumentException("asset type is not registered in the common catalog: " + id);
+        }
+        return new AssetType(id, defaultColor, directory, displayInBrowser,
+                AssetTypeCatalog.previewKind(id), sources, actions);
     }
 
     public synchronized AssetType get(String id) {

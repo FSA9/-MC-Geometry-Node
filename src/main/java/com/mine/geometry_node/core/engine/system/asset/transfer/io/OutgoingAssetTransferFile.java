@@ -66,6 +66,7 @@ public final class OutgoingAssetTransferFile implements AutoCloseable {
 
     public Path sourcePath() { return sourcePath; }
     public long totalBytes() { return totalBytes; }
+    public long lastModifiedMillis() { return lastModifiedMillis; }
     public String sha256() { return sha256; }
     @Override public void close() throws IOException { channel.close(); }
 }

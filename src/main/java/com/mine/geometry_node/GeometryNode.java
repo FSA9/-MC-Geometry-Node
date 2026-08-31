@@ -22,7 +22,7 @@ import com.mine.geometry_node.core.engine.system.quest.QuestService;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
 import com.mine.geometry_node.core.engine.system.marker.MarkerService;
 import com.mine.geometry_node.core.engine.system.chunk_loading.EntityChunkLoadingService;
-import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferServerConfig;
+import com.mine.geometry_node.core.config.GeometryNodeServerConfig;
 import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleRegistry;
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttachment;
@@ -135,7 +135,7 @@ public class GeometryNode {
     public GeometryNode(IEventBus modEventBus, ModContainer modContainer) {
         NeoForge.EVENT_BUS.register(this);
         modEventBus.addListener(EntityChunkLoadingService::registerTicketController);
-        modContainer.registerConfig(ModConfig.Type.SERVER, AssetTransferServerConfig.SPEC,
+        modContainer.registerConfig(ModConfig.Type.SERVER, GeometryNodeServerConfig.SPEC,
                 "geometry_node-server.toml");
 
         // 初始化网络包

@@ -3,7 +3,12 @@ package com.mine.geometry_node.core.engine.system.asset.preview;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.PreviewSourceChangedException;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.PreviewUnavailableException;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerAssetPreviewGenerator;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerAssetPreviewGeneratorRegistry;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerImagePreviewGenerator;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerSchematicPreviewGenerator;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -29,7 +34,7 @@ public final class ServerAssetPreviewService implements AutoCloseable {
     public static final ServerAssetPreviewService INSTANCE = new ServerAssetPreviewService();
 
     private final ServerAssetPreviewStore store = new ServerAssetPreviewStore();
-    private final ServerImagePreviewGenerator imageGenerator = new ServerImagePreviewGenerator(store);
+    private final ServerAssetPreviewGeneratorRegistry generators = new ServerAssetPreviewGeneratorRegistry();
     private final AssetTransferIoExecutor io = new AssetTransferIoExecutor("GeometryNode-Preview-ServerIO", 2, 64);
     private final Map<RequestKey, Boolean> active = new ConcurrentHashMap<>();
     private final Map<AssetPreviewRevision, CompletableFuture<Optional<ServerAssetPreviewStore.StoredPreview>>>
@@ -37,11 +42,18 @@ public final class ServerAssetPreviewService implements AutoCloseable {
     private boolean initialized;
 
     private ServerAssetPreviewService() {
+        registerGenerator(AssetPreviewKind.IMAGE, new ServerImagePreviewGenerator(store));
+        registerGenerator(AssetPreviewKind.SCHEMATIC, new ServerSchematicPreviewGenerator(store));
+    }
+
+    public void registerGenerator(AssetPreviewKind kind, ServerAssetPreviewGenerator generator) {
+        generators.register(kind, generator);
     }
 
     public synchronized void init() {
         if (initialized) return;
         initialized = true;
+        ServerAssetPreviewAssociations.init();
         PlayerEvent.PLAYER_QUIT.register(player ->
                 active.keySet().removeIf(key -> key.playerId.equals(player.getUUID())));
     }
@@ -54,24 +66,13 @@ public final class ServerAssetPreviewService implements AutoCloseable {
         }
 
         AssetPreviewRevision revision = packet.request().revision();
-        Path source;
-        try {
-            source = validateSource(player.level().getServer(), revision);
-        } catch (StaleRevisionException exception) {
-            result(player, requestId, AssetPreviewResultCode.STALE_REVISION, "stale_revision");
-            return;
-        } catch (Exception exception) {
-            result(player, requestId, AssetPreviewResultCode.INVALID_REQUEST, "invalid_source");
-            return;
-        }
-
         RequestKey key = new RequestKey(player.getUUID(), requestId);
         if (active.putIfAbsent(key, Boolean.TRUE) != null) {
             result(player, requestId, AssetPreviewResultCode.INVALID_REQUEST, "duplicate_request");
             return;
         }
 
-        resolvePreview(player.level().getServer(), source, revision).whenComplete((stored, error) ->
+        resolvePreview(player.level().getServer(), revision).whenComplete((stored, error) ->
                 player.level().getServer().execute(() -> completeResolution(player, key, stored, error)));
     }
 
@@ -80,12 +81,15 @@ public final class ServerAssetPreviewService implements AutoCloseable {
     }
 
     private CompletableFuture<Optional<ServerAssetPreviewStore.StoredPreview>> resolvePreview(
-            MinecraftServer server, Path source, AssetPreviewRevision revision) {
+            MinecraftServer server, AssetPreviewRevision revision) {
         return inFlight.computeIfAbsent(revision, ignored -> {
             CompletableFuture<Optional<ServerAssetPreviewStore.StoredPreview>> future = io.submit(() -> {
+                Path source = validateSource(server, revision);
                 Optional<ServerAssetPreviewStore.StoredPreview> cached = store.find(server, revision);
-                if (cached.isPresent() || revision.identity().kind() != AssetPreviewKind.IMAGE) return cached;
-                return Optional.of(imageGenerator.generate(server, source, revision));
+                if (cached.isPresent()) return cached;
+                ServerAssetPreviewGenerator generator = generators.get(revision.identity().kind());
+                return generator == null ? Optional.empty()
+                        : Optional.of(generator.generate(server, source, revision));
             });
             future.whenComplete((value, error) -> inFlight.remove(revision, future));
             return future;
@@ -97,9 +101,13 @@ public final class ServerAssetPreviewService implements AutoCloseable {
         if (!active.containsKey(key)) return;
         if (error != null) {
             active.remove(key);
-            if (hasCause(error, ServerImagePreviewGenerator.SourceChangedException.class)) {
+            if (hasCause(error, PreviewSourceChangedException.class)) {
                 result(player, key.requestId, AssetPreviewResultCode.STALE_REVISION, "stale_revision");
-            } else if (hasCause(error, ServerImagePreviewGenerator.PreviewUnavailableException.class)) {
+            } else if (hasCause(error, StaleRevisionException.class)) {
+                result(player, key.requestId, AssetPreviewResultCode.STALE_REVISION, "stale_revision");
+            } else if (hasCause(error, InvalidPreviewRequestException.class)) {
+                result(player, key.requestId, AssetPreviewResultCode.INVALID_REQUEST, "invalid_source");
+            } else if (hasCause(error, PreviewUnavailableException.class)) {
                 result(player, key.requestId, AssetPreviewResultCode.NOT_AVAILABLE, "not_available");
             } else {
                 result(player, key.requestId, AssetPreviewResultCode.IO_FAILURE, "preview_generation_failed");
@@ -134,16 +142,25 @@ public final class ServerAssetPreviewService implements AutoCloseable {
     }
 
     private static Path validateSource(MinecraftServer server, AssetPreviewRevision revision) throws Exception {
-        Path source = RemoteAssetFileService.resolveTransferSource(server, revision.identity().remotePath());
-        AssetPreviewKind actualKind = AssetPreviewKind.fromAssetType(AssetTypeCatalog.inspect(source).typeId());
-        if (actualKind != revision.identity().kind()) {
-            throw new IllegalArgumentException("Preview source type does not match request");
+        try {
+            if (revision.formatVersion() != AssetPreviewLimits.FORMAT_VERSION) {
+                throw new InvalidPreviewRequestException();
+            }
+            Path source = RemoteAssetFileService.resolveTransferSource(server, revision.identity().remotePath());
+            AssetPreviewKind actualKind = AssetTypeCatalog.previewKind(AssetTypeCatalog.inspect(source).typeId());
+            if (!actualKind.equals(revision.identity().kind())) {
+                throw new InvalidPreviewRequestException();
+            }
+            if (Files.size(source) != revision.sourceSize()
+                    || Files.getLastModifiedTime(source).toMillis() != revision.sourceLastModified()) {
+                throw new StaleRevisionException();
+            }
+            return source;
+        } catch (StaleRevisionException | InvalidPreviewRequestException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new InvalidPreviewRequestException(exception);
         }
-        if (Files.size(source) != revision.sourceSize()
-                || Files.getLastModifiedTime(source).toMillis() != revision.sourceLastModified()) {
-            throw new StaleRevisionException();
-        }
-        return source;
     }
 
     private static boolean hasCause(Throwable error, Class<? extends Throwable> type) {
@@ -168,5 +185,14 @@ public final class ServerAssetPreviewService implements AutoCloseable {
     }
 
     private static final class StaleRevisionException extends Exception {
+    }
+
+    private static final class InvalidPreviewRequestException extends Exception {
+        private InvalidPreviewRequestException() {
+        }
+
+        private InvalidPreviewRequestException(Throwable cause) {
+            super(cause);
+        }
     }
 }

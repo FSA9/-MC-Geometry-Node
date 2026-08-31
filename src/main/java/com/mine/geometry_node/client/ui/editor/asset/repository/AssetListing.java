@@ -6,20 +6,18 @@ import java.util.List;
 import java.util.Map;
 
 public record AssetListing(boolean success, AssetLocation location, List<AssetEntry> entries,
-                           Map<String, List<String>> tagsByKey,
-                           Map<String, String> graphTypeIdsByKey) {
+                           Map<String, List<String>> tagsByKey) {
     public AssetListing {
         entries = entries == null ? List.of() : List.copyOf(entries);
         tagsByKey = tagsByKey == null ? Map.of() : Map.copyOf(tagsByKey);
-        graphTypeIdsByKey = graphTypeIdsByKey == null ? Map.of() : Map.copyOf(graphTypeIdsByKey);
     }
 
     public static AssetListing empty(AssetLocation location) {
-        return new AssetListing(true, location, List.of(), Map.of(), Map.of());
+        return new AssetListing(true, location, List.of(), Map.of());
     }
 
     public static AssetListing failure(AssetLocation location) {
-        return new AssetListing(false, location, List.of(), Map.of(), Map.of());
+        return new AssetListing(false, location, List.of(), Map.of());
     }
 
     public List<String> tagsFor(AssetEntry entry) {
@@ -27,6 +25,6 @@ public record AssetListing(boolean success, AssetLocation location, List<AssetEn
     }
 
     public String graphTypeIdFor(AssetEntry entry) {
-        return entry == null ? "" : graphTypeIdsByKey.getOrDefault(entry.key(), "");
+        return entry == null ? "" : entry.metadata().variantId();
     }
 }

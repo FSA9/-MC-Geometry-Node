@@ -1,9 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.asset.service;
 
+import com.mine.geometry_node.client.asset.file.AssetFileOperations;
+import com.mine.geometry_node.client.asset.file.AssetFileTransactionManager;
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskContext;
-import com.mine.geometry_node.client.ui.persistence.graphfile.GraphDocumentStore;
-import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 
 import java.io.File;
@@ -35,7 +35,7 @@ public final class LocalAssetService {
                 validateSource(source);
                 Path sourcePath = normalize(source.toPath());
                 plans.add(new DeletePlan(source, sourcePath,
-                        GraphDocumentStore.siblingTemporary(sourcePath, "delete")));
+                        AssetFileOperations.siblingTemporary(sourcePath, "delete")));
             } catch (Exception e) {
                 failedPaths.add(pathLabel(source));
             }
@@ -48,9 +48,9 @@ public final class LocalAssetService {
             throw e;
         }
         try {
-            GraphFileRegistry.Mutation mutation = GraphFileRegistry.INSTANCE.beginDelete(
-                    plans.stream().map(DeletePlan::sourcePath).toList());
-            mutation.commit(() -> {
+            AssetFileTransactionManager.INSTANCE.mutate(
+                    AssetFileTransactionManager.deletes(
+                            plans.stream().map(DeletePlan::sourcePath).toList()), () -> {
                 commitDeletes(plans);
                 return null;
             });
@@ -100,7 +100,7 @@ public final class LocalAssetService {
                 validateSource(source);
                 File destination = resolveAvailableDestination(targetDirectory, source.getName(), source.isDirectory());
                 ensureNotNestedInSource(source, destination);
-                temporary = GraphDocumentStore.siblingTemporary(destination.toPath(), "copy");
+                temporary = AssetFileOperations.siblingTemporary(destination.toPath(), "copy");
                 copyRecursively(source.toPath(), temporary, context);
                 plans.add(new CopyPlan(source, normalize(destination.toPath()), temporary));
             } catch (InterruptedException e) {
@@ -122,7 +122,7 @@ public final class LocalAssetService {
             throw e;
         }
         try {
-            GraphDocumentStore.INSTANCE.withStructureMutation(() -> {
+            AssetFileTransactionManager.INSTANCE.mutateStructure(() -> {
                 commitCopies(plans);
                 return null;
             });
@@ -160,9 +160,9 @@ public final class LocalAssetService {
                 Path sourcePath = normalize(source.toPath());
                 Path destinationPath = normalize(destination.toPath());
                 boolean direct = sameFileStore(sourcePath, normalize(targetDirectory.toPath()));
-                Path trash = GraphDocumentStore.siblingTemporary(sourcePath, "move-source");
+                Path trash = AssetFileOperations.siblingTemporary(sourcePath, "move-source");
                 if (!direct) {
-                    temporary = GraphDocumentStore.siblingTemporary(destinationPath, "move-target");
+                    temporary = AssetFileOperations.siblingTemporary(destinationPath, "move-target");
                     copyRecursively(sourcePath, temporary, context);
                 }
                 plans.add(new MovePlan(source, sourcePath, destinationPath, temporary, trash, direct));
@@ -187,8 +187,8 @@ public final class LocalAssetService {
         Map<Path, Path> pathChanges = new LinkedHashMap<>();
         for (MovePlan plan : plans) pathChanges.put(plan.sourcePath(), plan.destinationPath());
         try {
-            GraphFileRegistry.Mutation mutation = GraphFileRegistry.INSTANCE.beginMoves(pathChanges);
-            mutation.commit(() -> {
+            AssetFileTransactionManager.INSTANCE.mutate(
+                    AssetFileTransactionManager.moves(pathChanges), () -> {
                 commitMoves(plans);
                 return null;
             });
@@ -239,7 +239,7 @@ public final class LocalAssetService {
         if (directory == null || !directory.isDirectory()) throw new IOException("目标目录无效");
         validateSourceName(sourceName);
         context.enterCommitPhase();
-        Path created = GraphDocumentStore.INSTANCE.withStructureMutation(() -> {
+        Path created = AssetFileTransactionManager.INSTANCE.mutateStructure(() -> {
             File destination = resolveAvailableDestination(directory, sourceName, directoryItem);
             if (directoryItem) Files.createDirectory(destination.toPath());
             else if (initialContent != null) {
@@ -269,9 +269,9 @@ public final class LocalAssetService {
         if (Files.exists(destinationPath)) return new RenameResult(source, source, false);
 
         context.enterCommitPhase();
-        GraphFileRegistry.Mutation mutation = GraphFileRegistry.INSTANCE.beginMove(sourcePath, destinationPath);
-        mutation.commit(() -> {
-            GraphDocumentStore.moveNew(sourcePath, destinationPath);
+        AssetFileTransactionManager.INSTANCE.mutate(
+                AssetFileTransactionManager.moves(Map.of(sourcePath, destinationPath)), () -> {
+            AssetFileOperations.moveNew(sourcePath, destinationPath);
             return null;
         });
         context.progress("重命名完成", 1, 1);
@@ -315,7 +315,7 @@ public final class LocalAssetService {
                 }
                 return;
             }
-            if (!Files.isRegularFile(path) || !AssetTypeCatalog.isTransferablePath(path.toString())) return;
+            if (!AssetTypeCatalog.isRecognizedAsset(path)) return;
             String relative = base.relativize(path).toString().replace('\\', '/');
             String targetPath = targetPrefix.isEmpty() ? relative : targetPrefix + "/" + relative;
             targetPath = AssetPathUtils.normalizeRemoteFilePath(targetPath);
@@ -332,14 +332,14 @@ public final class LocalAssetService {
         List<CopyPlan> committed = new ArrayList<>();
         try {
             for (CopyPlan plan : plans) {
-                GraphDocumentStore.moveNew(plan.temporaryPath(), plan.destinationPath());
+                AssetFileOperations.moveNew(plan.temporaryPath(), plan.destinationPath());
                 committed.add(plan);
             }
         } catch (IOException e) {
             for (int i = committed.size() - 1; i >= 0; i--) {
                 CopyPlan plan = committed.get(i);
                 try {
-                    GraphDocumentStore.moveNew(plan.destinationPath(), plan.temporaryPath());
+                    AssetFileOperations.moveNew(plan.destinationPath(), plan.temporaryPath());
                 } catch (IOException rollbackError) {
                     e.addSuppressed(rollbackError);
                 }
@@ -352,14 +352,14 @@ public final class LocalAssetService {
         List<DeletePlan> committed = new ArrayList<>();
         try {
             for (DeletePlan plan : plans) {
-                GraphDocumentStore.moveNew(plan.sourcePath(), plan.trashPath());
+                AssetFileOperations.moveNew(plan.sourcePath(), plan.trashPath());
                 committed.add(plan);
             }
         } catch (IOException e) {
             for (int i = committed.size() - 1; i >= 0; i--) {
                 DeletePlan plan = committed.get(i);
                 try {
-                    GraphDocumentStore.moveNew(plan.trashPath(), plan.sourcePath());
+                    AssetFileOperations.moveNew(plan.trashPath(), plan.sourcePath());
                 } catch (IOException rollbackError) {
                     e.addSuppressed(rollbackError);
                 }
@@ -373,14 +373,14 @@ public final class LocalAssetService {
         try {
             for (MovePlan plan : plans) {
                 if (plan.direct()) {
-                    GraphDocumentStore.moveNew(plan.sourcePath(), plan.destinationPath());
+                    AssetFileOperations.moveNew(plan.sourcePath(), plan.destinationPath());
                 } else {
-                    GraphDocumentStore.moveNew(plan.sourcePath(), plan.trashPath());
+                    AssetFileOperations.moveNew(plan.sourcePath(), plan.trashPath());
                     try {
-                        GraphDocumentStore.moveNew(plan.temporaryPath(), plan.destinationPath());
+                        AssetFileOperations.moveNew(plan.temporaryPath(), plan.destinationPath());
                     } catch (IOException e) {
                         try {
-                            GraphDocumentStore.moveNew(plan.trashPath(), plan.sourcePath());
+                            AssetFileOperations.moveNew(plan.trashPath(), plan.sourcePath());
                         } catch (IOException rollbackError) {
                             e.addSuppressed(rollbackError);
                         }
@@ -394,14 +394,14 @@ public final class LocalAssetService {
                 MovePlan plan = committed.get(i);
                 try {
                     if (plan.direct()) {
-                        GraphDocumentStore.moveNew(plan.destinationPath(), plan.sourcePath());
+                        AssetFileOperations.moveNew(plan.destinationPath(), plan.sourcePath());
                     } else {
                         try {
-                            GraphDocumentStore.moveNew(plan.destinationPath(), plan.temporaryPath());
+                            AssetFileOperations.moveNew(plan.destinationPath(), plan.temporaryPath());
                         } catch (IOException rollbackError) {
                             e.addSuppressed(rollbackError);
                         }
-                        GraphDocumentStore.moveNew(plan.trashPath(), plan.sourcePath());
+                        AssetFileOperations.moveNew(plan.trashPath(), plan.sourcePath());
                     }
                 } catch (IOException rollbackError) {
                     e.addSuppressed(rollbackError);

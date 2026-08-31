@@ -13,6 +13,7 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
 import com.mine.geometry_node.client.ui.editor.asset.repository.LocalAssetRepository;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
+import com.mine.geometry_node.client.asset.file.AssetSystemFileBrowser;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.service.GraphAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
@@ -110,11 +111,14 @@ final class AssetBrowserActionController {
     }
 
     boolean canRenameSelection() {
-        return mPanel.getSourceKind() == AssetSourceKind.LOCAL
-                && mEnableLocalFileActions
-                && mPanel.repositorySupports(AssetSourceKind.LOCAL, AssetRepositoryOperation.MANAGE)
-                && mPanel.getSelectedEntries().size() == 1
-                && mPanel.getSelectedEntries().get(0).supports(AssetTypeAction.RENAME);
+        List<AssetEntry> entries = mPanel.getSelectedEntries();
+        if (entries.size() != 1 || !entries.getFirst().supports(AssetTypeAction.RENAME)) return false;
+        return switch (mPanel.getSourceKind()) {
+            case LOCAL -> mEnableLocalFileActions
+                    && mPanel.repositorySupports(AssetSourceKind.LOCAL, AssetRepositoryOperation.MANAGE);
+            case REMOTE -> mEnableRemoteTransferActions
+                    && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE);
+        };
     }
 
     private boolean canActOnSelection(AssetTypeAction action) {
@@ -182,10 +186,7 @@ final class AssetBrowserActionController {
 
     void renameSelection() {
         if (!canRenameSelection()) return;
-        List<File> files = mPanel.getSelectedLocalFiles();
-        if (mPanel.getSourceKind() == AssetSourceKind.LOCAL && files.size() == 1) {
-            startInlineEdit(files.get(0));
-        }
+        startInlineEdit(mPanel.getSelectedEntries().getFirst());
     }
 
     void showContextMenuAtRaw(float rawX, float rawY, AssetEntry targetEntry) {
@@ -250,8 +251,19 @@ final class AssetBrowserActionController {
 
     void triggerNewItem(boolean isFolder) {
         if (mPanel.isFavoritesMode()
-                || !mPanel.repositorySupports(AssetSourceKind.LOCAL, AssetRepositoryOperation.CREATE)) return;
+                || !mPanel.repositorySupports(mPanel.getSourceKind(), AssetRepositoryOperation.CREATE)) return;
         mPanel.clearSearch();
+        if (mPanel.getSourceKind() == AssetSourceKind.REMOTE) {
+            String name = availableName(isFolder ? "新建文件夹" : "新建文件.json", isFolder);
+            String path = joinRemotePath(mPanel.getRemoteDirectory(), name);
+            if (isFolder) {
+                sendRemoteFileOperation(PacketRemoteAssetFileOperationRequest.Operation.CREATE_DIRECTORY,
+                        List.of(), path);
+            } else if (mCoordinator != null) {
+                mCoordinator.createRemoteGraph(path, () -> selectRemotePath(path));
+            }
+            return;
+        }
         File currentDirectory = mPanel.getCurrentDirectory();
         if (currentDirectory == null) return;
 
@@ -266,10 +278,17 @@ final class AssetBrowserActionController {
                             LocalAssetRepository.pathKey(newFile), newFile.getName());
                     mPanel.refreshFileList(() -> {
                         mPanel.selectOnly(newEntry);
-                        startInlineEdit(newFile);
+                        startInlineEdit(newEntry);
                         progress.requestClose();
                     });
                 });
+    }
+
+    void createRemoteDirectory(String path, boolean navigateAfterCreation) {
+        if (mPanel.getSourceKind() != AssetSourceKind.REMOTE
+                || !mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.CREATE)) return;
+        sendRemoteFileOperation(PacketRemoteAssetFileOperationRequest.Operation.CREATE_DIRECTORY,
+                List.of(), path, navigateAfterCreation ? () -> mPanel.navigateToRemote(path) : null);
     }
 
     void handleDoubleClick(AssetEntry entry) {
@@ -337,7 +356,13 @@ final class AssetBrowserActionController {
         if (entriesSnapshot.size() == 1 && entriesSnapshot.get(0).supports(AssetTypeAction.RENAME)) {
             if (added) menu.addDivider();
             menu.addMenuItem(actionLabel(AssetLibraryActionId.RENAME),
-                    shortcutText(AssetLibraryActionId.RENAME), () -> startInlineEdit(filesSnapshot.get(0)));
+                    shortcutText(AssetLibraryActionId.RENAME), () -> startInlineEdit(entriesSnapshot.getFirst()));
+            added = true;
+        }
+        if (entriesSnapshot.size() == 1) {
+            if (added) menu.addDivider();
+            File target = filesSnapshot.getFirst();
+            menu.addMenuItem("在资源管理器中打开", () -> openInSystemFileBrowser(target));
             added = true;
         }
         if (added) menu.addDivider();
@@ -413,6 +438,12 @@ final class AssetBrowserActionController {
                         shortcutText(AssetLibraryActionId.DELETE), () -> deleteRemoteEntries(entriesSnapshot));
                 added = true;
             }
+            if (entriesSnapshot.size() == 1 && entriesSnapshot.getFirst().supports(AssetTypeAction.RENAME)) {
+                if (added) menu.addDivider();
+                menu.addMenuItem(actionLabel(AssetLibraryActionId.RENAME),
+                        shortcutText(AssetLibraryActionId.RENAME), () -> startInlineEdit(entriesSnapshot.getFirst()));
+                added = true;
+            }
             if (added) menu.addDivider();
         }
     }
@@ -448,9 +479,12 @@ final class AssetBrowserActionController {
                     shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
             menu.addDivider();
         }
-        if (mEnableLocalFileActions && !mPanel.isFavoritesMode() && mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
+        if (!mPanel.isFavoritesMode()
+                && mPanel.repositorySupports(mPanel.getSourceKind(), AssetRepositoryOperation.CREATE)) {
             menu.addMenuItem("新建文件夹", () -> triggerNewItem(true));
-            menu.addMenuItem("新建文件", () -> triggerNewItem(false));
+            if (mPanel.getSourceKind() == AssetSourceKind.LOCAL || mCoordinator != null) {
+                menu.addMenuItem("新建文件", () -> triggerNewItem(false));
+            }
         }
 
         Consumer<AssetEntry> pickFileAction = mPanel.pickFileAction();
@@ -471,8 +505,8 @@ final class AssetBrowserActionController {
         }
     }
 
-    private void startInlineEdit(File targetFile) {
-        String key = mPanel.pathKey(targetFile);
+    private void startInlineEdit(AssetEntry targetEntry) {
+        String key = targetEntry.key();
         AssetFileItemView itemView = mPanel.itemViews().get(key);
         if (itemView == null) {
             int top = mPanel.fileContent().entryTop(key);
@@ -495,7 +529,7 @@ final class AssetBrowserActionController {
         editInput.setBackground(AssetFileBrowserPanel.createColorDrawable(0xFF444444));
         editInput.setSingleLine(true);
         editInput.setPadding(dp2pxInt(6), 0, dp2pxInt(6), 0);
-        editInput.setText(targetFile.getName());
+        editInput.setText(targetEntry.name());
 
         parent.addView(editInput, index, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -503,7 +537,7 @@ final class AssetBrowserActionController {
         editInput.requestFocus();
         String name = editInput.getText().toString();
         int dotIndex = name.lastIndexOf(".");
-        if (dotIndex > 0 && !targetFile.isDirectory()) {
+        if (dotIndex > 0 && !targetEntry.isDirectory()) {
             editInput.setSelection(0, dotIndex);
         } else {
             editInput.setSelection(name.length());
@@ -518,8 +552,12 @@ final class AssetBrowserActionController {
                 isCommitted = true;
 
                 String newName = editInput.getText().toString().trim();
-                if (!newName.isEmpty() && !newName.equals(targetFile.getName())) {
-                    renameFile(targetFile, newName);
+                if (!newName.isEmpty() && !newName.equals(targetEntry.name())) {
+                    if (targetEntry.sourceKind() == AssetSourceKind.LOCAL && targetEntry.localFile() != null) {
+                        renameFile(targetEntry.localFile(), newName);
+                    } else if (targetEntry.sourceKind() == AssetSourceKind.REMOTE) {
+                        renameRemoteEntry(targetEntry, newName);
+                    }
                     return;
                 }
                 mPanel.refreshFileList();
@@ -637,14 +675,25 @@ final class AssetBrowserActionController {
         sendRemoteFileOperation(operation, clipboardPaths, mPanel.getRemoteDirectory());
     }
 
-    private void sendRemoteFileOperation(PacketRemoteAssetFileOperationRequest.Operation operation, List<String> paths, String targetDirectory) {
-        if (paths.isEmpty()) return;
+    private void sendRemoteFileOperation(PacketRemoteAssetFileOperationRequest.Operation operation, List<String> paths, String destinationPath) {
+        sendRemoteFileOperation(operation, paths, destinationPath, null);
+    }
+
+    private void sendRemoteFileOperation(
+            PacketRemoteAssetFileOperationRequest.Operation operation,
+            List<String> paths,
+            String destinationPath,
+            Runnable onSuccess
+    ) {
+        if (paths.isEmpty() && operation != PacketRemoteAssetFileOperationRequest.Operation.CREATE_DIRECTORY) return;
         int requestId = RemoteAssetClient.nextRequestId();
         mRemoteRequestIds.add(requestId);
         String title = switch (operation) {
             case DELETE -> "删除云端文件";
             case COPY -> "复制云端文件";
             case MOVE -> "移动云端文件";
+            case CREATE_DIRECTORY -> "新建云端文件夹";
+            case RENAME -> "重命名云端文件";
         };
         TransferProgressDialog progress = new TransferProgressDialog(mPanel.getContext(), title);
         progress.show(mPanel);
@@ -661,10 +710,18 @@ final class AssetBrowserActionController {
                     mClipboard.clearRemote();
                 }
                 mPanel.clearSelection();
-                mPanel.refreshFileList();
+                if (onSuccess != null) {
+                    onSuccess.run();
+                    return;
+                }
+                mPanel.refreshFileList(() -> {
+                    if (operation == PacketRemoteAssetFileOperationRequest.Operation.CREATE_DIRECTORY) {
+                        selectRemotePath(destinationPath);
+                    }
+                });
             });
         });
-        NetworkHandler.sendToServer(new PacketRemoteAssetFileOperationRequest(requestId, operation, targetDirectory, paths));
+        NetworkHandler.sendToServer(new PacketRemoteAssetFileOperationRequest(requestId, operation, destinationPath, paths));
     }
 
     void cancelRemoteRequests() {
@@ -672,6 +729,60 @@ final class AssetBrowserActionController {
             RemoteAssetClient.cancel(requestId);
         }
         mRemoteRequestIds.clear();
+    }
+
+    private void renameRemoteEntry(AssetEntry entry, String newName) {
+        String parent = remoteParent(entry.path());
+        sendRemoteFileOperation(PacketRemoteAssetFileOperationRequest.Operation.RENAME,
+                List.of(entry.path()), joinRemotePath(parent, newName));
+    }
+
+    private void openInSystemFileBrowser(File target) {
+        mIoTasks.runSilent(context -> {
+            AssetSystemFileBrowser.open(target.toPath());
+            return null;
+        }, ignored -> { }, exception -> System.err.println(
+                "[AssetBrowser] Failed to open system file browser: " + exception.getMessage()));
+    }
+
+    private String availableName(String requestedName, boolean directory) {
+        Set<String> existing = new HashSet<>();
+        for (AssetEntry entry : mPanel.visibleEntriesSnapshot()) {
+            existing.add(entry.name().toLowerCase(java.util.Locale.ROOT));
+        }
+        if (!existing.contains(requestedName.toLowerCase(java.util.Locale.ROOT))) return requestedName;
+        String base = requestedName;
+        String extension = "";
+        if (!directory) {
+            int dot = requestedName.lastIndexOf('.');
+            if (dot > 0) {
+                base = requestedName.substring(0, dot);
+                extension = requestedName.substring(dot);
+            }
+        }
+        for (int index = 1; ; index++) {
+            String candidate = base + "_" + index + extension;
+            if (!existing.contains(candidate.toLowerCase(java.util.Locale.ROOT))) return candidate;
+        }
+    }
+
+    private void selectRemotePath(String path) {
+        for (AssetEntry entry : mPanel.visibleEntriesSnapshot()) {
+            if (entry.sourceKind() == AssetSourceKind.REMOTE && entry.path().equals(path)) {
+                mPanel.selectOnly(entry);
+                startInlineEdit(entry);
+                return;
+            }
+        }
+    }
+
+    private static String remoteParent(String path) {
+        int separator = path == null ? -1 : path.lastIndexOf('/');
+        return separator < 0 ? "" : path.substring(0, separator);
+    }
+
+    private static String joinRemotePath(String directory, String name) {
+        return directory == null || directory.isBlank() ? name : directory + "/" + name;
     }
 
     void clearClipboard() {

@@ -2,9 +2,9 @@ package com.mine.geometry_node.client.ui.editor.asset.preview;
 
 import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetPreviewKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -64,7 +64,7 @@ public final class AssetPreviewView extends FrameLayout {
         clearResolvedView();
         if (localSource == null || !localSource.isFile()) return;
         if (mEntry.sourceKind() == AssetSourceKind.LOCAL
-                && mEntry.type().previewKind() == AssetPreviewKind.SCHEMATIC) {
+                && mEntry.type().previewKind().equals(AssetPreviewKind.SCHEMATIC)) {
             mResolvedView = new SchematicThumbnailView(getContext(), localSource);
         } else {
             mResolvedView = new ImageThumbnailView(getContext(), localSource);

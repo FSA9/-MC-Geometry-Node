@@ -45,7 +45,6 @@ public class GeometryNodeClient {
     public GeometryNodeClient(IEventBus modBus) {
         disableModernUiDevRegistries();
         ClientNetworkReceiverRegistry.init();
-
         // 注册按键
         modBus.addListener(KeyBindings::register);
         modBus.addListener(this::onRegisterGuiLayers);

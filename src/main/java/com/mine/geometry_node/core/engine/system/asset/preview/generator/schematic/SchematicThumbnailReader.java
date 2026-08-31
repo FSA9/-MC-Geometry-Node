@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.asset.schematic;
+package com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic;
 
 import com.mine.geometry_node.core.schematic.SchematicBlockColor;
 import net.minecraft.nbt.CompoundTag;
@@ -6,7 +6,6 @@ import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -16,7 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-final class SchematicThumbnailReader {
+public final class SchematicThumbnailReader {
     private static final long MAX_NBT_BYTES = 256L * 1024L * 1024L;
     private static final int MAX_GRID_COLUMNS = 32;
     private static final int MAX_DECODED_BLOCKS = 8_000_000;
@@ -24,9 +23,9 @@ final class SchematicThumbnailReader {
     private SchematicThumbnailReader() {
     }
 
-    static SchematicThumbnail read(File file) throws IOException, InterruptedException {
+    public static SchematicThumbnail read(Path source) throws IOException, InterruptedException {
         checkInterrupted();
-        CompoundTag root = readRoot(file.toPath());
+        CompoundTag root = readRoot(source);
         checkInterrupted();
         if (looksLikeSponge(root)) {
             return readSponge(root);
@@ -70,17 +69,16 @@ final class SchematicThumbnailReader {
     }
 
     private static SchematicThumbnail readSponge(CompoundTag root) throws InterruptedException {
-        int width = positive(intOrZero(root, "Width"));
-        int height = positive(intOrZero(root, "Height"));
-        int length = positive(intOrZero(root, "Length"));
-        if (width <= 0 || height <= 0 || length <= 0) {
-            return SchematicThumbnail.error("invalid size");
-        }
-
         CompoundTag nestedBlocks = root.getCompoundOrEmpty("Blocks");
         CompoundTag blocksRoot = nestedBlocks.contains("Palette") || nestedBlocks.contains("BlockData") || nestedBlocks.contains("Data")
                 ? nestedBlocks
                 : root;
+        int width = positive(firstInt(root, blocksRoot, "Width"));
+        int height = positive(firstInt(root, blocksRoot, "Height"));
+        int length = positive(firstInt(root, blocksRoot, "Length"));
+        if (width <= 0 || height <= 0 || length <= 0) {
+            return SchematicThumbnail.error("invalid size");
+        }
         CompoundTag palette = blocksRoot.contains("Palette")
                 ? blocksRoot.getCompoundOrEmpty("Palette")
                 : root.getCompoundOrEmpty("Palette");
@@ -213,6 +211,11 @@ final class SchematicThumbnailReader {
     private static int intOrZero(CompoundTag tag, String key) {
         Tag value = tag.get(key);
         return value == null ? 0 : value.asInt().orElse(0);
+    }
+
+    private static int firstInt(CompoundTag primary, CompoundTag fallback, String key) {
+        int value = intOrZero(primary, key);
+        return value != 0 ? value : intOrZero(fallback, key);
     }
 
     private static byte[] byteArrayOrEmpty(CompoundTag tag, String key) {

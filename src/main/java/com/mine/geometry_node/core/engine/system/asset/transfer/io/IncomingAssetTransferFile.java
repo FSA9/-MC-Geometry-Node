@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.asset.transfer.io;
 
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferProtocolLimits;
+import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetContentHash;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -36,8 +37,7 @@ public final class IncomingAssetTransferFile implements AutoCloseable {
         if (declaredBytes < 0L || declaredBytes > AssetTransferProtocolLimits.MAX_FILE_BYTES) {
             throw new IllegalArgumentException("Invalid declared asset size: " + declaredBytes);
         }
-        String hash = Objects.requireNonNullElse(declaredSha256, "").trim().toLowerCase(java.util.Locale.ROOT);
-        if (!hash.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Invalid declared SHA-256");
+        String hash = AssetContentHash.normalizeRequired(declaredSha256);
         Files.createDirectories(temporaryDirectory);
         Path temporary = Files.createTempFile(temporaryDirectory, ".geometrynode-transfer-", ".part");
         try {

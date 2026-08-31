@@ -13,13 +13,15 @@ import java.util.List;
 public record PacketRemoteAssetFileOperationRequest(
         int requestId,
         Operation operation,
-        String targetDirectory,
+        String destinationPath,
         List<String> paths
 ) implements CustomPacketPayload {
     public enum Operation {
         DELETE,
         COPY,
-        MOVE
+        MOVE,
+        CREATE_DIRECTORY,
+        RENAME
     }
 
     public static final Type<PacketRemoteAssetFileOperationRequest> TYPE =
@@ -36,16 +38,28 @@ public record PacketRemoteAssetFileOperationRequest(
 
     public PacketRemoteAssetFileOperationRequest {
         operation = java.util.Objects.requireNonNull(operation, "operation");
-        targetDirectory = targetDirectory == null ? "" : targetDirectory;
+        destinationPath = destinationPath == null ? "" : destinationPath;
         paths = paths == null ? List.of() : List.copyOf(paths);
         AssetPacketLimits.requireCount(paths.size(), AssetPacketLimits.MAX_FILE_OPERATION_PATHS,
                 "remote asset file operation path");
+        switch (operation) {
+            case DELETE -> requirePaths(paths, operation);
+            case COPY, MOVE -> requirePaths(paths, operation);
+            case CREATE_DIRECTORY -> {
+                if (!paths.isEmpty()) throw new IllegalArgumentException("CREATE_DIRECTORY does not accept sources");
+                if (destinationPath.isBlank()) throw new IllegalArgumentException("CREATE_DIRECTORY requires a path");
+            }
+            case RENAME -> {
+                if (paths.size() != 1) throw new IllegalArgumentException("RENAME requires one source");
+                if (destinationPath.isBlank()) throw new IllegalArgumentException("RENAME requires a destination");
+            }
+        }
     }
 
     public void write(RegistryFriendlyByteBuf buf) {
         buf.writeInt(requestId);
         buf.writeVarInt(operation.ordinal());
-        buf.writeUtf(targetDirectory, AssetPacketLimits.MAX_PATH_LENGTH);
+        buf.writeUtf(destinationPath, AssetPacketLimits.MAX_PATH_LENGTH);
         AssetPacketCodecs.writeBoundedCount(buf, paths.size(),
                 AssetPacketLimits.MAX_FILE_OPERATION_PATHS, "remote asset file operation path");
         for (String path : paths) {
@@ -70,6 +84,10 @@ public record PacketRemoteAssetFileOperationRequest(
             throw new IllegalArgumentException("Invalid remote asset file operation: " + ordinal);
         }
         return values[ordinal];
+    }
+
+    private static void requirePaths(List<String> paths, Operation operation) {
+        if (paths.isEmpty()) throw new IllegalArgumentException(operation + " requires at least one source");
     }
 
     @Override

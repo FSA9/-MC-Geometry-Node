@@ -1,11 +1,11 @@
 package com.mine.geometry_node.core.engine.system.asset;
 
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.VerifiedAssetCommitter;
-import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewAssociations;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -14,13 +14,14 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public final class RemoteAssetFileService {
     private RemoteAssetFileService() {
     }
 
-    public static List<RemoteAssetEntry> list(MinecraftServer server, String directoryPath) throws IOException {
+    public static List<AssetDescriptor> list(MinecraftServer server, String directoryPath) throws IOException {
         Path directory = resolveDirectory(server, directoryPath);
         Path root = root(server);
         if (!Files.exists(directory) && directory.equals(root)) {
@@ -30,11 +31,11 @@ public final class RemoteAssetFileService {
             throw new IOException("Remote path is not a directory: " + directoryPath);
         }
 
-        List<RemoteAssetEntry> entries = new ArrayList<>();
+        List<AssetDescriptor> entries = new ArrayList<>();
         try (var stream = Files.list(directory)) {
-            stream.filter(path -> !Files.isSymbolicLink(path))
+            stream.filter(path -> !Files.isSymbolicLink(path) && !isTransactionArtifact(path))
                     .filter(path -> Files.isDirectory(path)
-                            || AssetTypeCatalog.isTransferablePath(path.toString()))
+                            || AssetTypeCatalog.isRecognizedAsset(path))
                     .sorted(Comparator.comparing((Path p) -> !Files.isDirectory(p))
                             .thenComparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
                     .forEach(path -> entries.add(toEntry(root, path)));
@@ -47,7 +48,7 @@ public final class RemoteAssetFileService {
         List<RemoteAssetConflict> conflicts = new ArrayList<>();
         for (String targetPath : targetPaths) {
             Path resolved = resolveFile(server, targetPath);
-            validateAssetFilePath(resolved);
+            validateAssetCandidatePath(resolved);
             if (Files.exists(resolved)) {
                 conflicts.add(new RemoteAssetConflict("", ServerAssetPaths.pathToId(root, resolved), Files.isDirectory(resolved)));
             }
@@ -57,9 +58,12 @@ public final class RemoteAssetFileService {
 
     public static Path resolveTransferSource(MinecraftServer server, String assetPath) throws IOException {
         Path file = resolveFile(server, assetPath);
-        validateAssetFilePath(file);
+        validateAssetCandidatePath(file);
         if (!Files.isRegularFile(file) || Files.isSymbolicLink(file)) {
             throw new IOException("Remote asset file does not exist: " + assetPath);
+        }
+        if (!AssetTypeCatalog.isRecognizedAsset(file, assetPath)) {
+            throw new IOException("Remote file is not a recognized asset: " + assetPath);
         }
         return file;
     }
@@ -79,9 +83,12 @@ public final class RemoteAssetFileService {
             AssetTransferConflictPolicy conflictPolicy
     ) throws IOException {
         Path target = resolveFile(server, targetPath);
-        validateAssetFilePath(target);
+        validateAssetCandidatePath(target);
         AssetMetadata oldMetadata = AssetTypeCatalog.inspect(target, targetPath);
         AssetMetadata newMetadata = AssetTypeCatalog.inspect(verifiedTemporaryFile, targetPath);
+        if (!newMetadata.isKnown()) {
+            throw new IOException("Uploaded file is not a recognized asset: " + targetPath);
+        }
         VerifiedAssetCommitter.CommitResult commit =
                 VerifiedAssetCommitter.commit(verifiedTemporaryFile, target, conflictPolicy);
         if (commit != VerifiedAssetCommitter.CommitResult.COMMITTED) {
@@ -105,9 +112,9 @@ public final class RemoteAssetFileService {
         return result;
     }
 
-    public static List<RemoteAssetEntry> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
+    public static List<AssetDescriptor> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
         Path root = root(server);
-        List<RemoteAssetEntry> files = new ArrayList<>();
+        List<AssetDescriptor> files = new ArrayList<>();
         Set<Path> seen = new HashSet<>();
         for (String selectedPath : selectedPaths) {
             Path path = resolvePath(server, selectedPath);
@@ -115,33 +122,57 @@ public final class RemoteAssetFileService {
             if (Files.isDirectory(path)) {
                 try (var walk = Files.walk(path)) {
                     walk.filter(p -> Files.isRegularFile(p) && !Files.isSymbolicLink(p)
-                                    && AssetTypeCatalog.isTransferablePath(p.toString()))
+                                    && !isInsideTransactionArtifact(p)
+                                    && AssetTypeCatalog.isRecognizedAsset(p))
                             .map(p -> p.toAbsolutePath().normalize())
                             .filter(seen::add)
                             .forEach(p -> files.add(toEntry(root, p)));
                 }
             } else if (Files.isRegularFile(path) && !Files.isSymbolicLink(path)
-                    && AssetTypeCatalog.isTransferablePath(path.toString())) {
+                    && AssetTypeCatalog.isRecognizedAsset(path)) {
                 Path normalized = path.toAbsolutePath().normalize();
                 if (seen.add(normalized)) {
                     files.add(toEntry(root, normalized));
                 }
             }
         }
-        files.sort(Comparator.comparing(RemoteAssetEntry::path, String.CASE_INSENSITIVE_ORDER));
+        files.sort(Comparator.comparing(AssetDescriptor::path, String.CASE_INSENSITIVE_ORDER));
         return files;
     }
 
     public static RemoteAssetOperationResult deleteSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
-        int deleted = 0;
-        Set<Path> roots = new HashSet<>();
         Set<String> affectedTypes = new HashSet<>();
-        for (String selectedPath : selectedPaths) {
-            Path path = resolvePath(server, selectedPath);
-            if (!Files.exists(path) || path.equals(root(server))) continue;
-            if (roots.add(path.toAbsolutePath().normalize())) {
+        List<PendingFileMutation> pending = new ArrayList<>();
+        try {
+            for (Path path : resolveSelectionRoots(server, selectedPaths)) {
                 collectAssetTypes(path, affectedTypes);
-                deleted += deleteRecursively(path);
+                RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
+                        server, RemoteAssetMutationRegistry.Operation.DELETE, path, null);
+                Path tombstone = transactionSibling(path);
+                int index = pending.size();
+                pending.add(new PendingFileMutation(path, tombstone, 0, mutation));
+                int affected = countRecursively(path);
+                pending.set(index, new PendingFileMutation(path, tombstone, affected, mutation));
+                moveWithoutReplace(path, tombstone);
+            }
+        } catch (IOException | RuntimeException exception) {
+            rollbackDeletes(pending, exception);
+            throw exception;
+        }
+
+        int deleted = 0;
+        for (PendingFileMutation item : pending) {
+            item.participant().commit();
+            deleted += item.affectedEntries();
+        }
+        for (PendingFileMutation item : pending) {
+            if (Files.exists(item.target())) {
+                try {
+                    deleteRecursively(item.target());
+                } catch (IOException cleanupException) {
+                    System.err.println("[RemoteAsset] Failed to clean deleted asset " + item.target()
+                            + ": " + cleanupException.getMessage());
+                }
             }
         }
         return new RemoteAssetOperationResult(deleted, affectedTypes);
@@ -155,20 +186,33 @@ public final class RemoteAssetFileService {
             throw new IOException("Remote target is not a directory: " + targetDirectoryPath);
         }
 
-        int copied = 0;
         Set<String> affectedTypes = new HashSet<>();
-        for (String sourcePath : sourcePaths) {
-            Path source = resolvePath(server, sourcePath);
-            if (!Files.exists(source) || source.equals(root(server))) continue;
-            Path target = resolveAvailableDestination(targetDirectory, source.getFileName().toString(), Files.isDirectory(source));
-            if (Files.isDirectory(source) && target.toAbsolutePath().normalize().startsWith(source.toAbsolutePath().normalize())) {
-                continue;
+        List<PendingFileMutation> pending = new ArrayList<>();
+        try {
+            for (Path source : resolveSelectionRoots(server, sourcePaths)) {
+                Path target = resolveAvailableDestination(
+                        targetDirectory, source.getFileName().toString(), Files.isDirectory(source));
+                if (Files.isDirectory(source)
+                        && target.toAbsolutePath().normalize().startsWith(source.toAbsolutePath().normalize())) {
+                    continue;
+                }
+                RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
+                        server, RemoteAssetMutationRegistry.Operation.COPY, source, target);
+                int index = pending.size();
+                pending.add(new PendingFileMutation(source, target, 0, mutation));
+                collectAssetTypes(source, affectedTypes);
+                int copied = copyAtomically(source, target);
+                pending.set(index, new PendingFileMutation(source, target, copied, mutation));
             }
-            ServerAssetPreviewAssociations.Migration previews =
-                    ServerAssetPreviewAssociations.capture(server, source, target);
-            collectAssetTypes(source, affectedTypes);
-            copied += copyRecursively(source, target);
-            previews.apply();
+        } catch (IOException | RuntimeException exception) {
+            rollbackCopies(pending, exception);
+            throw exception;
+        }
+
+        int copied = 0;
+        for (PendingFileMutation item : pending) {
+            item.participant().commit();
+            copied += item.affectedEntries();
         }
         return new RemoteAssetOperationResult(copied, affectedTypes);
     }
@@ -182,27 +226,105 @@ public final class RemoteAssetFileService {
         }
 
         Path normalizedTargetDirectory = targetDirectory.toAbsolutePath().normalize();
-        int moved = 0;
         Set<String> affectedTypes = new HashSet<>();
-        for (String sourcePath : sourcePaths) {
-            Path source = resolvePath(server, sourcePath);
-            Path normalizedSource = source.toAbsolutePath().normalize();
-            if (!Files.exists(source) || source.equals(root(server))) continue;
-            if (source.getParent() != null && source.getParent().toAbsolutePath().normalize().equals(normalizedTargetDirectory)) {
-                continue;
-            }
+        List<PendingFileMutation> pending = new ArrayList<>();
+        try {
+            for (Path source : resolveSelectionRoots(server, sourcePaths)) {
+                Path normalizedSource = source.toAbsolutePath().normalize();
+                if (source.getParent() != null
+                        && source.getParent().toAbsolutePath().normalize().equals(normalizedTargetDirectory)) {
+                    continue;
+                }
 
-            Path target = resolveAvailableDestination(targetDirectory, source.getFileName().toString(), Files.isDirectory(source));
-            if (Files.isDirectory(source) && target.toAbsolutePath().normalize().startsWith(normalizedSource)) {
-                continue;
+                Path target = resolveAvailableDestination(
+                        targetDirectory, source.getFileName().toString(), Files.isDirectory(source));
+                if (Files.isDirectory(source) && target.toAbsolutePath().normalize().startsWith(normalizedSource)) {
+                    continue;
+                }
+                RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
+                        server, RemoteAssetMutationRegistry.Operation.MOVE, source, target);
+                int index = pending.size();
+                pending.add(new PendingFileMutation(source, target, 0, mutation));
+                collectAssetTypes(source, affectedTypes);
+                int moved = moveAtomically(source, target);
+                pending.set(index, new PendingFileMutation(source, target, moved, mutation));
             }
-            ServerAssetPreviewAssociations.Migration previews =
-                    ServerAssetPreviewAssociations.capture(server, source, target);
-            collectAssetTypes(source, affectedTypes);
-            moved += moveRecursively(source, target);
-            previews.apply();
+        } catch (IOException | RuntimeException exception) {
+            rollbackMoves(pending, exception);
+            throw exception;
+        }
+
+        int moved = 0;
+        for (PendingFileMutation item : pending) {
+            item.participant().commit();
+            moved += item.affectedEntries();
         }
         return new RemoteAssetOperationResult(moved, affectedTypes);
+    }
+
+    public static RemoteAssetOperationResult createDirectory(MinecraftServer server, String directoryPath)
+            throws IOException {
+        String normalized = ServerAssetPaths.normalizeRelativePath(directoryPath, false);
+        Path directory = ServerAssetPaths.resolveUnderRoot(root(server), normalized, false);
+        Path parent = directory.getParent();
+        if (parent == null || !Files.isDirectory(parent)) {
+            throw new IOException("Remote parent directory does not exist: " + normalized);
+        }
+        Files.createDirectory(directory);
+        return new RemoteAssetOperationResult(1, Set.of());
+    }
+
+    public static RemoteAssetOperationResult rename(
+            MinecraftServer server,
+            String sourcePath,
+            String destinationPath
+    ) throws IOException {
+        String normalizedSource = ServerAssetPaths.normalizeRelativePath(sourcePath, false);
+        String normalizedDestination = ServerAssetPaths.normalizeRelativePath(destinationPath, false);
+        Path source = ServerAssetPaths.resolveUnderRoot(root(server), normalizedSource, false);
+        Path destination = ServerAssetPaths.resolveUnderRoot(root(server), normalizedDestination, false);
+        if (!Files.exists(source) || Files.isSymbolicLink(source) || isInsideTransactionArtifact(source)) {
+            throw new IOException("Remote asset does not exist: " + normalizedSource);
+        }
+        if (Files.exists(destination)) {
+            throw new IOException("Remote destination already exists: " + normalizedDestination);
+        }
+        if (source.getParent() == null || destination.getParent() == null
+                || !source.getParent().equals(destination.getParent())) {
+            throw new IOException("Rename destination must remain in the same directory");
+        }
+        validateSourceName(destination.getFileName().toString());
+        if (!Files.isDirectory(source)) {
+            validateAssetCandidatePath(destination);
+            if (!AssetTypeCatalog.inspect(source, normalizedDestination).isKnown()) {
+                throw new IOException("Renamed file would not be a recognized asset: " + normalizedDestination);
+            }
+        }
+
+        Set<String> affectedTypes = new HashSet<>();
+        collectAssetTypes(source, affectedTypes);
+        RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
+                server, RemoteAssetMutationRegistry.Operation.RENAME, source, destination);
+        try {
+            int affected = moveAtomically(source, destination);
+            mutation.commit();
+            collectAssetTypes(destination, affectedTypes);
+            return new RemoteAssetOperationResult(affected, affectedTypes);
+        } catch (IOException | RuntimeException exception) {
+            if (Files.exists(destination) && !Files.exists(source)) {
+                try {
+                    moveAtomically(destination, source);
+                } catch (IOException | RuntimeException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+            }
+            try {
+                mutation.rollback();
+            } catch (RuntimeException rollbackException) {
+                exception.addSuppressed(rollbackException);
+            }
+            throw exception;
+        }
     }
 
     public static Path root(MinecraftServer server) {
@@ -222,24 +344,19 @@ public final class RemoteAssetFileService {
     }
 
     private static Path resolvePath(MinecraftServer server, String relativePath) {
-        Path root = root(server);
-        String normalized = ServerAssetPaths.normalizeRelativePath(relativePath == null ? "" : relativePath, true);
-        Path resolved = normalized.isEmpty() ? root : root.resolve(normalized).normalize();
-        if (!resolved.startsWith(root)) {
-            throw new IllegalArgumentException("Remote asset path escapes root: " + relativePath);
-        }
-        return resolved;
+        return ServerAssetPaths.resolveUnderRoot(
+                root(server), relativePath == null ? "" : relativePath, true);
     }
 
-    private static void validateAssetFilePath(Path path) {
-        if (!AssetTypeCatalog.isTransferablePath(path.toString())) {
+    private static void validateAssetCandidatePath(Path path) {
+        if (!AssetTypeCatalog.isCandidatePath(path.toString())) {
             throw new IllegalArgumentException("Unsupported remote asset type: " + path.getFileName());
         }
     }
 
     private static int deleteRecursively(Path path) throws IOException {
         if (Files.isSymbolicLink(path)) {
-            return 0;
+            return Files.deleteIfExists(path) ? 1 : 0;
         }
         if (Files.isDirectory(path)) {
             int deleted = 0;
@@ -283,19 +400,189 @@ public final class RemoteAssetFileService {
         return 1;
     }
 
-    private static int moveRecursively(Path source, Path target) throws IOException {
+    private static int copyAtomically(Path source, Path target) throws IOException {
+        Path staging = transactionSibling(target);
+        try {
+            int copied = copyRecursively(source, staging);
+            commitStaging(staging, target);
+            return copied;
+        } catch (IOException | RuntimeException exception) {
+            deleteQuietly(staging, exception);
+            throw exception;
+        }
+    }
+
+    private static int moveAtomically(Path source, Path target) throws IOException {
         if (Files.isSymbolicLink(source)) {
             return 0;
         }
         int moved = countRecursively(source);
         Files.createDirectories(target.getParent());
+        if (sameFileStore(source, target.getParent())) {
+            moveWithoutReplace(source, target);
+            return moved;
+        }
+
+        // The staged fallback keeps incomplete cross-filesystem copies out of the repository namespace.
+        Path staging = transactionSibling(target);
+        Path backup = transactionSibling(source);
+        boolean sourceBackedUp = false;
+        boolean targetCommitted = false;
         try {
-            Files.move(source, target);
-        } catch (IOException moveException) {
-            copyRecursively(source, target);
-            deleteRecursively(source);
+            copyRecursively(source, staging);
+            moveWithoutReplace(source, backup);
+            sourceBackedUp = true;
+            commitStaging(staging, target);
+            targetCommitted = true;
+            try {
+                deleteRecursively(backup);
+            } catch (IOException cleanupException) {
+                System.err.println("[RemoteAsset] Failed to clean committed move backup " + backup
+                        + ": " + cleanupException.getMessage());
+            }
+        } catch (IOException | RuntimeException exception) {
+            if (targetCommitted) deleteQuietly(target, exception);
+            else deleteQuietly(staging, exception);
+            if (sourceBackedUp && Files.exists(backup) && !Files.exists(source)) {
+                try {
+                    moveWithoutReplace(backup, source);
+                } catch (IOException restoreException) {
+                    exception.addSuppressed(restoreException);
+                }
+            }
+            throw exception;
         }
         return moved;
+    }
+
+    private static void commitStaging(Path staging, Path target) throws IOException {
+        moveWithoutReplace(staging, target);
+    }
+
+    private static void moveWithoutReplace(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException ignored) {
+            Files.move(source, target);
+        }
+    }
+
+    private static boolean sameFileStore(Path source, Path targetParent) {
+        try {
+            return Files.getFileStore(source).equals(Files.getFileStore(targetParent));
+        } catch (IOException ignored) {
+            return false;
+        }
+    }
+
+    private static Path transactionSibling(Path path) {
+        Path parent = path.toAbsolutePath().normalize().getParent();
+        if (parent == null) throw new IllegalArgumentException("path has no parent: " + path);
+        return parent.resolve(".geometrynode-tx-" + UUID.randomUUID()).normalize();
+    }
+
+    private static boolean isTransactionArtifact(Path path) {
+        Path name = path.getFileName();
+        return name != null && name.toString().startsWith(".geometrynode-tx-");
+    }
+
+    private static boolean isInsideTransactionArtifact(Path path) {
+        for (Path segment : path) {
+            if (segment.toString().startsWith(".geometrynode-tx-")) return true;
+        }
+        return false;
+    }
+
+    private static void deleteQuietly(Path path, Throwable primary) {
+        if (path == null || !Files.exists(path)) return;
+        try {
+            deleteRecursively(path);
+        } catch (IOException cleanupException) {
+            primary.addSuppressed(cleanupException);
+        }
+    }
+
+    private static RemoteAssetMutationRegistry.PreparedMutation prepareMutation(
+            MinecraftServer server,
+            RemoteAssetMutationRegistry.Operation operation,
+            Path source,
+            Path target
+    ) throws IOException {
+        try {
+            return RemoteAssetMutationRegistry.INSTANCE.prepare(server, operation, source, target);
+        } catch (IOException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IOException("Failed to prepare remote asset mutation", exception);
+        }
+    }
+
+    private static List<Path> resolveSelectionRoots(MinecraftServer server, List<String> selectedPaths) {
+        Path repositoryRoot = root(server);
+        List<Path> candidates = selectedPaths.stream()
+                .map(path -> resolvePath(server, path).toAbsolutePath().normalize())
+                .filter(path -> Files.exists(path) && !path.equals(repositoryRoot)
+                        && !isInsideTransactionArtifact(path))
+                .distinct()
+                .sorted(Comparator.comparingInt(Path::getNameCount))
+                .toList();
+        List<Path> roots = new ArrayList<>();
+        for (Path candidate : candidates) {
+            if (roots.stream().noneMatch(candidate::startsWith)) roots.add(candidate);
+        }
+        return roots;
+    }
+
+    private static void rollbackCopies(List<PendingFileMutation> pending, Throwable primary) {
+        for (int i = pending.size() - 1; i >= 0; i--) {
+            PendingFileMutation item = pending.get(i);
+            deleteQuietly(item.target(), primary);
+            rollbackParticipant(item, primary);
+        }
+    }
+
+    private static void rollbackMoves(List<PendingFileMutation> pending, Throwable primary) {
+        for (int i = pending.size() - 1; i >= 0; i--) {
+            PendingFileMutation item = pending.get(i);
+            if (Files.exists(item.target()) && !Files.exists(item.source())) {
+                try {
+                    moveAtomically(item.target(), item.source());
+                } catch (IOException | RuntimeException restoreException) {
+                    primary.addSuppressed(restoreException);
+                }
+            }
+            rollbackParticipant(item, primary);
+        }
+    }
+
+    private static void rollbackDeletes(List<PendingFileMutation> pending, Throwable primary) {
+        for (int i = pending.size() - 1; i >= 0; i--) {
+            PendingFileMutation item = pending.get(i);
+            if (Files.exists(item.target()) && !Files.exists(item.source())) {
+                try {
+                    moveWithoutReplace(item.target(), item.source());
+                } catch (IOException restoreException) {
+                    primary.addSuppressed(restoreException);
+                }
+            }
+            rollbackParticipant(item, primary);
+        }
+    }
+
+    private static void rollbackParticipant(PendingFileMutation item, Throwable primary) {
+        try {
+            item.participant().rollback();
+        } catch (RuntimeException rollbackException) {
+            primary.addSuppressed(rollbackException);
+        }
+    }
+
+    private record PendingFileMutation(
+            Path source,
+            Path target,
+            int affectedEntries,
+            RemoteAssetMutationRegistry.PreparedMutation participant
+    ) {
     }
 
     private static int countRecursively(Path path) throws IOException {
@@ -357,7 +644,7 @@ public final class RemoteAssetFileService {
         }
     }
 
-    private static RemoteAssetEntry toEntry(Path root, Path path) {
+    private static AssetDescriptor toEntry(Path root, Path path) {
         boolean directory = Files.isDirectory(path);
         long size = 0L;
         long lastModified = 0L;
@@ -375,19 +662,18 @@ public final class RemoteAssetFileService {
         }
         String assetPath = ServerAssetPaths.pathToId(root, path);
         AssetMetadata metadata = directory ? AssetMetadata.UNKNOWN : AssetTypeCatalog.inspect(path, assetPath);
-        return new RemoteAssetEntry(
+        return new AssetDescriptor(
                 assetPath,
                 path.getFileName().toString(),
                 directory,
                 size,
                 lastModified,
-                metadata.typeId(),
-                metadata.variantId()
+                metadata
         );
     }
 
     private static void collectAssetTypes(Path path, Set<String> destination) throws IOException {
-        if (Files.isSymbolicLink(path) || !Files.exists(path)) return;
+        if (Files.isSymbolicLink(path) || !Files.exists(path) || isInsideTransactionArtifact(path)) return;
         if (Files.isDirectory(path)) {
             try (var stream = Files.list(path)) {
                 for (Path child : stream.toList()) collectAssetTypes(child, destination);

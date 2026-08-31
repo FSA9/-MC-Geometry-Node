@@ -6,7 +6,6 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetType;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -131,16 +130,14 @@ public final class LocalAssetRepository implements AssetRepository {
                                    Map<String, List<String>> tagCache) {
         List<AssetEntry> entries = new ArrayList<>(files.size());
         Map<String, List<String>> tagsByKey = includeTags ? new HashMap<>() : Collections.emptyMap();
-        Map<String, String> graphTypesByKey = new HashMap<>();
         for (File file : files) {
             AssetEntry entry = AssetEntry.local(file, pathKey(file),
                     relativeLabel(file, location.directory(), location.favorites()));
             entries.add(entry);
             if (!AssetTypeRegistry.GRAPH_ID.equals(entry.type().id())) continue;
             if (includeTags) tagsByKey.put(entry.key(), readTags(file, tagCache));
-            graphTypesByKey.put(entry.key(), readGraphTypeId(file));
         }
-        return new AssetListing(true, location, entries, tagsByKey, graphTypesByKey);
+        return new AssetListing(true, location, entries, tagsByKey);
     }
 
     private static AssetType resolveType(File file) {
@@ -168,10 +165,6 @@ public final class LocalAssetRepository implements AssetRepository {
         }
         cache.put(key, tags);
         return tags;
-    }
-
-    private static String readGraphTypeId(File file) {
-        return file == null ? "" : AssetTypeCatalog.inspect(file.toPath()).variantId();
     }
 
     private static void sortFiles(List<File> files, File baseDirectory, boolean favorites) {

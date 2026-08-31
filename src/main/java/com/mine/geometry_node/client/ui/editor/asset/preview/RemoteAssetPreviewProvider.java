@@ -7,6 +7,7 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewIdentity;
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewResultCode;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
 import java.util.concurrent.CompletableFuture;
@@ -16,7 +17,7 @@ final class RemoteAssetPreviewProvider implements AssetPreviewProvider {
     public boolean supports(AssetEntry entry) {
         return entry != null && entry.sourceKind() == AssetSourceKind.REMOTE && !entry.isDirectory()
                 && entry.supports(AssetTypeAction.PREVIEW) && entry.size() >= 0L && entry.lastModified() >= 0L
-                && coreKind(entry) != null;
+                && entry.type().previewKind().isConcrete();
     }
 
     @Override
@@ -26,7 +27,7 @@ final class RemoteAssetPreviewProvider implements AssetPreviewProvider {
             return Subscription.NONE;
         }
         AssetPreviewRevision revision = AssetPreviewRevision.current(
-                new AssetPreviewIdentity(entry.path(), coreKind(entry)), entry.size(), entry.lastModified());
+                new AssetPreviewIdentity(entry.path(), entry.type().previewKind()), entry.size(), entry.lastModified());
         ClientAssetPreviewService.Subscription subscription = ClientAssetPreviewService.INSTANCE.subscribe(revision,
                 new ClientAssetPreviewService.Listener() {
                     @Override
@@ -50,13 +51,5 @@ final class RemoteAssetPreviewProvider implements AssetPreviewProvider {
     static CompletableFuture<Void> clearAllCaches() {
         ImageThumbnailView.clearCache();
         return ClientAssetPreviewService.INSTANCE.clearAllCaches();
-    }
-
-    private static com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind coreKind(AssetEntry entry) {
-        return switch (entry.type().previewKind()) {
-            case IMAGE -> com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind.IMAGE;
-            case SCHEMATIC -> com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind.SCHEMATIC;
-            case NONE -> null;
-        };
     }
 }

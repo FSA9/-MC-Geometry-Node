@@ -24,8 +24,8 @@ public enum AssetTransferState {
         if (next == null || terminal) return false;
         if (next == FAILED || next == CANCELLED) return true;
         return switch (this) {
-            case QUEUED -> next == PREFLIGHT;
-            case PREFLIGHT -> next == TRANSFERRING;
+            case QUEUED -> next == PREFLIGHT || next == TRANSFERRING;
+            case PREFLIGHT -> next == QUEUED || next == TRANSFERRING;
             case TRANSFERRING -> next == VERIFYING;
             case VERIFYING -> next == COMMITTING;
             case COMMITTING -> next == COMPLETED;

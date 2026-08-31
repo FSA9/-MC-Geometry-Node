@@ -24,7 +24,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Iterator;
 
 /** Dedicated-server-safe image decoder, scaler, and nativepreview publisher. */
-public final class ServerImagePreviewGenerator {
+public final class ServerImagePreviewGenerator implements ServerAssetPreviewGenerator {
     private final ServerAssetPreviewStore store;
 
     public ServerImagePreviewGenerator(ServerAssetPreviewStore store) {
@@ -115,22 +115,10 @@ public final class ServerImagePreviewGenerator {
     }
 
     private static void verifyRevision(BasicFileAttributes attributes, AssetPreviewRevision revision)
-            throws SourceChangedException {
+            throws PreviewSourceChangedException {
         if (attributes.size() != revision.sourceSize()
                 || attributes.lastModifiedTime().toMillis() != revision.sourceLastModified()) {
-            throw new SourceChangedException();
-        }
-    }
-
-    public static final class PreviewUnavailableException extends IOException {
-        public PreviewUnavailableException(String message) {
-            super(message);
-        }
-    }
-
-    public static final class SourceChangedException extends IOException {
-        public SourceChangedException() {
-            super("Image source revision changed while generating nativepreview");
+            throw new PreviewSourceChangedException();
         }
     }
 }

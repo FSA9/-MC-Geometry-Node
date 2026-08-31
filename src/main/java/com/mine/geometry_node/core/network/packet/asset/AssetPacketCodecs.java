@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.network.packet.asset;
 
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
+import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
+import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
 import java.util.ArrayList;
@@ -11,46 +12,47 @@ public final class AssetPacketCodecs {
     private AssetPacketCodecs() {
     }
 
-    public static void writeRemoteAssetEntries(
+    public static void writeAssetDescriptors(
             RegistryFriendlyByteBuf buffer,
-            List<RemoteAssetEntry> entries,
+            List<AssetDescriptor> entries,
             int maximum
     ) {
-        List<RemoteAssetEntry> values = entries == null ? List.of() : entries;
-        writeBoundedCount(buffer, values.size(), maximum, "remote asset entry");
-        for (RemoteAssetEntry entry : values) writeRemoteAssetEntry(buffer, entry);
+        List<AssetDescriptor> values = entries == null ? List.of() : entries;
+        writeBoundedCount(buffer, values.size(), maximum, "asset descriptor");
+        for (AssetDescriptor entry : values) writeAssetDescriptor(buffer, entry);
     }
 
-    public static List<RemoteAssetEntry> readRemoteAssetEntries(
+    public static List<AssetDescriptor> readAssetDescriptors(
             RegistryFriendlyByteBuf buffer,
             int maximum
     ) {
-        int size = readBoundedCount(buffer, maximum, "remote asset entry");
-        List<RemoteAssetEntry> entries = new ArrayList<>(size);
-        for (int i = 0; i < size; i++) entries.add(readRemoteAssetEntry(buffer));
+        int size = readBoundedCount(buffer, maximum, "asset descriptor");
+        List<AssetDescriptor> entries = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) entries.add(readAssetDescriptor(buffer));
         return entries;
     }
 
-    public static void writeRemoteAssetEntry(RegistryFriendlyByteBuf buffer, RemoteAssetEntry entry) {
-        if (entry == null) throw new IllegalArgumentException("remote asset entry must not be null");
+    public static void writeAssetDescriptor(RegistryFriendlyByteBuf buffer, AssetDescriptor entry) {
+        if (entry == null) throw new IllegalArgumentException("asset descriptor must not be null");
         buffer.writeUtf(entry.path(), AssetPacketLimits.MAX_PATH_LENGTH);
         buffer.writeUtf(entry.name(), AssetPacketLimits.MAX_PATH_LENGTH);
         buffer.writeBoolean(entry.directory());
         buffer.writeLong(entry.size());
         buffer.writeLong(entry.lastModified());
-        buffer.writeUtf(entry.assetTypeId(), AssetPacketLimits.MAX_PATH_LENGTH);
-        buffer.writeUtf(entry.variantId(), AssetPacketLimits.MAX_PATH_LENGTH);
+        buffer.writeUtf(entry.metadata().typeId(), AssetPacketLimits.MAX_PATH_LENGTH);
+        buffer.writeUtf(entry.metadata().variantId(), AssetPacketLimits.MAX_PATH_LENGTH);
     }
 
-    public static RemoteAssetEntry readRemoteAssetEntry(RegistryFriendlyByteBuf buffer) {
-        return new RemoteAssetEntry(
+    public static AssetDescriptor readAssetDescriptor(RegistryFriendlyByteBuf buffer) {
+        return new AssetDescriptor(
                 buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH),
                 buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH),
                 buffer.readBoolean(),
                 buffer.readLong(),
                 buffer.readLong(),
-                buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH),
-                buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH)
+                new AssetMetadata(
+                        buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH),
+                        buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH))
         );
     }
 

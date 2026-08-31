@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.asset.remote;
 
 import com.mine.geometry_node.client.network.request.ClientRequestTracker;
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
+import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetCapabilitiesResponse;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetFileOperationResponse;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetListResponse;
@@ -95,8 +95,8 @@ public final class RemoteAssetClient {
         if (!response.success()) return;
         String directory = normalizeDirectory(response.directory());
         KNOWN_GRAPH_PATHS.removeIf(path -> parentDirectory(path).equals(directory));
-        for (RemoteAssetEntry entry : response.entries()) {
-            if (!entry.directory() && AssetTypeCatalog.GRAPH_TYPE_ID.equals(entry.assetTypeId())) {
+        for (AssetDescriptor entry : response.entries()) {
+            if (!entry.directory() && AssetTypeCatalog.GRAPH_TYPE_ID.equals(entry.metadata().typeId())) {
                 KNOWN_GRAPH_PATHS.add(entry.path());
             }
         }

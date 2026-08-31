@@ -15,7 +15,10 @@ public record PacketAssetTransferServerResult(
         AssetTransferState state,
         AssetTransferErrorCode errorCode,
         String messageKey,
-        String detail
+        String detail,
+        boolean contentCommitted,
+        long sourceSize,
+        long sourceLastModified
 ) implements CustomPacketPayload {
     public static final Type<PacketAssetTransferServerResult> TYPE =
             new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "asset_transfer_server_result"));
@@ -29,13 +32,21 @@ public record PacketAssetTransferServerResult(
         messageKey = Objects.requireNonNullElse(messageKey, "");
         detail = Objects.requireNonNullElse(detail, "");
         if (!state.isTerminal()) throw new IllegalArgumentException("Transfer result state must be terminal");
+        if (contentCommitted && (state != AssetTransferState.COMPLETED || sourceSize < 0L || sourceLastModified < 0L)) {
+            throw new IllegalArgumentException("Invalid committed asset revision");
+        }
+        if (!contentCommitted) {
+            sourceSize = 0L;
+            sourceLastModified = 0L;
+        }
     }
 
     private PacketAssetTransferServerResult(RegistryFriendlyByteBuf buffer) {
         this(buffer.readUUID(), AssetTransferPacketCodecs.readEnum(buffer, AssetTransferState.values()),
                 AssetTransferPacketCodecs.readEnum(buffer, AssetTransferErrorCode.values()),
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_MESSAGE_KEY_LENGTH),
-                buffer.readUtf(AssetTransferPacketCodecs.MAX_DETAIL_LENGTH));
+                buffer.readUtf(AssetTransferPacketCodecs.MAX_DETAIL_LENGTH), buffer.readBoolean(),
+                buffer.readLong(), buffer.readLong());
     }
 
     private void write(RegistryFriendlyByteBuf buffer) {
@@ -44,6 +55,9 @@ public record PacketAssetTransferServerResult(
         buffer.writeVarInt(errorCode.ordinal());
         buffer.writeUtf(messageKey, AssetTransferPacketCodecs.MAX_MESSAGE_KEY_LENGTH);
         buffer.writeUtf(detail, AssetTransferPacketCodecs.MAX_DETAIL_LENGTH);
+        buffer.writeBoolean(contentCommitted);
+        buffer.writeLong(sourceSize);
+        buffer.writeLong(sourceLastModified);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

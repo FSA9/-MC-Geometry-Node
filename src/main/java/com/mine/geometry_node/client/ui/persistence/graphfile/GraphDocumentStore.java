@@ -1,16 +1,14 @@
 package com.mine.geometry_node.client.ui.persistence.graphfile;
 
+import com.mine.geometry_node.client.asset.file.AssetFileOperations;
+import com.mine.geometry_node.client.asset.file.AssetFileTransactionManager;
+
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.UUID;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Supplier;
 
 /**
@@ -20,7 +18,6 @@ public final class GraphDocumentStore {
     public static final GraphDocumentStore INSTANCE = new GraphDocumentStore();
 
     private static final int FILE_LOCK_COUNT = 64;
-    private final ReentrantReadWriteLock mStructureLock = new ReentrantReadWriteLock(true);
     private final ReentrantLock[] mFileLocks = new ReentrantLock[FILE_LOCK_COUNT];
 
     private GraphDocumentStore() {
@@ -81,46 +78,31 @@ public final class GraphDocumentStore {
     }
 
     public <T> T withStructureMutation(IOCallable<T> action) throws IOException {
-        Lock lock = mStructureLock.writeLock();
-        lock.lock();
-        try {
-            return action.call();
-        } finally {
-            lock.unlock();
-        }
+        return AssetFileTransactionManager.INSTANCE.mutateStructure(action::call);
     }
 
     public <T> T withStructureRead(Supplier<T> action) {
-        Lock lock = mStructureLock.readLock();
-        lock.lock();
-        try {
-            return action.get();
-        } finally {
-            lock.unlock();
-        }
+        return AssetFileTransactionManager.INSTANCE.readStructure(action);
     }
 
     private <T> T withPath(Path path, PathCallable<T> action) throws IOException {
         Path normalized = GraphFileReference.normalize(path);
-        Lock structureLock = mStructureLock.readLock();
-        structureLock.lock();
-        ReentrantLock fileLock = fileLock(normalized);
-        fileLock.lock();
-        try {
-            return action.call(normalized);
-        } finally {
-            fileLock.unlock();
-            structureLock.unlock();
-        }
+        return AssetFileTransactionManager.INSTANCE.readStructureIO(() -> {
+            ReentrantLock fileLock = fileLock(normalized);
+            fileLock.lock();
+            try {
+                return action.call(normalized);
+            } finally {
+                fileLock.unlock();
+            }
+        });
     }
 
     public <T> T withReference(GraphFileReference reference, PathCallable<T> action) throws IOException {
         if (reference == null) {
             throw new IllegalArgumentException("reference must not be null");
         }
-        Lock structureLock = mStructureLock.readLock();
-        structureLock.lock();
-        try {
+        return AssetFileTransactionManager.INSTANCE.readStructureIO(() -> {
             Path path = reference.requireActivePath();
             ReentrantLock fileLock = fileLock(path);
             fileLock.lock();
@@ -129,9 +111,7 @@ public final class GraphDocumentStore {
             } finally {
                 fileLock.unlock();
             }
-        } finally {
-            structureLock.unlock();
-        }
+        });
     }
 
     private void writeStringAtomicLocked(Path target, String content, Charset charset) throws IOException {
@@ -139,43 +119,17 @@ public final class GraphDocumentStore {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        Path temporary = siblingTemporary(target, "write");
+        Path temporary = AssetFileOperations.siblingTemporary(target, "write");
         boolean committed = false;
         try {
             Files.writeString(temporary, content != null ? content : "", charset);
-            moveReplacing(temporary, target);
+            AssetFileOperations.moveReplacing(temporary, target);
             committed = true;
         } finally {
             if (!committed) {
                 Files.deleteIfExists(temporary);
             }
         }
-    }
-
-    public static void moveReplacing(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException ignored) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    public static void moveNew(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException ignored) {
-            Files.move(source, target);
-        }
-    }
-
-    public static Path siblingTemporary(Path target, String purpose) {
-        Path normalized = GraphFileReference.normalize(target);
-        Path parent = normalized.getParent();
-        if (parent == null) {
-            throw new IllegalArgumentException("path must have a parent: " + target);
-        }
-        String name = normalized.getFileName().toString();
-        return parent.resolve("." + name + ".geometrynode-" + purpose + "-" + UUID.randomUUID());
     }
 
     private ReentrantLock fileLock(Path path) {
@@ -200,4 +154,5 @@ public final class GraphDocumentStore {
 
     public record ReadSnapshot(String content, long revision) {
     }
+
 }

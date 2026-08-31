@@ -2,14 +2,12 @@ package com.mine.geometry_node.client.ui.editor.asset.repository;
 
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
+import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetListRequest;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -61,23 +59,18 @@ public final class RemoteAssetRepository implements AssetRepository {
         };
     }
 
-    private static AssetListing toListing(AssetLocation.Remote location, List<RemoteAssetEntry> source,
+    private static AssetListing toListing(AssetLocation.Remote location, List<AssetDescriptor> source,
                                           AssetQuery query) {
         if (!query.tag().isEmpty()) return AssetListing.empty(location);
         String nameQuery = query.normalizedName();
         List<AssetEntry> entries = new ArrayList<>();
-        Map<String, String> graphTypesByKey = new HashMap<>();
-        for (RemoteAssetEntry remote : source == null ? List.<RemoteAssetEntry>of() : source) {
+        for (AssetDescriptor remote : source == null ? List.<AssetDescriptor>of() : source) {
             if (!nameQuery.isEmpty() && !remote.name().toLowerCase(Locale.ROOT).contains(nameQuery)) continue;
-            AssetEntry entry = AssetEntry.remote(remote.path(), remote.name(), remote.directory(),
-                    remote.size(), remote.lastModified(), remote.assetTypeId());
+            AssetEntry entry = AssetEntry.remote(remote);
             if (entry.type() == null || !entry.type().displayInBrowser()
                     || !entry.type().supportsSource(AssetSourceKind.REMOTE)) continue;
             entries.add(entry);
-            if (AssetTypeRegistry.GRAPH_ID.equals(entry.type().id()) && !remote.variantId().isBlank()) {
-                graphTypesByKey.put(entry.key(), remote.variantId());
-            }
         }
-        return new AssetListing(true, location, entries, Map.of(), graphTypesByKey);
+        return new AssetListing(true, location, entries, Map.of());
     }
 }

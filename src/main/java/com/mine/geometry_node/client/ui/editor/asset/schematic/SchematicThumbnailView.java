@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.schematic;
 
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic.SchematicThumbnail;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.BlendMode;

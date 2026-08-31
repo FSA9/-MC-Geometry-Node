@@ -1294,6 +1294,7 @@
     "geometry_node.asset_transfer.error.permission_denied":  "你没有传输该资产的权限。",
     "geometry_node.asset_transfer.error.duplicate_transfer_id":  "该传输标识已经处于活动状态。",
     "geometry_node.asset_transfer.error.concurrency_limit":  "当前活动传输数量已达到上限。",
+    "geometry_node.asset_transfer.error.server_queue_full":  "服务器传输等待队列已满，请稍后重试。",
     "geometry_node.asset_transfer.error.invalid_sequence":  "传输数据块的序列无效。",
     "geometry_node.asset_transfer.error.invalid_acknowledgement":  "传输确认信息无效。",
     "geometry_node.asset_transfer.error.verification_or_commit_failed":  "文件校验失败或无法提交到目标位置。",

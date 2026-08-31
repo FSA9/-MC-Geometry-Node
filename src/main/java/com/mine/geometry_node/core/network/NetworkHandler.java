@@ -5,11 +5,10 @@ import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugServic
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetOperationResult;
 import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleRegistry;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetRepositoryService;
 import com.mine.geometry_node.core.engine.system.asset.transfer.service.ServerAssetTransferService;
 import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewService;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAck;
@@ -50,7 +49,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.nio.file.Files;
 import java.util.Set;
 import java.util.WeakHashMap;
 
@@ -81,7 +79,6 @@ public class NetworkHandler {
                 PacketAssetPreviewCancel.STREAM_CODEC, (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() instanceof ServerPlayer player) ServerAssetPreviewService.INSTANCE.cancel(player, payload.requestId());
                 }));
-
         NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetTransferOpen.TYPE,
                 PacketAssetTransferOpen.STREAM_CODEC, (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() instanceof ServerPlayer player) {
@@ -156,21 +153,30 @@ public class NetworkHandler {
                                     payload.requestId(), false, payload.directory(), "没有浏览服务器资产的权限。", Collections.emptyList()));
                             return;
                         }
-                        try {
-                            String directory = RemoteAssetFileService.normalizeDirectoryPath(payload.directory());
-                            if (payload.createIfMissing()) {
-                                if (!RemoteAssetPermissions.canCreateRemoteFolders(player)) {
-                                    sendToPlayer(player, new PacketRemoteAssetListResponse(
-                                            payload.requestId(), false, payload.directory(), "没有创建服务器资产文件夹的权限。", Collections.emptyList()));
-                                    return;
-                                }
-                                Files.createDirectories(RemoteAssetFileService.resolveDirectory(player.level().getServer(), directory));
-                            }
-                            List<RemoteAssetEntry> entries = RemoteAssetFileService.list(player.level().getServer(), directory);
-                            sendToPlayer(player, new PacketRemoteAssetListResponse(payload.requestId(), true, directory, "", entries));
-                        } catch (Exception e) {
+                        if (payload.createIfMissing() && !RemoteAssetPermissions.canCreateRemoteFolders(player)) {
                             sendToPlayer(player, new PacketRemoteAssetListResponse(
-                                    payload.requestId(), false, payload.directory(), e.getMessage(), Collections.emptyList()));
+                                    payload.requestId(), false, payload.directory(),
+                                    "没有创建服务器资产文件夹的权限。", Collections.emptyList()));
+                            return;
+                        }
+                        MinecraftServer server = player.level().getServer();
+                        try {
+                            RemoteAssetRepositoryService.INSTANCE.list(
+                                            server, payload.directory(), payload.createIfMissing())
+                                    .whenComplete((result, error) -> server.execute(() -> {
+                                        if (error != null) {
+                                            sendToPlayer(player, new PacketRemoteAssetListResponse(
+                                                    payload.requestId(), false, payload.directory(),
+                                                    failureMessage(error), Collections.emptyList()));
+                                            return;
+                                        }
+                                        sendToPlayer(player, new PacketRemoteAssetListResponse(
+                                                payload.requestId(), true, result.directory(), "", result.entries()));
+                                    }));
+                        } catch (RuntimeException exception) {
+                            sendToPlayer(player, new PacketRemoteAssetListResponse(
+                                    payload.requestId(), false, payload.directory(),
+                                    failureMessage(exception), Collections.emptyList()));
                         }
                     });
                 }
@@ -386,36 +392,56 @@ public class NetworkHandler {
             return;
         }
 
+        MinecraftServer server = player.level().getServer();
         try {
-            MinecraftServer server = player.level().getServer();
-            RemoteAssetOperationResult result;
-            try {
-                result = switch (payload.operation()) {
-                    case DELETE -> RemoteAssetFileService.deleteSelection(server, payload.paths());
-                    case COPY -> RemoteAssetFileService.copySelection(
-                            server, payload.paths(), payload.targetDirectory());
-                    case MOVE -> RemoteAssetFileService.moveSelection(
-                            server, payload.paths(), payload.targetDirectory());
-                };
-            } catch (Exception operationException) {
-                try {
-                    AssetLifecycleRegistry.INSTANCE.refreshAll(server);
-                } catch (RuntimeException reloadException) {
-                    operationException.addSuppressed(reloadException);
+            java.util.concurrent.CompletableFuture<RemoteAssetOperationResult> operation = switch (payload.operation()) {
+                case DELETE -> RemoteAssetRepositoryService.INSTANCE.delete(server, payload.paths());
+                case COPY -> RemoteAssetRepositoryService.INSTANCE.copy(
+                        server, payload.paths(), payload.destinationPath());
+                case MOVE -> RemoteAssetRepositoryService.INSTANCE.move(
+                        server, payload.paths(), payload.destinationPath());
+                case CREATE_DIRECTORY -> RemoteAssetRepositoryService.INSTANCE.createDirectory(
+                        server, payload.destinationPath());
+                case RENAME -> {
+                    if (payload.paths().size() != 1) {
+                        throw new IllegalArgumentException("Rename requires exactly one source path");
+                    }
+                    yield RemoteAssetRepositoryService.INSTANCE.rename(
+                            server, payload.paths().getFirst(), payload.destinationPath());
                 }
-                throw operationException;
-            }
-            AssetLifecycleRegistry.INSTANCE.refresh(server, result.affectedTypeIds());
-            String action = switch (payload.operation()) {
-                case DELETE -> "删除";
-                case COPY -> "复制";
-                case MOVE -> "移动";
             };
+            operation.whenComplete((result, error) -> server.execute(() -> {
+                if (error != null) {
+                    try {
+                        AssetLifecycleRegistry.INSTANCE.refreshAll(server);
+                    } catch (RuntimeException reloadException) {
+                        error.addSuppressed(reloadException);
+                    }
+                    sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
+                            payload.requestId(), false, "操作失败: " + failureMessage(error)));
+                    return;
+                }
+                AssetLifecycleRegistry.INSTANCE.refresh(server, result.affectedTypeIds());
+                String action = switch (payload.operation()) {
+                    case DELETE -> "删除";
+                    case COPY -> "复制";
+                    case MOVE -> "移动";
+                    case CREATE_DIRECTORY -> "新建文件夹";
+                    case RENAME -> "重命名";
+                };
+                sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
+                        payload.requestId(), true, action + "完成: " + result.affectedEntries()));
+            }));
+        } catch (RuntimeException exception) {
             sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
-                    payload.requestId(), true, action + "完成: " + result.affectedEntries()));
-        } catch (Exception e) {
-            sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
-                    payload.requestId(), false, "操作失败: " + e.getMessage()));
+                    payload.requestId(), false, "操作失败: " + failureMessage(exception)));
         }
+    }
+
+    private static String failureMessage(Throwable error) {
+        Throwable cause = error;
+        while (cause.getCause() != null && cause.getCause() != cause) cause = cause.getCause();
+        String message = cause.getMessage();
+        return message == null || message.isBlank() ? cause.getClass().getSimpleName() : message;
     }
 }

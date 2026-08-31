@@ -18,6 +18,7 @@ public enum AssetTransferErrorCode {
     DISCONNECTED(true),
     CANCELLED(false),
     GRAPH_RELOAD_FAILED(true),
+    SERVER_BUSY(true),
     UNKNOWN(true);
 
     private final boolean retryable;

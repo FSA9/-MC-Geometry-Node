@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
-import java.util.Locale;
+import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetContentHash;
+
 import java.util.Objects;
 
 public record AssetPreviewDescriptor(
@@ -20,7 +21,6 @@ public record AssetPreviewDescriptor(
         if (!AssetPreviewLimits.validEncodedSize(encodedBytes)) {
             throw new IllegalArgumentException("Invalid nativepreview encoded size: " + encodedBytes);
         }
-        sha256 = Objects.requireNonNullElse(sha256, "").toLowerCase(Locale.ROOT);
-        if (!sha256.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Invalid nativepreview SHA-256");
+        sha256 = AssetContentHash.normalizeRequired(sha256);
     }
 }

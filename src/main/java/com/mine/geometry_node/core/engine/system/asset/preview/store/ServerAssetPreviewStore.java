@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.preview.*;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
 import net.minecraft.server.MinecraftServer;
-import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferServerConfig;
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewServerConfig;
 
 import java.io.*;
 import java.nio.file.*;
@@ -44,7 +44,7 @@ public final class ServerAssetPreviewStore {
         atomicCopy(verifiedSource, artifact);
         writeMetadata(metadataPath(root, descriptor.revision().cacheKey()), descriptor);
         AssetPreviewCacheMaintenance.enforceLimit(root,
-                AssetTransferServerConfig.previewCacheMaxBytes(), artifact);
+                AssetPreviewServerConfig.cacheMaxBytes(), artifact);
         return new StoredPreview(descriptor, artifact);
     }
 
@@ -70,33 +70,14 @@ public final class ServerAssetPreviewStore {
         Files.createDirectories(target.getParent());
         Path temporary = target.resolveSibling(target.getFileName() + ".tmp");
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temporary)))) {
-            out.writeInt(METADATA_MAGIC);
-            out.writeUTF(descriptor.revision().identity().remotePath());
-            out.writeInt(descriptor.revision().identity().kind().ordinal());
-            out.writeLong(descriptor.revision().sourceSize());
-            out.writeLong(descriptor.revision().sourceLastModified());
-            out.writeInt(descriptor.revision().formatVersion());
-            out.writeInt(descriptor.format().ordinal());
-            out.writeInt(descriptor.width()); out.writeInt(descriptor.height());
-            out.writeInt(descriptor.encodedBytes()); out.writeUTF(descriptor.sha256());
+            AssetPreviewMetadataCodec.write(out, METADATA_MAGIC, descriptor);
         }
         atomicMove(temporary, target);
     }
 
     private static AssetPreviewDescriptor readMetadata(Path source) throws IOException {
         try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(source)))) {
-            if (in.readInt() != METADATA_MAGIC) throw new IOException("Invalid nativepreview metadata");
-            String path = in.readUTF(); int kind = in.readInt(); long size = in.readLong(); long modified = in.readLong();
-            int version = in.readInt(); int format = in.readInt();
-            if (kind < 0 || kind >= AssetPreviewKind.values().length || format < 0 || format >= AssetPreviewFormat.values().length) {
-                throw new IOException("Invalid nativepreview metadata enum");
-            }
-            AssetPreviewRevision revision = new AssetPreviewRevision(
-                    new AssetPreviewIdentity(path, AssetPreviewKind.values()[kind]), size, modified, version);
-            return new AssetPreviewDescriptor(revision, AssetPreviewFormat.values()[format],
-                    in.readInt(), in.readInt(), in.readInt(), in.readUTF());
-        } catch (IllegalArgumentException exception) {
-            throw new IOException("Invalid nativepreview metadata", exception);
+            return AssetPreviewMetadataCodec.read(in, METADATA_MAGIC);
         }
     }
 

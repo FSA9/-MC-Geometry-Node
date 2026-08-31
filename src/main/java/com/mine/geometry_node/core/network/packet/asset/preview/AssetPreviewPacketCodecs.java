@@ -6,11 +6,14 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 public final class AssetPreviewPacketCodecs {
     private AssetPreviewPacketCodecs() {}
     public static void writeRevision(RegistryFriendlyByteBuf b, AssetPreviewRevision r) {
-        b.writeUtf(r.identity().remotePath(), AssetPreviewLimits.MAX_PATH_LENGTH); b.writeVarInt(r.identity().kind().ordinal());
+        b.writeUtf(r.identity().remotePath(), AssetPreviewLimits.MAX_PATH_LENGTH);
+        b.writeUtf(r.identity().kind().id(), AssetPreviewLimits.MAX_PATH_LENGTH);
         b.writeLong(r.sourceSize()); b.writeLong(r.sourceLastModified()); b.writeVarInt(r.formatVersion());
     }
     public static AssetPreviewRevision readRevision(RegistryFriendlyByteBuf b) {
-        String path = b.readUtf(AssetPreviewLimits.MAX_PATH_LENGTH); AssetPreviewKind kind = readEnum(b, AssetPreviewKind.values());
+        String path = b.readUtf(AssetPreviewLimits.MAX_PATH_LENGTH);
+        AssetPreviewKind kind = AssetPreviewKind.fromId(b.readUtf(AssetPreviewLimits.MAX_PATH_LENGTH));
+        if (kind == null || !kind.isConcrete()) throw new IllegalArgumentException("Invalid asset preview kind");
         return new AssetPreviewRevision(new AssetPreviewIdentity(path, kind), b.readLong(), b.readLong(), b.readVarInt());
     }
     public static void writeDescriptor(RegistryFriendlyByteBuf b, AssetPreviewDescriptor d) {

@@ -15,6 +15,7 @@ import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
 import com.mine.geometry_node.client.asset.preview.protocol.ClientAssetPreviewProtocol;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAccepted;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferQueued;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadChunk;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadComplete;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferServerResult;
@@ -53,6 +54,8 @@ public final class ClientNetworkReceiverRegistry {
         initialized = true;
 
         ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferAccepted.TYPE,
+                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferQueued.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferPlanResponse.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferPlanState.handle(payload)));

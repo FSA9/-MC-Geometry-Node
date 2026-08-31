@@ -1,13 +1,13 @@
 package com.mine.geometry_node.core.network.packet.asset.transfer;
 
-import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferProtocolLimits;
+import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferChunkData;
+import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferCursor;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
 import java.util.Arrays;
-import java.util.Objects;
 import java.util.UUID;
 
 public record PacketAssetTransferDownloadChunk(UUID transferId, int sequence, long offset, byte[] content)
@@ -18,23 +18,22 @@ public record PacketAssetTransferDownloadChunk(UUID transferId, int sequence, lo
             StreamCodec.of((buffer, packet) -> packet.write(buffer), PacketAssetTransferDownloadChunk::new);
 
     public PacketAssetTransferDownloadChunk {
-        transferId = Objects.requireNonNull(transferId, "transferId");
-        if (sequence < 0 || offset < 0L) throw new IllegalArgumentException("Negative chunk position");
-        content = content == null ? new byte[0] : Arrays.copyOf(content, content.length);
-        if (content.length == 0 || content.length > AssetTransferProtocolLimits.MAX_CHUNK_BYTES) {
-            throw new IllegalArgumentException("Invalid asset transfer chunk length: " + content.length);
-        }
+        transferId = AssetTransferPacketCodecs.requireTransferId(transferId);
+        AssetTransferChunkData chunk = new AssetTransferChunkData(new AssetTransferCursor(sequence, offset), content);
+        content = chunk.content();
     }
 
     private PacketAssetTransferDownloadChunk(RegistryFriendlyByteBuf buffer) {
-        this(buffer.readUUID(), buffer.readVarInt(), buffer.readLong(), AssetTransferPacketCodecs.readChunk(buffer));
+        this(AssetTransferPacketCodecs.readChunk(buffer));
+    }
+
+    private PacketAssetTransferDownloadChunk(AssetTransferPacketCodecs.ChunkFrame frame) {
+        this(frame.transferId(), frame.chunk().cursor().sequence(), frame.chunk().cursor().offset(), frame.chunk().content());
     }
 
     private void write(RegistryFriendlyByteBuf buffer) {
-        buffer.writeUUID(transferId);
-        buffer.writeVarInt(sequence);
-        buffer.writeLong(offset);
-        buffer.writeByteArray(content);
+        AssetTransferPacketCodecs.writeChunk(buffer, transferId,
+                new AssetTransferChunkData(new AssetTransferCursor(sequence, offset), content));
     }
 
     @Override public byte[] content() { return Arrays.copyOf(content, content.length); }

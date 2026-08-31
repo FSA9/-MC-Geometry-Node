@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.mine.geometry_node.core.engine.system.asset.AssetRelativePath;
 
 public final class AssetPathUtils {
     private AssetPathUtils() {
@@ -9,27 +8,11 @@ public final class AssetPathUtils {
 
     public static String normalizeRemoteDirectory(String directory) {
         String normalized = trimRemoteRelativePath(directory);
-        if (normalized.isEmpty()) return "";
-
-        List<String> segments = new ArrayList<>();
-        for (String segment : normalized.split("/")) {
-            if (segment.isEmpty() || ".".equals(segment) || "..".equals(segment)) continue;
-            segments.add(segment);
-        }
-        return String.join("/", segments);
+        return AssetRelativePath.normalize(normalized, true);
     }
 
     public static String normalizeRemoteFilePath(String path) {
-        String normalized = trimRemoteRelativePath(path);
-        if (normalized.isEmpty()) {
-            throw new IllegalArgumentException("file path must not be empty");
-        }
-        for (String segment : normalized.split("/")) {
-            if (segment.isEmpty() || ".".equals(segment) || "..".equals(segment)) {
-                throw new IllegalArgumentException("invalid path: " + path);
-            }
-        }
-        return normalized;
+        return AssetRelativePath.normalize(trimRemoteRelativePath(path), false);
     }
 
     public static boolean isRemotePathInput(String path) {
@@ -49,14 +32,17 @@ public final class AssetPathUtils {
         if (path == null || path.isBlank() || "/".equals(path.trim())) return "";
         String normalized = path.replace('\\', '/').trim();
         String lower = normalized.toLowerCase(java.util.Locale.ROOT);
+        boolean remotePrefix = true;
         if (lower.startsWith("remote://")) {
             normalized = normalized.substring("remote://".length());
         } else if (lower.startsWith("remote:/")) {
             normalized = normalized.substring("remote:/".length());
         } else if (lower.startsWith("remote:")) {
             normalized = normalized.substring("remote:".length());
+        } else {
+            remotePrefix = false;
         }
-        while (normalized.startsWith("/")) {
+        while (remotePrefix && normalized.startsWith("/")) {
             normalized = normalized.substring(1);
         }
         while (normalized.endsWith("/")) {

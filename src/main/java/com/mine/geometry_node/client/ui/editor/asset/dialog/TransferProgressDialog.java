@@ -36,7 +36,7 @@ public class TransferProgressDialog extends AssetDialogBase {
         mProgress.setText(total > 0 ? processed + " / " + total : String.valueOf(processed));
         if (message != null && message.contains("完成")) {
             mFinished = true; mCommitting = false; mCancelButton.setEnabled(true);
-            mCancelButton.setText(tr("geometry_node.common.close")); postDelayed(this::requestClose, 900);
+            mCancelButton.setText(tr("geometry_node.common.close")); requestClose();
         }
     }
     public void enterCommitPhase() { mCommitting = true; mCancelButton.setEnabled(false); mCancelButton.setText(tr("geometry_node.asset_transfer.status.committing")); }

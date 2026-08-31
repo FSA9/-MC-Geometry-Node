@@ -24,7 +24,7 @@ public record AssetPreviewRevision(
     }
 
     public String cacheKey() {
-        String canonical = identity.remotePath() + '\0' + identity.kind().name() + '\0'
+        String canonical = identity.remotePath() + '\0' + identity.kind().id() + '\0'
                 + sourceSize + '\0' + sourceLastModified + '\0' + formatVersion;
         var digest = AssetTransferHashing.newSha256();
         return AssetTransferHashing.toHex(digest.digest(canonical.getBytes(StandardCharsets.UTF_8)));

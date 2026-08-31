@@ -1294,6 +1294,7 @@
     "geometry_node.asset_transfer.error.permission_denied":  "You do not have permission to transfer this asset.",
     "geometry_node.asset_transfer.error.duplicate_transfer_id":  "The transfer identifier is already active.",
     "geometry_node.asset_transfer.error.concurrency_limit":  "Too many transfers are already active.",
+    "geometry_node.asset_transfer.error.server_queue_full":  "The server transfer queue is full. Try again later.",
     "geometry_node.asset_transfer.error.invalid_sequence":  "The transfer chunk sequence is invalid.",
     "geometry_node.asset_transfer.error.invalid_acknowledgement":  "The transfer acknowledgement is invalid.",
     "geometry_node.asset_transfer.error.verification_or_commit_failed":  "The transferred file failed verification or could not be committed.",

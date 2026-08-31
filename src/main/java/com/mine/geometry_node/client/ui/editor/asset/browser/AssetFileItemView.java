@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.editor.asset.browser;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetPreviewKind;
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
@@ -80,7 +80,7 @@ final class AssetFileItemView extends LinearLayout {
                 ? SvgIconView.Icon.forGraphType(mGraphTypeId) : null;
         mGraphIconView = graphIcon != null ? new SvgIconView(context, graphIcon, iconColor()) : null;
         mPreviewView = entry.supports(AssetTypeAction.PREVIEW)
-                && entry.type().previewKind() != AssetPreviewKind.NONE
+                && entry.type().previewKind().isConcrete()
                 ? new AssetPreviewView(context, entry, mIconView)
                 : null;
         mNameView = UIUtils.createLockedTextView(context, displayName, mode.nameTextSizeDp, COLOR_TEXT);

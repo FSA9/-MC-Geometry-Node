@@ -18,5 +18,8 @@ public interface AssetBrowserCoordinator {
 
     void showDownloadDialog(List<AssetEntry> remoteEntries);
 
+    default void createRemoteGraph(String targetPath, Runnable onSuccess) {
+    }
+
     void notifySidebarChanged();
 }

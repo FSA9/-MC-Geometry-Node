@@ -2,10 +2,6 @@ package com.mine.geometry_node.client.asset.transfer;
 
 import com.mine.geometry_node.client.ui.persistence.config.AssetTransferConfigAdapter;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnail;
-import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicUploadPreview;
-import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicUploadPreviewGenerator;
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferClientPreferences;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.IncomingAssetTransferFile;
@@ -21,6 +17,7 @@ import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTrans
 import com.mine.geometry_node.core.engine.system.asset.transfer.service.ByteRateLimiter;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAccepted;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferQueued;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAck;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferCancel;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferChunk;
@@ -99,9 +96,16 @@ public final class ClientAssetTransferService implements AutoCloseable {
         if (job == null) return;
         for (ClientFile file : job.files) {
             if (file.state.isTerminal()) continue;
-            if (file.started) NetworkHandler.sendToServer(new PacketAssetTransferCancel(file.transferId, "cancelled_by_user"));
-            finish(file, AssetTransferState.CANCELLED, new AssetTransferFailure(
-                    AssetTransferErrorCode.CANCELLED, "geometry_node.asset_transfer.error.cancelled", List.of(), ""));
+            if (file.started) {
+                if (file.state == AssetTransferState.COMMITTING) continue;
+                if (!file.cancelRequested) {
+                    file.cancelRequested = true;
+                    NetworkHandler.sendToServer(new PacketAssetTransferCancel(file.transferId, "cancelled_by_user"));
+                }
+            } else {
+                finish(file, AssetTransferState.CANCELLED, new AssetTransferFailure(
+                        AssetTransferErrorCode.CANCELLED, "geometry_node.asset_transfer.error.cancelled", List.of(), ""));
+            }
         }
         publish();
         pump(job.direction);
@@ -155,7 +159,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
         ClientFile file;
         synchronized (this) {
             file = filesByTransferId.get(packet.transferId());
-            if (file == null || file.state.isTerminal()) return;
+            if (file == null || file.state.isTerminal() || file.cancelRequested) return;
             if (file.direction == AssetTransferDirection.DOWNLOAD
                     && packet.totalBytes() > preferences().maxDownloadFileBytes()) {
                 failLocal(file, AssetTransferErrorCode.FILE_TOO_LARGE, "file_too_large", "");
@@ -172,11 +176,19 @@ public final class ClientAssetTransferService implements AutoCloseable {
         else prepareIncomingDownload(file);
     }
 
+    public synchronized void handle(PacketAssetTransferQueued packet) {
+        ClientFile file = filesByTransferId.get(packet.transferId());
+        if (file == null || file.state.isTerminal() || file.cancelRequested) return;
+        file.state = AssetTransferState.QUEUED;
+        publish();
+    }
+
     public void handle(PacketAssetTransferUploadAck packet) {
         ClientFile file;
         synchronized (this) {
             file = filesByTransferId.get(packet.transferId());
-            if (file == null || file.direction != AssetTransferDirection.UPLOAD || file.state.isTerminal()) return;
+            if (file == null || file.direction != AssetTransferDirection.UPLOAD
+                    || file.state.isTerminal() || file.cancelRequested) return;
             if (packet.nextSequence() != file.nextSequence || packet.nextOffset() != file.transferredBytes) {
                 failLocal(file, AssetTransferErrorCode.INVALID_SEQUENCE, "invalid_acknowledgement", "");
                 return;
@@ -193,7 +205,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
         synchronized (this) {
             file = filesByTransferId.get(packet.transferId());
             if (file == null || file.direction != AssetTransferDirection.DOWNLOAD || file.state.isTerminal()
-                    || file.incoming == null) return;
+                    || file.cancelRequested || file.incoming == null) return;
             file.touch();
         }
         io.submit(() -> file.incoming.writeChunk(packet.sequence(), packet.offset(), packet.content()))
@@ -203,14 +215,20 @@ public final class ClientAssetTransferService implements AutoCloseable {
                         return;
                     }
                     synchronized (this) {
+                        if (file.cancelRequested || file.state.isTerminal()) return;
                         file.transferredBytes = file.incoming.nextOffset();
                         file.nextSequence = file.incoming.nextSequence();
                         publish();
                     }
                     long delay = preferences().downloadRateBytesPerSecond() == 0L ? 0L
                             : file.downloadLimiter.reserveDelayNanos(packet.content().length);
-                    scheduler.schedule(() -> post(() -> NetworkHandler.sendToServer(new PacketAssetTransferAck(
-                            file.transferId, file.nextSequence, file.transferredBytes))), delay, TimeUnit.NANOSECONDS);
+                    scheduler.schedule(() -> post(() -> {
+                        synchronized (this) {
+                            if (file.cancelRequested || file.state.isTerminal()) return;
+                        }
+                        NetworkHandler.sendToServer(new PacketAssetTransferAck(
+                                file.transferId, file.nextSequence, file.transferredBytes));
+                    }), delay, TimeUnit.NANOSECONDS);
                 }));
     }
 
@@ -218,7 +236,8 @@ public final class ClientAssetTransferService implements AutoCloseable {
         ClientFile file;
         synchronized (this) {
             file = filesByTransferId.get(packet.transferId());
-            if (file == null || file.direction != AssetTransferDirection.DOWNLOAD || file.state.isTerminal()) return;
+            if (file == null || file.direction != AssetTransferDirection.DOWNLOAD
+                    || file.state.isTerminal() || file.cancelRequested) return;
             file.state = AssetTransferState.VERIFYING;
             publish();
         }
@@ -226,7 +245,13 @@ public final class ClientAssetTransferService implements AutoCloseable {
             file.incoming.verifyAndClose();
             Path temporary = file.incoming.retainVerifiedFile();
             try {
-                file.state = AssetTransferState.COMMITTING;
+                synchronized (this) {
+                    if (file.cancelRequested || file.state.isTerminal()) {
+                        Files.deleteIfExists(temporary);
+                        return;
+                    }
+                    file.state = AssetTransferState.COMMITTING;
+                }
                 VerifiedAssetCommitter.commit(temporary, file.request.localPath(), file.request.conflictPolicy());
             } catch (Throwable throwable) {
                 Files.deleteIfExists(temporary);
@@ -238,6 +263,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
                 return;
             }
             synchronized (this) {
+                if (file.cancelRequested || file.state.isTerminal()) return;
                 finish(file, AssetTransferState.COMPLETED, null);
                 publish();
                 pump(file.direction);
@@ -302,33 +328,19 @@ public final class ClientAssetTransferService implements AutoCloseable {
             return;
         }
         AssetTransferClientPreferences preferences = preferences();
-        io.submit(() -> new PreparedUpload(
-                        OutgoingAssetTransferFile.open(file.request.localPath(), preferences.maxUploadFileBytes()),
-                        AssetTypeCatalog.SCHEMATIC_TYPE_ID.equals(
-                                AssetTypeCatalog.inspect(file.request.localPath(), file.request.remotePath()).typeId())
-                                ? SchematicUploadPreviewGenerator.read(file.request.localPath()) : null))
-                .whenComplete((prepared, throwable) -> post(() -> {
+        io.submit(() -> OutgoingAssetTransferFile.open(
+                        file.request.localPath(), preferences.maxUploadFileBytes()))
+                .whenComplete((outgoing, throwable) -> post(() -> {
                     if (throwable != null) {
                         failLocal(file, AssetTransferErrorCode.IO_FAILURE, "open_failed", rootMessage(throwable));
                         return;
                     }
-                    SchematicUploadPreview preview = null;
-                    try {
-                        if (prepared.thumbnail() != null) {
-                            preview = SchematicUploadPreviewGenerator.render(prepared.thumbnail());
-                        }
-                    } catch (Throwable previewFailure) {
-                        closeQuietly(prepared.outgoing());
-                        failLocal(file, AssetTransferErrorCode.IO_FAILURE, "preview_generation_failed",
-                                rootMessage(previewFailure));
-                        return;
-                    }
                     synchronized (this) {
-                        if (file.state.isTerminal()) { closeQuietly(prepared.outgoing()); return; }
-                        file.outgoing = prepared.outgoing();
-                        file.preview = preview;
-                        file.totalBytes = prepared.outgoing().totalBytes();
-                        file.sha256 = prepared.outgoing().sha256();
+                        if (file.state.isTerminal()) { closeQuietly(outgoing); return; }
+                        file.outgoing = outgoing;
+                        file.totalBytes = outgoing.totalBytes();
+                        file.sourceLastModified = outgoing.lastModifiedMillis();
+                        file.sha256 = outgoing.sha256();
                         publish();
                     }
                     NetworkHandler.sendToServer(new PacketAssetTransferOpen(file.transferId, file.direction,
@@ -348,7 +360,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
                         return;
                     }
                     synchronized (this) {
-                        if (file.state.isTerminal()) { closeQuietly(incoming); return; }
+                        if (file.state.isTerminal() || file.cancelRequested) { closeQuietly(incoming); return; }
                         file.incoming = incoming;
                     }
                     NetworkHandler.sendToServer(new PacketAssetTransferAck(file.transferId, 0, 0L));
@@ -357,15 +369,11 @@ public final class ClientAssetTransferService implements AutoCloseable {
 
     private void sendNextUploadChunk(ClientFile file) {
         synchronized (this) {
-            if (file.state.isTerminal() || file.sendInProgress) return;
+            if (file.state.isTerminal() || file.cancelRequested || file.sendInProgress) return;
             if (file.transferredBytes >= file.totalBytes) {
                 file.state = AssetTransferState.VERIFYING;
                 publish();
-                SchematicUploadPreview preview = file.preview;
-                NetworkHandler.sendToServer(preview == null
-                        ? new PacketAssetTransferComplete(file.transferId)
-                        : new PacketAssetTransferComplete(file.transferId, preview.format(), preview.width(),
-                        preview.height(), preview.content()));
+                NetworkHandler.sendToServer(new PacketAssetTransferComplete(file.transferId));
                 return;
             }
             file.sendInProgress = true;
@@ -380,7 +388,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
             long delay = file.uploadLimiter.reserveDelayNanos(content.length);
             scheduler.schedule(() -> post(() -> {
                 synchronized (this) {
-                    if (file.state.isTerminal()) return;
+                    if (file.state.isTerminal() || file.cancelRequested) return;
                     file.nextSequence++;
                     file.transferredBytes += content.length;
                     publish();
@@ -429,6 +437,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
         long deadline = System.nanoTime() - TimeUnit.SECONDS.toNanos(30L);
         List<ClientFile> expired = filesByTransferId.values().stream()
                 .filter(file -> file.started && file.state != AssetTransferState.PREFLIGHT
+                        && file.state != AssetTransferState.QUEUED
                         && !file.state.isTerminal() && file.lastActivityNanos < deadline).toList();
         for (ClientFile file : expired) {
             failLocal(file, AssetTransferErrorCode.TIMEOUT, "timeout", "");
@@ -501,14 +510,15 @@ public final class ClientAssetTransferService implements AutoCloseable {
         private AssetTransferFailure failure;
         private OutgoingAssetTransferFile outgoing;
         private IncomingAssetTransferFile incoming;
-        private SchematicUploadPreview preview;
         private String sha256 = "";
         private long totalBytes;
+        private long sourceLastModified;
         private long transferredBytes;
         private int chunkBytes;
         private int nextSequence;
         private boolean started;
         private boolean sendInProgress;
+        private boolean cancelRequested;
         private long startedAtNanos;
         private long lastActivityNanos = System.nanoTime();
         private ClientFile(ClientJob job, ClientAssetTransferRequest request) {
@@ -529,6 +539,4 @@ public final class ClientAssetTransferService implements AutoCloseable {
         }
     }
 
-    private record PreparedUpload(OutgoingAssetTransferFile outgoing, SchematicThumbnail thumbnail) {
-    }
 }

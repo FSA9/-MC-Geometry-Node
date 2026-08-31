@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.asset.repository;
 
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
+import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.network.packet.asset.AssetPacketCodecs;
 import com.mine.geometry_node.core.network.packet.asset.AssetPacketLimits;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -15,7 +15,7 @@ public record PacketRemoteAssetListResponse(
         boolean success,
         String directory,
         String message,
-        List<RemoteAssetEntry> entries
+        List<AssetDescriptor> entries
 ) implements CustomPacketPayload {
     public static final Type<PacketRemoteAssetListResponse> TYPE =
             new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "remote_asset_list_response"));
@@ -29,7 +29,7 @@ public record PacketRemoteAssetListResponse(
         this(buf.readInt(), buf.readBoolean(),
                 buf.readUtf(AssetPacketLimits.MAX_PATH_LENGTH),
                 buf.readUtf(AssetPacketLimits.MAX_MESSAGE_LENGTH),
-                AssetPacketCodecs.readRemoteAssetEntries(buf, AssetPacketLimits.MAX_REPOSITORY_ENTRIES));
+                AssetPacketCodecs.readAssetDescriptors(buf, AssetPacketLimits.MAX_REPOSITORY_ENTRIES));
     }
 
     public PacketRemoteAssetListResponse {
@@ -45,7 +45,7 @@ public record PacketRemoteAssetListResponse(
         buf.writeBoolean(success);
         buf.writeUtf(directory, AssetPacketLimits.MAX_PATH_LENGTH);
         buf.writeUtf(message, AssetPacketLimits.MAX_MESSAGE_LENGTH);
-        AssetPacketCodecs.writeRemoteAssetEntries(buf, entries, AssetPacketLimits.MAX_REPOSITORY_ENTRIES);
+        AssetPacketCodecs.writeAssetDescriptors(buf, entries, AssetPacketLimits.MAX_REPOSITORY_ENTRIES);
     }
 
     @Override

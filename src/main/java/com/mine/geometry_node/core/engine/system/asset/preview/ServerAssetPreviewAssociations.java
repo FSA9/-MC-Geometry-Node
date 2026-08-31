@@ -1,7 +1,8 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetMutationRegistry;
+import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
 import net.minecraft.server.MinecraftServer;
 
@@ -15,12 +16,39 @@ import java.util.List;
 /** Captures immutable nativepreview revisions before asset copy/move and rekeys them after the file operation. */
 public final class ServerAssetPreviewAssociations {
     private static final ServerAssetPreviewStore STORE = new ServerAssetPreviewStore();
+    private static boolean initialized;
 
     private ServerAssetPreviewAssociations() {
     }
 
+    public static synchronized void init() {
+        if (initialized) return;
+        initialized = true;
+        RemoteAssetMutationRegistry.INSTANCE.register(ServerAssetPreviewAssociations::prepare);
+    }
+
+    private static RemoteAssetMutationRegistry.PreparedMutation prepare(
+            MinecraftServer server,
+            RemoteAssetMutationRegistry.Operation operation,
+            Path source,
+            Path target
+    ) throws IOException {
+        if (target == null || (operation != RemoteAssetMutationRegistry.Operation.COPY
+                && operation != RemoteAssetMutationRegistry.Operation.MOVE
+                && operation != RemoteAssetMutationRegistry.Operation.RENAME)) {
+            return RemoteAssetMutationRegistry.PreparedMutation.NONE;
+        }
+        Migration migration = capture(server, source, target);
+        return new RemoteAssetMutationRegistry.PreparedMutation() {
+            @Override
+            public void commit() {
+                migration.apply();
+            }
+        };
+    }
+
     public static Migration capture(MinecraftServer server, Path source, Path target) throws IOException {
-        Path root = RemoteAssetFileService.root(server);
+        Path root = ServerAssetPaths.root(server);
         List<Entry> entries = new ArrayList<>();
         if (Files.isRegularFile(source) && !Files.isSymbolicLink(source)) {
             captureFile(root, source, target, entries);
@@ -35,8 +63,8 @@ public final class ServerAssetPreviewAssociations {
     }
 
     private static void captureFile(Path root, Path source, Path target, List<Entry> entries) throws IOException {
-        AssetPreviewKind kind = AssetPreviewKind.fromAssetType(AssetTypeCatalog.inspect(source).typeId());
-        if (kind == null) return;
+        AssetPreviewKind kind = AssetTypeCatalog.previewKind(AssetTypeCatalog.inspect(source).typeId());
+        if (!kind.isConcrete()) return;
         BasicFileAttributes attributes = Files.readAttributes(source, BasicFileAttributes.class);
         String relative = root.relativize(source.toAbsolutePath().normalize()).toString().replace('\\', '/');
         AssetPreviewRevision revision = AssetPreviewRevision.current(
@@ -50,7 +78,7 @@ public final class ServerAssetPreviewAssociations {
                 try {
                     if (!Files.isRegularFile(entry.target) || Files.isSymbolicLink(entry.target)) continue;
                     BasicFileAttributes attributes = Files.readAttributes(entry.target, BasicFileAttributes.class);
-                    Path root = RemoteAssetFileService.root(server);
+                    Path root = ServerAssetPaths.root(server);
                     String relative = root.relativize(entry.target).toString().replace('\\', '/');
                     AssetPreviewRevision targetRevision = AssetPreviewRevision.current(
                             new AssetPreviewIdentity(relative, entry.kind), attributes.size(),

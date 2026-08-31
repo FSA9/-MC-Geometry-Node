@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.system.asset.transfer.io;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -24,13 +25,17 @@ public final class AssetTransferIoExecutor implements AutoCloseable {
     }
 
     public <T> CompletableFuture<T> submit(IoSupplier<T> operation) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return operation.get();
-            } catch (Exception exception) {
-                throw new AssetTransferIoException(exception);
-            }
-        }, executor);
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return operation.get();
+                } catch (Exception exception) {
+                    throw new AssetTransferIoException(exception);
+                }
+            }, executor);
+        } catch (RejectedExecutionException exception) {
+            return CompletableFuture.failedFuture(new AssetTransferIoException(exception));
+        }
     }
 
     public CompletableFuture<Void> run(IoRunnable operation) {

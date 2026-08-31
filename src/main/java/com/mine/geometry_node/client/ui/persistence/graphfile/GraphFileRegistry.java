@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.persistence.graphfile;
 
+import com.mine.geometry_node.client.asset.file.AssetFileTransactionManager;
+
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.nio.file.Path;
@@ -12,12 +14,13 @@ import java.util.Map;
 /**
  * Owns graph-file identities and updates them together with filesystem mutations.
  */
-public final class GraphFileRegistry {
+public final class GraphFileRegistry implements AssetFileTransactionManager.MutationParticipant {
     public static final GraphFileRegistry INSTANCE = new GraphFileRegistry();
 
     private final Map<Path, WeakReference<GraphFileReference>> mReferences = new HashMap<>();
 
     private GraphFileRegistry() {
+        AssetFileTransactionManager.INSTANCE.registerParticipant(this);
     }
 
     public GraphFileReference reference(Path path) {
@@ -37,14 +40,12 @@ public final class GraphFileRegistry {
         });
     }
 
-    public Mutation beginMove(Path source, Path destination) throws IOException {
-        return beginMoves(Map.of(source, destination));
-    }
-
-    public Mutation beginMoves(Map<Path, Path> moves) throws IOException {
+    @Override
+    public AssetFileTransactionManager.PreparedMutation prepare(
+            AssetFileTransactionManager.MutationPlan plan) throws IOException {
         List<Map.Entry<Path, Path>> normalizedMoves = new ArrayList<>();
-        if (moves != null) {
-            for (Map.Entry<Path, Path> move : moves.entrySet()) {
+        if (plan != null) {
+            for (Map.Entry<Path, Path> move : plan.moves().entrySet()) {
                 if (move.getKey() != null && move.getValue() != null) {
                     normalizedMoves.add(Map.entry(
                             GraphFileReference.normalize(move.getKey()),
@@ -54,7 +55,10 @@ public final class GraphFileRegistry {
         }
         normalizedMoves.sort((first, second) -> Integer.compare(
                 second.getKey().getNameCount(), first.getKey().getNameCount()));
-        return begin(path -> {
+        List<Path> normalizedDeletes = plan == null ? List.of() : plan.deletes().stream()
+                .map(GraphFileReference::normalize)
+                .toList();
+        Map<GraphFileReference, Path> changes = prepareLocked(path -> {
             for (Map.Entry<Path, Path> move : normalizedMoves) {
                 Path source = move.getKey();
                 Path destination = move.getValue();
@@ -65,29 +69,30 @@ public final class GraphFileRegistry {
                     return destination.resolve(source.relativize(path)).normalize();
                 }
             }
-            return null;
-        });
-    }
-
-    public Mutation beginDelete(List<Path> targets) throws IOException {
-        List<Path> normalizedTargets = new ArrayList<>();
-        if (targets != null) {
-            for (Path target : targets) {
-                if (target != null) normalizedTargets.add(GraphFileReference.normalize(target));
-            }
-        }
-        return begin(path -> {
-            for (Path target : normalizedTargets) {
+            for (Path target : normalizedDeletes) {
                 if (path.equals(target) || path.startsWith(target)) {
-                    return Mutation.DELETED_PATH;
+                    return DELETED_PATH;
                 }
             }
             return null;
         });
-    }
+        return new AssetFileTransactionManager.PreparedMutation() {
+            private boolean mFinished;
 
-    private Mutation begin(PathMapper mapper) throws IOException {
-        return new Mutation(this, mapper);
+            @Override
+            public void commit() {
+                if (mFinished) return;
+                commitLocked(changes);
+                mFinished = true;
+            }
+
+            @Override
+            public void rollback() {
+                if (mFinished) return;
+                rollbackLocked(changes);
+                mFinished = true;
+            }
+        };
     }
 
     private synchronized Map<GraphFileReference, Path> prepareLocked(PathMapper mapper) {
@@ -112,7 +117,7 @@ public final class GraphFileRegistry {
 
     private synchronized void commitLocked(Map<GraphFileReference, Path> changes) {
         for (Map.Entry<GraphFileReference, Path> change : changes.entrySet()) {
-            if (change.getValue() == Mutation.DELETED_PATH) {
+            if (change.getValue() == DELETED_PATH) {
                 change.getKey().commitDelete();
             } else {
                 change.getKey().commitMove(change.getValue());
@@ -149,38 +154,5 @@ public final class GraphFileRegistry {
         Path map(Path path);
     }
 
-    public static final class Mutation {
-        private static final Path DELETED_PATH = Path.of("");
-
-        private final GraphFileRegistry mRegistry;
-        private final PathMapper mMapper;
-        private boolean mFinished;
-
-        private Mutation(GraphFileRegistry registry, PathMapper mapper) {
-            mRegistry = registry;
-            mMapper = mapper;
-        }
-
-        public void commit(GraphDocumentStore.IOCallable<Void> filesystemAction) throws IOException {
-            if (mFinished) {
-                throw new IllegalStateException("graph-file mutation already finished");
-            }
-            try {
-                GraphDocumentStore.INSTANCE.withStructureMutation(() -> {
-                    Map<GraphFileReference, Path> changes = mRegistry.prepareLocked(mMapper);
-                    try {
-                        filesystemAction.call();
-                        mRegistry.commitLocked(changes);
-                    } catch (IOException | RuntimeException e) {
-                        mRegistry.rollbackLocked(changes);
-                        throw e;
-                    }
-                    return null;
-                });
-            } finally {
-                mFinished = true;
-            }
-        }
-
-    }
+    private static final Path DELETED_PATH = Path.of("");
 }

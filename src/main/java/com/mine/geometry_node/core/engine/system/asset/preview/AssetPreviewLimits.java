@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.system.asset.preview;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferProtocolLimits;
 
 public final class AssetPreviewLimits {
-    public static final int FORMAT_VERSION = 2;
+    public static final int FORMAT_VERSION = 4;
     public static final int TARGET_WIDTH = 256;
     public static final int TARGET_HEIGHT = 256;
     public static final int MAX_WIDTH = 512;
@@ -11,6 +11,7 @@ public final class AssetPreviewLimits {
     public static final int MAX_PIXELS = MAX_WIDTH * MAX_HEIGHT;
     public static final int MAX_ENCODED_BYTES = 512 * 1024;
     public static final long MAX_IMAGE_SOURCE_BYTES = 64L * 1024L * 1024L;
+    public static final long MAX_SCHEMATIC_SOURCE_BYTES = 64L * 1024L * 1024L;
     public static final int MAX_IMAGE_SOURCE_WIDTH = 8192;
     public static final int MAX_IMAGE_SOURCE_HEIGHT = 8192;
     public static final long MAX_IMAGE_SOURCE_PIXELS = 16L * 1024L * 1024L;

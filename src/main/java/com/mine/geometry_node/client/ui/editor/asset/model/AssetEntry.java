@@ -1,45 +1,45 @@
 package com.mine.geometry_node.client.ui.editor.asset.model;
 
+import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
+import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
+
 import java.io.File;
 
 public final class AssetEntry {
     private final AssetSourceKind mSourceKind;
     private final String mKey;
-    private final String mName;
-    private final String mPath;
-    private final boolean mDirectory;
-    private final long mSize;
-    private final long mLastModified;
+    private final AssetDescriptor mDescriptor;
     private final File mLocalFile;
     private final AssetType mType;
 
-    private AssetEntry(AssetSourceKind sourceKind, String key, String name, String path,
-                       boolean directory, long size, long lastModified, File localFile, AssetType type) {
+    private AssetEntry(AssetSourceKind sourceKind, String key, AssetDescriptor descriptor,
+                       File localFile, AssetType type) {
         mSourceKind = sourceKind;
         mKey = key;
-        mName = name;
-        mPath = path;
-        mDirectory = directory;
-        mSize = size;
-        mLastModified = Math.max(0L, lastModified);
+        mDescriptor = descriptor;
         mLocalFile = localFile;
         mType = type != null ? type : AssetTypeRegistry.INSTANCE.get(AssetTypeRegistry.FILE_ID);
     }
 
     public static AssetEntry local(File file, String key, String displayPath) {
         String name = file.getName().isEmpty() ? file.getAbsolutePath() : file.getName();
-        AssetType type = AssetTypeRegistry.INSTANCE.resolveLocal(file);
-        return new AssetEntry(AssetSourceKind.LOCAL, key, name, displayPath,
-                file.isDirectory(), file.length(), file.lastModified(), file, type);
+        boolean directory = file.isDirectory();
+        AssetMetadata metadata = directory ? AssetMetadata.UNKNOWN : AssetTypeCatalog.inspect(file.toPath());
+        AssetDescriptor descriptor = new AssetDescriptor(displayPath, name, directory,
+                file.length(), file.lastModified(), metadata);
+        AssetType type = AssetTypeRegistry.INSTANCE.resolve(metadata.typeId(), AssetSourceKind.LOCAL, directory);
+        return new AssetEntry(AssetSourceKind.LOCAL, key, descriptor, file, type);
     }
 
-    public static AssetEntry remote(String path, String name, boolean directory, long size, long lastModified,
-                                    String assetTypeId) {
-        String normalizedPath = path == null ? "" : path.replace('\\', '/');
+    public static AssetEntry remote(AssetDescriptor descriptor) {
+        String normalizedPath = descriptor.path().replace('\\', '/');
         String key = "remote:" + normalizedPath;
-        AssetType type = AssetTypeRegistry.INSTANCE.resolve(assetTypeId, AssetSourceKind.REMOTE, directory);
-        return new AssetEntry(AssetSourceKind.REMOTE, key, name, normalizedPath,
-                directory, size, lastModified, null, type);
+        AssetDescriptor normalized = new AssetDescriptor(normalizedPath, descriptor.name(), descriptor.directory(),
+                descriptor.size(), descriptor.lastModified(), descriptor.metadata());
+        AssetType type = AssetTypeRegistry.INSTANCE.resolve(
+                descriptor.metadata().typeId(), AssetSourceKind.REMOTE, descriptor.directory());
+        return new AssetEntry(AssetSourceKind.REMOTE, key, normalized, null, type);
     }
 
     public AssetSourceKind sourceKind() {
@@ -51,23 +51,23 @@ public final class AssetEntry {
     }
 
     public String name() {
-        return mName;
+        return mDescriptor.name();
     }
 
     public String path() {
-        return mPath;
+        return mDescriptor.path();
     }
 
     public boolean isDirectory() {
-        return mDirectory;
+        return mDescriptor.directory();
     }
 
     public long size() {
-        return mSize;
+        return mDescriptor.size();
     }
 
     public long lastModified() {
-        return mLastModified;
+        return mDescriptor.lastModified();
     }
 
     public File localFile() {
@@ -76,6 +76,14 @@ public final class AssetEntry {
 
     public AssetType type() {
         return mType;
+    }
+
+    public AssetDescriptor descriptor() {
+        return mDescriptor;
+    }
+
+    public AssetMetadata metadata() {
+        return mDescriptor.metadata();
     }
 
     public boolean supports(AssetTypeAction action) {
