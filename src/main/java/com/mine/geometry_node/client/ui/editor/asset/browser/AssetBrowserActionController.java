@@ -25,7 +25,7 @@ import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetFileOperationRequest;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetFileOperationRequest;
 import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.View;
@@ -60,8 +60,7 @@ final class AssetBrowserActionController {
     private final boolean mOpenLocalJsonOnDoubleClick;
     private final boolean mShowPickerContextActions;
 
-    private List<File> mClipboardFiles = new ArrayList<>();
-    private boolean mIsCutOperation = false;
+    private final AssetBrowserClipboard mClipboard = new AssetBrowserClipboard();
 
     private final Set<Integer> mRemoteRequestIds = new HashSet<>();
 
@@ -95,11 +94,11 @@ final class AssetBrowserActionController {
 
     boolean canPasteClipboard() {
         if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
-            return mEnableLocalFileActions && !mPanel.isFavoritesMode() && !mClipboardFiles.isEmpty();
+            return mEnableLocalFileActions && !mPanel.isFavoritesMode() && !mClipboard.localFiles().isEmpty();
         }
         return mEnableRemoteTransferActions
                 && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)
-                && !RemoteAssetClient.clipboardPaths().isEmpty();
+                && !mClipboard.remotePaths().isEmpty();
     }
 
     boolean canCutSelection() {
@@ -137,8 +136,7 @@ final class AssetBrowserActionController {
         if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
             List<File> files = mPanel.getSelectedLocalFiles();
             if (files.isEmpty()) return;
-            mClipboardFiles = new ArrayList<>(files);
-            mIsCutOperation = false;
+            mClipboard.setLocal(files, false);
             return;
         }
 
@@ -162,8 +160,7 @@ final class AssetBrowserActionController {
         if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
             List<File> files = mPanel.getSelectedLocalFiles();
             if (files.isEmpty()) return;
-            mClipboardFiles = new ArrayList<>(files);
-            mIsCutOperation = true;
+            mClipboard.setLocal(files, true);
             return;
         }
 
@@ -328,8 +325,7 @@ final class AssetBrowserActionController {
         if (entriesSnapshot.stream().allMatch(entry -> entry.supports(AssetTypeAction.MOVE))) {
             menu.addMenuItem(actionLabel(AssetLibraryActionId.CUT) + suffix,
                     shortcutText(AssetLibraryActionId.CUT), () -> {
-                mClipboardFiles = new ArrayList<>(filesSnapshot);
-                mIsCutOperation = true;
+                    mClipboard.setLocal(filesSnapshot, true);
             });
             added = true;
         }
@@ -438,15 +434,15 @@ final class AssetBrowserActionController {
         }
 
         if (mEnableLocalFileActions && !mPanel.isFavoritesMode()
-                && mPanel.getSourceKind() == AssetSourceKind.LOCAL && !mClipboardFiles.isEmpty()) {
+                && mPanel.getSourceKind() == AssetSourceKind.LOCAL && !mClipboard.localFiles().isEmpty()) {
             menu.addMenuItem(actionLabel(AssetLibraryActionId.PASTE),
                     shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
             menu.addDivider();
         }
         if (mEnableRemoteTransferActions && mPanel.getSourceKind() == AssetSourceKind.REMOTE
                 && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)
-                && !RemoteAssetClient.clipboardPaths().isEmpty()) {
-            menu.addMenuItem(RemoteAssetClient.isCutOperation()
+                && !mClipboard.remotePaths().isEmpty()) {
+            menu.addMenuItem(mClipboard.isRemoteCut()
                             ? translated("geometry_node.asset_library.action.move_here")
                             : actionLabel(AssetLibraryActionId.PASTE),
                     shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
@@ -561,9 +557,9 @@ final class AssetBrowserActionController {
 
     private void performPaste() {
         File currentDirectory = mPanel.getCurrentDirectory();
-        if (mPanel.isFavoritesMode() || mClipboardFiles.isEmpty() || currentDirectory == null) return;
-        List<File> clipboardSnapshot = new ArrayList<>(mClipboardFiles);
-        boolean cutOperation = mIsCutOperation;
+        if (mPanel.isFavoritesMode() || mClipboard.localFiles().isEmpty() || currentDirectory == null) return;
+        List<File> clipboardSnapshot = mClipboard.localFiles();
+        boolean cutOperation = mClipboard.isLocalCut();
         mIoTasks.run(cutOperation ? "移动文件" : "复制文件",
                 context -> mLocalAssetService.pasteFiles(clipboardSnapshot, currentDirectory, cutOperation, context),
                 (result, progress) -> {
@@ -576,7 +572,7 @@ final class AssetBrowserActionController {
                         mFavoriteStore.updatePath(move.source(), move.destination());
                     }
                     if (cutOperation && !result.movedFiles().isEmpty()) {
-                        mClipboardFiles.clear();
+                        mClipboard.clearLocal();
                     }
                     if (!result.successfulFiles().isEmpty()) {
                         mPanel.clearSelection();
@@ -596,7 +592,7 @@ final class AssetBrowserActionController {
                 paths.add(entry.path());
             }
         }
-        RemoteAssetClient.setClipboard(paths, cutOperation);
+        mClipboard.setRemote(paths, cutOperation);
     }
 
     private String shortcutText(AssetLibraryActionId actionId) {
@@ -633,9 +629,9 @@ final class AssetBrowserActionController {
     }
 
     private void pasteRemoteEntries() {
-        List<String> clipboardPaths = RemoteAssetClient.clipboardPaths();
+        List<String> clipboardPaths = mClipboard.remotePaths();
         if (clipboardPaths.isEmpty()) return;
-        PacketRemoteAssetFileOperationRequest.Operation operation = RemoteAssetClient.isCutOperation()
+        PacketRemoteAssetFileOperationRequest.Operation operation = mClipboard.isRemoteCut()
                 ? PacketRemoteAssetFileOperationRequest.Operation.MOVE
                 : PacketRemoteAssetFileOperationRequest.Operation.COPY;
         sendRemoteFileOperation(operation, clipboardPaths, mPanel.getRemoteDirectory());
@@ -662,7 +658,7 @@ final class AssetBrowserActionController {
                 }
                 progress.update(response.message(), 1, 1);
                 if (operation == PacketRemoteAssetFileOperationRequest.Operation.MOVE) {
-                    RemoteAssetClient.clearClipboard();
+                    mClipboard.clearRemote();
                 }
                 mPanel.clearSelection();
                 mPanel.refreshFileList();
@@ -676,6 +672,10 @@ final class AssetBrowserActionController {
             RemoteAssetClient.cancel(requestId);
         }
         mRemoteRequestIds.clear();
+    }
+
+    void clearClipboard() {
+        mClipboard.clear();
     }
 
     private void finishFileOperation(

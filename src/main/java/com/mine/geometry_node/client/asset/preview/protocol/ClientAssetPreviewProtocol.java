@@ -5,12 +5,12 @@ import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewResul
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.c2s.PacketAssetPreviewCancel;
-import com.mine.geometry_node.core.network.packet.c2s.PacketAssetPreviewRequest;
-import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewAccepted;
-import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewChunk;
-import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewComplete;
-import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewResult;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewCancel;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewRequest;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewAccepted;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewChunk;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewComplete;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResult;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Map;

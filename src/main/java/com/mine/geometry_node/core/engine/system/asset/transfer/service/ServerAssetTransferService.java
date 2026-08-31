@@ -20,19 +20,19 @@ import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTrans
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferErrorCode;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferState;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferAccepted;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferAck;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferCancel;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferChunk;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferComplete;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferDownloadChunk;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferDownloadComplete;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferOpen;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferResult;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferServerResult;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferUploadAck;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferPlanRequest;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferPlanResponse;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAccepted;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAck;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferCancel;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferChunk;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferComplete;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadChunk;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadComplete;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferOpen;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferResult;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferServerResult;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferUploadAck;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanRequest;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanResponse;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
 import net.minecraft.server.level.ServerPlayer;
@@ -107,7 +107,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
     }
 
     public void handlePlan(ServerPlayer player, PacketAssetTransferPlanRequest packet) {
-        if (!hasPermission(player, packet.kind() == com.mine.geometry_node.core.network.packet.asset.AssetTransferPlanKind.UPLOAD_CONFLICTS
+        if (!hasPermission(player, packet.kind() == com.mine.geometry_node.core.network.packet.asset.transfer.AssetTransferPlanKind.UPLOAD_CONFLICTS
                 ? AssetTransferDirection.UPLOAD : AssetTransferDirection.DOWNLOAD)) {
             NetworkHandler.sendToPlayer(player, new PacketAssetTransferPlanResponse(
                     packet.requestId(), packet.kind(), false, "permission_denied", List.of(), List.of()));

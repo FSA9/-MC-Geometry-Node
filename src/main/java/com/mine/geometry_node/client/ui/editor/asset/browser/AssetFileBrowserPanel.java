@@ -364,6 +364,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     @Override
     protected void onDetachedFromWindow() {
         mIoTasks.cancelAll();
+        mActionController.clearClipboard();
         deactivatePanel();
         super.onDetachedFromWindow();
     }

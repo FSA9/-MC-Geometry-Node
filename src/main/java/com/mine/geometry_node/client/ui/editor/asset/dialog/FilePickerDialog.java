@@ -14,7 +14,7 @@ import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetCapabilitiesRequest;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetCapabilitiesRequest;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;

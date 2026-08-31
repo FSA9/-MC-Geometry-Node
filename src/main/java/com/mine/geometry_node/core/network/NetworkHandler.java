@@ -4,7 +4,6 @@ import com.mine.geometry_node.core.node.value.entity.EntityTemplateTargetResolve
 import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugService;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
-import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
@@ -13,32 +12,30 @@ import com.mine.geometry_node.core.engine.system.asset.RemoteAssetOperationResul
 import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleRegistry;
 import com.mine.geometry_node.core.engine.system.asset.transfer.service.ServerAssetTransferService;
 import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewService;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferAck;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferCancel;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferChunk;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferComplete;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferOpen;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferPlanRequest;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferResult;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAck;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferCancel;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferChunk;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferComplete;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferOpen;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanRequest;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferResult;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
 import com.mine.geometry_node.core.network.packet.c2s.PacketCaptureEntityTemplateRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketBehaviorDebugSubscription;
-import com.mine.geometry_node.core.network.packet.c2s.PacketAssetPreviewRequest;
-import com.mine.geometry_node.core.network.packet.c2s.PacketAssetPreviewCancel;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewRequest;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewCancel;
 import com.mine.geometry_node.core.network.packet.c2s.PacketDialogueChoice;
 import com.mine.geometry_node.core.network.packet.c2s.PacketPlayerInput;
 import com.mine.geometry_node.core.network.packet.c2s.PacketQuestScreenAction;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetCapabilitiesRequest;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetFileOperationRequest;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetListRequest;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetCapabilitiesRequest;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetFileOperationRequest;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetListRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketShopTradeRequest;
-import com.mine.geometry_node.core.network.packet.c2s.PacketSyncUpload;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetCapabilitiesResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetFileOperationResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetListResponse;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetCapabilitiesResponse;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetFileOperationResponse;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetListResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
-import com.mine.geometry_node.core.network.packet.s2c.PacketSyncResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import dev.architectury.networking.NetworkManager;
@@ -127,35 +124,6 @@ public class NetworkHandler {
                         ServerAssetTransferService.INSTANCE.handleCancel(player, payload);
                     }
                 }));
-
-        // ==========================================
-        // 1. 注册 C2S: 客户端上传蓝图 -> 服务端接收
-        // ==========================================
-        NetworkManager.registerReceiver(
-                NetworkManager.Side.C2S,
-                PacketSyncUpload.TYPE,
-                PacketSyncUpload.STREAM_CODEC,
-                (payload, context) -> {
-                    context.queue(() -> {
-                        if (context.getPlayer() instanceof ServerPlayer player) {
-                            MinecraftServer server = player.level().getServer();
-                            String graphId = payload.graphId();
-                            String jsonContent = payload.jsonContent();
-
-                            try {
-                                if (!RemoteAssetPermissions.canUploadAssets(player)) {
-                                    sendToPlayer(player, new PacketSyncResponse(false, graphId, "没有上传服务器图纸的权限。"));
-                                    return;
-                                }
-                                DynamicGraphManager.saveAndHotReload(server, graphId, jsonContent);
-                                sendToPlayer(player, new PacketSyncResponse(true, graphId, "上传成功！"));
-                            } catch (Exception e) {
-                                sendToPlayer(player, new PacketSyncResponse(false, graphId, "上传失败: " + e.getMessage()));
-                            }
-                        }
-                    });
-                }
-        );
 
         NetworkManager.registerReceiver(
                 NetworkManager.Side.C2S,

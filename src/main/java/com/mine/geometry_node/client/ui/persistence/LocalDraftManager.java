@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.persistence;
 
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
@@ -17,15 +18,21 @@ public class LocalDraftManager {
         return AssetBrowserPathPolicy.getLocalDraftsDir().toPath();
     }
 
+    public static Path resolveDraftPath(String graphId) {
+        Path folder = getDraftFolder().toAbsolutePath().normalize();
+        Path resolved = folder.resolve(GraphPathMapper.idToRelativePath(graphId)).normalize();
+        if (!resolved.startsWith(folder)) {
+            throw new IllegalArgumentException("invalid draft path: " + graphId);
+        }
+        return resolved;
+    }
+
     public static void saveDraft(String graphId, String jsonContent) {
         try {
             Path folder = getDraftFolder();
             // 1. 将 ID (A:B/C) 转化为相对路径 (A/B/C.json)
             Path relativePath = GraphPathMapper.idToRelativePath(graphId);
-            Path resolved = folder.toAbsolutePath().normalize().resolve(relativePath).normalize();
-            if (!resolved.startsWith(folder.toAbsolutePath().normalize())) {
-                throw new IllegalArgumentException("invalid draft path: " + graphId);
-            }
+            Path resolved = resolveDraftPath(graphId);
             File file = resolved.toFile();
 
             // 2. 自动创建所有缺失的父级文件夹 (关键！)
@@ -55,7 +62,7 @@ public class LocalDraftManager {
                 // 深度递归遍历所有文件
                 try (Stream<Path> walk = Files.walk(root)) {
                     walk.filter(Files::isRegularFile)
-                            .filter(p -> p.toString().endsWith(".json"))
+                            .filter(p -> AssetTypeCatalog.isType(p, AssetTypeCatalog.GRAPH_TYPE_ID))
                             .forEach(p -> names.add(GraphPathMapper.pathToId(root, p)));
                 }
             }
@@ -67,12 +74,7 @@ public class LocalDraftManager {
 
     public static String readDraft(String graphId) {
         try {
-            Path root = getDraftFolder();
-            Path relativePath = GraphPathMapper.idToRelativePath(graphId);
-            Path resolved = root.toAbsolutePath().normalize().resolve(relativePath).normalize();
-            if (!resolved.startsWith(root.toAbsolutePath().normalize())) {
-                throw new IllegalArgumentException("invalid draft path: " + graphId);
-            }
+            Path resolved = resolveDraftPath(graphId);
             File file = resolved.toFile();
 
             if (file.exists()) {

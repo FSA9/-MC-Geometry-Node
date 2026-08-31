@@ -6,7 +6,7 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetListRequest;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetListRequest;
 
 import java.util.ArrayList;
 import java.util.HashMap;

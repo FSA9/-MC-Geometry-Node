@@ -4,7 +4,6 @@ import com.mine.geometry_node.core.command.server.GraphBindCommand;
 import com.mine.geometry_node.core.command.server.BehaviorTreeCommand;
 import com.mine.geometry_node.core.command.server.DialogueCommand;
 import com.mine.geometry_node.core.command.server.GeometryNodeDebugCommand;
-import com.mine.geometry_node.core.command.server.GraphDownloadCommand;
 import com.mine.geometry_node.core.command.server.GraphUnbindCommand;
 import com.mine.geometry_node.core.command.server.ServerGraphListCommand;
 import com.mojang.brigadier.CommandDispatcher;
@@ -20,7 +19,6 @@ public class ModServerCommands {
             BehaviorTreeCommand.register(dispatcher);
             GraphUnbindCommand.register(dispatcher);
             ServerGraphListCommand.register(dispatcher);
-            GraphDownloadCommand.register(dispatcher);
             DialogueCommand.register(dispatcher);
             GeometryNodeDebugCommand.register(dispatcher);
         });

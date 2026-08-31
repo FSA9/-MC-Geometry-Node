@@ -10,17 +10,16 @@ import com.mine.geometry_node.client.runtime.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.runtime.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.runtime.render.image.ClientImageAssetManager;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
-import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
 import com.mine.geometry_node.client.asset.preview.protocol.ClientAssetPreviewProtocol;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferAccepted;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferDownloadChunk;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferDownloadComplete;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferServerResult;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferUploadAck;
-import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferPlanResponse;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAccepted;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadChunk;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadComplete;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferServerResult;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferUploadAck;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
@@ -31,19 +30,16 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerUpsert;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketPlayerInputInterceptions;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetCapabilitiesResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetFileOperationResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetListResponse;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetCapabilitiesResponse;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetFileOperationResponse;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetListResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
-import com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload;
-import com.mine.geometry_node.core.network.packet.s2c.PacketSyncResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
-import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewAccepted;
-import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewChunk;
-import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewComplete;
-import com.mine.geometry_node.core.network.packet.s2c.PacketAssetPreviewResult;
-import net.minecraft.network.chat.Component;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewAccepted;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewChunk;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewComplete;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResult;
 
 /** Registers S2C receivers and routes their payloads into client-owned state. */
 public final class ClientNetworkReceiverRegistry {
@@ -78,19 +74,6 @@ public final class ClientNetworkReceiverRegistry {
                 (payload, context) -> context.queue(() -> ClientBehaviorDebugStore.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketSchematicProjection.TYPE,
                 (payload, context) -> context.queue(() -> SchematicProjectionRenderer.handleProjection(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketSyncResponse.TYPE,
-                (payload, context) -> context.queue(() -> {
-                    if (context.getPlayer() == null) return;
-                    String prefix = payload.success() ? "§a[图纸同步成功]§r " : "§c[图纸同步失败]§r ";
-                    context.getPlayer().sendSystemMessage(Component.literal(prefix + payload.graphId() + " - " + payload.message()));
-                }));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketSyncDownload.TYPE,
-                (payload, context) -> context.queue(() -> {
-                    if (context.getPlayer() == null) return;
-                    LocalDraftManager.saveDraft(payload.graphId(), payload.jsonContent());
-                    context.getPlayer().sendSystemMessage(Component.literal(
-                            "§a[☁ 云端下载成功]§r 图纸 " + payload.graphId() + " 已保存到你的本地草稿箱！"));
-                }));
         ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteAssetCapabilitiesResponse.TYPE,
                 (payload, context) -> context.queue(() -> RemoteAssetClient.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteAssetListResponse.TYPE,
