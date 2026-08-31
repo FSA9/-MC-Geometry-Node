@@ -11,6 +11,7 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
+import net.minecraft.network.chat.Component;
 
 final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink {
     private final AreaLayoutRoot mRoot;
@@ -307,7 +308,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
                 getContext(), mRoot.editorRegistry(), mRoot::requestSessionSave);
         String surfaceRef = window != null && window.surfaceId() != null
                 ? " " + window.surfaceId().ref() : "";
-        mTitle.setText(mNode.editorType().displayName() + surfaceRef);
+        mTitle.setText(Component.translatable(mNode.editorType().translationKey()).getString() + surfaceRef);
         mTitle.setTextColor(mRoot.canCloseLeaf() ? AreaStyle.COLOR_TEXT : AreaStyle.COLOR_TEXT_MUTED);
     }
 

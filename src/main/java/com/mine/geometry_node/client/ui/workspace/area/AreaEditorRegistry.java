@@ -13,6 +13,7 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.TextView;
+import net.minecraft.network.chat.Component;
 
 final class AreaEditorRegistry {
     AreaEditorWindow create(
@@ -24,7 +25,8 @@ final class AreaEditorRegistry {
             case GRAPH_EDITOR -> new GraphEditorWindow(context, sessionState.graphEditor, sessionChanged);
             case ASSET_BROWSER -> new AssetBrowserWindow(context, sessionState.assetBrowser, sessionChanged);
             case TERMINAL -> new TerminalWindow(context, sessionState.terminal, sessionChanged);
-            case PERFORMANCE -> createPlaceholder(context, type.displayName());
+            case PERFORMANCE -> createPlaceholder(context,
+                    Component.translatable(type.translationKey()).getString());
         };
         return new RegisteredWindow(window, surfaceType(type));
     }

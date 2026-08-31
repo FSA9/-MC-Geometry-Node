@@ -11,6 +11,7 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
+import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
@@ -120,7 +121,8 @@ final class AreaEditorMenu extends FrameLayout {
                 UIUtils.dp2pxInt(ICON_SIZE_DP),
                 UIUtils.dp2pxInt(ICON_SIZE_DP)));
 
-        TextView label = UIUtils.createLockedTextView(context, type.displayName(), 12.0f,
+        TextView label = UIUtils.createLockedTextView(context,
+                Component.translatable(type.translationKey()).getString(), 12.0f,
                 type == mCurrentType ? AreaStyle.COLOR_ICON_SELECTED : AreaStyle.COLOR_TEXT);
         label.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
