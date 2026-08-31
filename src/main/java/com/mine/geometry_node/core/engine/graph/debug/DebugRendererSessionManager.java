@@ -13,6 +13,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Interaction;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.pathfinder.Path;
@@ -45,13 +46,16 @@ public final class DebugRendererSessionManager {
     private static final int MAX_PATHFINDING_ENTITIES = 32;
     private static final int MAX_PATH_NODES = 128;
     private static final int REQUESTED_TARGET_RETENTION_TICKS = 100;
+    private static final int FOLLOW_TARGET_RETENTION_TICKS = 20;
     private static final int PATH_COLOR = DebugRenderChannel.PATHFINDING.color();
     private static final int NEXT_NODE_COLOR = 0xFFFFC247;
     private static final int FINAL_TARGET_COLOR = 0xFF4FD17A;
     private static final int REQUESTED_TARGET_COLOR = 0xFF4A8DFF;
+    private static final int FOLLOW_TARGET_COLOR = 0xFFE86DFF;
 
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, RequestedPathTarget> REQUESTED_PATH_TARGETS = new HashMap<>();
+    private static final Map<UUID, FollowTarget> FOLLOW_TARGETS = new HashMap<>();
     private static final Map<ServerLevel, LevelCache> LEVEL_CACHES = new IdentityHashMap<>();
     private static final List<Consumer<ServerPlayer>> SCHEMATIC_CHANNEL_HYDRATORS = new ArrayList<>();
     private static boolean registered;
@@ -98,6 +102,7 @@ public final class DebugRendererSessionManager {
     public static void shutdown() {
         SESSIONS.clear();
         REQUESTED_PATH_TARGETS.clear();
+        FOLLOW_TARGETS.clear();
         LEVEL_CACHES.clear();
         dirtyVersion = 0L;
     }
@@ -245,6 +250,20 @@ public final class DebugRendererSessionManager {
     /** Clears the requested target written through the behavior-tree producer hook above. */
     public static void clearRequestedPathTarget(Mob mob) {
         if (mob != null && REQUESTED_PATH_TARGETS.remove(mob.getUUID()) != null) markDirty();
+    }
+
+    /** Behavior-tree producer hook for an active entity-to-entity Follow relationship. */
+    public static void recordFollowTarget(Mob follower, Entity target) {
+        if (follower == null || target == null || !hasPathfindingSessions()) return;
+        FOLLOW_TARGETS.put(follower.getUUID(), new FollowTarget(
+                follower.level().dimension(), target.getUUID(),
+                follower.level().getGameTime() + FOLLOW_TARGET_RETENTION_TICKS
+        ));
+    }
+
+    /** Removes the active Follow relationship immediately when its action exits. */
+    public static void clearFollowTarget(Mob follower) {
+        if (follower != null && FOLLOW_TARGETS.remove(follower.getUUID()) != null) markDirty();
     }
 
     private static Session enableChannel(ServerPlayer player, double radius) {
@@ -449,7 +468,10 @@ public final class DebugRendererSessionManager {
     }
 
     private static void clearRequestedPathTargetsIfUnused() {
-        if (!hasPathfindingSessions()) REQUESTED_PATH_TARGETS.clear();
+        if (!hasPathfindingSessions()) {
+            REQUESTED_PATH_TARGETS.clear();
+            FOLLOW_TARGETS.clear();
+        }
     }
 
     private static MeshSnapshot collectSnapshot(ServerPlayer player, Session session) {
@@ -557,10 +579,15 @@ public final class DebugRendererSessionManager {
             RequestedPathTarget target = entry.getValue();
             return target.dimension().equals(level.dimension()) && target.expiresAt() < currentTick;
         });
+        FOLLOW_TARGETS.entrySet().removeIf(entry -> {
+            FollowTarget target = entry.getValue();
+            return target.dimension().equals(level.dimension()) && target.expiresAt() < currentTick;
+        });
         List<Mob> mobs = level.getEntitiesOfClass(Mob.class, queryBounds, mob -> {
             Path path = mob.getNavigation().getPath();
             return !mob.isRemoved() && (path != null && !path.isDone()
-                    || requestedPathTarget(mob, level, currentTick) != null);
+                    || requestedPathTarget(mob, level, currentTick) != null
+                    || followTarget(mob, level, currentTick) != null);
         });
         mobs.sort((left, right) -> Double.compare(left.distanceToSqr(origin), right.distanceToSqr(origin)));
 
@@ -570,6 +597,8 @@ public final class DebugRendererSessionManager {
             if (mob.distanceToSqr(origin) > radiusSqr) continue;
             Path path = mob.getNavigation().getPath();
             RequestedPathTarget requested = requestedPathTarget(mob, level, currentTick);
+            FollowTarget follow = followTarget(mob, level, currentTick);
+            if (follow != null) addFollowLine(level, mob, follow, candidates, origin);
             if (path == null || path.isDone()) {
                 if (requested != null) {
                     addPathMarker(mob, "requested", requested.position(),
@@ -595,6 +624,37 @@ public final class DebugRendererSessionManager {
         RequestedPathTarget target = REQUESTED_PATH_TARGETS.get(mob.getUUID());
         return target != null && target.dimension().equals(level.dimension()) && target.expiresAt() >= currentTick
                 ? target : null;
+    }
+
+    private static FollowTarget followTarget(Mob mob, ServerLevel level, long currentTick) {
+        FollowTarget target = FOLLOW_TARGETS.get(mob.getUUID());
+        return target != null && target.dimension().equals(level.dimension())
+                && target.expiresAt() >= currentTick ? target : null;
+    }
+
+    private static void addFollowLine(ServerLevel level,
+                                      Mob follower,
+                                      FollowTarget relation,
+                                      List<Candidate> candidates,
+                                      Vec3 origin) {
+        Entity target = level.getEntity(relation.targetId());
+        if (target == null || target.isRemoved()) return;
+        Vec3 start = follower.getBoundingBox().getCenter();
+        Vec3 end = target.getBoundingBox().getCenter();
+        Vec3 center = start.add(end).scale(0.5D);
+        float[] vertices = new float[]{
+                (float) (start.x - center.x), (float) (start.y - center.y),
+                (float) (start.z - center.z),
+                (float) (end.x - center.x), (float) (end.y - center.y),
+                (float) (end.z - center.z)
+        };
+        String id = DebugRenderChannel.PATHFINDING.id() + ":"
+                + follower.getStringUUID() + ":follow";
+        GeometryDebugElement line = new GeometryDebugElement(
+                id, "pathfinding", GeometryDebugType.MESH, FOLLOW_TARGET_COLOR, false,
+                center, Vec3.ZERO, Vec3.ZERO, vertices, new int[]{0, 1}, new int[0]
+        );
+        candidates.add(new Candidate(line, start.distanceToSqr(origin)));
     }
 
     private static void addPathMesh(Mob mob, Path path, List<Candidate> candidates, Vec3 origin) {
@@ -767,6 +827,9 @@ public final class DebugRendererSessionManager {
     }
 
     private record RequestedPathTarget(ResourceKey<Level> dimension, Vec3 position, long expiresAt) {
+    }
+
+    private record FollowTarget(ResourceKey<Level> dimension, UUID targetId, long expiresAt) {
     }
 
     private static final class LevelCache {

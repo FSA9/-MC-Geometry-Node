@@ -11,7 +11,7 @@ import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContra
 import com.mine.geometry_node.core.engine.behavior.runtime.action.InstantBehaviorActionExecutor;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
-import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorEntityActionNode;
+import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorMoveToNode;
 import com.mine.geometry_node.mixin.MobNavigationInvoker;
 import com.mine.geometry_node.mixin.PathNavigationAccessor;
 import net.minecraft.core.BlockPos;
@@ -37,21 +37,42 @@ public final class BehaviorEntityExecutors {
     private static final int WANDER_ATTEMPTS = 10;
     private static final double WANDER_ARRIVAL_DISTANCE = 1.0D;
     private static final long MOVE_REPATH_INTERVAL = 10L;
+    private static final long FOLLOW_IDLE_CHECK_INTERVAL = 5L;
     private static final long NAVIGATION_PROBE_CACHE_TICKS = 5L;
 
     private BehaviorEntityExecutors() {
     }
 
-    public static BehaviorNodeExecutor forKind(BehaviorEntityActionNode.Kind kind) {
-        return switch (kind) {
-            case SELECT_TARGET -> new SelectTargetExecutor();
-            case CLEAR_TARGET -> new ClearTargetExecutor();
-            case MOVE_TO -> new MoveToExecutor();
-            case STOP_MOVING -> new StopMovingExecutor();
-            case WANDER -> new WanderExecutor();
-            case LOOK_AT -> new LookAtExecutor();
-            case ATTACK_TARGET -> new AttackTargetExecutor();
-        };
+    public static BehaviorNodeExecutor selectTarget() {
+        return new SelectTargetExecutor();
+    }
+
+    public static BehaviorNodeExecutor clearTarget() {
+        return new ClearTargetExecutor();
+    }
+
+    public static BehaviorNodeExecutor moveTo() {
+        return new MoveToExecutor();
+    }
+
+    public static BehaviorNodeExecutor follow() {
+        return new FollowExecutor();
+    }
+
+    public static BehaviorNodeExecutor stopMoving() {
+        return new StopMovingExecutor();
+    }
+
+    public static BehaviorNodeExecutor wander() {
+        return new WanderExecutor();
+    }
+
+    public static BehaviorNodeExecutor lookAt() {
+        return new LookAtExecutor();
+    }
+
+    public static BehaviorNodeExecutor setAttackTarget() {
+        return new AttackTargetExecutor();
     }
 
     public static BehaviorNodeExecutor canNavigateTo() {
@@ -229,6 +250,106 @@ public final class BehaviorEntityExecutors {
         }
     }
 
+    private static final class FollowExecutor extends BehaviorActionExecutor<FollowState> {
+        @Override
+        protected BehaviorActionStep<FollowState> start(BehaviorNodeContext context) {
+            Mob owner = requireOwner(context);
+            double speed = positiveFloat(context, StandardPorts.SPEED.getId());
+            double minimumDistance = nonNegativeFloat(context, StandardPorts.MIN_DISTANCE.getId());
+            double maximumDistance = nonNegativeFloat(context, StandardPorts.MAX_DISTANCE.getId());
+            if (maximumDistance < minimumDistance) {
+                throw new BehaviorContractViolation(
+                        "max_distance cannot be less than min_distance");
+            }
+
+            EntityTarget resolution = resolveEntityTarget(
+                    context, owner, StandardPorts.TARGET.getId());
+            Entity target = resolution.target();
+            if (target == null) return failure(resolution.supplied()
+                            ? BehaviorActionFailure.INVALID_TARGET
+                            : BehaviorActionFailure.MISSING_TARGET,
+                    resolution.supplied() ? "Follow target cannot be resolved"
+                            : "Follow target is unavailable");
+            if (!validEntityTarget(owner, target)) {
+                return failure(BehaviorActionFailure.INVALID_TARGET,
+                        "Follow target is dead, removed, self, or in another world");
+            }
+            if (!withinDistance(owner, target.position(), maximumDistance)) {
+                return failure(BehaviorActionFailure.OUT_OF_RANGE,
+                        "Follow target is outside the maximum distance");
+            }
+
+            DebugRendererSessionManager.recordFollowTarget(owner, target);
+            if (withinDistance(owner, target.position(), minimumDistance)) {
+                owner.getNavigation().stop();
+                context.requestWakeupAfter(FOLLOW_IDLE_CHECK_INTERVAL);
+                return BehaviorActionStep.running(new FollowState(target, speed,
+                        minimumDistance, maximumDistance, false,
+                        safeAdd(context.gameTick(), MOVE_REPATH_INTERVAL)));
+            }
+            DebugRendererSessionManager.recordRequestedPathTarget(owner, target.position());
+            if (!startNavigation(owner, target, speed)) {
+                return failure(BehaviorActionFailure.NO_PATH,
+                        "No path can be started to the follow target");
+            }
+            context.requestWakeupAfter(1);
+            return BehaviorActionStep.running(new FollowState(target, speed,
+                    minimumDistance, maximumDistance, true,
+                    safeAdd(context.gameTick(), MOVE_REPATH_INTERVAL)));
+        }
+
+        @Override
+        protected BehaviorActionStep<FollowState> tick(BehaviorNodeContext context,
+                                                       FollowState state) {
+            Mob owner = requireOwner(context);
+            Entity target = state.target();
+            if (!validEntityTarget(owner, target)) {
+                return failure(state, BehaviorActionFailure.TARGET_LOST,
+                        "Follow target became invalid");
+            }
+            if (!withinDistance(owner, target.position(), state.maximumDistance())) {
+                return failure(state, BehaviorActionFailure.OUT_OF_RANGE,
+                        "Follow target moved outside the maximum distance");
+            }
+
+            DebugRendererSessionManager.recordFollowTarget(owner, target);
+            if (withinDistance(owner, target.position(), state.minimumDistance())) {
+                // Brain-driven mobs may submit a new vanilla path while Follow is waiting.
+                owner.getNavigation().stop();
+                DebugRendererSessionManager.clearRequestedPathTarget(owner);
+                context.requestWakeupAfter(FOLLOW_IDLE_CHECK_INTERVAL);
+                return BehaviorActionStep.running(state.withNavigation(false,
+                        safeAdd(context.gameTick(), MOVE_REPATH_INTERVAL)));
+            }
+
+            DebugRendererSessionManager.recordRequestedPathTarget(owner, target.position());
+            boolean mustRepath = !state.navigating()
+                    || owner.getNavigation().isDone()
+                    || context.gameTick() >= state.nextRepathTick();
+            FollowState next = state;
+            if (mustRepath) {
+                if (!startNavigation(owner, target, state.speed())) {
+                    return failure(state, BehaviorActionFailure.REPATH_FAILED,
+                            "Follow target path could not be refreshed");
+                }
+                next = state.withNavigation(true,
+                        safeAdd(context.gameTick(), MOVE_REPATH_INTERVAL));
+            }
+            context.requestWakeupAfter(1);
+            return BehaviorActionStep.running(next);
+        }
+
+        @Override
+        protected void stop(BehaviorNodeContext context, @Nullable FollowState state,
+                            BehaviorTerminationReason reason) {
+            Mob owner = owner(context);
+            if (owner == null) return;
+            owner.getNavigation().stop();
+            DebugRendererSessionManager.clearRequestedPathTarget(owner);
+            DebugRendererSessionManager.clearFollowTarget(owner);
+        }
+    }
+
     private static final class WanderExecutor extends BehaviorActionExecutor<WanderState> {
         @Override
         protected BehaviorActionStep<WanderState> start(BehaviorNodeContext context) {
@@ -371,7 +492,7 @@ public final class BehaviorEntityExecutors {
 
     private static MoveTarget resolveMoveTarget(BehaviorNodeContext context, Mob owner) {
         String mode = context.optionalTypedInput(StandardPorts.TARGET_MODE.getId(), String.class);
-        if (BehaviorEntityActionNode.TARGET_MODE_POSITION.equals(mode)) {
+        if (BehaviorMoveToNode.TARGET_MODE_POSITION.equals(mode)) {
             Object raw = context.input(StandardPorts.TARGET_POSITION.getId());
             Vec3 position = context.optionalTypedInput(
                     StandardPorts.TARGET_POSITION.getId(), Vec3.class);
@@ -381,7 +502,7 @@ public final class BehaviorEntityExecutors {
             return new MoveTarget(position, raw != null);
         }
         if (mode != null && !mode.isBlank()
-                && !BehaviorEntityActionNode.TARGET_MODE_ENTITY.equals(mode)) {
+                && !BehaviorMoveToNode.TARGET_MODE_ENTITY.equals(mode)) {
             throw new BehaviorContractViolation("Unknown move target mode: " + mode);
         }
         EntityTarget target = resolveEntityTarget(
@@ -508,6 +629,16 @@ public final class BehaviorEntityExecutors {
 
     private record MoveState(Object target, double speed, double arrivalDistance,
                              long nextRepathTick) {
+    }
+
+    private record FollowState(Entity target, double speed, double minimumDistance,
+                               double maximumDistance, boolean navigating,
+                               long nextRepathTick) {
+        private FollowState withNavigation(boolean value, long repathTick) {
+            if (navigating == value && nextRepathTick == repathTick) return this;
+            return new FollowState(target, speed, minimumDistance, maximumDistance,
+                    value, repathTick);
+        }
     }
 
     private record WanderState(Mob navigator, Vec3 destination, double arrivalDistance) {

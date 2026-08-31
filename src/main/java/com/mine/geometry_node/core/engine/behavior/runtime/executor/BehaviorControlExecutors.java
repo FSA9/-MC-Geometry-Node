@@ -4,7 +4,6 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeContext;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
-import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorCompositeNode;
 
 /** Executors for behavior roots and composite control nodes. */
 public final class BehaviorControlExecutors {
@@ -33,11 +32,12 @@ public final class BehaviorControlExecutors {
         return SELECTOR;
     }
 
-    public static BehaviorNodeExecutor forKind(BehaviorCompositeNode.Kind kind) {
-        return switch (kind) {
-            case REACTIVE_SEQUENCE -> REACTIVE_SEQUENCE;
-            case PRIORITY_SELECTOR -> PRIORITY_SELECTOR;
-        };
+    public static BehaviorNodeExecutor reactiveSequence() {
+        return REACTIVE_SEQUENCE;
+    }
+
+    public static BehaviorNodeExecutor prioritySelector() {
+        return PRIORITY_SELECTOR;
     }
 
     private static final class MemoryCompositeExecutor implements BehaviorNodeExecutor {

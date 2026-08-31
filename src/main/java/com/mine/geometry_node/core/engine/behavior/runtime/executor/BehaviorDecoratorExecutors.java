@@ -5,7 +5,6 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationR
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeContext;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
-import com.mine.geometry_node.core.node.nodes.behavior.decorator.BehaviorDecoratorNode;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import org.jetbrains.annotations.Nullable;
 
@@ -41,15 +40,28 @@ public final class BehaviorDecoratorExecutors {
         return INVERTER;
     }
 
-    public static BehaviorNodeExecutor forKind(BehaviorDecoratorNode.Kind kind) {
-        return switch (kind) {
-            case REPEAT -> REPEAT;
-            case RETRY -> RETRY;
-            case TIMEOUT -> TIMEOUT;
-            case COOLDOWN -> COOLDOWN;
-            case ALWAYS_SUCCEED -> ALWAYS_SUCCEED;
-            case ALWAYS_FAIL -> ALWAYS_FAIL;
-        };
+    public static BehaviorNodeExecutor repeat() {
+        return REPEAT;
+    }
+
+    public static BehaviorNodeExecutor retry() {
+        return RETRY;
+    }
+
+    public static BehaviorNodeExecutor timeout() {
+        return TIMEOUT;
+    }
+
+    public static BehaviorNodeExecutor cooldown() {
+        return COOLDOWN;
+    }
+
+    public static BehaviorNodeExecutor alwaysSucceed() {
+        return ALWAYS_SUCCEED;
+    }
+
+    public static BehaviorNodeExecutor alwaysFail() {
+        return ALWAYS_FAIL;
     }
 
     private static <T> T require(@Nullable T value, String message) {

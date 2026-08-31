@@ -10,7 +10,7 @@ import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
-import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorEntityActionNode;
+import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorMoveToNode;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
@@ -176,9 +176,9 @@ public class GraphController {
         } else {
             node.inputs.put(portId, value);
         }
-        if (BehaviorEntityActionNode.Kind.MOVE_TO.typeId().equals(node.type)
+        if (BehaviorMoveToNode.TYPE_ID.equals(node.type)
                 && StandardPorts.TARGET_MODE.getId().equals(portId)) {
-            String inactivePort = BehaviorEntityActionNode.TARGET_MODE_POSITION.equals(value)
+            String inactivePort = BehaviorMoveToNode.TARGET_MODE_POSITION.equals(value)
                     ? StandardPorts.TARGET_ENTITY.getId() : StandardPorts.TARGET_POSITION.getId();
             node.inputs.remove(inactivePort);
         }

@@ -5,7 +5,6 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeContext;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
-import com.mine.geometry_node.core.node.nodes.behavior.condition.BehaviorUtilityConditionNode;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -35,11 +34,12 @@ public final class BehaviorConditionExecutors {
         return HAS_VALID_TARGET;
     }
 
-    public static BehaviorNodeExecutor forKind(BehaviorUtilityConditionNode.Kind kind) {
-        return switch (kind) {
-            case BLACKBOARD_VALUE_CHANGED -> BLACKBOARD_VALUE_CHANGED;
-            case CAN_NAVIGATE_TO -> BehaviorEntityExecutors.canNavigateTo();
-        };
+    public static BehaviorNodeExecutor blackboardValueChanged() {
+        return BLACKBOARD_VALUE_CHANGED;
+    }
+
+    public static BehaviorNodeExecutor canNavigateTo() {
+        return BehaviorEntityExecutors.canNavigateTo();
     }
 
     private static String key(BehaviorNodeContext context) {

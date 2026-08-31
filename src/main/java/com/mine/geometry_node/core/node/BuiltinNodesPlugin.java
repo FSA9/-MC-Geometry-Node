@@ -90,34 +90,25 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("behavior/blackboard", new BehaviorHasBlackboardNode());
         registry.register("behavior/blackboard", new BehaviorSetBlackboardNode());
         registry.register("behavior/blackboard", new BehaviorClearBlackboardNode());
-        registry.register("behavior/control", new BehaviorCompositeNode(
-                BehaviorCompositeNode.Kind.REACTIVE_SEQUENCE));
-        registry.register("behavior/control", new BehaviorCompositeNode(
-                BehaviorCompositeNode.Kind.PRIORITY_SELECTOR));
-        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.REPEAT);
-        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.RETRY);
-        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.TIMEOUT);
-        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.COOLDOWN);
-        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.ALWAYS_SUCCEED);
-        registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.ALWAYS_FAIL);
-        registry.register("behavior/condition", new BehaviorUtilityConditionNode(
-                BehaviorUtilityConditionNode.Kind.BLACKBOARD_VALUE_CHANGED));
-        registry.register("behavior/condition", new BehaviorUtilityConditionNode(
-                BehaviorUtilityConditionNode.Kind.CAN_NAVIGATE_TO));
-        registry.register("behavior/entity", new BehaviorEntityActionNode(
-                BehaviorEntityActionNode.Kind.SELECT_TARGET));
-        registry.register("behavior/entity", new BehaviorEntityActionNode(
-                BehaviorEntityActionNode.Kind.CLEAR_TARGET));
-        registry.register("behavior/entity", new BehaviorEntityActionNode(
-                BehaviorEntityActionNode.Kind.MOVE_TO));
-        registry.register("behavior/entity", new BehaviorEntityActionNode(
-                BehaviorEntityActionNode.Kind.STOP_MOVING));
-        registry.register("behavior/entity", new BehaviorEntityActionNode(
-                BehaviorEntityActionNode.Kind.WANDER));
-        registry.register("behavior/entity", new BehaviorEntityActionNode(
-                BehaviorEntityActionNode.Kind.LOOK_AT));
-        registry.register("behavior/entity", new BehaviorEntityActionNode(
-                BehaviorEntityActionNode.Kind.ATTACK_TARGET));
+        registry.register("behavior/control", new BehaviorReactiveSequenceNode());
+        registry.register("behavior/control", new BehaviorPrioritySelectorNode());
+        registry.register("behavior/decorator", new BehaviorRepeatNode());
+        registry.register("behavior/decorator", new BehaviorRetryNode());
+        registry.register("behavior/decorator", new BehaviorTimeoutNode());
+        registry.register("behavior/decorator", new BehaviorCooldownNode());
+        registry.register("behavior/decorator", new BehaviorAlwaysSucceedNode());
+        registry.register("behavior/decorator", new BehaviorAlwaysFailNode());
+        registry.register("behavior/condition", new BehaviorBlackboardValueChangedNode());
+        registry.register("behavior/condition", new BehaviorCanNavigateToNode());
+        registry.register("behavior/entity", new BehaviorSelectTargetNode());
+        registry.register("behavior/entity", new BehaviorClearTargetNode());
+        registry.register("behavior/entity", new BehaviorMoveToNode());
+        registry.register("behavior/entity", new BehaviorFollowNode());
+        registry.register("behavior/entity", new BehaviorPatrolNode());
+        registry.register("behavior/entity", new BehaviorStopMovingNode());
+        registry.register("behavior/entity", new BehaviorWanderNode());
+        registry.register("behavior/entity", new BehaviorLookAtNode());
+        registry.register("behavior/entity", new BehaviorSetAttackTargetNode());
 
         registry.register("layout", new RerouteNode());
 
@@ -545,11 +536,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("maths/vector", new CombineXYZ());
 
         System.out.println("[BuiltinNodesPlugin] Register Finished");
-    }
-
-    private static void registerBehaviorDecorator(NodeRegistrationContext registry,
-                                                  BehaviorDecoratorNode.Kind kind) {
-        registry.register("behavior/decorator", new BehaviorDecoratorNode(kind));
     }
 
 }

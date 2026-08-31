@@ -75,6 +75,7 @@ public enum StandardPorts {
     UNIQUE_IF_EXISTS("unique_if_exists", PortType.BOOLEAN),
     SHOW_DISTANCE("show_distance", PortType.BOOLEAN),
     INTERCEPT("intercept", PortType.BOOLEAN),
+    LOOP_ENABLED("loop_enabled", PortType.BOOLEAN),
 
     // Float
     FLOAT_VALUE("value", PortType.FLOAT),
@@ -102,7 +103,10 @@ public enum StandardPorts {
     ALPHA("alpha", PortType.FLOAT),
     FAC("fac", PortType.FLOAT),
     ARRIVAL_DISTANCE("arrival_distance", PortType.FLOAT),
+    MIN_DISTANCE("min_distance", PortType.FLOAT),
+    MAX_DISTANCE("max_distance", PortType.FLOAT),
     TARGET_RANGE("target_range", PortType.FLOAT),
+    PATROL_RADIUS("patrol_radius", PortType.FLOAT),
     STRENGTH("strength", PortType.FLOAT),
 
 
@@ -146,6 +150,7 @@ public enum StandardPorts {
     ANCHOR_TYPE("anchor_type", PortType.STRING),
     BLACKBOARD_SCOPE("blackboard_scope", PortType.STRING),
     TARGET_MODE("target_mode", PortType.STRING),
+    PATROL_MODE("patrol_mode", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),
