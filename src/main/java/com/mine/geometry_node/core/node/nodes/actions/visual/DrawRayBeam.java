@@ -2,10 +2,12 @@ package com.mine.geometry_node.core.node.nodes.actions.visual;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
@@ -13,11 +15,17 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class DrawRayBeam extends BaseNode {
 
     public static final String TYPE_ID = "draw_ray_beam";
+    public static final PortDef START_PORT = StandardPorts.START_POS.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef PITCH_PORT = StandardPorts.PITCH.toInput(0.0F).liveExpression();
+    public static final PortDef YAW_PORT = StandardPorts.YAW.toInput(0.0F).liveExpression();
+    public static final PortDef DISTANCE_PORT = StandardPorts.DIST.toInput(20.0F).liveExpression();
+    public static final PortDef RADIUS_PORT = StandardPorts.RADIUS.toInput(0.1F).liveExpression();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -41,12 +49,12 @@ public class DrawRayBeam extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.PITCH.toInput(0.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.YAW.toInput(0.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.DIST.toInput(20.0f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(START_PORT, null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(PITCH_PORT, null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(YAW_PORT, null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(DISTANCE_PORT, null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.COLOR.toInput(ColorValue.WHITE), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.RADIUS.toInput(0.1f), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(RADIUS_PORT, null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(2), null, UIHint.INPUT, null,
                         Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
 
@@ -93,8 +101,15 @@ public class DrawRayBeam extends BaseNode {
         extraData.putBoolean("penEnt", penetrateEntities != null ? penetrateEntities : false);
         extraData.putInt("maxEnt", limit != null ? limit : 1);
 
+        Map<String, ExpressionData> expressions = new LinkedHashMap<>();
+        putInputExpression(context, StandardPorts.START_POS.getId(), "offset", expressions);
+        putInputExpression(context, StandardPorts.PITCH.getId(), "pitch", expressions);
+        putInputExpression(context, StandardPorts.YAW.getId(), "yaw", expressions);
+        putInputExpression(context, StandardPorts.DIST.getId(), "distance", expressions);
+        putInputExpression(context, StandardPorts.RADIUS.getId(), "radius", expressions);
+
         context.broadcastDynamicVisual("ray_beam", color != null ? color.toArgb() : ColorValue.WHITE.toArgb(),
-                duration != null ? duration : 2, Map.of(), extraData);
+                duration != null ? duration : 2, expressions, extraData);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 }

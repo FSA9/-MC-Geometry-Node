@@ -42,9 +42,7 @@ public abstract class AbstractVisualEffect {
 
     protected final LiveValue.State<Float> captureFloat(PortDef port, String key, float snapshot) {
         ExpressionData expression = expressions.get(key);
-        ExpressionSpec spec = expression != null
-                ? new ExpressionSpec(expression.formula(), expression.bindings())
-                : null;
+        ExpressionSpec spec = ExpressionSpec.fromScalar(expression);
         LiveValue<Float> value = LiveValues.captureFloat(port, snapshot, spec);
         reportDiagnostics(key, value);
         return value.newState();
@@ -68,9 +66,7 @@ public abstract class AbstractVisualEffect {
     }
 
     private static ExpressionSpec componentSpec(ExpressionData expression, int component) {
-        return expression == null
-                ? null
-                : new ExpressionSpec(expression.component(component), expression.bindings());
+        return ExpressionSpec.fromComponent(expression, component);
     }
 
     private void reportDiagnostics(String key, LiveValue<?> value) {

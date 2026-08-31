@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.actions.area;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
@@ -10,6 +11,10 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaShape;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionSpec;
+import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
+import com.mine.geometry_node.core.engine.graph.expression.LiveValues;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -37,6 +42,14 @@ public final class CreateArea extends BaseNode {
     public static final String HEIGHT_PORT = StandardPorts.HEIGHT.getId();
     public static final double DEFAULT_RADIUS = 1.0D;
     public static final double DEFAULT_HEIGHT = 2.0D;
+    public static final PortDef CENTER_PORT = StandardPorts.CENTER.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef SIZE_PORT = StandardPorts.SIZE_3
+            .toInput(new Vec3(1, 1, 1)).liveExpression();
+    public static final PortDef ROTATION_PORT = StandardPorts.ROTATION.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef RADIUS_PORT = StandardPorts.RADIUS
+            .toInput((float) DEFAULT_RADIUS).liveExpression();
+    public static final PortDef HEIGHT_INPUT = PortDef.create(HEIGHT_PORT,
+            "geometry_node.port.area_height", PortType.FLOAT, (float) DEFAULT_HEIGHT).liveExpression();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -87,22 +100,18 @@ public final class CreateArea extends BaseNode {
                         PortDef.create(SHAPE_PORT, "geometry_node.port.area_shape", PortType.STRING,
                                 AreaShape.BOX.id()).hiddenPin(),
                         null, UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, AreaShape.OPTIONS)))
-                .addRow(new PortRow(StandardPorts.CENTER.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
+                .addRow(new PortRow(CENTER_PORT, null, UIHint.VECTOR, null, null));
 
         switch (shape) {
-            case SPHERE -> builder.addRow(new PortRow(StandardPorts.RADIUS.toInput((float) DEFAULT_RADIUS),
-                    null, UIHint.INPUT, null, null));
+            case SPHERE -> builder.addRow(new PortRow(RADIUS_PORT, null, UIHint.INPUT, null, null));
             case CYLINDER -> {
-                builder.addRow(new PortRow(StandardPorts.RADIUS.toInput((float) DEFAULT_RADIUS),
-                        null, UIHint.INPUT, null, null));
-                builder.addRow(new PortRow(PortDef.create(HEIGHT_PORT, "geometry_node.port.area_height",
-                        PortType.FLOAT, (float) DEFAULT_HEIGHT), null, UIHint.INPUT, null, null));
-                builder.addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
+                builder.addRow(new PortRow(RADIUS_PORT, null, UIHint.INPUT, null, null));
+                builder.addRow(new PortRow(HEIGHT_INPUT, null, UIHint.INPUT, null, null));
+                builder.addRow(new PortRow(ROTATION_PORT, null, UIHint.VECTOR, null, null));
             }
             case BOX -> {
-                builder.addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)),
-                        null, UIHint.VECTOR, null, null));
-                builder.addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
+                builder.addRow(new PortRow(SIZE_PORT, null, UIHint.VECTOR, null, null));
+                builder.addRow(new PortRow(ROTATION_PORT, null, UIHint.VECTOR, null, null));
             }
         }
         return builder.build();
@@ -120,7 +129,12 @@ public final class CreateArea extends BaseNode {
         if (areaLevel != null && areaId != null && !areaId.isBlank()) {
             AreaShape shape = AreaShape.fromId(getInput(context, SHAPE_PORT, String.class));
             Vec3 center = valueOr(getInput(context, StandardPorts.CENTER.getId(), Vec3.class), Vec3.ZERO);
-            Vec3 size = readSize(context, shape);
+            Vec3 size = AreaEntityQuery.sanitizeSize(valueOr(
+                    getInput(context, StandardPorts.SIZE_3.getId(), Vec3.class), new Vec3(1, 1, 1)));
+            float radius = positive(valueOr(getInput(context, StandardPorts.RADIUS.getId(), Float.class),
+                    (float) DEFAULT_RADIUS));
+            float height = positive(valueOr(getInput(context, HEIGHT_PORT, Float.class),
+                    (float) DEFAULT_HEIGHT));
             Vec3 rotation = shape == AreaShape.SPHERE
                     ? Vec3.ZERO
                     : valueOr(getInput(context, StandardPorts.ROTATION.getId(), Vec3.class), Vec3.ZERO);
@@ -137,8 +151,25 @@ public final class CreateArea extends BaseNode {
                 if (address != null) {
                     GraphResourceId resourceOwner = GraphResourceIds.forKey(context, stableId,
                             GraphResourceTypeRegistry.AREA, address.id());
+                    LiveValue<Vec3> liveCenter = captureXyz(CENTER_PORT, center,
+                            getInputExpression(context, StandardPorts.CENTER.getId()));
+                    LiveValue<Vec3> liveSize = captureXyz(SIZE_PORT, size,
+                            getInputExpression(context, StandardPorts.SIZE_3.getId()));
+                    LiveValue<Vec3> liveRotation = captureXyz(ROTATION_PORT, rotation,
+                            getInputExpression(context, StandardPorts.ROTATION.getId()));
+                    LiveValue<Float> liveRadius = LiveValues.captureFloat(RADIUS_PORT, radius,
+                            ExpressionSpec.fromScalar(getInputExpression(
+                                    context, StandardPorts.RADIUS.getId())));
+                    LiveValue<Float> liveHeight = LiveValues.captureFloat(HEIGHT_INPUT, height,
+                            ExpressionSpec.fromScalar(getInputExpression(context, HEIGHT_PORT)));
+                    reportDiagnostics(address.id(), "center", liveCenter);
+                    reportDiagnostics(address.id(), "size", liveSize);
+                    reportDiagnostics(address.id(), "rotation", liveRotation);
+                    reportDiagnostics(address.id(), "radius", liveRadius);
+                    reportDiagnostics(address.id(), "height", liveHeight);
                     AreaResourceStore.INSTANCE.upsert(hostLevel.getServer(), address, resourceOwner,
-                            shape, center, size, rotation, anchorId);
+                            shape, areaLevel.getGameTime(), liveCenter, liveSize, liveRotation,
+                            liveRadius, liveHeight, anchorId);
                     success = true;
                 }
             }
@@ -152,23 +183,18 @@ public final class CreateArea extends BaseNode {
         return StandardPorts.BOOL.getId().equals(portName) ? context.getTempData(tempKey(context)) : null;
     }
 
-    private Vec3 readSize(ExecutionContext context, AreaShape shape) {
-        return switch (shape) {
-            case SPHERE -> {
-                float radius = positive(valueOr(getInput(context, StandardPorts.RADIUS.getId(), Float.class),
-                        (float) DEFAULT_RADIUS));
-                yield new Vec3(radius * 2.0D, radius * 2.0D, radius * 2.0D);
-            }
-            case CYLINDER -> {
-                float radius = positive(valueOr(getInput(context, StandardPorts.RADIUS.getId(), Float.class),
-                        (float) DEFAULT_RADIUS));
-                float height = positive(valueOr(getInput(context, HEIGHT_PORT, Float.class),
-                        (float) DEFAULT_HEIGHT));
-                yield new Vec3(radius * 2.0D, height, radius * 2.0D);
-            }
-            case BOX -> AreaEntityQuery.sanitizeSize(valueOr(
-                    getInput(context, StandardPorts.SIZE_3.getId(), Vec3.class), new Vec3(1, 1, 1)));
-        };
+    private static LiveValue<Vec3> captureXyz(PortDef port, Vec3 snapshot, ExpressionData expression) {
+        return LiveValues.captureXyz(port, snapshot,
+                ExpressionSpec.fromComponent(expression, 0),
+                ExpressionSpec.fromComponent(expression, 1),
+                ExpressionSpec.fromComponent(expression, 2));
+    }
+
+    private static void reportDiagnostics(String areaId, String property, LiveValue<?> value) {
+        for (String diagnostic : value.diagnostics()) {
+            GeometryNode.LOGGER.warn("Invalid Area expression for '{}' property '{}': {}",
+                    areaId, property, diagnostic);
+        }
     }
 
     private static PortDef areaIdPort(String defaultValue) {

@@ -4,6 +4,7 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.system.visual.image.ImagePathReference;
 import com.mine.geometry_node.core.engine.system.visual.image.ServerImageAssetService;
 import com.mine.geometry_node.core.node.NodeComment;
@@ -12,6 +13,7 @@ import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.nbt.CompoundTag;
@@ -22,6 +24,7 @@ import net.minecraft.world.phys.Vec3;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,6 +34,11 @@ public final class DrawImageVisual extends BaseNode {
     public static final String TYPE_ID = "draw_image_visual";
     public static final String SIZE_MODE_STRETCH = "stretch";
     public static final String SIZE_MODE_FIT = "fit";
+    public static final PortDef POSITION_PORT = StandardPorts.XYZ.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef ROTATION_PORT = StandardPorts.ROTATION.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef WIDTH_PORT = StandardPorts.WIDTH.toInput(1.0F).liveExpression();
+    public static final PortDef HEIGHT_PORT = StandardPorts.HEIGHT.toInput(1.0F).liveExpression();
+    public static final PortDef ALPHA_PORT = StandardPorts.ALPHA.toInput(1.0F).liveExpression();
     private static final Set<String> REPORTED_FAILURES = Collections.synchronizedSet(new HashSet<>());
 
     @Override
@@ -52,8 +60,8 @@ public final class DrawImageVisual extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.PATH.toInput(""), null, UIHint.PATH, null, null))
-                .addRow(new PortRow(StandardPorts.XYZ.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(POSITION_PORT, null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(ROTATION_PORT, null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_MODE.toInput(SIZE_MODE_STRETCH), null, UIHint.SELECT, null,
                         Map.of(
                                 PortMetaKeys.OPTIONS, new String[]{SIZE_MODE_STRETCH, SIZE_MODE_FIT},
@@ -62,12 +70,15 @@ public final class DrawImageVisual extends BaseNode {
                                         "geometry_node.image.size_mode.fit"
                                 }
                         )))
-                .addRow(floatRow(StandardPorts.WIDTH, 1.0f, 0.01f, 1024.0f))
-                .addRow(floatRow(StandardPorts.HEIGHT, 1.0f, 0.01f, 1024.0f))
-                .addRow(floatRow(StandardPorts.ALPHA, 1.0f, 0.0f, 1.0f))
+                .addRow(floatRow(WIDTH_PORT, 0.01f, 1024.0f))
+                .addRow(floatRow(HEIGHT_PORT, 0.01f, 1024.0f))
+                .addRow(floatRow(ALPHA_PORT, 0.0f, 1.0f))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(20), null, UIHint.INPUT, null,
                         Map.of(PortMetaKeys.NUMERIC_MIN, 1, PortMetaKeys.NUMERIC_MAX, 72000)))
-                .addRow(floatRow(StandardPorts.VISIBILITY_RANGE, 128.0f, 1.0f, 4096.0f))
+                .addRow(new PortRow(StandardPorts.VISIBILITY_RANGE.toInput(128.0F), null,
+                        UIHint.INPUT, null,
+                        Map.of(PortMetaKeys.NUMERIC_MIN, 1.0F,
+                                PortMetaKeys.NUMERIC_MAX, 4096.0F)))
                 .build();
     }
 
@@ -104,6 +115,13 @@ public final class DrawImageVisual extends BaseNode {
             extraData.putFloat("height", height);
             extraData.putFloat("alpha", alpha);
 
+            Map<String, ExpressionData> expressions = new LinkedHashMap<>();
+            putInputExpression(context, StandardPorts.XYZ.getId(), "position", expressions);
+            putInputExpression(context, StandardPorts.ROTATION.getId(), "rotation", expressions);
+            putInputExpression(context, StandardPorts.WIDTH.getId(), "width", expressions);
+            putInputExpression(context, StandardPorts.HEIGHT.getId(), "height", expressions);
+            putInputExpression(context, StandardPorts.ALPHA.getId(), "alpha", expressions);
+
             List<GraphEngineServices.VisualAsset> assets = List.of();
             if (reference.source() == ImagePathReference.Source.SERVER) {
                 GraphEngineServices.VisualAsset asset = ServerImageAssetService.load(level.getServer(), reference.path());
@@ -117,7 +135,7 @@ public final class DrawImageVisual extends BaseNode {
                     "image_visual",
                     0xFFFFFFFF,
                     duration,
-                    Map.of(),
+                    expressions,
                     extraData,
                     position,
                     visibleRange,
@@ -130,8 +148,8 @@ public final class DrawImageVisual extends BaseNode {
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
-    private static PortRow floatRow(StandardPorts port, float defaultValue, float min, float max) {
-        return new PortRow(port.toInput(defaultValue), null, UIHint.INPUT, null,
+    private static PortRow floatRow(PortDef port, float min, float max) {
+        return new PortRow(port, null, UIHint.INPUT, null,
                 Map.of(PortMetaKeys.NUMERIC_MIN, min, PortMetaKeys.NUMERIC_MAX, max));
     }
 

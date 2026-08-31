@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
+import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
@@ -37,11 +38,14 @@ public final class AreaResourceStore {
 
     public synchronized AreaResource upsert(MinecraftServer server, AreaAddress address,
                                             GraphResourceId owner, AreaShape shape,
-                                            Vec3 center, Vec3 size, Vec3 rotation,
+                                            long creationGameTime,
+                                            LiveValue<Vec3> center, LiveValue<Vec3> size,
+                                            LiveValue<Vec3> rotation, LiveValue<Float> radius,
+                                            LiveValue<Float> height,
                                             @Nullable UUID anchorEntityId) {
         ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
         AreaResource resource = new AreaResource(address, owner, ++state.generation,
-                shape, center, size, rotation, anchorEntityId);
+                shape, creationGameTime, center, size, rotation, radius, height, anchorEntityId);
         state.entries.put(address, resource);
         return resource;
     }

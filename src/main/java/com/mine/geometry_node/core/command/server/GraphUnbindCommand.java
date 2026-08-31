@@ -24,7 +24,7 @@ public class GraphUnbindCommand {
                                             for (Entity entity : targets) {
                                                 BlueprintRuntime.INSTANCE.unbindAllGraphs(entity);
                                             }
-                                            context.getSource().sendSuccess(() -> Component.literal("成功解绑 " + targets.size() + " 个实体上的所有图。"), true);
+                                            context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_unbind.target_all", targets.size()), true);
                                             return targets.size();
                                         })
                                         .then(Commands.argument("graph_id", StringArgumentType.greedyString())
@@ -35,7 +35,7 @@ public class GraphUnbindCommand {
                                                     for (Entity entity : targets) {
                                                         BlueprintRuntime.INSTANCE.unbindGraph(entity, graphId);
                                                     }
-                                                    context.getSource().sendSuccess(() -> Component.literal("成功解绑 " + targets.size() + " 个实体上的图: " + graphId), true);
+                                                    context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_unbind.target", targets.size(), graphId), true);
                                                     return targets.size();
                                                 })
                                         )
@@ -45,7 +45,7 @@ public class GraphUnbindCommand {
                         .then(Commands.literal("global")
                                 .executes(context -> {
                                     BlueprintRuntime.INSTANCE.unbindAllGlobalGraphs(context.getSource().getLevel());
-                                    context.getSource().sendSuccess(() -> Component.literal("成功解绑全局服务器上的所有图。"), true);
+                                    context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_unbind.global_all"), true);
                                     return 1;
                                 })
                                 .then(Commands.argument("graph_id", StringArgumentType.greedyString())
@@ -53,7 +53,7 @@ public class GraphUnbindCommand {
                                         .executes(context -> {
                                             String graphId = StringArgumentType.getString(context, "graph_id");
                                             BlueprintRuntime.INSTANCE.unbindGlobalGraph(context.getSource().getLevel(), graphId);
-                                            context.getSource().sendSuccess(() -> Component.literal("成功解绑全局服务器上的图: " + graphId), true);
+                                            context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_unbind.global", graphId), true);
                                             return 1;
                                         })
                                 )

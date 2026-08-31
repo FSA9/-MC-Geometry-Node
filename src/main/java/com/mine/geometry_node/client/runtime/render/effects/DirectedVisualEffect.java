@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationC
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.node.nodes.actions.visual.DrawLaserBeam;
+import com.mine.geometry_node.core.node.port.PortDef;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.nbt.CompoundTag;
@@ -20,6 +21,11 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
     private final LiveValue.State<Float> size;
 
     public DirectedVisualEffect(PacketSpawnDynamicVisual packet) {
+        this(packet, DrawLaserBeam.START_PORT, DrawLaserBeam.END_PORT, DrawLaserBeam.SIZE_PORT);
+    }
+
+    protected DirectedVisualEffect(PacketSpawnDynamicVisual packet,
+                                   PortDef startPort, PortDef endPort, PortDef sizePort) {
         super(packet);
         CompoundTag data = packet.extraData();
 
@@ -36,9 +42,9 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
             this.baseEnd = Vec3.ZERO;
             this.baseSize = 1.0f;
         }
-        this.start = captureXyz(DrawLaserBeam.START_PORT, "start", baseStart);
-        this.end = captureXyz(DrawLaserBeam.END_PORT, "end", baseEnd);
-        this.size = captureFloat(DrawLaserBeam.SIZE_PORT, "size", baseSize);
+        this.start = captureXyz(startPort, "start", baseStart);
+        this.end = captureXyz(endPort, "end", baseEnd);
+        this.size = captureFloat(sizePort, "size", baseSize);
     }
 
     protected DirectedAnchors computeAnchors(float partialTick) {

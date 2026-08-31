@@ -3,16 +3,10 @@ package com.mine.geometry_node.core.engine.blueprint.spatial.forceField;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaEntityQuery;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResource;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResourceStore;
-import com.mine.geometry_node.core.engine.graph.expression.EntityExpressionValues;
-import com.mine.geometry_node.core.engine.graph.expression.ExpressionBinding;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.MinecraftServer;
+import com.mine.geometry_node.core.engine.graph.expression.ServerExpressionBindingResolver;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -30,7 +24,7 @@ public final class ForceFieldTickService {
 
     public void tickLevel(ServerLevel level) {
         List<ForceFieldResource> fields = ForceFieldResourceStore.INSTANCE.snapshot(level);
-        ServerBindingResolver resolver = new ServerBindingResolver(level.getServer());
+        ServerExpressionBindingResolver resolver = new ServerExpressionBindingResolver(level.getServer());
         long worldGameTime = level.getGameTime();
         for (ForceFieldResource field : fields) {
             double age = Math.max(0L, worldGameTime - field.creationGameTime());
@@ -67,25 +61,4 @@ public final class ForceFieldTickService {
         return Double.isFinite(value.x) && Double.isFinite(value.y) && Double.isFinite(value.z);
     }
 
-    private static final class ServerBindingResolver implements ExpressionEvaluationContext.BindingResolver {
-        private final MinecraftServer server;
-
-        private ServerBindingResolver(MinecraftServer server) {
-            this.server = server;
-        }
-
-        @Override
-        public double resolve(ExpressionBinding binding) {
-            if (!(binding instanceof ExpressionBinding.EntityProperty entityBinding)) {
-                return Double.NaN;
-            }
-            Identifier dimensionId = Identifier.tryParse(entityBinding.dimensionId());
-            if (dimensionId == null) return Double.NaN;
-            ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION, dimensionId);
-            ServerLevel targetLevel = server.getLevel(dimension);
-            if (targetLevel == null) return Double.NaN;
-            Entity entity = targetLevel.getEntity(entityBinding.entityUuid());
-            return EntityExpressionValues.resolve(entityBinding, entity, 1.0f);
-        }
-    }
 }

@@ -6,7 +6,6 @@ import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
-import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
@@ -82,11 +81,11 @@ public class DrawLaserBeam extends BaseNode {
         Map<String, ExpressionData> expressions = new LinkedHashMap<>();
 
         // 3. 处理动态粗细 (标量)
-        putDynamicExpression(context, StandardPorts.SIZE_1.getId(), "size", expressions);
+        putInputExpression(context, StandardPorts.SIZE_1.getId(), "size", expressions);
 
         // 4. 处理动态起点和终点 (矢量解包)
-        putDynamicExpression(context, StandardPorts.START_POS.getId(), "start", expressions);
-        putDynamicExpression(context, StandardPorts.END_POS.getId(), "end", expressions);
+        putInputExpression(context, StandardPorts.START_POS.getId(), "start", expressions);
+        putInputExpression(context, StandardPorts.END_POS.getId(), "end", expressions);
 
         // 5. 组装动态数据夹 (NBT)
         net.minecraft.nbt.CompoundTag extraData = new net.minecraft.nbt.CompoundTag();
@@ -107,13 +106,5 @@ public class DrawLaserBeam extends BaseNode {
         context.broadcastDynamicVisual("laser_beam", argb, duration, expressions, extraData);
 
         return next(StandardPorts.FLOW_OUT.getId());
-    }
-
-    private void putDynamicExpression(ExecutionContext context, String portId, String key,
-                                      Map<String, ExpressionData> expressions) {
-        Object raw = getRawInput(context, portId);
-        if (raw instanceof DynamicData dynamic && dynamic.expression() != null) {
-            expressions.put(key, dynamic.expression());
-        }
     }
 }

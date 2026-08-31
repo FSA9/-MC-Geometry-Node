@@ -2,21 +2,27 @@ package com.mine.geometry_node.core.node.nodes.actions.visual;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class DrawDebugLine extends BaseNode {
 
     public static final String TYPE_ID = "draw_debug_line";
+    public static final PortDef START_PORT = StandardPorts.START_POS.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef END_PORT = StandardPorts.END_POS.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef SIZE_PORT = StandardPorts.SIZE_1.toInput(0.01F).liveExpression();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -34,11 +40,11 @@ public class DrawDebugLine extends BaseNode {
                 // 执行流：输入与输出
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 核心数据端口：使用 PortDef.create 创建具有默认值的自定义语义端口
-                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.END_POS.toInput(), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(START_PORT, null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(END_PORT, null, UIHint.VECTOR, null, null))
                 // 渲染参数端口：颜色、粗细、持续时间(Tick)
                 .addRow(new PortRow(StandardPorts.COLOR.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.SIZE_1.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(SIZE_PORT, null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null,
                         Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
                 .build();
@@ -52,8 +58,28 @@ public class DrawDebugLine extends BaseNode {
         Float size = getInput(context, StandardPorts.SIZE_1.getId(), Float.class);
         Integer duration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
         int argb = color != null ? color.toArgb() : ColorValue.WHITE.toArgb();
+        Vec3 baseStart = startPos != null ? startPos : Vec3.ZERO;
+        Vec3 baseEnd = endPos != null ? endPos : Vec3.ZERO;
+        float baseSize = size != null ? size : 0.01F;
+        int durationTicks = duration != null ? duration : 20;
 
-        context.broadcastVisual("debug_line", -1, startPos, -1, endPos, argb, size, duration);
+        Map<String, ExpressionData> expressions = new LinkedHashMap<>();
+        putInputExpression(context, StandardPorts.START_POS.getId(), "start", expressions);
+        putInputExpression(context, StandardPorts.END_POS.getId(), "end", expressions);
+        putInputExpression(context, StandardPorts.SIZE_1.getId(), "size", expressions);
+
+        net.minecraft.nbt.CompoundTag extraData = new net.minecraft.nbt.CompoundTag();
+        extraData.putInt("sourceId", -1);
+        extraData.putInt("targetId", -1);
+        extraData.putDouble("startX", baseStart.x);
+        extraData.putDouble("startY", baseStart.y);
+        extraData.putDouble("startZ", baseStart.z);
+        extraData.putDouble("endX", baseEnd.x);
+        extraData.putDouble("endY", baseEnd.y);
+        extraData.putDouble("endZ", baseEnd.z);
+        extraData.putFloat("size", baseSize);
+
+        context.broadcastDynamicVisual("debug_line", argb, durationTicks, expressions, extraData);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }

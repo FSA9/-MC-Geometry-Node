@@ -21,4 +21,16 @@ public record ExpressionSpec(String formula, Map<String, ExpressionBinding> bind
     public static ExpressionSpec of(String formula) {
         return new ExpressionSpec(formula, Map.of());
     }
+
+    public static ExpressionSpec fromScalar(ExpressionData expression) {
+        return expression == null
+                ? null
+                : new ExpressionSpec(expression.component(0), expression.bindings());
+    }
+
+    public static ExpressionSpec fromComponent(ExpressionData expression, int component) {
+        return expression == null
+                ? null
+                : new ExpressionSpec(expression.component(component), expression.bindings());
+    }
 }

@@ -67,6 +67,7 @@ public class MathExpression extends BaseNode {
     private NodeDef buildDef(int portCount) {
         NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
                 .text("summary")
+                .text("time_variables")
                 .output(StandardPorts.FLOAT_VALUE, "value")
                 .input(StandardPorts.EXPRESSION, "expression");
         for (int i = 1; i <= portCount; i++) {

@@ -4,7 +4,6 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
-import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
@@ -93,9 +92,9 @@ public class DrawItemVisual extends BaseNode {
         if (duration == null || duration <= 0) duration = 20;
 
         Map<String, ExpressionData> expressions = new LinkedHashMap<>();
-        putDynamicExpression(context, StandardPorts.TRANSLATION.getId(), "translation", expressions);
-        putDynamicExpression(context, StandardPorts.ROTATION.getId(), "rotation", expressions);
-        putDynamicExpression(context, StandardPorts.SIZE_3.getId(), "scale", expressions);
+        putInputExpression(context, StandardPorts.TRANSLATION.getId(), "translation", expressions);
+        putInputExpression(context, StandardPorts.ROTATION.getId(), "rotation", expressions);
+        putInputExpression(context, StandardPorts.SIZE_3.getId(), "scale", expressions);
 
         CompoundTag extraData = new CompoundTag();
         extraData.putInt("sourceId", sourceId);
@@ -117,13 +116,5 @@ public class DrawItemVisual extends BaseNode {
         context.broadcastDynamicVisual("item_visual", 0xFFFFFFFF, duration, expressions, extraData);
 
         return next(StandardPorts.FLOW_OUT.getId());
-    }
-
-    private void putDynamicExpression(ExecutionContext context, String portId, String key,
-                                      Map<String, ExpressionData> expressions) {
-        Object raw = getRawInput(context, portId);
-        if (raw instanceof DynamicData dynamic && dynamic.expression() != null) {
-            expressions.put(key, dynamic.expression());
-        }
     }
 }

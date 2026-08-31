@@ -70,6 +70,18 @@ public abstract class BaseNode {
         return TypeConverter.convert(raw, type, ctx);
     }
 
+    @Nullable
+    protected ExpressionData getInputExpression(GraphDataContext ctx, String portName) {
+        Object raw = getRawInput(ctx, portName);
+        return raw instanceof DynamicData dynamic ? dynamic.expression() : null;
+    }
+
+    protected void putInputExpression(GraphDataContext ctx, String portName, String key,
+                                      Map<String, ExpressionData> expressions) {
+        ExpressionData expression = getInputExpression(ctx, portName);
+        if (expression != null) expressions.put(key, expression);
+    }
+
     protected <T> List<T> getInputList(GraphDataContext ctx, String portName, Class<T> elementType) {
         Object raw = getRawInput(ctx, portName);
         if (raw == null) return List.of();

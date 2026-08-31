@@ -22,8 +22,6 @@ import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
-import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
-import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 
@@ -84,11 +82,11 @@ public final class CreateForceField extends BaseNode {
                 if (stableId == null || stableId.isBlank()) stableId = Integer.toString(context.getCurrentNodeId());
                 GraphResourceId owner = GraphResourceIds.forKey(context, stableId,
                         GraphResourceTypeRegistry.FORCE_FIELD, address.id());
-                Object rawStrengthInput = getRawInput(context, StandardPorts.STRENGTH.getId());
                 Float rawStrength = getInput(context, StandardPorts.STRENGTH.getId(), Float.class);
                 float strengthSnapshot = rawStrength != null && Float.isFinite(rawStrength)
                         ? rawStrength : DEFAULT_STRENGTH;
-                ExpressionSpec strengthExpression = expressionSpec(rawStrengthInput);
+                ExpressionSpec strengthExpression = ExpressionSpec.fromScalar(
+                        getInputExpression(context, StandardPorts.STRENGTH.getId()));
                 LiveValue<Float> strength = LiveValues.captureFloat(
                         STRENGTH_PORT, strengthSnapshot, strengthExpression);
                 for (String diagnostic : strength.diagnostics()) {
@@ -111,12 +109,5 @@ public final class CreateForceField extends BaseNode {
 
     private static String tempKey(ExecutionContext context) {
         return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + StandardPorts.BOOL.getId();
-    }
-
-    private static ExpressionSpec expressionSpec(Object rawInput) {
-        if (!(rawInput instanceof DynamicData dynamic)) return null;
-        ExpressionData expression = dynamic.expression();
-        if (expression == null) return null;
-        return new ExpressionSpec(expression.component(0), expression.bindings());
     }
 }

@@ -61,8 +61,7 @@ public final class BehaviorTreeCommand {
         String graphId = StringArgumentType.getString(context, "graph_id");
         return runTargets(context, (source, mob) -> {
             boolean changed = BehaviorTreeRuntime.INSTANCE.bind(mob, graphId);
-            source.sendSuccess(() -> Component.literal((changed ? "Bound " : "Already bound ")
-                    + graphId + " to " + mob.getName().getString()), false);
+            source.sendSuccess(() -> Component.translatable(changed ? "geometry_node.command.behavior.bind" : "geometry_node.command.behavior.already_bound", graphId, mob.getName().getString()), false);
             return changed;
         });
     }
@@ -71,8 +70,7 @@ public final class BehaviorTreeCommand {
         String graphId = StringArgumentType.getString(context, "graph_id");
         return runTargets(context, (source, mob) -> {
             BehaviorTreeProcess instance = BehaviorTreeRuntime.INSTANCE.switchTo(mob, graphId);
-            source.sendSuccess(() -> Component.literal("Switched " + mob.getName().getString()
-                    + " to " + graphId + " (" + instance.instanceId() + ")"), false);
+            source.sendSuccess(() -> Component.translatable("geometry_node.command.behavior.switched", mob.getName().getString(), graphId, instance.instanceId()), false);
             return true;
         });
     }
@@ -83,19 +81,15 @@ public final class BehaviorTreeCommand {
         String selected = BehaviorTreeRuntime.INSTANCE.selectedGraph(mob);
         BehaviorTerminationReason lastStop = BehaviorTreeRuntime.INSTANCE.lastStopReasonForOwner(
                 source.getServer(), mob.getUUID());
-        source.sendSuccess(() -> Component.literal(mob.getName().getString()
-                + ": bindings=" + bindings
-                + ", selected=" + (selected != null ? selected : "none")
-                + ", runtime=" + (instance != null
-                ? instance.state() + " (" + instance.instanceId() + ")" : "none")
-                + ", last_stop=" + (lastStop != null ? lastStop : "none")), false);
+        source.sendSuccess(() -> Component.translatable("geometry_node.command.behavior.status", mob.getName().getString(), bindings,
+                selected != null ? selected : "none", instance != null ? instance.state() + " (" + instance.instanceId() + ")" : "none",
+                lastStop != null ? lastStop : "none"), false);
         return true;
     }
 
     private static boolean start(CommandSourceStack source, Mob mob) {
         BehaviorTreeProcess instance = BehaviorTreeRuntime.INSTANCE.startBound(mob);
-        source.sendSuccess(() -> Component.literal("Started " + instance.graphId() + " on "
-                + mob.getName().getString() + " (" + instance.instanceId() + ")"), false);
+        source.sendSuccess(() -> Component.translatable("geometry_node.command.behavior.started", instance.graphId(), mob.getName().getString(), instance.instanceId()), false);
         return true;
     }
 
@@ -127,22 +121,19 @@ public final class BehaviorTreeCommand {
         String graphId = StringArgumentType.getString(context, "graph_id");
         return runTargets(context, (source, mob) -> {
             boolean changed = BehaviorTreeRuntime.INSTANCE.unbind(mob, graphId);
-            if (changed) source.sendSuccess(() -> Component.literal("Unbound " + graphId
-                    + " from " + mob.getName().getString()), false);
+            if (changed) source.sendSuccess(() -> Component.translatable("geometry_node.command.behavior.unbound", graphId, mob.getName().getString()), false);
             return changed;
         });
     }
 
     private static boolean unbindAll(CommandSourceStack source, Mob mob) {
         boolean changed = BehaviorTreeRuntime.INSTANCE.unbindAll(mob);
-        if (changed) source.sendSuccess(() -> Component.literal("Unbound all behavior trees from "
-                + mob.getName().getString()), false);
+        if (changed) source.sendSuccess(() -> Component.translatable("geometry_node.command.behavior.unbound_all", mob.getName().getString()), false);
         return changed;
     }
 
     private static void sendLifecycle(CommandSourceStack source, Mob mob, String action) {
-        source.sendSuccess(() -> Component.literal(action + " behavior tree on "
-                + mob.getName().getString()), false);
+        source.sendSuccess(() -> Component.translatable("geometry_node.command.behavior.lifecycle." + action.toLowerCase(), mob.getName().getString()), false);
     }
 
     private static int runTargets(CommandContext<CommandSourceStack> context,
@@ -151,15 +142,13 @@ public final class BehaviorTreeCommand {
         int changed = 0;
         for (Entity entity : entities) {
             if (!(entity instanceof Mob mob)) {
-                context.getSource().sendFailure(Component.literal(
-                        entity.getName().getString() + " is not a Mob"));
+                context.getSource().sendFailure(Component.translatable("geometry_node.command.behavior.not_mob", entity.getName().getString()));
                 continue;
             }
             try {
                 if (handler.apply(context.getSource(), mob)) changed++;
             } catch (RuntimeException exception) {
-                context.getSource().sendFailure(Component.literal(mob.getName().getString()
-                        + ": " + exception.getMessage()));
+                context.getSource().sendFailure(Component.translatable("geometry_node.command.behavior.error", mob.getName().getString(), exception.getMessage()));
             }
         }
         return changed;

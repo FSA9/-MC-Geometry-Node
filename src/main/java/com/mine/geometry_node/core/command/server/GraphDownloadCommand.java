@@ -32,12 +32,12 @@ public class GraphDownloadCommand {
                                         if (file.exists()) {
                                             String json = Files.readString(file.toPath());
                                             NetworkHandler.sendToPlayer(player, new PacketSyncDownload(graphId, json));
-                                            context.getSource().sendSuccess(() -> Component.literal("§a正在下发图纸: " + graphId), false);
+                                            context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_download.sending", graphId), false);
                                         } else {
-                                            context.getSource().sendFailure(Component.literal("找不到动态图纸文件，可能是内置数据包图纸，或路径错误。"));
+                                            context.getSource().sendFailure(Component.translatable("geometry_node.command.graph_download.not_found"));
                                         }
                                     } catch (Exception e) {
-                                        context.getSource().sendFailure(Component.literal("服务器读取文件失败: " + e.getMessage()));
+                                        context.getSource().sendFailure(Component.translatable("geometry_node.command.graph_download.read_failed", e.getMessage()));
                                     }
                                     return 1;
                                 })
