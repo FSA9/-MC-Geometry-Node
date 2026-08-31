@@ -45,7 +45,7 @@ public class DialogueCommand {
     private static int choose(CommandSourceStack source, UUID sessionId, String choiceId) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         if (DialogueRuntime.INSTANCE.choose(player, sessionId, choiceId) == null) {
-            source.sendFailure(Component.literal("没有可用的对话选项。"));
+            source.sendFailure(Component.translatable("geometry_node.command.dialogue.no_choice"));
             return 0;
         }
         return 1;
@@ -54,7 +54,7 @@ public class DialogueCommand {
     private static int choose(CommandSourceStack source, String choiceId) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         if (DialogueRuntime.INSTANCE.chooseCurrent(player, choiceId) == null) {
-            source.sendFailure(Component.literal("没有可用的对话选项。"));
+            source.sendFailure(Component.translatable("geometry_node.command.dialogue.no_choice"));
             return 0;
         }
         return 1;
@@ -63,7 +63,7 @@ public class DialogueCommand {
     private static int close(CommandSourceStack source, UUID sessionId) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         if (DialogueRuntime.INSTANCE.closeFromClient(player, sessionId) == null) {
-            source.sendFailure(Component.literal("没有可关闭的对话。"));
+            source.sendFailure(Component.translatable("geometry_node.command.dialogue.no_dialogue_to_close"));
             return 0;
         }
         return 1;
@@ -72,7 +72,7 @@ public class DialogueCommand {
     private static int close(CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         if (DialogueRuntime.INSTANCE.closeCurrentFromClient(player) == null) {
-            source.sendFailure(Component.literal("没有可关闭的对话。"));
+            source.sendFailure(Component.translatable("geometry_node.command.dialogue.no_dialogue_to_close"));
             return 0;
         }
         return 1;

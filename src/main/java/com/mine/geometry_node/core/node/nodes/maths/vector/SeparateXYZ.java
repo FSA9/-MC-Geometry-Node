@@ -2,14 +2,11 @@ package com.mine.geometry_node.core.node.nodes.maths.vector;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
-import com.mine.geometry_node.core.node.value.dynamic.ExpressionData;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class SeparateXYZ extends BaseNode {
 
@@ -43,40 +40,9 @@ public class SeparateXYZ extends BaseNode {
         ExpressionData inExpr = getInput(context, StandardPorts.VECTOR.getId(), ExpressionData.class);
         ExpressionData outExpr = ExpressionData.ZERO;
 
-        if (inExpr != null && inExpr.formula() != null) {
-            String f = inExpr.formula().trim();
-
-            // 检查是否为标准的动态向量协议
-            if (f.startsWith("vec3(") && f.endsWith(")")) {
-                String inner = f.substring(5, f.length() - 1);
-
-                // 【核心修复】：安全的分量提取算法
-                // 通过记录括号层级，确保函数内部的逗号（如 max(a,b)）不会触发错误的切分
-                List<String> parts = new ArrayList<>();
-                int bracketLevel = 0;
-                StringBuilder currentStr = new StringBuilder();
-
-                for (char c : inner.toCharArray()) {
-                    if (c == '(') bracketLevel++;
-                    else if (c == ')') bracketLevel--;
-                    else if (c == ',' && bracketLevel == 0) {
-                        parts.add(currentStr.toString().trim());
-                        currentStr.setLength(0);
-                        continue;
-                    }
-                    currentStr.append(c);
-                }
-                parts.add(currentStr.toString().trim());
-
-                if (parts.size() >= 3) {
-                    // 根据请求的端口返回对应的分量公式，并透传变量绑定关系
-                    String targetFormula = isX ? parts.get(0) : (isY ? parts.get(1) : parts.get(2));
-                    outExpr = new ExpressionData(targetFormula, inExpr.bindings());
-                }
-            } else {
-                // 如果输入不是向量协议（例如死坐标或单一变量），则作为标量直接透传公式
-                outExpr = new ExpressionData(f, inExpr.bindings());
-            }
+        if (inExpr != null) {
+            int component = isX ? 0 : isY ? 1 : 2;
+            outExpr = ExpressionData.scalar(inExpr.component(component), inExpr.bindings());
         }
 
         // 重新包装为 DynamicData 输出

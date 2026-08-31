@@ -3,12 +3,14 @@ package com.mine.geometry_node.core.node.nodes.actions.visual;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.NodeComment;
-import com.mine.geometry_node.core.node.value.dynamic.ExpressionData;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
+import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
 import net.minecraft.nbt.CompoundTag;
@@ -19,15 +21,16 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class DrawItemVisual extends BaseNode {
 
     public static final String TYPE_ID = "draw_item_visual";
     public static final String PROPERTY_DISPLAY_CONTEXT = "item_display_context";
+    public static final PortDef TRANSLATION_PORT = StandardPorts.TRANSLATION.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef ROTATION_PORT = StandardPorts.ROTATION.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef SCALE_PORT = StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)).liveExpression();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -56,9 +59,9 @@ public class DrawItemVisual extends BaseNode {
                         Map.of(PortMetaKeys.OPTIONS, new String[]{"fixed", "none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground"})
                 ))
                 // 核心三大动态矢量
-                .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(TRANSLATION_PORT, null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(ROTATION_PORT, null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(SCALE_PORT, null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(20), null, UIHint.INPUT, null,
                         Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
                 .build();
@@ -89,19 +92,10 @@ public class DrawItemVisual extends BaseNode {
         Integer duration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
         if (duration == null || duration <= 0) duration = 20;
 
-        Vec3 broadcastCenter = (sourceEntity != null) ? sourceEntity.position().add(baseTrans) : baseTrans;
-
-        Map<String, String> expressions = new HashMap<>();
-        Map<String, String> bindings = new HashMap<>();
-
-        ExpressionData transExpr = getInput(context, StandardPorts.TRANSLATION.getId(), ExpressionData.class);
-        extractVec3(transExpr, "trans", expressions, bindings);
-
-        ExpressionData rotExpr = getInput(context, StandardPorts.ROTATION.getId(), ExpressionData.class);
-        extractVec3(rotExpr, "rot", expressions, bindings);
-
-        ExpressionData scaleExpr = getInput(context, StandardPorts.SIZE_3.getId(), ExpressionData.class);
-        extractVec3(scaleExpr, "scale", expressions, bindings);
+        Map<String, ExpressionData> expressions = new LinkedHashMap<>();
+        putDynamicExpression(context, StandardPorts.TRANSLATION.getId(), "translation", expressions);
+        putDynamicExpression(context, StandardPorts.ROTATION.getId(), "rotation", expressions);
+        putDynamicExpression(context, StandardPorts.SIZE_3.getId(), "scale", expressions);
 
         CompoundTag extraData = new CompoundTag();
         extraData.putInt("sourceId", sourceId);
@@ -120,40 +114,16 @@ public class DrawItemVisual extends BaseNode {
                 .orElseGet(CompoundTag::new);
         extraData.put("item", itemTag);
 
-        // 注意：如果你有办法修改 broadcastDynamicVisual 的方法签名，请把上面的 broadcastCenter 传进去作为发包中心！
-        context.broadcastDynamicVisual("item_visual", 0xFFFFFFFF, duration, expressions, bindings, extraData);
+        context.broadcastDynamicVisual("item_visual", 0xFFFFFFFF, duration, expressions, extraData);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
-    protected void extractVec3(ExpressionData expr, String prefix, Map<String, String> expressions, Map<String, String> bindings) {
-        if (expr == null || expr.formula() == null || expr.formula().isEmpty()) return;
-
-        String f = expr.formula().trim();
-        if (f.startsWith("vec3(") && f.endsWith(")")) {
-            String inner = f.substring(5, f.length() - 1);
-            List<String> parts = new ArrayList<>();
-            int bracketLevel = 0;
-            StringBuilder currentStr = new StringBuilder();
-
-            for (char c : inner.toCharArray()) {
-                if (c == '(') bracketLevel++;
-                else if (c == ')') bracketLevel--;
-                else if (c == ',' && bracketLevel == 0) {
-                    parts.add(currentStr.toString().trim());
-                    currentStr.setLength(0);
-                    continue;
-                }
-                currentStr.append(c);
-            }
-            parts.add(currentStr.toString().trim());
-
-            if (parts.size() >= 3) {
-                if (!parts.get(0).equals("0")) expressions.put(prefix + "X", parts.get(0));
-                if (!parts.get(1).equals("0")) expressions.put(prefix + "Y", parts.get(1));
-                if (!parts.get(2).equals("0")) expressions.put(prefix + "Z", parts.get(2));
-            }
+    private void putDynamicExpression(ExecutionContext context, String portId, String key,
+                                      Map<String, ExpressionData> expressions) {
+        Object raw = getRawInput(context, portId);
+        if (raw instanceof DynamicData dynamic && dynamic.expression() != null) {
+            expressions.put(key, dynamic.expression());
         }
-        if (expr.bindings() != null) bindings.putAll(expr.bindings());
     }
 }

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.value.dynamic;
 
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
+
 /**
  * [双模数字]
  * 数学节点的真实输出类型，兼顾服务端的单帧浮点与客户端的连续公式

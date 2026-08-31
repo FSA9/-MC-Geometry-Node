@@ -1,8 +1,9 @@
 package com.mine.geometry_node.core.node.nodes.maths.operation;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionBinding;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
-import com.mine.geometry_node.core.node.value.dynamic.ExpressionData;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -126,7 +127,7 @@ public class MathExpression extends BaseNode {
         }
 
         Map<String, ASTNode> substitutions = new HashMap<>();
-        Map<String, String> mergedBindings = new HashMap<>();
+        Map<String, ExpressionBinding> mergedBindings = new HashMap<>();
 
         int portCount = 1;
         Object countObj = context.getStaticInput(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id());

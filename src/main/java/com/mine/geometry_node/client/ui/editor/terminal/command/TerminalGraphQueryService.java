@@ -416,6 +416,7 @@ final class TerminalGraphQueryService {
                 port.displayName().getString()));
         result.addProperty("ui_hint", row.uiHint() == null ? "default" : row.uiHint().name().toLowerCase(Locale.ROOT));
         result.addProperty("hidden", port.hidePin());
+        result.addProperty("live_expression", port.liveExpressionEnabled());
         result.addProperty("connected", connectedPortIds.contains(port.id()));
         result.addProperty("has_stored_value", hasStored);
         result.addProperty("stored_value_json", hasStored ? valueJson(stored) : "");
@@ -453,6 +454,7 @@ final class TerminalGraphQueryService {
         result.addProperty("display_name", port.displayName().getString());
         result.addProperty("ui_hint", row.uiHint() == null ? "default" : row.uiHint().name().toLowerCase(Locale.ROOT));
         result.addProperty("hidden", port.hidePin());
+        result.addProperty("live_expression", port.liveExpressionEnabled());
         result.addProperty("default_value_json", valueJson(port.defaultValue()));
         result.addProperty("comment", portComment(definition, port.id(), input));
         result.addProperty("dynamic", isDynamic(row));

@@ -118,7 +118,6 @@ public final class DrawImageVisual extends BaseNode {
                     0xFFFFFFFF,
                     duration,
                     Map.of(),
-                    Map.of(),
                     extraData,
                     position,
                     visibleRange,

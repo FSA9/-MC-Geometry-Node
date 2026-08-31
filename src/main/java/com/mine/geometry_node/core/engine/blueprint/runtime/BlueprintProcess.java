@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataInd
 import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandler;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandlerRegistry;
@@ -1135,21 +1136,19 @@ public class BlueprintProcess {
 
         @Override
         public void broadcastDynamicVisual(String effectType, int color, int durationTicks,
-                                           Map<String, String> expressions,
-                                           Map<String, String> bindings,
+                                           Map<String, ExpressionData> expressions,
                                            net.minecraft.nbt.CompoundTag extraData) {
 
             ServerLevel currentLevel = getLevel();
             if (currentLevel == null) return;
 
             GraphVisualEmitter.broadcastDynamicVisual(currentLevel, effectType, color, durationTicks,
-                    expressions, bindings, extraData);
+                    expressions, extraData);
         }
 
         @Override
         public void broadcastDynamicVisual(String effectType, int color, int durationTicks,
-                                           Map<String, String> expressions,
-                                           Map<String, String> bindings,
+                                           Map<String, ExpressionData> expressions,
                                            net.minecraft.nbt.CompoundTag extraData,
                                            Vec3 center,
                                            double radius,
@@ -1158,7 +1157,7 @@ public class BlueprintProcess {
             if (currentLevel == null) return;
 
             GraphVisualEmitter.broadcastDynamicVisual(currentLevel, effectType, color, durationTicks,
-                    expressions, bindings, extraData, center, radius, assets);
+                    expressions, extraData, center, radius, assets);
         }
     }
 

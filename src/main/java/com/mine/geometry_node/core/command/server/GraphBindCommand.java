@@ -65,9 +65,8 @@ public class GraphBindCommand {
         Collection<? extends Entity> targets = EntityArgument.getEntities(context, "targets");
         for (Entity entity : targets) {
             Set<String> graphs = BlueprintRuntime.INSTANCE.getBoundGraphs(entity);
-            context.getSource().sendSuccess(() -> Component.literal(
-                    entity.getName().getString() + " 绑定的图: " + (graphs.isEmpty() ? "无" : graphs)
-            ), false);
+            context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_bind.target_list",
+                    entity.getName().getString(), graphs.isEmpty() ? "无" : graphs), false);
         }
         return targets.size();
     }
@@ -81,22 +80,21 @@ public class GraphBindCommand {
             count++;
         }
         int finalCount = count;
-        context.getSource().sendSuccess(() -> Component.literal("成功将图 " + graphId + " 绑定到 " + finalCount + " 个实体上。"), true);
+        context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_bind.target_bound", graphId, finalCount), true);
         return count;
     }
 
     private static int handleGlobalList(CommandContext<CommandSourceStack> context) {
         Set<String> graphs = BlueprintRuntime.INSTANCE.getGlobalBoundGraphs(context.getSource().getLevel());
-        context.getSource().sendSuccess(() -> Component.literal(
-                "全局绑定的图: " + (graphs.isEmpty() ? "无" : graphs)
-        ), false);
+        context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_bind.global_list",
+                graphs.isEmpty() ? "无" : graphs), false);
         return 1;
     }
 
     private static int handleGlobalBind(CommandContext<CommandSourceStack> context) {
         String graphId = StringArgumentType.getString(context, "graph_id");
         BlueprintRuntime.INSTANCE.bindGlobalGraph(context.getSource().getLevel(), graphId);
-        context.getSource().sendSuccess(() -> Component.literal("成功将图 " + graphId + " 绑定到全局服务器。"), true);
+        context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_bind.global_bound", graphId), true);
         return 1;
     }
 
@@ -120,12 +118,11 @@ public class GraphBindCommand {
         if (hitResult != null && hitResult.getEntity() != null) {
             Entity targetEntity = hitResult.getEntity();
             BlueprintRuntime.INSTANCE.bindGraph(targetEntity, graphId);
-            context.getSource().sendSuccess(() -> Component.literal(
-                    "§a成功将图纸 " + graphId + " 绑定到: " + targetEntity.getName().getString()
-            ), true);
+            context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_bind.look_bound",
+                    graphId, targetEntity.getName().getString()), true);
             return 1;
         } else {
-            context.getSource().sendFailure(Component.literal("§c未发现实体！请靠近并对准目标。"));
+            context.getSource().sendFailure(Component.translatable("geometry_node.command.graph_bind.no_entity"));
             return 0;
         }
     }

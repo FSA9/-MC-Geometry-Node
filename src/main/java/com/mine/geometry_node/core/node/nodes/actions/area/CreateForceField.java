@@ -1,12 +1,15 @@
 package com.mine.geometry_node.core.node.nodes.actions.area;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldAddress;
-import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldMode;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldResourceStore;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionSpec;
+import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
+import com.mine.geometry_node.core.engine.graph.expression.LiveValues;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.node.NodeComment;
@@ -17,9 +20,10 @@ import com.mine.geometry_node.core.node.nodes.NodeDef;
 import com.mine.geometry_node.core.node.nodes.NodeType;
 import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 
@@ -27,8 +31,9 @@ import java.util.Map;
 
 public final class CreateForceField extends BaseNode {
     public static final String TYPE_ID = "create_force_field";
-    public static final String MODE_PORT = "force_field_mode";
     public static final float DEFAULT_STRENGTH = 0.05F;
+    public static final PortDef STRENGTH_PORT = StandardPorts.STRENGTH
+            .toInput(DEFAULT_STRENGTH).liveExpression();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -45,7 +50,6 @@ public final class CreateForceField extends BaseNode {
                         .input(StandardPorts.FORCE_FIELD_ID, "force_field_id")
                         .input(StandardPorts.AREA_ID, "area_id")
                         .input(StandardPorts.DIMENSION, "dimension")
-                        .input(MODE_PORT, "mode")
                         .input(StandardPorts.STRENGTH, "strength")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
@@ -56,15 +60,7 @@ public final class CreateForceField extends BaseNode {
                 .addRow(new PortRow(StandardPorts.DIMENSION.toInput(RegistryDataManager.DEFAULT_DIMENSION),
                         null, UIHint.SELECT, null,
                         Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, RegistryDataManager.DIMENSION_REGISTRY_ID)))
-                .addRow(new PortRow(PortDef.create(MODE_PORT, "geometry_node.port.force_field_mode",
-                                PortType.STRING, ForceFieldMode.ATTRACT.id()),
-                        null, UIHint.SELECT, null, Map.of(
-                                PortMetaKeys.OPTIONS, ForceFieldMode.OPTIONS,
-                                PortMetaKeys.OPTION_LABELS, new String[]{
-                                        "geometry_node.force_field.mode.attract",
-                                        "geometry_node.force_field.mode.repel"
-                                })))
-                .addRow(new PortRow(StandardPorts.STRENGTH.toInput(DEFAULT_STRENGTH),
+                .addRow(new PortRow(STRENGTH_PORT,
                         null, UIHint.INPUT, null, null))
                 .build();
     }
@@ -88,11 +84,19 @@ public final class CreateForceField extends BaseNode {
                 if (stableId == null || stableId.isBlank()) stableId = Integer.toString(context.getCurrentNodeId());
                 GraphResourceId owner = GraphResourceIds.forKey(context, stableId,
                         GraphResourceTypeRegistry.FORCE_FIELD, address.id());
+                Object rawStrengthInput = getRawInput(context, StandardPorts.STRENGTH.getId());
                 Float rawStrength = getInput(context, StandardPorts.STRENGTH.getId(), Float.class);
-                double strength = rawStrength != null && Float.isFinite(rawStrength)
-                        ? Math.abs(rawStrength) : DEFAULT_STRENGTH;
+                float strengthSnapshot = rawStrength != null && Float.isFinite(rawStrength)
+                        ? rawStrength : DEFAULT_STRENGTH;
+                ExpressionSpec strengthExpression = expressionSpec(rawStrengthInput);
+                LiveValue<Float> strength = LiveValues.captureFloat(
+                        STRENGTH_PORT, strengthSnapshot, strengthExpression);
+                for (String diagnostic : strength.diagnostics()) {
+                    GeometryNode.LOGGER.warn("Invalid force field strength expression for '{}': {}",
+                            address.id(), diagnostic);
+                }
                 ForceFieldResourceStore.INSTANCE.upsert(hostLevel.getServer(), address, owner, area,
-                        ForceFieldMode.fromId(getInput(context, MODE_PORT, String.class)), strength);
+                        fieldLevel.getGameTime(), strength);
                 success = true;
             }
         }
@@ -107,5 +111,12 @@ public final class CreateForceField extends BaseNode {
 
     private static String tempKey(ExecutionContext context) {
         return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + StandardPorts.BOOL.getId();
+    }
+
+    private static ExpressionSpec expressionSpec(Object rawInput) {
+        if (!(rawInput instanceof DynamicData dynamic)) return null;
+        ExpressionData expression = dynamic.expression();
+        if (expression == null) return null;
+        return new ExpressionSpec(expression.component(0), expression.bindings());
     }
 }

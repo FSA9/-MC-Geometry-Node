@@ -5,8 +5,10 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
-import com.mine.geometry_node.core.node.value.dynamic.ExpressionData;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
+import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.node.nodes.*;
+import com.mine.geometry_node.core.node.port.PortDef;
 import com.mine.geometry_node.core.node.port.PortRow;
 import com.mine.geometry_node.core.node.port.StandardPorts;
 import com.mine.geometry_node.core.node.port.UIHint;
@@ -14,14 +16,15 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class DrawLaserBeam extends BaseNode {
 
     public static final String TYPE_ID = "draw_laser_beam";
+    public static final PortDef START_PORT = StandardPorts.START_POS.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef END_PORT = StandardPorts.END_POS.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef SIZE_PORT = StandardPorts.SIZE_1.toInput(0.5f).liveExpression();
 
     @Override
     public NodeDef getDefaultDefinition() {
@@ -44,10 +47,10 @@ public class DrawLaserBeam extends BaseNode {
                 .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.TARGET_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
 
-                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.END_POS.toInput(), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(START_PORT, null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(END_PORT, null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.COLOR.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.SIZE_1.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(SIZE_PORT, null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null,
                         Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
                 .build();
@@ -76,22 +79,14 @@ public class DrawLaserBeam extends BaseNode {
         if (duration == null) duration = 20;
 
         // 2. 准备协议字典
-        Map<String, String> expressions = new HashMap<>();
-        Map<String, String> bindings = new HashMap<>();
+        Map<String, ExpressionData> expressions = new LinkedHashMap<>();
 
         // 3. 处理动态粗细 (标量)
-        ExpressionData sizeExpr = getInput(context, StandardPorts.SIZE_1.getId(), ExpressionData.class);
-        if (sizeExpr != null && sizeExpr.formula() != null && !sizeExpr.formula().isEmpty() && !sizeExpr.formula().equals("0")) {
-            expressions.put("size", sizeExpr.formula());
-            bindings.putAll(sizeExpr.bindings());
-        }
+        putDynamicExpression(context, StandardPorts.SIZE_1.getId(), "size", expressions);
 
         // 4. 处理动态起点和终点 (矢量解包)
-        ExpressionData startExpr = getInput(context, StandardPorts.START_POS.getId(), ExpressionData.class);
-        extractVec3(startExpr, "start", expressions, bindings);
-
-        ExpressionData endExpr = getInput(context, StandardPorts.END_POS.getId(), ExpressionData.class);
-        extractVec3(endExpr, "end", expressions, bindings);
+        putDynamicExpression(context, StandardPorts.START_POS.getId(), "start", expressions);
+        putDynamicExpression(context, StandardPorts.END_POS.getId(), "end", expressions);
 
         // 5. 组装动态数据夹 (NBT)
         net.minecraft.nbt.CompoundTag extraData = new net.minecraft.nbt.CompoundTag();
@@ -109,48 +104,16 @@ public class DrawLaserBeam extends BaseNode {
         extraData.putFloat("size", baseSize);
 
         // 6. 广播
-        context.broadcastDynamicVisual("laser_beam", argb, duration, expressions, bindings, extraData);
+        context.broadcastDynamicVisual("laser_beam", argb, duration, expressions, extraData);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
-    /**
-     * 专属协议解析器：把 "vec3(X, Y, Z)" 切割成三个轴的偏移公式
-     */
-    protected void extractVec3(ExpressionData expr, String prefix, Map<String, String> expressions, Map<String, String> bindings) {
-        if (expr == null || expr.formula() == null || expr.formula().isEmpty()) return;
-
-        String f = expr.formula().trim();
-        // 【修复1】：必须先验证并剥离 vec3(...) 外壳，拿到 inner！
-        if (f.startsWith("vec3(") && f.endsWith(")")) {
-            String inner = f.substring(5, f.length() - 1);
-
-            List<String> parts = new ArrayList<>();
-            int bracketLevel = 0;
-            StringBuilder currentStr = new StringBuilder();
-
-            for (char c : inner.toCharArray()) {
-                if (c == '(') bracketLevel++;
-                else if (c == ')') bracketLevel--;
-                else if (c == ',' && bracketLevel == 0) {
-                    parts.add(currentStr.toString().trim());
-                    currentStr.setLength(0);
-                    continue;
-                }
-                currentStr.append(c);
-            }
-            parts.add(currentStr.toString().trim());
-
-            if (parts.size() >= 3) {
-                expressions.put(prefix + "X", parts.get(0));
-                expressions.put(prefix + "Y", parts.get(1));
-                expressions.put(prefix + "Z", parts.get(2));
-            }
-        }
-
-        // 【修复2】：不要忘了把表达式绑定的变量（比如环境里的实体数据）传递下去
-        if (expr.bindings() != null) {
-            bindings.putAll(expr.bindings());
+    private void putDynamicExpression(ExecutionContext context, String portId, String key,
+                                      Map<String, ExpressionData> expressions) {
+        Object raw = getRawInput(context, portId);
+        if (raw instanceof DynamicData dynamic && dynamic.expression() != null) {
+            expressions.put(key, dynamic.expression());
         }
     }
 }

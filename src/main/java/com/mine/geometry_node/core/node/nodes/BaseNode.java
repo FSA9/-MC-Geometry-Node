@@ -3,8 +3,9 @@ package com.mine.geometry_node.core.node.nodes;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionBinding;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
-import com.mine.geometry_node.core.node.value.dynamic.ExpressionData;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.port.TypeConverter;
 import net.minecraft.world.entity.Entity;
@@ -13,7 +14,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * [逻辑定义层] 节点行为基类
@@ -105,9 +105,6 @@ public abstract class BaseNode {
         return new java.util.HashMap<>();
     }
 
-    private static final ConcurrentHashMap<Integer, Map<String, ExpressionData>> DYNAMIC_CACHE = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<Integer, Map<String, ExpressionData>> VECTOR_CACHE = new ConcurrentHashMap<>();
-    
     /**
      * 将普通数据包装为“可溯源”的动态数据，使客户端能够实时追踪该属性。
      * @param value 当前的物理数值
@@ -117,17 +114,11 @@ public abstract class BaseNode {
     protected Object bindDynamic(Object value, Entity target, String propertyName) {
         if (target == null) return value;
 
-        int entityId = target.getId();
-
-        Map<String, ExpressionData> entityCache = DYNAMIC_CACHE.computeIfAbsent(entityId, k -> new java.util.concurrent.ConcurrentHashMap<>());
-
-        ExpressionData cachedProtocol = entityCache.computeIfAbsent(propertyName, prop -> {
-            String varKey = "env_" + entityId + "_" + prop;
-            Map<String, String> bindings = Map.of(varKey, "entity:" + entityId + ":" + prop);
-            return new ExpressionData(varKey, bindings);
-        });
-
-        return new DynamicData(value, cachedProtocol);
+        ExpressionBinding.Property property = ExpressionBinding.Property.fromId(propertyName);
+        if (property == null) return value;
+        String varKey = variableKey(target, propertyName);
+        return new DynamicData(value, ExpressionData.scalar(varKey,
+                Map.of(varKey, entityBinding(target, property))));
     }
 
     /**
@@ -136,26 +127,38 @@ public abstract class BaseNode {
     protected Object bindDynamicVector(Vec3 value, Entity target, String propertyPrefix) {
         if (target == null) return value;
 
-        int entityId = target.getId();
+        String xName = propertyPrefix + "_x";
+        String yName = propertyPrefix + "_y";
+        String zName = propertyPrefix + "_z";
+        ExpressionBinding.Property xProperty = ExpressionBinding.Property.fromId(xName);
+        ExpressionBinding.Property yProperty = ExpressionBinding.Property.fromId(yName);
+        ExpressionBinding.Property zProperty = ExpressionBinding.Property.fromId(zName);
+        if (xProperty == null || yProperty == null || zProperty == null) return value;
 
-        Map<String, ExpressionData> entityCache = VECTOR_CACHE.computeIfAbsent(entityId, k -> new java.util.concurrent.ConcurrentHashMap<>());
+        String xKey = variableKey(target, xName);
+        String yKey = variableKey(target, yName);
+        String zKey = variableKey(target, zName);
+        Map<String, ExpressionBinding> bindings = Map.of(
+                xKey, entityBinding(target, xProperty),
+                yKey, entityBinding(target, yProperty),
+                zKey, entityBinding(target, zProperty)
+        );
+        return new DynamicData(value, ExpressionData.vector(xKey, yKey, zKey, bindings));
+    }
 
-        ExpressionData cachedProtocol = entityCache.computeIfAbsent(propertyPrefix, prop -> {
-            String xKey = "env_" + entityId + "_" + prop + "_x";
-            String yKey = "env_" + entityId + "_" + prop + "_y";
-            String zKey = "env_" + entityId + "_" + prop + "_z";
+    private static ExpressionBinding.EntityProperty entityBinding(Entity entity,
+                                                                    ExpressionBinding.Property property) {
+        return new ExpressionBinding.EntityProperty(
+                entity.level().dimension().identifier().toString(),
+                entity.getUUID(),
+                entity.getId(),
+                property,
+                0.0
+        );
+    }
 
-            Map<String, String> bindings = Map.of(
-                    xKey, "entity:" + entityId + ":" + prop + "_x",
-                    yKey, "entity:" + entityId + ":" + prop + "_y",
-                    zKey, "entity:" + entityId + ":" + prop + "_z"
-            );
-
-            String vectorFormula = "vec3(" + xKey + "," + yKey + "," + zKey + ")";
-            return new ExpressionData(vectorFormula, bindings);
-        });
-
-        return new DynamicData(value, cachedProtocol);
+    private static String variableKey(Entity entity, String property) {
+        return "env_" + entity.getUUID().toString().replace("-", "") + "_" + property;
     }
 
     // ==========================================

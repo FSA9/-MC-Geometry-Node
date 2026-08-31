@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugServic
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
@@ -309,11 +310,8 @@ public class NetworkHandler {
             return;
         }
 
-        Map<String, String> expressions = effect.expressions() != null
+        Map<String, ExpressionData> expressions = effect.expressions() != null
                 ? effect.expressions()
-                : Collections.emptyMap();
-        Map<String, String> bindings = effect.bindings() != null
-                ? effect.bindings()
                 : Collections.emptyMap();
         net.minecraft.nbt.CompoundTag extraData = effect.extraData() != null
                 ? effect.extraData()
@@ -324,7 +322,6 @@ public class NetworkHandler {
                 effect.color(),
                 effect.durationTicks(),
                 expressions,
-                bindings,
                 extraData
         );
 

@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -243,13 +244,11 @@ public interface ExecutionContext extends GraphDataContext {
      * @param extraData 动态物理数据夹 (包含起点、终点等任意定制化数据)
      */
     void broadcastDynamicVisual(String effectType, int color, int durationTicks,
-                                Map<String, String> expressions,
-                                Map<String, String> bindings,
+                                Map<String, ExpressionData> expressions,
                                 net.minecraft.nbt.CompoundTag extraData);
 
     void broadcastDynamicVisual(String effectType, int color, int durationTicks,
-                                Map<String, String> expressions,
-                                Map<String, String> bindings,
+                                Map<String, ExpressionData> expressions,
                                 net.minecraft.nbt.CompoundTag extraData,
                                 net.minecraft.world.phys.Vec3 center,
                                 double radius,

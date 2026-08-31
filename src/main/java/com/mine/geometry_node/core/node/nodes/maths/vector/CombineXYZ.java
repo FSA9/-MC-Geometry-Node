@@ -1,8 +1,9 @@
 package com.mine.geometry_node.core.node.nodes.maths.vector;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionBinding;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
-import com.mine.geometry_node.core.node.value.dynamic.ExpressionData;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.port.*;
 import net.minecraft.network.chat.Component;
@@ -41,15 +42,13 @@ public class CombineXYZ extends BaseNode {
         ExpressionData zExpr = getInput(context, StandardPorts.Z.getId(), ExpressionData.class);
 
         // 3. 组装 vec3 协议文本并合并绑定关系
-        Map<String, String> mergedBindings = new HashMap<>();
+        Map<String, ExpressionBinding> mergedBindings = new HashMap<>();
         String fx = "0", fy = "0", fz = "0";
 
         if (xExpr != null) { fx = xExpr.formula(); mergedBindings.putAll(xExpr.bindings()); }
         if (yExpr != null) { fy = yExpr.formula(); mergedBindings.putAll(yExpr.bindings()); }
         if (zExpr != null) { fz = zExpr.formula(); mergedBindings.putAll(zExpr.bindings()); }
 
-        String vectorFormula = "vec3(" + fx + "," + fy + "," + fz + ")";
-
-        return new DynamicData(physicalVec, new ExpressionData(vectorFormula, mergedBindings));
+        return new DynamicData(physicalVec, ExpressionData.vector(fx, fy, fz, mergedBindings));
     }
 }

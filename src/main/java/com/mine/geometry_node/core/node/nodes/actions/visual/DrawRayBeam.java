@@ -13,7 +13,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
-import java.util.HashMap;
 import java.util.Map;
 
 public class DrawRayBeam extends BaseNode {
@@ -94,7 +93,8 @@ public class DrawRayBeam extends BaseNode {
         extraData.putBoolean("penEnt", penetrateEntities != null ? penetrateEntities : false);
         extraData.putInt("maxEnt", limit != null ? limit : 1);
 
-        context.broadcastDynamicVisual("ray_beam", color != null ? color.toArgb() : ColorValue.WHITE.toArgb(), duration != null ? duration : 2, new HashMap<>(), new HashMap<>(), extraData);
+        context.broadcastDynamicVisual("ray_beam", color != null ? color.toArgb() : ColorValue.WHITE.toArgb(),
+                duration != null ? duration : 2, Map.of(), extraData);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 }

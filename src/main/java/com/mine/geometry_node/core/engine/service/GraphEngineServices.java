@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.service;
 
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateStore;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
@@ -51,13 +52,17 @@ public final class GraphEngineServices {
             String effectType,
             int color,
             int durationTicks,
-            Map<String, String> expressions,
-            Map<String, String> bindings,
+            Map<String, ExpressionData> expressions,
             CompoundTag extraData,
             Vec3 center,
             double radius,
             List<VisualAsset> assets
     ) {
+        public VisualEffect {
+            expressions = expressions == null ? Map.of() : Map.copyOf(expressions);
+            extraData = extraData == null ? new CompoundTag() : extraData;
+            assets = assets == null ? List.of() : List.copyOf(assets);
+        }
     }
 
     public record VisualAsset(String assetId, byte[] data) {

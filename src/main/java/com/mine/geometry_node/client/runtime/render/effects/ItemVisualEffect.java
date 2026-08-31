@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.runtime.render.effects;
 
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext;
+import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
+import com.mine.geometry_node.core.node.nodes.actions.visual.DrawItemVisual;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -26,6 +29,9 @@ public class ItemVisualEffect extends AbstractVisualEffect {
     private final Vec3 bTrans;
     private final Vec3 bRot;
     private final Vec3 bScale;
+    private final LiveValue.State<Vec3> translation;
+    private final LiveValue.State<Vec3> rotation;
+    private final LiveValue.State<Vec3> scale;
 
     public ItemVisualEffect(PacketSpawnDynamicVisual packet) {
         super(packet);
@@ -61,13 +67,14 @@ public class ItemVisualEffect extends AbstractVisualEffect {
             this.sourceEntityId = -1;
             this.bTrans = Vec3.ZERO; this.bRot = Vec3.ZERO; this.bScale = new Vec3(1, 1, 1);
         }
+        this.translation = captureXyz(DrawItemVisual.TRANSLATION_PORT, "translation", bTrans);
+        this.rotation = captureXyz(DrawItemVisual.ROTATION_PORT, "rotation", bRot);
+        this.scale = captureXyz(DrawItemVisual.SCALE_PORT, "scale", bScale);
     }
 
     @Override
     public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, SubmitNodeCollector submitNodeCollector, Vec3 camPos, float partialTick) {
         if (this.itemStack.isEmpty()) return;
-
-        updateVariables(partialTick);
 
         ClientLevel level = Minecraft.getInstance().level;
 
@@ -84,26 +91,10 @@ public class ItemVisualEffect extends AbstractVisualEffect {
             }
         }
 
-        double tX = eval("transX", Double.NaN); double tY = eval("transY", Double.NaN); double tZ = eval("transZ", Double.NaN);
-        Vec3 trans = new Vec3(
-                Double.isNaN(tX) ? bTrans.x : tX,
-                Double.isNaN(tY) ? bTrans.y : tY,
-                Double.isNaN(tZ) ? bTrans.z : tZ
-        );
-
-        double rX = eval("rotX", Double.NaN); double rY = eval("rotY", Double.NaN); double rZ = eval("rotZ", Double.NaN);
-        Vec3 rot = new Vec3(
-                Double.isNaN(rX) ? bRot.x : rX,
-                Double.isNaN(rY) ? bRot.y : rY,
-                Double.isNaN(rZ) ? bRot.z : rZ
-        );
-
-        double sX = eval("scaleX", Double.NaN); double sY = eval("scaleY", Double.NaN); double sZ = eval("scaleZ", Double.NaN);
-        Vec3 scale = new Vec3(
-                Double.isNaN(sX) ? bScale.x : sX,
-                Double.isNaN(sY) ? bScale.y : sY,
-                Double.isNaN(sZ) ? bScale.z : sZ
-        );
+        ExpressionEvaluationContext expressionContext = expressionContext(partialTick);
+        Vec3 trans = translation.evaluate(expressionContext);
+        Vec3 rot = rotation.evaluate(expressionContext);
+        Vec3 evaluatedScale = scale.evaluate(expressionContext);
 
         // 最终坐标 = 锚点 + 偏移 - 相机坐标
         Vec3 renderPos = anchorPos.add(trans).subtract(camPos);
@@ -117,7 +108,7 @@ public class ItemVisualEffect extends AbstractVisualEffect {
                 (float) Math.toRadians(rot.z)
         );
         poseStack.mulPose(rotationQuat);
-        poseStack.scale((float) scale.x, (float) scale.y, (float) scale.z);
+        poseStack.scale((float) evaluatedScale.x, (float) evaluatedScale.y, (float) evaluatedScale.z);
 
         ItemStackRenderState renderState = new ItemStackRenderState();
         Minecraft.getInstance().getItemModelResolver().updateForTopItem(

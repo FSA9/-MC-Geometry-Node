@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.graph.debug.DebugSourceId;
 import com.mine.geometry_node.core.engine.graph.debug.DebugSourceIdCodec;
+import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import net.minecraft.resources.ResourceKey;
@@ -42,10 +43,10 @@ public final class ForceFieldResourceStore {
 
     public synchronized ForceFieldResource upsert(MinecraftServer server, ForceFieldAddress address,
                                                    GraphResourceId owner, AreaAddress area,
-                                                   ForceFieldMode mode, double strength) {
+                                                   long creationGameTime, LiveValue<Float> strength) {
         ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
         ForceFieldResource resource = new ForceFieldResource(address, owner, ++state.generation,
-                area, mode, strength);
+                area, creationGameTime, strength);
         state.entries.put(address, resource);
         return resource;
     }
@@ -84,7 +85,7 @@ public final class ForceFieldResourceStore {
                 AreaResource.Resolved area = areaResource != null ? areaResource.resolve(level) : null;
                 if (area == null) continue;
 
-                int color = field.mode() == ForceFieldMode.ATTRACT ? ATTRACT_COLOR : REPEL_COLOR;
+                int color = field.currentStrength() >= 0.0F ? ATTRACT_COLOR : REPEL_COLOR;
                 DebugSourceId source = DebugSourceId.graph(DebugRenderChannel.AREA, field.owner());
                 List<DebugRenderShape> shapes = shapesByOwner.computeIfAbsent(
                         field.owner(), ignored -> new ArrayList<>());

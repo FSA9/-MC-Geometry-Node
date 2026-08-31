@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.runtime.render.effects;
 
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext;
+import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
+import com.mine.geometry_node.core.node.nodes.actions.visual.DrawLaserBeam;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.nbt.CompoundTag;
@@ -12,6 +15,9 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
     protected final int targetEntityId;
     protected final Vec3 baseEnd;
     protected final float baseSize;
+    private final LiveValue.State<Vec3> start;
+    private final LiveValue.State<Vec3> end;
+    private final LiveValue.State<Float> size;
 
     public DirectedVisualEffect(PacketSpawnDynamicVisual packet) {
         super(packet);
@@ -30,10 +36,13 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
             this.baseEnd = Vec3.ZERO;
             this.baseSize = 1.0f;
         }
+        this.start = captureXyz(DrawLaserBeam.START_PORT, "start", baseStart);
+        this.end = captureXyz(DrawLaserBeam.END_PORT, "end", baseEnd);
+        this.size = captureFloat(DrawLaserBeam.SIZE_PORT, "size", baseSize);
     }
 
     protected DirectedAnchors computeAnchors(float partialTick) {
-        updateVariables(partialTick);
+        ExpressionEvaluationContext expressionContext = expressionContext(partialTick);
 
         ClientLevel level = Minecraft.getInstance().level;
 
@@ -43,29 +52,14 @@ public abstract class DirectedVisualEffect extends AbstractVisualEffect {
         Vec3 targetEntityPos = (level != null && targetEntityId != -1 && level.getEntity(targetEntityId) != null) ?
                 level.getEntity(targetEntityId).getPosition(partialTick) : Vec3.ZERO;
 
-        double dynStartX = eval("startX", Double.NaN);
-        double dynStartY = eval("startY", Double.NaN);
-        double dynStartZ = eval("startZ", Double.NaN);
-        Vec3 startOffset = new Vec3(
-                Double.isNaN(dynStartX) ? baseStart.x : dynStartX,
-                Double.isNaN(dynStartY) ? baseStart.y : dynStartY,
-                Double.isNaN(dynStartZ) ? baseStart.z : dynStartZ
-        );
-
-        double dynEndX = eval("endX", Double.NaN);
-        double dynEndY = eval("endY", Double.NaN);
-        double dynEndZ = eval("endZ", Double.NaN);
-        Vec3 endOffset = new Vec3(
-                Double.isNaN(dynEndX) ? baseEnd.x : dynEndX,
-                Double.isNaN(dynEndY) ? baseEnd.y : dynEndY,
-                Double.isNaN(dynEndZ) ? baseEnd.z : dynEndZ
-        );
+        Vec3 startOffset = start.evaluate(expressionContext);
+        Vec3 endOffset = end.evaluate(expressionContext);
 
         Vec3 start = sourceEntityPos.add(startOffset);
         Vec3 end = targetEntityPos.add(endOffset);
 
-        float size = (float) eval("size", baseSize);
-        return new DirectedAnchors(start, end, Math.max(0.01f, size));
+        float evaluatedSize = size.evaluate(expressionContext);
+        return new DirectedAnchors(start, end, Math.max(0.01f, evaluatedSize));
     }
 
     protected record DirectedAnchors(Vec3 start, Vec3 end, float size) {}

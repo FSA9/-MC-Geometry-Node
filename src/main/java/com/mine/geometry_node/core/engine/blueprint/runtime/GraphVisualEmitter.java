@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -42,7 +43,6 @@ final class GraphVisualEmitter {
                 color,
                 durationTicks,
                 Collections.emptyMap(),
-                Collections.emptyMap(),
                 extraData,
                 center,
                 RADIUS,
@@ -51,8 +51,7 @@ final class GraphVisualEmitter {
     }
 
     static void broadcastDynamicVisual(ServerLevel level, String effectType, int color, int durationTicks,
-                                       Map<String, String> expressions,
-                                       Map<String, String> bindings,
+                                       Map<String, ExpressionData> expressions,
                                        CompoundTag extraData) {
         Vec3 center = null;
 
@@ -76,12 +75,12 @@ final class GraphVisualEmitter {
             center = Vec3.ZERO;
         }
 
-        broadcastDynamicVisual(level, effectType, color, durationTicks, expressions, bindings, extraData, center, RADIUS, List.of());
+        broadcastDynamicVisual(level, effectType, color, durationTicks, expressions, extraData,
+                center, RADIUS, List.of());
     }
 
     static void broadcastDynamicVisual(ServerLevel level, String effectType, int color, int durationTicks,
-                                       Map<String, String> expressions,
-                                       Map<String, String> bindings,
+                                       Map<String, ExpressionData> expressions,
                                        CompoundTag extraData,
                                        Vec3 center,
                                        double radius,
@@ -92,7 +91,6 @@ final class GraphVisualEmitter {
                 color,
                 durationTicks,
                 expressions,
-                bindings,
                 extraData,
                 center != null ? center : Vec3.ZERO,
                 radius,

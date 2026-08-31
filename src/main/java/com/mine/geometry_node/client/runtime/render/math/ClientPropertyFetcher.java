@@ -1,45 +1,56 @@
 package com.mine.geometry_node.client.runtime.render.math;
 
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionBinding;
+import com.mine.geometry_node.core.engine.graph.expression.EntityExpressionValues;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.Entity;
 
-public class ClientPropertyFetcher {
-    public record ParsedBinding(int index, int entityId, String property, double fallback) {}
+import java.util.UUID;
 
-    public static ParsedBinding parseProtocol(String bindingProtocol, int targetIndex) {
-        if (bindingProtocol == null || bindingProtocol.isEmpty()) return null;
+/** Resolves typed entity bindings for client-side visual expressions. */
+public final class ClientPropertyFetcher {
+    private ClientPropertyFetcher() {
+    }
 
-        String[] parts = bindingProtocol.split(":");
-        if (parts.length < 3 || !"entity".equals(parts[0])) return null;
+    public static final class Resolver implements com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext.BindingResolver {
+        private ClientLevel level;
+        private float partialTick;
+        private int cachedRuntimeId = Integer.MIN_VALUE;
+        private UUID cachedUuid;
+        private Entity cachedEntity;
 
-        try {
-            int entityId = Integer.parseInt(parts[1]);
-            String property = parts[2];
-            double fallback = parts.length >= 4 ? Double.parseDouble(parts[3]) : 0.0;
-            return new ParsedBinding(targetIndex, entityId, property, fallback);
-        } catch (NumberFormatException e) {
-            return null;
+        public void begin(ClientLevel level, float partialTick) {
+            this.level = level;
+            this.partialTick = partialTick;
+            this.cachedRuntimeId = Integer.MIN_VALUE;
+            this.cachedUuid = null;
+            this.cachedEntity = null;
+        }
+
+        @Override
+        public double resolve(ExpressionBinding binding) {
+            if (!(binding instanceof ExpressionBinding.EntityProperty entityBinding) || level == null) {
+                return Double.NaN;
+            }
+            if (!entityBinding.dimensionId().equals(level.dimension().identifier().toString())) {
+                return Double.NaN;
+            }
+            Entity entity = entity(entityBinding);
+            return EntityExpressionValues.resolve(entityBinding, entity, partialTick);
+        }
+
+        private Entity entity(ExpressionBinding.EntityProperty binding) {
+            if (binding.runtimeEntityId() != cachedRuntimeId || !binding.entityUuid().equals(cachedUuid)
+                    || cachedEntity == null) {
+                cachedRuntimeId = binding.runtimeEntityId();
+                cachedUuid = binding.entityUuid();
+                cachedEntity = level.getEntity(cachedRuntimeId);
+                if (cachedEntity != null && !cachedEntity.getUUID().equals(binding.entityUuid())) {
+                    cachedEntity = null;
+                }
+            }
+            return cachedEntity;
         }
     }
 
-    // 剥离实体查询逻辑，Entity 从外部传入
-    public static double fetchFast(ParsedBinding binding, Entity entity, float partialTick) {
-        if (entity == null) return binding.fallback;
-
-        return switch (binding.property) {
-            case "velocity" -> entity.getDeltaMovement().length();
-            case "velocity_x" -> entity.getDeltaMovement().x;
-            case "velocity_y" -> entity.getDeltaMovement().y;
-            case "velocity_z" -> entity.getDeltaMovement().z;
-            case "pos_x" -> entity.getPosition(partialTick).x;
-            case "pos_y" -> entity.getPosition(partialTick).y;
-            case "pos_z" -> entity.getPosition(partialTick).z;
-            case "rotation_x" -> entity.getXRot();
-            case "rotation_y" -> entity.getYRot();
-            case "rotation_z" -> 0.0;
-            case "pitch" -> entity.getXRot();
-            case "yaw" -> entity.getYRot();
-            case "yaw_head" -> entity.getYHeadRot();
-            default -> binding.fallback;
-        };
-    }
 }
