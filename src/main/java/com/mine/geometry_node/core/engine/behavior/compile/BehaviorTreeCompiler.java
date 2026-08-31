@@ -3,7 +3,6 @@ package com.mine.geometry_node.core.engine.behavior.compile;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
-import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
 import com.mine.geometry_node.core.engine.graph.compile.CompiledNodeTable;
 import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph;
@@ -14,7 +13,9 @@ import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDiagnost
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationException;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationResult;
-import com.mine.geometry_node.core.node.NodeCapabilities;
+import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorRootNode;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortType;
@@ -74,9 +75,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                                 FlattenedGraph flattened) {
         String assetId = context != null ? context.diagnosticAssetId() : "<anonymous>";
         List<GraphDiagnostic> diagnostics = new ArrayList<>();
-        String graphTypeId = readGraphType(document);
         GraphValidationResult common = GraphDocumentValidator.validate(
-                GraphDocumentValidator.input(assetId, graphTypeId, flattened));
+                GraphDocumentValidator.input(assetId, flattened));
         diagnostics.addAll(common.diagnostics());
         diagnostics.sort(Comparator.comparing(GraphDiagnostic::code)
                 .thenComparing(GraphDiagnostic::nodeId)
@@ -126,7 +126,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     private BehaviorTreePlan buildPlan(GraphCompileContext context, Compilation compilation) {
         CompiledNodeIndex nodes = compilation.nodes.index();
         int size = nodes.getNodeCount();
-        @SuppressWarnings("unchecked") Set<NodeCapabilities.ResourceUse>[] resources = new Set[size];
+        @SuppressWarnings("unchecked") Set<BehaviorExecutableNode.Resource>[] resources = new Set[size];
         int[] parents = new int[size];
         java.util.Arrays.fill(parents, -1);
         int[][] children = new int[size][];
@@ -135,8 +135,9 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         for (int nodeIndex = 0; nodeIndex < size; nodeIndex++) {
             String nodeId = nodes.getNodeId(nodeIndex);
             CompiledNodeTable.NodeDescriptor descriptor = compilation.nodes.descriptor(nodeId);
-            NodeCapabilities capabilities = descriptor.capabilities();
-            resources[nodeIndex] = capabilities != null ? capabilities.resources() : Set.of();
+            BaseNode node = NodeRegistry.INSTANCE.get(descriptor.type());
+            resources[nodeIndex] = node instanceof BehaviorExecutableNode executable
+                    ? executable.requiredResources() : Set.of();
             if (root < 0 && BehaviorRootNode.TYPE_ID.equals(descriptor.type())) root = nodeIndex;
 
             List<String> childIds = compilation.structure.getOrDefault(nodeId, List.of());
@@ -165,13 +166,6 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
                 Integer.class, BehaviorTreePlan.RootSchedule.AUTO_OFFSET);
         offset = Math.max(BehaviorTreePlan.RootSchedule.AUTO_OFFSET, offset);
         return new BehaviorTreePlan.RootSchedule(interval, offset);
-    }
-
-    private static String readGraphType(JsonObject document) {
-        if (document.has("graph_kind") && document.get("graph_kind").isJsonPrimitive()) {
-            return document.get("graph_kind").getAsString();
-        }
-        return GraphTypeRegistry.BEHAVIOR_TREE.id();
     }
 
     private static Compilation failedCompilation(GraphDiagnostic diagnostic) {

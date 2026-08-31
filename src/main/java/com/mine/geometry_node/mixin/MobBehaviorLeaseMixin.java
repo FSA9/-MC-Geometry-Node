@@ -1,7 +1,7 @@
 package com.mine.geometry_node.mixin;
 
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorEntityLeaseAccess;
-import com.mine.geometry_node.core.node.NodeCapabilities;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import net.minecraft.world.entity.Mob;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -19,12 +19,12 @@ public abstract class MobBehaviorLeaseMixin implements BehaviorEntityLeaseAccess
     }
 
     @Override
-    public void geometryNode$acquireBehaviorLeases(Set<NodeCapabilities.ResourceUse> resources) {
+    public void geometryNode$acquireBehaviorLeases(Set<BehaviorExecutableNode.Resource> resources) {
         if (resources.isEmpty()) return;
         if (geometryNode$behaviorLeaseCounts == null) {
-            geometryNode$behaviorLeaseCounts = new int[NodeCapabilities.ResourceUse.values().length];
+            geometryNode$behaviorLeaseCounts = new int[BehaviorExecutableNode.Resource.values().length];
         }
-        for (NodeCapabilities.ResourceUse resource : resources) {
+        for (BehaviorExecutableNode.Resource resource : resources) {
             int ordinal = resource.ordinal();
             if (geometryNode$behaviorLeaseCounts[ordinal]++ == 0) {
                 geometryNode$behaviorLeaseMask |= 1 << ordinal;
@@ -33,9 +33,9 @@ public abstract class MobBehaviorLeaseMixin implements BehaviorEntityLeaseAccess
     }
 
     @Override
-    public void geometryNode$releaseBehaviorLeases(Set<NodeCapabilities.ResourceUse> resources) {
+    public void geometryNode$releaseBehaviorLeases(Set<BehaviorExecutableNode.Resource> resources) {
         if (geometryNode$behaviorLeaseCounts == null || resources.isEmpty()) return;
-        for (NodeCapabilities.ResourceUse resource : resources) {
+        for (BehaviorExecutableNode.Resource resource : resources) {
             int ordinal = resource.ordinal();
             int count = geometryNode$behaviorLeaseCounts[ordinal];
             if (count <= 1) {

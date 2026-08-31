@@ -31,7 +31,6 @@ public class NodeRegistry {
     // 后端核心存储
     private final Map<String, BaseNode> registry = new HashMap<>();
     private final Map<String, NodeDef> defaultDefCache = new LinkedHashMap<>();
-    private final Map<String, NodeCapabilities> capabilityRegistry = new HashMap<>();
     private final Map<String, EventDef> eventRegistry = new LinkedHashMap<>();
     private final Map<String, String> eventOwners = new HashMap<>();
     private final Set<String> registeredEventIds = new HashSet<>();
@@ -134,12 +133,7 @@ public class NodeRegistry {
         register(category, node, activeAddonId);
     }
 
-    public void register(NodeCategory category, BaseNode node, String addonId) {
-        register(category, node, addonId, NodeCapabilities.LEGACY_BLUEPRINT);
-    }
-
-    public synchronized void register(NodeCategory category, BaseNode node, String addonId,
-                                      NodeCapabilities capabilities) {
+    public synchronized void register(NodeCategory category, BaseNode node, String addonId) {
         // 1. 基础校验
         if (node == null || category == null) {
             System.err.println("[NodeRegistry] Skip: Cannot register null node or null category");
@@ -174,27 +168,15 @@ public class NodeRegistry {
             return;
         }
 
-        NodeCapabilities effectiveCapabilities = capabilities != null
-                ? capabilities : NodeCapabilities.LEGACY_BLUEPRINT;
         BehaviorNodeExecutor behaviorExecutor = node instanceof BehaviorExecutableNode executable
                 ? Objects.requireNonNull(executable.behaviorExecutor(),
                 "Behavior executor cannot be null: " + typeId) : null;
-        if (effectiveCapabilities.context() == NodeCapabilities.Context.BEHAVIOR_EXECUTION
-                && behaviorExecutor == null) {
-            throw new IllegalStateException("Behavior node has no executor: " + typeId);
-        }
-        if (effectiveCapabilities.context() != NodeCapabilities.Context.BEHAVIOR_EXECUTION
-                && behaviorExecutor != null) {
-            throw new IllegalStateException(
-                    "Non-behavior node cannot provide a behavior executor: " + typeId);
-        }
         if (behaviorExecutor != null) {
             BehaviorNodeExecutorRegistry.INSTANCE.register(typeId, behaviorExecutor);
         }
 
         registry.put(typeId, node);
         defaultDefCache.put(typeId, def);
-        capabilityRegistry.put(typeId, effectiveCapabilities);
 
         category.addNode(node);
 
@@ -263,10 +245,6 @@ public class NodeRegistry {
         return Collections.unmodifiableCollection(defaultDefCache.values());
     }
 
-    public NodeCapabilities getCapabilities(String typeId) {
-        return capabilityRegistry.getOrDefault(typeId, NodeCapabilities.LEGACY_BLUEPRINT);
-    }
-
     public boolean hasEvent(String eventId) {
         return registeredEventIds.contains(eventId);
     }
@@ -323,13 +301,6 @@ public class NodeRegistry {
         @Override
         public void registerNode(String menuPath, BaseNode node) {
             NodeRegistry.this.register(menuPath, node, addonId);
-            registeredCount++;
-        }
-
-        @Override
-        public void registerNode(String menuPath, BaseNode node, NodeCapabilities capabilities) {
-            NodeCategory category = NodeRegistry.this.getOrCreateCategory(menuPath);
-            NodeRegistry.this.register(category, node, addonId, capabilities);
             registeredCount++;
         }
 

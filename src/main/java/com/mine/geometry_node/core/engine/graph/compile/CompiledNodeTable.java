@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
-import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -57,9 +56,6 @@ public final class CompiledNodeTable {
             NodeDef definition = node != null ? NodeRegistry.INSTANCE.resolveDefinition(node) : null;
             PortCatalog catalog = PortCatalog.from(definition);
             String type = node != null && node.type != null ? node.type : "unknown";
-            NodeCapabilities capabilities = NodeRegistry.INSTANCE.has(type)
-                    ? NodeRegistry.INSTANCE.getCapabilities(type) : null;
-
             ids[nodeIndex] = nodeId;
             types[nodeIndex] = type;
             staticInputs[nodeIndex] = canonicalStaticInputs(
@@ -70,7 +66,7 @@ public final class CompiledNodeTable {
             nodePorts.addAll(flattened.ports().getOrDefault(nodeId, Set.of()));
             ports[nodeIndex] = Set.copyOf(nodePorts);
             descriptors.put(nodeId, new NodeDescriptor(nodeId, nodeIndex, type,
-                    capabilities, catalog.inputs(), catalog.outputs()));
+                    catalog.inputs(), catalog.outputs()));
         }
 
         Map<String, Integer> portKeys = buildPortKeys(ports, flattened.portNames());
@@ -146,7 +142,6 @@ public final class CompiledNodeTable {
     }
 
     public record NodeDescriptor(String id, int index, String type,
-                                 @Nullable NodeCapabilities capabilities,
                                  Map<String, PortDef> inputs,
                                  Map<String, PortDef> outputs) {
         public NodeDescriptor {

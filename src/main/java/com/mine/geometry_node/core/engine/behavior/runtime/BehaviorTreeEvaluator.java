@@ -16,7 +16,7 @@ import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
-import com.mine.geometry_node.core.node.NodeCapabilities;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
@@ -252,7 +252,7 @@ public final class BehaviorTreeEvaluator {
 
     private void enterNode(BehaviorTreeProcess instance, int nodeIndex, BehaviorNodeExecutor executor,
                            BehaviorNodeContext context) throws Exception {
-        Set<NodeCapabilities.ResourceUse> resources = instance.plan()
+        Set<BehaviorExecutableNode.Resource> resources = instance.plan()
                 .getNodeResources(nodeIndex);
         int conflictOwner = instance.conflictingResourceOwner(nodeIndex, resources);
         if (conflictOwner >= 0) {

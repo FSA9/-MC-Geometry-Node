@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateProviderResolver;
-import com.mine.geometry_node.core.node.NodeCapabilities;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -71,7 +71,7 @@ public final class BehaviorTreeProcess {
         this.nodeStates = new BehaviorNodeState[nodeCount];
         Arrays.fill(nodeStates, BehaviorNodeState.IDLE);
         this.nodeMemory = new Object[nodeCount];
-        this.resourceOwners = new int[NodeCapabilities.ResourceUse.values().length];
+        this.resourceOwners = new int[BehaviorExecutableNode.Resource.values().length];
         Arrays.fill(resourceOwners, -1);
         this.resourcesAcquired = new boolean[nodeCount];
         this.blackboard = newBlackboard();
@@ -304,20 +304,20 @@ public final class BehaviorTreeProcess {
         }
     }
 
-    boolean acquireResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
+    boolean acquireResources(int nodeIndex, Set<BehaviorExecutableNode.Resource> resources) {
         if (resources.isEmpty()) return true;
         if (conflictingResourceOwner(nodeIndex, resources) >= 0) return false;
         if (!host.acquireResources(nodeIndex, resources)) return false;
-        for (NodeCapabilities.ResourceUse resource : resources) {
+        for (BehaviorExecutableNode.Resource resource : resources) {
             resourceOwners[resource.ordinal()] = nodeIndex;
         }
         resourcesAcquired[nodeIndex] = true;
         return true;
     }
 
-    int conflictingResourceOwner(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
-        for (NodeCapabilities.ResourceUse requested : resources) {
-            for (NodeCapabilities.ResourceUse held : NodeCapabilities.ResourceUse.values()) {
+    int conflictingResourceOwner(int nodeIndex, Set<BehaviorExecutableNode.Resource> resources) {
+        for (BehaviorExecutableNode.Resource requested : resources) {
+            for (BehaviorExecutableNode.Resource held : BehaviorExecutableNode.Resource.values()) {
                 int owner = resourceOwners[held.ordinal()];
                 if (owner != -1 && owner != nodeIndex && requested == held) {
                     return owner;
@@ -327,13 +327,13 @@ public final class BehaviorTreeProcess {
         return -1;
     }
 
-    void releaseResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
+    void releaseResources(int nodeIndex, Set<BehaviorExecutableNode.Resource> resources) {
         if (!resourcesAcquired[nodeIndex]) return;
         resourcesAcquired[nodeIndex] = false;
         try {
             host.releaseResources(nodeIndex, resources);
         } finally {
-            for (NodeCapabilities.ResourceUse resource : resources) {
+            for (BehaviorExecutableNode.Resource resource : resources) {
                 if (resourceOwners[resource.ordinal()] == nodeIndex) {
                     resourceOwners[resource.ordinal()] = -1;
                 }

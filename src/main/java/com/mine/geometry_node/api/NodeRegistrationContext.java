@@ -1,7 +1,6 @@
 package com.mine.geometry_node.api;
 
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import com.mine.geometry_node.core.node.NodeCapabilities;
 
 /**
  * 节点注册上下文。
@@ -12,15 +11,7 @@ public interface NodeRegistrationContext {
 
     void registerNode(String menuPath, BaseNode node);
 
-    default void registerNode(String menuPath, BaseNode node, NodeCapabilities capabilities) {
-        registerNode(menuPath, node);
-    }
-
     default void register(String menuPath, BaseNode node) {
         registerNode(menuPath, node);
-    }
-
-    default void register(String menuPath, BaseNode node, NodeCapabilities capabilities) {
-        registerNode(menuPath, node, capabilities);
     }
 }

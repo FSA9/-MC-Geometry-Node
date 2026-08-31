@@ -47,7 +47,7 @@ public final class GraphDocumentValidator {
         if (!result.isValid()) throw new GraphValidationException(result.diagnostics());
     }
 
-    public static Input input(String assetId, String graphTypeId, FlattenedGraph flattened) {
+    public static Input input(String assetId, FlattenedGraph flattened) {
         List<Node> nodes = flattened.nodes().entrySet().stream()
                 .map(entry -> new Node(entry.getKey(), readNodeType(entry.getValue())))
                 .toList();
@@ -56,7 +56,7 @@ public final class GraphDocumentValidator {
                 .mapToLong(java.util.Map::size).sum();
         int boundedCount = connectionCount > MAX_CONNECTIONS
                 ? MAX_CONNECTIONS + 1 : (int) connectionCount;
-        return new Input(assetId, graphTypeId, nodes, boundedCount);
+        return new Input(assetId, nodes, boundedCount);
     }
 
     private static String readNodeType(JsonObject node) {
@@ -69,11 +69,10 @@ public final class GraphDocumentValidator {
         return new GraphDiagnostic(assetId, code, message, nodeId, "", "");
     }
 
-    public record Input(String assetId, String graphTypeId, Collection<Node> nodes,
+    public record Input(String assetId, Collection<Node> nodes,
                         int connectionCount) {
         public Input {
             assetId = assetId != null ? assetId : "";
-            graphTypeId = graphTypeId != null ? graphTypeId : "";
             nodes = nodes != null ? List.copyOf(nodes) : List.of();
             connectionCount = Math.max(0, connectionCount);
         }

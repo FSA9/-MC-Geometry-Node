@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
-import com.mine.geometry_node.core.node.NodeCapabilities;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -22,11 +22,11 @@ public interface BehaviorRuntimeHost {
 
     @Nullable Entity owner();
 
-    default boolean acquireResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
+    default boolean acquireResources(int nodeIndex, Set<BehaviorExecutableNode.Resource> resources) {
         return true;
     }
 
-    default void releaseResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
+    default void releaseResources(int nodeIndex, Set<BehaviorExecutableNode.Resource> resources) {
     }
 
     /** Assigns a target whose selection remains owned by this behavior instance until cleared. */

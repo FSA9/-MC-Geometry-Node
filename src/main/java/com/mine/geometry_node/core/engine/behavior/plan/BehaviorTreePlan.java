@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
-import com.mine.geometry_node.core.node.NodeCapabilities;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -15,14 +15,14 @@ import java.util.Set;
 public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex {
     private final String assetId;
     private final CompiledNodeIndex nodes;
-    private final Set<NodeCapabilities.ResourceUse>[] resources;
+    private final Set<BehaviorExecutableNode.Resource>[] resources;
     private final int rootNode;
     private final int[] parents;
     private final int[][] children;
     private final RootSchedule rootSchedule;
 
     private BehaviorTreePlan(String assetId, CompiledNodeIndex nodes,
-                             Set<NodeCapabilities.ResourceUse>[] resources, int rootNode,
+                             Set<BehaviorExecutableNode.Resource>[] resources, int rootNode,
                              int[] parents, int[][] children,
                              RootSchedule rootSchedule) {
         this.assetId = assetId != null ? assetId : "";
@@ -36,7 +36,7 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
 
     public static BehaviorTreePlan createCompiled(
             String assetId, CompiledNodeIndex nodes,
-            Set<NodeCapabilities.ResourceUse>[] resources, int rootNode,
+            Set<BehaviorExecutableNode.Resource>[] resources, int rootNode,
             int[] parents, int[][] children,
             RootSchedule rootSchedule) {
         return new BehaviorTreePlan(assetId, nodes, resources,
@@ -73,7 +73,7 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
         return nodes.getNodeType(nodeId);
     }
 
-    public Set<NodeCapabilities.ResourceUse> getNodeResources(int nodeId) {
+    public Set<BehaviorExecutableNode.Resource> getNodeResources(int nodeId) {
         return resources[Objects.checkIndex(nodeId, resources.length)];
     }
 
@@ -133,9 +133,9 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
     }
 
     @SuppressWarnings("unchecked")
-    private static Set<NodeCapabilities.ResourceUse>[] copyResources(
-            Set<NodeCapabilities.ResourceUse>[] source) {
-        Set<NodeCapabilities.ResourceUse>[] result = new Set[source.length];
+    private static Set<BehaviorExecutableNode.Resource>[] copyResources(
+            Set<BehaviorExecutableNode.Resource>[] source) {
+        Set<BehaviorExecutableNode.Resource>[] result = new Set[source.length];
         for (int index = 0; index < source.length; index++) {
             result[index] = source[index] != null ? Set.copyOf(source[index]) : Set.of();
         }

@@ -82,7 +82,7 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
         FlattenedGraph flattened = GraphFlattener.flatten(rootNodes);
         GraphDocumentValidator.requireValid(GraphDocumentValidator.input(
                 context != null ? context.diagnosticAssetId() : "<anonymous>",
-                graphTypeId, flattened));
+                flattened));
         CompiledNodeTable nodeTable = CompiledNodeTable.build(flattened);
         CompiledNodeIndex nodes = nodeTable.index();
 

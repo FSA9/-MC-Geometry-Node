@@ -19,6 +19,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Editor definitions for the first server-authoritative entity behavior actions. */
 public final class BehaviorEntityActionNode extends BaseNode implements BehaviorExecutableNode {
@@ -148,5 +149,14 @@ public final class BehaviorEntityActionNode extends BaseNode implements Behavior
     @Override
     public BehaviorNodeExecutor behaviorExecutor() {
         return BehaviorEntityExecutors.forKind(kind);
+    }
+
+    @Override
+    public Set<Resource> requiredResources() {
+        return switch (kind) {
+            case SELECT_TARGET, CLEAR_TARGET, ATTACK_TARGET -> Set.of(Resource.TARGET);
+            case MOVE_TO, STOP_MOVING, WANDER -> Set.of(Resource.MOVEMENT);
+            case LOOK_AT -> Set.of(Resource.LOOK);
+        };
     }
 }

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
-import com.mine.geometry_node.core.node.NodeCapabilities;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -42,9 +42,9 @@ public final class BehaviorNativeAiController {
         this.targetSelector = new SelectorLeases(owner.targetSelector);
     }
 
-    boolean acquire(Set<NodeCapabilities.ResourceUse> resources) {
+    boolean acquire(Set<BehaviorExecutableNode.Resource> resources) {
         EnumSet<Goal.Flag> acquiredFlags = EnumSet.noneOf(Goal.Flag.class);
-        EnumSet<NodeCapabilities.ResourceUse> acquiredBrainResources = normalizedResources(resources);
+        EnumSet<BehaviorExecutableNode.Resource> acquiredBrainResources = normalizedResources(resources);
         Set<MemoryModuleType<?>> newlyControlledMemories = newlyControlledMemories(
                 owner, acquiredBrainResources);
         Set<MemoryModuleType<?>> newlyBlockedBehaviorMemories = newlyBlockedBehaviorMemories(
@@ -73,8 +73,8 @@ public final class BehaviorNativeAiController {
         }
     }
 
-    void release(Set<NodeCapabilities.ResourceUse> resources) {
-        EnumSet<NodeCapabilities.ResourceUse> normalized = normalizedResources(resources);
+    void release(Set<BehaviorExecutableNode.Resource> resources) {
+        EnumSet<BehaviorExecutableNode.Resource> normalized = normalizedResources(resources);
         removeBrainLeases(owner, normalized);
         releaseGoalFlags(goalFlags(normalized));
     }
@@ -93,7 +93,7 @@ public final class BehaviorNativeAiController {
 
         boolean acquiredNow = false;
         if (!targetAssignmentActive) {
-            if (!acquire(Set.of(NodeCapabilities.ResourceUse.TARGET))) {
+            if (!acquire(Set.of(BehaviorExecutableNode.Resource.TARGET))) {
                 return owner.getTargetUnchecked();
             }
             targetAssignmentActive = true;
@@ -111,7 +111,7 @@ public final class BehaviorNativeAiController {
         if (acquiredNow) {
             targetAssignmentActive = false;
             assignedTarget = null;
-            release(Set.of(NodeCapabilities.ResourceUse.TARGET));
+            release(Set.of(BehaviorExecutableNode.Resource.TARGET));
         } else if (previous != null && validAssignedTarget(previous)) {
             writeAttackTarget(previous);
         }
@@ -147,7 +147,7 @@ public final class BehaviorNativeAiController {
             assignedTarget = null;
             targetAssignmentActive = false;
             unregisterTargetAssignment();
-            release(Set.of(NodeCapabilities.ResourceUse.TARGET));
+            release(Set.of(BehaviorExecutableNode.Resource.TARGET));
         }
     }
 
@@ -159,7 +159,7 @@ public final class BehaviorNativeAiController {
             assignedTarget = null;
             targetAssignmentActive = false;
             unregisterTargetAssignment();
-            release(Set.of(NodeCapabilities.ResourceUse.TARGET));
+            release(Set.of(BehaviorExecutableNode.Resource.TARGET));
         }
         return actual;
     }
@@ -286,30 +286,30 @@ public final class BehaviorNativeAiController {
         return false;
     }
 
-    private static boolean blocksBehaviorUsing(Set<NodeCapabilities.ResourceUse> resources,
+    private static boolean blocksBehaviorUsing(Set<BehaviorExecutableNode.Resource> resources,
                                                MemoryModuleType<?> memory) {
         return blocksBehaviorUsing(resourceMask(resources), memory);
     }
 
     private static boolean blocksBehaviorUsing(int leaseMask, MemoryModuleType<?> memory) {
-        return hasLease(leaseMask, NodeCapabilities.ResourceUse.MOVEMENT)
+        return hasLease(leaseMask, BehaviorExecutableNode.Resource.MOVEMENT)
                 && (memory == MemoryModuleType.WALK_TARGET || memory == MemoryModuleType.PATH)
-                || hasLease(leaseMask, NodeCapabilities.ResourceUse.LOOK)
+                || hasLease(leaseMask, BehaviorExecutableNode.Resource.LOOK)
                 && memory == MemoryModuleType.LOOK_TARGET;
     }
 
     private static boolean controlsMemory(int leaseMask,
                                           MemoryModuleType<?> memory) {
-        return hasLease(leaseMask, NodeCapabilities.ResourceUse.MOVEMENT)
+        return hasLease(leaseMask, BehaviorExecutableNode.Resource.MOVEMENT)
                 && (memory == MemoryModuleType.WALK_TARGET || memory == MemoryModuleType.PATH)
-                || hasLease(leaseMask, NodeCapabilities.ResourceUse.LOOK)
+                || hasLease(leaseMask, BehaviorExecutableNode.Resource.LOOK)
                 && memory == MemoryModuleType.LOOK_TARGET
-                || hasLease(leaseMask, NodeCapabilities.ResourceUse.TARGET)
+                || hasLease(leaseMask, BehaviorExecutableNode.Resource.TARGET)
                 && memory == MemoryModuleType.ATTACK_TARGET;
     }
 
     private static Set<MemoryModuleType<?>> newlyControlledMemories(
-            LivingEntity body, Set<NodeCapabilities.ResourceUse> resources) {
+            LivingEntity body, Set<BehaviorExecutableNode.Resource> resources) {
         Set<MemoryModuleType<?>> result = controlledMemories(resources);
         int leaseMask = entityLeaseMask(body);
         if (leaseMask != 0) result.removeIf(memory -> controlsMemory(leaseMask, memory));
@@ -317,7 +317,7 @@ public final class BehaviorNativeAiController {
     }
 
     private static Set<MemoryModuleType<?>> newlyBlockedBehaviorMemories(
-            LivingEntity body, Set<NodeCapabilities.ResourceUse> resources) {
+            LivingEntity body, Set<BehaviorExecutableNode.Resource> resources) {
         Set<MemoryModuleType<?>> result = controlledMemories(resources);
         result.removeIf(memory -> !blocksBehaviorUsing(resources, memory));
         int leaseMask = entityLeaseMask(body);
@@ -325,7 +325,7 @@ public final class BehaviorNativeAiController {
         return result;
     }
 
-    private static void addBrainLeases(LivingEntity body, Set<NodeCapabilities.ResourceUse> resources) {
+    private static void addBrainLeases(LivingEntity body, Set<BehaviorExecutableNode.Resource> resources) {
         if (resources.isEmpty()) return;
         BehaviorEntityLeaseAccess access = entityLeaseAccess(body);
         access.geometryNode$acquireBehaviorLeases(resources);
@@ -333,7 +333,7 @@ public final class BehaviorNativeAiController {
                 access.geometryNode$getBehaviorLeaseMask());
     }
 
-    private static void removeBrainLeases(LivingEntity body, Set<NodeCapabilities.ResourceUse> resources) {
+    private static void removeBrainLeases(LivingEntity body, Set<BehaviorExecutableNode.Resource> resources) {
         if (resources.isEmpty()) return;
         BehaviorEntityLeaseAccess access = entityLeaseAccess(body);
         access.geometryNode$releaseBehaviorLeases(resources);
@@ -360,28 +360,28 @@ public final class BehaviorNativeAiController {
                 ? access.geometryNode$getBehaviorLeaseMask() : 0;
     }
 
-    private static int resourceMask(Set<NodeCapabilities.ResourceUse> resources) {
+    private static int resourceMask(Set<BehaviorExecutableNode.Resource> resources) {
         int mask = 0;
-        for (NodeCapabilities.ResourceUse resource : resources) {
+        for (BehaviorExecutableNode.Resource resource : resources) {
             mask |= 1 << resource.ordinal();
         }
         return mask;
     }
 
-    private static boolean hasLease(int mask, NodeCapabilities.ResourceUse resource) {
+    private static boolean hasLease(int mask, BehaviorExecutableNode.Resource resource) {
         return (mask & 1 << resource.ordinal()) != 0;
     }
 
-    private static EnumSet<NodeCapabilities.ResourceUse> normalizedResources(
-            Set<NodeCapabilities.ResourceUse> resources) {
-        EnumSet<NodeCapabilities.ResourceUse> result = EnumSet.noneOf(NodeCapabilities.ResourceUse.class);
+    private static EnumSet<BehaviorExecutableNode.Resource> normalizedResources(
+            Set<BehaviorExecutableNode.Resource> resources) {
+        EnumSet<BehaviorExecutableNode.Resource> result = EnumSet.noneOf(BehaviorExecutableNode.Resource.class);
         result.addAll(resources);
         return result;
     }
 
-    private static EnumSet<Goal.Flag> goalFlags(Set<NodeCapabilities.ResourceUse> resources) {
+    private static EnumSet<Goal.Flag> goalFlags(Set<BehaviorExecutableNode.Resource> resources) {
         EnumSet<Goal.Flag> result = EnumSet.noneOf(Goal.Flag.class);
-        for (NodeCapabilities.ResourceUse resource : resources) {
+        for (BehaviorExecutableNode.Resource resource : resources) {
             switch (resource) {
                 case MOVEMENT -> result.add(Goal.Flag.MOVE);
                 case LOOK -> result.add(Goal.Flag.LOOK);
@@ -391,9 +391,9 @@ public final class BehaviorNativeAiController {
         return result;
     }
 
-    private static Set<MemoryModuleType<?>> controlledMemories(Set<NodeCapabilities.ResourceUse> resources) {
+    private static Set<MemoryModuleType<?>> controlledMemories(Set<BehaviorExecutableNode.Resource> resources) {
         Set<MemoryModuleType<?>> result = new java.util.HashSet<>();
-        for (NodeCapabilities.ResourceUse resource : resources) {
+        for (BehaviorExecutableNode.Resource resource : resources) {
             switch (resource) {
                 case MOVEMENT -> {
                     result.add(MemoryModuleType.WALK_TARGET);

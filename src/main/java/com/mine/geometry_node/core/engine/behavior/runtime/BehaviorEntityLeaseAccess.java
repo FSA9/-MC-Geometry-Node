@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
-import com.mine.geometry_node.core.node.NodeCapabilities;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 
 import java.util.Set;
 
@@ -8,7 +8,7 @@ import java.util.Set;
 public interface BehaviorEntityLeaseAccess {
     int geometryNode$getBehaviorLeaseMask();
 
-    void geometryNode$acquireBehaviorLeases(Set<NodeCapabilities.ResourceUse> resources);
+    void geometryNode$acquireBehaviorLeases(Set<BehaviorExecutableNode.Resource> resources);
 
-    void geometryNode$releaseBehaviorLeases(Set<NodeCapabilities.ResourceUse> resources);
+    void geometryNode$releaseBehaviorLeases(Set<BehaviorExecutableNode.Resource> resources);
 }

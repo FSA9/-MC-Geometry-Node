@@ -3,7 +3,6 @@ package com.mine.geometry_node.core.node;
 import com.mine.geometry_node.api.GeometryNodePlugin;
 import com.mine.geometry_node.api.MarkerRegistrationContext;
 import com.mine.geometry_node.api.NodeRegistrationContext;
-import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import com.mine.geometry_node.core.node.nodes.actions.block.*;
@@ -53,8 +52,6 @@ import com.mine.geometry_node.core.node.nodes.maths.operation.*;
 import com.mine.geometry_node.core.node.nodes.quest.*;
 import com.mine.geometry_node.core.node.nodes.special.RerouteNode;
 
-import java.util.Set;
-
 public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
     @Override
@@ -80,25 +77,23 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
     public void registerNodes(NodeRegistrationContext registry) {
         System.out.println("[BuiltinNodesPlugin] Start to register Nodes...");
 
-        registry.register("behavior/control", new BehaviorRootNode(), behaviorNodeCapabilities());
-        registry.register("behavior/control", new BehaviorSequenceNode(), behaviorNodeCapabilities());
-        registry.register("behavior/control", new BehaviorSelectorNode(), behaviorNodeCapabilities());
-        registry.register("behavior/condition", new BehaviorConditionNode(), behaviorNodeCapabilities());
-        registry.register("behavior/condition", new BehaviorHasValidTargetNode(), behaviorNodeCapabilities());
-        registry.register("behavior/decorator", new BehaviorGuardNode(), behaviorNodeCapabilities());
-        registry.register("behavior/decorator", new BehaviorInverterNode(), behaviorNodeCapabilities());
-        registry.register("behavior/action", new BehaviorWaitNode(), behaviorNodeCapabilities());
-        registry.register("behavior/action", new BehaviorIdleNode(), behaviorNodeCapabilities());
-        registry.register("behavior/blackboard", new BehaviorGetBlackboardNode(),
-                behaviorDataCapabilities());
-        registry.register("behavior/blackboard", new BehaviorHasBlackboardNode(),
-                behaviorDataCapabilities());
-        registry.register("behavior/blackboard", new BehaviorSetBlackboardNode(), behaviorNodeCapabilities());
-        registry.register("behavior/blackboard", new BehaviorClearBlackboardNode(), behaviorNodeCapabilities());
+        registry.register("behavior/control", new BehaviorRootNode());
+        registry.register("behavior/control", new BehaviorSequenceNode());
+        registry.register("behavior/control", new BehaviorSelectorNode());
+        registry.register("behavior/condition", new BehaviorConditionNode());
+        registry.register("behavior/condition", new BehaviorHasValidTargetNode());
+        registry.register("behavior/decorator", new BehaviorGuardNode());
+        registry.register("behavior/decorator", new BehaviorInverterNode());
+        registry.register("behavior/action", new BehaviorWaitNode());
+        registry.register("behavior/action", new BehaviorIdleNode());
+        registry.register("behavior/blackboard", new BehaviorGetBlackboardNode());
+        registry.register("behavior/blackboard", new BehaviorHasBlackboardNode());
+        registry.register("behavior/blackboard", new BehaviorSetBlackboardNode());
+        registry.register("behavior/blackboard", new BehaviorClearBlackboardNode());
         registry.register("behavior/control", new BehaviorCompositeNode(
-                BehaviorCompositeNode.Kind.REACTIVE_SEQUENCE), behaviorNodeCapabilities());
+                BehaviorCompositeNode.Kind.REACTIVE_SEQUENCE));
         registry.register("behavior/control", new BehaviorCompositeNode(
-                BehaviorCompositeNode.Kind.PRIORITY_SELECTOR), behaviorNodeCapabilities());
+                BehaviorCompositeNode.Kind.PRIORITY_SELECTOR));
         registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.REPEAT);
         registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.RETRY);
         registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.TIMEOUT);
@@ -106,23 +101,23 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.ALWAYS_SUCCEED);
         registerBehaviorDecorator(registry, BehaviorDecoratorNode.Kind.ALWAYS_FAIL);
         registry.register("behavior/condition", new BehaviorUtilityConditionNode(
-                BehaviorUtilityConditionNode.Kind.BLACKBOARD_VALUE_CHANGED), behaviorNodeCapabilities());
+                BehaviorUtilityConditionNode.Kind.BLACKBOARD_VALUE_CHANGED));
         registry.register("behavior/condition", new BehaviorUtilityConditionNode(
-                BehaviorUtilityConditionNode.Kind.CAN_NAVIGATE_TO), behaviorNodeCapabilities());
-        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.SELECT_TARGET,
-                Set.of(NodeCapabilities.ResourceUse.TARGET));
-        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.CLEAR_TARGET,
-                Set.of(NodeCapabilities.ResourceUse.TARGET));
-        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.MOVE_TO,
-                Set.of(NodeCapabilities.ResourceUse.MOVEMENT));
-        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.STOP_MOVING,
-                Set.of(NodeCapabilities.ResourceUse.MOVEMENT));
-        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.WANDER,
-                Set.of(NodeCapabilities.ResourceUse.MOVEMENT));
-        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.LOOK_AT,
-                Set.of(NodeCapabilities.ResourceUse.LOOK));
-        registerBehaviorAction(registry, BehaviorEntityActionNode.Kind.ATTACK_TARGET,
-                Set.of(NodeCapabilities.ResourceUse.TARGET));
+                BehaviorUtilityConditionNode.Kind.CAN_NAVIGATE_TO));
+        registry.register("behavior/entity", new BehaviorEntityActionNode(
+                BehaviorEntityActionNode.Kind.SELECT_TARGET));
+        registry.register("behavior/entity", new BehaviorEntityActionNode(
+                BehaviorEntityActionNode.Kind.CLEAR_TARGET));
+        registry.register("behavior/entity", new BehaviorEntityActionNode(
+                BehaviorEntityActionNode.Kind.MOVE_TO));
+        registry.register("behavior/entity", new BehaviorEntityActionNode(
+                BehaviorEntityActionNode.Kind.STOP_MOVING));
+        registry.register("behavior/entity", new BehaviorEntityActionNode(
+                BehaviorEntityActionNode.Kind.WANDER));
+        registry.register("behavior/entity", new BehaviorEntityActionNode(
+                BehaviorEntityActionNode.Kind.LOOK_AT));
+        registry.register("behavior/entity", new BehaviorEntityActionNode(
+                BehaviorEntityActionNode.Kind.ATTACK_TARGET));
 
         registry.register("layout", new RerouteNode());
 
@@ -315,11 +310,11 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/player", new IsKeyPressed());
 
         // Data/World
-        registry.register("data/world", new GetGameTime(), sharedDataCapabilities());
-        registry.register("data/world", new GetWorldTime(), sharedDataCapabilities());
+        registry.register("data/world", new GetGameTime());
+        registry.register("data/world", new GetWorldTime());
 
         // Data/Entity
-        registry.register("data/entity", new GetEntitiesByRadius(), sharedDataCapabilities());
+        registry.register("data/entity", new GetEntitiesByRadius());
         registry.register("data/entity", new GetEntitiesbyRotationBox());
         registry.register("data/entity", new PickEntityTemplate());
 
@@ -327,10 +322,10 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/entity/attribution", new GetEntityDimension());
         registry.register("data/entity/attribution", new GetEntityEyePosition());
         registry.register("data/entity/attribution", new GetEntityFallDistance());
-        registry.register("data/entity/attribution", new GetEntityHealth(), sharedDataCapabilities());
-        registry.register("data/entity/attribution", new GetEntityMaxHealth(), sharedDataCapabilities());
+        registry.register("data/entity/attribution", new GetEntityHealth());
+        registry.register("data/entity/attribution", new GetEntityMaxHealth());
         registry.register("data/entity/attribution", new GetEntityRotation());
-        registry.register("data/entity/attribution", new GetEntityPosition(), sharedDataCapabilities());
+        registry.register("data/entity/attribution", new GetEntityPosition());
         registry.register("data/entity/attribution", new GetEntityTags());
         registry.register("data/entity/attribution", new GetEntityUUID());
         registry.register("data/entity/attribution", new GetEntityVelocity());
@@ -342,7 +337,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/entity/attribution", new GetTotalExperience());
         registry.register("data/entity/attribution", new IsInvisible());
         registry.register("data/entity/attribution", new IsOnFire());
-        registry.register("data/entity/attribution", new IsOnGround(), sharedDataCapabilities());
+        registry.register("data/entity/attribution", new IsOnGround());
         registry.register("data/entity/attribution", new IsSneaking());
         registry.register("data/entity/attribution", new IsSprinting());
         registry.register("data/entity/attribution", new IsSwimming());
@@ -360,10 +355,10 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/type", new GetPortType());
 
         // Data/Inventory
-        registry.register("data/inventory", new GetSlot(), sharedDataCapabilities());
-        registry.register("data/inventory", new SlotFromIndex(), sharedDataCapabilities());
+        registry.register("data/inventory", new GetSlot());
+        registry.register("data/inventory", new SlotFromIndex());
         registry.register("data/inventory", new PickItemStack());
-        registry.register("data/inventory", new GetSlotItem(), sharedDataCapabilities());
+        registry.register("data/inventory", new GetSlotItem());
         registry.register("data/inventory", new CountInventoryItem());
         registry.register("data/inventory", new FindInventorySlots());
 
@@ -381,8 +376,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/item/attribution", new HasItemCustomName());
 
         // Data/Container
-        registry.register("data/container", new GetInputDataType(), sharedDataCapabilities());
-        registry.register("data/container", new GetLength(), sharedDataCapabilities());
+        registry.register("data/container", new GetInputDataType());
+        registry.register("data/container", new GetLength());
         registry.register("data/container", new MakeList());
         registry.register("data/container", new MakeDict());
         registry.register("data/container", new GetListValue());
@@ -392,12 +387,12 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/container", new DictHasValue());
 
         // Data/Value
-        registry.register("data/value", new StringValue(), sharedDataCapabilities());
+        registry.register("data/value", new StringValue());
         registry.register("data/value", new StringExpression());
         registry.register("data/value", new PathSelection());
-        registry.register("data/value", new IntValue(), sharedDataCapabilities());
-        registry.register("data/value", new FloatValue(), sharedDataCapabilities());
-        registry.register("data/value", new BoolValue(), sharedDataCapabilities());
+        registry.register("data/value", new IntValue());
+        registry.register("data/value", new FloatValue());
+        registry.register("data/value", new BoolValue());
 
         // Geometry
         registry.register("geometry/mesh", new CreateMesh());
@@ -518,7 +513,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // --- FUNCTIONS ---
         registry.register("functions/graph", new FinishGraph());
-        registry.register("functions/graph", new GraphOwner(), sharedDataCapabilities());
+        registry.register("functions/graph", new GraphOwner());
         registry.register("functions/graph", new ReceiveBlueprint());
         registry.register("functions/graph", new TriggerBlueprint());
 
@@ -529,7 +524,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // --- LOGICS ---
         registry.register("logics", new Contain());
-        registry.register("logics", new Equal(), sharedDataCapabilities());
+        registry.register("logics", new Equal());
         registry.register("logics", new HasTag());
         registry.register("logics", new GetTags());
         registry.register("logics", new ForEachLoop());
@@ -543,7 +538,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("maths", new SnapshotValue());
         registry.register("maths", new RandomValue());
         registry.register("maths/operation", new MathExpression());
-        registry.register("maths/operation", new MathOperation(), sharedDataCapabilities());
+        registry.register("maths/operation", new MathOperation());
         registry.register("maths/vector", new VectorAdd());
         registry.register("maths/vector", new ReflectVector());
         registry.register("maths/vector", new SeparateXYZ());
@@ -554,41 +549,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
     private static void registerBehaviorDecorator(NodeRegistrationContext registry,
                                                   BehaviorDecoratorNode.Kind kind) {
-        registry.register("behavior/decorator", new BehaviorDecoratorNode(kind), behaviorNodeCapabilities());
-    }
-
-    private static void registerBehaviorAction(NodeRegistrationContext registry,
-                                               BehaviorEntityActionNode.Kind kind,
-                                               Set<NodeCapabilities.ResourceUse> resources) {
-        registry.register("behavior/entity", new BehaviorEntityActionNode(kind),
-                behaviorNodeCapabilities(resources));
-    }
-
-    private static NodeCapabilities behaviorNodeCapabilities() {
-        return new NodeCapabilities(
-                Set.of(GraphTypeRegistry.BEHAVIOR_TREE.id()),
-                NodeCapabilities.Context.BEHAVIOR_EXECUTION,
-                Set.of());
-    }
-
-    private static NodeCapabilities behaviorNodeCapabilities(Set<NodeCapabilities.ResourceUse> resources) {
-        return new NodeCapabilities(
-                Set.of(GraphTypeRegistry.BEHAVIOR_TREE.id()),
-                NodeCapabilities.Context.BEHAVIOR_EXECUTION, resources);
-    }
-
-    private static NodeCapabilities behaviorDataCapabilities() {
-        return new NodeCapabilities(
-                Set.of(GraphTypeRegistry.BEHAVIOR_TREE.id()), NodeCapabilities.Context.DATA,
-                Set.of());
-    }
-
-    private static NodeCapabilities sharedDataCapabilities() {
-        return new NodeCapabilities(
-                Set.of(GraphTypeRegistry.BLUEPRINT.id(), GraphTypeRegistry.QUEST.id(),
-                        GraphTypeRegistry.BEHAVIOR_TREE.id()),
-                NodeCapabilities.Context.DATA,
-                Set.of());
+        registry.register("behavior/decorator", new BehaviorDecoratorNode(kind));
     }
 
 }

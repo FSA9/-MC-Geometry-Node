@@ -12,7 +12,7 @@ import com.mine.geometry_node.core.engine.graph.scheduling.DueTickScheduler;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
-import com.mine.geometry_node.core.node.NodeCapabilities;
+import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -558,13 +558,13 @@ public final class BehaviorTreeEngine {
         @Override public Mob owner() { return owner.get(); }
 
         @Override
-        public boolean acquireResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
+        public boolean acquireResources(int nodeIndex, Set<BehaviorExecutableNode.Resource> resources) {
             Mob mob = owner.get();
             return mob != null && nativeAi.acquire(resources);
         }
 
         @Override
-        public void releaseResources(int nodeIndex, Set<NodeCapabilities.ResourceUse> resources) {
+        public void releaseResources(int nodeIndex, Set<BehaviorExecutableNode.Resource> resources) {
             nativeAi.release(resources);
         }
 
