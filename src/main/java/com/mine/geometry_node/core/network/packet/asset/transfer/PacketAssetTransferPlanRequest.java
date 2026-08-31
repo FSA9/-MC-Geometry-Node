@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.network.packet.asset.transfer;
 
+import com.mine.geometry_node.core.network.packet.asset.AssetPacketCodecs;
+import com.mine.geometry_node.core.network.packet.asset.AssetPacketLimits;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -16,15 +18,16 @@ public record PacketAssetTransferPlanRequest(int requestId, AssetTransferPlanKin
             (buffer, packet) -> {
                 buffer.writeInt(packet.requestId);
                 buffer.writeVarInt(packet.kind.ordinal());
-                buffer.writeVarInt(packet.paths.size());
-                for (String path : packet.paths) buffer.writeUtf(path, AssetTransferPacketCodecs.MAX_PATH_LENGTH);
+                AssetPacketCodecs.writeBoundedCount(buffer, packet.paths.size(),
+                        AssetPacketLimits.MAX_TRANSFER_PLAN_PATHS, "transfer plan path");
+                for (String path : packet.paths) buffer.writeUtf(path, AssetPacketLimits.MAX_PATH_LENGTH);
             }, buffer -> {
                 int requestId = buffer.readInt();
                 AssetTransferPlanKind kind = AssetTransferPacketCodecs.readEnum(buffer, AssetTransferPlanKind.values());
-                int size = buffer.readVarInt();
-                if (size < 0 || size > 16_384) throw new IllegalArgumentException("Invalid transfer plan path count");
+                int size = AssetPacketCodecs.readBoundedCount(buffer,
+                        AssetPacketLimits.MAX_TRANSFER_PLAN_PATHS, "transfer plan path");
                 List<String> paths = new ArrayList<>(size);
-                for (int i = 0; i < size; i++) paths.add(buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH));
+                for (int i = 0; i < size; i++) paths.add(buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH));
                 return new PacketAssetTransferPlanRequest(requestId, kind, paths);
             });
 
@@ -32,7 +35,8 @@ public record PacketAssetTransferPlanRequest(int requestId, AssetTransferPlanKin
         if (requestId < 0) throw new IllegalArgumentException("Negative transfer plan request ID");
         kind = java.util.Objects.requireNonNull(kind, "kind");
         paths = paths == null ? List.of() : List.copyOf(paths);
-        if (paths.size() > 16_384) throw new IllegalArgumentException("Too many transfer plan paths");
+        AssetPacketLimits.requireCount(paths.size(), AssetPacketLimits.MAX_TRANSFER_PLAN_PATHS,
+                "transfer plan path");
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

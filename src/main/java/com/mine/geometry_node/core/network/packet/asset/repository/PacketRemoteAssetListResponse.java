@@ -1,12 +1,13 @@
 package com.mine.geometry_node.core.network.packet.asset.repository;
 
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
+import com.mine.geometry_node.core.network.packet.asset.AssetPacketCodecs;
+import com.mine.geometry_node.core.network.packet.asset.AssetPacketLimits;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public record PacketRemoteAssetListResponse(
@@ -25,41 +26,26 @@ public record PacketRemoteAssetListResponse(
     );
 
     public PacketRemoteAssetListResponse(RegistryFriendlyByteBuf buf) {
-        this(buf.readInt(), buf.readBoolean(), buf.readUtf(32767), buf.readUtf(32767), readEntries(buf));
+        this(buf.readInt(), buf.readBoolean(),
+                buf.readUtf(AssetPacketLimits.MAX_PATH_LENGTH),
+                buf.readUtf(AssetPacketLimits.MAX_MESSAGE_LENGTH),
+                AssetPacketCodecs.readRemoteAssetEntries(buf, AssetPacketLimits.MAX_REPOSITORY_ENTRIES));
+    }
+
+    public PacketRemoteAssetListResponse {
+        directory = directory == null ? "" : directory;
+        message = message == null ? "" : message;
+        entries = entries == null ? List.of() : List.copyOf(entries);
+        AssetPacketLimits.requireCount(entries.size(), AssetPacketLimits.MAX_REPOSITORY_ENTRIES,
+                "remote repository entry");
     }
 
     public void write(RegistryFriendlyByteBuf buf) {
         buf.writeInt(requestId);
         buf.writeBoolean(success);
-        buf.writeUtf(directory, 32767);
-        buf.writeUtf(message, 32767);
-        buf.writeInt(entries.size());
-        for (RemoteAssetEntry entry : entries) {
-            buf.writeUtf(entry.path(), 32767);
-            buf.writeUtf(entry.name(), 32767);
-            buf.writeBoolean(entry.directory());
-            buf.writeLong(entry.size());
-            buf.writeLong(entry.lastModified());
-            buf.writeUtf(entry.assetTypeId(), 32767);
-            buf.writeUtf(entry.variantId(), 32767);
-        }
-    }
-
-    private static List<RemoteAssetEntry> readEntries(RegistryFriendlyByteBuf buf) {
-        int size = buf.readInt();
-        List<RemoteAssetEntry> entries = new ArrayList<>(size);
-        for (int i = 0; i < size; i++) {
-            entries.add(new RemoteAssetEntry(
-                    buf.readUtf(32767),
-                    buf.readUtf(32767),
-                    buf.readBoolean(),
-                    buf.readLong(),
-                    buf.readLong(),
-                    buf.readUtf(32767),
-                    buf.readUtf(32767)
-            ));
-        }
-        return entries;
+        buf.writeUtf(directory, AssetPacketLimits.MAX_PATH_LENGTH);
+        buf.writeUtf(message, AssetPacketLimits.MAX_MESSAGE_LENGTH);
+        AssetPacketCodecs.writeRemoteAssetEntries(buf, entries, AssetPacketLimits.MAX_REPOSITORY_ENTRIES);
     }
 
     @Override

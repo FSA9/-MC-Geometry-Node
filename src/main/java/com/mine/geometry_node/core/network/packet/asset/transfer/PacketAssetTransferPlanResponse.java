@@ -2,6 +2,8 @@ package com.mine.geometry_node.core.network.packet.asset.transfer;
 
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetConflict;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
+import com.mine.geometry_node.core.network.packet.asset.AssetPacketCodecs;
+import com.mine.geometry_node.core.network.packet.asset.AssetPacketLimits;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -28,6 +30,10 @@ public record PacketAssetTransferPlanResponse(
         message = java.util.Objects.requireNonNullElse(message, "");
         files = files == null ? List.of() : List.copyOf(files);
         conflicts = conflicts == null ? List.of() : List.copyOf(conflicts);
+        AssetPacketLimits.requireCount(files.size(), AssetPacketLimits.MAX_TRANSFER_MANIFEST_ENTRIES,
+                "transfer manifest entry");
+        AssetPacketLimits.requireCount(conflicts.size(), AssetPacketLimits.MAX_TRANSFER_CONFLICTS,
+                "transfer conflict");
     }
 
     private PacketAssetTransferPlanResponse(RegistryFriendlyByteBuf buffer) {
@@ -41,44 +47,29 @@ public record PacketAssetTransferPlanResponse(
         buffer.writeVarInt(kind.ordinal());
         buffer.writeBoolean(success);
         buffer.writeUtf(message, AssetTransferPacketCodecs.MAX_DETAIL_LENGTH);
-        buffer.writeVarInt(files.size());
-        for (RemoteAssetEntry file : files) {
-            buffer.writeUtf(file.path(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
-            buffer.writeUtf(file.name(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
-            buffer.writeBoolean(file.directory());
-            buffer.writeLong(file.size());
-            buffer.writeLong(file.lastModified());
-            buffer.writeUtf(file.assetTypeId(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
-            buffer.writeUtf(file.variantId(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
-        }
-        buffer.writeVarInt(conflicts.size());
+        AssetPacketCodecs.writeRemoteAssetEntries(
+                buffer, files, AssetPacketLimits.MAX_TRANSFER_MANIFEST_ENTRIES);
+        AssetPacketCodecs.writeBoundedCount(
+                buffer, conflicts.size(), AssetPacketLimits.MAX_TRANSFER_CONFLICTS, "transfer conflict");
         for (RemoteAssetConflict conflict : conflicts) {
-            buffer.writeUtf(conflict.sourcePath(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
-            buffer.writeUtf(conflict.targetPath(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
+            buffer.writeUtf(conflict.sourcePath(), AssetPacketLimits.MAX_PATH_LENGTH);
+            buffer.writeUtf(conflict.targetPath(), AssetPacketLimits.MAX_PATH_LENGTH);
             buffer.writeBoolean(conflict.directory());
         }
     }
 
     private static List<RemoteAssetEntry> readFiles(RegistryFriendlyByteBuf buffer) {
-        int size = buffer.readVarInt();
-        if (size < 0 || size > 65_536) throw new IllegalArgumentException("Invalid transfer manifest size");
-        List<RemoteAssetEntry> files = new ArrayList<>(size);
-        for (int i = 0; i < size; i++) files.add(new RemoteAssetEntry(
-                buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH),
-                buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH), buffer.readBoolean(), buffer.readLong(),
-                buffer.readLong(),
-                buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH),
-                buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH)));
-        return files;
+        return AssetPacketCodecs.readRemoteAssetEntries(
+                buffer, AssetPacketLimits.MAX_TRANSFER_MANIFEST_ENTRIES);
     }
 
     private static List<RemoteAssetConflict> readConflicts(RegistryFriendlyByteBuf buffer) {
-        int size = buffer.readVarInt();
-        if (size < 0 || size > 16_384) throw new IllegalArgumentException("Invalid transfer conflict count");
+        int size = AssetPacketCodecs.readBoundedCount(
+                buffer, AssetPacketLimits.MAX_TRANSFER_CONFLICTS, "transfer conflict");
         List<RemoteAssetConflict> conflicts = new ArrayList<>(size);
         for (int i = 0; i < size; i++) conflicts.add(new RemoteAssetConflict(
-                buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH),
-                buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH), buffer.readBoolean()));
+                buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH),
+                buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH), buffer.readBoolean()));
         return conflicts;
     }
 

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.network.packet.asset.transfer;
 
+import com.mine.geometry_node.core.network.packet.asset.AssetPacketLimits;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferProtocolLimits;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferDirection;
@@ -46,7 +47,7 @@ public record PacketAssetTransferOpen(
     private PacketAssetTransferOpen(RegistryFriendlyByteBuf buffer) {
         this(buffer.readUUID(),
                 AssetTransferPacketCodecs.readEnum(buffer, AssetTransferDirection.values()),
-                buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH), buffer.readLong(),
+                buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH), buffer.readLong(),
                 buffer.readUtf(AssetTransferPacketCodecs.SHA256_HEX_LENGTH), buffer.readVarInt(),
                 AssetTransferPacketCodecs.readEnum(buffer, AssetTransferConflictPolicy.values()));
     }
@@ -54,7 +55,7 @@ public record PacketAssetTransferOpen(
     private void write(RegistryFriendlyByteBuf buffer) {
         buffer.writeUUID(transferId);
         buffer.writeVarInt(direction.ordinal());
-        buffer.writeUtf(relativePath, AssetTransferPacketCodecs.MAX_PATH_LENGTH);
+        buffer.writeUtf(relativePath, AssetPacketLimits.MAX_PATH_LENGTH);
         buffer.writeLong(totalBytes);
         buffer.writeUtf(sha256, AssetTransferPacketCodecs.SHA256_HEX_LENGTH);
         buffer.writeVarInt(requestedChunkBytes);

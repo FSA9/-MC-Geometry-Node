@@ -5,7 +5,6 @@ import io.netty.handler.codec.DecoderException;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
 final class AssetTransferPacketCodecs {
-    static final int MAX_PATH_LENGTH = 32_767;
     static final int SHA256_HEX_LENGTH = 64;
     static final int MAX_MESSAGE_KEY_LENGTH = 256;
     static final int MAX_DETAIL_LENGTH = 2_048;
