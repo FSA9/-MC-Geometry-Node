@@ -16,13 +16,8 @@ public final class EditorSessionState {
         public float ratio = 0.5f;
         public AreaState first;
         public AreaState second;
-        public GraphEditorState graphEditor = new GraphEditorState();
         public AssetBrowserState assetBrowser = new AssetBrowserState();
         public TerminalState terminal = new TerminalState();
-    }
-
-    public static final class GraphEditorState {
-        public float outlinerWeight = 0.2f;
     }
 
     public static final class AssetBrowserState {

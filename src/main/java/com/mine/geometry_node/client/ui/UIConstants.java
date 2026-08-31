@@ -41,7 +41,6 @@ public class UIConstants {
      */
     public static class MainUI {
         public static final int BG_ROOT = CLR_BG_DARK_2;         // 根布局背景
-        public static final int BG_OUTLINER = CLR_BG_DARK_5;     // 左侧大纲面板背景
         public static final int BG_TIMELINE = CLR_BG_DARK_3;     // 底部时间轴面板背景
         public static final int TEXT_COLOR = CLR_GRAY_TEXT;      // 默认全局文字颜色
 

@@ -96,10 +96,6 @@ public final class EditorSessionStore {
         if (state.assetBrowser == null) {
             state.assetBrowser = new EditorSessionState.AssetBrowserState();
         }
-        if (state.graphEditor == null) {
-            state.graphEditor = new EditorSessionState.GraphEditorState();
-        }
-        state.graphEditor.outlinerWeight = sanitizeWeight(state.graphEditor.outlinerWeight);
         String location = state.assetBrowser.location;
         state.assetBrowser.location = "REMOTE".equals(location) || "FAVORITES".equals(location)
                 ? location

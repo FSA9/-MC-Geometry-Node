@@ -22,7 +22,7 @@ final class AreaEditorRegistry {
             EditorSessionState.AreaState sessionState,
             Runnable sessionChanged) {
         AreaEditorWindow window = switch (type) {
-            case GRAPH_EDITOR -> new GraphEditorWindow(context, sessionState.graphEditor, sessionChanged);
+            case GRAPH_EDITOR -> new GraphEditorWindow(context);
             case ASSET_BROWSER -> new AssetBrowserWindow(context, sessionState.assetBrowser, sessionChanged);
             case TERMINAL -> new TerminalWindow(context, sessionState.terminal, sessionChanged);
             case PERFORMANCE -> createPlaceholder(context,

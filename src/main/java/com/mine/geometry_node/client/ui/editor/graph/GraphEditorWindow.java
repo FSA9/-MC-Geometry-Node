@@ -12,8 +12,6 @@ import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
-import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
-import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.area.SurfaceRegistrationAware;
 import com.mine.geometry_node.client.ui.document.GraphSession;
@@ -21,15 +19,11 @@ import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
-import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.RelativeLayout;
-import icyllis.modernui.widget.TextView;
-import net.minecraft.network.chat.Component;
 
 public class GraphEditorWindow extends LinearLayout
         implements AreaEditorWindow, SurfaceRegistrationAware, ViewportSurface {
@@ -37,37 +31,18 @@ public class GraphEditorWindow extends LinearLayout
     private final GraphPropertiesPanel mPropertiesPanel;
     private final EditorSidebar mRightSidebar;
     private final SidebarLayoutController mSidebarLayout;
-    private final EditorSessionState.GraphEditorState mSessionState;
-    private final Runnable mSessionChanged;
-    private final View mLeftPanel;
 
     public GraphEditorWindow(Context context) {
-        this(context, new EditorSessionState.GraphEditorState(), null);
-    }
-
-    public GraphEditorWindow(
-            Context context,
-            EditorSessionState.GraphEditorState sessionState,
-            Runnable sessionChanged) {
         super(context);
-        mSessionState = sessionState == null ? new EditorSessionState.GraphEditorState() : sessionState;
-        mSessionChanged = sessionChanged;
         setOrientation(LinearLayout.HORIZONTAL);
         setBackground(createColorDrawable(UIConstants.MainUI.BG_ROOT));
-
-        float outlinerWeight = sanitizeOutlinerWeight(mSessionState.outlinerWeight);
-        mLeftPanel = createPanel(context, "Outliner", UIConstants.MainUI.BG_OUTLINER);
-        addView(mLeftPanel, createWeightParams(outlinerWeight));
-
-        addView(ResizableDivider.weighted(
-                context, ResizableDivider.Orientation.HORIZONTAL, delta -> captureOutlinerWeight()));
 
         AppConfig.ViewportConfig viewportConfig = ConfigManager.INSTANCE.getConfig().viewport;
         float sidebarWeight = viewportConfig.rightSidebarWeight;
 
         LinearLayout workspace = new LinearLayout(context);
         workspace.setOrientation(LinearLayout.HORIZONTAL);
-        addView(workspace, createWeightParams(1.0f - outlinerWeight));
+        addView(workspace, createWeightParams(1.0f));
 
         mGraphViewportPanel = new GraphViewportPanel(context);
         workspace.addView(mGraphViewportPanel, createWeightParams(
@@ -154,42 +129,12 @@ public class GraphEditorWindow extends LinearLayout
         return super.dispatchKeyEvent(event);
     }
 
-    private RelativeLayout createPanel(Context context, String title, int colorHex) {
-        RelativeLayout panel = new RelativeLayout(context);
-        panel.setBackground(createColorDrawable(colorHex));
-
-        TextView textView = new TextView(context);
-        textView.setText(title);
-        textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, UIUtils.dp2px(UIConstants.MainUI.TEXT_SIZE));
-        textView.setTextColor(UIConstants.MainUI.TEXT_COLOR);
-
-        RelativeLayout.LayoutParams textParams = new RelativeLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        textParams.addRule(RelativeLayout.CENTER_IN_PARENT);
-        panel.addView(textView, textParams);
-        return panel;
-    }
-
     private LinearLayout.LayoutParams createWeightParams(float weight) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.MATCH_PARENT);
         params.weight = weight;
         return params;
-    }
-
-    private void captureOutlinerWeight() {
-        if (mLeftPanel.getLayoutParams() instanceof LinearLayout.LayoutParams params) {
-            mSessionState.outlinerWeight = sanitizeOutlinerWeight(params.weight);
-            if (mSessionChanged != null) {
-                mSessionChanged.run();
-            }
-        }
-    }
-
-    private static float sanitizeOutlinerWeight(float weight) {
-        return Float.isFinite(weight) ? Math.max(0.05f, Math.min(0.45f, weight)) : 0.2f;
     }
 
     private ShapeDrawable createColorDrawable(int color) {
@@ -199,7 +144,4 @@ public class GraphEditorWindow extends LinearLayout
         return drawable;
     }
 
-    private static String tr(String key) {
-        return Component.translatable(key).getString();
-    }
 }

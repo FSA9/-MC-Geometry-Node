@@ -21,9 +21,6 @@ final class AreaLeafNode extends AreaNode {
         mEditorType = parseEditorType(mSessionState.editorType);
         mSessionState.kind = "leaf";
         mSessionState.editorType = mEditorType.name();
-        if (mSessionState.graphEditor == null) {
-            mSessionState.graphEditor = new EditorSessionState.GraphEditorState();
-        }
         if (mSessionState.assetBrowser == null) {
             mSessionState.assetBrowser = new EditorSessionState.AssetBrowserState();
         }

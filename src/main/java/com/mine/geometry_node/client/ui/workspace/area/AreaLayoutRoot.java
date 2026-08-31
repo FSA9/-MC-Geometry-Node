@@ -362,7 +362,6 @@ public final class AreaLayoutRoot extends FrameLayout {
             state.ratio = split.ratio();
             state.first = snapshotNode(split.first());
             state.second = snapshotNode(split.second());
-            state.graphEditor = null;
             state.assetBrowser = null;
             state.terminal = null;
             return state;
