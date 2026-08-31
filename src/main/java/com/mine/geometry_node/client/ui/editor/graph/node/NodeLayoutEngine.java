@@ -6,10 +6,10 @@ import com.mine.geometry_node.client.ui.editor.graph.node.hint.HintRendererFacto
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.NumericInputSpec;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers.UIHintRenderer;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.graphics.text.FontMetricsInt;

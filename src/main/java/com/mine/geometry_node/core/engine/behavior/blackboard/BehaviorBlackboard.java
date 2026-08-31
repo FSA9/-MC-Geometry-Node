@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessExceptio
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateEntry;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateProvider;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;

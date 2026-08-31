@@ -16,8 +16,8 @@ import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidati
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationResult;
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorRootNode;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;

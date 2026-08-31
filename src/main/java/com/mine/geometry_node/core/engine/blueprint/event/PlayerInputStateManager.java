@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.blueprint.event;
 import com.mine.geometry_node.api.EventPayload;
 import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.node.nodes.events.player.OnPlayerKeyEvent;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketPlayerInputInterceptions;
 import net.minecraft.server.level.ServerPlayer;

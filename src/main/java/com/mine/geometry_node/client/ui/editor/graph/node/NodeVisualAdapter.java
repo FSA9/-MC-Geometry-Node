@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.editor.graph.CanvasVisualItem;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
 import com.mine.geometry_node.client.ui.editor.graph.connection.ConnectionNodeVisual;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.view.View;
 

@@ -1,8 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.compile.validation;
 
 import com.google.gson.JsonObject;
-import com.mine.geometry_node.core.engine.graph.GraphType;
-import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
 
@@ -31,16 +29,11 @@ public final class GraphDocumentValidator {
                     "Graph contains more than " + MAX_CONNECTIONS + " connections", ""));
         }
 
-        GraphType graphType = GraphTypeRegistry.INSTANCE.get(input.graphTypeId());
         for (Node node : input.nodes()) {
             String typeId = node.typeId();
             if (typeId == null || typeId.isBlank() || !NodeRegistry.INSTANCE.has(typeId)) {
                 diagnostics.add(diagnostic(assetId, "NODE_TYPE_MISSING",
                         "Node type is missing or unavailable", node.id()));
-            } else if (graphType != null
-                    && !NodeRegistry.INSTANCE.getCapabilities(typeId).supports(graphType.id())) {
-                diagnostics.add(diagnostic(assetId, "NODE_GRAPH_TYPE_UNSUPPORTED",
-                        "Node type is not available in " + graphType.id(), node.id()));
             }
         }
 

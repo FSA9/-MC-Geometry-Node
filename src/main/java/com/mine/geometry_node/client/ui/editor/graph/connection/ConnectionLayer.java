@@ -10,7 +10,7 @@ import com.mine.geometry_node.client.ui.editor.graph.Viewport;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import java.util.ArrayList;
 import java.util.HashMap;

@@ -3,11 +3,11 @@ package com.mine.geometry_node.core.node.reroute;
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.nodes.special.RerouteNode;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 
 import java.util.List;
 import java.util.Map;

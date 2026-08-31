@@ -9,11 +9,11 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorEntityActionNode;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 
@@ -70,9 +70,7 @@ public class GraphController {
 
     public boolean canAddNode(NodeData node) {
         return node != null && node.id != null && node.type != null
-                && NodeRegistry.INSTANCE.get(node.type) != null
-                && NodeRegistry.INSTANCE.getCapabilities(node.type)
-                .supports(mContext.getGraph().getGraphTypeId());
+                && NodeRegistry.INSTANCE.get(node.type) != null;
     }
 
     public void removeNode(String nodeId) {

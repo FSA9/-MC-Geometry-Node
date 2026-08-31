@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.ui.editor.graph.GraphController;
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.List;

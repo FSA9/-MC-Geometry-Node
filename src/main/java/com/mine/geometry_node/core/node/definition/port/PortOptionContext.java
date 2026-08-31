@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.port;
+package com.mine.geometry_node.core.node.definition.port;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

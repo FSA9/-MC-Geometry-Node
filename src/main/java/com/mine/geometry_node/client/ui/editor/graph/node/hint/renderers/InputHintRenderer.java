@@ -9,8 +9,8 @@ import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 
 import icyllis.modernui.core.Context;

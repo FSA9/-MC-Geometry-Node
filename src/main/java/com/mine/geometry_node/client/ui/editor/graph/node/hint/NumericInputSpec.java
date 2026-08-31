@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 
 import java.util.Locale;
 

@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.event.precheck;
 
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.event.EventPrecheckSpec;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 
 import java.util.ArrayList;
 import java.util.List;

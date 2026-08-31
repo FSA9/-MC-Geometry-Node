@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.engine.blueprint.event.GraphEventFields;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.node.nodes.events.block.*;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.BlockEvent;
 import net.minecraft.core.registries.BuiltInRegistries;

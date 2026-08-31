@@ -2,11 +2,11 @@ package com.mine.geometry_node.core.node.nodes.data.value;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.nodes.NodeType;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.StandardPorts;
-import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeType;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 public class IntValue extends BaseNode {

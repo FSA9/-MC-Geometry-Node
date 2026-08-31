@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node;
 
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
@@ -11,7 +11,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;

@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ai.graph;
 
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
-import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 
 /** Central fail-closed policy for port values writable by GraphPatch. */
 public final class PortEditCapabilityResolver {

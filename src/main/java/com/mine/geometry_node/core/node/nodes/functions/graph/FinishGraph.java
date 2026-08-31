@@ -3,14 +3,10 @@ package com.mine.geometry_node.core.node.nodes.functions.graph;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.*;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.StandardPorts;
-import com.mine.geometry_node.core.node.port.UIHint;
-import net.minecraft.network.chat.Component;
-
-import java.util.Map;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
 public class FinishGraph extends BaseNode {
 

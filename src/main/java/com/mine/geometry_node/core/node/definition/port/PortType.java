@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.port;
+package com.mine.geometry_node.core.node.definition.port;
 
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import com.mine.geometry_node.core.node.value.DialogueChoiceValue;

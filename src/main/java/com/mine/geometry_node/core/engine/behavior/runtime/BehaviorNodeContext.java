@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
 import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;

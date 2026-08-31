@@ -19,7 +19,7 @@ import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessExceptio
 import com.mine.geometry_node.core.node.NodeCapabilities;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import com.mine.geometry_node.core.node.port.TypeConverter;
+import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;

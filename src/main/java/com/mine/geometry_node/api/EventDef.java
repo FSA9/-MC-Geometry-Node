@@ -1,6 +1,6 @@
 package com.mine.geometry_node.api;
 
-import com.mine.geometry_node.core.node.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;

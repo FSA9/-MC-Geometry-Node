@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeContext;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import org.jetbrains.annotations.Nullable;
 
 /** Executors that mutate scoped blackboard state. */

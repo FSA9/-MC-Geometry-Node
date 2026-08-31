@@ -1,16 +1,16 @@
 package com.mine.geometry_node.core.node.nodes.behavior.blackboard;
 
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.nodes.NodeType;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorBlackboardExecutors;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 /** Creates or overwrites one dynamic value in an explicit scope. */

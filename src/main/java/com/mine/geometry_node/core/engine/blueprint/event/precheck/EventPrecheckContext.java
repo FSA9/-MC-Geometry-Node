@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.event.precheck;
 
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;

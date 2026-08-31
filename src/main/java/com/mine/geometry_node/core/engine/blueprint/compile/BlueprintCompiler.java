@@ -19,7 +19,7 @@ import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.nodes.events.block.OnMultiblockBuilt;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
 import java.io.Reader;
 import java.util.ArrayList;

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.schematic;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.SchematicPlacementRecord;
 import net.minecraft.core.BlockPos;

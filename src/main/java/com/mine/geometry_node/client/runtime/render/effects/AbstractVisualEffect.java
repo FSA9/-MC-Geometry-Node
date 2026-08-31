@@ -7,7 +7,7 @@ import com.mine.geometry_node.core.engine.graph.expression.ExpressionSpec;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValues;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
-import com.mine.geometry_node.core.node.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;

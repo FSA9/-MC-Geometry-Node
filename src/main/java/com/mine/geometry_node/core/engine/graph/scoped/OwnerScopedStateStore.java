@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.graph.scoped;
 
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;

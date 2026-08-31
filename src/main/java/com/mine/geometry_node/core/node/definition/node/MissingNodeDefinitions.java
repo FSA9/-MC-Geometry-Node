@@ -1,13 +1,11 @@
-package com.mine.geometry_node.core.node;
+package com.mine.geometry_node.core.node.definition.node;
 
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.nodes.NodeType;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
-import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -20,7 +18,7 @@ import java.util.Map;
  * Builds a read-only visual definition for node types that are present in a
  * graph file but not registered by the current mod set.
  */
-final class MissingNodeDefinitions {
+public final class MissingNodeDefinitions {
     private static final String COMMENT = """
             Missing node type.
             The original node data and links are kept in the graph file.
@@ -29,7 +27,7 @@ final class MissingNodeDefinitions {
     private MissingNodeDefinitions() {
     }
 
-    static NodeDef resolve(NodeData data) {
+    public static NodeDef resolve(NodeData data) {
         String typeId = data != null && data.type != null && !data.type.isBlank()
                 ? data.type
                 : "unknown";

@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationR
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorInstanceState;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeProcess;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;

@@ -1,9 +1,8 @@
-package com.mine.geometry_node.core.node.nodes;
+package com.mine.geometry_node.core.node.definition.node;
 
-import com.mine.geometry_node.core.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.MetaKey;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
-import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
 import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
 import java.util.HashMap;

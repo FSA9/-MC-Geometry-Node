@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationC
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.node.nodes.actions.visual.DrawLaserBeam;
-import com.mine.geometry_node.core.node.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.nbt.CompoundTag;

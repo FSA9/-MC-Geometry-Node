@@ -11,7 +11,7 @@ import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputKeys;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityInventoryGainTracker;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.node.nodes.events.player.OnPlayerKeyEvent;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;

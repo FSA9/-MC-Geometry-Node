@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.node.nodes.events.world.*;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;

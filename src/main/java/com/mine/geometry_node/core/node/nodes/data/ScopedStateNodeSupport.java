@@ -6,11 +6,11 @@ import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
-import com.mine.geometry_node.core.node.port.StandardPorts;
-import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 

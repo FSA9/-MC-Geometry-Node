@@ -7,16 +7,16 @@ import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheck
 import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckRegistry;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.QuestEventTypes;
-import com.mine.geometry_node.core.node.NodeComment;
+import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.nodes.NodeType;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.nodes.events.BaseEventNode;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
-import com.mine.geometry_node.core.node.port.StandardPorts;
-import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 
 import java.util.Map;

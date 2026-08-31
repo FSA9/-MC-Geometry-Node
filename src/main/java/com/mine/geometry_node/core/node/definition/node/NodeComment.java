@@ -1,6 +1,6 @@
-package com.mine.geometry_node.core.node;
+package com.mine.geometry_node.core.node.definition.node;
 
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;

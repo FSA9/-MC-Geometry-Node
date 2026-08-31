@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.port;
+package com.mine.geometry_node.core.node.definition.port;
 
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;

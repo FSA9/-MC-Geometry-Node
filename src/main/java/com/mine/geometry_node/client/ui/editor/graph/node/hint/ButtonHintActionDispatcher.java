@@ -6,7 +6,7 @@ import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEdit
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.dialogue.OpenShop;
 import com.mine.geometry_node.core.node.nodes.dialogue.ShowDialoguePage;
-import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
 import icyllis.modernui.view.View;
 import org.jetbrains.annotations.Nullable;
 

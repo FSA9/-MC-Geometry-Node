@@ -21,7 +21,7 @@ import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import com.mine.geometry_node.client.ui.editor.graph.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeVisualAdapter;

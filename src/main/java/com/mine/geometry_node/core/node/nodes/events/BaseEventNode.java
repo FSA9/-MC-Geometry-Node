@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.node.nodes.events;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import org.jetbrains.annotations.Nullable;
 
 public abstract class BaseEventNode extends BaseNode {

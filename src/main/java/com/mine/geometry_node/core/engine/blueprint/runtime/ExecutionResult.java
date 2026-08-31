@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
-import com.mine.geometry_node.core.node.port.PortType;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
 import java.util.HashMap;
 import java.util.List;

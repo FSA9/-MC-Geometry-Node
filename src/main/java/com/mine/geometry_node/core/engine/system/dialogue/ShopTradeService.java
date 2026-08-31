@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayload;
 import com.mine.geometry_node.core.node.nodes.events.dialogue.OnShopTradeSuccess;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;

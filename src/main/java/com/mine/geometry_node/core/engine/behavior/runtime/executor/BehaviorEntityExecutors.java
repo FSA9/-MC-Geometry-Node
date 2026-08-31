@@ -10,7 +10,7 @@ import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorBudget
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.InstantBehaviorActionExecutor;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorEntityActionNode;
 import com.mine.geometry_node.mixin.MobNavigationInvoker;
 import com.mine.geometry_node.mixin.PathNavigationAccessor;

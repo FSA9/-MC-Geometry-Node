@@ -9,7 +9,7 @@ import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.functions.color.ColorRamp;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.color.ColorGradientValue;
 import com.mine.geometry_node.core.node.value.color.ColorGradientValue.ColorMode;
 import com.mine.geometry_node.core.node.value.color.ColorGradientValue.ColorStop;

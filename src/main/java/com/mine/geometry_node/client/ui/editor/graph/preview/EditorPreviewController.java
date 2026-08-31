@@ -19,7 +19,7 @@ import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.dialogue.OpenShop;
 import com.mine.geometry_node.core.node.nodes.dialogue.ShowDialoguePage;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import net.minecraft.network.chat.Component;
 

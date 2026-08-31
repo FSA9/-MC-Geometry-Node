@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.UICommand.commands;
 
 import com.mine.geometry_node.client.ui.UICommand.ICommand;
 import com.mine.geometry_node.client.ui.editor.graph.GraphController;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 
 import java.util.ArrayList;
 import java.util.List;

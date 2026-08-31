@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.widget.FrameLayout;

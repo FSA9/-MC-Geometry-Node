@@ -4,8 +4,8 @@ import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
 
 public final class NodeUiMetrics {
     private static final int MIN_NODE_WIDTH_DP = 4 * UIConstants.GRID_SIZE;

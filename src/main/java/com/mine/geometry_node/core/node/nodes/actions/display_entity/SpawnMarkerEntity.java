@@ -3,11 +3,11 @@ package com.mine.geometry_node.core.node.nodes.actions.display_entity;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.nodes.NodeType;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.StandardPorts;
-import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeType;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.utils.nbt.EntityNbtCompat;
 import com.mine.geometry_node.core.utils.nbt.NbtDictConverter; // 引入我们的工具类
 import net.minecraft.nbt.CompoundTag;

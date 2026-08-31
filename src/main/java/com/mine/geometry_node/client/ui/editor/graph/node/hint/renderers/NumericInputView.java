@@ -7,8 +7,8 @@ import com.mine.geometry_node.client.ui.editor.graph.node.hint.NumericInputSpec;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;

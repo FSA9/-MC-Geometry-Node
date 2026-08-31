@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.group;
 
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;

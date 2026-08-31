@@ -1,12 +1,12 @@
 package com.mine.geometry_node.core.node.nodes.behavior.blackboard;
 
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
-import com.mine.geometry_node.core.node.NodeComment;
+import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 
 import java.util.Map;
 

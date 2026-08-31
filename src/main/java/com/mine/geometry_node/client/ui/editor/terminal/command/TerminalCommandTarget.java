@@ -10,9 +10,9 @@ import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveNodes;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
 
 import java.util.ArrayList;
 import java.util.Collection;

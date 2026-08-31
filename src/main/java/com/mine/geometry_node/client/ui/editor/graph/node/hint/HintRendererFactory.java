@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers.*;
-import com.mine.geometry_node.core.node.port.UIHint;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 import java.util.EnumMap;
 import java.util.Map;
 

@@ -19,7 +19,7 @@ import com.mine.geometry_node.core.engine.graph.resource.GraphResourceSelector;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.node.nodes.events.area.OnAreaEvent;
 import com.mine.geometry_node.core.node.RegistryDataManager;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;

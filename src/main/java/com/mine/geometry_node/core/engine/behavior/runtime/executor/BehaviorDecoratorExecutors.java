@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeContext;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.node.nodes.behavior.decorator.BehaviorDecoratorNode;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import org.jetbrains.annotations.Nullable;
 
 /** Executors for behavior decorators. */

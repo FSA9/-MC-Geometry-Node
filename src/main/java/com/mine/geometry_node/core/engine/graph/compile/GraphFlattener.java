@@ -10,9 +10,9 @@ import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph.InputKey;
 import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph.TargetConnection;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.*;

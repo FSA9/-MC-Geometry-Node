@@ -3,8 +3,8 @@ package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdChangeInputValue;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 
 import java.util.Objects;
 

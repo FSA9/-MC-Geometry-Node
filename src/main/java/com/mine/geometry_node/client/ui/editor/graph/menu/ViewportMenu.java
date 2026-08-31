@@ -14,7 +14,7 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.node.NodeCategory;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.Editable;
@@ -205,13 +205,11 @@ public class ViewportMenu extends FrameLayout {
         }
 
         for (NodeCategory sub : mCurrentFolder.getSubCategories()) {
-            if (!hasVisibleNodes(sub)) continue;
             String label = Component.translatable(sub.translationKey).getString() + "    ›";
             addClickItem(label, COLOR_CATEGORY_TEXT, v -> { mSearchBox.setText(""); navigateTo(sub); });
         }
 
         for (BaseNode node : mCurrentFolder.getNodes()) {
-            if (!isNodeVisible(node)) continue;
             String label = node.getDefaultDefinition().displayName().getString();
             addClickItem(label, COLOR_NODE_TEXT, v -> {
                 performAction(ViewportActionId.ADD_NODE, ViewportActionRequest.builder()
@@ -231,10 +229,7 @@ public class ViewportMenu extends FrameLayout {
         mListContainer.removeAllViews();
         List<NodeDef> visibleDefinitions = new ArrayList<>();
         for (NodeDef definition : NodeRegistry.INSTANCE.getAllDefinitions()) {
-            if (definition != null && NodeRegistry.INSTANCE.getCapabilities(definition.typeId())
-                    .supports(currentGraphTypeId())) {
-                visibleDefinitions.add(definition);
-            }
+            if (definition != null) visibleDefinitions.add(definition);
         }
         NodeSearchService.Page results = NodeSearchService.search(
                 visibleDefinitions, query, 0, visibleDefinitions.size());
@@ -252,25 +247,6 @@ public class ViewportMenu extends FrameLayout {
 
         updateScrollHeight();
         relayoutIfAttached();
-    }
-
-    private String currentGraphTypeId() {
-        return mActionSink != null ? mActionSink.graphTypeId() : "blueprint";
-    }
-
-    private boolean isNodeVisible(BaseNode node) {
-        return node != null && NodeRegistry.INSTANCE.getCapabilities(node.getTypeId())
-                .supports(currentGraphTypeId());
-    }
-
-    private boolean hasVisibleNodes(NodeCategory category) {
-        for (BaseNode node : category.getNodes()) {
-            if (isNodeVisible(node)) return true;
-        }
-        for (NodeCategory child : category.getSubCategories()) {
-            if (hasVisibleNodes(child)) return true;
-        }
-        return false;
     }
 
     private void addClickItem(String text, int color, View.OnClickListener listener) {

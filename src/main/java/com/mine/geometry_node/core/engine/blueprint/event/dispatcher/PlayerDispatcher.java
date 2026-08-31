@@ -7,7 +7,7 @@ import com.mine.geometry_node.core.node.nodes.events.display_entity.OnInteractio
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.inventory.OnContainerOpen;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.InteractionEvent;
 import net.minecraft.core.registries.BuiltInRegistries;

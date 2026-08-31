@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
 import net.minecraft.server.level.ServerLevel;

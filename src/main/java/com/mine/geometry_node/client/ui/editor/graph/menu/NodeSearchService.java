@@ -4,7 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.client.ui.editor.graph.node.comment.NodeCommentTextBuilder;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;

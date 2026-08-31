@@ -12,8 +12,8 @@ import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.dialogue.OpenShop;
-import com.mine.geometry_node.core.node.port.PortRow;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;

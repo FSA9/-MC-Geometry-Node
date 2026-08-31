@@ -1,9 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.comment;
 
-import com.mine.geometry_node.core.node.NodeComment;
-import com.mine.geometry_node.core.node.nodes.NodeDef;
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortRow;
+import com.mine.geometry_node.core.node.definition.node.NodeComment;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
 import net.minecraft.network.chat.Component;
 
 import java.util.LinkedHashMap;

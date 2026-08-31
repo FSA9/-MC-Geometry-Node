@@ -2,10 +2,12 @@ package com.mine.geometry_node.core.node.nodes.maths.vector;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionBinding;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.nodes.*;
-import com.mine.geometry_node.core.node.port.*;
+import com.mine.geometry_node.core.node.definition.port.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 

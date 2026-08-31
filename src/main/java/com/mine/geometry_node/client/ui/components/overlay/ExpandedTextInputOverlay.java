@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.components.common.ColorPickerDialog;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;

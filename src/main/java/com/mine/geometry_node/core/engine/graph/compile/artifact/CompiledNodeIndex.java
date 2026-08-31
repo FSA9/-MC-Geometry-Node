@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.compile.artifact;
 
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
-import com.mine.geometry_node.core.node.port.TypeConverter;
+import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;

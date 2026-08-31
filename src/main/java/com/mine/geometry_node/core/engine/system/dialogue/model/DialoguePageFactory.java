@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.dialogue.model;
 
 import com.mine.geometry_node.core.engine.system.dialogue.richtext.DialogueRoundParser;
-import com.mine.geometry_node.core.node.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import net.minecraft.network.chat.Component;
 

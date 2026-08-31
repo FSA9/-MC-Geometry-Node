@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.expression;
 
-import com.mine.geometry_node.core.node.port.PortDef;
-import com.mine.geometry_node.core.node.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
