@@ -1,20 +1,17 @@
 package com.mine.geometry_node.client.ui.editor.asset.model;
 
-import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
-import com.mine.geometry_node.core.engine.system.visual.image.ImageAssetFormats;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 public final class AssetTypeRegistry {
     public static final String DIRECTORY_ID = "directory";
-    public static final String GRAPH_ID = AssetTransferPolicy.GRAPH_TYPE_ID;
-    public static final String SCHEMATIC_ID = AssetTransferPolicy.SCHEMATIC_TYPE_ID;
-    public static final String IMAGE_ID = AssetTransferPolicy.IMAGE_TYPE_ID;
+    public static final String GRAPH_ID = AssetTypeCatalog.GRAPH_TYPE_ID;
+    public static final String SCHEMATIC_ID = AssetTypeCatalog.SCHEMATIC_TYPE_ID;
+    public static final String IMAGE_ID = AssetTypeCatalog.IMAGE_TYPE_ID;
     public static final String FILE_ID = "file";
 
     public static final AssetTypeRegistry INSTANCE = new AssetTypeRegistry();
@@ -27,37 +24,32 @@ public final class AssetTypeRegistry {
                 EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.COPY, AssetTypeAction.MOVE,
                         AssetTypeAction.DELETE, AssetTypeAction.RENAME,
-                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD),
-                (name, directory) -> directory));
+                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD)));
         register(new AssetType(
                 GRAPH_ID, 0xFF88CCFF, false, true, AssetPreviewKind.NONE,
                 EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.OPEN, AssetTypeAction.PICK, AssetTypeAction.FAVORITE,
                         AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD, AssetTypeAction.COPY,
-                        AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME),
-                extensionMatcher(".json")));
+                        AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME)));
         register(new AssetType(
                 SCHEMATIC_ID, 0xFF86B8FF, false, true, AssetPreviewKind.SCHEMATIC,
                 EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.FAVORITE,
                         AssetTypeAction.COPY,
                         AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME,
-                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD),
-                extensionMatcher(".schem", ".schematic")));
+                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD)));
         register(new AssetType(
                 IMAGE_ID, 0xFF77C99D, false, true, AssetPreviewKind.IMAGE,
                 EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.FAVORITE,
                         AssetTypeAction.COPY,
                         AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME,
-                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD),
-                (name, directory) -> !directory && ImageAssetFormats.isSupportedPath(name)));
+                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD)));
         register(new AssetType(
                 FILE_ID, 0xFF88CCFF, false, false, AssetPreviewKind.NONE,
                 EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.COPY, AssetTypeAction.MOVE,
-                        AssetTypeAction.DELETE, AssetTypeAction.RENAME),
-                (name, directory) -> !directory));
+                        AssetTypeAction.DELETE, AssetTypeAction.RENAME)));
     }
 
     public synchronized void register(AssetType type) {
@@ -76,13 +68,16 @@ public final class AssetTypeRegistry {
         return List.copyOf(mTypes.values());
     }
 
-    public synchronized AssetType resolve(AssetSourceKind source, String name, boolean directory) {
-        AssetType fallback = mTypes.get(FILE_ID);
-        for (AssetType type : mTypes.values()) {
-            if (FILE_ID.equals(type.id())) continue;
-            if (type.matches(source, name, directory)) return type;
-        }
-        return fallback;
+    public synchronized AssetType resolve(String typeId, AssetSourceKind source, boolean directory) {
+        AssetType type = directory ? mTypes.get(DIRECTORY_ID) : mTypes.get(AssetType.normalizeId(typeId));
+        if (type == null || !type.supportsSource(source)) return mTypes.get(FILE_ID);
+        return type;
+    }
+
+    public AssetType resolveLocal(java.io.File file) {
+        if (file == null) return get(FILE_ID);
+        String typeId = file.isDirectory() ? DIRECTORY_ID : AssetTypeCatalog.inspect(file.toPath()).typeId();
+        return resolve(typeId, AssetSourceKind.LOCAL, file.isDirectory());
     }
 
     public boolean isType(AssetEntry entry, String typeId) {
@@ -92,25 +87,7 @@ public final class AssetTypeRegistry {
 
     public boolean isType(java.io.File file, String typeId) {
         if (file == null) return false;
-        AssetType type = resolve(AssetSourceKind.LOCAL, file.getName(), file.isDirectory());
+        AssetType type = resolveLocal(file);
         return type != null && type.id().equals(AssetType.normalizeId(typeId));
-    }
-
-    private static AssetType.Matcher extensionMatcher(String... extensions) {
-        List<String> normalized = new ArrayList<>();
-        for (String extension : extensions) {
-            if (extension != null && !extension.isBlank()) {
-                String value = extension.toLowerCase(Locale.ROOT);
-                normalized.add(value.startsWith(".") ? value : "." + value);
-            }
-        }
-        return (name, directory) -> {
-            if (directory || name == null) return false;
-            String lowerName = name.toLowerCase(Locale.ROOT);
-            for (String extension : normalized) {
-                if (lowerName.endsWith(extension)) return true;
-            }
-            return false;
-        };
     }
 }

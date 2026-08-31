@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnail;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicUploadPreview;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicUploadPreviewGenerator;
-import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferClientPreferences;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.IncomingAssetTransferFile;
@@ -304,8 +304,8 @@ public final class ClientAssetTransferService implements AutoCloseable {
         AssetTransferClientPreferences preferences = preferences();
         io.submit(() -> new PreparedUpload(
                         OutgoingAssetTransferFile.open(file.request.localPath(), preferences.maxUploadFileBytes()),
-                        AssetTransferPolicy.SCHEMATIC_TYPE_ID.equals(
-                                AssetTransferPolicy.resolveTypeId(file.request.remotePath()))
+                        AssetTypeCatalog.SCHEMATIC_TYPE_ID.equals(
+                                AssetTypeCatalog.inspect(file.request.localPath(), file.request.remotePath()).typeId())
                                 ? SchematicUploadPreviewGenerator.read(file.request.localPath()) : null))
                 .whenComplete((prepared, throwable) -> post(() -> {
                     if (throwable != null) {

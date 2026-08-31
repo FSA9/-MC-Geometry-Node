@@ -12,18 +12,20 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
 import com.mine.geometry_node.client.ui.editor.asset.repository.LocalAssetRepository;
-import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.service.GraphAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
+import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphFileOperationRequest;
+import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetFileOperationRequest;
 import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.View;
@@ -97,7 +99,7 @@ final class AssetBrowserActionController {
         }
         return mEnableRemoteTransferActions
                 && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)
-                && !RemoteGraphClientState.clipboardPaths().isEmpty();
+                && !RemoteAssetClient.clipboardPaths().isEmpty();
     }
 
     boolean canCutSelection() {
@@ -245,7 +247,7 @@ final class AssetBrowserActionController {
         }
         if (paths.isEmpty()) return false;
 
-        sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation.MOVE, paths, targetDirectoryEntry.path());
+        sendRemoteFileOperation(PacketRemoteAssetFileOperationRequest.Operation.MOVE, paths, targetDirectoryEntry.path());
         return true;
     }
 
@@ -257,8 +259,10 @@ final class AssetBrowserActionController {
         if (currentDirectory == null) return;
 
         String defaultName = isFolder ? "新建文件夹" : "新建文件.json";
+        String initialContent = isFolder ? null : GraphJsonIO.toJson(new NodeGraph());
         mIoTasks.run(isFolder ? "新建文件夹" : "新建文件",
-                context -> mLocalAssetService.createAssetItem(currentDirectory, defaultName, isFolder, context),
+                context -> mLocalAssetService.createAssetItem(
+                        currentDirectory, defaultName, isFolder, initialContent, context),
                 (result, progress) -> {
                     File newFile = result.file();
                     AssetEntry newEntry = AssetEntry.local(newFile,
@@ -441,8 +445,8 @@ final class AssetBrowserActionController {
         }
         if (mEnableRemoteTransferActions && mPanel.getSourceKind() == AssetSourceKind.REMOTE
                 && mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)
-                && !RemoteGraphClientState.clipboardPaths().isEmpty()) {
-            menu.addMenuItem(RemoteGraphClientState.isCutOperation()
+                && !RemoteAssetClient.clipboardPaths().isEmpty()) {
+            menu.addMenuItem(RemoteAssetClient.isCutOperation()
                             ? translated("geometry_node.asset_library.action.move_here")
                             : actionLabel(AssetLibraryActionId.PASTE),
                     shortcutText(AssetLibraryActionId.PASTE), this::pasteClipboard);
@@ -592,7 +596,7 @@ final class AssetBrowserActionController {
                 paths.add(entry.path());
             }
         }
-        RemoteGraphClientState.setClipboard(paths, cutOperation);
+        RemoteAssetClient.setClipboard(paths, cutOperation);
     }
 
     private String shortcutText(AssetLibraryActionId actionId) {
@@ -623,23 +627,23 @@ final class AssetBrowserActionController {
                 "删除云端文件",
                 message,
                 actionLabel(AssetLibraryActionId.DELETE),
-                () -> sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation.DELETE, paths, "")
+                () -> sendRemoteFileOperation(PacketRemoteAssetFileOperationRequest.Operation.DELETE, paths, "")
         );
         dialog.show(mPanel);
     }
 
     private void pasteRemoteEntries() {
-        List<String> clipboardPaths = RemoteGraphClientState.clipboardPaths();
+        List<String> clipboardPaths = RemoteAssetClient.clipboardPaths();
         if (clipboardPaths.isEmpty()) return;
-        PacketRemoteGraphFileOperationRequest.Operation operation = RemoteGraphClientState.isCutOperation()
-                ? PacketRemoteGraphFileOperationRequest.Operation.MOVE
-                : PacketRemoteGraphFileOperationRequest.Operation.COPY;
+        PacketRemoteAssetFileOperationRequest.Operation operation = RemoteAssetClient.isCutOperation()
+                ? PacketRemoteAssetFileOperationRequest.Operation.MOVE
+                : PacketRemoteAssetFileOperationRequest.Operation.COPY;
         sendRemoteFileOperation(operation, clipboardPaths, mPanel.getRemoteDirectory());
     }
 
-    private void sendRemoteFileOperation(PacketRemoteGraphFileOperationRequest.Operation operation, List<String> paths, String targetDirectory) {
+    private void sendRemoteFileOperation(PacketRemoteAssetFileOperationRequest.Operation operation, List<String> paths, String targetDirectory) {
         if (paths.isEmpty()) return;
-        int requestId = RemoteGraphClientState.nextRequestId();
+        int requestId = RemoteAssetClient.nextRequestId();
         mRemoteRequestIds.add(requestId);
         String title = switch (operation) {
             case DELETE -> "删除云端文件";
@@ -648,7 +652,7 @@ final class AssetBrowserActionController {
         };
         TransferProgressDialog progress = new TransferProgressDialog(mPanel.getContext(), title);
         progress.show(mPanel);
-        RemoteGraphClientState.onFileOperation(requestId, response -> {
+        RemoteAssetClient.onFileOperation(requestId, response -> {
             mRemoteRequestIds.remove(requestId);
             mPanel.post(() -> {
                 if (!response.success()) {
@@ -657,19 +661,19 @@ final class AssetBrowserActionController {
                     return;
                 }
                 progress.update(response.message(), 1, 1);
-                if (operation == PacketRemoteGraphFileOperationRequest.Operation.MOVE) {
-                    RemoteGraphClientState.clearClipboard();
+                if (operation == PacketRemoteAssetFileOperationRequest.Operation.MOVE) {
+                    RemoteAssetClient.clearClipboard();
                 }
                 mPanel.clearSelection();
                 mPanel.refreshFileList();
             });
         });
-        NetworkHandler.sendToServer(new PacketRemoteGraphFileOperationRequest(requestId, operation, targetDirectory, paths));
+        NetworkHandler.sendToServer(new PacketRemoteAssetFileOperationRequest(requestId, operation, targetDirectory, paths));
     }
 
     void cancelRemoteRequests() {
         for (int requestId : mRemoteRequestIds) {
-            RemoteGraphClientState.cancel(requestId);
+            RemoteAssetClient.cancel(requestId);
         }
         mRemoteRequestIds.clear();
     }

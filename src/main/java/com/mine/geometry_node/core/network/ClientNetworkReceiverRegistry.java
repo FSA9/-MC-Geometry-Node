@@ -9,7 +9,7 @@ import com.mine.geometry_node.client.runtime.render.ClientVisualManager;
 import com.mine.geometry_node.client.runtime.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.runtime.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.runtime.render.image.ClientImageAssetManager;
-import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
@@ -31,9 +31,9 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerUpsert;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketPlayerInputInterceptions;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphCapabilitiesResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphFileOperationResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphListResponse;
+import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetCapabilitiesResponse;
+import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetFileOperationResponse;
+import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetListResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncDownload;
@@ -91,12 +91,12 @@ public final class ClientNetworkReceiverRegistry {
                     context.getPlayer().sendSystemMessage(Component.literal(
                             "§a[☁ 云端下载成功]§r 图纸 " + payload.graphId() + " 已保存到你的本地草稿箱！"));
                 }));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteGraphCapabilitiesResponse.TYPE,
-                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteGraphListResponse.TYPE,
-                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteGraphFileOperationResponse.TYPE,
-                (payload, context) -> context.queue(() -> RemoteGraphClientState.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteAssetCapabilitiesResponse.TYPE,
+                (payload, context) -> context.queue(() -> RemoteAssetClient.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteAssetListResponse.TYPE,
+                (payload, context) -> context.queue(() -> RemoteAssetClient.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteAssetFileOperationResponse.TYPE,
+                (payload, context) -> context.queue(() -> RemoteAssetClient.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketOpenDialogue.TYPE,
                 (payload, context) -> context.queue(() -> ClientDialogueState.handleOpen(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketPlayerInputInterceptions.TYPE,

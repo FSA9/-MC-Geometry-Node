@@ -3,10 +3,10 @@ package com.mine.geometry_node.client.ui.editor.asset.repository;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
-import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphListRequest;
+import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetListRequest;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,10 +25,10 @@ public final class RemoteAssetRepository implements AssetRepository {
     @Override
     public boolean supports(AssetRepositoryOperation operation) {
         return switch (operation) {
-            case BROWSE -> RemoteGraphClientState.canBrowse();
-            case UPLOAD -> RemoteGraphClientState.canUpload();
-            case DOWNLOAD -> RemoteGraphClientState.canDownload();
-            case MANAGE, CREATE -> RemoteGraphClientState.canManage();
+            case BROWSE -> RemoteAssetClient.canBrowse();
+            case UPLOAD -> RemoteAssetClient.canUpload();
+            case DOWNLOAD -> RemoteAssetClient.canDownload();
+            case MANAGE, CREATE -> RemoteAssetClient.canManage();
         };
     }
 
@@ -43,9 +43,9 @@ public final class RemoteAssetRepository implements AssetRepository {
             return AssetRequest.NONE;
         }
 
-        int requestId = RemoteGraphClientState.nextRequestId();
+        int requestId = RemoteAssetClient.nextRequestId();
         AtomicBoolean cancelled = new AtomicBoolean(false);
-        RemoteGraphClientState.onList(requestId, response -> {
+        RemoteAssetClient.onList(requestId, response -> {
             if (cancelled.get()) return;
             if (!response.success()) {
                 callback.accept(AssetListing.failure(location));
@@ -54,10 +54,10 @@ public final class RemoteAssetRepository implements AssetRepository {
             AssetLocation.Remote responseLocation = new AssetLocation.Remote(response.directory(), false);
             callback.accept(toListing(responseLocation, response.entries(), request.query()));
         });
-        NetworkHandler.sendToServer(new PacketRemoteGraphListRequest(
+        NetworkHandler.sendToServer(new PacketRemoteAssetListRequest(
                 requestId, location.directory(), location.createIfMissing()));
         return () -> {
-            if (cancelled.compareAndSet(false, true)) RemoteGraphClientState.cancel(requestId);
+            if (cancelled.compareAndSet(false, true)) RemoteAssetClient.cancel(requestId);
         };
     }
 
@@ -70,12 +70,12 @@ public final class RemoteAssetRepository implements AssetRepository {
         for (RemoteAssetEntry remote : source == null ? List.<RemoteAssetEntry>of() : source) {
             if (!nameQuery.isEmpty() && !remote.name().toLowerCase(Locale.ROOT).contains(nameQuery)) continue;
             AssetEntry entry = AssetEntry.remote(remote.path(), remote.name(), remote.directory(),
-                    remote.size(), remote.lastModified());
+                    remote.size(), remote.lastModified(), remote.assetTypeId());
             if (entry.type() == null || !entry.type().displayInBrowser()
                     || !entry.type().supportsSource(AssetSourceKind.REMOTE)) continue;
             entries.add(entry);
-            if (AssetTypeRegistry.GRAPH_ID.equals(entry.type().id()) && !remote.graphTypeId().isBlank()) {
-                graphTypesByKey.put(entry.key(), remote.graphTypeId());
+            if (AssetTypeRegistry.GRAPH_ID.equals(entry.type().id()) && !remote.variantId().isBlank()) {
+                graphTypesByKey.put(entry.key(), remote.variantId());
             }
         }
         return new AssetListing(true, location, entries, Map.of(), graphTypesByKey);

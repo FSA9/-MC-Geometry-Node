@@ -10,7 +10,7 @@ import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationP
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
-import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.editor.asset.properties.AssetFilePropertiesTarget;
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
@@ -36,7 +36,7 @@ import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.AssetTransferPlanKind;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphCapabilitiesRequest;
+import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetCapabilitiesRequest;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
@@ -299,7 +299,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     private void requestRemoteCapabilities() {
         int requestId = beginRemoteRequest();
-        RemoteGraphClientState.onCapabilities(requestId, response -> {
+        RemoteAssetClient.onCapabilities(requestId, response -> {
             finishRemoteRequest(requestId);
             post(() -> {
                 if (mNavigationPanel != null) {
@@ -308,7 +308,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 restorePendingRemoteLocation();
             });
         });
-        NetworkHandler.sendToServer(new PacketRemoteGraphCapabilitiesRequest(requestId));
+        NetworkHandler.sendToServer(new PacketRemoteAssetCapabilitiesRequest(requestId));
     }
 
     private void restoreInitialLocation() {
@@ -603,7 +603,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     }
 
     private int beginRemoteRequest() {
-        int requestId = RemoteGraphClientState.nextRequestId();
+        int requestId = RemoteAssetClient.nextRequestId();
         mRemoteRequestIds.add(requestId);
         return requestId;
     }
@@ -614,7 +614,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     private void cancelRemoteRequests() {
         for (int requestId : mRemoteRequestIds) {
-            RemoteGraphClientState.cancel(requestId);
+            RemoteAssetClient.cancel(requestId);
         }
         mRemoteRequestIds.clear();
         for (int requestId : mTransferPlanRequestIds) ClientAssetTransferPlanState.cancel(requestId);

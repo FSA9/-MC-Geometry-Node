@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.visual.image;
 
-import com.mine.geometry_node.core.utils.ServerAssetPaths;
+import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
 
 /** Distinguishes server assets selected through remote:/ from client-local paths. */
 public record ImagePathReference(Source source, String path) {

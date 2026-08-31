@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.model;
 
 import java.util.EnumSet;
-import java.util.Objects;
 import java.util.Set;
 
 public final class AssetType {
@@ -12,11 +11,10 @@ public final class AssetType {
     private final AssetPreviewKind mPreviewKind;
     private final Set<AssetSourceKind> mSources;
     private final Set<AssetTypeAction> mActions;
-    private final Matcher mMatcher;
 
     public AssetType(String id, int defaultColor, boolean directory, boolean displayInBrowser,
                      AssetPreviewKind previewKind, Set<AssetSourceKind> sources,
-                     Set<AssetTypeAction> actions, Matcher matcher) {
+                     Set<AssetTypeAction> actions) {
         mId = normalizeId(id);
         if (mId.isEmpty()) throw new IllegalArgumentException("asset type id must not be empty");
         mDefaultColor = defaultColor;
@@ -25,7 +23,6 @@ public final class AssetType {
         mPreviewKind = previewKind != null ? previewKind : AssetPreviewKind.NONE;
         mSources = immutableEnumSet(sources);
         mActions = immutableEnumSet(actions);
-        mMatcher = Objects.requireNonNull(matcher, "matcher");
     }
 
     public String id() {
@@ -56,10 +53,6 @@ public final class AssetType {
         return action != null && mActions.contains(action);
     }
 
-    boolean matches(AssetSourceKind source, String name, boolean directory) {
-        return supportsSource(source) && mMatcher.matches(name, directory);
-    }
-
     public static String normalizeId(String id) {
         return id == null ? "" : id.trim().toLowerCase(java.util.Locale.ROOT);
     }
@@ -67,10 +60,5 @@ public final class AssetType {
     private static <E extends Enum<E>> Set<E> immutableEnumSet(Set<E> source) {
         if (source == null || source.isEmpty()) return Set.of();
         return Set.copyOf(EnumSet.copyOf(source));
-    }
-
-    @FunctionalInterface
-    public interface Matcher {
-        boolean matches(String name, boolean directory);
     }
 }

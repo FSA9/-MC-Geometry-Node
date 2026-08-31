@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskContext;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphDocumentStore;
 import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
-import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 
 import java.io.File;
 import java.io.IOException;
@@ -315,7 +315,7 @@ public final class LocalAssetService {
                 }
                 return;
             }
-            if (!Files.isRegularFile(path) || !AssetTransferPolicy.isTransferablePath(path.toString())) return;
+            if (!Files.isRegularFile(path) || !AssetTypeCatalog.isTransferablePath(path.toString())) return;
             String relative = base.relativize(path).toString().replace('\\', '/');
             String targetPath = targetPrefix.isEmpty() ? relative : targetPrefix + "/" + relative;
             targetPath = AssetPathUtils.normalizeRemoteFilePath(targetPath);

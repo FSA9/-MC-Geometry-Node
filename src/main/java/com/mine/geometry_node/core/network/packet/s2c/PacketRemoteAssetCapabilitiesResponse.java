@@ -5,17 +5,17 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
-public record PacketRemoteGraphCapabilitiesResponse(
+public record PacketRemoteAssetCapabilitiesResponse(
         int requestId,
         boolean canBrowse,
         boolean canUpload,
         boolean canDownload,
         boolean canManage
 ) implements CustomPacketPayload {
-    public static final Type<PacketRemoteGraphCapabilitiesResponse> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "remote_graph_capabilities_response"));
+    public static final Type<PacketRemoteAssetCapabilitiesResponse> TYPE =
+            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "remote_asset_capabilities_response"));
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, PacketRemoteGraphCapabilitiesResponse> STREAM_CODEC = StreamCodec.of(
+    public static final StreamCodec<RegistryFriendlyByteBuf, PacketRemoteAssetCapabilitiesResponse> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> {
                 buf.writeInt(packet.requestId);
                 buf.writeBoolean(packet.canBrowse);
@@ -23,7 +23,7 @@ public record PacketRemoteGraphCapabilitiesResponse(
                 buf.writeBoolean(packet.canDownload);
                 buf.writeBoolean(packet.canManage);
             },
-            buf -> new PacketRemoteGraphCapabilitiesResponse(buf.readInt(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean())
+            buf -> new PacketRemoteAssetCapabilitiesResponse(buf.readInt(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean())
     );
 
     @Override

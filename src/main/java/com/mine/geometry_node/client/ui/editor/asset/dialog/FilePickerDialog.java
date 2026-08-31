@@ -8,13 +8,13 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
-import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphCapabilitiesRequest;
+import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetCapabilitiesRequest;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
@@ -194,9 +194,9 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
     }
 
     private void requestRemoteCapabilities() {
-        int requestId = RemoteGraphClientState.nextRequestId();
+        int requestId = RemoteAssetClient.nextRequestId();
         mCapabilityRequestId = requestId;
-        RemoteGraphClientState.onCapabilities(requestId, response -> post(() -> {
+        RemoteAssetClient.onCapabilities(requestId, response -> post(() -> {
             if (mCapabilityRequestId != requestId) return;
             mCapabilityRequestId = 0;
             mLeftPanel.buildSidebar();
@@ -206,13 +206,13 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
                 mBrowser.navigateToRemote(target);
             }
         }));
-        NetworkHandler.sendToServer(new PacketRemoteGraphCapabilitiesRequest(requestId));
+        NetworkHandler.sendToServer(new PacketRemoteAssetCapabilitiesRequest(requestId));
     }
 
     @Override
     protected void onAssetDialogDestroyed() {
         if (mCapabilityRequestId != 0) {
-            RemoteGraphClientState.cancel(mCapabilityRequestId);
+            RemoteAssetClient.cancel(mCapabilityRequestId);
             mCapabilityRequestId = 0;
         }
     }

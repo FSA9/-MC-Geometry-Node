@@ -1,29 +1,33 @@
-package com.mine.geometry_node.core.utils;
+package com.mine.geometry_node.core.engine.system.asset;
+
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.storage.LevelResource;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Canonical path policy and world-owned root for server assets. */
 public final class ServerAssetPaths {
+    public static final LevelResource ROOT = new LevelResource("geometry_nodes");
+
     private ServerAssetPaths() {
     }
 
+    public static Path root(MinecraftServer server) {
+        if (server == null) throw new IllegalArgumentException("server must not be null");
+        return server.getWorldPath(ROOT).toAbsolutePath().normalize();
+    }
+
     public static String normalizeRelativePath(String path, boolean allowEmpty) {
-        if (path == null) {
-            throw new IllegalArgumentException("path must not be null");
-        }
+        if (path == null) throw new IllegalArgumentException("path must not be null");
 
         String pathStr = path.replace('\\', '/').trim();
-        if (pathStr.indexOf('\0') >= 0) {
-            throw new IllegalArgumentException("path must not contain null characters");
-        }
+        if (pathStr.indexOf('\0') >= 0) throw new IllegalArgumentException("path must not contain null characters");
         if (pathStr.isEmpty()) {
-            if (allowEmpty) {
-                return "";
-            }
+            if (allowEmpty) return "";
             throw new IllegalArgumentException("path must not be empty");
         }
-
         if (pathStr.startsWith("/") || pathStr.matches("^[A-Za-z]:.*")) {
             throw new IllegalArgumentException("absolute paths are not allowed: " + path);
         }
@@ -45,13 +49,14 @@ public final class ServerAssetPaths {
         Path root = rootDir.toAbsolutePath().normalize();
         String normalized = normalizeRelativePath(relativePath, allowEmpty);
         Path resolved = normalized.isEmpty() ? root : root.resolve(normalized).normalize();
-        if (!resolved.startsWith(root)) {
-            throw new IllegalArgumentException("asset path escapes root: " + relativePath);
-        }
+        if (!resolved.startsWith(root)) throw new IllegalArgumentException("asset path escapes root: " + relativePath);
         return resolved;
     }
 
     public static String pathToId(Path rootDir, Path file) {
-        return rootDir.relativize(file).toString().replace('\\', '/');
+        Path root = rootDir.toAbsolutePath().normalize();
+        Path resolved = file.toAbsolutePath().normalize();
+        if (!resolved.startsWith(root)) throw new IllegalArgumentException("asset path escapes root: " + file);
+        return root.relativize(resolved).toString().replace('\\', '/');
     }
 }

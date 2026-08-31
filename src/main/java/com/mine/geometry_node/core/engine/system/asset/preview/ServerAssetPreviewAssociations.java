@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
-import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
 import net.minecraft.server.MinecraftServer;
@@ -35,7 +35,7 @@ public final class ServerAssetPreviewAssociations {
     }
 
     private static void captureFile(Path root, Path source, Path target, List<Entry> entries) throws IOException {
-        AssetPreviewKind kind = AssetPreviewKind.fromAssetType(AssetTransferPolicy.resolveTypeId(source.toString()));
+        AssetPreviewKind kind = AssetPreviewKind.fromAssetType(AssetTypeCatalog.inspect(source).typeId());
         if (kind == null) return;
         BasicFileAttributes attributes = Files.readAttributes(source, BasicFileAttributes.class);
         String relative = root.relativize(source.toAbsolutePath().normalize()).toString().replace('\\', '/');

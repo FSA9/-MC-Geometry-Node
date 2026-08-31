@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
-import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerImagePreviewGenerator;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
@@ -135,7 +135,7 @@ public final class ServerAssetPreviewService implements AutoCloseable {
 
     private static Path validateSource(MinecraftServer server, AssetPreviewRevision revision) throws Exception {
         Path source = RemoteAssetFileService.resolveTransferSource(server, revision.identity().remotePath());
-        AssetPreviewKind actualKind = AssetPreviewKind.fromAssetType(AssetTransferPolicy.resolveTypeId(source.toString()));
+        AssetPreviewKind actualKind = AssetPreviewKind.fromAssetType(AssetTypeCatalog.inspect(source).typeId());
         if (actualKind != revision.identity().kind()) {
             throw new IllegalArgumentException("Preview source type does not match request");
         }

@@ -1,8 +1,7 @@
 package com.mine.geometry_node.core.engine.system.visual.image;
 
-import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
-import com.mine.geometry_node.core.utils.ServerAssetPaths;
+import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.IOException;
@@ -30,7 +29,7 @@ public final class ServerImageAssetService {
             throw new IOException("Missing server");
         }
 
-        Path root = server.getWorldPath(DynamicGraphManager.GRAPH_DIR).toAbsolutePath().normalize();
+        Path root = ServerAssetPaths.root(server);
         Path path = ServerAssetPaths.resolveUnderRoot(root, relativePath, false);
         if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(path)) {
             throw new IOException("Server image does not exist: " + relativePath);

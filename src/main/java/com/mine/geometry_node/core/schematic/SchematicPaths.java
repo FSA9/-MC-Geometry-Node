@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.schematic;
 
-import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.utils.ServerAssetPaths;
+import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.IOException;
@@ -19,7 +18,7 @@ public final class SchematicPaths {
         }
 
         String relative = normalizeSchematicPath(rawPath);
-        Path root = server.getWorldPath(DynamicGraphManager.GRAPH_DIR).toAbsolutePath().normalize();
+        Path root = ServerAssetPaths.root(server);
         Path path = ServerAssetPaths.resolveUnderRoot(root, relative, false);
         if (!Files.isRegularFile(path)) {
             throw new IOException("Schematic file does not exist in geometry_nodes: " + relative);

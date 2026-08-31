@@ -9,22 +9,22 @@ import net.minecraft.resources.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public record PacketRemoteGraphListResponse(
+public record PacketRemoteAssetListResponse(
         int requestId,
         boolean success,
         String directory,
         String message,
         List<RemoteAssetEntry> entries
 ) implements CustomPacketPayload {
-    public static final Type<PacketRemoteGraphListResponse> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "remote_graph_list_response"));
+    public static final Type<PacketRemoteAssetListResponse> TYPE =
+            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "remote_asset_list_response"));
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, PacketRemoteGraphListResponse> STREAM_CODEC = StreamCodec.of(
+    public static final StreamCodec<RegistryFriendlyByteBuf, PacketRemoteAssetListResponse> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> packet.write(buf),
-            PacketRemoteGraphListResponse::new
+            PacketRemoteAssetListResponse::new
     );
 
-    public PacketRemoteGraphListResponse(RegistryFriendlyByteBuf buf) {
+    public PacketRemoteAssetListResponse(RegistryFriendlyByteBuf buf) {
         this(buf.readInt(), buf.readBoolean(), buf.readUtf(32767), buf.readUtf(32767), readEntries(buf));
     }
 
@@ -40,7 +40,8 @@ public record PacketRemoteGraphListResponse(
             buf.writeBoolean(entry.directory());
             buf.writeLong(entry.size());
             buf.writeLong(entry.lastModified());
-            buf.writeUtf(entry.graphTypeId(), 32767);
+            buf.writeUtf(entry.assetTypeId(), 32767);
+            buf.writeUtf(entry.variantId(), 32767);
         }
     }
 
@@ -54,6 +55,7 @@ public record PacketRemoteGraphListResponse(
                     buf.readBoolean(),
                     buf.readLong(),
                     buf.readLong(),
+                    buf.readUtf(32767),
                     buf.readUtf(32767)
             ));
         }

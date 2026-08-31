@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.storage;
 
-import com.mine.geometry_node.core.utils.ServerAssetPaths;
+import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
 
 import java.nio.file.Path;
 

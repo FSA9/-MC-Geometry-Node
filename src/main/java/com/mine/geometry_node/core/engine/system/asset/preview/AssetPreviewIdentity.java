@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
-import com.mine.geometry_node.core.utils.ServerAssetPaths;
+import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
 
 import java.util.Objects;
 

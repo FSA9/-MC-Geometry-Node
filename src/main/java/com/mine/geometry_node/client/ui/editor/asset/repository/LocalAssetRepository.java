@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetType;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -143,8 +144,7 @@ public final class LocalAssetRepository implements AssetRepository {
     }
 
     private static AssetType resolveType(File file) {
-        return AssetTypeRegistry.INSTANCE.resolve(AssetSourceKind.LOCAL,
-                file != null ? file.getName() : "", file != null && file.isDirectory());
+        return AssetTypeRegistry.INSTANCE.resolveLocal(file);
     }
 
     private static boolean isRegularType(File file, AssetType type) {
@@ -171,11 +171,7 @@ public final class LocalAssetRepository implements AssetRepository {
     }
 
     private static String readGraphTypeId(File file) {
-        try {
-            return GraphTagIO.readMetadata(file).graphTypeId();
-        } catch (Exception ignored) {
-            return "";
-        }
+        return file == null ? "" : AssetTypeCatalog.inspect(file.toPath()).variantId();
     }
 
     private static void sortFiles(List<File> files, File baseDirectory, boolean favorites) {

@@ -9,6 +9,8 @@ import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetEntry;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetOperationResult;
+import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleRegistry;
 import com.mine.geometry_node.core.engine.system.asset.transfer.service.ServerAssetTransferService;
 import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewService;
 import com.mine.geometry_node.core.network.packet.asset.PacketAssetTransferAck;
@@ -26,15 +28,15 @@ import com.mine.geometry_node.core.network.packet.c2s.PacketAssetPreviewCancel;
 import com.mine.geometry_node.core.network.packet.c2s.PacketDialogueChoice;
 import com.mine.geometry_node.core.network.packet.c2s.PacketPlayerInput;
 import com.mine.geometry_node.core.network.packet.c2s.PacketQuestScreenAction;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphCapabilitiesRequest;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphFileOperationRequest;
-import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteGraphListRequest;
+import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetCapabilitiesRequest;
+import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetFileOperationRequest;
+import com.mine.geometry_node.core.network.packet.c2s.PacketRemoteAssetListRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketShopTradeRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketSyncUpload;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphCapabilitiesResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphFileOperationResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphListResponse;
+import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetCapabilitiesResponse;
+import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetFileOperationResponse;
+import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetListResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSyncResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
@@ -157,12 +159,12 @@ public class NetworkHandler {
 
         NetworkManager.registerReceiver(
                 NetworkManager.Side.C2S,
-                PacketRemoteGraphCapabilitiesRequest.TYPE,
-                PacketRemoteGraphCapabilitiesRequest.STREAM_CODEC,
+                PacketRemoteAssetCapabilitiesRequest.TYPE,
+                PacketRemoteAssetCapabilitiesRequest.STREAM_CODEC,
                 (payload, context) -> {
                     context.queue(() -> {
                         if (context.getPlayer() instanceof ServerPlayer player) {
-                            sendToPlayer(player, new PacketRemoteGraphCapabilitiesResponse(
+                            sendToPlayer(player, new PacketRemoteAssetCapabilitiesResponse(
                                     payload.requestId(),
                                     RemoteAssetPermissions.canBrowseRemoteAssets(player),
                                     RemoteAssetPermissions.canUploadAssets(player),
@@ -176,30 +178,30 @@ public class NetworkHandler {
 
         NetworkManager.registerReceiver(
                 NetworkManager.Side.C2S,
-                PacketRemoteGraphListRequest.TYPE,
-                PacketRemoteGraphListRequest.STREAM_CODEC,
+                PacketRemoteAssetListRequest.TYPE,
+                PacketRemoteAssetListRequest.STREAM_CODEC,
                 (payload, context) -> {
                     context.queue(() -> {
                         if (!(context.getPlayer() instanceof ServerPlayer player)) return;
                         if (!RemoteAssetPermissions.canBrowseRemoteAssets(player)) {
-                            sendToPlayer(player, new PacketRemoteGraphListResponse(
-                                    payload.requestId(), false, payload.directory(), "没有浏览服务器图纸的权限。", Collections.emptyList()));
+                            sendToPlayer(player, new PacketRemoteAssetListResponse(
+                                    payload.requestId(), false, payload.directory(), "没有浏览服务器资产的权限。", Collections.emptyList()));
                             return;
                         }
                         try {
                             String directory = RemoteAssetFileService.normalizeDirectoryPath(payload.directory());
                             if (payload.createIfMissing()) {
                                 if (!RemoteAssetPermissions.canCreateRemoteFolders(player)) {
-                                    sendToPlayer(player, new PacketRemoteGraphListResponse(
-                                            payload.requestId(), false, payload.directory(), "没有创建服务器图纸文件夹的权限。", Collections.emptyList()));
+                                    sendToPlayer(player, new PacketRemoteAssetListResponse(
+                                            payload.requestId(), false, payload.directory(), "没有创建服务器资产文件夹的权限。", Collections.emptyList()));
                                     return;
                                 }
                                 Files.createDirectories(RemoteAssetFileService.resolveDirectory(player.level().getServer(), directory));
                             }
                             List<RemoteAssetEntry> entries = RemoteAssetFileService.list(player.level().getServer(), directory);
-                            sendToPlayer(player, new PacketRemoteGraphListResponse(payload.requestId(), true, directory, "", entries));
+                            sendToPlayer(player, new PacketRemoteAssetListResponse(payload.requestId(), true, directory, "", entries));
                         } catch (Exception e) {
-                            sendToPlayer(player, new PacketRemoteGraphListResponse(
+                            sendToPlayer(player, new PacketRemoteAssetListResponse(
                                     payload.requestId(), false, payload.directory(), e.getMessage(), Collections.emptyList()));
                         }
                     });
@@ -208,12 +210,12 @@ public class NetworkHandler {
 
         NetworkManager.registerReceiver(
                 NetworkManager.Side.C2S,
-                PacketRemoteGraphFileOperationRequest.TYPE,
-                PacketRemoteGraphFileOperationRequest.STREAM_CODEC,
+                PacketRemoteAssetFileOperationRequest.TYPE,
+                PacketRemoteAssetFileOperationRequest.STREAM_CODEC,
                 (payload, context) -> {
                     context.queue(() -> {
                         if (context.getPlayer() instanceof ServerPlayer player) {
-                            handleRemoteGraphFileOperation(payload, player);
+                            handleRemoteAssetFileOperation(payload, player);
                         }
                     });
                 }
@@ -409,18 +411,18 @@ public class NetworkHandler {
         ));
     }
 
-    private static void handleRemoteGraphFileOperation(PacketRemoteGraphFileOperationRequest payload, ServerPlayer player) {
+    private static void handleRemoteAssetFileOperation(PacketRemoteAssetFileOperationRequest payload, ServerPlayer player) {
         if (!RemoteAssetPermissions.canManageAssets(player)) {
-            sendToPlayer(player, new PacketRemoteGraphFileOperationResponse(
-                    payload.requestId(), false, "没有管理服务器图纸文件的权限。"));
+            sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
+                    payload.requestId(), false, "没有管理服务器资产文件的权限。"));
             return;
         }
 
         try {
             MinecraftServer server = player.level().getServer();
-            int count;
+            RemoteAssetOperationResult result;
             try {
-                count = switch (payload.operation()) {
+                result = switch (payload.operation()) {
                     case DELETE -> RemoteAssetFileService.deleteSelection(server, payload.paths());
                     case COPY -> RemoteAssetFileService.copySelection(
                             server, payload.paths(), payload.targetDirectory());
@@ -429,22 +431,22 @@ public class NetworkHandler {
                 };
             } catch (Exception operationException) {
                 try {
-                    DynamicGraphManager.loadAllFromDisk(server);
+                    AssetLifecycleRegistry.INSTANCE.refreshAll(server);
                 } catch (RuntimeException reloadException) {
                     operationException.addSuppressed(reloadException);
                 }
                 throw operationException;
             }
-            DynamicGraphManager.loadAllFromDisk(server);
+            AssetLifecycleRegistry.INSTANCE.refresh(server, result.affectedTypeIds());
             String action = switch (payload.operation()) {
                 case DELETE -> "删除";
                 case COPY -> "复制";
                 case MOVE -> "移动";
             };
-            sendToPlayer(player, new PacketRemoteGraphFileOperationResponse(
-                    payload.requestId(), true, action + "完成: " + count));
+            sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
+                    payload.requestId(), true, action + "完成: " + result.affectedEntries()));
         } catch (Exception e) {
-            sendToPlayer(player, new PacketRemoteGraphFileOperationResponse(
+            sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
                     payload.requestId(), false, "操作失败: " + e.getMessage()));
         }
     }

@@ -1,13 +1,5 @@
 package com.mine.geometry_node.core.engine.system.asset;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.mine.geometry_node.core.engine.graph.GraphType;
-import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
-import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.graph.storage.GraphAssetDescriptor;
-import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.VerifiedAssetCommitter;
 import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewAssociations;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
@@ -17,7 +9,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -43,7 +34,7 @@ public final class RemoteAssetFileService {
         try (var stream = Files.list(directory)) {
             stream.filter(path -> !Files.isSymbolicLink(path))
                     .filter(path -> Files.isDirectory(path)
-                            || AssetTransferPolicy.isTransferablePath(path.toString()))
+                            || AssetTypeCatalog.isTransferablePath(path.toString()))
                     .sorted(Comparator.comparing((Path p) -> !Files.isDirectory(p))
                             .thenComparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
                     .forEach(path -> entries.add(toEntry(root, path)));
@@ -58,7 +49,7 @@ public final class RemoteAssetFileService {
             Path resolved = resolveFile(server, targetPath);
             validateAssetFilePath(resolved);
             if (Files.exists(resolved)) {
-                conflicts.add(new RemoteAssetConflict("", GraphPathMapper.pathToId(root, resolved), Files.isDirectory(resolved)));
+                conflicts.add(new RemoteAssetConflict("", ServerAssetPaths.pathToId(root, resolved), Files.isDirectory(resolved)));
             }
         }
         return conflicts;
@@ -89,30 +80,25 @@ public final class RemoteAssetFileService {
     ) throws IOException {
         Path target = resolveFile(server, targetPath);
         validateAssetFilePath(target);
-        if (!AssetTransferPolicy.isGraphPath(targetPath)) {
-            return CompletableFuture.completedFuture(
-                    VerifiedAssetCommitter.commit(verifiedTemporaryFile, target, conflictPolicy));
+        AssetMetadata oldMetadata = AssetTypeCatalog.inspect(target, targetPath);
+        AssetMetadata newMetadata = AssetTypeCatalog.inspect(verifiedTemporaryFile, targetPath);
+        VerifiedAssetCommitter.CommitResult commit =
+                VerifiedAssetCommitter.commit(verifiedTemporaryFile, target, conflictPolicy);
+        if (commit != VerifiedAssetCommitter.CommitResult.COMMITTED) {
+            return CompletableFuture.completedFuture(commit);
         }
 
-        if (Files.exists(target)) {
-            if (conflictPolicy == AssetTransferConflictPolicy.SKIP) {
-                Files.deleteIfExists(verifiedTemporaryFile);
-                return CompletableFuture.completedFuture(VerifiedAssetCommitter.CommitResult.SKIPPED);
-            }
-            if (conflictPolicy == AssetTransferConflictPolicy.FAIL_IF_EXISTS) {
-                throw new VerifiedAssetCommitter.AssetTransferConflictException("Transfer target now exists");
-            }
-        }
-        String graphJson = Files.readString(verifiedTemporaryFile, StandardCharsets.UTF_8);
+        Set<String> affectedTypeIds = new HashSet<>();
+        if (oldMetadata.isKnown()) affectedTypeIds.add(oldMetadata.typeId());
+        if (newMetadata.isKnown()) affectedTypeIds.add(newMetadata.typeId());
+        if (affectedTypeIds.isEmpty()) return CompletableFuture.completedFuture(commit);
+
         CompletableFuture<VerifiedAssetCommitter.CommitResult> result = new CompletableFuture<>();
         server.execute(() -> {
             try {
-                DynamicGraphManager.saveAndHotReload(
-                        server, GraphPathMapper.pathToId(root(server), target), graphJson);
-                Files.deleteIfExists(verifiedTemporaryFile);
-                result.complete(VerifiedAssetCommitter.CommitResult.COMMITTED);
+                AssetLifecycleRegistry.INSTANCE.refresh(server, affectedTypeIds);
+                result.complete(commit);
             } catch (Exception exception) {
-                try { Files.deleteIfExists(verifiedTemporaryFile); } catch (IOException ignored) { }
                 result.completeExceptionally(exception);
             }
         });
@@ -124,18 +110,18 @@ public final class RemoteAssetFileService {
         List<RemoteAssetEntry> files = new ArrayList<>();
         Set<Path> seen = new HashSet<>();
         for (String selectedPath : selectedPaths) {
-            Path path = resolvePath(server, selectedPath, false);
+            Path path = resolvePath(server, selectedPath);
             if (!Files.exists(path)) continue;
             if (Files.isDirectory(path)) {
                 try (var walk = Files.walk(path)) {
                     walk.filter(p -> Files.isRegularFile(p) && !Files.isSymbolicLink(p)
-                                    && AssetTransferPolicy.isTransferablePath(p.toString()))
+                                    && AssetTypeCatalog.isTransferablePath(p.toString()))
                             .map(p -> p.toAbsolutePath().normalize())
                             .filter(seen::add)
                             .forEach(p -> files.add(toEntry(root, p)));
                 }
             } else if (Files.isRegularFile(path) && !Files.isSymbolicLink(path)
-                    && AssetTransferPolicy.isTransferablePath(path.toString())) {
+                    && AssetTypeCatalog.isTransferablePath(path.toString())) {
                 Path normalized = path.toAbsolutePath().normalize();
                 if (seen.add(normalized)) {
                     files.add(toEntry(root, normalized));
@@ -146,20 +132,23 @@ public final class RemoteAssetFileService {
         return files;
     }
 
-    public static int deleteSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
+    public static RemoteAssetOperationResult deleteSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
         int deleted = 0;
         Set<Path> roots = new HashSet<>();
+        Set<String> affectedTypes = new HashSet<>();
         for (String selectedPath : selectedPaths) {
-            Path path = resolvePath(server, selectedPath, false);
+            Path path = resolvePath(server, selectedPath);
             if (!Files.exists(path) || path.equals(root(server))) continue;
             if (roots.add(path.toAbsolutePath().normalize())) {
+                collectAssetTypes(path, affectedTypes);
                 deleted += deleteRecursively(path);
             }
         }
-        return deleted;
+        return new RemoteAssetOperationResult(deleted, affectedTypes);
     }
 
-    public static int copySelection(MinecraftServer server, List<String> sourcePaths, String targetDirectoryPath) throws IOException {
+    public static RemoteAssetOperationResult copySelection(MinecraftServer server, List<String> sourcePaths,
+                                                           String targetDirectoryPath) throws IOException {
         Path targetDirectory = resolveDirectory(server, targetDirectoryPath);
         Files.createDirectories(targetDirectory);
         if (!Files.isDirectory(targetDirectory)) {
@@ -167,8 +156,9 @@ public final class RemoteAssetFileService {
         }
 
         int copied = 0;
+        Set<String> affectedTypes = new HashSet<>();
         for (String sourcePath : sourcePaths) {
-            Path source = resolvePath(server, sourcePath, false);
+            Path source = resolvePath(server, sourcePath);
             if (!Files.exists(source) || source.equals(root(server))) continue;
             Path target = resolveAvailableDestination(targetDirectory, source.getFileName().toString(), Files.isDirectory(source));
             if (Files.isDirectory(source) && target.toAbsolutePath().normalize().startsWith(source.toAbsolutePath().normalize())) {
@@ -176,13 +166,15 @@ public final class RemoteAssetFileService {
             }
             ServerAssetPreviewAssociations.Migration previews =
                     ServerAssetPreviewAssociations.capture(server, source, target);
+            collectAssetTypes(source, affectedTypes);
             copied += copyRecursively(source, target);
             previews.apply();
         }
-        return copied;
+        return new RemoteAssetOperationResult(copied, affectedTypes);
     }
 
-    public static int moveSelection(MinecraftServer server, List<String> sourcePaths, String targetDirectoryPath) throws IOException {
+    public static RemoteAssetOperationResult moveSelection(MinecraftServer server, List<String> sourcePaths,
+                                                           String targetDirectoryPath) throws IOException {
         Path targetDirectory = resolveDirectory(server, targetDirectoryPath);
         Files.createDirectories(targetDirectory);
         if (!Files.isDirectory(targetDirectory)) {
@@ -191,8 +183,9 @@ public final class RemoteAssetFileService {
 
         Path normalizedTargetDirectory = targetDirectory.toAbsolutePath().normalize();
         int moved = 0;
+        Set<String> affectedTypes = new HashSet<>();
         for (String sourcePath : sourcePaths) {
-            Path source = resolvePath(server, sourcePath, false);
+            Path source = resolvePath(server, sourcePath);
             Path normalizedSource = source.toAbsolutePath().normalize();
             if (!Files.exists(source) || source.equals(root(server))) continue;
             if (source.getParent() != null && source.getParent().toAbsolutePath().normalize().equals(normalizedTargetDirectory)) {
@@ -205,40 +198,41 @@ public final class RemoteAssetFileService {
             }
             ServerAssetPreviewAssociations.Migration previews =
                     ServerAssetPreviewAssociations.capture(server, source, target);
+            collectAssetTypes(source, affectedTypes);
             moved += moveRecursively(source, target);
             previews.apply();
         }
-        return moved;
+        return new RemoteAssetOperationResult(moved, affectedTypes);
     }
 
     public static Path root(MinecraftServer server) {
-        return server.getWorldPath(DynamicGraphManager.GRAPH_DIR).toAbsolutePath().normalize();
+        return ServerAssetPaths.root(server);
     }
 
     public static Path resolveDirectory(MinecraftServer server, String directoryPath) {
-        return resolvePath(server, directoryPath, false);
+        return resolvePath(server, directoryPath);
     }
 
     public static Path resolveFile(MinecraftServer server, String filePath) {
-        return resolvePath(server, filePath, false);
+        return resolvePath(server, filePath);
     }
 
     public static String normalizeDirectoryPath(String path) {
-        return GraphPathMapper.normalizeRelativePath(path == null ? "" : path, false);
+        return ServerAssetPaths.normalizeRelativePath(path == null ? "" : path, true);
     }
 
-    private static Path resolvePath(MinecraftServer server, String relativePath, boolean ensureJsonExtension) {
+    private static Path resolvePath(MinecraftServer server, String relativePath) {
         Path root = root(server);
-        String normalized = GraphPathMapper.normalizeRelativePath(relativePath == null ? "" : relativePath, ensureJsonExtension);
+        String normalized = ServerAssetPaths.normalizeRelativePath(relativePath == null ? "" : relativePath, true);
         Path resolved = normalized.isEmpty() ? root : root.resolve(normalized).normalize();
         if (!resolved.startsWith(root)) {
-            throw new IllegalArgumentException("Remote graph path escapes root: " + relativePath);
+            throw new IllegalArgumentException("Remote asset path escapes root: " + relativePath);
         }
         return resolved;
     }
 
     private static void validateAssetFilePath(Path path) {
-        if (!AssetTransferPolicy.isTransferablePath(path.toString())) {
+        if (!AssetTypeCatalog.isTransferablePath(path.toString())) {
             throw new IllegalArgumentException("Unsupported remote asset type: " + path.getFileName());
         }
     }
@@ -359,7 +353,7 @@ public final class RemoteAssetFileService {
         Path root = rootLike.toAbsolutePath().normalize();
         Path normalizedCandidate = candidate.toAbsolutePath().normalize();
         if (!normalizedCandidate.startsWith(root)) {
-            throw new IOException("Remote graph path escapes target directory: " + candidate);
+            throw new IOException("Remote asset path escapes target directory: " + candidate);
         }
     }
 
@@ -379,43 +373,30 @@ public final class RemoteAssetFileService {
         } catch (IOException ignored) {
             lastModified = 0L;
         }
-        String graphId = GraphPathMapper.pathToId(root, path);
-        GraphAssetDescriptor graph = directory || !AssetTransferPolicy.isGraphPath(path.toString())
-                ? null
-                : DynamicGraphManager.getGraph(graphId);
-        String graphTypeId = graph != null ? graph.type().id()
-                : directory || !AssetTransferPolicy.isGraphPath(path.toString())
-                ? "" : readGraphTypeId(path);
+        String assetPath = ServerAssetPaths.pathToId(root, path);
+        AssetMetadata metadata = directory ? AssetMetadata.UNKNOWN : AssetTypeCatalog.inspect(path, assetPath);
         return new RemoteAssetEntry(
-                graphId,
+                assetPath,
                 path.getFileName().toString(),
                 directory,
                 size,
                 lastModified,
-                graphTypeId
+                metadata.typeId(),
+                metadata.variantId()
         );
     }
 
-    private static String readGraphTypeId(Path path) {
-        try (var reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            JsonElement parsed = JsonParser.parseReader(reader);
-            if (!parsed.isJsonObject()) return "";
-            JsonObject root = parsed.getAsJsonObject();
-            if (root.has("graph_kind") && root.get("graph_kind").isJsonPrimitive()) {
-                String explicitId = GraphType.normalizeId(root.get("graph_kind").getAsString());
-                if (GraphTypeRegistry.INSTANCE.get(explicitId) != null) return explicitId;
+    private static void collectAssetTypes(Path path, Set<String> destination) throws IOException {
+        if (Files.isSymbolicLink(path) || !Files.exists(path)) return;
+        if (Files.isDirectory(path)) {
+            try (var stream = Files.list(path)) {
+                for (Path child : stream.toList()) collectAssetTypes(child, destination);
             }
-            if (root.has("tags") && root.get("tags").isJsonArray()) {
-                for (JsonElement tag : root.getAsJsonArray("tags")) {
-                    if (!tag.isJsonPrimitive() || !tag.getAsJsonPrimitive().isString()) continue;
-                    GraphType legacyType = GraphTypeRegistry.INSTANCE.get(tag.getAsString());
-                    if (legacyType != null) return legacyType.id();
-                }
-            }
-            return GraphTypeRegistry.BLUEPRINT.id();
-        } catch (Exception ignored) {
-            return "";
+            return;
         }
+        if (!Files.isRegularFile(path)) return;
+        AssetMetadata metadata = AssetTypeCatalog.inspect(path);
+        if (metadata.isKnown()) destination.add(metadata.typeId());
     }
 
 }

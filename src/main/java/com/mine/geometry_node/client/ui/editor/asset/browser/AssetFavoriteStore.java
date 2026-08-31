@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.repository.LocalAssetRepository;
@@ -21,7 +20,7 @@ final class AssetFavoriteStore {
 
     void toggle(File file) {
         if (file == null || !file.isFile()
-                || !AssetTypeRegistry.INSTANCE.resolve(AssetSourceKind.LOCAL, file.getName(), false)
+                || !AssetTypeRegistry.INSTANCE.resolveLocal(file)
                 .supports(AssetTypeAction.FAVORITE)) return;
 
         String key = pathKey(file);

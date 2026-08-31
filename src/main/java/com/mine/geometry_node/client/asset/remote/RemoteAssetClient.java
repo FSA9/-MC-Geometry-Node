@@ -1,8 +1,8 @@
-package com.mine.geometry_node.client.ui.editor.asset.remote;
+package com.mine.geometry_node.client.asset.remote;
 
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphCapabilitiesResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphFileOperationResponse;
-import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteGraphListResponse;
+import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetCapabilitiesResponse;
+import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetFileOperationResponse;
+import com.mine.geometry_node.core.network.packet.s2c.PacketRemoteAssetListResponse;
 
 import java.util.List;
 import java.util.Map;
@@ -15,21 +15,21 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-public final class RemoteGraphClientState {
+public final class RemoteAssetClient {
     private static final long REQUEST_TIMEOUT_SECONDS = 30L;
     private static final AtomicInteger REQUEST_IDS = new AtomicInteger(1);
     private static final ScheduledExecutorService TIMEOUT_EXECUTOR =
             Executors.newSingleThreadScheduledExecutor(task -> {
-                Thread thread = new Thread(task, "GeometryNode-RemoteGraph-Timeout");
+                Thread thread = new Thread(task, "GeometryNode-RemoteAsset-Timeout");
                 thread.setDaemon(true);
                 return thread;
             });
 
-    private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteGraphCapabilitiesResponse>> CAPABILITY_CALLBACKS =
+    private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteAssetCapabilitiesResponse>> CAPABILITY_CALLBACKS =
             new ConcurrentHashMap<>();
-    private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteGraphListResponse>> LIST_CALLBACKS =
+    private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteAssetListResponse>> LIST_CALLBACKS =
             new ConcurrentHashMap<>();
-    private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteGraphFileOperationResponse>> FILE_OPERATION_CALLBACKS =
+    private static final ConcurrentMap<Integer, PendingRequest<PacketRemoteAssetFileOperationResponse>> FILE_OPERATION_CALLBACKS =
             new ConcurrentHashMap<>();
 
     private static volatile boolean canBrowse;
@@ -39,7 +39,7 @@ public final class RemoteGraphClientState {
     private static volatile List<String> clipboardPaths = List.of();
     private static volatile boolean cutOperation;
 
-    private RemoteGraphClientState() {
+    private RemoteAssetClient() {
     }
 
     public static int nextRequestId() {
@@ -80,15 +80,15 @@ public final class RemoteGraphClientState {
         cutOperation = false;
     }
 
-    public static void onCapabilities(int requestId, Consumer<PacketRemoteGraphCapabilitiesResponse> callback) {
+    public static void onCapabilities(int requestId, Consumer<PacketRemoteAssetCapabilitiesResponse> callback) {
         register(CAPABILITY_CALLBACKS, requestId, callback);
     }
 
-    public static void onList(int requestId, Consumer<PacketRemoteGraphListResponse> callback) {
+    public static void onList(int requestId, Consumer<PacketRemoteAssetListResponse> callback) {
         register(LIST_CALLBACKS, requestId, callback);
     }
 
-    public static void onFileOperation(int requestId, Consumer<PacketRemoteGraphFileOperationResponse> callback) {
+    public static void onFileOperation(int requestId, Consumer<PacketRemoteAssetFileOperationResponse> callback) {
         register(FILE_OPERATION_CALLBACKS, requestId, callback);
     }
 
@@ -109,7 +109,7 @@ public final class RemoteGraphClientState {
         clearClipboard();
     }
 
-    public static void handle(PacketRemoteGraphCapabilitiesResponse response) {
+    public static void handle(PacketRemoteAssetCapabilitiesResponse response) {
         canBrowse = response.canBrowse();
         canUpload = response.canUpload();
         canDownload = response.canDownload();
@@ -117,11 +117,11 @@ public final class RemoteGraphClientState {
         dispatch(CAPABILITY_CALLBACKS, response.requestId(), response, true);
     }
 
-    public static void handle(PacketRemoteGraphListResponse response) {
+    public static void handle(PacketRemoteAssetListResponse response) {
         dispatch(LIST_CALLBACKS, response.requestId(), response, true);
     }
 
-    public static void handle(PacketRemoteGraphFileOperationResponse response) {
+    public static void handle(PacketRemoteAssetFileOperationResponse response) {
         dispatch(FILE_OPERATION_CALLBACKS, response.requestId(), response, true);
     }
 

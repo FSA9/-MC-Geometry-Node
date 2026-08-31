@@ -14,7 +14,7 @@ import com.mine.geometry_node.client.runtime.render.image.ClientImageAssetManage
 import com.mine.geometry_node.client.runtime.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.runtime.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
-import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.workspace.registration.BuiltinSidebarPanels;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
@@ -105,7 +105,7 @@ public class GeometryNodeClient {
         ClientBlueprintInputManager.reset();
         ClientQuestScreenState.reset();
         ClientDialogueState.reset();
-        RemoteGraphClientState.reset();
+        RemoteAssetClient.reset();
         ClientAssetTransferPlanState.reset();
         ClientAssetTransferService.INSTANCE.resetConnection();
         ClientAssetPreviewService.INSTANCE.resetConnection();

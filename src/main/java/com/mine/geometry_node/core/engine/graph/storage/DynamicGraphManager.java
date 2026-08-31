@@ -5,8 +5,9 @@ import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
+import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
@@ -25,9 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * 负责管理玩家在 UI 编辑器中实时发布到服务器的图纸。
  */
 public class DynamicGraphManager {
-    // 定义当前世界存档下的专属子文件夹名称
-    public static final LevelResource GRAPH_DIR = new LevelResource("geometry_nodes");
-
     // 核心内存缓存
     private static final ConcurrentHashMap<String, GraphAssetDescriptor> dynamicGraphCache = new ConcurrentHashMap<>();
     private static final Set<String> invalidDynamicGraphIds = ConcurrentHashMap.newKeySet();
@@ -60,8 +58,12 @@ public class DynamicGraphManager {
 
     public static void saveAndHotReload(MinecraftServer server, String graphId, String jsonContent) throws Exception {
         if (server == null) return;
+        if (!AssetTypeCatalog.GRAPH_TYPE_ID.equals(
+                AssetTypeCatalog.inspectGraphJson(jsonContent).typeId())) {
+            throw new IllegalArgumentException("Uploaded content is not a registered graph document");
+        }
 
-        Path folder = server.getWorldPath(GRAPH_DIR).toAbsolutePath().normalize();
+        Path folder = ServerAssetPaths.root(server);
         Path filePath = GraphPathMapper.resolveGraphPath(folder, graphId);
         File file = filePath.toFile();
         String normalizedId = GraphPathMapper.pathToId(folder, filePath);
@@ -108,7 +110,7 @@ public class DynamicGraphManager {
         if (server == null) return;
 
         try {
-            Path folder = server.getWorldPath(GRAPH_DIR).toAbsolutePath().normalize();
+            Path folder = ServerAssetPaths.root(server);
             if (!java.nio.file.Files.exists(folder) || !java.nio.file.Files.isDirectory(folder)) {
                 publishDynamicSnapshot(server);
                 return;
@@ -118,6 +120,8 @@ public class DynamicGraphManager {
             try (java.util.stream.Stream<Path> walk = java.nio.file.Files.walk(folder)) {
                 walk.filter(p -> java.nio.file.Files.isRegularFile(p) && !java.nio.file.Files.isSymbolicLink(p))
                         .filter(p -> p.toString().endsWith(".json"))
+                        .filter(p -> AssetTypeCatalog.GRAPH_TYPE_ID.equals(
+                                AssetTypeCatalog.inspect(p).typeId()))
                         .forEach(file -> {
                             try {
                                 String graphId = GraphPathMapper.pathToId(folder, file);

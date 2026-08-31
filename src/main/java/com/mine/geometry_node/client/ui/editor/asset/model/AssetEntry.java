@@ -23,20 +23,21 @@ public final class AssetEntry {
         mSize = size;
         mLastModified = Math.max(0L, lastModified);
         mLocalFile = localFile;
-        mType = type != null ? type : AssetTypeRegistry.INSTANCE.resolve(sourceKind, name, directory);
+        mType = type != null ? type : AssetTypeRegistry.INSTANCE.get(AssetTypeRegistry.FILE_ID);
     }
 
     public static AssetEntry local(File file, String key, String displayPath) {
         String name = file.getName().isEmpty() ? file.getAbsolutePath() : file.getName();
-        AssetType type = AssetTypeRegistry.INSTANCE.resolve(AssetSourceKind.LOCAL, name, file.isDirectory());
+        AssetType type = AssetTypeRegistry.INSTANCE.resolveLocal(file);
         return new AssetEntry(AssetSourceKind.LOCAL, key, name, displayPath,
                 file.isDirectory(), file.length(), file.lastModified(), file, type);
     }
 
-    public static AssetEntry remote(String path, String name, boolean directory, long size, long lastModified) {
+    public static AssetEntry remote(String path, String name, boolean directory, long size, long lastModified,
+                                    String assetTypeId) {
         String normalizedPath = path == null ? "" : path.replace('\\', '/');
         String key = "remote:" + normalizedPath;
-        AssetType type = AssetTypeRegistry.INSTANCE.resolve(AssetSourceKind.REMOTE, name, directory);
+        AssetType type = AssetTypeRegistry.INSTANCE.resolve(assetTypeId, AssetSourceKind.REMOTE, directory);
         return new AssetEntry(AssetSourceKind.REMOTE, key, name, normalizedPath,
                 directory, size, lastModified, null, type);
     }

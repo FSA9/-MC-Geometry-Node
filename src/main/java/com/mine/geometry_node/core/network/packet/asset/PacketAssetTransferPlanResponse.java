@@ -48,7 +48,8 @@ public record PacketAssetTransferPlanResponse(
             buffer.writeBoolean(file.directory());
             buffer.writeLong(file.size());
             buffer.writeLong(file.lastModified());
-            buffer.writeUtf(file.graphTypeId(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
+            buffer.writeUtf(file.assetTypeId(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
+            buffer.writeUtf(file.variantId(), AssetTransferPacketCodecs.MAX_PATH_LENGTH);
         }
         buffer.writeVarInt(conflicts.size());
         for (RemoteAssetConflict conflict : conflicts) {
@@ -66,6 +67,7 @@ public record PacketAssetTransferPlanResponse(
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH),
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH), buffer.readBoolean(), buffer.readLong(),
                 buffer.readLong(),
+                buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH),
                 buffer.readUtf(AssetTransferPacketCodecs.MAX_PATH_LENGTH)));
         return files;
     }

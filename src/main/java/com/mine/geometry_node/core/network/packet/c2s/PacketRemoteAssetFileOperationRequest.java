@@ -8,7 +8,7 @@ import net.minecraft.resources.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public record PacketRemoteGraphFileOperationRequest(
+public record PacketRemoteAssetFileOperationRequest(
         int requestId,
         Operation operation,
         String targetDirectory,
@@ -20,15 +20,15 @@ public record PacketRemoteGraphFileOperationRequest(
         MOVE
     }
 
-    public static final Type<PacketRemoteGraphFileOperationRequest> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "remote_graph_file_operation_request"));
+    public static final Type<PacketRemoteAssetFileOperationRequest> TYPE =
+            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "remote_asset_file_operation_request"));
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, PacketRemoteGraphFileOperationRequest> STREAM_CODEC = StreamCodec.of(
+    public static final StreamCodec<RegistryFriendlyByteBuf, PacketRemoteAssetFileOperationRequest> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> packet.write(buf),
-            PacketRemoteGraphFileOperationRequest::new
+            PacketRemoteAssetFileOperationRequest::new
     );
 
-    public PacketRemoteGraphFileOperationRequest(RegistryFriendlyByteBuf buf) {
+    public PacketRemoteAssetFileOperationRequest(RegistryFriendlyByteBuf buf) {
         this(buf.readInt(), readOperation(buf), buf.readUtf(32767), readPaths(buf));
     }
 
@@ -45,7 +45,7 @@ public record PacketRemoteGraphFileOperationRequest(
     private static List<String> readPaths(RegistryFriendlyByteBuf buf) {
         int size = buf.readInt();
         if (size < 0 || size > 4096) {
-            throw new IllegalArgumentException("Invalid remote graph file operation path count: " + size);
+            throw new IllegalArgumentException("Invalid remote asset file operation path count: " + size);
         }
         List<String> paths = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
@@ -58,7 +58,7 @@ public record PacketRemoteGraphFileOperationRequest(
         int ordinal = buf.readVarInt();
         Operation[] values = Operation.values();
         if (ordinal < 0 || ordinal >= values.length) {
-            throw new IllegalArgumentException("Invalid remote graph file operation: " + ordinal);
+            throw new IllegalArgumentException("Invalid remote asset file operation: " + ordinal);
         }
         return values[ordinal];
     }

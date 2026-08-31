@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.system.asset.transfer.service;
 
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
-import com.mine.geometry_node.core.engine.system.asset.AssetTransferPolicy;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewIdentity;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
@@ -174,7 +174,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
             var temporary = session.incoming.retainVerifiedFile();
             Path previewTemporary = null;
             try {
-                previewTemporary = stageSchematicPreview(player, session, packet);
+                previewTemporary = stageSchematicPreview(player, session, packet, temporary);
                 VerifiedAssetCommitter.CommitResult commit = RemoteAssetFileService.commitVerifiedUpload(
                         player.level().getServer(), session.remotePath, temporary,
                         session.open.conflictPolicy()).join();
@@ -198,9 +198,9 @@ public final class ServerAssetTransferService implements AutoCloseable {
     }
 
     private Path stageSchematicPreview(ServerPlayer player, ServerSession session,
-                                       PacketAssetTransferComplete packet) throws Exception {
-        boolean schematic = AssetTransferPolicy.SCHEMATIC_TYPE_ID.equals(
-                AssetTransferPolicy.resolveTypeId(session.remotePath));
+                                       PacketAssetTransferComplete packet, Path verifiedFile) throws Exception {
+        boolean schematic = AssetTypeCatalog.SCHEMATIC_TYPE_ID.equals(
+                AssetTypeCatalog.inspect(verifiedFile, session.remotePath).typeId());
         if (!schematic) {
             if (packet.hasPreview()) throw new java.io.IOException("Preview attachment is not valid for this asset type");
             return null;

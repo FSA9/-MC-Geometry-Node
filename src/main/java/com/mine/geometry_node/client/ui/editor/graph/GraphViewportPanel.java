@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragDropRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragState;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
-import com.mine.geometry_node.client.ui.editor.asset.remote.RemoteGraphClientState;
+import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferRequest;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
@@ -192,14 +192,14 @@ public class GraphViewportPanel extends LinearLayout {
             return;
         }
 
-        if (entry.sourceKind() == AssetSourceKind.REMOTE && RemoteGraphClientState.canDownload()) {
+        if (entry.sourceKind() == AssetSourceKind.REMOTE && RemoteAssetClient.canDownload()) {
             Path temporary = Path.of(System.getProperty("java.io.tmpdir"), "geometrynode-graph-import",
                     UUID.randomUUID() + ".json");
             UUID jobId = ClientAssetTransferService.INSTANCE.submit(java.util.List.of(
                     ClientAssetTransferRequest.download(entry.path(), temporary, AssetTransferConflictPolicy.OVERWRITE)));
             ClientAssetTransferService.INSTANCE.completion(jobId).thenCompose(job -> {
                 if (job.completedFileCount() != job.files().size()) {
-                    return CompletableFuture.failedFuture(new IllegalStateException("remote graph download failed"));
+                    return CompletableFuture.failedFuture(new IllegalStateException("remote asset download failed"));
                 }
                 return CompletableFuture.supplyAsync(() -> {
                     try {

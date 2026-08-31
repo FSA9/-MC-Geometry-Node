@@ -23,6 +23,8 @@ import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
 import com.mine.geometry_node.core.engine.system.marker.MarkerService;
 import com.mine.geometry_node.core.engine.system.chunk_loading.EntityChunkLoadingService;
 import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferServerConfig;
+import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleRegistry;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttachment;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -144,6 +146,9 @@ public class GeometryNode {
 
         GraphEngineServices.INSTANCE.setScopedStateStore(new ServerScopedStateStore());
         GraphResourceLifecycleManager.INSTANCE.init();
+        AssetLifecycleRegistry.INSTANCE.register(
+                AssetTypeCatalog.GRAPH_TYPE_ID,
+                DynamicGraphManager::loadAllFromDisk);
 
         // 初始化图运行时注册表
         ServerEngineDriver.init();
