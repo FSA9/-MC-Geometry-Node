@@ -126,6 +126,7 @@ public final class BehaviorPatrolNode extends BaseNode implements BehaviorExecut
             Boolean loop = context.requiredInput(StandardPorts.LOOP_ENABLED.getId(), Boolean.class);
             PatrolState state = new PatrolState(owner, waypoints, 0, speed, mode,
                     tolerance, minimumWait, maximumWait, loop, Phase.PLANNING, 0L);
+            DebugRendererSessionManager.recordPatrolRoute(owner, waypoints, 0, loop);
             return planCurrentWaypoint(context, state);
         }
 
@@ -153,6 +154,7 @@ public final class BehaviorPatrolNode extends BaseNode implements BehaviorExecut
             if (owner == null) return;
             owner.getNavigation().stop();
             DebugRendererSessionManager.clearRequestedPathTarget(owner);
+            DebugRendererSessionManager.clearPatrolRoute(owner);
         }
 
         private static BehaviorActionStep<PatrolState> planCurrentWaypoint(
@@ -207,6 +209,8 @@ public final class BehaviorPatrolNode extends BaseNode implements BehaviorExecut
                 BehaviorNodeContext context, PatrolState state) {
             state.owner().getNavigation().stop();
             DebugRendererSessionManager.clearRequestedPathTarget(state.owner());
+            DebugRendererSessionManager.recordPatrolRoute(state.owner(), state.waypoints(),
+                    state.index() + 1, state.loop());
             long wait = randomWait(context, state.minimumWait(), state.maximumWait());
             if (wait == 0L) return advance(context, state);
             long deadline = safeAdd(context.gameTick(), wait);

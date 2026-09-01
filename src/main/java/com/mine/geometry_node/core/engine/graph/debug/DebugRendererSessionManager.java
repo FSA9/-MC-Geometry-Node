@@ -52,10 +52,12 @@ public final class DebugRendererSessionManager {
     private static final int FINAL_TARGET_COLOR = 0xFF4FD17A;
     private static final int REQUESTED_TARGET_COLOR = 0xFF4A8DFF;
     private static final int FOLLOW_TARGET_COLOR = 0xFFE86DFF;
+    private static final int PATROL_COMPLETED_COLOR = 0xFF8A8A8A;
 
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, RequestedPathTarget> REQUESTED_PATH_TARGETS = new HashMap<>();
     private static final Map<UUID, FollowTarget> FOLLOW_TARGETS = new HashMap<>();
+    private static final Map<UUID, PatrolRoute> PATROL_ROUTES = new HashMap<>();
     private static final Map<ServerLevel, LevelCache> LEVEL_CACHES = new IdentityHashMap<>();
     private static final List<Consumer<ServerPlayer>> SCHEMATIC_CHANNEL_HYDRATORS = new ArrayList<>();
     private static boolean registered;
@@ -103,6 +105,7 @@ public final class DebugRendererSessionManager {
         SESSIONS.clear();
         REQUESTED_PATH_TARGETS.clear();
         FOLLOW_TARGETS.clear();
+        PATROL_ROUTES.clear();
         LEVEL_CACHES.clear();
         dirtyVersion = 0L;
     }
@@ -264,6 +267,21 @@ public final class DebugRendererSessionManager {
     /** Removes the active Follow relationship immediately when its action exits. */
     public static void clearFollowTarget(Mob follower) {
         if (follower != null && FOLLOW_TARGETS.remove(follower.getUUID()) != null) markDirty();
+    }
+
+    /** Records the frozen waypoint route owned by an active Patrol action. */
+    public static void recordPatrolRoute(Mob mob, List<Vec3> waypoints,
+                                         int completedCount, boolean loop) {
+        if (mob == null || waypoints == null || waypoints.isEmpty()) return;
+        int completed = Math.max(0, Math.min(completedCount, waypoints.size()));
+        PATROL_ROUTES.put(mob.getUUID(), new PatrolRoute(mob.level().dimension(),
+                List.copyOf(waypoints), completed, loop));
+        markDirty();
+    }
+
+    /** Removes the frozen route when Patrol stops, fails, or is preempted. */
+    public static void clearPatrolRoute(Mob mob) {
+        if (mob != null && PATROL_ROUTES.remove(mob.getUUID()) != null) markDirty();
     }
 
     private static Session enableChannel(ServerPlayer player, double radius) {
@@ -471,6 +489,7 @@ public final class DebugRendererSessionManager {
         if (!hasPathfindingSessions()) {
             REQUESTED_PATH_TARGETS.clear();
             FOLLOW_TARGETS.clear();
+            PATROL_ROUTES.clear();
         }
     }
 
@@ -583,11 +602,18 @@ public final class DebugRendererSessionManager {
             FollowTarget target = entry.getValue();
             return target.dimension().equals(level.dimension()) && target.expiresAt() < currentTick;
         });
+        PATROL_ROUTES.entrySet().removeIf(entry -> {
+            PatrolRoute route = entry.getValue();
+            return route.dimension().equals(level.dimension())
+                    && (level.getEntity(entry.getKey()) == null
+                    || level.getEntity(entry.getKey()).isRemoved());
+        });
         List<Mob> mobs = level.getEntitiesOfClass(Mob.class, queryBounds, mob -> {
             Path path = mob.getNavigation().getPath();
             return !mob.isRemoved() && (path != null && !path.isDone()
                     || requestedPathTarget(mob, level, currentTick) != null
-                    || followTarget(mob, level, currentTick) != null);
+                    || followTarget(mob, level, currentTick) != null
+                    || patrolRoute(mob, level) != null);
         });
         mobs.sort((left, right) -> Double.compare(left.distanceToSqr(origin), right.distanceToSqr(origin)));
 
@@ -598,7 +624,9 @@ public final class DebugRendererSessionManager {
             Path path = mob.getNavigation().getPath();
             RequestedPathTarget requested = requestedPathTarget(mob, level, currentTick);
             FollowTarget follow = followTarget(mob, level, currentTick);
+            PatrolRoute patrol = patrolRoute(mob, level);
             if (follow != null) addFollowLine(level, mob, follow, candidates, origin);
+            if (patrol != null) addPatrolRoute(mob, patrol, candidates, origin);
             if (path == null || path.isDone()) {
                 if (requested != null) {
                     addPathMarker(mob, "requested", requested.position(),
@@ -630,6 +658,45 @@ public final class DebugRendererSessionManager {
         FollowTarget target = FOLLOW_TARGETS.get(mob.getUUID());
         return target != null && target.dimension().equals(level.dimension())
                 && target.expiresAt() >= currentTick ? target : null;
+    }
+
+    private static PatrolRoute patrolRoute(Mob mob, ServerLevel level) {
+        PatrolRoute route = PATROL_ROUTES.get(mob.getUUID());
+        return route != null && route.dimension().equals(level.dimension()) ? route : null;
+    }
+
+    private static void addPatrolRoute(Mob mob, PatrolRoute route,
+                                       List<Candidate> candidates, Vec3 origin) {
+        List<Vec3> points = route.waypoints();
+        int pointCount = Math.min(points.size(), MAX_PATH_NODES);
+        for (int i = 0; i < pointCount; i++) {
+            int color = !route.loop() && i < route.completedCount()
+                    ? PATROL_COMPLETED_COLOR : REQUESTED_TARGET_COLOR;
+            addPathMarker(mob, "patrol-point-" + i, points.get(i), color, candidates, origin);
+        }
+        int segmentCount = route.loop() ? pointCount : Math.max(0, pointCount - 1);
+        for (int i = 0; i < segmentCount; i++) {
+            int end = (i + 1) % pointCount;
+            // A segment is completed only after both endpoint waypoints have been reached.
+            int color = !route.loop() && i < route.completedCount() - 1
+                    ? PATROL_COMPLETED_COLOR : REQUESTED_TARGET_COLOR;
+            addPatrolSegment(mob, points.get(i), points.get(end), i, color, candidates, origin);
+        }
+    }
+
+    private static void addPatrolSegment(Mob mob, Vec3 start, Vec3 end, int index,
+                                         int color, List<Candidate> candidates, Vec3 origin) {
+        Vec3 center = start.add(end).scale(0.5D);
+        float[] vertices = new float[]{
+                (float) (start.x - center.x), (float) (start.y - center.y), (float) (start.z - center.z),
+                (float) (end.x - center.x), (float) (end.y - center.y), (float) (end.z - center.z)
+        };
+        String id = DebugRenderChannel.PATHFINDING.id() + ":" + mob.getStringUUID()
+                + ":patrol-segment-" + index;
+        GeometryDebugElement line = new GeometryDebugElement(id, "pathfinding",
+                GeometryDebugType.MESH, color, false, center, Vec3.ZERO, Vec3.ZERO,
+                vertices, new int[]{0, 1}, new int[0]);
+        candidates.add(new Candidate(line, center.distanceToSqr(origin)));
     }
 
     private static void addFollowLine(ServerLevel level,
@@ -830,6 +897,10 @@ public final class DebugRendererSessionManager {
     }
 
     private record FollowTarget(ResourceKey<Level> dimension, UUID targetId, long expiresAt) {
+    }
+
+    private record PatrolRoute(ResourceKey<Level> dimension, List<Vec3> waypoints,
+                               int completedCount, boolean loop) {
     }
 
     private static final class LevelCache {
