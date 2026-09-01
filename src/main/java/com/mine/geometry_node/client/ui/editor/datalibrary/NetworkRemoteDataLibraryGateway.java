@@ -10,7 +10,6 @@ import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTrans
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferState;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferPurpose;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryDocument;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryEntry;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryEntryKey;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryFileStore;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryJsonCodec;
@@ -33,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.LongConsumer;
 
 /** Remote Data Library control plane; payload bytes use the shared chunked transfer service. */
 public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryGateway {
@@ -41,6 +41,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
     private final AtomicReference<List<DataLibraryUiRepository.Entry>> snapshot = new AtomicReference<>(List.of());
     private final Deque<Runnable> mutations = new ArrayDeque<>();
     private boolean mutationRunning;
+    private long connectionGeneration;
 
     private NetworkRemoteDataLibraryGateway() {
     }
@@ -49,30 +50,30 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
 
     @Override
     public void refresh(Runnable completion) {
-        enqueueMutation(() -> refreshNow(() -> finishMutation(completion)));
+        enqueueMutation(generation -> refreshNow(() -> finishMutation(generation, completion)));
     }
 
     @Override
     public void create(DataLibraryUiRepository.Entry entry, Runnable completion) {
-        enqueueMutation(() -> upload(List.of(entry), AssetTransferPurpose.DATA_LIBRARY_CREATE,
-                () -> finishMutation(completion)));
+        enqueueMutation(generation -> upload(List.of(entry), AssetTransferPurpose.DATA_LIBRARY_CREATE,
+                () -> finishMutation(generation, completion)));
     }
 
     @Override
     public void update(DataLibraryUiRepository.Entry entry, Runnable completion) {
-        enqueueMutation(() -> upload(List.of(entry), AssetTransferPurpose.DATA_LIBRARY_UPDATE,
-                () -> finishMutation(completion)));
+        enqueueMutation(generation -> upload(List.of(entry), AssetTransferPurpose.DATA_LIBRARY_UPDATE,
+                () -> finishMutation(generation, completion)));
     }
 
     @Override
     public void delete(Set<DataLibraryUiRepository.EntryKey> entries, Runnable completion) {
-        enqueueMutation(() -> control(RemoteDataLibraryOperation.DELETE, keys(entries), response -> {
+        enqueueMutation(generation -> control(RemoteDataLibraryOperation.DELETE, keys(entries), response -> {
             if (!response.success()) {
                 failure(RemoteDataLibraryOperation.DELETE, response.message());
-                finishMutation(completion);
+                finishMutation(generation, completion);
                 return;
             }
-            refreshNow(() -> finishMutation(completion));
+            refreshNow(() -> finishMutation(generation, completion));
         }));
     }
 
@@ -83,6 +84,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
     public void resetConnection() {
         synchronized (mutations) {
             mutations.clear();
+            connectionGeneration++;
             mutationRunning = false;
         }
         REQUESTS.reset();
@@ -94,7 +96,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
         Path temporary = null;
         try {
             temporary = Files.createTempFile("geometrynode-data-library-", ".json");
-            Files.writeString(temporary, DataLibraryJsonCodec.encode(document(entries), registries()), StandardCharsets.UTF_8);
+            Files.writeString(temporary, DataLibraryJsonCodec.encode(DataLibraryUiMapper.toDocument(entries), registries()), StandardCharsets.UTF_8);
         } catch (Exception exception) {
             deleteQuietly(temporary);
             failure(purpose, exception.getMessage());
@@ -141,7 +143,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                         return;
                     }
                     DataLibraryLoadResult loaded = DataLibraryFileStore.read(target, registries());
-                    List<DataLibraryUiRepository.Entry> accepted = entries(loaded);
+                    List<DataLibraryUiRepository.Entry> accepted = DataLibraryUiMapper.fromDocument(loaded);
                     snapshot.set(accepted);
                 } catch (Exception exception) {
                     failure(RemoteDataLibraryOperation.PREPARE_REFRESH, exception.getMessage());
@@ -153,26 +155,14 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
         });
     }
 
-    private static DataLibraryDocument document(List<DataLibraryUiRepository.Entry> entries) {
-        DataLibraryDocument document = new DataLibraryDocument();
-        for (DataLibraryUiRepository.Entry entry : entries) {
-            document.put(entry.type(), new DataLibraryEntry(entry.id(), entry.name(), entry.value()));
-        }
-        return document;
-    }
-
     private static List<DataLibraryUiRepository.Entry> entries(DataLibraryLoadResult loaded) {
         loaded.diagnostics().forEach(diagnostic -> GeometryNode.LOGGER.warn(
                 "Remote Data Library {}: {}", diagnostic.path(), diagnostic.message()));
-        List<DataLibraryUiRepository.Entry> result = new ArrayList<>();
-        loaded.document().entriesByType().forEach((type, values) -> values.values().forEach(entry ->
-                result.add(new DataLibraryUiRepository.Entry(type, entry.id(), entry.name(), entry.value()))));
-        return List.copyOf(result);
+        return DataLibraryUiMapper.fromDocument(loaded);
     }
 
-    private static Set<DataLibraryEntryKey> keys(Set<DataLibraryUiRepository.EntryKey> keys) {
-        return keys.stream().map(key -> new DataLibraryEntryKey(key.type(), key.id()))
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    private static Set<com.mine.geometry_node.core.engine.system.data.library.DataLibraryEntryKey> keys(Set<DataLibraryUiRepository.EntryKey> keys) {
+        return DataLibraryUiMapper.toKeys(keys);
     }
 
     private static void control(RemoteDataLibraryOperation operation, Set<DataLibraryEntryKey> keys,
@@ -234,10 +224,13 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
     private static void run(Runnable completion) { if (completion != null) completion.run(); }
     private static void deleteQuietly(Path path) { if (path != null) try { Files.deleteIfExists(path); } catch (Exception ignored) { } }
 
-    private void enqueueMutation(Runnable mutation) {
+    private void enqueueMutation(LongConsumer mutation) {
         Runnable start = null;
         synchronized (mutations) {
-            mutations.addLast(mutation);
+            long generation = connectionGeneration;
+            mutations.addLast(() -> {
+                if (isGenerationActive(generation)) mutation.accept(generation);
+            });
             if (!mutationRunning) {
                 mutationRunning = true;
                 start = mutations.removeFirst();
@@ -246,12 +239,14 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
         if (start != null) start.run();
     }
 
-    private void finishMutation(Runnable completion) {
+    private void finishMutation(long generation, Runnable completion) {
+        if (!isGenerationActive(generation)) return;
         Runnable next = null;
         try {
             run(completion);
         } finally {
             synchronized (mutations) {
+                if (generation != connectionGeneration) return;
                 if (mutations.isEmpty()) {
                     mutationRunning = false;
                 } else {
@@ -260,5 +255,11 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             }
         }
         if (next != null) next.run();
+    }
+
+    private boolean isGenerationActive(long generation) {
+        synchronized (mutations) {
+            return generation == connectionGeneration;
+        }
     }
 }

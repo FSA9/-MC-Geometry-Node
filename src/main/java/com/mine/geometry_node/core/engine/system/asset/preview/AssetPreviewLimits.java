@@ -18,6 +18,8 @@ public final class AssetPreviewLimits {
     public static final int MAX_PATH_LENGTH = 1024;
     public static final int MAX_CHUNK_BYTES = AssetTransferProtocolLimits.MAX_CHUNK_BYTES;
     public static final int CACHE_KEY_HEX_LENGTH = 64;
+    public static final int SHA256_HEX_LENGTH = CACHE_KEY_HEX_LENGTH;
+    public static final int PACKET_DETAIL_MAX_LENGTH = 512;
 
     private AssetPreviewLimits() {
     }

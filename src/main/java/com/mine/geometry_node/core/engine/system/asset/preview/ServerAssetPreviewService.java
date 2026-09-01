@@ -7,8 +7,6 @@ import com.mine.geometry_node.core.engine.system.asset.preview.generator.Preview
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.PreviewUnavailableException;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerAssetPreviewGenerator;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerAssetPreviewGeneratorRegistry;
-import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerImagePreviewGenerator;
-import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerSchematicPreviewGenerator;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -42,8 +40,7 @@ public final class ServerAssetPreviewService implements AutoCloseable {
     private boolean initialized;
 
     private ServerAssetPreviewService() {
-        registerGenerator(AssetPreviewKind.IMAGE, new ServerImagePreviewGenerator(store));
-        registerGenerator(AssetPreviewKind.SCHEMATIC, new ServerSchematicPreviewGenerator(store));
+        generators.registerBuiltins(store);
     }
 
     public void registerGenerator(AssetPreviewKind kind, ServerAssetPreviewGenerator generator) {

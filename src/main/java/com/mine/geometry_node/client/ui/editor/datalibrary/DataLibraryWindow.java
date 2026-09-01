@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.editor.datalibrary;
 
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
 import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
@@ -87,7 +88,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private final DataLibraryUiRepository repository;
     private final LinearLayout groupsHost;
     private final UiSearchInput searchInput;
-    private final SelectionToggle selectAll;
+    private final UiCheckBox selectAll;
     private final View deleteButton;
     private final Set<DataLibraryUiRepository.EntryKey> selected = new LinkedHashSet<>();
     private final EnumMap<PortType, Boolean> expanded = new EnumMap<>(PortType.class);
@@ -134,7 +135,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         clearLp.leftMargin = px(2);
         searchRow.addView(clear, clearLp);
 
-        selectAll = new SelectionToggle(context);
+        selectAll = new UiCheckBox(context);
         selectAll.setContentDescription(tr("geometry_node.data_library.all"));
         selectAll.setOnCheckedChangeListener((button, checked) -> {
             if (!syncingSelectAll) selectAllVisible(checked);
@@ -214,7 +215,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         SvgIconView fold = new SvgIconView(getContext(),
                 SvgIconView.Icon.forExpandedState(isExpanded), TEXT);
         header.addView(fold, fixed(16, 26));
-        SelectionToggle typeSelect = new SelectionToggle(getContext());
+        UiCheckBox typeSelect = new UiCheckBox(getContext());
         typeSelect.setChecked(!entries.isEmpty()
                 && entries.stream().allMatch(entry -> selected.contains(key(entry))));
         typeSelect.setOnCheckedChangeListener((button, checked) -> {
@@ -231,7 +232,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         LayoutParams titleLp = new LayoutParams(0, px(26), 1);
         titleLp.leftMargin = px(5);
         header.addView(title, titleLp);
-        SelectionToggle add = new SelectionToggle(getContext(), SvgIconView.Icon.SQUARE_PLUS);
+        SvgIconView add = new SvgIconView(getContext(), SvgIconView.Icon.SQUARE_PLUS, TEXT);
+        add.setClickable(true);
         add.setContentDescription(tr("geometry_node.data_library.add"));
         add.setOnClickListener(v -> repository.create(type));
         header.addView(add, fixed(CHECKBOX_SIZE_DP + 4, CHECKBOX_SIZE_DP + 4));
@@ -257,7 +259,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         card.setPadding(px(4), px(3), px(4), px(3));
         card.setBackground(solid(selected.contains(key(entry)) ? CARD_SELECTED_BG : CARD_BG, 1,
                 selected.contains(key(entry)) ? ACCENT : BORDER));
-        SelectionToggle check = new SelectionToggle(getContext());
+        UiCheckBox check = new UiCheckBox(getContext());
         check.setChecked(selected.contains(key(entry)));
         check.setOnCheckedChangeListener((button, checked) -> {
             if (checked) selected.add(key(entry)); else selected.remove(key(entry));
@@ -898,11 +900,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private static View iconButton(Context context, View icon, String description) {
-        FrameLayout button = new FrameLayout(context);
+        UiIconButton button = new UiIconButton(context, icon);
         button.setContentDescription(description);
-        button.setBackground(solid(0xFF3B3B3B, 1, BORDER));
-        button.addView(icon, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         return button;
     }
 
@@ -939,59 +938,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private static TextView label(Context context, String text, float size, int color) {
         return UIUtils.createLockedTextView(context, text, size, color);
-    }
-
-    /** SVG-backed selection control used by Data Library rows and category headers. */
-    private static final class SelectionToggle extends FrameLayout {
-        private final SvgIconView icon;
-        private boolean checked;
-        private boolean fixedIcon;
-        private SelectionListener listener;
-
-        private SelectionToggle(Context context) {
-            this(context, null);
-        }
-
-        private SelectionToggle(Context context, SvgIconView.Icon fixedIcon) {
-            super(context);
-            this.fixedIcon = fixedIcon != null;
-            icon = new SvgIconView(context,
-                    fixedIcon != null ? fixedIcon : SvgIconView.Icon.SQUARE_CHECK,
-                    fixedIcon != null ? TEXT : MUTED);
-            if (!this.fixedIcon) icon.setAlpha(0.55f);
-            icon.setClickable(false);
-            addView(icon, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            setClickable(true);
-            setFocusable(true);
-            setOnClickListener(v -> {
-                if (this.fixedIcon) return;
-                setChecked(!checked);
-                if (listener != null) listener.changed(this, checked);
-            });
-        }
-
-        private boolean isChecked() {
-            return checked;
-        }
-
-        private void setChecked(boolean checked) {
-            if (this.checked == checked) return;
-            this.checked = checked;
-            if (!fixedIcon) {
-                icon.setIconColor(checked ? ACCENT : MUTED);
-                icon.setAlpha(checked ? 1.0f : 0.55f);
-            }
-        }
-
-        private void setOnCheckedChangeListener(SelectionListener listener) {
-            this.listener = listener;
-        }
-
-        @FunctionalInterface
-        private interface SelectionListener {
-            void changed(SelectionToggle toggle, boolean checked);
-        }
     }
 
     private static LayoutParams fixed(int widthDp, int heightDp) {

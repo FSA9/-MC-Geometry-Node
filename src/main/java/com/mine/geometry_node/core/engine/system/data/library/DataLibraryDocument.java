@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.system.data.library;
 
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 
 import java.util.Collections;
@@ -62,7 +63,8 @@ public final class DataLibraryDocument {
 
     public DataLibraryDocument copy() {
         DataLibraryDocument copy = new DataLibraryDocument();
-        entries.forEach((type, values) -> values.values().forEach(entry -> copy.put(type, entry)));
+        entries.forEach((type, values) -> values.values().forEach(entry -> copy.put(type,
+                new DataLibraryEntry(entry.id(), entry.name(), GraphValueSnapshot.snapshot(entry.value())))));
         return copy;
     }
 

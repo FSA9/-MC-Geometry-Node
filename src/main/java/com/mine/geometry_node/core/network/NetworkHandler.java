@@ -438,7 +438,6 @@ public class NetworkHandler {
                             payload.requestId(), false, "操作失败: " + failureMessage(error)));
                     return;
                 }
-                AssetLifecycleRegistry.INSTANCE.refresh(server, result.affectedTypeIds());
                 String action = switch (payload.operation()) {
                     case DELETE -> "删除";
                     case COPY -> "复制";
@@ -446,8 +445,15 @@ public class NetworkHandler {
                     case CREATE_DIRECTORY -> "新建文件夹";
                     case RENAME -> "重命名";
                 };
+                String refreshWarning = "";
+                try {
+                    AssetLifecycleRegistry.INSTANCE.refresh(server, result.affectedTypeIds());
+                } catch (RuntimeException refreshException) {
+                    refreshWarning = "（资源刷新失败: " + failureMessage(refreshException) + "）";
+                }
                 sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
-                        payload.requestId(), true, action + "完成: " + result.affectedEntries()));
+                        payload.requestId(), true,
+                        action + "完成: " + result.affectedEntries() + refreshWarning));
             }));
         } catch (RuntimeException exception) {
             sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(

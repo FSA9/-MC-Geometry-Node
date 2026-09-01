@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
+import java.util.Collections;
+import java.util.WeakHashMap;
 import org.jetbrains.annotations.Nullable;
 
 /** Server-authoritative access to the remote Data Library database. */
@@ -19,6 +21,8 @@ public final class RemoteDataLibraryService {
     public static final RemoteDataLibraryService INSTANCE = new RemoteDataLibraryService();
 
     private final Map<MinecraftServer, CachedLibrary> caches = new ConcurrentHashMap<>();
+    private final Set<MinecraftServer> stoppedServers =
+            Collections.newSetFromMap(new WeakHashMap<>());
     private volatile boolean initialized;
 
     private RemoteDataLibraryService() {
@@ -28,13 +32,17 @@ public final class RemoteDataLibraryService {
         if (initialized) return;
         initialized = true;
         NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) -> {
+            clearStopped(event.getServer());
             try {
                 load(event.getServer());
             } catch (IOException exception) {
                 GeometryNode.LOGGER.error("Failed to load server Data Library cache", exception);
             }
         });
-        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> caches.remove(event.getServer()));
+        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> {
+            markStopped(event.getServer());
+            caches.remove(event.getServer());
+        });
     }
 
     /** Returns the server's immutable in-memory snapshot, loading it at most once per server. */
@@ -48,6 +56,7 @@ public final class RemoteDataLibraryService {
      */
     @Nullable
     public Object resolve(MinecraftServer server, DataLibraryEntryKey key) {
+        if (server == null || key == null || isStopped(server)) return null;
         try {
             Object value = ensureLoaded(server).document().find(key)
                     .map(DataLibraryEntry::value).orElse(null);
@@ -56,7 +65,7 @@ public final class RemoteDataLibraryService {
             }
             return GraphValueSnapshot.snapshot(value);
         } catch (IOException | RuntimeException exception) {
-            GeometryNode.LOGGER.warn("Unable to resolve Data Library entry {}", key, exception);
+            // Missing entries and temporarily unavailable worlds are valid null results.
             return null;
         }
     }
@@ -86,6 +95,9 @@ public final class RemoteDataLibraryService {
     }
 
     private synchronized DataLibraryLoadResult update(MinecraftServer server, DocumentMutation mutation) throws IOException {
+        if (server == null || isStopped(server)) {
+            throw new IOException("Server is stopping");
+        }
         DataLibraryLoadResult result = DataLibraryFileStore.updateAtomic(
                 ServerDataLibraryPaths.file(server), server.overworld().registryAccess(), document -> {
                     mutation.apply(document);
@@ -93,7 +105,9 @@ public final class RemoteDataLibraryService {
                 });
         // Publish only after updateAtomic has completed its atomic move successfully.
         CachedLibrary published = freeze(result);
-        caches.put(server, published);
+        if (!isStopped(server)) {
+            caches.put(server, published);
+        }
         return published.asResult();
     }
 
@@ -104,12 +118,17 @@ public final class RemoteDataLibraryService {
     }
 
     private synchronized CachedLibrary load(MinecraftServer server) throws IOException {
+        if (server == null || isStopped(server)) {
+            throw new IOException("Server is stopping");
+        }
         CachedLibrary cached = caches.get(server);
         if (cached != null) return cached;
         DataLibraryLoadResult loaded = DataLibraryFileStore.read(
                 ServerDataLibraryPaths.file(server), server.overworld().registryAccess());
         CachedLibrary snapshot = freeze(loaded);
-        caches.put(server, snapshot);
+        if (!isStopped(server)) {
+            caches.put(server, snapshot);
+        }
         return snapshot;
     }
 
@@ -141,4 +160,22 @@ public final class RemoteDataLibraryService {
     }
 
     @FunctionalInterface private interface DocumentMutation { void apply(DataLibraryDocument document); }
+
+    private boolean isStopped(MinecraftServer server) {
+        synchronized (stoppedServers) {
+            return stoppedServers.contains(server);
+        }
+    }
+
+    private void markStopped(MinecraftServer server) {
+        synchronized (stoppedServers) {
+            stoppedServers.add(server);
+        }
+    }
+
+    private void clearStopped(MinecraftServer server) {
+        synchronized (stoppedServers) {
+            stoppedServers.remove(server);
+        }
+    }
 }

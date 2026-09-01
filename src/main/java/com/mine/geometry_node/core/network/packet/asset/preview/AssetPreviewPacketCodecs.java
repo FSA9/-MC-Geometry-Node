@@ -18,11 +18,11 @@ public final class AssetPreviewPacketCodecs {
     }
     public static void writeDescriptor(RegistryFriendlyByteBuf b, AssetPreviewDescriptor d) {
         writeRevision(b, d.revision()); b.writeVarInt(d.format().ordinal()); b.writeVarInt(d.width()); b.writeVarInt(d.height());
-        b.writeVarInt(d.encodedBytes()); b.writeUtf(d.sha256(), 64);
+        b.writeVarInt(d.encodedBytes()); b.writeUtf(d.sha256(), AssetPreviewLimits.SHA256_HEX_LENGTH);
     }
     public static AssetPreviewDescriptor readDescriptor(RegistryFriendlyByteBuf b) {
         return new AssetPreviewDescriptor(readRevision(b), readEnum(b, AssetPreviewFormat.values()),
-                b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readUtf(64));
+                b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readUtf(AssetPreviewLimits.SHA256_HEX_LENGTH));
     }
     public static <E extends Enum<E>> E readEnum(RegistryFriendlyByteBuf b, E[] values) {
         int i = b.readVarInt(); if (i < 0 || i >= values.length) throw new IllegalArgumentException("Invalid nativepreview enum ordinal");
