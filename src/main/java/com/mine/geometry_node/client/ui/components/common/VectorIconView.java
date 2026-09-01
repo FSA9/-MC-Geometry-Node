@@ -16,6 +16,7 @@ public class VectorIconView extends View {
         CHEVRON_DOWN,
         SPLIT_HORIZONTAL,
         SPLIT_VERTICAL,
+        TRASH,
         CLOSE
     }
 
@@ -72,6 +73,7 @@ public class VectorIconView extends View {
             case CHEVRON_DOWN -> drawChevronDown(canvas, cx, cy, half);
             case SPLIT_HORIZONTAL -> drawSplitHorizontal(canvas, cx, cy, half);
             case SPLIT_VERTICAL -> drawSplitVertical(canvas, cx, cy, half);
+            case TRASH -> drawTrash(canvas, cx, cy, half);
             case CLOSE -> drawClose(canvas, cx, cy, half);
         }
     }
@@ -192,6 +194,27 @@ public class VectorIconView extends View {
         mPaint.setAlpha(220);
         canvas.drawLine(cx - size, cy - size, cx + size, cy + size, mPaint);
         canvas.drawLine(cx + size, cy - size, cx - size, cy + size, mPaint);
+    }
+
+    private void drawTrash(Canvas canvas, float cx, float cy, float half) {
+        float left = cx - half * 0.52f;
+        float right = cx + half * 0.52f;
+        float top = cy - half * 0.30f;
+        float bottom = cy + half * 0.70f;
+        float stroke = Math.max(1.2f, half * 0.12f);
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(stroke);
+        mRect.set(left, top, right, bottom);
+        canvas.drawRoundRect(mRect, half * 0.10f, half * 0.10f,
+                half * 0.10f, half * 0.10f, mPaint);
+        canvas.drawLine(cx - half * 0.68f, cy - half * 0.48f,
+                cx + half * 0.68f, cy - half * 0.48f, mPaint);
+        canvas.drawLine(cx - half * 0.24f, cy - half * 0.68f,
+                cx + half * 0.24f, cy - half * 0.68f, mPaint);
+        canvas.drawLine(cx - half * 0.18f, cy - half * 0.10f,
+                cx - half * 0.18f, cy + half * 0.46f, mPaint);
+        canvas.drawLine(cx + half * 0.18f, cy - half * 0.10f,
+                cx + half * 0.18f, cy + half * 0.46f, mPaint);
     }
 
 }

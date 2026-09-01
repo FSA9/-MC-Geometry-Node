@@ -8,6 +8,7 @@ public enum UiSurfaceType {
     VIEWPORT("V"),
     TERMINAL("T"),
     ASSET_BROWSER("A"),
+    DATA_LIBRARY("D"),
     PERFORMANCE("PF");
 
     private final String prefix;

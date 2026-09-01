@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
 import com.mine.geometry_node.client.runtime.quest.ui.QuestHintView;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;
@@ -153,7 +154,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
 
         private final LinearLayout root;
         private final FrameLayout expandButton;
-        private final VectorIconView expandIcon;
+        private final SvgIconView expandIcon;
         private final EditText contentInput;
         private final TextView quantityToggle;
         private final TextView counterToggle;
@@ -185,7 +186,8 @@ public final class QuestObjectivesEditor extends LinearLayout {
             contentRow.setGravity(Gravity.CENTER_VERTICAL);
             expandButton = new FrameLayout(getContext());
             styleButton(expandButton, COLOR_BUTTON, COLOR_BUTTON_HOVER);
-            expandIcon = new VectorIconView(getContext(), VectorIconView.Kind.CHEVRON_UP, COLOR_TEXT);
+            expandIcon = new SvgIconView(getContext(),
+                    SvgIconView.Icon.forExpandedState(expanded), COLOR_TEXT);
             expandIcon.setClickable(false);
             FrameLayout.LayoutParams expandIconLp = new FrameLayout.LayoutParams(
                     UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(12));
@@ -435,7 +437,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
             quantityRow.setVisibility(visibility);
             counterRow.setVisibility(visibility);
             hintRow.setVisibility(visibility);
-            expandIcon.setKind(expanded ? VectorIconView.Kind.CHEVRON_UP : VectorIconView.Kind.CHEVRON_DOWN);
+            expandIcon.setIcon(SvgIconView.Icon.forExpandedState(expanded));
             expandButton.setTooltipText(tr(expanded
                     ? "geometry_node.graph_properties.quest.objective_collapse"
                     : "geometry_node.graph_properties.quest.objective_expand"));

@@ -3,6 +3,7 @@ package com.mine.geometry_node.mixin;
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
+import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryEntityPickerController;
 import com.mojang.blaze3d.platform.InputConstants;
 import icyllis.modernui.mc.MuiScreen;
 import net.minecraft.CrashReport;
@@ -54,6 +55,10 @@ public abstract class KeyboardHandlerMixin {
             cancellable = true
     )
     private void geometryNode$routeMainUiKey(long handle, int action, KeyEvent event, CallbackInfo ci) {
+        if (DataLibraryEntityPickerController.handleKey(action, event)) {
+            ci.cancel();
+            return;
+        }
         if (EntityTemplatePickerController.handleKey(action, event)) {
             ci.cancel();
             return;

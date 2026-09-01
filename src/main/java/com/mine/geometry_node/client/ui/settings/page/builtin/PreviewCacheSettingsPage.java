@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.settings.page.builtin;
 
 import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewService;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.ui.settings.editor.ConfigEntryEditor;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPage;
@@ -32,7 +33,7 @@ public final class PreviewCacheSettingsPage implements SettingsPage {
     private final ScrollView root;
     private final LinearLayout group;
     private final LinearLayout entriesHost;
-    private final TextView disclosure;
+    private final SvgIconView disclosure;
     private final TextView usageValue;
     private final TextView statusValue;
     private final List<ConfigEntryEditor<?>> editors = new ArrayList<>();
@@ -57,8 +58,8 @@ public final class PreviewCacheSettingsPage implements SettingsPage {
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
         header.setBackground(rect(COLOR_HEADER, 0));
-        disclosure = text(context, ">", 11.0f, COLOR_MUTED);
-        disclosure.setGravity(Gravity.CENTER);
+        disclosure = new SvgIconView(context.uiContext(),
+                SvgIconView.Icon.forExpandedState(false), COLOR_MUTED);
         header.addView(disclosure, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(20),
                 ViewGroup.LayoutParams.MATCH_PARENT));
         TextView title = text(context, tr("geometry_node.settings.category.preview_cache"), 10.5f, COLOR_TEXT);
@@ -160,7 +161,7 @@ public final class PreviewCacheSettingsPage implements SettingsPage {
     private void setExpanded(boolean value) {
         expanded = value;
         entriesHost.setVisibility(value ? View.VISIBLE : View.GONE);
-        disclosure.setText(value ? "v" : ">");
+        disclosure.setIcon(SvgIconView.Icon.forExpandedState(value));
         if (value) refreshUsage();
     }
 

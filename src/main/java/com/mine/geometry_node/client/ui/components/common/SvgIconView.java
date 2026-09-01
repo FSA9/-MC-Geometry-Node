@@ -33,11 +33,16 @@ public class SvgIconView extends View {
     public enum Icon {
         GRAPH_EDITOR("graph_editor.svg"),
         ASSET_LIBRARY("asset_library.svg"),
+        DATA_LIBRARY("data_library.svg"),
         TERMINAL("console.svg"),
         PERFORMANCE("analysis.svg"),
-        CLEAR("clear.svg"),
-        RESET("refresh.svg"),
-        CLOSE("close.svg"),
+        CLEAR("function/clear.svg"),
+        RESET("function/refresh.svg"),
+        CLOSE("function/close.svg"),
+        EXPAND("function/chevrons-up-down-64px.svg"),
+        COLLAPSE("function/chevrons-down-up-64px.svg"),
+        SQUARE_CHECK("function/square-check-64px.svg"),
+        SQUARE_PLUS("function/square-plus-64px.svg"),
         BLUEPRINT("graph_editor.svg", "blueprint"),
         QUEST("quest.svg", "quest"),
         BEHAVIOR_TREE("behavior_tree.svg", "behavior_tree");
@@ -64,6 +69,10 @@ public class SvgIconView extends View {
                 if (graphTypeId.equals(icon.mGraphTypeId)) return icon;
             }
             return null;
+        }
+
+        public static Icon forExpandedState(boolean expanded) {
+            return expanded ? COLLAPSE : EXPAND;
         }
     }
 

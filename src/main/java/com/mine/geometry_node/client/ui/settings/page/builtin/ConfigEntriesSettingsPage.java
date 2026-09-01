@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.settings.page.builtin;
 
 import com.mine.geometry_node.client.ui.persistence.config.ConfigCategory;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigEntry;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.settings.editor.ConfigEntryEditor;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPage;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPageContext;
@@ -132,8 +133,8 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
         header.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
         header.setBackground(headerBackground(COLOR_HEADER));
 
-        TextView disclosure = UIUtils.createLockedTextView(context.uiContext(), ">", 11.0f, COLOR_DISCLOSURE);
-        disclosure.setGravity(Gravity.CENTER);
+        SvgIconView disclosure = new SvgIconView(context.uiContext(),
+                SvgIconView.Icon.forExpandedState(false), COLOR_DISCLOSURE);
         header.addView(disclosure, new LinearLayout.LayoutParams(
                 UIUtils.dp2pxInt(20), ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -232,13 +233,13 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
     private static final class GroupBinding {
         private final LinearLayout view;
         private final LinearLayout entriesHost;
-        private final TextView disclosure;
+        private final SvgIconView disclosure;
         private final List<EntryBinding> entries;
         private final String searchText;
         private boolean expanded;
         private boolean searchExpanded;
 
-        private GroupBinding(LinearLayout view, LinearLayout entriesHost, TextView disclosure,
+        private GroupBinding(LinearLayout view, LinearLayout entriesHost, SvgIconView disclosure,
                              List<EntryBinding> entries, String searchText) {
             this.view = view;
             this.entriesHost = entriesHost;
@@ -265,7 +266,7 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
         private void updateExpansion() {
             boolean visible = expanded || searchExpanded;
             entriesHost.setVisibility(visible ? View.VISIBLE : View.GONE);
-            disclosure.setText(visible ? "v" : ">");
+            disclosure.setIcon(SvgIconView.Icon.forExpandedState(visible));
         }
     }
 }

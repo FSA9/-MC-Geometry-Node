@@ -37,6 +37,9 @@ import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteA
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
+import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryTransferStaging;
+import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryRequest;
+import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
 import dev.architectury.networking.NetworkManager;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
@@ -61,6 +64,7 @@ public class NetworkHandler {
         GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
         ServerAssetTransferService.INSTANCE.init();
         ServerAssetPreviewService.INSTANCE.init();
+        RemoteDataLibraryTransferStaging.INSTANCE.init();
         BehaviorTreeDebugService.INSTANCE.init();
 
         NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketBehaviorDebugSubscription.TYPE,
@@ -193,6 +197,17 @@ public class NetworkHandler {
                         }
                     });
                 }
+        );
+
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                PacketRemoteDataLibraryRequest.TYPE,
+                PacketRemoteDataLibraryRequest.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> {
+                    if (context.getPlayer() instanceof ServerPlayer player) {
+                        handleRemoteDataLibrary(payload, player);
+                    }
+                })
         );
 
         // ==========================================
@@ -436,6 +451,44 @@ public class NetworkHandler {
             sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
                     payload.requestId(), false, "操作失败: " + failureMessage(exception)));
         }
+    }
+
+    private static void handleRemoteDataLibrary(PacketRemoteDataLibraryRequest payload, ServerPlayer player) {
+        try {
+            var staging = RemoteDataLibraryTransferStaging.INSTANCE;
+            switch (payload.operation()) {
+                case PREPARE_REFRESH -> {
+                    requireDataLibraryPermission(RemoteAssetPermissions.canBrowseRemoteAssets(player)
+                            && RemoteAssetPermissions.canDownloadAssets(player));
+                    MinecraftServer server = player.level().getServer();
+                    staging.prepareDownloadAsync(player)
+                            .whenComplete((ticket, error) -> server.execute(() -> sendToPlayer(player,
+                                    error == null
+                                            ? new PacketRemoteDataLibraryResponse(
+                                                    payload.requestId(), true, "", ticket.token())
+                                            : new PacketRemoteDataLibraryResponse(
+                                                    payload.requestId(), false, failureMessage(error), ""))));
+                }
+                case DELETE -> {
+                    requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
+                    MinecraftServer server = player.level().getServer();
+                    staging.deleteAsync(player, payload.keys())
+                            .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
+                                    error == null
+                                            ? new PacketRemoteDataLibraryResponse(
+                                                    payload.requestId(), true, "", "")
+                                            : new PacketRemoteDataLibraryResponse(
+                                                    payload.requestId(), false, failureMessage(error), ""))));
+                }
+            }
+        } catch (Exception exception) {
+            sendToPlayer(player, new PacketRemoteDataLibraryResponse(
+                    payload.requestId(), false, failureMessage(exception), ""));
+        }
+    }
+
+    private static void requireDataLibraryPermission(boolean allowed) {
+        if (!allowed) throw new SecurityException("没有执行该 Data Library 操作的权限。");
     }
 
     private static String failureMessage(Throwable error) {

@@ -324,7 +324,8 @@ public final class ClientAssetTransferService implements AutoCloseable {
     private void start(ClientFile file) {
         if (file.direction == AssetTransferDirection.DOWNLOAD) {
             NetworkHandler.sendToServer(new PacketAssetTransferOpen(file.transferId, file.direction,
-                    file.request.remotePath(), 0L, "", preferences().preferredChunkBytes(), file.request.conflictPolicy()));
+                    file.request.remotePath(), 0L, "", preferences().preferredChunkBytes(),
+                    file.request.conflictPolicy(), file.request.purpose()));
             return;
         }
         AssetTransferClientPreferences preferences = preferences();
@@ -345,7 +346,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
                     }
                     NetworkHandler.sendToServer(new PacketAssetTransferOpen(file.transferId, file.direction,
                             file.request.remotePath(), file.totalBytes, file.sha256,
-                            preferences.preferredChunkBytes(), file.request.conflictPolicy()));
+                            preferences.preferredChunkBytes(), file.request.conflictPolicy(), file.request.purpose()));
                 }));
     }
 

@@ -41,6 +41,8 @@ import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPrevi
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewChunk;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewComplete;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResult;
+import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
+import com.mine.geometry_node.client.ui.editor.datalibrary.NetworkRemoteDataLibraryGateway;
 
 /** Registers S2C receivers and routes their payloads into client-owned state. */
 public final class ClientNetworkReceiverRegistry {
@@ -107,5 +109,7 @@ public final class ClientNetworkReceiverRegistry {
                 (payload, context) -> context.queue(() -> ClientAssetPreviewProtocol.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketAssetPreviewResult.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetPreviewProtocol.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteDataLibraryResponse.TYPE,
+                (payload, context) -> context.queue(() -> NetworkRemoteDataLibraryGateway.INSTANCE.handle(payload)));
     }
 }

@@ -47,14 +47,21 @@ public final class ClientRequestTracker {
         }
 
         public <T> void register(int requestId, Class<T> responseType, Consumer<? super T> callback) {
+            register(requestId, responseType, callback, null);
+        }
+
+        public <T> void register(int requestId, Class<T> responseType, Consumer<? super T> callback,
+                                 Runnable onTimeout) {
             cancel(requestId);
-            PendingRequest<T> pending = new PendingRequest<>(this, responseType, callback);
+            PendingRequest<T> pending = new PendingRequest<>(this, responseType, callback, onTimeout);
             PendingRequest<?> existing = REQUESTS.putIfAbsent(requestId, pending);
             if (existing != null) {
                 throw new IllegalStateException("Client request ID is already registered: " + requestId);
             }
             pending.setTimeout(TIMEOUT_EXECUTOR.schedule(
-                    () -> REQUESTS.remove(requestId, pending),
+                    () -> {
+                        if (REQUESTS.remove(requestId, pending)) pending.timeout();
+                    },
                     DEFAULT_TIMEOUT_SECONDS,
                     TimeUnit.SECONDS
             ));
@@ -98,13 +105,16 @@ public final class ClientRequestTracker {
         private final Group owner;
         private final Class<T> responseType;
         private final Consumer<? super T> callback;
+        private final Runnable timeoutCallback;
         private volatile ScheduledFuture<?> timeout;
         private boolean closed;
 
-        private PendingRequest(Group owner, Class<T> responseType, Consumer<? super T> callback) {
+        private PendingRequest(Group owner, Class<T> responseType, Consumer<? super T> callback,
+                               Runnable timeoutCallback) {
             this.owner = owner;
             this.responseType = Objects.requireNonNull(responseType, "responseType");
             this.callback = callback != null ? callback : ignored -> { };
+            this.timeoutCallback = timeoutCallback != null ? timeoutCallback : () -> { };
         }
 
         private boolean accepts(Object response) {
@@ -114,6 +124,11 @@ public final class ClientRequestTracker {
         private void complete(Object response) {
             cancelTimeout();
             callback.accept(responseType.cast(response));
+        }
+
+        private void timeout() {
+            cancelTimeout();
+            timeoutCallback.run();
         }
 
         private synchronized void setTimeout(ScheduledFuture<?> timeout) {

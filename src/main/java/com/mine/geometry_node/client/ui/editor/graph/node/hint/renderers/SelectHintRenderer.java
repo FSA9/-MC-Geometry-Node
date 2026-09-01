@@ -287,7 +287,7 @@ public class SelectHintRenderer implements UIHintRenderer {
         }
     }
 
-    static class DropdownSearchMenu extends FrameLayout {
+    public static class DropdownSearchMenu extends FrameLayout {
         private LinearLayout mContentLayout;
         private LinearLayout mListContainer;
         private EditText mSearchBox;
@@ -300,7 +300,8 @@ public class SelectHintRenderer implements UIHintRenderer {
 
         private View mAnchor;
 
-        private InteractionContext mContext;
+        private ViewGroup mContext;
+        private float mAnchorScale = 1.0f;
         private boolean mIsTracking = false;
 
         public DropdownSearchMenu(Context context, String title, List<String> options,
@@ -465,15 +466,27 @@ public class SelectHintRenderer implements UIHintRenderer {
         }
 
         public void showAt(View anchor, InteractionContext context) {
+            if (!(context instanceof ViewGroup host)) return;
+            showAt(anchor, host, context.getCamera().getScale());
+        }
+
+        /** Shows the same searchable selector outside the graph viewport. */
+        public void showAt(View anchor, ViewGroup context) {
+            showAt(anchor, context, 1.0f);
+        }
+
+        private void showAt(View anchor, ViewGroup context, float anchorScale) {
+            if (anchor == null || context == null) return;
             this.mAnchor = anchor;
             this.mContext = context;
+            this.mAnchorScale = anchorScale;
 
             renderList();
             updatePosition();
 
             if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
 
-            ((ViewGroup) context).addView(this);
+            context.addView(this);
 
             mSearchBox.post(() -> { mSearchBox.setText(""); mSearchBox.requestFocus(); });
 
@@ -498,7 +511,7 @@ public class SelectHintRenderer implements UIHintRenderer {
         private void updatePosition() {
             if (mAnchor == null || mContext == null) return;
 
-            ViewGroup parentView = (ViewGroup) mContext;
+            ViewGroup parentView = mContext;
 
             int[] btnLoc = new int[2]; mAnchor.getLocationOnScreen(btnLoc);
             int[] vpLoc = new int[2]; parentView.getLocationOnScreen(vpLoc);
@@ -507,7 +520,7 @@ public class SelectHintRenderer implements UIHintRenderer {
             float relY = btnLoc[1] - vpLoc[1];
 
             int targetWidth = UIUtils.dp2pxInt(MENU_WIDTH_DP);
-            float scaledHeight = mAnchor.getHeight() * mContext.getCamera().getScale();
+            float scaledHeight = mAnchor.getHeight() * mAnchorScale;
 
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
             lp.gravity = Gravity.TOP | Gravity.LEFT;

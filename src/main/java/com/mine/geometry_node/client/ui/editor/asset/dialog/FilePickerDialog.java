@@ -67,6 +67,10 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
         browserArea.setOrientation(LinearLayout.HORIZONTAL);
         browserArea.setBackground(rect(0xFF1F1F1F, 3));
 
+        mBrowser = AssetFileBrowserPanel.picker(context, this);
+        mBrowser.setPickFileAction(this::chooseEntry);
+        mBrowser.setPickCurrentDirectoryAction(this::chooseCurrentDirectory);
+
         mLeftPanel = new AssetNavigationPanel(context, this);
         browserArea.addView(mLeftPanel, new LinearLayout.LayoutParams(
                 0,
@@ -76,9 +80,6 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
 
         browserArea.addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
 
-        mBrowser = AssetFileBrowserPanel.picker(context, this);
-        mBrowser.setPickFileAction(this::chooseEntry);
-        mBrowser.setPickCurrentDirectoryAction(this::chooseCurrentDirectory);
         browserArea.addView(mBrowser, new LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -286,7 +287,8 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
 
     @Override
     public boolean canBrowseRemote() {
-        return mBrowser.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE);
+        return mBrowser != null
+                && mBrowser.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE);
     }
 
     @Override

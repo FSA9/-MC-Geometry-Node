@@ -25,7 +25,7 @@ public final class EditorSessionStore {
     private static final int MAX_TERMINAL_TITLE_LENGTH = 80;
     private static final int MAX_TERMINAL_PROFILE_ID_LENGTH = 128;
     private static final Set<String> EDITOR_TYPES = Set.of(
-            "GRAPH_EDITOR", "ASSET_BROWSER", "TERMINAL", "PERFORMANCE", "GAME_VIEWPORT");
+            "GRAPH_EDITOR", "ASSET_BROWSER", "DATA_LIBRARY", "TERMINAL", "PERFORMANCE", "GAME_VIEWPORT");
 
     private EditorSessionStore() {
     }

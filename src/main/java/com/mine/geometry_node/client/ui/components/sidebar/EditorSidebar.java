@@ -66,22 +66,6 @@ public final class EditorSidebar extends LinearLayout {
         mTitleView = label(context, "", 12.0f, COLOR_TEXT);
         header.addView(mTitleView, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
-        TextView collapse = label(context, ">", 14.0f, 0xFFB8B8B8);
-        collapse.setGravity(Gravity.CENTER);
-        String collapseDescription = tr("geometry_node.registration.collapse");
-        collapse.setContentDescription(collapseDescription);
-        collapse.setTooltipText(collapseDescription);
-        collapse.setBackground(rect(0x00000000, 3.0f, 0, 0));
-        collapse.setOnHoverListener((v, event) -> {
-            collapse.setBackground(rect(
-                    event.getAction() == MotionEvent.ACTION_HOVER_ENTER ? COLOR_HOVER : 0x00000000,
-                    3.0f, 0, 0));
-            return false;
-        });
-        collapse.setOnClickListener(v -> {
-            if (mOnCollapseRequested != null) mOnCollapseRequested.run();
-        });
-        header.addView(collapse, new LayoutParams(UIUtils.dp2pxInt(26), UIUtils.dp2pxInt(24)));
         mPanelColumn.addView(header, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
 
         mContentHost = new FrameLayout(context);

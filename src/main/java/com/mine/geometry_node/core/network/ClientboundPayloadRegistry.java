@@ -27,6 +27,7 @@ import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPrevi
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewChunk;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewComplete;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResult;
+import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
 import dev.architectury.networking.NetworkManager;
 import dev.architectury.platform.Platform;
 import dev.architectury.utils.Env;
@@ -70,6 +71,7 @@ public final class ClientboundPayloadRegistry {
         add(PacketAssetPreviewChunk.TYPE, PacketAssetPreviewChunk.STREAM_CODEC);
         add(PacketAssetPreviewComplete.TYPE, PacketAssetPreviewComplete.STREAM_CODEC);
         add(PacketAssetPreviewResult.TYPE, PacketAssetPreviewResult.STREAM_CODEC);
+        add(PacketRemoteDataLibraryResponse.TYPE, PacketRemoteDataLibraryResponse.STREAM_CODEC);
     }
 
     private ClientboundPayloadRegistry() {

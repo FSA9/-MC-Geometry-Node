@@ -17,6 +17,8 @@ import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.workspace.registration.BuiltinSidebarPanels;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
+import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryEntityPickerController;
+import com.mine.geometry_node.client.ui.editor.datalibrary.NetworkRemoteDataLibraryGateway;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
 import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewService;
@@ -106,14 +108,18 @@ public class GeometryNodeClient {
         ClientDialogueState.reset();
         RemoteAssetClient.reset();
         ClientAssetTransferPlanState.reset();
+        NetworkRemoteDataLibraryGateway.INSTANCE.resetConnection();
         ClientAssetTransferService.INSTANCE.resetConnection();
         ClientAssetPreviewService.INSTANCE.resetConnection();
         ClientBehaviorDebugStore.clear();
         EntityTemplatePickerController.reset();
+        DataLibraryEntityPickerController.reset();
         clearClientRenderState();
     }
 
     private void onInteractionKeyMappingTriggered(InputEvent.InteractionKeyMappingTriggered event) {
+        DataLibraryEntityPickerController.handleInteraction(event);
+        if (event.isCanceled()) return;
         EntityTemplatePickerController.handleInteraction(event);
     }
 

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.transfer.service;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetRepositoryService;
@@ -11,6 +12,10 @@ import com.mine.geometry_node.core.engine.system.asset.transfer.io.IncomingAsset
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.OutgoingAssetTransferFile;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.VerifiedAssetCommitter;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferDirection;
+import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferPurpose;
+import com.mine.geometry_node.core.engine.system.data.library.DataLibraryJsonCodec;
+import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryService;
+import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryTransferStaging;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferErrorCode;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferState;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -67,7 +72,7 @@ public final class ServerAssetTransferService implements AutoCloseable {
     }
 
     public void handleOpen(ServerPlayer player, PacketAssetTransferOpen packet) {
-        if (!hasPermission(player, packet.direction())) {
+        if (!hasPermissionForOpen(player, packet)) {
             sendFailure(player, packet.transferId(), AssetTransferErrorCode.PERMISSION_DENIED, "permission_denied", "");
             return;
         }
@@ -187,10 +192,15 @@ public final class ServerAssetTransferService implements AutoCloseable {
                     session.state = AssetTransferState.COMMITTING;
                 }
                 BasicFileAttributes committedRevision = Files.readAttributes(temporary, BasicFileAttributes.class);
-                VerifiedAssetCommitter.CommitResult result = RemoteAssetRepositoryService.INSTANCE.commitVerifiedUpload(
-                        player.level().getServer(), session.remotePath, temporary,
-                        session.open.conflictPolicy()).join();
-                if (result != VerifiedAssetCommitter.CommitResult.COMMITTED) return CommitOutcome.SKIPPED;
+                if (session.open.purpose() == AssetTransferPurpose.ASSET_REPOSITORY) {
+                    VerifiedAssetCommitter.CommitResult result = RemoteAssetRepositoryService.INSTANCE.commitVerifiedUpload(
+                            player.level().getServer(), session.remotePath, temporary,
+                            session.open.conflictPolicy()).join();
+                    if (result != VerifiedAssetCommitter.CommitResult.COMMITTED) return CommitOutcome.SKIPPED;
+                } else {
+                    commitDataLibraryUpload(session, temporary);
+                    Files.deleteIfExists(temporary);
+                }
                 return new CommitOutcome(true, committedRevision.size(),
                         committedRevision.lastModifiedTime().toMillis());
             } catch (Throwable throwable) {
@@ -200,6 +210,10 @@ public final class ServerAssetTransferService implements AutoCloseable {
         }).whenComplete((outcome, throwable) -> player.level().getServer().execute(() -> {
             if (lookup.owner.sessions.get(session.transferId) != session) return;
             if (throwable != null) {
+                if (session.open.purpose() != AssetTransferPurpose.ASSET_REPOSITORY) {
+                    GeometryNode.LOGGER.warn("Data Library transfer {} commit failed for player {}: {}",
+                            session.open.purpose(), player.getGameProfile().name(), rootMessage(throwable), throwable);
+                }
                 failAndClose(lookup.owner, session, AssetTransferErrorCode.HASH_MISMATCH,
                         "verification_or_commit_failed", rootMessage(throwable));
             } else {
@@ -262,9 +276,14 @@ public final class ServerAssetTransferService implements AutoCloseable {
         if (session == null) return;
         session.state = AssetTransferState.PREFLIGHT;
         session.touch();
-        io.submit(() -> OutgoingAssetTransferFile.open(
-                RemoteAssetFileService.resolveTransferSource(session.player.level().getServer(), session.remotePath),
-                session.policy.maxDownloadFileBytes())).whenComplete((outgoing, throwable) ->
+        io.submit(() -> {
+            java.nio.file.Path source = session.open.purpose() == AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD
+                    ? RemoteDataLibraryTransferStaging.INSTANCE.claimDownload(session.player, session.remotePath)
+                    : RemoteAssetFileService.resolveTransferSource(session.player.level().getServer(), session.remotePath);
+            session.downloadSource = source;
+            session.deleteDownloadSource = session.open.purpose() == AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD;
+            return OutgoingAssetTransferFile.open(source, session.policy.maxDownloadFileBytes());
+        }).whenComplete((outgoing, throwable) ->
                 session.player.level().getServer().execute(() -> {
                     if (owner.sessions.get(transferId) != session) {
                         closeQuietly(outgoing);
@@ -421,10 +440,40 @@ public final class ServerAssetTransferService implements AutoCloseable {
         io.close();
     }
 
+    private static boolean hasPermissionForOpen(ServerPlayer player, PacketAssetTransferOpen open) {
+        return switch (open.purpose()) {
+            case ASSET_REPOSITORY -> open.direction() == AssetTransferDirection.UPLOAD
+                    ? RemoteAssetPermissions.canUploadAssets(player) : RemoteAssetPermissions.canDownloadAssets(player);
+            case DATA_LIBRARY_CREATE, DATA_LIBRARY_UPDATE ->
+                    open.direction() == AssetTransferDirection.UPLOAD && RemoteAssetPermissions.canUploadAssets(player);
+            case DATA_LIBRARY_DOWNLOAD -> open.direction() == AssetTransferDirection.DOWNLOAD
+                    && RemoteAssetPermissions.canBrowseRemoteAssets(player)
+                    && RemoteAssetPermissions.canDownloadAssets(player);
+        };
+    }
+
     private static boolean hasPermission(ServerPlayer player, AssetTransferDirection direction) {
         return direction == AssetTransferDirection.UPLOAD
                 ? RemoteAssetPermissions.canUploadAssets(player) : RemoteAssetPermissions.canDownloadAssets(player);
     }
+
+    private static void commitDataLibraryUpload(ServerSession session, java.nio.file.Path temporary) throws Exception {
+        String json = Files.readString(temporary, java.nio.charset.StandardCharsets.UTF_8);
+        var server = session.player.level().getServer();
+        var incoming = DataLibraryJsonCodec.decode(json, server.overworld().registryAccess());
+        if (!incoming.diagnostics().isEmpty()) {
+            String details = incoming.diagnostics().stream()
+                    .map(diagnostic -> diagnostic.path() + ": " + diagnostic.message())
+                    .collect(java.util.stream.Collectors.joining("; "));
+            throw new IllegalArgumentException("Uploaded Data Library contains invalid entries: " + details);
+        }
+        switch (session.open.purpose()) {
+            case DATA_LIBRARY_CREATE -> RemoteDataLibraryService.INSTANCE.create(server, incoming.document());
+            case DATA_LIBRARY_UPDATE -> RemoteDataLibraryService.INSTANCE.update(server, incoming.document());
+            default -> throw new IllegalArgumentException("Invalid Data Library upload purpose");
+        }
+    }
+
 
     private static void sendFailure(ServerPlayer player, UUID transferId, AssetTransferErrorCode code,
                                     String message, String detail) {
@@ -500,6 +549,8 @@ public final class ServerAssetTransferService implements AutoCloseable {
         private int nextSequence;
         private long nextOffset;
         private boolean sendInProgress;
+        private volatile java.nio.file.Path downloadSource;
+        private volatile boolean deleteDownloadSource;
 
         private ServerSession(ServerPlayer player, PacketAssetTransferOpen open, int chunkBytes,
                               AssetTransferServerPolicy policy) {
@@ -517,6 +568,9 @@ public final class ServerAssetTransferService implements AutoCloseable {
         @Override public void close() {
             closeQuietly(incoming);
             closeQuietly(outgoing);
+            if (deleteDownloadSource && downloadSource != null) {
+                try { Files.deleteIfExists(downloadSource); } catch (Exception ignored) { }
+            }
         }
     }
 

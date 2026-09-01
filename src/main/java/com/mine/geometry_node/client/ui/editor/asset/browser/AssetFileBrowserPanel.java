@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.editor.asset.browser;
 
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
+import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionId;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragState;
@@ -30,8 +31,6 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.resources.TypedValue;
-import icyllis.modernui.text.Editable;
-import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
@@ -298,16 +297,9 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private EditText createSearchInput(Context context, String hint, Consumer<String> pendingQuerySetter) {
-        EditText input = createSearchInput(context);
+        UiSearchInput input = new UiSearchInput(context);
         input.setHint(hint);
-        input.setHintTextColor(0xFF737B86);
-        input.addTextChangedListener(new TextWatcher() {
-            @Override public void afterTextChanged(Editable s) {
-                pendingQuerySetter.accept(s.toString().trim());
-            }
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-        });
+        input.setOnQueryChanged(value -> pendingQuerySetter.accept(value.trim()));
         input.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
                 applySearch();
@@ -1038,13 +1030,6 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         input.setGravity(Gravity.CENTER_VERTICAL);
         input.setBackground(createRectDrawable(COLOR_CONTROL_BG, 3, 1, COLOR_CONTROL_BORDER));
         input.setSingleLine(true);
-        return input;
-    }
-
-    private EditText createSearchInput(Context context) {
-        EditText input = createNavInput(context);
-        input.setTextColor(0xFFE6E6E6);
-        input.setHintTextColor(0xFF737B86);
         return input;
     }
 

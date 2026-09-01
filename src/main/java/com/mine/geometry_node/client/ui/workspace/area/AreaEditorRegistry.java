@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserWindow;
+import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryWindow;
+import com.mine.geometry_node.client.ui.editor.datalibrary.ClientDataLibraryRepository;
 import com.mine.geometry_node.client.ui.editor.terminal.TerminalWindow;
 import com.mine.geometry_node.client.ui.editor.graph.GraphEditorWindow;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
@@ -24,6 +26,7 @@ final class AreaEditorRegistry {
         AreaEditorWindow window = switch (type) {
             case GRAPH_EDITOR -> new GraphEditorWindow(context);
             case ASSET_BROWSER -> new AssetBrowserWindow(context, sessionState.assetBrowser, sessionChanged);
+            case DATA_LIBRARY -> new DataLibraryWindow(context, ClientDataLibraryRepository.INSTANCE);
             case TERMINAL -> new TerminalWindow(context, sessionState.terminal, sessionChanged);
             case PERFORMANCE -> createPlaceholder(context,
                     Component.translatable(type.translationKey()).getString());
@@ -35,6 +38,7 @@ final class AreaEditorRegistry {
         return switch (type) {
             case GRAPH_EDITOR -> UiSurfaceType.VIEWPORT;
             case ASSET_BROWSER -> UiSurfaceType.ASSET_BROWSER;
+            case DATA_LIBRARY -> UiSurfaceType.DATA_LIBRARY;
             case TERMINAL -> UiSurfaceType.TERMINAL;
             case PERFORMANCE -> UiSurfaceType.PERFORMANCE;
         };

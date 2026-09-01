@@ -2,7 +2,6 @@ package com.mine.geometry_node.client.ui.editor.asset.sidebar.transfer;
 
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
@@ -266,8 +265,8 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         header.setBackground(rect(COLOR_SECTION, 0, 0));
 
         boolean expanded = expandedSections.getOrDefault(section, true);
-        VectorIconView disclosure = new VectorIconView(getContext(),
-                expanded ? VectorIconView.Kind.CHEVRON_UP : VectorIconView.Kind.CHEVRON_DOWN, COLOR_MUTED);
+        SvgIconView disclosure = new SvgIconView(getContext(),
+                SvgIconView.Icon.forExpandedState(expanded), COLOR_MUTED);
         header.addView(disclosure, new LinearLayout.LayoutParams(px(22), px(22)));
         TextView label = label(title, 10, COLOR_TEXT);
         header.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
@@ -286,7 +285,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
             boolean next = !expandedSections.getOrDefault(section, true);
             expandedSections.put(section, next);
             body.setVisibility(next ? View.VISIBLE : View.GONE);
-            disclosure.setKind(next ? VectorIconView.Kind.CHEVRON_UP : VectorIconView.Kind.CHEVRON_DOWN);
+            disclosure.setIcon(SvgIconView.Icon.forExpandedState(next));
         });
         header.setOnHoverListener((view, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {

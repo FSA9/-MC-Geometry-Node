@@ -145,6 +145,7 @@ public final class AssetTypeCatalog {
         }
     }
 
+
     private static String inspectGraphType(JsonElement parsed) {
         if (parsed == null || !parsed.isJsonObject()) return "";
         JsonObject root = parsed.getAsJsonObject();

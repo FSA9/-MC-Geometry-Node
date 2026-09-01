@@ -31,6 +31,13 @@ public final class GeometryValue {
         return new GeometryValue(new Primitive[]{primitive});
     }
 
+    public static GeometryValue of(Primitive... primitives) {
+        if (primitives == null || primitives.length == 0) return EMPTY;
+        return new GeometryValue(java.util.Arrays.stream(primitives)
+                .filter(java.util.Objects::nonNull)
+                .toArray(Primitive[]::new));
+    }
+
     public boolean isEmpty() {
         return primitives.length == 0;
     }
