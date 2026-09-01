@@ -298,6 +298,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data", new SetScopedState());
         registry.register("data", new HasScopedState());
         registry.register("data", new ClearScopedState());
+        registry.register("data", new DataLibraryReference());
         registry.register("data/player", new IsKeyPressed());
 
         // Data/World

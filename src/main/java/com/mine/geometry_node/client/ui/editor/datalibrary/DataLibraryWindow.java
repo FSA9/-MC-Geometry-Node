@@ -19,6 +19,8 @@ import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryValueCodec;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryEntityReference;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryTypes;
@@ -207,7 +209,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(px(5), 0, px(5), 0);
         header.setBackground(solid(HEADER_BG, 0));
-        boolean isExpanded = expanded.getOrDefault(type, true);
+        // Keep the library compact on first open; users can expand only the types they need.
+        boolean isExpanded = expanded.getOrDefault(type, false);
         SvgIconView fold = new SvgIconView(getContext(),
                 SvgIconView.Icon.forExpandedState(isExpanded), TEXT);
         header.addView(fold, fixed(16, 26));
@@ -254,7 +257,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         card.setPadding(px(4), px(3), px(4), px(3));
         card.setBackground(solid(selected.contains(key(entry)) ? CARD_SELECTED_BG : CARD_BG, 1,
                 selected.contains(key(entry)) ? ACCENT : BORDER));
-
         SelectionToggle check = new SelectionToggle(getContext());
         check.setChecked(selected.contains(key(entry)));
         check.setOnCheckedChangeListener((button, checked) -> {
@@ -384,7 +386,68 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             card.addView(check, checkLp);
         }
+        installDragZone(card, entry);
         return card;
+    }
+
+    /** Dedicated title-bar drag strip, kept separate from editors and action controls. */
+    private void installDragZone(FrameLayout card, DataLibraryUiRepository.Entry entry) {
+        boolean vertical = isVerticalCard(entry.type());
+        int reserved = vertical ? px(12) : px(30);
+        for (int index = 0; index < card.getChildCount(); index++) {
+            View child = card.getChildAt(index);
+            if (!(child.getLayoutParams() instanceof FrameLayout.LayoutParams params)) continue;
+            if (vertical) params.topMargin += reserved;
+            else params.leftMargin += reserved;
+            child.setLayoutParams(params);
+        }
+        View dragZone = new View(getContext());
+        // ModernUI only dispatches touch listeners reliably for an interactive view.
+        dragZone.setClickable(true);
+        dragZone.setContentDescription(tr("geometry_node.data_library.drag"));
+        dragZone.setBackground(solid(HEADER_BG, 1, ACCENT));
+        dragZone.setOnTouchListener(new WorkspaceDragGesture(getContext(), new WorkspaceDragGesture.Listener() {
+            @Override public void onPressed(MotionEvent event) {}
+
+            @Override public void onDragStarted(MotionEvent event) {
+                WorkspaceDragService.INSTANCE.begin(
+                        new DataLibraryDragPayload(entry.type(), entry.id(), entry.name()),
+                        WorkspaceDragOperation.LINK, DataLibraryWindow.this);
+            }
+
+            @Override public void onDragged(MotionEvent event) {}
+
+            @Override public void onReleased(MotionEvent event, boolean moved) {
+                if (!moved) return;
+                if (!WorkspaceDragService.INSTANCE.drop(event.getRawX(), event.getRawY())) {
+                    WorkspaceDragService.INSTANCE.cancelIfSource(DataLibraryWindow.this);
+                }
+            }
+
+            @Override public void onCancelled(MotionEvent event) {
+                WorkspaceDragService.INSTANCE.cancelIfSource(DataLibraryWindow.this);
+            }
+        }));
+        FrameLayout.LayoutParams dragLp;
+        if (vertical) {
+            dragLp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, px(10), Gravity.LEFT | Gravity.TOP);
+            dragLp.leftMargin = px(1);
+            dragLp.rightMargin = px(1);
+            dragLp.topMargin = px(1);
+        } else {
+            dragLp = new FrameLayout.LayoutParams(
+                    px(14), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT | Gravity.TOP);
+            dragLp.leftMargin = px(1);
+            dragLp.topMargin = px(1);
+            dragLp.bottomMargin = px(1);
+        }
+        card.addView(dragZone, dragLp);
+    }
+
+    private static boolean isVerticalCard(PortType type) {
+        return type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE
+                || type == PortType.ITEM_STACK || type == PortType.XYZ;
     }
 
     private EditText createValueEditor(DataLibraryUiRepository.Entry entry,

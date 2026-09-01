@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
 import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragPayload;
+import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryDragPayload;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
@@ -168,6 +169,9 @@ public class GraphViewportPanel extends LinearLayout {
     }
 
     private boolean acceptAssetDrop(WorkspaceDragState.Session session, float rawX, float rawY) {
+        if (session.payload() instanceof DataLibraryDragPayload payload) {
+            return acceptDataLibraryDrop(payload, rawX, rawY);
+        }
         if (!(session.payload() instanceof AssetDragPayload payload)) return false;
         if (payload == null || !payload.isSingleJsonGraph()) return false;
         GraphSession targetSession = mViewport.getController().getCurrentSession();
@@ -179,6 +183,17 @@ public class GraphViewportPanel extends LinearLayout {
         float viewportX = rawX - viewportLoc[0];
         float viewportY = rawY - viewportLoc[1];
         return importDraggedGraph(payload.entry(), viewportX, viewportY, targetSession);
+    }
+
+    private boolean acceptDataLibraryDrop(DataLibraryDragPayload payload, float rawX, float rawY) {
+        GraphSession targetSession = mViewport.getController().getCurrentSession();
+        if (!isReadyForImport(targetSession) || !isRawPointInside(mViewport, rawX, rawY)) return false;
+        int[] viewportLoc = new int[2];
+        mViewport.getLocationOnScreen(viewportLoc);
+        float viewportX = rawX - viewportLoc[0];
+        float viewportY = rawY - viewportLoc[1];
+        return mViewport.getController().executeAddDataLibraryReference(
+                viewportX, viewportY, payload.type(), payload.id(), payload.name());
     }
 
     private boolean importDraggedGraph(AssetEntry entry, float viewportX, float viewportY, GraphSession targetSession) {

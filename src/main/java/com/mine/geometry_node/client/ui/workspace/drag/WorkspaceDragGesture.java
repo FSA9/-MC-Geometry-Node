@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.workspace.drag;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewConfiguration;
+import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.core.Context;
 
 /** Shared touch-slop gesture adapter for workspace drag sources. */
@@ -36,6 +37,7 @@ public final class WorkspaceDragGesture implements View.OnTouchListener {
                 downY = event.getRawY();
                 moved = false;
                 dragging = false;
+                disallowParentIntercept(view, true);
                 listener.onPressed(event);
                 return true;
             }
@@ -50,12 +52,14 @@ public final class WorkspaceDragGesture implements View.OnTouchListener {
             }
             case MotionEvent.ACTION_UP -> {
                 listener.onReleased(event, moved);
+                disallowParentIntercept(view, false);
                 moved = false;
                 dragging = false;
                 return true;
             }
             case MotionEvent.ACTION_CANCEL -> {
                 listener.onCancelled(event);
+                disallowParentIntercept(view, false);
                 moved = false;
                 dragging = false;
                 return true;
@@ -70,5 +74,11 @@ public final class WorkspaceDragGesture implements View.OnTouchListener {
         float dx = event.getRawX() - downX;
         float dy = event.getRawY() - downY;
         return (float) Math.sqrt(dx * dx + dy * dy);
+    }
+
+    private static void disallowParentIntercept(View view, boolean disallow) {
+        if (view.getParent() instanceof ViewGroup parent) {
+            parent.requestDisallowInterceptTouchEvent(disallow);
+        }
     }
 }
