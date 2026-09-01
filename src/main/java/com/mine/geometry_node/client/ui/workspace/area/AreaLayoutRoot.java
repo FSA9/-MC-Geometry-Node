@@ -1,6 +1,10 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionStore;
 import icyllis.modernui.core.Context;
@@ -23,6 +27,7 @@ public final class AreaLayoutRoot extends FrameLayout {
     private final Runnable mSaveRunnable = this::persistNow;
     private boolean mClosing;
     private boolean mClosed;
+    private final WorkspaceDragDropRegistry.DropTarget mDragTarget = this::acceptLeafDrop;
 
     public AreaLayoutRoot(Context context) {
         super(context);
@@ -35,6 +40,20 @@ public final class AreaLayoutRoot extends FrameLayout {
             mRootNode = createDefaultLayout();
         }
         installRootView(createNodeView(mRootNode));
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        WorkspaceDragDropRegistry.register(mDragTarget);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        WorkspaceDragService.INSTANCE.cancelIfSource(this);
+        WorkspaceDragDropRegistry.unregister(mDragTarget);
+        cancelLeafDrag();
+        super.onDetachedFromWindow();
     }
 
     AreaEditorRegistry editorRegistry() {
@@ -141,6 +160,21 @@ public final class AreaLayoutRoot extends FrameLayout {
     void beginLeafDrag(AreaLeafNode sourceNode, float rawX, float rawY) {
         mDragSourceNode = sourceNode;
         updateLeafDrag(rawX, rawY);
+    }
+
+    private boolean acceptLeafDrop(WorkspaceDragState.Session session, float rawX, float rawY) {
+        if (!(session.payload() instanceof AreaDragPayload payload)
+                || payload.source() == null || mClosed || mClosing) return false;
+        if (!isRawPointInside(rawX, rawY)) return false;
+        AreaLeafView target = findLeafViewAtRaw(rawX, rawY);
+        return target != null && target.node() != payload.source();
+    }
+
+    private boolean isRawPointInside(float rawX, float rawY) {
+        int[] location = new int[2];
+        getLocationOnScreen(location);
+        return rawX >= location[0] && rawY >= location[1]
+                && rawX < location[0] + getWidth() && rawY < location[1] + getHeight();
     }
 
     void updateLeafDrag(float rawX, float rawY) {

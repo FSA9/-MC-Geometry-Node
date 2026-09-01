@@ -18,6 +18,7 @@ import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryValueCodec;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryEntityReference;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryTypes;
@@ -166,6 +167,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private void rebuild() {
+        WorkspaceDragService.INSTANCE.cancelIfSource(this);
         Set<DataLibraryUiRepository.EntryKey> available = new LinkedHashSet<>();
         for (DataLibraryUiRepository.Entry entry : repository.entries()) {
             if (entry != null && entry.type() != null && entry.id() != null) available.add(key(entry));
@@ -951,8 +953,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     @Override public View getView() { return this; }
     @Override public void onShow() { refresh(); }
-    @Override public void onHide() {}
+
     @Override public void onDispose() {
+        WorkspaceDragService.INSTANCE.cancelIfSource(this);
         repository.removeChangeListener(repositoryChanged);
     }
+    @Override public void onHide() {}
 }

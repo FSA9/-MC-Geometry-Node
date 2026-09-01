@@ -2,11 +2,13 @@ package com.mine.geometry_node.client.ui.workspace.area;
 
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
-import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
@@ -19,20 +21,15 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
     private final AreaIconButton mEditorSelector;
     private final TextView mTitle;
     private final FrameLayout mContentFrame;
-    private final float mHeaderTouchSlop;
     private AreaIconButton mHintButton;
     private AreaEditorMenu mEditorMenu;
     private AreaEditorWindow mCurrentWindow;
     private boolean mWindowShown;
-    private boolean mHeaderDragging;
-    private float mHeaderDownRawX;
-    private float mHeaderDownRawY;
 
     AreaLeafView(Context context, AreaLayoutRoot root, AreaLeafNode node) {
         super(context);
         mRoot = root;
         mNode = node;
-        mHeaderTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         setOrientation(VERTICAL);
         setPadding(
                 UIUtils.dp2pxInt(AreaStyle.PANE_GAP_DP),
@@ -50,7 +47,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         mTitle = UIUtils.createLockedTextView(context, "", 10.0f, AreaStyle.COLOR_TEXT);
         mTitle.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         mTitle.setSingleLine(true);
-        mTitle.setOnTouchListener(this::handleHeaderTouch);
+        mTitle.setOnTouchListener(createDragGesture());
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
         titleParams.setMargins(UIUtils.dp2pxInt(5.0f), 0, UIUtils.dp2pxInt(4.0f), 0);
         header.addView(mTitle, titleParams);
@@ -149,53 +146,38 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(UIUtils.dp2pxInt(AreaStyle.HEADER_PADDING_X_DP), 0, UIUtils.dp2pxInt(4.0f), 0);
         header.setBackground(AreaStyle.rounded(AreaStyle.COLOR_HEADER, 3.5f, 0, 0));
-        header.setOnTouchListener(this::handleHeaderTouch);
+        header.setOnTouchListener(createDragGesture());
         return header;
     }
 
-    private boolean handleHeaderTouch(View view, MotionEvent event) {
-        switch (event.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN -> {
-                mHeaderDownRawX = event.getRawX();
-                mHeaderDownRawY = event.getRawY();
-                mHeaderDragging = false;
-                return true;
-            }
-            case MotionEvent.ACTION_MOVE -> {
-                float rawX = event.getRawX();
-                float rawY = event.getRawY();
-                if (!mHeaderDragging && draggedFarEnough(rawX, rawY)) {
-                    mHeaderDragging = true;
-                    mRoot.beginLeafDrag(mNode, rawX, rawY);
-                } else if (mHeaderDragging) {
-                    mRoot.updateLeafDrag(rawX, rawY);
+    private WorkspaceDragGesture createDragGesture() {
+        return new WorkspaceDragGesture(getContext(), new WorkspaceDragGesture.Listener() {
+            @Override public void onPressed(MotionEvent event) { }
+            @Override public void onDragStarted(MotionEvent event) {
+                if (WorkspaceDragService.INSTANCE.begin(new AreaDragPayload(mNode), WorkspaceDragOperation.MOVE, mRoot)) {
+                    mRoot.beginLeafDrag(mNode, event.getRawX(), event.getRawY());
                 }
-                return true;
             }
-            case MotionEvent.ACTION_UP -> {
-                if (mHeaderDragging) {
-                    mRoot.finishLeafDrag(event.getRawX(), event.getRawY());
+            @Override public void onDragged(MotionEvent event) {
+                mRoot.updateLeafDrag(event.getRawX(), event.getRawY());
+            }
+            @Override public void onReleased(MotionEvent event, boolean moved) {
+                if (moved) {
+                    boolean accepted = WorkspaceDragService.INSTANCE.drop(event.getRawX(), event.getRawY());
+                    if (accepted) {
+                        mRoot.finishLeafDrag(event.getRawX(), event.getRawY());
+                    } else {
+                        mRoot.cancelLeafDrag();
+                    }
+                } else {
+                    WorkspaceDragService.INSTANCE.cancel();
                 }
-                mHeaderDragging = false;
-                return true;
             }
-            case MotionEvent.ACTION_CANCEL -> {
-                if (mHeaderDragging) {
-                    mRoot.cancelLeafDrag();
-                }
-                mHeaderDragging = false;
-                return true;
+            @Override public void onCancelled(MotionEvent event) {
+                WorkspaceDragService.INSTANCE.cancelIfSource(mRoot);
+                mRoot.cancelLeafDrag();
             }
-            default -> {
-                return false;
-            }
-        }
-    }
-
-    private boolean draggedFarEnough(float rawX, float rawY) {
-        float dx = rawX - mHeaderDownRawX;
-        float dy = rawY - mHeaderDownRawY;
-        return dx * dx + dy * dy >= mHeaderTouchSlop * mHeaderTouchSlop;
+        });
     }
 
     private void addActionButton(LinearLayout header, Context context, VectorIconView.Kind kind, String hint, Runnable action) {

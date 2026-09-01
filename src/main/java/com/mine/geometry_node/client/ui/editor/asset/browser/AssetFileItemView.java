@@ -9,6 +9,7 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.preview.AssetPreviewView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import icyllis.modernui.core.Context;
@@ -16,7 +17,6 @@ import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
-import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
@@ -32,6 +32,7 @@ final class AssetFileItemView extends LinearLayout {
         void onItemPressed(AssetEntry entry, MotionEvent event);
         void onItemDragStarted(AssetEntry entry, MotionEvent event);
         void onItemReleased(AssetEntry entry, MotionEvent event, boolean moved);
+        default void onItemCancelled(AssetEntry entry, MotionEvent event) {}
         void onFavoriteToggled(AssetEntry entry);
     }
 
@@ -56,11 +57,6 @@ final class AssetFileItemView extends LinearLayout {
     private final TextView mSubtitleView;
     private final Listener mListener;
     private boolean mIsSelected;
-    private float mDownX;
-    private float mDownY;
-    private boolean mMoved;
-    private boolean mDragging;
-    private final float mTouchSlop;
 
     AssetFileItemView(Context context, AssetEntry entry, AssetViewMode mode, String displayName, String parentLabel,
                       List<String> tags, String graphTypeId, boolean favorite, Listener listener) {
@@ -70,7 +66,6 @@ final class AssetFileItemView extends LinearLayout {
         mGraphTypeId = graphTypeId != null ? graphTypeId : "";
         mFavorite = favorite;
         mListener = listener;
-        mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         setGravity(Gravity.CENTER_VERTICAL);
         setPadding(dp2pxInt(6), dp2pxInt(4), dp2pxInt(6), dp2pxInt(4));
         setBackground(AssetFileBrowserPanel.createRectDrawable(COLOR_ITEM_TRANSPARENT, 4));
@@ -91,7 +86,13 @@ final class AssetFileItemView extends LinearLayout {
         mSubtitleView.setSingleLine(true);
 
         buildLayoutForMode(mode, displayName, parentLabel);
-        setOnTouchListener(this::onItemTouch);
+        setOnTouchListener(new WorkspaceDragGesture(getContext(), new WorkspaceDragGesture.Listener() {
+            @Override public void onPressed(MotionEvent event) { mListener.onItemPressed(mEntry, event); }
+            @Override public void onDragStarted(MotionEvent event) { mListener.onItemDragStarted(mEntry, event); }
+            @Override public void onDragged(MotionEvent event) { }
+            @Override public void onReleased(MotionEvent event, boolean moved) { mListener.onItemReleased(mEntry, event, moved); }
+            @Override public void onCancelled(MotionEvent event) { mListener.onItemCancelled(mEntry, event); }
+        }));
     }
 
     AssetEntry getEntry() {
@@ -237,34 +238,4 @@ final class AssetFileItemView extends LinearLayout {
         return lp;
     }
 
-    private boolean onItemTouch(View v, MotionEvent event) {
-        switch (event.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-                mDownX = event.getX();
-                mDownY = event.getY();
-                mMoved = false;
-                mDragging = false;
-                mListener.onItemPressed(mEntry, event);
-                return true;
-            case MotionEvent.ACTION_MOVE:
-                if (Math.abs(event.getX() - mDownX) > mTouchSlop || Math.abs(event.getY() - mDownY) > mTouchSlop) {
-                    mMoved = true;
-                    if (!mDragging) {
-                        mDragging = true;
-                        mListener.onItemDragStarted(mEntry, event);
-                    }
-                }
-                return true;
-            case MotionEvent.ACTION_UP:
-                mListener.onItemReleased(mEntry, event, mMoved);
-                mDragging = false;
-                return true;
-            case MotionEvent.ACTION_CANCEL:
-                mMoved = false;
-                mDragging = false;
-                return true;
-            default:
-                return true;
-        }
-    }
 }

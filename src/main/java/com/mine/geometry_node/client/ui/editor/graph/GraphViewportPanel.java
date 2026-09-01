@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
-import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragDropRegistry;
-import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragState;
+import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragPayload;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
@@ -62,7 +63,7 @@ public class GraphViewportPanel extends LinearLayout {
     private final Viewport mViewport;
     private final float mTouchSlop;
     private final Runnable mTabChangedListener = () -> post(this::refreshTabs);
-    private final AssetDragDropRegistry.DropTarget mDropTarget = this::acceptAssetDrop;
+    private final WorkspaceDragDropRegistry.DropTarget mDropTarget = this::acceptAssetDrop;
     private GraphSession mSelectedSession;
     private long mObservedOpenSessionSerial = -1L;
     private boolean mManualSessionSelection;
@@ -166,7 +167,8 @@ public class GraphViewportPanel extends LinearLayout {
         return super.dispatchTouchEvent(event);
     }
 
-    private boolean acceptAssetDrop(AssetDragState.Payload payload, float rawX, float rawY) {
+    private boolean acceptAssetDrop(WorkspaceDragState.Session session, float rawX, float rawY) {
+        if (!(session.payload() instanceof AssetDragPayload payload)) return false;
         if (payload == null || !payload.isSingleJsonGraph()) return false;
         GraphSession targetSession = mViewport.getController().getCurrentSession();
         if (!isReadyForImport(targetSession)) return false;
@@ -176,20 +178,20 @@ public class GraphViewportPanel extends LinearLayout {
         mViewport.getLocationOnScreen(viewportLoc);
         float viewportX = rawX - viewportLoc[0];
         float viewportY = rawY - viewportLoc[1];
-        importDraggedGraph(payload.entry(), viewportX, viewportY, targetSession);
-        return true;
+        return importDraggedGraph(payload.entry(), viewportX, viewportY, targetSession);
     }
 
-    private void importDraggedGraph(AssetEntry entry, float viewportX, float viewportY, GraphSession targetSession) {
-        if (!isReadyForImport(targetSession)) return;
+    private boolean importDraggedGraph(AssetEntry entry, float viewportX, float viewportY, GraphSession targetSession) {
+        if (!isReadyForImport(targetSession)) return false;
         if (entry.sourceKind() == AssetSourceKind.LOCAL) {
-            if (entry.localFile() == null || entry.localFile().isDirectory()) return;
+            if (entry.localFile() == null || entry.localFile().isDirectory()) return false;
             try {
                 mViewport.getController().executeImportGraphJson(Files.readString(entry.localFile().toPath()), viewportX, viewportY);
+                return true;
             } catch (Exception e) {
                 e.printStackTrace();
+                return false;
             }
-            return;
         }
 
         if (entry.sourceKind() == AssetSourceKind.REMOTE && RemoteAssetClient.canDownload()) {
@@ -219,7 +221,9 @@ public class GraphViewportPanel extends LinearLayout {
                     mViewport.getController().executeImportGraphJson(json, viewportX, viewportY);
                 }
             }));
+            return true;
         }
+        return false;
     }
 
     private boolean isReadyForImport(GraphSession targetSession) {
@@ -397,7 +401,7 @@ public class GraphViewportPanel extends LinearLayout {
             return;
         }
         DocumentManager.INSTANCE.addOnTabChangedListener(mTabChangedListener);
-        AssetDragDropRegistry.registerDropTarget(mDropTarget);
+        WorkspaceDragDropRegistry.register(mDropTarget);
         mCallbacksRegistered = true;
     }
 
@@ -406,7 +410,7 @@ public class GraphViewportPanel extends LinearLayout {
             return;
         }
         DocumentManager.INSTANCE.removeOnTabChangedListener(mTabChangedListener);
-        AssetDragDropRegistry.unregisterDropTarget(mDropTarget);
+        WorkspaceDragDropRegistry.unregister(mDropTarget);
         mCallbacksRegistered = false;
     }
 

@@ -38,6 +38,7 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryTransferStaging;
+import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryService;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryRequest;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
 import dev.architectury.networking.NetworkManager;
@@ -64,6 +65,7 @@ public class NetworkHandler {
         GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
         ServerAssetTransferService.INSTANCE.init();
         ServerAssetPreviewService.INSTANCE.init();
+        RemoteDataLibraryService.INSTANCE.init();
         RemoteDataLibraryTransferStaging.INSTANCE.init();
         BehaviorTreeDebugService.INSTANCE.init();
 

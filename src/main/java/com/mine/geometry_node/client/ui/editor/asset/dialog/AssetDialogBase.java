@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
-import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragDropRegistry;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.shell.MainUiServices;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
@@ -61,7 +61,7 @@ abstract class AssetDialogBase extends ModalWindowView {
     @Override
     protected final void onWindowShown() {
         if (!registeredDragBlocker) {
-            AssetDragDropRegistry.pushModalBlocker();
+            WorkspaceDragDropRegistry.pushModalBlocker();
             registeredDragBlocker = true;
         }
         onAssetDialogShown();
@@ -73,7 +73,7 @@ abstract class AssetDialogBase extends ModalWindowView {
             onAssetDialogDestroyed();
         } finally {
             if (registeredDragBlocker) {
-                AssetDragDropRegistry.popModalBlocker();
+                WorkspaceDragDropRegistry.popModalBlocker();
                 registeredDragBlocker = false;
             }
         }

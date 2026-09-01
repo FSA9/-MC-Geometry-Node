@@ -5,8 +5,11 @@ import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionId;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionRegistry;
-import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragState;
-import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragDropRegistry;
+import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragPayload;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
 import com.mine.geometry_node.client.ui.editor.asset.menu.FileContextMenu;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
@@ -355,6 +358,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     @Override
     protected void onDetachedFromWindow() {
+        WorkspaceDragService.INSTANCE.cancelIfSource(this);
         mIoTasks.cancelAll();
         mActionController.clearClipboard();
         deactivatePanel();
@@ -680,7 +684,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     @Override
     public void onItemPressed(AssetEntry entry, MotionEvent event) {
         requestFocus();
-        AssetDragState.clear();
+        WorkspaceDragState.clear();
         if (isRightMouse(event)) {
             if (!mSelectedPaths.contains(entry.key())) {
                 selectOnly(entry);
@@ -702,23 +706,23 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     public void onItemDragStarted(AssetEntry entry, MotionEvent event) {
         List<AssetEntry> selectedEntries = getSelectedEntries();
         if (selectedEntries.isEmpty() || !mSelectedPaths.contains(entry.key())) {
-            AssetDragState.clear();
+            WorkspaceDragState.clear();
             return;
         }
-        AssetDragState.start(new AssetDragState.Payload(selectedEntries));
+        WorkspaceDragService.INSTANCE.begin(new AssetDragPayload(selectedEntries), WorkspaceDragOperation.IMPORT, this);
     }
 
     @Override
     public void onItemReleased(AssetEntry entry, MotionEvent event, boolean moved) {
         if (moved && handleInternalDrop(event.getRawX(), event.getRawY())) {
-            AssetDragState.clear();
+            WorkspaceDragState.clear();
             return;
         }
-        if (moved && AssetDragDropRegistry.dispatchDrop(event.getRawX(), event.getRawY())) {
-            AssetDragState.clear();
+        if (moved && WorkspaceDragDropRegistry.dispatchDrop(event.getRawX(), event.getRawY())) {
+            WorkspaceDragState.clear();
             return;
         }
-        AssetDragState.clear();
+        WorkspaceDragState.clear();
         if (moved || isRightMouse(event)) return;
 
         String key = entry.key();
@@ -731,6 +735,12 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
             mLastClickedPath = key;
             mLastClickTime = now;
         }
+    }
+
+    @Override
+    public void onItemCancelled(AssetEntry entry, MotionEvent event) {
+        WorkspaceDragService.INSTANCE.cancelIfSource(this);
+        WorkspaceDragState.clear();
     }
 
     private void toggleSelection(AssetEntry entry) {
@@ -897,7 +907,9 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private boolean handleInternalDrop(float rawX, float rawY) {
-        AssetDragState.Payload payload = AssetDragState.current();
+        WorkspaceDragState.Session session = WorkspaceDragState.current();
+        AssetDragPayload payload = session != null && session.payload() instanceof AssetDragPayload asset
+                ? asset : null;
         if (payload == null || payload.entries().isEmpty()) return false;
 
         AssetEntry target = findDirectoryEntryAt(rawX, rawY);
