@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.common;
 
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
@@ -47,22 +48,11 @@ public final class GraphTypeSelector extends FrameLayout {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        FrameLayout menuButton = new FrameLayout(context);
-        menuButton.setBackground(rect(COLOR_BUTTON, 2.0f, 0, 0));
+        UiIconButton.Style menuStyle = new UiIconButton.Style(2.0f, 0.0f, COLOR_BUTTON,
+                COLOR_BUTTON_HOVER, COLOR_BUTTON_HOVER, COLOR_BUTTON, 0, 16.0f, 0.5f);
+        UiIconButton menuButton = new UiIconButton(context,
+                new VectorIconView(context, VectorIconView.Kind.CHEVRON_DOWN, COLOR_MUTED), menuStyle);
         menuButton.setOnClickListener(v -> toggleMenu());
-        menuButton.setOnHoverListener((v, event) -> {
-            boolean hovered = event.getAction() == MotionEvent.ACTION_HOVER_ENTER
-                    || event.getAction() == MotionEvent.ACTION_HOVER_MOVE;
-            menuButton.setBackground(rect(
-                    hovered ? COLOR_BUTTON_HOVER : COLOR_BUTTON, 2.0f, 0, 0));
-            return true;
-        });
-        VectorIconView menuIcon = new VectorIconView(
-                context, VectorIconView.Kind.CHEVRON_DOWN, COLOR_MUTED);
-        menuIcon.setClickable(false);
-        menuButton.addView(menuIcon, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
         FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(
                 UIUtils.dp2pxInt(28),
                 ViewGroup.LayoutParams.MATCH_PARENT);

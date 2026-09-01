@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils;
 
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -72,17 +73,10 @@ public final class GraphPropertiesUi {
             int iconColor,
             int normalColor,
             int hoverColor) {
-        FrameLayout button = new FrameLayout(context);
-        button.setTooltipText(tooltip);
-        styleButton(button, normalColor, hoverColor);
+        UiIconButton.Style style = new UiIconButton.Style(3.0f, 0.0f, normalColor,
+                hoverColor, hoverColor, normalColor, 0, iconSizeDp, 0.5f);
         VectorIconView icon = new VectorIconView(context, kind, iconColor);
-        icon.setClickable(false);
-        FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams(
-                UIUtils.dp2pxInt(iconSizeDp),
-                UIUtils.dp2pxInt(iconSizeDp));
-        iconParams.gravity = Gravity.CENTER;
-        button.addView(icon, iconParams);
-        return button;
+        return new UiIconButton(context, icon, style).tooltip(tooltip);
     }
 
     public static LinearLayout orderButtons(

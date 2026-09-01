@@ -1,11 +1,11 @@
 package com.mine.geometry_node.client.ui.settings.editor;
 
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.widget.FrameLayout;
 
 final class SettingsEditorStyle {
@@ -32,24 +32,9 @@ final class SettingsEditorStyle {
     }
 
     static FrameLayout iconButton(Context context, SvgIconView.Icon iconType, String tooltip) {
-        FrameLayout button = new FrameLayout(context);
-        button.setClickable(true);
-        button.setTooltipText(tooltip);
-        button.setBackground(rect(CONTROL, 2.0f, 0));
-        button.setOnHoverListener((view, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                view.setBackground(rect(CONTROL_HOVER, 2.0f, 0));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                view.setBackground(rect(CONTROL, 2.0f, 0));
-            }
-            return false;
-        });
-        SvgIconView icon = new SvgIconView(context, iconType, MUTED);
-        icon.setClickable(false);
-        FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams(
-                UIUtils.dp2pxInt(14), UIUtils.dp2pxInt(14));
-        iconParams.gravity = Gravity.CENTER;
-        button.addView(icon, iconParams);
-        return button;
+        UiIconButton.Style style = new UiIconButton.Style(2.0f, 0.0f, CONTROL,
+                CONTROL_HOVER, CONTROL_HOVER, CONTROL, 0, 14.0f, 0.5f);
+        return new UiIconButton(context, new SvgIconView(context, iconType, MUTED), style)
+                .tooltip(tooltip);
     }
 }

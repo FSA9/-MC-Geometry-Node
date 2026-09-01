@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.editor.asset.sidebar.transfer;
 
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
@@ -309,17 +310,10 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     }
 
     private View iconButton(SvgIconView.Icon icon, int color, String tooltip, Runnable action) {
-        FrameLayout button = new FrameLayout(getContext());
-        button.setContentDescription(tooltip);
-        button.setTooltipText(tooltip);
-        button.setBackground(rect(0x00000000, 0, 0));
-        SvgIconView image = new SvgIconView(getContext(), icon, color);
-        FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams(px(14), px(14), Gravity.CENTER);
-        button.addView(image, iconParams);
-        button.setOnHoverListener((view, event) -> {
-            button.setBackground(rect(event.getAction() == MotionEvent.ACTION_HOVER_ENTER ? COLOR_HOVER : 0x00000000, 0, 0));
-            return false;
-        });
+        UiIconButton.Style style = new UiIconButton.Style(0.0f, 0.0f, 0x00000000,
+                COLOR_HOVER, COLOR_HOVER, 0x00000000, 0, 14.0f, 0.5f);
+        UiIconButton button = new UiIconButton(getContext(), new SvgIconView(getContext(), icon, color), style)
+                .tooltip(tooltip);
         button.setOnClickListener(view -> action.run());
         return button;
     }

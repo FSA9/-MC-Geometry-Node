@@ -217,10 +217,8 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         }
         mHintButton = null;
         updateTitle();
-        mEditorSelector.setSelectedState(true);
         mEditorMenu = new AreaEditorMenu(getContext(), mNode.editorType(), this::switchEditor, () -> {
             mEditorMenu = null;
-            mEditorSelector.setSelectedState(false);
         });
         mEditorMenu.showBelow(mEditorSelector, mRoot);
     }
@@ -231,7 +229,6 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
             mEditorMenu = null;
             menu.dismiss();
         }
-        mEditorSelector.setSelectedState(false);
     }
 
     private void attachEditor() {

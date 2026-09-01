@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.shell.layer.modal;
 
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -309,25 +310,12 @@ public class ModalWindowView extends LinearLayout implements MainUiModal {
     }
 
     private FrameLayout createCloseButton(Context context) {
-        FrameLayout button = new FrameLayout(context);
-        button.setClickable(true);
+        UiIconButton.Style buttonStyle = new UiIconButton.Style(2.0f, 0.0f, 0x00000000,
+                style.closeHoverColor(), style.closeHoverColor(), 0x00000000, 0,
+                CLOSE_ICON_SIZE_DP, 0.5f);
+        UiIconButton button = new UiIconButton(context,
+                new SvgIconView(context, SvgIconView.Icon.CLOSE, style.mutedTextColor()), buttonStyle);
         button.setOnClickListener(view -> onCloseRequested());
-        button.setOnHoverListener((view, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                button.setBackground(rect(style.closeHoverColor(), 2.0f, 0, 0));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                button.setBackground(null);
-            }
-            return false;
-        });
-
-        SvgIconView icon = new SvgIconView(context, SvgIconView.Icon.CLOSE, style.mutedTextColor());
-        FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams(
-                UIUtils.dp2pxInt(CLOSE_ICON_SIZE_DP),
-                UIUtils.dp2pxInt(CLOSE_ICON_SIZE_DP)
-        );
-        iconParams.gravity = Gravity.CENTER;
-        button.addView(icon, iconParams);
         return button;
     }
 
