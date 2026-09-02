@@ -84,6 +84,7 @@ public enum StandardPorts {
     MIN_FLOAT("min_float", PortType.FLOAT),
     MAX_FLOAT("max_float", PortType.FLOAT),
     DIST("distance", PortType.FLOAT),
+    LENGTH("length", PortType.FLOAT),
     RADIUS("radius", PortType.FLOAT),
     SIZE_1("size_1", PortType.FLOAT),
     VOLUME("volume", PortType.FLOAT),
