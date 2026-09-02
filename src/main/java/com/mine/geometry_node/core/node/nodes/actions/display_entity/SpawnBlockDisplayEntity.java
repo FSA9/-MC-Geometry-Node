@@ -10,7 +10,6 @@ import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
-import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.utils.nbt.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
@@ -48,9 +47,8 @@ public class SpawnBlockDisplayEntity extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.BLOCK_STATE.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
-                        StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
+                        StandardPorts.BLOCK_STATE.toInput("minecraft:stone"), null, UIHint.SELECT, null,
                         Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0]))
                 ))
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
@@ -72,12 +70,6 @@ public class SpawnBlockDisplayEntity extends BaseNode {
         if (pos == null) pos = Vec3.ZERO;
 
         BlockState blockState = getInput(context, StandardPorts.BLOCK_STATE.getId(), BlockState.class);
-        if (blockState == null) {
-            String selectedBlockId = getInput(context, StandardPorts.STRING.getId(), String.class);
-            if (selectedBlockId != null && !selectedBlockId.isEmpty()) {
-                blockState = TypeConverter.convert(selectedBlockId, BlockState.class, context);
-            }
-        }
 
         if (blockState == null) blockState = Blocks.STONE.defaultBlockState();
 
