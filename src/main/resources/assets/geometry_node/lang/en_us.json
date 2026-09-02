@@ -536,7 +536,7 @@
     "geometry_node.node.color_ramp":  "Color Ramp",
     "geometry_node.node.combine_color":  "Combine Color",
     "geometry_node.node.separate_color":  "Separate Color",
-    "geometry_node.node.vector_add":  "Vector Add",
+    "geometry_node.node.vector_operation":  "Vector Operation",
     "geometry_node.node.reflect_vector":  "Reflect Vector",
     "--- LOGICS ---":  "--- Logic ---",
     "geometry_node.node.contain":  "Contain",

@@ -536,7 +536,7 @@
     "geometry_node.node.color_ramp":  "颜色渐变",
     "geometry_node.node.combine_color":  "合并颜色",
     "geometry_node.node.separate_color":  "分离颜色",
-    "geometry_node.node.vector_add":  "向量相加",
+    "geometry_node.node.vector_operation":  "矢量运算",
     "geometry_node.node.reflect_vector":  "反射向量",
     "--- LOGICS ---":  "--- 逻辑控制 ---",
     "geometry_node.node.contain":  "包含",
