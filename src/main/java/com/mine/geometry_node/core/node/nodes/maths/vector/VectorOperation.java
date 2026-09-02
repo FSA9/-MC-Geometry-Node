@@ -50,8 +50,7 @@ public class VectorOperation extends BaseNode {
         NodeDef.Builder b = NodeDef.builder(TYPE_ID, NodeType.MATH,
                 Component.translatable("geometry_node.node.vector_operation"));
         if (vectorToDirection) {
-            b.addRow(new PortRow(null, StandardPorts.PITCH.toOutput(), UIHint.DEFAULT, null, null));
-            b.addRow(new PortRow(null, StandardPorts.YAW.toOutput(), UIHint.DEFAULT, null, null));
+            b.addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.VECTOR, null, null));
             b.addRow(new PortRow(null, StandardPorts.LENGTH.toOutput(), UIHint.DEFAULT, null, null));
         } else {
             b.addRow(new PortRow(null, (scalar ? StandardPorts.FLOAT_VALUE : StandardPorts.VECTOR).toOutput(), UIHint.DEFAULT, null, null));
@@ -59,8 +58,7 @@ public class VectorOperation extends BaseNode {
         b.addRow(new PortRow(StandardPorts.STRING.toInput("add").hiddenPin(), null, UIHint.SELECT, null,
                 Map.of(PortMetaKeys.OPTIONS, OPERATORS, PortMetaKeys.OPTION_LABELS, OPERATOR_LABEL_KEYS)));
         if (directionToVector) {
-            b.addRow(new PortRow(StandardPorts.PITCH.toInput(0.0f), null, UIHint.INPUT, null, null));
-            b.addRow(new PortRow(StandardPorts.YAW.toInput(0.0f), null, UIHint.INPUT, null, null));
+            b.addRow(new PortRow(StandardPorts.VECTOR.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
             b.addRow(new PortRow(StandardPorts.LENGTH.toInput(1.0f), null, UIHint.INPUT, null, null));
             return b.build();
         }
@@ -77,22 +75,20 @@ public class VectorOperation extends BaseNode {
         String op = getInput(c, StandardPorts.STRING.getId(), String.class);
         if (op == null) op = "add";
         if (op.equals("direction_to_vector")) {
-            Float pitch = getInput(c, StandardPorts.PITCH.getId(), Float.class);
-            Float yaw = getInput(c, StandardPorts.YAW.getId(), Float.class);
+            Vec3 direction = getInput(c, StandardPorts.VECTOR.getId(), Vec3.class);
             Float length = getInput(c, StandardPorts.LENGTH.getId(), Float.class);
-            return Vec3.directionFromRotation(pitch == null ? 0.0f : pitch, yaw == null ? 0.0f : yaw)
-                    .scale(length == null ? 1.0 : length);
+            if (direction == null || direction.lengthSqr() < 1.0E-12) return Vec3.ZERO;
+            return direction.normalize().scale(length == null ? 1.0 : length);
         }
         Vec3 a = getInput(c, StandardPorts.VECTOR.getIdWithIndex(1), Vec3.class);
         if (a == null) a = Vec3.ZERO;
         if (op.equals("vector_to_direction")) {
-            double length = a.length();
+            Vec3 target = getInput(c, StandardPorts.VECTOR.getIdWithIndex(2), Vec3.class);
+            if (target == null) target = Vec3.ZERO;
+            Vec3 delta = target.subtract(a);
+            double length = delta.length();
             if (StandardPorts.LENGTH.getId().equals(port)) return (float) length;
-            if (length < 1.0E-12) return 0.0f;
-            double horizontal = Math.sqrt(a.x * a.x + a.z * a.z);
-            if (StandardPorts.PITCH.getId().equals(port)) return (float) Math.toDegrees(Math.atan2(-a.y, horizontal));
-            if (StandardPorts.YAW.getId().equals(port)) return (float) Math.toDegrees(Math.atan2(-a.x, a.z));
-            return null;
+            return length < 1.0E-12 ? Vec3.ZERO : delta.scale(1.0 / length);
         }
         Vec3 b = getInput(c, StandardPorts.VECTOR.getIdWithIndex(2), Vec3.class);
         if (b == null) b = Vec3.ZERO;
