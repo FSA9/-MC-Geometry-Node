@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.ai.command.CommandResult;
+import com.mine.geometry_node.client.ai.command.NodeCatalogIndex;
 import com.mine.geometry_node.client.ai.graph.PortEditCapabilityResolver;
 import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.editor.graph.menu.NodeSearchService;
@@ -28,7 +29,6 @@ import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -46,25 +46,81 @@ final class TerminalGraphQueryService {
         this.graph = graph;
     }
 
-    CommandResult searchNodeTypes(String query, int offset, int limit) {
-        NodeSearchService.Page page = NodeSearchService.search(
-                NodeRegistry.INSTANCE.getAllDefinitions(), query, offset, limit);
+    CommandResult searchNodeTypes(String query, String path, boolean recursive, int offset, int limit) {
+        String normalizedPath;
+        try {
+            normalizedPath = NodeCatalogIndex.normalizePath(path);
+        } catch (IllegalArgumentException failure) {
+            return CommandResult.failure("NODE_CATALOG_PATH_INVALID", failure.getMessage());
+        }
+        if (NodeCatalogIndex.resolveDirectory(normalizedPath) == null) {
+            return CommandResult.failure("NODE_CATALOG_PATH_NOT_FOUND", "节点目录不存在: " + normalizedPath);
+        }
+        String normalizedQuery = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        List<NodeCatalogIndex.Entry> matches = NodeCatalogIndex.entries().stream()
+                .filter(entry -> inDirectory(entry.path(), normalizedPath, recursive))
+                .filter(entry -> normalizedQuery.isEmpty()
+                        || entry.typeId().toLowerCase(Locale.ROOT).contains(normalizedQuery))
+                .toList();
+        PageSlice<NodeCatalogIndex.Entry> page = page(matches, offset, limit);
         JsonArray items = new JsonArray();
-        for (NodeSearchService.Match match : page.items()) {
-            NodeDef definition = match.definition();
+        for (NodeCatalogIndex.Entry entry : page.items()) {
             JsonObject item = new JsonObject();
-            item.addProperty("type_id", definition.typeId());
-            item.addProperty("display_name", match.displayName());
-            item.addProperty("category", definition.category().name().toLowerCase(Locale.ROOT));
-            item.addProperty("comment", match.comment());
+            item.addProperty("type_id", entry.typeId());
+            item.addProperty("path", entry.path());
             items.add(item);
         }
         JsonObject data = pagedData("query", query, items, page.offset(), page.limit(), page.total());
+        data.addProperty("path", normalizedPath);
+        data.addProperty("recursive", recursive);
         return CommandResult.success("NODE_TYPES_FOUND", "找到 " + page.total() + " 个匹配的节点类型", data);
     }
 
+    CommandResult browseNodeCatalog(String path, boolean recursive, int offset, int limit) {
+        String normalizedPath;
+        try {
+            normalizedPath = NodeCatalogIndex.normalizePath(path);
+        } catch (IllegalArgumentException failure) {
+            return CommandResult.failure("NODE_CATALOG_PATH_INVALID", failure.getMessage());
+        }
+        if (NodeCatalogIndex.resolveDirectory(normalizedPath) == null) {
+            return CommandResult.failure("NODE_CATALOG_PATH_NOT_FOUND", "节点目录不存在: " + normalizedPath);
+        }
+        List<CatalogItem> candidates = new ArrayList<>();
+        NodeCatalogIndex.directories().stream().map(NodeCatalogIndex.Directory::path)
+                .filter(candidate -> isVisibleDirectory(candidate, normalizedPath, recursive))
+                .map(pathValue -> new CatalogItem(true, pathValue)).forEach(candidates::add);
+        NodeCatalogIndex.entries().stream()
+                .filter(entry -> inDirectory(entry.path(), normalizedPath, recursive))
+                .map(entry -> new CatalogItem(false, entry.typeId())).forEach(candidates::add);
+        candidates.sort(java.util.Comparator.comparing(CatalogItem::directory).reversed()
+                .thenComparing(CatalogItem::value));
+        PageSlice<CatalogItem> page = page(candidates, offset, limit);
+        JsonArray directories = new JsonArray();
+        JsonArray typeIds = new JsonArray();
+        for (CatalogItem item : page.items()) {
+            if (item.directory()) directories.add(item.value());
+            else typeIds.add(item.value());
+        }
+        JsonObject data = new JsonObject();
+        data.addProperty("path", normalizedPath);
+        data.addProperty("recursive", recursive);
+        data.add("directories", directories);
+        data.add("type_ids", typeIds);
+        data.add("page", pageJson(page.offset(), page.limit(), page.total(), page.items().size()));
+        return CommandResult.success("NODE_CATALOG", "已读取节点目录", data);
+    }
+
+    private record CatalogItem(boolean directory, String value) {}
+
     CommandResult getNodeTypeDetails(String typeId) {
-        NodeDef definition = NodeRegistry.INSTANCE.getDefaultDefinition(typeId);
+        String canonicalTypeId;
+        try {
+            canonicalTypeId = NodeCatalogIndex.canonicalTypeId(typeId);
+        } catch (IllegalArgumentException failure) {
+            return CommandResult.failure("NODE_TYPE_INVALID", failure.getMessage());
+        }
+        NodeDef definition = NodeRegistry.INSTANCE.getDefaultDefinition(canonicalTypeId);
         if (definition == null) return missingNodeType(typeId);
 
         JsonArray ports = new JsonArray();
@@ -93,7 +149,7 @@ final class TerminalGraphQueryService {
         declaresDynamicPorts |= dynamicLimits.size() > 0;
 
         JsonObject data = new JsonObject();
-        data.addProperty("type_id", definition.typeId());
+        data.addProperty("type_id", typeId);
         data.addProperty("display_name", definition.displayName().getString());
         data.addProperty("category", definition.category().name().toLowerCase(Locale.ROOT));
         data.addProperty("definition_comment", NodeCommentTextBuilder.build(definition));
@@ -107,7 +163,13 @@ final class TerminalGraphQueryService {
     }
 
     CommandResult getNodeTypePortOptions(String typeId, String portId, String query, int offset, int limit) {
-        NodeDef definition = NodeRegistry.INSTANCE.getDefaultDefinition(typeId);
+        String canonicalTypeId;
+        try {
+            canonicalTypeId = NodeCatalogIndex.canonicalTypeId(typeId);
+        } catch (IllegalArgumentException failure) {
+            return CommandResult.failure("NODE_TYPE_INVALID", failure.getMessage());
+        }
+        NodeDef definition = NodeRegistry.INSTANCE.getDefaultDefinition(canonicalTypeId);
         if (definition == null) return missingNodeType(typeId);
         PortRow row = findInputRow(definition, portId);
         if (row == null) return CommandResult.failure("PORT_NOT_FOUND", "节点类型不存在输入端口: " + portId);
@@ -137,35 +199,84 @@ final class TerminalGraphQueryService {
         return CommandResult.success("NODE_TYPE_PORT_OPTIONS", "已读取节点类型端口选项", data);
     }
 
-    CommandResult searchGraphNodes(String query, String typeId, String category, String commentFilter,
-                                   String connectionState, int offset, int limit) {
+    CommandResult queryGraphNodes(List<String> nodeIds, List<String> typeIds, String directory, String query,
+                                  String commentFilter, String connectionState, List<String> select,
+                                  String connectionDirection, List<String> connectionKinds,
+                                  int offset, int limit) {
         GraphReadSnapshot snapshot = snapshot();
+        Set<String> requestedNodeIds = Set.copyOf(nodeIds);
+        Set<String> canonicalTypeIds;
+        try {
+            canonicalTypeIds = typeIds.stream().map(NodeCatalogIndex::canonicalTypeId)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        } catch (IllegalArgumentException failure) {
+            return CommandResult.failure("NODE_TYPE_INVALID", failure.getMessage());
+        }
+        String normalizedDirectory;
+        try {
+            normalizedDirectory = NodeCatalogIndex.normalizePath(directory);
+        } catch (IllegalArgumentException failure) {
+            return CommandResult.failure("NODE_DIRECTORY_INVALID", failure.getMessage());
+        }
+        if (!normalizedDirectory.isEmpty() && NodeCatalogIndex.resolveDirectory(normalizedDirectory) == null) {
+            return CommandResult.failure("NODE_DIRECTORY_NOT_FOUND", "节点目录不存在: " + normalizedDirectory);
+        }
+        Map<String, String> directories = nodeDirectories();
         List<Map.Entry<String, NodeData>> matches = snapshot.nodes().entrySet().stream()
+                .filter(entry -> requestedNodeIds.isEmpty() || requestedNodeIds.contains(entry.getKey()))
+                .filter(entry -> canonicalTypeIds.isEmpty() || canonicalTypeIds.contains(entry.getValue().type))
+                .filter(entry -> matchesDirectory(directories.get(entry.getValue().type), normalizedDirectory))
                 .filter(entry -> matchesNode(entry.getKey(), entry.getValue(), snapshot.definition(entry.getKey()), query))
-                .filter(entry -> matchesTypeAndCategory(entry.getValue(), snapshot.definition(entry.getKey()), typeId, category))
-                .filter(entry -> matchesComment(entry.getValue(), commentFilter))
-                .filter(entry -> matchesConnectionState(snapshot, entry.getKey(), connectionState)).toList();
+                .filter(entry -> matchesComment(entry.getValue(), snapshot.definition(entry.getKey()), commentFilter))
+                .filter(entry -> matchesConnectionState(snapshot, entry.getKey(), connectionState,
+                        connectionDirection, connectionKinds)).toList();
         PageSlice<Map.Entry<String, NodeData>> page = page(matches, offset, limit);
         JsonArray items = new JsonArray();
         for (Map.Entry<String, NodeData> entry : page.items()) {
-            JsonObject item = nodeSummary(entry.getKey(), entry.getValue(), snapshot.definition(entry.getKey()));
-            item.addProperty("incoming_count", snapshot.incoming(entry.getKey()).size());
-            item.addProperty("outgoing_count", snapshot.outgoing(entry.getKey()).size());
+            String nodeId = entry.getKey();
+            NodeData node = entry.getValue();
+            NodeDef definition = snapshot.definition(nodeId);
+            JsonObject item = new JsonObject();
+            if (select.contains("identity")) {
+                item.add("identity", identityData(nodeId, node, definition,
+                        directories.getOrDefault(node.type, "")));
+            }
+            if (select.contains("values")) item.add("values", valueArray(node, definition, snapshot, nodeId));
+            if (select.contains("connections")) {
+                item.add("connections", edgeArray(filterEdges(snapshot.direct(nodeId), nodeId,
+                        connectionDirection, connectionKinds)));
+            }
+            if (select.contains("comments")) item.add("comments", commentData(node, definition));
+            if (select.contains("ports")) item.add("ports", portArray(node, definition));
+            if (select.contains("position")) item.add("position", positionData(node));
+            if (select.contains("metadata")) item.add("metadata", metadataData(node, definition, snapshot, nodeId));
             items.add(item);
         }
-        JsonObject data = pagedData("query", query, items, page.offset(), page.limit(), page.total());
-        data.addProperty("type_id", typeId);
-        data.addProperty("category", category);
-        data.addProperty("comment_filter", commentFilter);
-        data.addProperty("connection_state", connectionState);
-        return CommandResult.success("GRAPH_NODES_FOUND", "在蓝图中找到 " + page.total() + " 个匹配节点", data);
+        JsonObject data = new JsonObject();
+        data.add("filters", queryFilters(nodeIds, typeIds, normalizedDirectory, query, commentFilter,
+                connectionState, connectionDirection, connectionKinds));
+        data.add("select", strings(select));
+        data.add("items", items);
+        data.add("page", pageJson(page.offset(), page.limit(), page.total(), page.items().size()));
+        data.addProperty("snapshot_node_count", snapshot.nodes().size());
+        data.addProperty("snapshot_connection_count", snapshot.edges().size());
+        return CommandResult.success("GRAPH_NODES_QUERIED", "在蓝图中找到 " + page.total() + " 个匹配节点", data);
     }
 
     CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
         GraphReadSnapshot snapshot = snapshot();
+        String canonicalTypeId = "";
+        if (!typeId.isEmpty()) {
+            try {
+                canonicalTypeId = NodeCatalogIndex.canonicalTypeId(typeId);
+            } catch (IllegalArgumentException failure) {
+                return CommandResult.failure("NODE_TYPE_INVALID", failure.getMessage());
+            }
+        }
+        String effectiveTypeId = canonicalTypeId;
         List<Map.Entry<String, NodeData>> matchingNodes = snapshot.nodes().entrySet().stream()
                 .filter(entry -> matchesTypeAndCategory(entry.getValue(), snapshot.definition(entry.getKey()),
-                        typeId, category)).toList();
+                        effectiveTypeId, category)).toList();
         Set<String> matchingIds = matchingNodes.stream().map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
         long flowConnections = snapshot.edges().stream().filter(edge -> edge.kind().equals("flow")).count();
         long dataConnections = snapshot.edges().stream().filter(edge -> edge.kind().equals("data")).count();
@@ -180,7 +291,7 @@ final class TerminalGraphQueryService {
         Map<String, Integer> counts = new java.util.TreeMap<>();
         if (!"none".equals(groupBy)) {
             for (Map.Entry<String, NodeData> entry : matchingNodes) {
-                String key = "type".equals(groupBy) ? text(entry.getValue().type)
+                String key = "type".equals(groupBy) ? NodeCatalogIndex.shortTypeId(text(entry.getValue().type))
                         : nodeCategory(snapshot.definition(entry.getKey()));
                 counts.merge(key, 1, Integer::sum);
             }
@@ -212,91 +323,6 @@ final class TerminalGraphQueryService {
         data.add("groups", groups);
         data.add("page", pageJson(groupsPage.offset(), groupsPage.limit(), groupsPage.total(), groupsPage.items().size()));
         return CommandResult.success("GRAPH_STATS", "已读取蓝图统计", data);
-    }
-
-    CommandResult getNodeDetails(String nodeId) {
-        GraphReadSnapshot snapshot = snapshot();
-        NodeData node = snapshot.node(nodeId);
-        if (node == null) return missingNode(nodeId);
-        NodeDef definition = snapshot.definition(nodeId);
-
-        JsonObject data = new JsonObject();
-        data.add("node", nodeSummary(nodeId, node, definition));
-        data.addProperty("definition_comment", NodeCommentTextBuilder.build(definition));
-        JsonArray ports = new JsonArray();
-        Set<String> connectedInputs = snapshot.incoming(nodeId).stream()
-                .map(GraphReadSnapshot.Edge::inputPortId).collect(java.util.stream.Collectors.toSet());
-        Set<String> connectedOutputs = snapshot.outgoing(nodeId).stream()
-                .map(GraphReadSnapshot.Edge::outputPortId).collect(java.util.stream.Collectors.toSet());
-        if (definition != null) {
-            for (PortRow row : definition.rows()) {
-                if (ports.size() >= DETAILS_COLLECTION_LIMIT) break;
-                if (row.leftPort() != null) {
-                    ports.add(portDetails(node, definition, row, row.leftPort(), "input", connectedInputs));
-                }
-                if (ports.size() >= DETAILS_COLLECTION_LIMIT) break;
-                if (row.rightPort() != null) {
-                    ports.add(portDetails(node, definition, row, row.rightPort(), "output", connectedOutputs));
-                }
-            }
-        }
-        data.add("ports", ports);
-        JsonArray connections = edgeArray(limit(snapshot.direct(nodeId), DETAILS_COLLECTION_LIMIT));
-        data.add("connections", connections);
-        return CommandResult.success("NODE_DETAILS", "已读取节点 " + nodeId, data);
-    }
-
-    CommandResult getNodeConnections(String nodeId, String direction, int depth, int offset, int limit) {
-        GraphReadSnapshot snapshot = snapshot();
-        if (snapshot.node(nodeId) == null) return missingNode(nodeId);
-        List<GraphReadSnapshot.Edge> candidates;
-        if (depth <= 1) {
-            candidates = snapshot.direct(nodeId);
-        } else {
-            candidates = snapshot.inducedEdges(snapshot.neighborhood(nodeId, depth));
-        }
-        List<GraphReadSnapshot.Edge> edges = candidates.stream()
-                .filter(edge -> matchesDirection(edge, nodeId, direction)).toList();
-        PageSlice<GraphReadSnapshot.Edge> page = page(edges, offset, limit);
-        JsonObject data = new JsonObject();
-        data.addProperty("node_id", nodeId);
-        data.addProperty("direction", direction);
-        data.addProperty("depth", depth);
-        data.add("items", edgeArray(page.items()));
-        data.add("page", pageJson(page.offset(), page.limit(), page.total(), page.items().size()));
-        return CommandResult.success("NODE_CONNECTIONS", "已读取节点连接", data);
-    }
-
-    CommandResult getGraphContext(String focusNodeId, int depth, int offset, int limit) {
-        GraphReadSnapshot snapshot = snapshot();
-        if (!focusNodeId.isEmpty() && snapshot.node(focusNodeId) == null) return missingNode(focusNodeId);
-        List<String> candidateIds = focusNodeId.isEmpty()
-                ? List.copyOf(snapshot.nodes().keySet())
-                : snapshot.neighborhood(focusNodeId, depth).stream().sorted().toList();
-        PageSlice<String> page = page(candidateIds, offset, limit);
-        Set<String> returnedIds = new LinkedHashSet<>(page.items());
-        JsonArray nodes = new JsonArray();
-        for (String nodeId : page.items()) {
-            nodes.add(nodeSummary(nodeId, snapshot.node(nodeId), snapshot.definition(nodeId)));
-        }
-        List<GraphReadSnapshot.Edge> visibleEdges = limit(snapshot.inducedEdges(returnedIds), DETAILS_COLLECTION_LIMIT);
-
-        NodeGraph graph = snapshot.graph();
-        JsonObject data = new JsonObject();
-        data.addProperty("graph_kind", text(graph.graphKind));
-        data.addProperty("version", text(graph.version));
-        data.addProperty("comment", text(graph.comment));
-        JsonArray tags = new JsonArray();
-        if (graph.tags != null) graph.tags.stream().filter(value -> value != null).limit(DETAILS_COLLECTION_LIMIT).forEach(tags::add);
-        data.add("tags", tags);
-        data.addProperty("node_count", snapshot.nodes().size());
-        data.addProperty("connection_count", snapshot.edges().size());
-        data.addProperty("focus_node_id", focusNodeId);
-        data.addProperty("depth", depth);
-        data.add("nodes", nodes);
-        data.add("connections", edgeArray(visibleEdges));
-        data.add("page", pageJson(page.offset(), page.limit(), page.total(), page.items().size()));
-        return CommandResult.success("GRAPH_CONTEXT", "已读取蓝图上下文", data);
     }
 
     CommandResult validateGraph(int offset, int limit) {
@@ -363,22 +389,38 @@ final class TerminalGraphQueryService {
                 definition == null ? "" : definition.displayName().getString(), NodeCommentTextBuilder.build(definition));
     }
 
+    private static boolean inDirectory(String candidate, String parent, boolean recursive) {
+        if (parent.isEmpty()) return recursive || !candidate.contains("/");
+        if (candidate.equals(parent)) return true;
+        return recursive && candidate.startsWith(parent + "/");
+    }
+
+    private static boolean isVisibleDirectory(String candidate, String parent, boolean recursive) {
+        if (candidate.equals(parent)) return false;
+        String prefix = parent.isEmpty() ? "" : parent + "/";
+        if (!candidate.startsWith(prefix)) return false;
+        String relative = candidate.substring(prefix.length());
+        return recursive || !relative.contains("/");
+    }
+
     private static boolean matchesTypeAndCategory(NodeData node, NodeDef definition,
-                                                  String typeId, String category) {
-        if (!typeId.isEmpty() && !typeId.equals(text(node.type))) return false;
+                                                  String canonicalTypeId, String category) {
+        if (!canonicalTypeId.isEmpty() && !canonicalTypeId.equals(text(node.type))) return false;
         return category.isEmpty() || category.equals(nodeCategory(definition));
     }
 
-    private static boolean matchesComment(NodeData node, String filter) {
+    private static boolean matchesComment(NodeData node, NodeDef definition, String filter) {
+        boolean present = hasText(node.comment) || hasText(NodeCommentTextBuilder.build(definition));
         return switch (filter) {
-            case "with" -> hasText(node.comment);
-            case "without" -> !hasText(node.comment);
+            case "with" -> present;
+            case "without" -> !present;
             default -> true;
         };
     }
 
-    private static boolean matchesConnectionState(GraphReadSnapshot snapshot, String nodeId, String state) {
-        boolean connected = !snapshot.incoming(nodeId).isEmpty() || !snapshot.outgoing(nodeId).isEmpty();
+    private static boolean matchesConnectionState(GraphReadSnapshot snapshot, String nodeId, String state,
+                                                   String direction, List<String> kinds) {
+        boolean connected = !filterEdges(snapshot.direct(nodeId), nodeId, direction, kinds).isEmpty();
         return switch (state) {
             case "connected" -> connected;
             case "unconnected" -> !connected;
@@ -386,20 +428,143 @@ final class TerminalGraphQueryService {
         };
     }
 
+    private static List<GraphReadSnapshot.Edge> filterEdges(List<GraphReadSnapshot.Edge> edges, String nodeId,
+                                                             String direction, List<String> kinds) {
+        Set<String> kindFilter = Set.copyOf(kinds);
+        return edges.stream()
+                .filter(edge -> kindFilter.isEmpty() || kindFilter.contains(edge.kind()))
+                .filter(edge -> switch (direction) {
+                    case "incoming" -> edge.inputNodeId().equals(nodeId);
+                    case "outgoing" -> edge.outputNodeId().equals(nodeId);
+                    default -> true;
+                })
+                .limit(DETAILS_COLLECTION_LIMIT)
+                .toList();
+    }
+
+    private static Map<String, String> nodeDirectories() {
+        Map<String, String> result = new java.util.HashMap<>();
+        for (NodeCatalogIndex.Entry entry : NodeCatalogIndex.entries()) {
+            result.put(entry.definition().typeId(), entry.path());
+        }
+        return Map.copyOf(result);
+    }
+
+    private static boolean matchesDirectory(String nodeDirectory, String requestedDirectory) {
+        if (requestedDirectory.isEmpty()) return true;
+        if (nodeDirectory == null) return false;
+        return nodeDirectory.equals(requestedDirectory) || nodeDirectory.startsWith(requestedDirectory + "/");
+    }
+
+    private static JsonObject queryFilters(List<String> nodeIds, List<String> typeIds, String directory,
+                                           String query, String commentFilter, String connectionState,
+                                           String connectionDirection, List<String> connectionKinds) {
+        JsonObject filters = new JsonObject();
+        filters.add("node_ids", strings(nodeIds));
+        filters.add("type_ids", strings(typeIds));
+        filters.addProperty("directory", directory);
+        filters.addProperty("query", text(query));
+        filters.addProperty("comment_filter", commentFilter);
+        filters.addProperty("connection_state", connectionState);
+        filters.addProperty("connection_direction", connectionDirection);
+        filters.add("connection_kinds", strings(connectionKinds));
+        return filters;
+    }
+
+    private static JsonArray strings(List<String> values) {
+        JsonArray array = new JsonArray();
+        values.forEach(array::add);
+        return array;
+    }
+
+    private static JsonArray valueArray(NodeData node, NodeDef definition, GraphReadSnapshot snapshot, String nodeId) {
+        JsonArray values = new JsonArray();
+        if (definition == null) return values;
+        Set<String> connectedInputs = snapshot.incoming(nodeId).stream()
+                .map(GraphReadSnapshot.Edge::inputPortId).collect(java.util.stream.Collectors.toSet());
+        for (PortRow row : definition.rows()) {
+            PortDef port = row.leftPort();
+            if (port == null || port.type() != null && port.type().isFlow()) continue;
+            boolean stored = node.inputs != null && node.inputs.containsKey(port.id());
+            Object storedValue = stored ? node.inputs.get(port.id()) : null;
+            JsonObject value = new JsonObject();
+            value.addProperty("port_id", port.id());
+            value.addProperty("type", port.type() == null ? "any" : port.type().name().toLowerCase(Locale.ROOT));
+            value.addProperty("connected", connectedInputs.contains(port.id()));
+            value.addProperty("has_stored_value", stored);
+            value.addProperty("stored_value_json", stored ? valueJson(storedValue) : "");
+            value.addProperty("default_value_json", valueJson(port.defaultValue()));
+            value.addProperty("effective_value_json", valueJson(stored ? storedValue : port.defaultValue()));
+            values.add(value);
+            if (values.size() >= DETAILS_COLLECTION_LIMIT) break;
+        }
+        return values;
+    }
+
+    private static JsonArray portArray(NodeData node, NodeDef definition) {
+        JsonArray ports = new JsonArray();
+        if (definition == null) return ports;
+        for (PortRow row : definition.rows()) {
+            if (row.leftPort() != null) ports.add(portDefinitionDetails(node, row, row.leftPort(), "input"));
+            if (ports.size() >= DETAILS_COLLECTION_LIMIT) break;
+            if (row.rightPort() != null) ports.add(portDefinitionDetails(node, row, row.rightPort(), "output"));
+            if (ports.size() >= DETAILS_COLLECTION_LIMIT) break;
+        }
+        return ports;
+    }
+
+    private static JsonObject portDefinitionDetails(NodeData node, PortRow row, PortDef port, String direction) {
+        boolean input = "input".equals(direction);
+        JsonObject result = new JsonObject();
+        result.addProperty("port_id", port.id());
+        result.addProperty("direction", direction);
+        result.addProperty("type", port.type() == null ? "any" : port.type().name().toLowerCase(Locale.ROOT));
+        result.addProperty("display_name", effectivePortName(node, portCategory(port, input), port,
+                port.displayName().getString()));
+        result.addProperty("ui_hint", row.uiHint() == null ? "default" : row.uiHint().name().toLowerCase(Locale.ROOT));
+        result.addProperty("hidden", port.hidePin());
+        result.addProperty("live_expression", port.liveExpressionEnabled());
+        return result;
+    }
+
+    private static JsonObject commentData(NodeData node, NodeDef definition) {
+        JsonObject comments = new JsonObject();
+        comments.addProperty("instance", text(node.comment));
+        comments.addProperty("definition", NodeCommentTextBuilder.build(definition));
+        return comments;
+    }
+
+    private static JsonObject positionData(NodeData node) {
+        JsonObject position = new JsonObject();
+        position.addProperty("x", node.uiPos != null && node.uiPos.length > 0 ? finite(node.uiPos[0]) : 0.0);
+        position.addProperty("y", node.uiPos != null && node.uiPos.length > 1 ? finite(node.uiPos[1]) : 0.0);
+        return position;
+    }
+
+    private static JsonObject metadataData(NodeData node, NodeDef definition,
+                                           GraphReadSnapshot snapshot, String nodeId) {
+        JsonObject metadata = new JsonObject();
+        metadata.addProperty("category", nodeCategory(definition));
+        metadata.addProperty("custom_color", node.customColor == null ? 0 : node.customColor);
+        metadata.addProperty("has_custom_color", node.customColor != null);
+        metadata.addProperty("parent_frame", text(node.parentFrame));
+        metadata.addProperty("incoming_count", snapshot.incoming(nodeId).size());
+        metadata.addProperty("outgoing_count", snapshot.outgoing(nodeId).size());
+        return metadata;
+    }
+
     private static String nodeCategory(NodeDef definition) {
         return definition == null ? "" : definition.category().name().toLowerCase(Locale.ROOT);
     }
 
-    private static JsonObject nodeSummary(String nodeId, NodeData node, NodeDef definition) {
-        JsonObject result = new JsonObject();
-        result.addProperty("node_id", nodeId);
-        result.addProperty("type_id", text(node.type));
-        result.addProperty("display_name", definition == null ? "" : definition.displayName().getString());
-        result.addProperty("custom_name", text(node.customName));
-        result.addProperty("comment", text(node.comment));
-        result.addProperty("x", node.uiPos != null && node.uiPos.length > 0 ? finite(node.uiPos[0]) : 0.0);
-        result.addProperty("y", node.uiPos != null && node.uiPos.length > 1 ? finite(node.uiPos[1]) : 0.0);
-        return result;
+    private static JsonObject identityData(String nodeId, NodeData node, NodeDef definition, String directory) {
+        JsonObject identity = new JsonObject();
+        identity.addProperty("node_id", nodeId);
+        identity.addProperty("type_id", NodeCatalogIndex.shortTypeId(text(node.type)));
+        identity.addProperty("display_name", definition == null ? "" : definition.displayName().getString());
+        identity.addProperty("custom_name", text(node.customName));
+        identity.addProperty("directory", directory);
+        return identity;
     }
 
     private static JsonObject portDetails(NodeData node, NodeDef definition, PortRow row, PortDef port,
@@ -514,14 +679,6 @@ final class TerminalGraphQueryService {
         return null;
     }
 
-    private static boolean matchesDirection(GraphReadSnapshot.Edge edge, String nodeId, String direction) {
-        return switch (direction) {
-            case "incoming" -> edge.inputNodeId().equals(nodeId);
-            case "outgoing" -> edge.outputNodeId().equals(nodeId);
-            default -> true;
-        };
-    }
-
     private static List<ValidationDiagnostic> validate(GraphReadSnapshot snapshot) {
         List<ValidationDiagnostic> diagnostics = new ArrayList<>();
         try {
@@ -584,10 +741,6 @@ final class TerminalGraphQueryService {
         int start = Math.min(offset, values.size());
         int end = Math.min(values.size(), start + limit);
         return new PageSlice<>(values.subList(start, end), offset, limit, values.size());
-    }
-
-    private static <T> List<T> limit(List<T> values, int limit) {
-        return values.size() <= limit ? values : values.subList(0, limit);
     }
 
     private static String valueJson(Object value) {

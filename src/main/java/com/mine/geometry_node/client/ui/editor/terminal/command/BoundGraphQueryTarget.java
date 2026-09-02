@@ -46,26 +46,27 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
     @Override public CommandResult applyGraphPatch(GraphPatch patch, CommandInvocationContext.CancellationToken cancellation) {
         return transactions.apply(patch, cancellation);
     }
-    @Override public CommandResult searchNodeTypes(String query, int offset, int limit) { return queries().searchNodeTypes(query, offset, limit); }
+    @Override public CommandResult searchNodeTypes(String query, String path, boolean recursive, int offset, int limit) {
+        return queries().searchNodeTypes(query, path, recursive, offset, limit);
+    }
+    @Override public CommandResult browseNodeCatalog(String path, boolean recursive, int offset, int limit) {
+        return queries().browseNodeCatalog(path, recursive, offset, limit);
+    }
     @Override public CommandResult getNodeTypeDetails(String typeId) { return queries().getNodeTypeDetails(typeId); }
     @Override public CommandResult getNodeTypePortOptions(String typeId, String portId, String query, int offset, int limit) {
         return queries().getNodeTypePortOptions(typeId, portId, query, offset, limit);
     }
-    @Override public CommandResult searchGraphNodes(String query, String typeId, String category,
-                                                    String commentFilter, String connectionState,
-                                                    int offset, int limit) {
-        return queries().searchGraphNodes(query, typeId, category, commentFilter, connectionState, offset, limit);
+    @Override public CommandResult queryGraphNodes(java.util.List<String> nodeIds, java.util.List<String> typeIds,
+                                                   String directory, String query, String commentFilter,
+                                                   String connectionState, java.util.List<String> select,
+                                                   String connectionDirection, java.util.List<String> connectionKinds,
+                                                   int offset, int limit) {
+        return withScope(queries().queryGraphNodes(nodeIds, typeIds, directory, query, commentFilter,
+                connectionState, select, connectionDirection, connectionKinds, offset, limit));
     }
     @Override public CommandResult getGraphStats(String typeId, String category, String groupBy,
                                                  int offset, int limit) {
         return withScope(queries().getGraphStats(typeId, category, groupBy, offset, limit));
-    }
-    @Override public CommandResult getNodeDetails(String nodeId) { return queries().getNodeDetails(nodeId); }
-    @Override public CommandResult getNodeConnections(String nodeId, String direction, int depth, int offset, int limit) {
-        return queries().getNodeConnections(nodeId, direction, depth, offset, limit);
-    }
-    @Override public CommandResult getGraphContext(String focusNodeId, int depth, int offset, int limit) {
-        return withScope(queries().getGraphContext(focusNodeId, depth, offset, limit));
     }
     private CommandResult withScope(CommandResult result) {
         long responseRevision = revision();

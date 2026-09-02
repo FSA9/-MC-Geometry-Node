@@ -212,34 +212,21 @@ public final class McpHttpServer implements AutoCloseable {
             sendJson(exchange, 400, jsonRpcError(-32700, "Parse error"));
             return;
         }
-        String requestedVersion = normalize(header(exchange, "MCP-Protocol-Version"));
-        if (headerValues(exchange, "MCP-Protocol-Version").size() != 1) {
-            sendJson(exchange, 400, jsonRpcError(-32020, "MCP-Protocol-Version header is missing or repeated"));
-            return;
-        }
-        if (!McpRequestDispatcher.MCP_PROTOCOL_VERSION.equals(requestedVersion)) {
-            sendJson(exchange, 400, unsupportedProtocolVersion(requestedVersion));
-            return;
-        }
         String method = string(request, "method");
-        String bodyVersion = requestMetadataString(request, "io.modelcontextprotocol/protocolVersion");
-        if (headerValues(exchange, "Mcp-Method").size() != 1
-                || !requestedVersion.equals(bodyVersion)
-                || !method.equals(normalize(header(exchange, "Mcp-Method")))) {
-            sendJson(exchange, 400, jsonRpcError(-32020, "MCP request headers do not match the body"));
+        if (method == null || method.isBlank()) {
+            sendJson(exchange, 400, jsonRpcError(-32600, "Request method is required"));
             return;
         }
-        String bodyName = requestName(request, method);
-        if (bodyName != null && (headerValues(exchange, "Mcp-Name").size() != 1
-                || !bodyName.equals(decodeHeaderValue(header(exchange, "Mcp-Name"))))) {
-            sendJson(exchange, 400, jsonRpcError(-32020, "Mcp-Name header does not match the body"));
-            return;
-        }
-        if (!isSupportedMethod(method)) {
+        if (!isSupportedMethod(method) && !method.startsWith("notifications/")) {
             sendJson(exchange, 404, jsonRpcError(-32601, "Method not found: " + method));
             return;
         }
         McpRequestDispatcher.Reply reply = dispatcher.dispatch(request);
+        if (reply == null || reply.body() == null) {
+            exchange.sendResponseHeaders(202, -1);
+            return;
+        }
+        exchange.getResponseHeaders().set("MCP-Protocol-Version", dispatcher.negotiatedProtocolVersion());
         sendJson(exchange, 200, reply.body());
     }
 
@@ -311,6 +298,7 @@ public final class McpHttpServer implements AutoCloseable {
         JsonObject response = jsonRpcError(-32022, "Unsupported MCP protocol version");
         JsonObject data = new JsonObject();
         com.google.gson.JsonArray supported = new com.google.gson.JsonArray();
+        supported.add("2025-06-18");
         supported.add(McpRequestDispatcher.MCP_PROTOCOL_VERSION);
         data.add("supported", supported);
         data.addProperty("requested", requested);
@@ -320,7 +308,8 @@ public final class McpHttpServer implements AutoCloseable {
 
     private static boolean isSupportedMethod(String method) {
         return switch (method) {
-            case "server/discover", "resources/list", "resources/templates/list", "resources/read",
+            case "initialize", "notifications/initialized", "notifications/cancelled",
+                    "resources/list", "resources/templates/list", "resources/read",
                     "tools/list", "tools/call" -> true;
             default -> false;
         };

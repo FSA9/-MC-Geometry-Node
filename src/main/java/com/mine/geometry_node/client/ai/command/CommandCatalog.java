@@ -37,7 +37,8 @@ public final class CommandCatalog {
 
     private static CommandSpec addNode() {
         List<CommandArgumentSpec> arguments = List.of(
-                argument("type_id", "已注册的节点类型 ID", true, null, stringSchema(1), CommandCatalog::completeNodeTypes),
+                argument("type_id", "不带 geometry_node: 前缀的已注册节点短 type_id", true, null,
+                        stringSchema(1), CommandCatalog::completeNodeTypes),
                 argument("x", "节点 X 坐标", false, new JsonPrimitive(0), numberSchema(), null),
                 argument("y", "节点 Y 坐标", false, new JsonPrimitive(0), numberSchema(), null),
                 argument("node_id", "可选的节点实例 ID", false, null, stringSchema(1), null)
@@ -46,7 +47,7 @@ public final class CommandCatalog {
                 property("type_id", stringSchema(1)),
                 property("node_id", stringSchema(1))
         );
-        return spec("addnode", "向当前蓝图添加一个节点", "addnode <类型ID> [x] [y] [自定义ID]", arguments,
+        return spec("addnode", "向当前蓝图添加一个节点", "addnode <短type_id> [x] [y] [自定义ID]", arguments,
                 CommandSpec.objectSchema(output, "type_id", "node_id"), ToolContract.CommandEffect.GRAPH_WRITE,
                 ToolContract.RiskLevel.REVERSIBLE_EDIT, true, CommandSpec.Exposure.MODEL_VISIBLE,
                 CommandCatalog::executeAddNode);
@@ -113,13 +114,14 @@ public final class CommandCatalog {
                 "patch_hash", "change_id", "revision", "operation_count");
         return new CommandSpec("apply_graph_patch", List.of(),
                 "提交 GraphPatch JSON 字符串。根字段: session_id, scope_id, "
-                        + "expected_revision, idempotency_key, operations。当前支持 add_node(alias,type_id,position,properties={}), "
+                        + "expected_revision, idempotency_key, operations。type_id 必须是不带 geometry_node: 前缀的短 ID。"
+                        + "当前支持 add_node(alias,type_id,position,properties={}), "
                         + "move_node(node,position), set_port_value(port,value,expected_old_value), "
                         + "set_select_value(port,option_id,expected_old_value,option_context_token), "
                         + "connect(from,to)。position 必须是 {x:number,y:number}；node 使用 {id:string} 或此前 "
                         + "add_node 的 {alias:string}；port 使用 {node:{id|alias},port_id:string}。connect.from 必须是输出端口，"
                         + "connect.to 必须是输入端口；不要猜端口 ID。"
-                        + "document/scope/revision 来自 get_graph_stats 或 get_graph_context；创建前 SELECT token 来自 "
+                        + "document/scope/revision 来自 get_graph_stats 或 query_graph_nodes；创建前 SELECT token 来自 "
                         + "get_node_type_port_options，已有实例 token 来自 get_port_options。"
                         + "调用由 MCP 客户端授权；GeometryNode 完成事务预检后原子提交为一次 Undo",
                 "apply_graph_patch <patch_json>", arguments, output,

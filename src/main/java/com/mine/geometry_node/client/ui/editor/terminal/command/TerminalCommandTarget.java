@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.command.GraphCommandTarget;
 import com.mine.geometry_node.client.ai.command.GraphQueryTarget;
+import com.mine.geometry_node.client.ai.command.NodeCatalogIndex;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdAddNode;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdConnect;
 import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveNodes;
@@ -27,7 +28,7 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
 
     @Override
     public Collection<String> registeredNodeTypeIds() {
-        return List.copyOf(NodeRegistry.INSTANCE.getAllTypeIds());
+        return NodeCatalogIndex.entries().stream().map(NodeCatalogIndex.Entry::typeId).toList();
     }
 
     @Override
@@ -53,7 +54,13 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
     @Override
     public CommandResult addNode(String typeId, double x, double y, String requestedNodeId) {
         if (session == null) return graphRequired();
-        if (!NodeRegistry.INSTANCE.has(typeId)) {
+        String canonicalTypeId;
+        try {
+            canonicalTypeId = NodeCatalogIndex.canonicalTypeId(typeId);
+        } catch (IllegalArgumentException failure) {
+            return CommandResult.failure("NODE_TYPE_INVALID", failure.getMessage());
+        }
+        if (!NodeRegistry.INSTANCE.has(canonicalTypeId)) {
             return CommandResult.failure("NODE_TYPE_NOT_FOUND",
                     "节点生成失败: 注册表中不存在类型为 '" + typeId + "' 的节点");
         }
@@ -66,7 +73,7 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
             return CommandResult.failure("NODE_ID_CONFLICT",
                     "节点生成失败: 当前画布中已经存在 ID 为 '" + nodeId + "' 的节点");
         }
-        NodeData data = new NodeData(nodeId, typeId, (float) x, (float) y);
+        NodeData data = new NodeData(nodeId, canonicalTypeId, (float) x, (float) y);
         boolean executed = session.editorContext.getCommandManager().execute(
                 new CmdAddNode(session.editorContext.getGraphController(), data));
         if (!executed) return CommandResult.failure("COMMAND_REJECTED", "节点生成失败: 当前图状态拒绝执行");
@@ -118,8 +125,13 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
     }
 
     @Override
-    public CommandResult searchNodeTypes(String query, int offset, int limit) {
-        return queries().searchNodeTypes(query, offset, limit);
+    public CommandResult searchNodeTypes(String query, String path, boolean recursive, int offset, int limit) {
+        return queries().searchNodeTypes(query, path, recursive, offset, limit);
+    }
+
+    @Override
+    public CommandResult browseNodeCatalog(String path, boolean recursive, int offset, int limit) {
+        return queries().browseNodeCatalog(path, recursive, offset, limit);
     }
 
     @Override
@@ -133,29 +145,18 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
     }
 
     @Override
-    public CommandResult searchGraphNodes(String query, String typeId, String category, String commentFilter,
-                                          String connectionState, int offset, int limit) {
-        return queries().searchGraphNodes(query, typeId, category, commentFilter, connectionState, offset, limit);
+    public CommandResult queryGraphNodes(java.util.List<String> nodeIds, java.util.List<String> typeIds,
+                                         String directory, String query, String commentFilter,
+                                         String connectionState, java.util.List<String> select,
+                                         String connectionDirection, java.util.List<String> connectionKinds,
+                                         int offset, int limit) {
+        return queries().queryGraphNodes(nodeIds, typeIds, directory, query, commentFilter, connectionState,
+                select, connectionDirection, connectionKinds, offset, limit);
     }
 
     @Override
     public CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
         return queries().getGraphStats(typeId, category, groupBy, offset, limit);
-    }
-
-    @Override
-    public CommandResult getNodeDetails(String nodeId) {
-        return queries().getNodeDetails(nodeId);
-    }
-
-    @Override
-    public CommandResult getNodeConnections(String nodeId, String direction, int depth, int offset, int limit) {
-        return queries().getNodeConnections(nodeId, direction, depth, offset, limit);
-    }
-
-    @Override
-    public CommandResult getGraphContext(String focusNodeId, int depth, int offset, int limit) {
-        return queries().getGraphContext(focusNodeId, depth, offset, limit);
     }
 
     @Override

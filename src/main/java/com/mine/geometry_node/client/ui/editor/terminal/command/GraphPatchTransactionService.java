@@ -9,6 +9,7 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.ai.command.CommandInvocationContext;
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.graph.GraphPatch;
+import com.mine.geometry_node.client.ai.command.NodeCatalogIndex;
 import com.mine.geometry_node.client.ai.graph.GraphPatchCodec;
 import com.mine.geometry_node.client.ai.graph.GraphPatchContractValidator;
 import com.mine.geometry_node.client.ai.graph.InputValueCodec;
@@ -168,12 +169,20 @@ public final class GraphPatchTransactionService {
                                 RegistryAccess registryAccess) {
         switch (operation) {
             case GraphPatch.AddNode add -> {
-                if (!NodeRegistry.INSTANCE.has(add.typeId())) throw fail("NODE_TYPE_NOT_FOUND", "节点类型不存在: " + add.typeId());
+                String canonicalTypeId;
+                try {
+                    canonicalTypeId = NodeCatalogIndex.canonicalTypeId(add.typeId());
+                } catch (IllegalArgumentException failure) {
+                    throw fail("NODE_TYPE_INVALID", failure.getMessage());
+                }
+                if (!NodeRegistry.INSTANCE.has(canonicalTypeId)) {
+                    throw fail("NODE_TYPE_NOT_FOUND", "节点类型不存在: " + add.typeId());
+                }
                 if (!add.properties().isEmpty()) throw unsupported(index, operation);
                 String nodeId = deterministicNodeId(patch.idempotencyKey(), add.alias());
                 if (graph.getNode(nodeId) != null) throw fail("NODE_ID_CONFLICT", "生成的节点 ID 已存在: " + nodeId);
                 aliases.put(add.alias(), nodeId);
-                context.getGraphController().addNode(new NodeData(nodeId, add.typeId(),
+                context.getGraphController().addNode(new NodeData(nodeId, canonicalTypeId,
                         finiteFloat(add.position().x()), finiteFloat(add.position().y())));
             }
             case GraphPatch.MoveNode move -> {

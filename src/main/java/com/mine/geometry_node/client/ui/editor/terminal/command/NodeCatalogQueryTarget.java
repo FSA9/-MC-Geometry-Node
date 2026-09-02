@@ -18,25 +18,26 @@ final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTa
     private final TerminalGraphQueryService queries = new TerminalGraphQueryService(null);
 
     @Override public boolean hasGraph() { return false; }
-    @Override public CommandResult searchNodeTypes(String query, int offset, int limit) {
-        return queries.searchNodeTypes(query, offset, limit);
+    @Override public CommandResult searchNodeTypes(String query, String path, boolean recursive, int offset, int limit) {
+        return queries.searchNodeTypes(query, path, recursive, offset, limit);
+    }
+    @Override public CommandResult browseNodeCatalog(String path, boolean recursive, int offset, int limit) {
+        return queries.browseNodeCatalog(path, recursive, offset, limit);
     }
     @Override public CommandResult getNodeTypeDetails(String typeId) { return queries.getNodeTypeDetails(typeId); }
     @Override public CommandResult getNodeTypePortOptions(String typeId, String portId, String query, int offset, int limit) {
         return queries.getNodeTypePortOptions(typeId, portId, query, offset, limit);
     }
-    @Override public CommandResult searchGraphNodes(String query, String typeId, String category,
-                                                    String commentFilter, String connectionState, int offset, int limit) {
+    @Override public CommandResult queryGraphNodes(java.util.List<String> nodeIds, java.util.List<String> typeIds,
+                                                   String directory, String query, String commentFilter,
+                                                   String connectionState, java.util.List<String> select,
+                                                   String connectionDirection, java.util.List<String> connectionKinds,
+                                                   int offset, int limit) {
         return unavailable();
     }
     @Override public CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
         return unavailable();
     }
-    @Override public CommandResult getNodeDetails(String nodeId) { return unavailable(); }
-    @Override public CommandResult getNodeConnections(String nodeId, String direction, int depth, int offset, int limit) {
-        return unavailable();
-    }
-    @Override public CommandResult getGraphContext(String focusNodeId, int depth, int offset, int limit) { return unavailable(); }
     @Override public CommandResult validateGraph(int offset, int limit) { return unavailable(); }
     @Override public CommandResult getPortOptions(String nodeId, String portId, String query, int offset, int limit) {
         return unavailable();

@@ -5,6 +5,10 @@ import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -45,19 +49,30 @@ final class GraphReadSnapshot {
     }
 
     static GraphReadSnapshot capture(NodeGraph graph) {
+        NodeGraph source = graph == null ? null : GraphJsonIO.fromJson(GraphJsonIO.toJson(graph));
         Map<String, NodeData> nodes = new LinkedHashMap<>();
-        if (graph != null && graph.nodes != null) {
-            graph.nodes.entrySet().stream().filter(entry -> entry.getKey() != null)
+        if (source != null && source.nodes != null) {
+            source.nodes.entrySet().stream().filter(entry -> entry.getKey() != null)
                     .sorted(Map.Entry.comparingByKey()).forEach(entry -> {
                         if (entry.getValue() != null) nodes.put(entry.getKey(), entry.getValue());
                     });
         }
+        Map<String, NodeDef> definitions = new LinkedHashMap<>();
+        nodes.forEach((nodeId, node) -> {
+            NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+            if (definition != null) definitions.put(nodeId, definition);
+        });
         List<Edge> edges = new ArrayList<>();
         for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {
             String sourceId = entry.getKey();
             NodeData node = entry.getValue();
             if (node.execOutputs != null) {
-                node.execOutputs.forEach((portId, connection) -> addEdge(edges, "flow", sourceId, portId, connection));
+                NodeDef definition = definitions.get(sourceId);
+                node.execOutputs.forEach((portId, connection) -> {
+                    String kind = outputType(definition, portId) == PortType.BEHAVIOR_STRUCTURE
+                            ? "behavior" : "flow";
+                    addEdge(edges, kind, sourceId, portId, connection);
+                });
             }
             if (node.outputs != null) {
                 node.outputs.forEach((portId, connections) -> {
@@ -79,12 +94,7 @@ final class GraphReadSnapshot {
         }
         Map<String, List<Edge>> direct = new LinkedHashMap<>();
         directSets.forEach((nodeId, nodeEdges) -> direct.put(nodeId, List.copyOf(nodeEdges)));
-        Map<String, NodeDef> definitions = new LinkedHashMap<>();
-        nodes.forEach((nodeId, node) -> {
-            NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
-            if (definition != null) definitions.put(nodeId, definition);
-        });
-        return new GraphReadSnapshot(graph, nodes, definitions, edges, outgoing, incoming, direct);
+        return new GraphReadSnapshot(source, nodes, definitions, edges, outgoing, incoming, direct);
     }
 
     NodeGraph graph() { return graph; }
@@ -132,6 +142,15 @@ final class GraphReadSnapshot {
         String targetPort = target.targetPortName();
         if (targetNode == null || targetNode.isBlank() || targetPort == null || targetPort.isBlank()) return;
         edges.add(new Edge(kind, sourceId, sourcePort, targetNode, targetPort));
+    }
+
+    private static PortType outputType(NodeDef definition, String portId) {
+        if (definition == null || portId == null) return null;
+        for (PortRow row : definition.rows()) {
+            PortDef output = row.rightPort();
+            if (output != null && portId.equals(output.id())) return output.type();
+        }
+        return null;
     }
 
     private static Map<String, List<Edge>> freezeIndex(Map<String, List<Edge>> source) {

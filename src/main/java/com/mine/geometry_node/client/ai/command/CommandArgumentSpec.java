@@ -20,7 +20,7 @@ public record CommandArgumentSpec(
         CompletionProvider completionProvider
 ) {
     private static final Pattern NAME_PATTERN = Pattern.compile("[a-z][a-z0-9_]{0,63}");
-    private static final Set<String> CLI_SCALAR_TYPES = Set.of("string", "number", "integer", "boolean");
+    private static final Set<String> CLI_ARGUMENT_TYPES = Set.of("string", "number", "integer", "boolean", "array");
 
     @FunctionalInterface
     public interface CompletionProvider {
@@ -37,7 +37,7 @@ public record CommandArgumentSpec(
             throw new IllegalArgumentException("argument schema requires a scalar type");
         }
         String type = schema.get("type").getAsString();
-        if (!CLI_SCALAR_TYPES.contains(type)) {
+        if (!CLI_ARGUMENT_TYPES.contains(type)) {
             throw new IllegalArgumentException("unsupported CLI argument type: " + type);
         }
         if (required && defaultValue != null) throw new IllegalArgumentException("required argument cannot have a default");

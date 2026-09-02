@@ -6,6 +6,7 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.command.CommandSpec;
+import com.mine.geometry_node.client.ai.command.NodeCatalogIndex;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -27,10 +28,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Stateless JSON-RPC dispatcher for the current MCP protocol. */
+/** JSON-RPC dispatcher for the MCP Streamable HTTP lifecycle. */
 public final class McpRequestDispatcher implements AutoCloseable {
     static final String GRAPH_STATS_RESOURCE_URI = "geometry-node://current-graph/stats";
-    public static final String MCP_PROTOCOL_VERSION = "2026-07-28";
+    /** Most recent protocol version; older listed version remains formally negotiated for Codex clients. */
+    public static final String MCP_PROTOCOL_VERSION = "2025-11-25";
+    private static final java.util.Set<String> SUPPORTED_PROTOCOL_VERSIONS =
+            java.util.Set.of("2025-06-18", MCP_PROTOCOL_VERSION);
     public static final int MAX_RESULT_BYTES = 1_048_576;
     private static final Duration READ_TOOL_TIMEOUT = Duration.ofSeconds(15);
     private static final Duration WRITE_TOOL_TIMEOUT = Duration.ofMinutes(6);
@@ -60,32 +64,48 @@ public final class McpRequestDispatcher implements AutoCloseable {
             READING THE GRAPH
             - Use get_graph_stats for counts, type/category distribution, frame or comment counts, isolated-node
               counts, and other summaries. It intentionally does not return the full graph.
-            - Use get_graph_context for graph contents or a paginated overview. When investigating one area, pass
-              focus_node_id and the smallest useful depth instead of reading the entire graph.
-            - Use search_graph_nodes to locate existing node instances by text, exact type, category, comment
-              presence, or connection state. Use get_node_details for exact ports, values, and comments on one
-              instance, and get_node_connections for its local incoming or outgoing neighborhood.
+            - Use query_graph_nodes for graph contents. Filter by node IDs, short type IDs, node directory, text,
+              comment presence, or connection state, and select only the identity, values, connections, comments,
+              ports, position, or metadata fields needed. Use direction and kind filters for connection queries.
+            - Empty node_ids/type_ids, an empty directory/query, comment_filter=any, and connection_state=any mean
+              no restriction for that filter. directory matches that exact node menu directory and its descendants;
+              it is not the broad runtime category used by get_graph_stats.
+            - Projections are independent: identity identifies nodes; values returns current input values; ports
+              returns the instance port contract; connections returns graph edges; comments, position, and metadata
+              return only their named concerns. Request the smallest useful combination.
             - Use validate_graph only when validation is requested or useful to verify a completed edit. Respect
               pagination metadata and request additional pages when the answer depends on omitted results.
 
+            QUERY EXAMPLES
+            - List nodes: query_graph_nodes with {\"select\":[\"identity\"]}.
+            - Inspect Follow nodes: query_graph_nodes with
+              {\"type_ids\":[\"behavior_follow\"],\"select\":[\"identity\",\"values\",\"comments\"]}.
+            - Inspect one node's outgoing behavior edges: query_graph_nodes with
+              {\"node_ids\":[\"node-1\"],\"select\":[\"connections\"],\"connection_direction\":\"outgoing\",
+              \"connection_kinds\":[\"behavior\"]}.
+
             DISCOVERING NODE CONTRACTS
-            - Before creating a node, call search_nodes and then get_node_type_details. Registry results and tool
-              responses are authoritative; never infer a type_id, port_id, direction, type, default value, or
-              edit capability from a display label or from memory.
+            - The appended NODE TYPE CATALOG is the live authoritative menu tree. If it gives the exact type_id,
+              call get_node_type_details directly. Otherwise browse_node_catalog or search_nodes first. Never invent
+              an absent type_id or infer a port_id, direction, type, default value, or edit capability from memory.
+            - Every model-facing type_id is the exact short ID, for example behavior_follow. Never include the
+              geometry_node: namespace in tool input; GeometryNode adds it internally.
             - For a SELECT input on a node type that has not been created, call get_node_type_port_options. For an
               existing node instance, call get_port_options. Submit the stable option_id, never its display label,
               and preserve the returned option_context_token where required.
-            - If an instance has generated or dynamic ports, create it first, then call get_node_details in a later
-              read step before connecting those ports. Never guess a generated port ID.
+            - If an instance has generated or dynamic ports, create it first, then call query_graph_nodes with its
+              node ID and select both ports and values in a later read step before configuring or connecting those
+              ports. Never guess a generated port ID.
 
             WRITING THE GRAPH
             - The only model-visible write tool is apply_graph_patch. Its patch_json argument is a JSON string, not
               an embedded object. A patch must contain the current session_id, scope_id, expected_revision, a
-              non-empty idempotency_key, and operations. Obtain session, scope, and revision from a graph-context
-              tool immediately before planning the write.
+              non-empty idempotency_key, and operations. Obtain session, scope, and revision from get_graph_stats
+              or query_graph_nodes immediately before planning the write.
             - Currently executable operations are add_node, move_node, set_port_value, set_select_value, and
-              connect. add_node requires a unique alias, an exact type_id, a finite {x,y} position, and an empty
-              properties object. A node reference is exactly one of {\"id\":...} for an existing node or
+              connect. add_node requires a unique alias, an exact short type_id without a namespace, a finite
+              {x,y} position, and an empty properties object. A node reference is exactly one of {\"id\":...}
+              for an existing node or
               {\"alias\":...} for a node created earlier in the same patch. A port reference contains that node
               reference plus an exact port_id. connect.from is an output and connect.to is an input.
             - Supply expected_old_value when changing an existing input. Do not overwrite a connected input value,
@@ -122,6 +142,8 @@ public final class McpRequestDispatcher implements AutoCloseable {
     private final Map<String, AtomicBoolean> activeCalls = new ConcurrentHashMap<>();
     private final Map<RepeatFingerprint, Deque<Long>> repeatedCalls = new HashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final AtomicBoolean initialized = new AtomicBoolean();
+    private volatile String negotiatedVersion = MCP_PROTOCOL_VERSION;
 
     public McpRequestDispatcher(McpToolCatalog catalog, McpCommandGateway gateway,
                                 McpToolEventListener eventListener) {
@@ -136,18 +158,24 @@ public final class McpRequestDispatcher implements AutoCloseable {
         String method = string(request.get("method"));
         JsonElement requestId = id(request);
         if (method == null) return protocolError(requestId, -32600, "Request method is required");
-        if (!validRequestMetadata(request)) {
-            return protocolError(requestId, -32602, "Missing or invalid MCP request metadata");
+        if (!method.equals("initialize") && !method.startsWith("notifications/") && !initialized.get()) {
+            return protocolError(requestId, -32002, "MCP server has not been initialized");
         }
-        String requestScope = randomId();
+        if (method.startsWith("notifications/") && !method.equals("notifications/initialized")
+                && !method.equals("notifications/cancelled")) return new Reply(null);
+        String requestScope = requestId == null || requestId.isJsonNull() ? randomId() : requestId.toString();
         return switch (method) {
-            case "server/discover" -> discover(requestId, request);
+            case "initialize" -> initialize(requestId, request);
+            case "notifications/initialized" -> notification(request);
+            case "notifications/cancelled" -> cancelNotification(request);
             case "resources/list" -> listResources(requestId, request);
             case "resources/templates/list" -> listResourceTemplates(requestId, request);
             case "resources/read" -> readResource(requestScope, requestId, request);
             case "tools/list" -> listTools(requestId, request);
             case "tools/call" -> callTool(requestScope, requestId, request);
-            default -> protocolError(requestId, -32601, "Method not found: " + method);
+            default -> initialized.get()
+                    ? protocolError(requestId, -32601, "Method not found: " + method)
+                    : protocolError(requestId, -32002, "MCP server has not been initialized");
         };
     }
 
@@ -160,24 +188,52 @@ public final class McpRequestDispatcher implements AutoCloseable {
         gateway.close();
     }
 
-    private Reply discover(JsonElement id, JsonObject request) {
-        if (id == null) return protocolError(null, -32600, "server/discover requires an id");
-        JsonObject params = object(request.get("params"));
-        if (params == null || !hasOnly(params, "_meta")) {
-            return protocolError(id, -32602, "Invalid server/discover params");
+    private Reply initialize(JsonElement id, JsonObject request) {
+        if (initialized.get()) return protocolError(id, -32600, "MCP server is already initialized");
+        if (id == null || !request.has("params") || !request.get("params").isJsonObject()) {
+            return protocolError(id, -32602, "initialize requires params");
         }
-        JsonObject result = completeResult();
-        JsonArray supportedVersions = new JsonArray();
-        supportedVersions.add(MCP_PROTOCOL_VERSION);
-        result.add("supportedVersions", supportedVersions);
+        JsonObject params = request.getAsJsonObject("params");
+        String requested = string(params.get("protocolVersion"));
+        if (requested == null || !SUPPORTED_PROTOCOL_VERSIONS.contains(requested)) {
+            JsonObject error = protocolError(id, -32602, "Unsupported MCP protocol version").body();
+            JsonObject data = new JsonObject();
+            JsonArray supported = new JsonArray();
+            for (String version : SUPPORTED_PROTOCOL_VERSIONS) supported.add(version);
+            data.add("supported", supported);
+            data.addProperty("requested", requested == null ? "" : requested);
+            error.getAsJsonObject("error").add("data", data);
+            return new Reply(error);
+        }
+        if (object(params.get("capabilities")) == null || object(params.get("clientInfo")) == null) {
+            return protocolError(id, -32602, "initialize requires capabilities and clientInfo");
+        }
+        initialized.set(true);
+        negotiatedVersion = requested;
+        JsonObject result = new JsonObject();
+        result.addProperty("protocolVersion", negotiatedVersion);
         result.add("capabilities", serverCapabilities());
-        JsonObject metadata = new JsonObject();
-        metadata.add(SERVER_INFO_META, serverInfo());
-        result.add("_meta", metadata);
-        result.addProperty("instructions", INSTRUCTIONS);
-        result.addProperty("ttlMs", 3_600_000);
-        result.addProperty("cacheScope", "private");
+        result.add("serverInfo", serverInfo());
+        result.addProperty("instructions", INSTRUCTIONS + NodeCatalogIndex.instructionsCatalog());
         return success(id, result);
+    }
+
+    public String negotiatedProtocolVersion() { return negotiatedVersion; }
+
+    private Reply notification(JsonObject request) {
+        return new Reply(null);
+    }
+
+    private Reply cancelNotification(JsonObject request) {
+        JsonObject params = object(request.get("params"));
+        if (params != null) {
+            JsonElement requestId = params.get("requestId");
+            if (requestId != null && requestId.isJsonPrimitive()) {
+                AtomicBoolean token = activeCalls.get(requestId.toString());
+                if (token != null) token.set(true);
+            }
+        }
+        return new Reply(null);
     }
 
     private Reply listResources(JsonElement id, JsonObject request) {
@@ -441,28 +497,11 @@ public final class McpRequestDispatcher implements AutoCloseable {
     }
 
     private static Reply success(JsonElement id, JsonObject result) {
-        if (!result.has("resultType")) result.addProperty("resultType", "complete");
-        JsonObject metadata = object(result.get("_meta"));
-        if (metadata == null) {
-            metadata = new JsonObject();
-            result.add("_meta", metadata);
-        }
-        if (!metadata.has(SERVER_INFO_META)) metadata.add(SERVER_INFO_META, serverInfo());
         return new Reply(response(id, result));
     }
 
-    private static boolean validRequestMetadata(JsonObject request) {
-        JsonObject params = object(request.get("params"));
-        JsonObject metadata = params == null ? null : object(params.get("_meta"));
-        return metadata != null
-                && MCP_PROTOCOL_VERSION.equals(string(metadata.get(REQUEST_PROTOCOL_META)))
-                && object(metadata.get(REQUEST_CLIENT_CAPABILITIES_META)) != null;
-    }
-
     private static JsonObject completeResult() {
-        JsonObject result = new JsonObject();
-        result.addProperty("resultType", "complete");
-        return result;
+        return new JsonObject();
     }
 
     private static JsonObject serverCapabilities() {

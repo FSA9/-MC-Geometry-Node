@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ai.command;
 
+import com.google.gson.JsonParser;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -149,6 +150,11 @@ public final class CliCommandParser {
                     String value = raw.toLowerCase(Locale.ROOT);
                     if (!value.equals("true") && !value.equals("false")) throw new IllegalArgumentException("boolean");
                     yield new JsonPrimitive(Boolean.parseBoolean(value));
+                }
+                case "array" -> {
+                    JsonElement value = JsonParser.parseString(raw);
+                    if (!value.isJsonArray()) throw new IllegalArgumentException("array");
+                    yield value;
                 }
                 default -> throw new IllegalStateException("unsupported argument type: " + type);
             };
