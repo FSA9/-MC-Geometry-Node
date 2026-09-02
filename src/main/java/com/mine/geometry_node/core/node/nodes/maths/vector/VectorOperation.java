@@ -22,6 +22,16 @@ public class VectorOperation extends BaseNode {
             "add_scalar", "subtract_scalar", "multiply_scalar", "divide_scalar",
             "dot", "cross", "length", "normalize", "distance", "lerp", "negate", "reflect"
     };
+    private static final String[] OPERATOR_LABEL_KEYS = {
+            "geometry_node.vector.operation.add", "geometry_node.vector.operation.subtract",
+            "geometry_node.vector.operation.multiply", "geometry_node.vector.operation.divide",
+            "geometry_node.vector.operation.add_scalar", "geometry_node.vector.operation.subtract_scalar",
+            "geometry_node.vector.operation.multiply_scalar", "geometry_node.vector.operation.divide_scalar",
+            "geometry_node.vector.operation.dot", "geometry_node.vector.operation.cross",
+            "geometry_node.vector.operation.length", "geometry_node.vector.operation.normalize",
+            "geometry_node.vector.operation.distance", "geometry_node.vector.operation.lerp",
+            "geometry_node.vector.operation.negate", "geometry_node.vector.operation.reflect"
+    };
 
     @Override public NodeDef getDefaultDefinition() { return buildDef("add"); }
 
@@ -36,7 +46,7 @@ public class VectorOperation extends BaseNode {
                 Component.translatable("geometry_node.node.vector_operation"));
         b.addRow(new PortRow(null, (scalar ? StandardPorts.FLOAT_VALUE : StandardPorts.VECTOR).toOutput(), UIHint.DEFAULT, null, null));
         b.addRow(new PortRow(StandardPorts.STRING.toInput("add").hiddenPin(), null, UIHint.SELECT, null,
-                Map.of(PortMetaKeys.OPTIONS, OPERATORS)));
+                Map.of(PortMetaKeys.OPTIONS, OPERATORS, PortMetaKeys.OPTION_LABELS, OPERATOR_LABEL_KEYS)));
         b.addRow(new PortRow(StandardPorts.VECTOR.toInputWithIndex(1), null, UIHint.VECTOR, null, null));
         if (op.equals("scale") || op.equals("add_scalar") || op.equals("subtract_scalar")
                 || op.equals("multiply_scalar") || op.equals("divide_scalar") || op.equals("lerp"))

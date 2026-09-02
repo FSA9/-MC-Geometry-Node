@@ -14,6 +14,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.monster.zombie.ZombieVillager;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityMobGriefingEvent;
@@ -237,9 +239,13 @@ public class EntityDispatcher {
             if (!event.getLevel().isClientSide() && event.getEntity() instanceof Projectile projectile) {
                 Entity owner = projectile.getOwner();
                 Entity dispatchTarget = owner != null ? owner : projectile;
+                ItemStack weapon = projectile instanceof AbstractArrow arrow && arrow.getWeaponItem() != null
+                        ? arrow.getWeaponItem().copy()
+                        : ItemStack.EMPTY;
                 BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getLevel(), dispatchTarget, OnProjectileShoot.TYPE_ID, GraphEventData.of(
                         StandardPorts.ENTITY.getId(), projectile,
                         StandardPorts.SOURCE_ENTITY.getId(), owner,
+                        StandardPorts.ITEM_STACK.getId(), weapon,
                         StandardPorts.XYZ.getId(), projectile.position(),
                         StandardPorts.VECTOR.getId(), projectile.getDeltaMovement()
                 ));
