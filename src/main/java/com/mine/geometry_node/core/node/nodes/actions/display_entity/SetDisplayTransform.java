@@ -57,7 +57,7 @@ public class SetDisplayTransform extends BaseNode {
         if (scaleVec == null) scaleVec = new Vec3(1, 1, 1);
 
         Quaternionf leftRotation = new Quaternionf().rotationYXZ(
-                (float) Math.toRadians(rotation.y),
+                (float) Math.toRadians(-rotation.y),
                 (float) Math.toRadians(rotation.x),
                 (float) Math.toRadians(rotation.z)
         );

@@ -105,7 +105,7 @@ public class SpawnTextDisplayEntity extends BaseNode {
         Integer interpDuration = getInput(context, StandardPorts.TICK.getIdWithIndex(1), Integer.class);
 
         Quaternionf leftRotation = new Quaternionf().rotationYXZ(
-                (float) Math.toRadians(rotation.y),
+                (float) Math.toRadians(-rotation.y),
                 (float) Math.toRadians(rotation.x),
                 (float) Math.toRadians(rotation.z)
         );

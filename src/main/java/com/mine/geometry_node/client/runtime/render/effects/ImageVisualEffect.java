@@ -80,7 +80,7 @@ public final class ImageVisualEffect extends AbstractVisualEffect {
         poseStack.pushPose();
         poseStack.translate(renderPosition.x, renderPosition.y, renderPosition.z);
         poseStack.mulPose(new Quaternionf().rotationYXZ(
-                (float) Math.toRadians(evaluatedRotation.y),
+                (float) Math.toRadians(-evaluatedRotation.y),
                 (float) Math.toRadians(evaluatedRotation.x),
                 (float) Math.toRadians(evaluatedRotation.z)));
 

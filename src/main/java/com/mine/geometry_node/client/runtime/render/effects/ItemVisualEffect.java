@@ -103,7 +103,7 @@ public class ItemVisualEffect extends AbstractVisualEffect {
         poseStack.translate(renderPos.x, renderPos.y, renderPos.z);
 
         Quaternionf rotationQuat = new Quaternionf().rotationYXZ(
-                (float) Math.toRadians(rot.y),
+                (float) Math.toRadians(-rot.y),
                 (float) Math.toRadians(rot.x),
                 (float) Math.toRadians(rot.z)
         );
