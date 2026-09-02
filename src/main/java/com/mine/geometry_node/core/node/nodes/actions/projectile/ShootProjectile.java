@@ -37,6 +37,7 @@ public class ShootProjectile extends BaseNode {
                         .text("impact_priority")
                         .input(StandardPorts.PROJECTILE, "projectile")
                         .input(StandardPorts.SOURCE_ENTITY, "source_entity")
+                        .input(StandardPorts.IGNORE_AIR_RESISTANCE, "ignore_air_resistance")
                         .output(StandardPorts.PROJECTILE, "projectile_output")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),

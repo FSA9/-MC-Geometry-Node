@@ -55,7 +55,20 @@ public class DrawItemVisual extends BaseNode {
                         null,
                         UIHint.SELECT,
                         null,
-                        Map.of(PortMetaKeys.OPTIONS, new String[]{"fixed", "none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground"})
+                        Map.of(
+                                PortMetaKeys.OPTIONS, new String[]{"fixed", "none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground"},
+                                PortMetaKeys.OPTION_LABELS, new String[]{
+                                        "geometry_node.display.item_context.fixed",
+                                        "geometry_node.display.item_context.none",
+                                        "geometry_node.display.item_context.third_person_left_hand",
+                                        "geometry_node.display.item_context.third_person_right_hand",
+                                        "geometry_node.display.item_context.first_person_left_hand",
+                                        "geometry_node.display.item_context.first_person_right_hand",
+                                        "geometry_node.display.item_context.head",
+                                        "geometry_node.display.item_context.gui",
+                                        "geometry_node.display.item_context.ground"
+                                }
+                        )
                 ))
                 // 核心三大动态矢量
                 .addRow(new PortRow(TRANSLATION_PORT, null, UIHint.VECTOR, null, null))

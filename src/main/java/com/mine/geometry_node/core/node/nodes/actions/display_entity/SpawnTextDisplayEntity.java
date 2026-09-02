@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
@@ -32,13 +33,31 @@ public class SpawnTextDisplayEntity extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_text_display_entity"))
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .input(StandardPorts.START_POS, "start_pos")
+                        .input(StandardPorts.MESSAGE, "message")
+                        .input(StandardPorts.STRING, "alignment")
+                        .input(StandardPorts.TEXT_LINE_WIDTH, "line_width")
+                        .input(StandardPorts.TRANSLATION, "translation")
+                        .input(StandardPorts.ROTATION, "rotation")
+                        .input(StandardPorts.SIZE_3, "size_3")
+                        .input(StandardPorts.TICK, "teleport_tick")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.MESSAGE.toInput("Hello World"), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, new String[]{"center", "left", "right"})
+                        Map.of(
+                                PortMetaKeys.OPTIONS, new String[]{"center", "left", "right"},
+                                PortMetaKeys.OPTION_LABELS, new String[]{
+                                        "geometry_node.display.text_alignment.center",
+                                        "geometry_node.display.text_alignment.left",
+                                        "geometry_node.display.text_alignment.right"
+                                }
+                        )
                 ))
                 .addRow(new PortRow(StandardPorts.TEXT_LINE_WIDTH.toInput(200), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.BACKGROUND_COLOR.toInput(1073741824), null, UIHint.INPUT, null, null))

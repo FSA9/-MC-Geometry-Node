@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
@@ -34,13 +35,36 @@ public class SpawnItemDisplayEntity extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_item_display_entity"))
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .input(StandardPorts.START_POS, "start_pos")
+                        .input(StandardPorts.ITEM_STACK, "item_stack")
+                        .input(StandardPorts.STRING, "display_context")
+                        .input(StandardPorts.TRANSLATION, "translation")
+                        .input(StandardPorts.ROTATION, "rotation")
+                        .input(StandardPorts.SIZE_3, "size_3")
+                        .input(StandardPorts.TICK, "teleport_tick")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, new String[]{"none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground", "fixed"})
+                        Map.of(
+                                PortMetaKeys.OPTIONS, new String[]{"none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground", "fixed"},
+                                PortMetaKeys.OPTION_LABELS, new String[]{
+                                        "geometry_node.display.item_context.none",
+                                        "geometry_node.display.item_context.third_person_left_hand",
+                                        "geometry_node.display.item_context.third_person_right_hand",
+                                        "geometry_node.display.item_context.first_person_left_hand",
+                                        "geometry_node.display.item_context.first_person_right_hand",
+                                        "geometry_node.display.item_context.head",
+                                        "geometry_node.display.item_context.gui",
+                                        "geometry_node.display.item_context.ground",
+                                        "geometry_node.display.item_context.fixed"
+                                }
+                        )
                 ))
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
