@@ -30,8 +30,8 @@ public class ShootProjectile extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.shoot_projectile"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                // 输出生成的投掷物
-                .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
+                // 输出生成的投射物
+                .addRow(new PortRow(null, StandardPorts.PROJECTILE.toOutput(), UIHint.DEFAULT, null, null))
                 // 输入：发射者与坐标
                 .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
@@ -108,7 +108,7 @@ public class ShootProjectile extends BaseNode {
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (StandardPorts.ENTITY.getId().equals(portName)) {
+        if (StandardPorts.PROJECTILE.getId().equals(portName)) {
             return context.getTempData("spawned_projectile");
         }
         return null;

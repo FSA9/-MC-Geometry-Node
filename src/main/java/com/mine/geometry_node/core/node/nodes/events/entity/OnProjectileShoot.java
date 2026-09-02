@@ -18,15 +18,15 @@ public class OnProjectileShoot extends BaseEventNode {
         return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node.on_projectile_shoot"))
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
-                        .output(StandardPorts.ENTITY, "projectile")
+                        .output(StandardPorts.PROJECTILE, "projectile")
                         .output(StandardPorts.SOURCE_ENTITY, "source_entity")
                         .output(StandardPorts.ITEM_STACK, "weapon_item_stack")
                         .output(StandardPorts.XYZ, "shoot_position")
                         .output(StandardPorts.VECTOR, "initial_velocity")
                         .build())
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                // 投掷物实体本身
-                .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
+                // 投射物实体本身
+                .addRow(new PortRow(null, StandardPorts.PROJECTILE.toOutput(), UIHint.DEFAULT, null, null))
                 // 发射者 (Owner)
                 .addRow(new PortRow(null, StandardPorts.SOURCE_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 // 发射该箭的武器快照；不具备统一武器来源的投射物输出空 ItemStack。

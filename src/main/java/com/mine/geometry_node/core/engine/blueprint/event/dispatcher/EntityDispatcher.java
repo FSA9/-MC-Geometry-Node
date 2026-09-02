@@ -243,7 +243,7 @@ public class EntityDispatcher {
                         ? arrow.getWeaponItem().copy()
                         : ItemStack.EMPTY;
                 BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getLevel(), dispatchTarget, OnProjectileShoot.TYPE_ID, GraphEventData.of(
-                        StandardPorts.ENTITY.getId(), projectile,
+                        StandardPorts.PROJECTILE.getId(), projectile,
                         StandardPorts.SOURCE_ENTITY.getId(), owner,
                         StandardPorts.ITEM_STACK.getId(), weapon,
                         StandardPorts.XYZ.getId(), projectile.position(),

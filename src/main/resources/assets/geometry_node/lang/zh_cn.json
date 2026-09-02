@@ -629,7 +629,7 @@
     "geometry_node.node.spawn_interaction_entity":  "生成交互实体",
     "geometry_node.node.spawn_marker_entity":  "生成标记点",
     "geometry_node.node.on_interaction":  "交互触发",
-    "geometry_node.node.shoot_projectile":  "发射投掷物",
+    "geometry_node.node.shoot_projectile":  "发射投射物",
     "geometry_node.node.combine_flow":  "合流",
     "geometry_node.port.gravity":  "重力",
     "geometry_node.port.invisible":  "隐形",

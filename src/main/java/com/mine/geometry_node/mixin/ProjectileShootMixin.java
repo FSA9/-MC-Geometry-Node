@@ -35,7 +35,7 @@ public abstract class ProjectileShootMixin {
             Entity dispatchTarget = (owner != null) ? owner : projectile;
 
             BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, dispatchTarget, OnProjectileShoot.TYPE_ID, GraphEventData.of(
-                    StandardPorts.ENTITY.getId(), projectile,
+                    StandardPorts.PROJECTILE.getId(), projectile,
                     StandardPorts.XYZ.getId(), pos,
                     StandardPorts.VECTOR.getId(), motion,
                     StandardPorts.SOURCE_ENTITY.getId(), owner

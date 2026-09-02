@@ -28,13 +28,13 @@ public class OnProjectileHit extends BaseEventNode {
                         .output(StandardPorts.BLOCK_STATE, "block_state")
                         .build())
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                // 投掷物本身 (如雪球、箭)
+                // 投射物本身（如雪球、箭）
                 .addRow(new PortRow(null, StandardPorts.PROJECTILE.toOutput(), UIHint.DEFAULT, null, null))
-                // 投掷物的发射者
+                // 投射物的发射者
                 .addRow(new PortRow(null, StandardPorts.SOURCE_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 // 击中的实体 (如果是击中方块，此项为 null)
                 .addRow(new PortRow(null, StandardPorts.HIT_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                // 碰撞瞬间的投掷物运动矢量
+                // 碰撞瞬间的投射物运动矢量
                 .addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.DEFAULT, null, null))
                 // 击中位置的精准坐标
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))
