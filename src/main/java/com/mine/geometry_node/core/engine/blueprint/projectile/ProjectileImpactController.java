@@ -126,7 +126,6 @@ public final class ProjectileImpactController {
             accessor.geometryNode$setLastState(arrow.level().getBlockState(blockHit.getBlockPos()));
             arrow.shakeTime = 7;
             arrow.setCritArrow(false);
-            arrow.setPierceLevel((byte) 0);
             return;
         }
 
