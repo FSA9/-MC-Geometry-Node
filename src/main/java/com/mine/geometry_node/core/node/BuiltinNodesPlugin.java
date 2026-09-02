@@ -19,6 +19,7 @@ import com.mine.geometry_node.core.node.nodes.actions.inventory.*;
 import com.mine.geometry_node.core.node.nodes.actions.item.*;
 import com.mine.geometry_node.core.node.nodes.actions.marker.*;
 import com.mine.geometry_node.core.node.nodes.actions.player.*;
+import com.mine.geometry_node.core.node.nodes.actions.projectile.*;
 import com.mine.geometry_node.core.node.nodes.actions.schematic.*;
 import com.mine.geometry_node.core.node.nodes.actions.visual.*;
 import com.mine.geometry_node.core.node.nodes.actions.world.*;
@@ -39,6 +40,7 @@ import com.mine.geometry_node.core.node.nodes.events.display_entity.*;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.dialogue.*;
 import com.mine.geometry_node.core.node.nodes.events.player.*;
+import com.mine.geometry_node.core.node.nodes.events.projectile.*;
 import com.mine.geometry_node.core.node.nodes.events.inventory.*;
 import com.mine.geometry_node.core.node.nodes.events.world.*;
 import com.mine.geometry_node.core.node.nodes.functions.graph.*;
@@ -114,7 +116,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // --- ACTIONS ---
 //        registry.register("actions", new ExecuteCommand());
-//        registry.register("actions", new LaunchProjectile());
 //        registry.register("actions/visual", new Raycast());
         registry.register("actions/visual", new MultiRaycast());
         registry.register("actions/visual", new DrawDebugLine());
@@ -230,7 +231,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/entity", new SetEntityNoAI());
         registry.register("actions/entity", new SetEntityNoGravity());
         registry.register("actions/entity", new SetEntityPersistence());
-        registry.register("actions/entity", new ShootProjectile());
+        registry.register("actions/projectile", new ShootProjectile());
 
         // Action/DisplayEntity
         registry.register("actions/display_entity", new SpawnInteractionEntity());
@@ -459,11 +460,11 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/entity", new OnEntitySpawn());
         registry.register("events/entity", new OnEntityTame());
         registry.register("events/entity", new OnEntityTeleport());
-        registry.register("events/entity", new OnProjectileShoot());
+        registry.register("events/projectile", new OnProjectileShoot());
         registry.register("events/entity", new OnTargetChange());
         registry.register("events/entity", new OnVillagerCure());
         registry.register("events/entity", new OnVillagerTrade());
-        registry.register("events/entity", new OnProjectileHit());
+        registry.register("events/projectile", new OnProjectileHit());
         registry.register("events/entity", new OnEntityTick());
 
         // Events/Inventory

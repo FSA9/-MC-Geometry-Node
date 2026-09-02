@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructu
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
+import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileControlAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
@@ -110,6 +111,26 @@ public class GeometryNode {
                     })
                     .copyOnDeath()
                     .build());
+
+    public static final Supplier<AttachmentType<ProjectileControlAttachment>> PROJECTILE_CONTROL_ATTACHMENT =
+            ATTACHMENT_TYPES.register("projectile_control", () -> AttachmentType.builder(ProjectileControlAttachment::new)
+                    .serialize(new IAttachmentSerializer<ProjectileControlAttachment>() {
+                        @Override
+                        public ProjectileControlAttachment read(IAttachmentHolder holder, ValueInput input) {
+                            ProjectileControlAttachment attachment = new ProjectileControlAttachment();
+                            CompoundTag tag = input.read(MapCodec.assumeMapUnsafe(CompoundTag.CODEC))
+                                    .orElseGet(CompoundTag::new);
+                            attachment.load(tag);
+                            return attachment;
+                        }
+
+                        @Override
+                        public boolean write(ProjectileControlAttachment attachment, ValueOutput output) {
+                            CompoundTag tag = attachment.save();
+                            output.store(tag);
+                            return !tag.isEmpty();
+                        }
+                    }).build());
 
     public static final Supplier<AttachmentType<EntityQuestAttachment>> QUEST_DATA_ATTACHMENT =
             ATTACHMENT_TYPES.register("quest_data", () -> AttachmentType.builder(EntityQuestAttachment::new)

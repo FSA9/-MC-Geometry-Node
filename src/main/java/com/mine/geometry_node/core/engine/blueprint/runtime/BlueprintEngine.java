@@ -585,6 +585,33 @@ public final class BlueprintEngine {
         }
     }
 
+    public boolean hasMatchingStaticEventFlag(@NotNull ServerLevel level, @Nullable Entity target,
+                                              String eventNodeId, @Nullable Map<String, Object> eventData,
+                                              String staticInputId) {
+        Map<String, Object> eventPayload = snapshotEventData(eventData);
+        ServerState serverState = state(level);
+
+        refreshGlobalSubscriptions(level);
+        GlobalGraphStorage globalStorage = GlobalGraphStorage.get(level.getServer().overworld());
+        for (EventSubscription subscription : serverState.graphSubscriptions.globalSubscriptionsFor(eventNodeId)) {
+            if (!globalStorage.getGraphs().contains(subscription.graphId())
+                    || !subscription.shouldDispatch(level, target, eventPayload)) continue;
+            if (subscription.index().getNodeStaticInput(subscription.nodeId(), staticInputId,
+                    Boolean.class, false)) return true;
+        }
+
+        if (target == null) return false;
+        EntityGraphAttachment attachment = getAttachment(target);
+        if (attachment == null) return false;
+        for (EventSubscription subscription : getEntitySubscriptionsForEvent(target, eventNodeId)) {
+            if (!attachment.getBoundGraphs().contains(subscription.graphId())
+                    || !subscription.shouldDispatch(level, target, eventPayload)) continue;
+            if (subscription.index().getNodeStaticInput(subscription.nodeId(), staticInputId,
+                    Boolean.class, false)) return true;
+        }
+        return false;
+    }
+
     private void refreshGraphSubscriptions(ServerState state, MinecraftServer server, String graphId,
                                            @Nullable BlueprintPlan newIndex) {
         GraphSubscriptionIndex graphSubscriptions = state.graphSubscriptions;

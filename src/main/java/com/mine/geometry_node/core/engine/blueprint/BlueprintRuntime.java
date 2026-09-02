@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputKeys;
 import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityInventoryGainTracker;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.node.nodes.events.player.OnPlayerKeyEvent;
+import com.mine.geometry_node.core.node.nodes.events.projectile.OnProjectileHit;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
@@ -244,6 +245,13 @@ public final class BlueprintRuntime implements GraphRuntime {
 
     public void clearEntityInventoryTracking(Entity entity) {
         inventoryGainTracker.clear(entity);
+    }
+
+    public boolean shouldInterceptProjectileHit(ServerLevel level, Entity target,
+                                                Map<String, Object> eventData) {
+        return engine.hasMatchingStaticEventFlag(level, target,
+                OnProjectileHit.TYPE_ID,
+                eventData, StandardPorts.INTERCEPT.getId());
     }
 
     private void onGraphAssetsChanged(GraphAssetLifecycleIndex.Change change) {

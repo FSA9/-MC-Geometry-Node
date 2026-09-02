@@ -151,6 +151,7 @@ public enum StandardPorts {
     BLACKBOARD_SCOPE("blackboard_scope", PortType.STRING),
     TARGET_MODE("target_mode", PortType.STRING),
     PATROL_MODE("patrol_mode", PortType.STRING),
+    COLLISION_POLICY("collision_policy", PortType.STRING),
 
     // Entity
     ENTITY("entity", PortType.ENTITY),

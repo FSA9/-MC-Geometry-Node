@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
+import com.mine.geometry_node.core.node.nodes.events.projectile.OnProjectileShoot;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
