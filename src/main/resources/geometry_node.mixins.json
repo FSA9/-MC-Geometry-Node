@@ -8,6 +8,9 @@
     "MobNavigationInvoker",
     "PathNavigationAccessor",
     "AbstractArrowAccessor",
+    "AbstractArrowPhysicsMixin",
+    "ThrowableProjectileAccessor",
+    "ThrowableProjectilePhysicsMixin",
     "ProjectileAccessor",
     "FishingHookImpactMixin",
     "ProjectileImpactMixin"

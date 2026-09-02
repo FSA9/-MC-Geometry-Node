@@ -130,7 +130,9 @@ public class GeometryNode {
                             output.store(tag);
                             return !tag.isEmpty();
                         }
-                    }).build());
+                    })
+                    .sync(ProjectileControlAttachment.SYNC_CODEC)
+                    .build());
 
     public static final Supplier<AttachmentType<EntityQuestAttachment>> QUEST_DATA_ATTACHMENT =
             ATTACHMENT_TYPES.register("quest_data", () -> AttachmentType.builder(EntityQuestAttachment::new)

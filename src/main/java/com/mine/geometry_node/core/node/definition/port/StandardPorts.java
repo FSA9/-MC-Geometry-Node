@@ -63,6 +63,7 @@ public enum StandardPorts {
     TEXT_SHADOW("text_shadow", PortType.BOOLEAN),
     RESPONSIVE("responsive", PortType.BOOLEAN),
     GRAVITY("gravity", PortType.BOOLEAN),
+    IGNORE_AIR_RESISTANCE("ignore_air_resistance", PortType.BOOLEAN),
     INVISIBLE("invisible", PortType.BOOLEAN),
     CHOICE_VISIBLE("choice_visible", PortType.BOOLEAN),
     CHOICE_ENABLED("choice_enabled", PortType.BOOLEAN),

@@ -642,6 +642,7 @@
     "geometry_node.node.shoot_projectile.comment.projectile_output":  "重新发射后的同一个投射物实体。",
     "geometry_node.node.combine_flow":  "合流",
     "geometry_node.port.gravity":  "重力",
+    "geometry_node.port.ignore_air_resistance":  "忽略空气阻力",
     "geometry_node.port.invisible":  "隐形",
     "geometry_node.port.responsive":  "反馈",
     "geometry_node.port.data":  "数据",

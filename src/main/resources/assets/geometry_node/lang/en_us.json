@@ -642,6 +642,7 @@
     "geometry_node.node.shoot_projectile.comment.projectile_output":  "The same projectile entity after re-launching.",
     "geometry_node.node.combine_flow":  "Combine Flow",
     "geometry_node.port.gravity":  "Gravity",
+    "geometry_node.port.ignore_air_resistance":  "Ignore Air Resistance",
     "geometry_node.port.invisible":  "Invisible",
     "geometry_node.port.responsive":  "Responsive",
     "geometry_node.port.data":  "Data",

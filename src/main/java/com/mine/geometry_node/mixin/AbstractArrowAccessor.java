@@ -13,4 +13,7 @@ public interface AbstractArrowAccessor {
 
     @Accessor("lastState")
     void geometryNode$setLastState(BlockState state);
+
+    @org.spongepowered.asm.mixin.gen.Invoker("applyInertia")
+    void geometryNode$applyInertia(float inertia);
 }

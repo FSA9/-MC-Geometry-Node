@@ -68,6 +68,8 @@ public class ShootProjectile extends BaseNode {
                 ))
                 .addRow(new PortRow(StandardPorts.GRAVITY.toInput(true), null,
                         UIHint.CHECKBOX, null, null))
+                .addRow(new PortRow(StandardPorts.IGNORE_AIR_RESISTANCE.toInput(false), null,
+                        UIHint.CHECKBOX, null, null))
                 .addRow(new PortRow(StandardPorts.INVISIBLE.toInput(false), null,
                         UIHint.CHECKBOX, null, null))
                 .build();
@@ -89,6 +91,7 @@ public class ShootProjectile extends BaseNode {
         Vec3 direction = getInput(context, StandardPorts.VECTOR.getId(), Vec3.class);
         Float speed = getInput(context, StandardPorts.SPEED.getId(), Float.class);
         Boolean hasGravity = getInput(context, StandardPorts.GRAVITY.getId(), Boolean.class);
+        Boolean ignoreAirResistance = getInput(context, StandardPorts.IGNORE_AIR_RESISTANCE.getId(), Boolean.class);
         Boolean invisible = getInput(context, StandardPorts.INVISIBLE.getId(), Boolean.class);
         String policyId = getInput(context, StandardPorts.COLLISION_POLICY.getId(), String.class);
 
@@ -96,6 +99,7 @@ public class ShootProjectile extends BaseNode {
         if (direction == null) direction = new Vec3(0, 0, 1);
         if (speed == null) speed = 1.5f;
         if (hasGravity == null) hasGravity = true;
+        if (ignoreAirResistance == null) ignoreAirResistance = false;
         if (invisible == null) invisible = false;
 
         if (owner != null) {
@@ -104,6 +108,8 @@ public class ShootProjectile extends BaseNode {
         var projectileControl = projectile.getData(GeometryNode.PROJECTILE_CONTROL_ATTACHMENT);
         projectileControl.setCollisionPolicy(ProjectileCollisionPolicy.parse(policyId));
         projectileControl.setRetained(false);
+        projectileControl.setIgnoreAirResistance(ignoreAirResistance);
+        projectile.syncData(GeometryNode.PROJECTILE_CONTROL_ATTACHMENT);
         if (projectile instanceof AbstractArrow arrow) {
             ((AbstractArrowAccessor) arrow).geometryNode$setInGround(false);
         }
