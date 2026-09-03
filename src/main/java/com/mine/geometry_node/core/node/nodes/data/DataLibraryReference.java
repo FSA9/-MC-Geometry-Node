@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryTypes;
 import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryService;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
@@ -11,20 +11,20 @@ import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
-import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.document.NodeData;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Map;
+import java.util.UUID;
 
 /**
- * Reads one entry from the server Data Library by its public type and key.
+ * Reads one entry from the server Data Library by its stable UUID.
  * The entry itself is deliberately not embedded in the graph document.
  */
 public final class DataLibraryReference extends com.mine.geometry_node.core.node.nodes.BaseNode {
     public static final String TYPE_ID = "data_library_reference";
     public static final String ENTRY_TYPE = "entry_type";
+    public static final String INFO_WIDGET_ID = "data_library_reference_info";
     public static final String VALUE = "value";
     private static final PortType DEFAULT_TYPE = PortType.STRING;
 
@@ -46,36 +46,43 @@ public final class DataLibraryReference extends com.mine.geometry_node.core.node
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
                         .input(ENTRY_TYPE, "type")
-                        .input(StandardPorts.KEY, "key")
+                        .input(StandardPorts.ENTRY_ID, "id")
                         .output(VALUE, "value")
                         .build())
                 .addRow(new PortRow(
-                        PortDef.create(ENTRY_TYPE, "geometry_node.port.data_library_entry_type",
-                                PortType.STRING, DEFAULT_TYPE.name()).hiddenPin(),
-                        null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, DataLibraryTypes.optionIds())))
-                .addRow(new PortRow(
-                        StandardPorts.KEY.toInput(),
+                        StandardPorts.ENTRY_ID.toInput(),
                         new PortDef(VALUE,
                                 Component.translatable("geometry_node.port.data_library_value"),
                                 type, type.getDefaultValue(), false),
                         UIHint.INPUT, null, null))
+                .addRow(new PortRow(null, null, UIHint.CUSTOM, INFO_WIDGET_ID, null))
                 .build();
     }
 
     @Override
     @Nullable
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!VALUE.equals(portName)) return null;
 
-        PortType type = resolveType(getInput(context, ENTRY_TYPE, String.class));
-        String key = getInput(context, StandardPorts.KEY.getId(), String.class);
-        return RemoteDataLibraryService.INSTANCE.resolve(context.getLevel().getServer(), type,
-                key == null ? "" : key);
+        UUID id = parseUuid(getInput(context, StandardPorts.ENTRY_ID.getId(), String.class));
+        if (id == null) return null;
+        PortType expectedType = resolveType(getInput(context, ENTRY_TYPE, String.class));
+        return RemoteDataLibraryService.INSTANCE.resolve(
+                context.getLevel().getServer(), id, expectedType);
     }
 
     private static PortType resolveType(Object raw) {
         PortType type = DataLibraryTypes.resolve(raw);
         return type != null ? type : DEFAULT_TYPE;
+    }
+
+    @Nullable
+    private static UUID parseUuid(@Nullable String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return UUID.fromString(raw.trim());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 }

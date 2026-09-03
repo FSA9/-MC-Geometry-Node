@@ -9,8 +9,8 @@ import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTrans
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferJobSnapshot;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferState;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferPurpose;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryDocument;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryEntryKey;
+import com.mine.geometry_node.core.engine.system.data.library.DataLibraryObjectKey;
+import com.mine.geometry_node.core.engine.system.data.library.DataLibraryObjectFingerprint;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryFileStore;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryJsonCodec;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryLoadResult;
@@ -24,10 +24,10 @@ import net.minecraft.core.HolderLookup;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -38,7 +38,7 @@ import java.util.function.LongConsumer;
 public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryGateway {
     public static final NetworkRemoteDataLibraryGateway INSTANCE = new NetworkRemoteDataLibraryGateway();
     private static final ClientRequestTracker.Group REQUESTS = ClientRequestTracker.group("remote-data-library");
-    private final AtomicReference<List<DataLibraryUiRepository.Entry>> snapshot = new AtomicReference<>(List.of());
+    private final AtomicReference<Snapshot> snapshot = new AtomicReference<>(Snapshot.EMPTY);
     private final Deque<Runnable> mutations = new ArrayDeque<>();
     private boolean mutationRunning;
     private long connectionGeneration;
@@ -46,7 +46,19 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
     private NetworkRemoteDataLibraryGateway() {
     }
 
-    @Override public List<DataLibraryUiRepository.Entry> snapshot() { return snapshot.get(); }
+    @Override public List<DataLibraryUiRepository.Folder> folderSnapshot() { return snapshot.get().folders(); }
+
+    @Override public List<DataLibraryUiRepository.Entry> snapshot() { return snapshot.get().entries(); }
+
+    @Override public DataLibraryUiRepository.Entry findEntry(UUID id) {
+        return id == null ? null : snapshot.get().entriesById.get(id);
+    }
+
+    @Override public String folderPath(UUID folderId) {
+        return folderId == null ? "/" : snapshot.get().folderPaths.getOrDefault(folderId, "/");
+    }
+
+    @Override public boolean hasLoadedSnapshot() { return snapshot.get().loaded; }
 
     @Override
     public void refresh(Runnable completion) {
@@ -55,26 +67,176 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
 
     @Override
     public void create(DataLibraryUiRepository.Entry entry, Runnable completion) {
-        enqueueMutation(generation -> upload(List.of(entry), AssetTransferPurpose.DATA_LIBRARY_CREATE,
+        enqueueMutation(generation -> upload(List.of(entry), null, AssetTransferPurpose.DATA_LIBRARY_CREATE,
                 () -> finishMutation(generation, completion)));
     }
 
     @Override
-    public void update(DataLibraryUiRepository.Entry entry, Runnable completion) {
-        enqueueMutation(generation -> upload(List.of(entry), AssetTransferPurpose.DATA_LIBRARY_UPDATE,
-                () -> finishMutation(generation, completion)));
+    public void update(DataLibraryUiRepository.Entry previous, DataLibraryUiRepository.Entry entry,
+                       Runnable completion) {
+        enqueueMutation(generation -> {
+            if (previous == null || !previous.id().equals(entry.id())) {
+                failure(AssetTransferPurpose.DATA_LIBRARY_UPDATE, "Entry no longer exists: " + entry.id());
+                refreshNow(() -> finishMutation(generation, completion));
+                return;
+            }
+            if (previous.type() != entry.type()) {
+                failure(AssetTransferPurpose.DATA_LIBRARY_UPDATE, "Entry type cannot be changed: " + entry.id());
+                refreshNow(() -> finishMutation(generation, completion));
+                return;
+            }
+            if (!java.util.Objects.equals(previous.parentId(), entry.parentId())) {
+                sendMoveEntry(previous, entry.parentId(), response -> {
+                    if (!response.success()) {
+                        failure(RemoteDataLibraryOperation.MOVE_ENTRY, response.message());
+                        refreshNow(() -> finishMutation(generation, completion));
+                        return;
+                    }
+                    if (java.util.Objects.equals(previous.key(), entry.key())
+                            && java.util.Objects.equals(previous.value(), entry.value())) {
+                        refreshNow(() -> finishMutation(generation, completion));
+                        return;
+                    }
+                    DataLibraryUiRepository.Entry moved = new DataLibraryUiRepository.Entry(
+                            previous.id(), entry.parentId(), previous.type(), previous.key(), previous.value());
+                    upload(List.of(entry), moved, AssetTransferPurpose.DATA_LIBRARY_UPDATE,
+                            () -> finishMutation(generation, completion));
+                });
+                return;
+            }
+            upload(List.of(entry), previous, AssetTransferPurpose.DATA_LIBRARY_UPDATE,
+                    () -> finishMutation(generation, completion));
+        });
     }
 
     @Override
-    public void delete(Set<DataLibraryUiRepository.EntryKey> entries, Runnable completion) {
-        enqueueMutation(generation -> control(RemoteDataLibraryOperation.DELETE, keys(entries), response -> {
-            if (!response.success()) {
-                failure(RemoteDataLibraryOperation.DELETE, response.message());
+    public void delete(Set<DataLibraryUiRepository.EntryKey> entries, Set<UUID> folders,
+                       Runnable completion) {
+        Set<DataLibraryObjectKey> objectKeys = new java.util.LinkedHashSet<>(keys(entries));
+        objectKeys.addAll(DataLibraryUiMapper.toFolderKeys(folders));
+        enqueueMutation(generation -> {
+            try {
+                Snapshot current = snapshot.get();
+                var document = DataLibraryUiMapper.toDocument(current.folders(), current.entries());
+                String expected = DataLibraryObjectFingerprint.deletion(
+                        document, Set.copyOf(objectKeys), registries());
+                control(new PacketRemoteDataLibraryRequest(REQUESTS.nextRequestId(),
+                        RemoteDataLibraryOperation.DELETE, Set.copyOf(objectKeys),
+                        null, null, "", expected), response -> {
+                    if (!response.success()) failure(RemoteDataLibraryOperation.DELETE, response.message());
+                    refreshNow(() -> finishMutation(generation, completion));
+                });
+            } catch (RuntimeException exception) {
+                failure(RemoteDataLibraryOperation.DELETE, exception.getMessage());
+                refreshNow(() -> finishMutation(generation, completion));
+            }
+        });
+    }
+
+    @Override
+    public void createFolder(DataLibraryUiRepository.Folder folder, Runnable completion) {
+        enqueueMutation(generation -> {
+            try {
+                control(new PacketRemoteDataLibraryRequest(
+                        REQUESTS.nextRequestId(), RemoteDataLibraryOperation.CREATE_FOLDER, Set.of(),
+                        null, folder.parentId(), folder.name(), ""), response -> {
+                    if (!response.success()) failure(RemoteDataLibraryOperation.CREATE_FOLDER, response.message());
+                    refreshNow(() -> finishMutation(generation, completion));
+                });
+            } catch (RuntimeException exception) {
+                failure(RemoteDataLibraryOperation.CREATE_FOLDER, exception.getMessage());
+                refreshNow(() -> finishMutation(generation, completion));
+            }
+        });
+    }
+
+    @Override
+    public void updateFolder(DataLibraryUiRepository.Folder previous,
+                             DataLibraryUiRepository.Folder folder, Runnable completion) {
+        enqueueMutation(generation -> {
+            if (previous == null || !previous.id().equals(folder.id())) {
+                failure(RemoteDataLibraryOperation.UPDATE_FOLDER, "Folder no longer exists: " + folder.id());
+                refreshNow(() -> finishMutation(generation, completion));
+                return;
+            }
+            boolean moved = !java.util.Objects.equals(previous.parentId(), folder.parentId());
+            RemoteDataLibraryOperation operation = moved
+                    ? RemoteDataLibraryOperation.MOVE_FOLDER : RemoteDataLibraryOperation.UPDATE_FOLDER;
+            String name = moved ? "" : folder.name();
+            String expected = DataLibraryObjectFingerprint.folder(DataLibraryUiMapper.toCore(previous));
+            try {
+                control(new PacketRemoteDataLibraryRequest(REQUESTS.nextRequestId(), operation, Set.of(),
+                        folder.id(), folder.parentId(), name, expected), response -> {
+                    if (!response.success()) {
+                        failure(operation, response.message());
+                        refreshNow(() -> finishMutation(generation, completion));
+                        return;
+                    }
+                    if (!moved || java.util.Objects.equals(previous.name(), folder.name())) {
+                        refreshNow(() -> finishMutation(generation, completion));
+                        return;
+                    }
+                    DataLibraryUiRepository.Folder movedFolder = new DataLibraryUiRepository.Folder(
+                            previous.id(), folder.parentId(), previous.name());
+                    String renameExpected = DataLibraryObjectFingerprint.folder(
+                            DataLibraryUiMapper.toCore(movedFolder));
+                    control(new PacketRemoteDataLibraryRequest(REQUESTS.nextRequestId(),
+                            RemoteDataLibraryOperation.UPDATE_FOLDER, Set.of(), folder.id(),
+                            folder.parentId(), folder.name(), renameExpected), renamed -> {
+                        if (!renamed.success()) {
+                            failure(RemoteDataLibraryOperation.UPDATE_FOLDER, renamed.message());
+                        }
+                        refreshNow(() -> finishMutation(generation, completion));
+                    });
+                });
+            } catch (RuntimeException exception) {
+                failure(operation, exception.getMessage());
+                refreshNow(() -> finishMutation(generation, completion));
+            }
+        });
+    }
+
+    @Override
+    public void moveEntry(UUID entryId, UUID parentId, Runnable completion) {
+        enqueueMutation(generation -> {
+            DataLibraryUiRepository.Entry current = snapshot.get().entriesById.get(entryId);
+            if (current == null) {
+                failure(RemoteDataLibraryOperation.MOVE_ENTRY, "Entry no longer exists: " + entryId);
+                refreshNow(() -> finishMutation(generation, completion));
+                return;
+            }
+            if (java.util.Objects.equals(current.parentId(), parentId)) {
                 finishMutation(generation, completion);
                 return;
             }
-            refreshNow(() -> finishMutation(generation, completion));
-        }));
+            sendMoveEntry(current, parentId, response -> {
+                if (!response.success()) failure(RemoteDataLibraryOperation.MOVE_ENTRY, response.message());
+                refreshNow(() -> finishMutation(generation, completion));
+            });
+        });
+    }
+
+    @Override
+    public void moveFolder(UUID folderId, UUID parentId, Runnable completion) {
+        enqueueMutation(generation -> {
+            DataLibraryUiRepository.Folder current = snapshot.get().foldersById.get(folderId);
+            if (current == null) {
+                failure(RemoteDataLibraryOperation.MOVE_FOLDER, "Folder no longer exists: " + folderId);
+                refreshNow(() -> finishMutation(generation, completion));
+                return;
+            }
+            if (java.util.Objects.equals(current.parentId(), parentId)) {
+                finishMutation(generation, completion);
+                return;
+            }
+            String expected = DataLibraryObjectFingerprint.folder(DataLibraryUiMapper.toCore(current));
+            control(new PacketRemoteDataLibraryRequest(REQUESTS.nextRequestId(),
+                    RemoteDataLibraryOperation.MOVE_FOLDER, Set.of(), current.id(), parentId, "", expected),
+                    response -> {
+                        if (!response.success()) failure(RemoteDataLibraryOperation.MOVE_FOLDER, response.message());
+                        refreshNow(() -> finishMutation(generation, completion));
+                    });
+        });
     }
 
     public void handle(PacketRemoteDataLibraryResponse response) {
@@ -88,19 +250,25 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             mutationRunning = false;
         }
         REQUESTS.reset();
-        snapshot.set(List.of());
+        snapshot.set(Snapshot.EMPTY);
     }
 
     private void upload(List<DataLibraryUiRepository.Entry> entries,
+                        DataLibraryUiRepository.Entry previous,
                         AssetTransferPurpose purpose, Runnable completion) {
         Path temporary = null;
         try {
             temporary = Files.createTempFile("geometrynode-data-library-", ".json");
-            Files.writeString(temporary, DataLibraryJsonCodec.encode(DataLibraryUiMapper.toDocument(entries), registries()), StandardCharsets.UTF_8);
+            var document = DataLibraryUiMapper.toEntryMutationDocument(snapshot.get().folders(), entries);
+            String json = previous == null
+                    ? DataLibraryJsonCodec.encode(document, registries())
+                    : DataLibraryJsonCodec.encodeMutation(document, registries(), Map.of(previous.id(),
+                    DataLibraryObjectFingerprint.entry(DataLibraryUiMapper.toCore(previous), registries())));
+            Files.writeString(temporary, json, StandardCharsets.UTF_8);
         } catch (Exception exception) {
             deleteQuietly(temporary);
             failure(purpose, exception.getMessage());
-            run(completion);
+            refreshNow(completion);
             return;
         }
         Path source = temporary;
@@ -110,11 +278,18 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             deleteQuietly(source);
             if (error != null || result.files().stream().anyMatch(file -> file.state() != AssetTransferState.COMPLETED)) {
                 failure(purpose, transferFailure(result, error, "Data Library upload failed"));
-                run(completion);
+                refreshNow(completion);
             } else {
                 refreshNow(completion);
             }
         });
+    }
+
+    private static void sendMoveEntry(DataLibraryUiRepository.Entry previous, UUID parentId,
+                                      Consumer<PacketRemoteDataLibraryResponse> completion) {
+        String expected = DataLibraryObjectFingerprint.entry(DataLibraryUiMapper.toCore(previous), registries());
+        control(new PacketRemoteDataLibraryRequest(REQUESTS.nextRequestId(),
+                RemoteDataLibraryOperation.MOVE_ENTRY, Set.of(), previous.id(), parentId, "", expected), completion);
     }
 
     private void refreshNow(Runnable completion) {
@@ -143,8 +318,8 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                         return;
                     }
                     DataLibraryLoadResult loaded = DataLibraryFileStore.read(target, registries());
-                    List<DataLibraryUiRepository.Entry> accepted = DataLibraryUiMapper.fromDocument(loaded);
-                    snapshot.set(accepted);
+                    snapshot.set(new Snapshot(DataLibraryUiMapper.folders(loaded),
+                            DataLibraryUiMapper.fromDocument(loaded), true));
                 } catch (Exception exception) {
                     failure(RemoteDataLibraryOperation.PREPARE_REFRESH, exception.getMessage());
                 } finally {
@@ -155,17 +330,11 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
         });
     }
 
-    private static List<DataLibraryUiRepository.Entry> entries(DataLibraryLoadResult loaded) {
-        loaded.diagnostics().forEach(diagnostic -> GeometryNode.LOGGER.warn(
-                "Remote Data Library {}: {}", diagnostic.path(), diagnostic.message()));
-        return DataLibraryUiMapper.fromDocument(loaded);
-    }
-
-    private static Set<com.mine.geometry_node.core.engine.system.data.library.DataLibraryEntryKey> keys(Set<DataLibraryUiRepository.EntryKey> keys) {
+    private static Set<DataLibraryObjectKey> keys(Set<DataLibraryUiRepository.EntryKey> keys) {
         return DataLibraryUiMapper.toKeys(keys);
     }
 
-    private static void control(RemoteDataLibraryOperation operation, Set<DataLibraryEntryKey> keys,
+    private static void control(RemoteDataLibraryOperation operation, Set<DataLibraryObjectKey> keys,
                                 Consumer<PacketRemoteDataLibraryResponse> completion) {
         int requestId = REQUESTS.nextRequestId();
         REQUESTS.register(requestId, PacketRemoteDataLibraryResponse.class, completion, () -> {
@@ -180,6 +349,23 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             REQUESTS.cancel(requestId);
             completion.accept(new PacketRemoteDataLibraryResponse(
                     requestId, false, exception.getMessage(), ""));
+        }
+    }
+
+    private static void control(PacketRemoteDataLibraryRequest request,
+                                Consumer<PacketRemoteDataLibraryResponse> completion) {
+        int requestId = request.requestId();
+        REQUESTS.register(requestId, PacketRemoteDataLibraryResponse.class, completion, () -> {
+            Runnable fail = () -> completion.accept(new PacketRemoteDataLibraryResponse(
+                    requestId, false, "Data Library request timed out", ""));
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft != null) minecraft.execute(fail); else fail.run();
+        });
+        try {
+            NetworkHandler.sendToServer(request);
+        } catch (RuntimeException exception) {
+            REQUESTS.cancel(requestId);
+            completion.accept(new PacketRemoteDataLibraryResponse(requestId, false, exception.getMessage(), ""));
         }
     }
 
@@ -260,6 +446,51 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
     private boolean isGenerationActive(long generation) {
         synchronized (mutations) {
             return generation == connectionGeneration;
+        }
+    }
+
+    private static final class Snapshot {
+        private static final Snapshot EMPTY = new Snapshot(List.of(), List.of(), false);
+        private final List<DataLibraryUiRepository.Folder> folders;
+        private final List<DataLibraryUiRepository.Entry> entries;
+        private final Map<UUID, DataLibraryUiRepository.Entry> entriesById;
+        private final Map<UUID, DataLibraryUiRepository.Folder> foldersById;
+        private final Map<UUID, String> folderPaths;
+        private final boolean loaded;
+
+        private Snapshot(List<DataLibraryUiRepository.Folder> folders,
+                         List<DataLibraryUiRepository.Entry> entries, boolean loaded) {
+            this.folders = List.copyOf(folders);
+            this.entries = List.copyOf(entries);
+            this.loaded = loaded;
+            this.entriesById = this.entries.stream().collect(
+                    java.util.stream.Collectors.toUnmodifiableMap(
+                            DataLibraryUiRepository.Entry::id, entry -> entry));
+            this.foldersById = this.folders.stream().collect(
+                    java.util.stream.Collectors.toUnmodifiableMap(
+                            DataLibraryUiRepository.Folder::id, folder -> folder));
+            Map<UUID, String> paths = new java.util.HashMap<>();
+            for (DataLibraryUiRepository.Folder folder : this.folders) {
+                paths.put(folder.id(), resolveFolderPath(folder.id(), this.foldersById));
+            }
+            this.folderPaths = Map.copyOf(paths);
+        }
+
+        private List<DataLibraryUiRepository.Folder> folders() { return folders; }
+        private List<DataLibraryUiRepository.Entry> entries() { return entries; }
+
+        private static String resolveFolderPath(UUID folderId,
+                                                Map<UUID, DataLibraryUiRepository.Folder> folders) {
+            java.util.ArrayDeque<String> names = new java.util.ArrayDeque<>();
+            java.util.HashSet<UUID> visited = new java.util.HashSet<>();
+            UUID current = folderId;
+            while (current != null && visited.add(current)) {
+                DataLibraryUiRepository.Folder folder = folders.get(current);
+                if (folder == null) break;
+                names.addFirst(folder.name());
+                current = folder.parentId();
+            }
+            return names.isEmpty() ? "/" : "/" + String.join("/", names);
         }
     }
 }

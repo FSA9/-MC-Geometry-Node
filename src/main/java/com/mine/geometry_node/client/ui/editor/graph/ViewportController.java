@@ -249,14 +249,14 @@ public class ViewportController implements EditorContext.EditorListener,
 
     /** Adds a stable Data Library reference through the normal command history. */
     public boolean executeAddDataLibraryReference(float screenX, float screenY,
-                                                  PortType type, String key) {
-        if (mEditorContext == null || type == null || key == null) return false;
+                                                  UUID entryId, PortType type, String key) {
+        if (mEditorContext == null || entryId == null || type == null || key == null) return false;
         float uiX = mViewport.getCamera().screenToUIX(screenX);
         float uiY = mViewport.getCamera().screenToUIY(screenY);
         NodeData data = new NodeData(UUID.randomUUID().toString(), DataLibraryReference.TYPE_ID, uiX, uiY);
         if (!key.isBlank()) data.customName = key;
         data.inputs.put(DataLibraryReference.ENTRY_TYPE, type.name());
-        data.inputs.put(StandardPorts.KEY.getId(), key);
+        data.inputs.put(StandardPorts.ENTRY_ID.getId(), entryId.toString());
         CmdAddNode command = new CmdAddNode(mEditorContext.getGraphController(), data);
         if (!command.canExecute()) return false;
         mEditorContext.getCommandManager().execute(command);

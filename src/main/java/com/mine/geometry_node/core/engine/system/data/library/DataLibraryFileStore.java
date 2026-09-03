@@ -38,6 +38,9 @@ public final class DataLibraryFileStore {
         lock.lock();
         try {
             DataLibraryLoadResult loaded = read(normalized, registries);
+            if (!loaded.diagnostics().isEmpty()) {
+                throw new IOException("Data Library contains invalid objects; refusing to overwrite it");
+            }
             DataLibraryDocument updated = update.apply(loaded.document().copy());
             if (updated == null) throw new IllegalArgumentException("Data Library update returned null");
             writeAtomicUnlocked(normalized, DataLibraryJsonCodec.encode(updated, registries));

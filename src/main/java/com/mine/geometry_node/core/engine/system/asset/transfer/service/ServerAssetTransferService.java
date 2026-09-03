@@ -210,12 +210,16 @@ public final class ServerAssetTransferService implements AutoCloseable {
         }).whenComplete((outcome, throwable) -> player.level().getServer().execute(() -> {
             if (lookup.owner.sessions.get(session.transferId) != session) return;
             if (throwable != null) {
+                String detail = rootMessage(throwable);
                 if (session.open.purpose() != AssetTransferPurpose.ASSET_REPOSITORY) {
                     GeometryNode.LOGGER.warn("Data Library transfer {} commit failed for player {}: {}",
-                            session.open.purpose(), player.getGameProfile().name(), rootMessage(throwable), throwable);
+                            session.open.purpose(), player.getGameProfile().name(), detail, throwable);
                 }
-                failAndClose(lookup.owner, session, AssetTransferErrorCode.HASH_MISMATCH,
-                        "verification_or_commit_failed", rootMessage(throwable));
+                boolean staleObject = session.open.purpose() != AssetTransferPurpose.ASSET_REPOSITORY
+                        && detail.startsWith("STALE_OBJECT:");
+                failAndClose(lookup.owner, session,
+                        staleObject ? AssetTransferErrorCode.STALE_OBJECT : AssetTransferErrorCode.HASH_MISMATCH,
+                        staleObject ? "stale_object" : "verification_or_commit_failed", detail);
             } else {
                 completeAndClose(lookup.owner, session, outcome);
             }
@@ -469,7 +473,8 @@ public final class ServerAssetTransferService implements AutoCloseable {
         }
         switch (session.open.purpose()) {
             case DATA_LIBRARY_CREATE -> RemoteDataLibraryService.INSTANCE.create(server, incoming.document());
-            case DATA_LIBRARY_UPDATE -> RemoteDataLibraryService.INSTANCE.update(server, incoming.document());
+            case DATA_LIBRARY_UPDATE -> RemoteDataLibraryService.INSTANCE.update(
+                    server, incoming.document(), incoming.expectedFingerprints());
             default -> throw new IllegalArgumentException("Invalid Data Library upload purpose");
         }
     }

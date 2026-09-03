@@ -62,9 +62,33 @@ public final class RemoteDataLibraryTransferStaging {
         return io.submit(() -> prepareDownload(player));
     }
 
-    public CompletableFuture<Void> deleteAsync(ServerPlayer player, Set<DataLibraryEntryKey> keys) {
+    public CompletableFuture<Void> deleteAsync(ServerPlayer player, Set<DataLibraryObjectKey> keys,
+                                               String expectedFingerprint) {
         return io.run(() -> RemoteDataLibraryService.INSTANCE.delete(
-                player.level().getServer(), keys));
+                player.level().getServer(), keys, expectedFingerprint));
+    }
+
+    public CompletableFuture<Void> createFolderAsync(ServerPlayer player, UUID parentId, String name) {
+        return io.run(() -> RemoteDataLibraryService.INSTANCE.createFolder(
+                player.level().getServer(), parentId, name));
+    }
+
+    public CompletableFuture<Void> updateFolderAsync(ServerPlayer player, UUID folderId,
+                                                     UUID parentId, String name, String expectedFingerprint) {
+        return io.run(() -> RemoteDataLibraryService.INSTANCE.updateFolder(
+                player.level().getServer(), new DataLibraryFolder(folderId, parentId, name), expectedFingerprint));
+    }
+
+    public CompletableFuture<Void> moveEntryAsync(ServerPlayer player, UUID entryId,
+                                                  UUID parentId, String expectedFingerprint) {
+        return io.run(() -> RemoteDataLibraryService.INSTANCE.moveEntry(
+                player.level().getServer(), entryId, parentId, expectedFingerprint));
+    }
+
+    public CompletableFuture<Void> moveFolderAsync(ServerPlayer player, UUID folderId,
+                                                   UUID parentId, String expectedFingerprint) {
+        return io.run(() -> RemoteDataLibraryService.INSTANCE.moveFolder(
+                player.level().getServer(), folderId, parentId, expectedFingerprint));
     }
 
     public Path claimDownload(ServerPlayer player, String token) throws IOException {

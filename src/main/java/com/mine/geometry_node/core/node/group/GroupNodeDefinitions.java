@@ -41,8 +41,12 @@ public final class GroupNodeDefinitions {
         }
 
         NodeData.PortsConfig config = groupNode.ensurePortConfig();
-        appendSideRows(builder, config.outputs, config.execOutputs, false);
-        appendSideRows(builder, config.inputs, config.execInputs, true);
+        TreeMap<Integer, RowPorts> rows = new TreeMap<>();
+        addPorts(rows, config.execInputs, true);
+        addPorts(rows, config.inputs, true);
+        addPorts(rows, config.execOutputs, false);
+        addPorts(rows, config.outputs, false);
+        appendRows(builder, rows, false);
         return builder.build();
     }
 
@@ -63,22 +67,10 @@ public final class GroupNodeDefinitions {
 
         NodeData.PortsConfig config = groupNode.ensurePortConfig();
         TreeMap<Integer, RowPorts> rows = new TreeMap<>();
-        addPorts(rows, config.inputs, false);
         addPorts(rows, config.execInputs, false);
+        addPorts(rows, config.inputs, false);
         appendRows(builder, rows, true);
         return builder.build();
-    }
-
-    private static void appendSideRows(
-            NodeDef.Builder builder,
-            Map<String, NodeData.PortConfig> dataPorts,
-            Map<String, NodeData.PortConfig> execPorts,
-            boolean inputSide
-    ) {
-        TreeMap<Integer, RowPorts> rows = new TreeMap<>();
-        addPorts(rows, dataPorts, inputSide);
-        addPorts(rows, execPorts, inputSide);
-        appendRows(builder, rows, false);
     }
 
     private static NodeDef buildGroupOutputDefinition(@Nullable NodeData groupNode) {
@@ -91,15 +83,15 @@ public final class GroupNodeDefinitions {
 
         NodeData.PortsConfig config = groupNode.ensurePortConfig();
         TreeMap<Integer, RowPorts> rows = new TreeMap<>();
-        addPorts(rows, config.outputs, true);
         addPorts(rows, config.execOutputs, true);
+        addPorts(rows, config.outputs, true);
         appendRows(builder, rows, true);
         return builder.build();
     }
 
     private static void addPorts(TreeMap<Integer, RowPorts> rows, Map<String, NodeData.PortConfig> ports, boolean inputSide) {
         if (ports == null) return;
-        int fallbackOrder = rows.isEmpty() ? 0 : rows.lastKey() + 1;
+        int fallbackOrder = nextFallbackOrder(rows, inputSide);
         for (Map.Entry<String, NodeData.PortConfig> entry : ports.entrySet()) {
             NodeData.PortConfig config = entry.getValue();
             int order = config != null && config.order != null ? config.order : fallbackOrder++;
@@ -112,6 +104,16 @@ public final class GroupNodeDefinitions {
                 row.right = port;
             }
         }
+    }
+
+    private static int nextFallbackOrder(TreeMap<Integer, RowPorts> rows, boolean inputSide) {
+        int order = 0;
+        for (Map.Entry<Integer, RowPorts> entry : rows.entrySet()) {
+            RowPorts row = entry.getValue();
+            boolean occupied = inputSide ? row.left != null : row.right != null;
+            if (occupied) order = Math.max(order, entry.getKey() + 1);
+        }
+        return order;
     }
 
     private static int nextAvailableRenderOrder(TreeMap<Integer, RowPorts> rows, int preferredOrder, boolean inputSide) {

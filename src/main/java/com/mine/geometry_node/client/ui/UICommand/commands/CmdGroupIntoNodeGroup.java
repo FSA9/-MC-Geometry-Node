@@ -15,7 +15,7 @@ import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -97,8 +97,10 @@ public class CmdGroupIntoNodeGroup implements ICommand {
             groupNode.attachSubNode(nodeId, node);
         }
 
-        rewriteDataConnections(scopeNodes, selected, groupNode);
-        rewriteFlowConnections(scopeNodes, selected, groupNode);
+        BoundaryPorts boundaryPorts = new BoundaryPorts();
+        rewriteFlowConnections(scopeNodes, selected, groupNode, boundaryPorts);
+        rewriteDataConnections(scopeNodes, selected, groupNode, boundaryPorts);
+        assignBoundaryPortOrders(scopeNodes, groupNode, boundaryPorts);
 
         after.put(groupNode.id, groupNode);
         return deepCopyNodes(after);
@@ -130,9 +132,8 @@ public class CmdGroupIntoNodeGroup implements ICommand {
         return commonParent;
     }
 
-    private void rewriteDataConnections(Map<String, NodeData> scopeNodes, Set<String> selected, NodeData groupNode) {
-        Map<BoundaryInputKey, String> inputPorts = new HashMap<>();
-        Map<BoundaryOutputKey, String> outputPorts = new HashMap<>();
+    private void rewriteDataConnections(Map<String, NodeData> scopeNodes, Set<String> selected,
+                                        NodeData groupNode, BoundaryPorts boundaryPorts) {
         Set<BoundaryInputKey> bridgedInputs = new HashSet<>();
         Set<BoundaryOutputKey> bridgedOutputs = new HashSet<>();
 
@@ -157,7 +158,7 @@ public class CmdGroupIntoNodeGroup implements ICommand {
                         node.addDataConnection(outPortId, link.targetNodeId(), link.targetPortName());
                     } else if (!sourceInside && targetInside) {
                         BoundaryInputKey key = new BoundaryInputKey(link.targetNodeId(), link.targetPortName());
-                        String groupInputPort = inputPorts.computeIfAbsent(
+                        String groupInputPort = boundaryPorts.dataInputs.computeIfAbsent(
                                 key,
                                 ignored -> createDataInputPort(groupNode, key.targetNodeId(), key.targetPortId(), scopeNodes)
                         );
@@ -168,7 +169,7 @@ public class CmdGroupIntoNodeGroup implements ICommand {
                         }
                     } else if (sourceInside) {
                         BoundaryOutputKey key = new BoundaryOutputKey(node.id, outPortId);
-                        String groupOutputPort = outputPorts.computeIfAbsent(
+                        String groupOutputPort = boundaryPorts.dataOutputs.computeIfAbsent(
                                 key,
                                 ignored -> createDataOutputPort(groupNode, key.sourceNodeId(), key.sourcePortId(), scopeNodes)
                         );
@@ -184,10 +185,8 @@ public class CmdGroupIntoNodeGroup implements ICommand {
         }
     }
 
-    private void rewriteFlowConnections(Map<String, NodeData> scopeNodes, Set<String> selected, NodeData groupNode) {
-        Map<BoundaryInputKey, String> flowInputPorts = new HashMap<>();
-        Map<BoundaryOutputKey, String> flowOutputPorts = new HashMap<>();
-
+    private void rewriteFlowConnections(Map<String, NodeData> scopeNodes, Set<String> selected,
+                                        NodeData groupNode, BoundaryPorts boundaryPorts) {
         for (NodeData node : scopeNodes.values()) {
             if (node == null || node.execOutputs == null) continue;
 
@@ -205,7 +204,7 @@ public class CmdGroupIntoNodeGroup implements ICommand {
                     node.addExecutionConnection(outPortId, link.targetNodeId(), link.targetPortName());
                 } else if (!sourceInside && targetInside) {
                     BoundaryInputKey key = new BoundaryInputKey(link.targetNodeId(), link.targetPortName());
-                    String flowInputPort = flowInputPorts.computeIfAbsent(
+                    String flowInputPort = boundaryPorts.flowInputs.computeIfAbsent(
                             key,
                             ignored -> createFlowInputPort(groupNode, key.targetNodeId(), key.targetPortId(), scopeNodes)
                     );
@@ -214,7 +213,7 @@ public class CmdGroupIntoNodeGroup implements ICommand {
                     groupIn.addExecutionConnection(flowInputPort, link.targetNodeId(), link.targetPortName());
                 } else if (sourceInside) {
                     BoundaryOutputKey key = new BoundaryOutputKey(node.id, outPortId);
-                    String groupOutputPort = flowOutputPorts.computeIfAbsent(
+                    String groupOutputPort = boundaryPorts.flowOutputs.computeIfAbsent(
                             key,
                             ignored -> createFlowOutputPort(groupNode, key.sourceNodeId(), key.sourcePortId(), scopeNodes)
                     );
@@ -225,6 +224,71 @@ public class CmdGroupIntoNodeGroup implements ICommand {
                 }
             }
         }
+    }
+
+    private void assignBoundaryPortOrders(Map<String, NodeData> scopeNodes, NodeData groupNode,
+                                          BoundaryPorts ports) {
+        int inputOrder = assignInputOrders(scopeNodes, groupNode, ports.flowInputs,
+                GroupNodeTypes.CATEGORY_EXEC_INPUTS, 0);
+        assignInputOrders(scopeNodes, groupNode, ports.dataInputs,
+                GroupNodeTypes.CATEGORY_INPUTS, inputOrder);
+
+        int outputOrder = assignOutputOrders(scopeNodes, groupNode, ports.flowOutputs,
+                GroupNodeTypes.CATEGORY_EXEC_OUTPUTS, 0);
+        assignOutputOrders(scopeNodes, groupNode, ports.dataOutputs,
+                GroupNodeTypes.CATEGORY_OUTPUTS, outputOrder);
+    }
+
+    private int assignInputOrders(Map<String, NodeData> scopeNodes, NodeData groupNode,
+                                  Map<BoundaryInputKey, String> ports, String category, int firstOrder) {
+        List<Map.Entry<BoundaryInputKey, String>> ordered = new ArrayList<>(ports.entrySet());
+        ordered.sort(Comparator
+                .comparingInt((Map.Entry<BoundaryInputKey, String> entry) -> selectedNodeOrder(entry.getKey().targetNodeId()))
+                .thenComparingInt(entry -> portOrder(scopeNodes, groupNode,
+                        entry.getKey().targetNodeId(), entry.getKey().targetPortId(), true))
+                .thenComparing(entry -> entry.getKey().targetPortId()));
+        int order = firstOrder;
+        for (Map.Entry<BoundaryInputKey, String> entry : ordered) {
+            NodeData.PortConfig config = GroupNodeFactory.getPortConfig(groupNode, category, entry.getValue());
+            if (config != null) config.order = order++;
+        }
+        return order;
+    }
+
+    private int assignOutputOrders(Map<String, NodeData> scopeNodes, NodeData groupNode,
+                                   Map<BoundaryOutputKey, String> ports, String category, int firstOrder) {
+        List<Map.Entry<BoundaryOutputKey, String>> ordered = new ArrayList<>(ports.entrySet());
+        ordered.sort(Comparator
+                .comparingInt((Map.Entry<BoundaryOutputKey, String> entry) -> selectedNodeOrder(entry.getKey().sourceNodeId()))
+                .thenComparingInt(entry -> portOrder(scopeNodes, groupNode,
+                        entry.getKey().sourceNodeId(), entry.getKey().sourcePortId(), false))
+                .thenComparing(entry -> entry.getKey().sourcePortId()));
+        int order = firstOrder;
+        for (Map.Entry<BoundaryOutputKey, String> entry : ordered) {
+            NodeData.PortConfig config = GroupNodeFactory.getPortConfig(groupNode, category, entry.getValue());
+            if (config != null) config.order = order++;
+        }
+        return order;
+    }
+
+    private int selectedNodeOrder(String nodeId) {
+        int index = mSelectedNodeIds.indexOf(nodeId);
+        return index >= 0 ? index : Integer.MAX_VALUE;
+    }
+
+    private int portOrder(Map<String, NodeData> scopeNodes, NodeData groupNode,
+                          String nodeId, String portId, boolean inputSide) {
+        NodeData node = scopeNodes.get(nodeId);
+        if (node == null && groupNode.subNodes != null) node = groupNode.subNodes.get(nodeId);
+        NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+        if (definition == null) return Integer.MAX_VALUE;
+        for (int index = 0; index < definition.rows().size(); index++) {
+            PortDef port = inputSide
+                    ? definition.rows().get(index).leftPort()
+                    : definition.rows().get(index).rightPort();
+            if (port != null && port.id().equals(portId)) return index;
+        }
+        return Integer.MAX_VALUE;
     }
 
     private String createDataInputPort(NodeData groupNode, String targetNodeId, String targetPortId, Map<String, NodeData> scopeNodes) {
@@ -318,4 +382,11 @@ public class CmdGroupIntoNodeGroup implements ICommand {
 
     private record BoundaryInputKey(String targetNodeId, String targetPortId) {}
     private record BoundaryOutputKey(String sourceNodeId, String sourcePortId) {}
+
+    private static final class BoundaryPorts {
+        private final Map<BoundaryInputKey, String> flowInputs = new LinkedHashMap<>();
+        private final Map<BoundaryInputKey, String> dataInputs = new LinkedHashMap<>();
+        private final Map<BoundaryOutputKey, String> flowOutputs = new LinkedHashMap<>();
+        private final Map<BoundaryOutputKey, String> dataOutputs = new LinkedHashMap<>();
+    }
 }

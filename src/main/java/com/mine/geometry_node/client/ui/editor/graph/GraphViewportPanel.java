@@ -186,6 +186,7 @@ public class GraphViewportPanel extends LinearLayout {
     }
 
     private boolean acceptDataLibraryDrop(DataLibraryDragPayload payload, float rawX, float rawY) {
+        if (!payload.isEntry()) return false;
         GraphSession targetSession = mViewport.getController().getCurrentSession();
         if (!isReadyForImport(targetSession) || !isRawPointInside(mViewport, rawX, rawY)) return false;
         int[] viewportLoc = new int[2];
@@ -193,7 +194,7 @@ public class GraphViewportPanel extends LinearLayout {
         float viewportX = rawX - viewportLoc[0];
         float viewportY = rawY - viewportLoc[1];
         return mViewport.getController().executeAddDataLibraryReference(
-                viewportX, viewportY, payload.type(), payload.key());
+                viewportX, viewportY, payload.id(), payload.type(), payload.key());
     }
 
     private boolean importDraggedGraph(AssetEntry entry, float viewportX, float viewportY, GraphSession targetSession) {

@@ -5,5 +5,7 @@ public enum WorkspaceDragOperation {
     COPY,
     MOVE,
     LINK,
-    IMPORT
+    IMPORT,
+    /** The drop target decides whether the gesture moves or links the payload. */
+    CONTEXTUAL
 }

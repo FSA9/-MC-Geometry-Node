@@ -477,10 +477,48 @@ public class NetworkHandler {
                                             : new PacketRemoteDataLibraryResponse(
                                                     payload.requestId(), false, failureMessage(error), ""))));
                 }
+                case CREATE_FOLDER -> {
+                    requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
+                    MinecraftServer server = player.level().getServer();
+                    staging.createFolderAsync(player, payload.parentId(), payload.name())
+                            .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
+                                    error == null
+                                            ? new PacketRemoteDataLibraryResponse(payload.requestId(), true, "", "")
+                                            : new PacketRemoteDataLibraryResponse(payload.requestId(), false, failureMessage(error), ""))));
+                }
+                case UPDATE_FOLDER -> {
+                    requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
+                    if (payload.objectId() == null) throw new IllegalArgumentException("Folder UUID is required");
+                    MinecraftServer server = player.level().getServer();
+                    staging.updateFolderAsync(player, payload.objectId(), payload.parentId(), payload.name(),
+                                    payload.expectedFingerprint())
+                            .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
+                                    error == null
+                                            ? new PacketRemoteDataLibraryResponse(payload.requestId(), true, "", "")
+                                            : new PacketRemoteDataLibraryResponse(payload.requestId(), false, failureMessage(error), ""))));
+                }
+                case MOVE_ENTRY -> {
+                    requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
+                    MinecraftServer server = player.level().getServer();
+                    staging.moveEntryAsync(player, payload.objectId(), payload.parentId(), payload.expectedFingerprint())
+                            .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
+                                    error == null
+                                            ? new PacketRemoteDataLibraryResponse(payload.requestId(), true, "", "")
+                                            : new PacketRemoteDataLibraryResponse(payload.requestId(), false, failureMessage(error), ""))));
+                }
+                case MOVE_FOLDER -> {
+                    requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
+                    MinecraftServer server = player.level().getServer();
+                    staging.moveFolderAsync(player, payload.objectId(), payload.parentId(), payload.expectedFingerprint())
+                            .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
+                                    error == null
+                                            ? new PacketRemoteDataLibraryResponse(payload.requestId(), true, "", "")
+                                            : new PacketRemoteDataLibraryResponse(payload.requestId(), false, failureMessage(error), ""))));
+                }
                 case DELETE -> {
                     requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
                     MinecraftServer server = player.level().getServer();
-                    staging.deleteAsync(player, payload.keys())
+                    staging.deleteAsync(player, payload.keys(), payload.expectedFingerprint())
                             .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
                                     error == null
                                             ? new PacketRemoteDataLibraryResponse(

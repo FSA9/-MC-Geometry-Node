@@ -11,6 +11,7 @@ public enum AssetTransferErrorCode {
     INVALID_SEQUENCE(false),
     PERMISSION_DENIED(false),
     CONFLICT_CHANGED(true),
+    STALE_OBJECT(false),
     TEMPORARY_STORAGE_LIMIT(true),
     HASH_MISMATCH(true),
     IO_FAILURE(true),
