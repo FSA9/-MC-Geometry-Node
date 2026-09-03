@@ -542,6 +542,7 @@ public final class BehaviorTreeEvaluator {
         @Override public String getGraphId() { return instance.plan().assetId(); }
         @Override public GraphBindingKey getGraphBindingKey() { return GraphBindingKey.behaviorTree(instance.plan().assetId()); }
         @Override public UUID getGraphProcessInstanceId() { return instance.instanceId(); }
+        @Override public String getCurrentNodeStableId() { return instance.plan().getNodeId(nodeIndex); }
 
         @Override
         public Object getVariable(String name) {

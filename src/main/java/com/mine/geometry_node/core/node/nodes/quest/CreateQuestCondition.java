@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.quest;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -37,7 +37,7 @@ public final class CreateQuestCondition extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!OUTPUT_PORT.equals(portName)) return null;
 
         String displayText = getInput(context, DISPLAY_TEXT_PORT, String.class);

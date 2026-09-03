@@ -26,13 +26,16 @@ public class OnMultiblockBuilt extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.DIMENSION.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BLOCK_STATE.toOutput(), UIHint.DEFAULT, null, null))
-                .addPassthroughInput(StandardPorts.TYPE.toInput(MultiblockStructureManager.ANY_STRUCTURE_ID).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, MultiblockStructureManager.DYNAMIC_REGISTRY_ID))
+                .addStaticInput(StandardPorts.TYPE.toInput(MultiblockStructureManager.ANY_STRUCTURE_ID),
+                        UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, MultiblockStructureManager.DYNAMIC_REGISTRY_ID))
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        String expected = getInput(context, StandardPorts.TYPE.getId(), String.class);
+        Object configured = context.getStaticInput(StandardPorts.TYPE.getId());
+        String expected = configured != null ? String.valueOf(configured) : null;
         String actual = (String) context.getEventData(StandardPorts.NAME.getId());
         if (expected != null
                 && !expected.isBlank()

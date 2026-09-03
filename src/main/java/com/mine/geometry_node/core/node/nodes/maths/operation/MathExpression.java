@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.maths.operation;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionBinding;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -20,13 +20,22 @@ import com.mine.geometry_node.core.utils.expression.VariableRegistry;
 import net.minecraft.network.chat.Component;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class MathExpression extends BaseNode {
 
     public static final String TYPE_ID = "math_expression";
+    private static final int AST_CACHE_CAPACITY = 256;
 
     private record CachedAST(ASTNode node, VariableRegistry registry) {}
+
+    private static final Map<String, CachedAST> AST_CACHE = new LinkedHashMap<>(32, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, CachedAST> eldest) {
+            return size() > AST_CACHE_CAPACITY;
+        }
+    };
 
     // ==========================================
     // 缓存池 (A-Z, 1-26)
@@ -93,7 +102,7 @@ public class MathExpression extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.FLOAT_VALUE.getId().equals(portName)) return null;
 
         String mainExpr = getInput(context, StandardPorts.EXPRESSION.getId(), String.class);
@@ -102,15 +111,7 @@ public class MathExpression extends BaseNode {
         }
 
         // 1. 获取或编译主表达式的 AST 和 Registry
-        String cacheKey = "AST_" + context.getCurrentNodeId() + "_" + mainExpr.hashCode();
-        CachedAST cache = (CachedAST) context.getTempData(cacheKey);
-
-        if (cache == null) {
-            VariableRegistry newRegistry = new VariableRegistry();
-            ASTNode newNode = ExpressionCompiler.compile(mainExpr, newRegistry);
-            cache = new CachedAST(newNode, newRegistry);
-            context.setTempData(cacheKey, cache);
-        }
+        CachedAST cache = compiledAst(mainExpr);
 
         ASTNode mainAst = cache.node();
         VariableRegistry mainRegistry = cache.registry();
@@ -155,8 +156,7 @@ public class MathExpression extends BaseNode {
             ExpressionData inputExpr = getInput(context, portId, ExpressionData.class);
 
             if (inputExpr != null && inputExpr.formula() != null && !inputExpr.formula().isEmpty() && !inputExpr.formula().equals("0")) {
-                VariableRegistry dummyRegistry = new VariableRegistry();
-                ASTNode subAst = ExpressionCompiler.compile(inputExpr.formula(), dummyRegistry);
+                ASTNode subAst = compiledAst(inputExpr.formula()).node();
                 substitutions.put(varKey, subAst);
                 mergedBindings.putAll(inputExpr.bindings());
             } else {
@@ -173,6 +173,18 @@ public class MathExpression extends BaseNode {
         } catch (Exception e) {
             System.err.println("[MathExpression] Compute Error: " + e.getMessage());
             return new DynamicData(0.0f, ExpressionData.ZERO);
+        }
+    }
+
+    private static CachedAST compiledAst(String expression) {
+        synchronized (AST_CACHE) {
+            CachedAST cached = AST_CACHE.get(expression);
+            if (cached != null) return cached;
+
+            VariableRegistry registry = new VariableRegistry();
+            CachedAST compiled = new CachedAST(ExpressionCompiler.compile(expression, registry), registry);
+            AST_CACHE.put(expression, compiled);
+            return compiled;
         }
     }
 }

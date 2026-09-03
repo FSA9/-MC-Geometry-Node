@@ -40,11 +40,11 @@ public class OnPlayerKeyEvent extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.TICK.toOutput(), UIHint.DEFAULT, null, null))
-                .addPassthroughInput(StandardPorts.NAME.toInput(""), UIHint.SELECT, null,
+                .addStaticInput(StandardPorts.NAME.toInput(""), UIHint.SELECT, null,
                         Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(PlayerInputKeys.ALL_KEYS)))
-                .addPassthroughInput(StandardPorts.TYPE.toInput(""), UIHint.SELECT, null,
+                .addStaticInput(StandardPorts.TYPE.toInput(""), UIHint.SELECT, null,
                         Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(VALID_ACTIONS)))
-                .addPassthroughInput(StandardPorts.INTERCEPT.toInput(false), UIHint.CHECKBOX)
+                .addStaticInput(StandardPorts.INTERCEPT.toInput(false), UIHint.CHECKBOX)
                 .build();
     }
 }

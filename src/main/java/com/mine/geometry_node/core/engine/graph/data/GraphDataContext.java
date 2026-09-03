@@ -24,6 +24,11 @@ public interface GraphDataContext {
         return null;
     }
 
+    /** Returns the stable document ID of the node currently being evaluated. */
+    default @Nullable String getCurrentNodeStableId() {
+        return null;
+    }
+
     @Nullable Object getVariable(String name);
 
     default boolean hasVariable(String name) {

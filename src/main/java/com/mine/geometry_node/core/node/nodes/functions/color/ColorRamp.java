@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.functions.color;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.meta.MetaKey;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -36,7 +36,7 @@ public class ColorRamp extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         ColorValue sampled = sample(context);
         if (StandardPorts.COLOR.getId().equals(portName)) {
             return sampled;
@@ -47,7 +47,7 @@ public class ColorRamp extends BaseNode {
         return null;
     }
 
-    private ColorValue sample(ExecutionContext context) {
+    private ColorValue sample(GraphDataContext context) {
         ColorGradientValue gradient = ColorGradientValue.from(context.getStaticInput(GRADIENT_INPUT));
         Float fac = getInput(context, StandardPorts.FAC.getId(), Float.class);
         return gradient.sample(fac != null ? fac : 0.5f);

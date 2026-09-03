@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.maths.vector;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
@@ -70,7 +70,7 @@ public class VectorOperation extends BaseNode {
         return b.build();
     }
 
-    @Override public Object compute(ExecutionContext c, String port) {
+    @Override public Object compute(GraphDataContext c, String port) {
         String op = getInput(c, StandardPorts.STRING.getId(), String.class);
         if (op == null) op = "add";
         if (op.equals("direction_to_vector")) {

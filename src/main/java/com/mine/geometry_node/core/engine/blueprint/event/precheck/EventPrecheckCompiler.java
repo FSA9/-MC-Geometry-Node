@@ -45,8 +45,6 @@ final class EventPrecheckCompiler {
     }
 
     private static EventPrecheck compileStaticEquals(EventPrecheckContext context, EventPrecheckSpec.StaticValueEqualsEventField rule) {
-        requireStaticOnly(context, rule.inputPortId());
-
         String expected = normalizeString(context.staticInput(rule.inputPortId()));
         if (expected.isEmpty()) {
             return EventPrecheck.ALWAYS;
@@ -56,9 +54,6 @@ final class EventPrecheckCompiler {
     }
 
     private static EventPrecheck compileTickInterval(EventPrecheckContext context, EventPrecheckSpec.TickInterval rule) {
-        requireStaticOnly(context, rule.intervalPortId());
-        requireStaticOnly(context, rule.offsetPortId());
-
         int interval = Math.max(1, context.staticInput(rule.intervalPortId(), Integer.class, 1));
         int offset = Math.floorMod(context.staticInput(rule.offsetPortId(), Integer.class, 0), interval);
         if (interval == 1) {
@@ -83,12 +78,6 @@ final class EventPrecheckCompiler {
             }
             return true;
         };
-    }
-
-    private static void requireStaticOnly(EventPrecheckContext context, String inputPortId) {
-        if (context.index().findInputSource(context.nodeId(), inputPortId) != null) {
-            throw new IllegalStateException("Event precheck port must be static: " + context.eventType() + "." + inputPortId);
-        }
     }
 
     private static String readEventString(Map<String, Object> eventData, String key) {

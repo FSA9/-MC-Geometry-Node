@@ -136,7 +136,6 @@ public class NodeLayoutEngine {
 
         NodeLayout.LabelRun label = new NodeLayout.LabelRun(port.id(), effectiveName, shapedText, xPx, baselinePx, hitRect);
         layout.labels.add(label);
-        layout.labelsByPortId.put(port.id(), label);
     }
 
     private String getPortCategory(PortDef port, boolean isLeft) {

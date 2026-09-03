@@ -41,7 +41,9 @@ public class OnContainerOpen extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.PLAYER.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.TYPE.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
-                .addPassthroughInput(PortDef.create(CONTAINER_TYPE_PORT, "geometry_node.port.type", PortType.STRING, "").hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(RegistryDataManager.getAllMenus())))
+                .addStaticInput(PortDef.create(CONTAINER_TYPE_PORT, "geometry_node.port.type", PortType.STRING, ""),
+                        UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(RegistryDataManager.getAllMenus())))
                 .build();
     }
 }

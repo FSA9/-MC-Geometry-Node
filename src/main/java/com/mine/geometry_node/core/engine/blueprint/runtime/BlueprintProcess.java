@@ -78,6 +78,7 @@ public class BlueprintProcess {
         final String id;
         final int ownerNodeId;
         final String completedPortName;
+        final int eventSourceNodeId;
         final Object[] eventRegisters;
         final Map<String, Object> dynamicEventData;
         final Map<String, Object> tempData;
@@ -87,12 +88,14 @@ public class BlueprintProcess {
         BranchJoin(String id,
                    int ownerNodeId,
                    String completedPortName,
+                   int eventSourceNodeId,
                    Object[] eventRegisters,
                    @Nullable Map<String, Object> dynamicEventData,
                    Map<String, Object> tempData) {
             this.id = id;
             this.ownerNodeId = ownerNodeId;
             this.completedPortName = completedPortName;
+            this.eventSourceNodeId = eventSourceNodeId;
             this.eventRegisters = eventRegisters;
             this.dynamicEventData = dynamicEventData != null ? new HashMap<>(dynamicEventData) : null;
             this.tempData = new HashMap<>(tempData);
@@ -279,6 +282,7 @@ public class BlueprintProcess {
         // 调用修改后的 borrowThread，传入默认端口 "flow_in" 作为执行起点的占位
         ExecutionThread thread = borrowThread(startNodeId, "flow_in");
 
+        thread.eventSourceNodeId = startNodeId;
         thread.applyEventData(eventData);
 
         thread.run();
@@ -384,6 +388,7 @@ public class BlueprintProcess {
 
         ExecutionThread completionThread = borrowThread(completedTarget.targetNodeId(), completedTarget.targetPortName());
         completionThread.parentJoinId = null;
+        completionThread.eventSourceNodeId = join.eventSourceNodeId;
         completionThread.eventRegisters = Arrays.copyOf(join.eventRegisters, join.eventRegisters.length);
         completionThread.dynamicEventData = join.dynamicEventData != null ? new HashMap<>(join.dynamicEventData) : null;
         completionThread.tempData.putAll(join.tempData);
@@ -417,6 +422,7 @@ public class BlueprintProcess {
         private boolean pooled = false;
         @Nullable
         private String parentJoinId;
+        private int eventSourceNodeId = -1;
 
         // --- 线程私有寄存器 (Zero-Allocation 核心) ---
         final List<BlueprintPlan.IntFlowTarget> executionStack = new ArrayList<>();
@@ -453,6 +459,7 @@ public class BlueprintProcess {
             this.wakeUpTick = -1;
             this.runDepth = 0;
             this.parentJoinId = null;
+            this.eventSourceNodeId = -1;
             this.executionStack.clear();
             this.dataEvaluation.reset();
             this.tempData.clear();
@@ -509,6 +516,14 @@ public class BlueprintProcess {
 
         public void setEventRegistersForSerialization(Object[] eventRegisters) {
             this.eventRegisters = eventRegisters;
+        }
+
+        public int getEventSourceNodeIdForSerialization() {
+            return eventSourceNodeId;
+        }
+
+        public void setEventSourceNodeIdForSerialization(int eventSourceNodeId) {
+            this.eventSourceNodeId = eventSourceNodeId;
         }
 
         @Nullable
@@ -948,6 +963,11 @@ public class BlueprintProcess {
         }
 
         @Override
+        public int getEventSourceNodeId() {
+            return eventSourceNodeId;
+        }
+
+        @Override
         public void setEventData(String key, Object value) {
             int id = index.getKeyId(key);
             Object finalValue = (value instanceof Entity ent) ? ent.getUUID() : value;
@@ -1052,6 +1072,7 @@ public class BlueprintProcess {
                     joinId,
                     activeNodeId,
                     completedPortName,
+                    this.eventSourceNodeId,
                     Arrays.copyOf(this.eventRegisters, this.eventRegisters.length),
                     this.dynamicEventData,
                     this.tempData
@@ -1081,6 +1102,7 @@ public class BlueprintProcess {
             ExecutionThread child = BlueprintProcess.this.borrowThread(target.targetNodeId(), target.targetPortName());
             child.restoreEnvironment(getLevel(), getThreadEntityUuid());
             child.parentJoinId = joinId;
+            child.eventSourceNodeId = this.eventSourceNodeId;
             child.eventRegisters = Arrays.copyOf(this.eventRegisters, this.eventRegisters.length);
             child.dynamicEventData = this.dynamicEventData != null ? new HashMap<>(this.dynamicEventData) : null;
             child.tempData.putAll(this.tempData);
@@ -1123,6 +1145,7 @@ public class BlueprintProcess {
             delayThread.restoreEnvironment(currentLevel, getThreadEntityUuid());
             delayThread.wakeUpTick = currentLevel.getGameTime() + delayTicks;
             delayThread.state = State.WAITING;
+            delayThread.eventSourceNodeId = this.eventSourceNodeId;
 
             System.arraycopy(this.eventRegisters, 0, delayThread.eventRegisters, 0, this.eventRegisters.length);
 

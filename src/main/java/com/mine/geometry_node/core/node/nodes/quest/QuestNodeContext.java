@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.quest;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
@@ -10,21 +10,21 @@ final class QuestNodeContext {
     private QuestNodeContext() {
     }
 
-    static String resolveTaskKey(ExecutionContext context, String configuredPath) {
+    static String resolveTaskKey(GraphDataContext context, String configuredPath) {
         if (configuredPath != null && !configuredPath.isBlank()) {
             return configuredPath;
         }
         return isQuestGraph(context) ? context.getGraphId() : "";
     }
 
-    static Entity resolveOwner(ExecutionContext context, Entity configuredOwner) {
+    static Entity resolveOwner(GraphDataContext context, Entity configuredOwner) {
         if (configuredOwner != null) {
             return configuredOwner;
         }
         return isQuestGraph(context) ? context.getGraphOwnerEntity() : null;
     }
 
-    private static boolean isQuestGraph(ExecutionContext context) {
+    private static boolean isQuestGraph(GraphDataContext context) {
         if (context == null || context.getGraphId() == null || context.getGraphId().isBlank()) {
             return false;
         }

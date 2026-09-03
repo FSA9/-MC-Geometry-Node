@@ -11,7 +11,6 @@ import java.util.Map;
 public class NodeLayout {
     public final Map<String, Float> inputPortY = new HashMap<>();
     public final Map<String, Float> outputPortY = new HashMap<>();
-    public final Map<String, LabelRun> labelsByPortId = new HashMap<>();
     public final List<LabelRun> labels = new ArrayList<>();
 
     public ShapedText titleText;

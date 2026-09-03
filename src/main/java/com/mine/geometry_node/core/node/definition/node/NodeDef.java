@@ -17,13 +17,11 @@ public record NodeDef(
         String typeId,
         NodeType category,
         Component displayName,
-        String comment,
         NodeComment nodeComment,
         Map<MetaKey<?>, Object> meta,
         List<PortRow> rows
 ) {
     public NodeDef {
-        comment = comment == null ? "" : comment;
         nodeComment = nodeComment == null ? NodeComment.EMPTY : nodeComment;
         meta = meta == null ? Map.of() : Map.copyOf(meta);
         rows = rows == null ? List.of() : List.copyOf(rows);
@@ -48,7 +46,6 @@ public record NodeDef(
         private final NodeType category;
         private final Component displayName;
 
-        private String comment = "";
         private NodeComment nodeComment = NodeComment.EMPTY;
         private final Map<MetaKey<?>, Object> meta = new HashMap<>();
         private final List<PortRow> rows = new ArrayList<>();
@@ -57,11 +54,6 @@ public record NodeDef(
             this.typeId = typeId;
             this.category = category;
             this.displayName = displayName;
-        }
-
-        public Builder comment(String comment) {
-            this.comment = comment;
-            return this;
         }
 
         public Builder comment(NodeComment comment) {
@@ -97,8 +89,22 @@ public record NodeDef(
             return addRow(PortRow.passthrough(input, uiHint, customWidgetId, hintParams));
         }
 
+        /**
+         * Adds an editor-visible configuration value that cannot participate in data flow.
+         * Runtime systems read these values from the compiled node's static inputs.
+         */
+        public Builder addStaticInput(PortDef input, UIHint uiHint) {
+            return addStaticInput(input, uiHint, null, null);
+        }
+
+        public Builder addStaticInput(PortDef input, UIHint uiHint,
+                                      @Nullable String customWidgetId,
+                                      @Nullable Map<MetaKey<?>, Object> hintParams) {
+            return addRow(new PortRow(input.hiddenPin(), null, uiHint, customWidgetId, hintParams));
+        }
+
         public NodeDef build() {
-            return new NodeDef(typeId, category, displayName, comment, nodeComment, Map.copyOf(meta), List.copyOf(rows));
+            return new NodeDef(typeId, category, displayName, nodeComment, Map.copyOf(meta), List.copyOf(rows));
         }
     }
 }

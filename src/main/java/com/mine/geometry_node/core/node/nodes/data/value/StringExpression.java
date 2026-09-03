@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.value;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -71,7 +71,7 @@ public class StringExpression extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.STRING.getId().equals(portName)) {
             return null;
         }
@@ -179,7 +179,7 @@ public class StringExpression extends BaseNode {
         return c - 'A' + 1;
     }
 
-    private static String stringify(Object raw, ExecutionContext context) {
+    private static String stringify(Object raw, GraphDataContext context) {
         if (raw == null) {
             return "";
         }
@@ -194,7 +194,7 @@ public class StringExpression extends BaseNode {
         return resolvePortCount(countObj);
     }
 
-    private static int resolveRuntimePortCount(ExecutionContext context) {
+    private static int resolveRuntimePortCount(GraphDataContext context) {
         return resolvePortCount(context.getStaticInput(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id()));
     }
 

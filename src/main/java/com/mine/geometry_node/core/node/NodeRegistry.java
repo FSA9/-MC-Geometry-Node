@@ -35,6 +35,7 @@ public class NodeRegistry {
     private final Map<String, String> eventOwners = new HashMap<>();
     private final Set<String> registeredEventIds = new HashSet<>();
     private boolean initialized = false;
+    private boolean initializing = false;
     private String activeAddonId = "legacy";
 
     // 前端根目录
@@ -43,56 +44,63 @@ public class NodeRegistry {
     private NodeRegistry() {}
 
     public synchronized void init() {
-        if (initialized) {
+        if (initialized || initializing) {
             return;
         }
-        initialized = true;
+        initializing = true;
 
         System.out.println("[NodeRegistry] Start node registry");
 
-        ServiceLoader<GeometryNodePlugin> loader = ServiceLoader.load(GeometryNodePlugin.class);
-        Iterator<GeometryNodePlugin> iterator = loader.iterator();
+        boolean completed = false;
+        try {
+            ServiceLoader<GeometryNodePlugin> loader = ServiceLoader.load(GeometryNodePlugin.class);
+            Iterator<GeometryNodePlugin> iterator = loader.iterator();
 
-        while (true) {
-            GeometryNodePlugin plugin;
-            try {
-                if (!iterator.hasNext()) {
-                    break;
-                }
-                plugin = iterator.next();
-            } catch (ServiceConfigurationError error) {
-                System.err.println("[NodeRegistry] Skip invalid GeometryNodePlugin provider: " + error.getMessage());
-                error.printStackTrace();
-                continue;
-            }
-
-            String addonId = sanitizeAddonId(plugin.addonId(), plugin);
-            System.out.println("[NodeRegistry] Find plugin: " + addonId + " (" + plugin.getClass().getName() + ")");
-
-            try {
-                plugin.registerMarkerTypes(new PluginMarkerRegistrationContext(addonId));
-
-                PluginNodeRegistrationContext nodeContext = new PluginNodeRegistrationContext(addonId);
-                plugin.registerNodes(nodeContext);
-                if (nodeContext.registeredCount() == 0) {
-                    String previousAddonId = activeAddonId;
-                    activeAddonId = addonId;
-                    try {
-                        plugin.registerNodes(this);
-                    } finally {
-                        activeAddonId = previousAddonId;
+            while (true) {
+                GeometryNodePlugin plugin;
+                try {
+                    if (!iterator.hasNext()) {
+                        break;
                     }
+                    plugin = iterator.next();
+                } catch (ServiceConfigurationError error) {
+                    System.err.println("[NodeRegistry] Skip invalid GeometryNodePlugin provider: " + error.getMessage());
+                    error.printStackTrace();
+                    continue;
                 }
 
-                PluginEventRegistrationContext eventContext = new PluginEventRegistrationContext(addonId);
-                plugin.registerEvents(eventContext);
-            } catch (Exception e) {
-                System.err.println("[NodeRegistry] Plugin registration failed: " + addonId + " (" + plugin.getClass().getName() + ")");
-                e.printStackTrace();
-            }
-        }
+                String addonId = sanitizeAddonId(plugin.addonId(), plugin);
+                System.out.println("[NodeRegistry] Find plugin: " + addonId + " (" + plugin.getClass().getName() + ")");
 
-        System.out.println("[NodeRegistry] Load finished. Total nodes: " + registry.size() + ", total events: " + eventRegistry.size());
+                try {
+                    plugin.registerMarkerTypes(new PluginMarkerRegistrationContext(addonId));
+
+                    PluginNodeRegistrationContext nodeContext = new PluginNodeRegistrationContext(addonId);
+                    plugin.registerNodes(nodeContext);
+                    if (nodeContext.registeredCount() == 0) {
+                        String previousAddonId = activeAddonId;
+                        activeAddonId = addonId;
+                        try {
+                            plugin.registerNodes(this);
+                        } finally {
+                            activeAddonId = previousAddonId;
+                        }
+                    }
+
+                    PluginEventRegistrationContext eventContext = new PluginEventRegistrationContext(addonId);
+                    plugin.registerEvents(eventContext);
+                } catch (Exception e) {
+                    System.err.println("[NodeRegistry] Plugin registration failed: " + addonId + " (" + plugin.getClass().getName() + ")");
+                    e.printStackTrace();
+                }
+            }
+
+            completed = true;
+            System.out.println("[NodeRegistry] Load finished. Total nodes: " + registry.size() + ", total events: " + eventRegistry.size());
+        } finally {
+            initialized = completed;
+            initializing = false;
+        }
     }
 
     public void register(String path, BaseNode node) {
@@ -100,8 +108,12 @@ public class NodeRegistry {
     }
 
     public void register(String path, BaseNode node, String addonId) {
-        NodeCategory category = getOrCreateCategory(path);
-        register(category, node, addonId);
+        try {
+            NodeCategory category = getOrCreateCategory(path);
+            registerNode(category, node, addonId);
+        } catch (Exception | LinkageError error) {
+            logNodeRegistrationFailure(path, node, addonId, error);
+        }
     }
 
     public NodeCategory getOrCreateCategory(String path) {
@@ -133,7 +145,16 @@ public class NodeRegistry {
         register(category, node, activeAddonId);
     }
 
-    public synchronized void register(NodeCategory category, BaseNode node, String addonId) {
+    public void register(NodeCategory category, BaseNode node, String addonId) {
+        try {
+            registerNode(category, node, addonId);
+        } catch (Exception | LinkageError error) {
+            String path = category != null ? category.translationKey : "<null-category>";
+            logNodeRegistrationFailure(path, node, addonId, error);
+        }
+    }
+
+    private synchronized void registerNode(NodeCategory category, BaseNode node, String addonId) {
         // 1. 基础校验
         if (node == null || category == null) {
             System.err.println("[NodeRegistry] Skip: Cannot register null node or null category");
@@ -183,6 +204,14 @@ public class NodeRegistry {
         if (def.category() == NodeType.EVENT) {
             registerEvent(createEventDef(def), addonId);
         }
+    }
+
+    private static void logNodeRegistrationFailure(String path, @Nullable BaseNode node,
+                                                   String addonId, Throwable error) {
+        String nodeClass = node != null ? node.getClass().getName() : "<null-node>";
+        System.err.println("[NodeRegistry] Skip node after registration failure: addon=" + addonId
+                + ", path=" + path + ", node=" + nodeClass + ", error=" + error.getMessage());
+        error.printStackTrace();
     }
 
     public void registerEvent(EventDef eventDef, String addonId) {

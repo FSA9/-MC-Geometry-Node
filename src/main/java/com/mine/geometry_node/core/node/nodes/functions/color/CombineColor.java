@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.functions.color;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.MetaKey;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -54,7 +54,7 @@ public class CombineColor extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.COLOR.getId().equals(portName)) {
             return null;
         }
@@ -107,7 +107,7 @@ public class CombineColor extends BaseNode {
         };
     }
 
-    private float normalizedInput(ExecutionContext context, String portId, float fallback) {
+    private float normalizedInput(GraphDataContext context, String portId, float fallback) {
         Float value = getInput(context, portId, Float.class);
         if (value == null) {
             value = fallback;

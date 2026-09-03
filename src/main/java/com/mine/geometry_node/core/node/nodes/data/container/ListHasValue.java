@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.container;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -26,7 +26,7 @@ public class ListHasValue extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         // 1. 获取基础列表和要寻找的纯正（Raw）Java对象
         List<Object> list = getInputList(context, StandardPorts.LIST.getId(), Object.class);
         Object targetValue = getRawInput(context, StandardPorts.ANY_VALUE.getId());

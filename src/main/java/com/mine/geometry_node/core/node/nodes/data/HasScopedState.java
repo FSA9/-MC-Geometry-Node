@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
@@ -47,7 +47,7 @@ public final class HasScopedState extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.BOOL.getId().equals(portName)) return null;
 
         String key = ScopedStateNodeSupport.requireKey(
@@ -56,6 +56,6 @@ public final class HasScopedState extends BaseNode {
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
                 ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
         ScopedStateTarget target = ScopedStateNodeSupport.requireTarget(context, scope, entity);
-        return context.hasScopedState(target, key);
+        return context.getScopedState(target, key) != null;
     }
 }

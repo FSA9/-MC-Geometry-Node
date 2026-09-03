@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.node.nodes.data.entity;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaShape;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaTargetType;
 import com.mine.geometry_node.core.engine.blueprint.spatial.RotatedBoxEntityQuery;
@@ -40,7 +40,7 @@ public class GetEntitiesbyRotationBox extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.LIST.getId().equals(portName)) return null;
 
         Vec3 center = getInput(context, StandardPorts.CENTER.getId(), Vec3.class);
@@ -61,17 +61,14 @@ public class GetEntitiesbyRotationBox extends BaseNode {
                 AreaTargetType.fromId(targetId),
                 entity -> !entity.isSpectator()
         );
-        DebugRendererSessionManager.showTransientQueryArea(
-                context.getLevel(), GraphResourceIds.node(context, stableNodeId(context),
-                        GraphResourceTypeRegistry.AREA_QUERY),
-                AreaShape.BOX.id(), center, size, rotation
-        );
+        String stableNodeId = context.getCurrentNodeStableId();
+        if (stableNodeId != null && !stableNodeId.isBlank()) {
+            DebugRendererSessionManager.showTransientQueryArea(
+                    context.getLevel(), GraphResourceIds.node(context, stableNodeId,
+                            GraphResourceTypeRegistry.AREA_QUERY),
+                    AreaShape.BOX.id(), center, size, rotation
+            );
+        }
         return result;
-    }
-
-    private static String stableNodeId(ExecutionContext context) {
-        String stableId = context.getCurrentNodeStableId();
-        return stableId == null || stableId.isBlank()
-                ? Integer.toString(context.getCurrentNodeId()) : stableId;
     }
 }

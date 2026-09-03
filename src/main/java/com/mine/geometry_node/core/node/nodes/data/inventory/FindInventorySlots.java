@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.inventory;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -58,7 +58,7 @@ public class FindInventorySlots extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         List<SlotRef> slots = findSlots(context);
         if (StandardPorts.LIST.getId().equals(portName)) {
             return slots;
@@ -75,7 +75,7 @@ public class FindInventorySlots extends BaseNode {
         return null;
     }
 
-    private List<SlotRef> findSlots(ExecutionContext context) {
+    private List<SlotRef> findSlots(GraphDataContext context) {
         Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
         ItemStack template = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         String tag = getInput(context, StandardPorts.TAG.getId(), String.class);

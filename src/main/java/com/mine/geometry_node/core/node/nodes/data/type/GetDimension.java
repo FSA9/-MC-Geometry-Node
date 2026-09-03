@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.type;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -26,7 +26,7 @@ public class GetDimension extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.DIMENSION.getId().equals(portName)) {
             String selectedDimension = getInput(context, StandardPorts.STRING.getId(), String.class);
             return selectedDimension != null ? selectedDimension : RegistryDataManager.DEFAULT_DIMENSION;

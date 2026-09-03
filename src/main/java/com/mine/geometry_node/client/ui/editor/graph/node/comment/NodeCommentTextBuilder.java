@@ -27,14 +27,9 @@ public final class NodeCommentTextBuilder {
 
         NodeComment nodeComment = nodeDef.nodeComment();
         if (nodeComment != null && !nodeComment.isEmpty()) {
-            String structured = buildStructured(nodeDef, nodeComment);
-            if (!structured.isBlank()) {
-                return structured;
-            }
+            return buildStructured(nodeDef, nodeComment);
         }
-
-        String legacyComment = nodeDef.comment();
-        return legacyComment == null ? "" : legacyComment.trim();
+        return "";
     }
 
     public static boolean hasComment(NodeDef nodeDef) {

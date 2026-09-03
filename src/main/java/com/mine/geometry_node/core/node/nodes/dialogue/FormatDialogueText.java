@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.dialogue;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.MetaKey;
@@ -66,7 +66,7 @@ public class FormatDialogueText extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.STRING.getId().equals(portName)) {
             return null;
         }
@@ -80,7 +80,7 @@ public class FormatDialogueText extends BaseNode {
         return format(template, variables);
     }
 
-    private Map<String, String> collectVariables(ExecutionContext context) {
+    private Map<String, String> collectVariables(GraphDataContext context) {
         Map<String, String> variables = new HashMap<>();
         int variableCount = resolveRuntimeVariableCount(context);
 
@@ -164,7 +164,7 @@ public class FormatDialogueText extends BaseNode {
         return resolveVariableCount(countObj);
     }
 
-    private static int resolveRuntimeVariableCount(ExecutionContext context) {
+    private static int resolveRuntimeVariableCount(GraphDataContext context) {
         return resolveVariableCount(context.getStaticInput(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id()));
     }
 

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.logics;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -39,7 +39,7 @@ public class Contain extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.BOOL.getId().equals(portName)) {
             return null;
         }
@@ -49,7 +49,7 @@ public class Contain extends BaseNode {
         return contains(container, target, context);
     }
 
-    private static boolean contains(Object container, Object target, ExecutionContext context) {
+    private static boolean contains(Object container, Object target, GraphDataContext context) {
         container = ValueTagUtils.unwrap(container);
         target = ValueTagUtils.unwrap(target);
         if (container == null || target == null) {
@@ -95,7 +95,7 @@ public class Contain extends BaseNode {
         return valueMatches(container, target, context);
     }
 
-    private static boolean valueMatches(Object value, Object target, ExecutionContext context) {
+    private static boolean valueMatches(Object value, Object target, GraphDataContext context) {
         value = ValueTagUtils.unwrap(value);
         target = ValueTagUtils.unwrap(target);
 

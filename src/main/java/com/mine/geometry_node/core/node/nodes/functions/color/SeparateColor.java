@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.functions.color;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -49,7 +49,7 @@ public class SeparateColor extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         ColorValue color = getInput(context, StandardPorts.COLOR.getId(), ColorValue.class);
         if (color == null) {
             color = ColorValue.WHITE;

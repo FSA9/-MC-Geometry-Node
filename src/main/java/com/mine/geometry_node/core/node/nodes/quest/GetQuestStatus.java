@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.quest;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestInstance;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;
@@ -35,7 +35,7 @@ public final class GetQuestStatus extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         Entity owner = QuestNodeContext.resolveOwner(
                 context,
                 getInput(context, StandardPorts.ENTITY.getId(), Entity.class));

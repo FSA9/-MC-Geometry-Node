@@ -18,7 +18,7 @@ public enum StandardPorts {
     BEHAVIOR_CHILDREN("behavior_children", PortType.BEHAVIOR_STRUCTURE),
 
     // Int
-    INT_VALUE("value", PortType.INTEGER),
+    INT_VALUE("int_value", PortType.INTEGER),
     INT("int", PortType.INTEGER),
     MIN_INT("min_int", PortType.INTEGER),
     MAX_INT("max_int", PortType.INTEGER),
@@ -79,7 +79,7 @@ public enum StandardPorts {
     LOOP_ENABLED("loop_enabled", PortType.BOOLEAN),
 
     // Float
-    FLOAT_VALUE("value", PortType.FLOAT),
+    FLOAT_VALUE("float_value", PortType.FLOAT),
     FLOAT("float", PortType.FLOAT),
     MIN_FLOAT("min_float", PortType.FLOAT),
     MAX_FLOAT("max_float", PortType.FLOAT),
@@ -233,7 +233,7 @@ public enum StandardPorts {
     COLOR("color", PortType.COLOR),
 
     // ANY
-    GENERIC_VALUE("value", PortType.ANY),
+    GENERIC_VALUE("generic_value", PortType.ANY),
     ANY_VALUE("any_value", PortType.ANY),
     STATE_VALUE("state_value", PortType.ANY),
     VARIABLE_VALUE("variable_value", PortType.ANY);

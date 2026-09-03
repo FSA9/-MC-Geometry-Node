@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.maths.vector;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
@@ -25,7 +25,7 @@ public class SeparateXYZ extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         // 1. 获取物理层数值
         Vec3 physicalVec = getInput(context, StandardPorts.VECTOR.getId(), Vec3.class);
         float physicalOut = 0f;

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.dialogue;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -34,7 +34,7 @@ public class CreateDialogueChoice extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.DIALOGUE_CHOICE.getId().equals(portName)) {
             return null;
         }
@@ -46,7 +46,7 @@ public class CreateDialogueChoice extends BaseNode {
         return new DialogueChoiceValue(text, visible, enabled, disabledReason);
     }
 
-    private RichTextValue richText(ExecutionContext context, String portName) {
+    private RichTextValue richText(GraphDataContext context, String portName) {
         RichTextValue value = getInput(context, portName, RichTextValue.class);
         return value == null ? RichTextValue.EMPTY : value;
     }

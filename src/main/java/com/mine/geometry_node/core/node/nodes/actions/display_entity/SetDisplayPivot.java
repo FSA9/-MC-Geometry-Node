@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.display_entity;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.runtime.display.DisplayTransformController;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -49,7 +50,7 @@ public final class SetDisplayPivot extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.DISPLAY_ENTITY.getId().equals(portName)) {
             return getRawInput(context, StandardPorts.DISPLAY_ENTITY.getId());
         }

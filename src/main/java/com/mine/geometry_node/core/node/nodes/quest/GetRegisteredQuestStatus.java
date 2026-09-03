@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.quest;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatus;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -38,7 +38,7 @@ public final class GetRegisteredQuestStatus extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!STATUS_PORT.equals(portName)) return null;
         String selected = getInput(context, SELECTED_STATUS_PORT, String.class);
         QuestStatus status = QuestStatusRegistry.INSTANCE.get(selected);

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.world;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -131,7 +131,7 @@ public class TargetSelector extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.LIST.getId().equals(portName)) return null;
 
         String base = getInput(context, StandardPorts.STRING.getId(), String.class);

@@ -13,9 +13,7 @@ public class NodeCategory {
     public final String translationKey;
 
     private final Map<String, NodeCategory> children = new LinkedHashMap<>();
-
-    // 树枝&树叶
-    private final List<NodeCategory> subCategories = new ArrayList<>();
+    private final Collection<NodeCategory> childView = Collections.unmodifiableCollection(children.values());
     private final List<BaseNode> nodes = new ArrayList<>();
 
     public NodeCategory(String translationKey) {
@@ -27,7 +25,6 @@ public class NodeCategory {
     public NodeCategory addChild(NodeCategory child) {
         if (child != null && !this.children.containsKey(child.translationKey)) {
             this.children.put(child.translationKey, child);
-            this.subCategories.add(child);
         }
         return this;
     }
@@ -43,8 +40,8 @@ public class NodeCategory {
         return this.children.get(translationKey);
     }
 
-    public List<NodeCategory> getSubCategories() {
-        return Collections.unmodifiableList(subCategories);
+    public Collection<NodeCategory> getSubCategories() {
+        return childView;
     }
 
     public List<BaseNode> getNodes() {

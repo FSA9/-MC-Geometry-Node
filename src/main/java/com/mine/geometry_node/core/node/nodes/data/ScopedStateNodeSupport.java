@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -31,7 +31,7 @@ final class ScopedStateNodeSupport {
         return normalizeScope(value);
     }
 
-    static ScopedStateScope selectedScope(ExecutionContext context) {
+    static ScopedStateScope selectedScope(GraphDataContext context) {
         return normalizeScope(context.getStaticInput(SCOPE_PORT));
     }
 
@@ -65,7 +65,7 @@ final class ScopedStateNodeSupport {
     }
 
     @Nullable
-    static ScopedStateTarget resolveTarget(ExecutionContext context, ScopedStateScope scope, @Nullable Entity entity) {
+    static ScopedStateTarget resolveTarget(GraphDataContext context, ScopedStateScope scope, @Nullable Entity entity) {
         return switch (scope) {
             case OWNER -> entity != null ? ScopedStateTarget.owner(entity) : null;
             case SHARED -> ScopedStateTarget.shared();
@@ -79,7 +79,7 @@ final class ScopedStateNodeSupport {
     }
 
     static ScopedStateTarget requireTarget(
-            ExecutionContext context, ScopedStateScope scope, @Nullable Entity entity) {
+            GraphDataContext context, ScopedStateScope scope, @Nullable Entity entity) {
         ScopedStateTarget target = resolveTarget(context, scope, entity);
         if (target == null) {
             throw new IllegalStateException("Scoped state target is unavailable for " + scope);
@@ -87,7 +87,7 @@ final class ScopedStateNodeSupport {
         return target;
     }
 
-    static String dimension(ExecutionContext context) {
+    static String dimension(GraphDataContext context) {
         Object value = context.getInputValue(StandardPorts.DIMENSION.getId());
         if (value == null) value = context.getStaticInput(StandardPorts.DIMENSION.getId());
         return value instanceof String text && !text.isBlank() ? text : DEFAULT_DIMENSION;

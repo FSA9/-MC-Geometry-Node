@@ -44,7 +44,7 @@ public class OnProjectileHit extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.PREVIOUS_POS.toOutput(), UIHint.DEFAULT, null, null))
                 // 击中的方块状态
                 .addRow(new PortRow(null, StandardPorts.BLOCK_STATE.toOutput(), UIHint.DEFAULT, null, null))
-                .addPassthroughInput(StandardPorts.INTERCEPT.toInput(false)
+                .addStaticInput(StandardPorts.INTERCEPT.toInput(false)
                         .withDisplayName("geometry_node.port.intercept.projectile_hit_effects"), UIHint.CHECKBOX)
                 .build();
     }

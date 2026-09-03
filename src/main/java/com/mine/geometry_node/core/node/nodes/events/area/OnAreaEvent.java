@@ -100,25 +100,25 @@ public final class OnAreaEvent extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.DIMENSION.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, PortDef.create(INSIDE_COUNT_PORT,
                         "geometry_node.port.inside_count", PortType.INTEGER), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(PortDef.create(SOURCE_PORT, "geometry_node.port.area_source",
-                                PortType.STRING, SOURCE_AREA), null, UIHint.SELECT, null, Map.of(
+                .addStaticInput(PortDef.create(SOURCE_PORT, "geometry_node.port.area_source",
+                                PortType.STRING, SOURCE_AREA), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, SOURCE_OPTIONS,
                                 PortMetaKeys.OPTION_LABELS, new String[]{
                                         "geometry_node.area.source.area",
                                         "geometry_node.area.source.force_field"
-                                })))
-                .addRow(new PortRow(idPort, null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.DIMENSION.toInput(RegistryDataManager.DEFAULT_DIMENSION),
-                        null, UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID,
+                                }))
+                .addStaticInput(idPort, UIHint.INPUT)
+                .addStaticInput(StandardPorts.DIMENSION.toInput(RegistryDataManager.DEFAULT_DIMENSION),
+                        UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID,
                                 RegistryDataManager.DIMENSION_REGISTRY_ID)))
-                .addPassthroughInput(PortDef.create(PHASE_PORT, "geometry_node.port.area_phase", PortType.STRING,
-                                PHASE_ENTER).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, PHASE_OPTIONS))
-                .addPassthroughInput(PortDef.create(TARGET_PORT, "geometry_node.port.area_target", PortType.STRING,
-                                AreaTargetType.ALL.id()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, AreaTargetType.OPTIONS))
-                .addPassthroughInput(StandardPorts.TICK.toInput(1)
-                        .withDisplayName("geometry_node.port.tick.interval").hiddenPin(), UIHint.INPUT)
-                .addPassthroughInput(StandardPorts.TICK.toInputWithIndex(1, 0)
-                        .withDisplayName("geometry_node.port.tick.offset").hiddenPin(), UIHint.INPUT)
+                .addStaticInput(PortDef.create(PHASE_PORT, "geometry_node.port.area_phase", PortType.STRING,
+                                PHASE_ENTER), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, PHASE_OPTIONS))
+                .addStaticInput(PortDef.create(TARGET_PORT, "geometry_node.port.area_target", PortType.STRING,
+                                AreaTargetType.ALL.id()), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, AreaTargetType.OPTIONS))
+                .addStaticInput(StandardPorts.TICK.toInput(1)
+                        .withDisplayName("geometry_node.port.tick.interval"), UIHint.INPUT)
+                .addStaticInput(StandardPorts.TICK.toInputWithIndex(1, 0)
+                        .withDisplayName("geometry_node.port.tick.offset"), UIHint.INPUT)
                 .build();
     }
 }

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.type;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -37,7 +37,7 @@ public class GetItemStack extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         // 数据节点只响应它自己的输出端口
         if (!StandardPorts.ITEM_STACK.getId().equals(portName)) return null;
 

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.container;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -25,7 +25,7 @@ public class GetListValue extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.ANY_VALUE.getId().equals(portName)) return null;
 
         List<Object> list = getInputList(context, StandardPorts.LIST.getId(), Object.class);

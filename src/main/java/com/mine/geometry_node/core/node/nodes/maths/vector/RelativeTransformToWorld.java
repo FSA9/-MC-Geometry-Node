@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.maths.vector;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -40,7 +40,7 @@ public final class RelativeTransformToWorld extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         Vec3 basePosition = inputOrZero(context, StandardPorts.BASE_POSITION);
         Vec3 baseRotation = inputOrZero(context, StandardPorts.BASE_ROTATION);
         Vec3 positionOffset = inputOrZero(context, StandardPorts.POSITION_OFFSET);
@@ -64,7 +64,7 @@ public final class RelativeTransformToWorld extends BaseNode {
         return null;
     }
 
-    private Vec3 inputOrZero(ExecutionContext context, StandardPorts port) {
+    private Vec3 inputOrZero(GraphDataContext context, StandardPorts port) {
         Vec3 value = getInput(context, port.getId(), Vec3.class);
         return value != null ? value : Vec3.ZERO;
     }

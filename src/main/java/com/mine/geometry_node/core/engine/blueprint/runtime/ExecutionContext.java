@@ -103,6 +103,12 @@ public interface ExecutionContext extends GraphDataContext {
     Object getEventData(String key);
 
     /**
+     * Returns the runtime node ID of the event node that started this execution flow.
+     * A negative value means that the flow was not started by an event.
+     */
+    int getEventSourceNodeId();
+
+    /**
      * [事件参数写入] 仅供引擎在分发事件时调用，向运行时注入瞬时环境数据。
      */
     void setEventData(String key, Object value);

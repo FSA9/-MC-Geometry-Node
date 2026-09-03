@@ -54,6 +54,10 @@ public class BlueprintProcessSerializer {
                 if (thread.getParentJoinIdForSerialization() != null) {
                     tTag.putString("ParentJoinId", thread.getParentJoinIdForSerialization());
                 }
+                String eventSourceNodeId = index.getIdToString(thread.getEventSourceNodeIdForSerialization());
+                if (eventSourceNodeId != null) {
+                    tTag.putString("EventSourceNodeId", eventSourceNodeId);
+                }
                 String contextDimension = thread.getThreadDimensionId();
                 if (contextDimension != null) {
                     tTag.putString("ContextDimension", contextDimension);
@@ -98,6 +102,10 @@ public class BlueprintProcessSerializer {
                 joinTag.putString("CompletedPortName", join.completedPortName);
                 joinTag.putInt("PendingChildren", join.pendingChildren);
                 joinTag.putBoolean("LaunchFinished", join.launchFinished);
+                String eventSourceNodeId = index.getIdToString(join.eventSourceNodeId);
+                if (eventSourceNodeId != null) {
+                    joinTag.putString("EventSourceNodeId", eventSourceNodeId);
+                }
 
                 CompoundTag regTag = new CompoundTag();
                 saveVariablesToTag(regTag, join.eventRegisters, join.dynamicEventData, index, provider);
@@ -154,6 +162,9 @@ public class BlueprintProcessSerializer {
                 if (currentPort.isEmpty()) currentPort = "flow_in";
 
                 BlueprintProcess.ExecutionThread thread = process.new ExecutionThread(currentFlowId, currentPort);
+                thread.setEventSourceNodeIdForSerialization(
+                        index.getStringToId(tTag.getStringOr("EventSourceNodeId", ""))
+                );
                 if (tTag.contains("ParentJoinId")) {
                     thread.setParentJoinIdForSerialization(tTag.getStringOr("ParentJoinId", ""));
                 }
@@ -232,6 +243,7 @@ public class BlueprintProcessSerializer {
                         joinId,
                         ownerNodeId,
                         completedPortName,
+                        index.getStringToId(joinTag.getStringOr("EventSourceNodeId", "")),
                         regScope.statics,
                         regScope.dynamics,
                         tempData

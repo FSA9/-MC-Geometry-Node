@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.quest;
 
-import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionResult;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -78,7 +78,7 @@ public abstract class BaseQuestConditionsNode extends BaseNode {
     }
 
     @Override
-    public final Object compute(ExecutionContext context, String portName) {
+    public final Object compute(GraphDataContext context, String portName) {
         if (!RESULT_PORT.equals(portName)) return null;
 
         int conditionCount = resolveConditionCount(

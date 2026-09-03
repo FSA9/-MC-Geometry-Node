@@ -30,7 +30,8 @@ public class OnBlockBreak extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.BLOCK_STATE.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.DIMENSION.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))
-                .addPassthroughInput(StandardPorts.TYPE.toInput().hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(RegistryDataManager.getAllBlocks())))
+                .addStaticInput(StandardPorts.TYPE.toInput(), UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(RegistryDataManager.getAllBlocks())))
                 .build();
     }
 }
