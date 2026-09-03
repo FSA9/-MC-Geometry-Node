@@ -49,12 +49,10 @@ public class SpawnItemDisplayEntity extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.DISPLAY_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.WORLD_POSITION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.WORLD_ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
-                        Map.of(
+                .addPassthroughInput(StandardPorts.WORLD_POSITION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.WORLD_ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.STRING.toInput().hiddenPin(), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, new String[]{"none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground", "fixed"},
                                 PortMetaKeys.OPTION_LABELS, new String[]{
                                         "geometry_node.display.item_context.none",
@@ -67,21 +65,21 @@ public class SpawnItemDisplayEntity extends BaseNode {
                                         "geometry_node.display.item_context.ground",
                                         "geometry_node.display.item_context.fixed"
                                 }
-                        )
-                ))
-                .addRow(new PortRow(StandardPorts.PIVOT.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(0)
-                        .withDisplayName("geometry_node.port.tick.teleport"), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInputWithIndex(1, 0)
-                        .withDisplayName("geometry_node.port.tick.interpolation"), null, UIHint.INPUT, null, null))
+                        ))
+                .addPassthroughInput(StandardPorts.PIVOT.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.TICK.toInput(0)
+                        .withDisplayName("geometry_node.port.tick.teleport"), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.TICK.toInputWithIndex(1, 0)
+                        .withDisplayName("geometry_node.port.tick.interpolation"), UIHint.INPUT)
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        context.setNodeResult(StandardPorts.DISPLAY_ENTITY.getId(), null);
         Level level = context.getLevel();
         if (level == null) return next(StandardPorts.FLOW_OUT.getId());
 
@@ -130,7 +128,7 @@ public class SpawnItemDisplayEntity extends BaseNode {
             EntityNbtCompat.load(displayEntity, nbt);
             DisplayTransformController.initializePose(displayEntity, worldRotation, pivot);
             level.addFreshEntity(displayEntity);
-            context.setTempData("spawned_item_display", displayEntity);
+            context.setNodeResult(StandardPorts.DISPLAY_ENTITY.getId(), displayEntity);
         }
 
         return next(StandardPorts.FLOW_OUT.getId());
@@ -139,7 +137,7 @@ public class SpawnItemDisplayEntity extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.DISPLAY_ENTITY.getId().equals(portName)) {
-            return context.getTempData("spawned_item_display");
+            return context.getNodeResult(StandardPorts.DISPLAY_ENTITY.getId());
         }
         return null;
     }

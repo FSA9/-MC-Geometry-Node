@@ -21,13 +21,7 @@ public class GetSound extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_sound"))
                 .addRow(new PortRow(null, StandardPorts.SOUND_TYPE.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.STRING.toInput().hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllSounds().toArray(new String[0]))
-                ))
+                .addPassthroughInput(StandardPorts.STRING.toInput().hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllSounds().toArray(new String[0])))
                 .build();
     }
 

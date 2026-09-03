@@ -86,7 +86,8 @@ public class CmdDissolveNodeGroup implements ICommand {
             if (mGroupNodeId.equals(entry.getKey())) continue;
 
             NodeData node = entry.getValue();
-            rewriteExternalDataInputConnections(node, groupNode.id, dataInputBridges, groupDataInputsWithExternalConnections);
+            rewriteExternalDataInputConnections(node, groupNode.id, dataInputBridges,
+                    dataOutputBridges, groupDataInputsWithExternalConnections);
             rewriteExternalFlowInputConnections(node, groupNode.id, flowInputBridges);
             after.put(entry.getKey(), node);
         }
@@ -101,7 +102,8 @@ public class CmdDissolveNodeGroup implements ICommand {
             after.put(entry.getKey(), node);
         }
 
-        applyGroupInputDefaults(groupNode, groupInputNode, groupDataInputsWithExternalConnections);
+        applyGroupInputDefaults(groupNode, groupInputNode, dataOutputBridges,
+                groupDataInputsWithExternalConnections, after);
         return deepCopyNodes(after);
     }
 
@@ -109,6 +111,7 @@ public class CmdDissolveNodeGroup implements ICommand {
             NodeData node,
             String groupNodeId,
             Map<String, List<Connection>> inputBridges,
+            Map<String, List<Connection>> outputBridges,
             Set<String> groupInputsWithExternalConnections
     ) {
         if (node == null || node.outputs == null) return;
@@ -123,10 +126,20 @@ public class CmdDissolveNodeGroup implements ICommand {
                 if (groupNodeId.equals(link.targetNodeId())) {
                     groupInputsWithExternalConnections.add(link.targetPortName());
                     List<Connection> bridges = inputBridges.get(link.targetPortName());
-                    if (bridges == null) continue;
-                    for (Connection bridge : bridges) {
-                        if (bridge != null && !isGroupBoundaryId(bridge.targetNodeId())) {
-                            addDataConnection(node, entry.getKey(), bridge.targetNodeId(), bridge.targetPortName());
+                    if (bridges != null) {
+                        for (Connection bridge : bridges) {
+                            if (bridge != null && !isGroupBoundaryId(bridge.targetNodeId())) {
+                                addDataConnection(node, entry.getKey(), bridge.targetNodeId(), bridge.targetPortName());
+                            }
+                        }
+                    }
+                    List<Connection> passthroughTargets = outputBridges.get(link.targetPortName());
+                    if (passthroughTargets != null) {
+                        for (Connection target : passthroughTargets) {
+                            if (target != null && !groupNodeId.equals(target.targetNodeId())) {
+                                addDataConnection(node, entry.getKey(),
+                                        target.targetNodeId(), target.targetPortName());
+                            }
                         }
                     }
                 } else {
@@ -214,28 +227,50 @@ public class CmdDissolveNodeGroup implements ICommand {
     private void applyGroupInputDefaults(
             NodeData groupNode,
             NodeData groupInputNode,
-            Set<String> groupInputsWithExternalConnections
+            Map<String, List<Connection>> outputBridges,
+            Set<String> groupInputsWithExternalConnections,
+            Map<String, NodeData> dissolvedNodes
     ) {
-        if (groupNode == null || groupInputNode == null || groupInputNode.outputs == null || groupNode.inputs == null) {
-            return;
-        }
+        if (groupNode == null || groupInputNode == null) return;
 
-        for (Map.Entry<String, List<Connection>> entry : groupInputNode.outputs.entrySet()) {
-            String portId = entry.getKey();
-            if (groupInputsWithExternalConnections.contains(portId) || !groupNode.inputs.containsKey(portId)) {
-                continue;
+        Map<String, List<Connection>> internalBridges = groupInputNode.outputs != null
+                ? groupInputNode.outputs : Map.of();
+        Map<String, NodeData.PortConfig> configuredInputs = groupNode.ensurePortConfig().inputs;
+        Set<String> inputPortIds = new HashSet<>();
+        if (configuredInputs != null) inputPortIds.addAll(configuredInputs.keySet());
+        inputPortIds.addAll(internalBridges.keySet());
+
+        for (String portId : inputPortIds) {
+            if (groupInputsWithExternalConnections.contains(portId)) continue;
+
+            Object value = groupNode.inputs != null && groupNode.inputs.containsKey(portId)
+                    ? groupNode.inputs.get(portId)
+                    : groupInputDefault(configuredInputs != null ? configuredInputs.get(portId) : null);
+            if (internalBridges.get(portId) != null) {
+                for (Connection link : internalBridges.get(portId)) {
+                    if (link == null || isGroupBoundaryId(link.targetNodeId())) continue;
+                    NodeData targetNode = groupNode.subNodes.get(link.targetNodeId());
+                    if (targetNode != null) {
+                        targetNode.inputs.put(link.targetPortName(), value);
+                    }
+                }
             }
 
-            Object value = groupNode.inputs.get(portId);
-            if (entry.getValue() == null) continue;
-            for (Connection link : entry.getValue()) {
-                if (link == null || isGroupBoundaryId(link.targetNodeId())) continue;
-                NodeData targetNode = groupNode.subNodes.get(link.targetNodeId());
-                if (targetNode != null) {
-                    targetNode.inputs.put(link.targetPortName(), value);
+            List<Connection> passthroughTargets = outputBridges.get(portId);
+            if (passthroughTargets != null) {
+                for (Connection link : passthroughTargets) {
+                    if (link == null || mGroupNodeId.equals(link.targetNodeId())) continue;
+                    NodeData targetNode = dissolvedNodes.get(link.targetNodeId());
+                    if (targetNode != null) {
+                        targetNode.inputs.put(link.targetPortName(), value);
+                    }
                 }
             }
         }
+    }
+
+    private Object groupInputDefault(NodeData.PortConfig config) {
+        return config != null && config.type != null ? config.type.getDefaultValue() : null;
     }
 
     private void addDataConnection(NodeData node, String outPortId, String targetNodeId, String targetPortId) {

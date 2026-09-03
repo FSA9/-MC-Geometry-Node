@@ -25,8 +25,8 @@ public class DeleteGeometryDebugMesh extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.delete_geometry_debug_mesh"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.RESOURCE_ID.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.KEY.toInput(""), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.RESOURCE_ID.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT)
                 .build();
     }
 

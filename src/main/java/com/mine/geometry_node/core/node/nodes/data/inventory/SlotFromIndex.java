@@ -43,14 +43,8 @@ public class SlotFromIndex extends BaseNode {
                         .input(StandardPorts.SCOPE, "scope")
                         .build())
                 .addRow(new PortRow(null, StandardPorts.SLOT.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.INDEX.toInput(0), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.SCOPE.toInput(SCOPE_PLAYER_INVENTORY).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, SCOPE_OPTIONS)
-                ))
+                .addPassthroughInput(StandardPorts.INDEX.toInput(0), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.SCOPE.toInput(SCOPE_PLAYER_INVENTORY).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, SCOPE_OPTIONS))
                 .build();
     }
 

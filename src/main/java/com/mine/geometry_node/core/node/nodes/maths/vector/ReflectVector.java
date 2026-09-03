@@ -26,7 +26,7 @@ public class ReflectVector extends BaseNode {
                         .build())
                 .addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.VECTOR.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.NORMAL.toInput(), null, UIHint.VECTOR, null, null))
+                .addPassthroughInput(StandardPorts.NORMAL.toInput(), UIHint.VECTOR, null, null)
                 .build();
     }
 

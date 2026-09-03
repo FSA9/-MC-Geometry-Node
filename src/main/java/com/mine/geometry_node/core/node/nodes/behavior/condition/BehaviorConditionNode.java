@@ -20,7 +20,7 @@ public final class BehaviorConditionNode extends BaseNode implements BehaviorExe
         return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL,
                         Component.translatable("geometry_node.node.behavior_condition"))
                 .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.CONDITION.toInput(), null, UIHint.CHECKBOX, null, null))
+                .addPassthroughInput(StandardPorts.CONDITION.toInput(), UIHint.CHECKBOX)
                 .build();
     }
 

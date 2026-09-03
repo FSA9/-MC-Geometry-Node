@@ -37,14 +37,8 @@ abstract class AbstractSetEntityIntegerProperty extends EntityPassthroughActionN
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(typeId, NodeType.ACTION, Component.translatable("geometry_node.node." + typeId))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.TICK.toInput(defaultValue),
-                        null,
-                        UIHint.INPUT,
-                        null,
-                        minValue != null ? Map.of(PortMetaKeys.NUMERIC_MIN, minValue) : null
-                ))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.TICK.toInput(defaultValue), UIHint.INPUT, null, minValue != null ? Map.of(PortMetaKeys.NUMERIC_MIN, minValue) : null)
                 .build();
     }
 

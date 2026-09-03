@@ -24,10 +24,10 @@ public class GiveItemStackToPlayer extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
 
                 // 2. 目标实体 (必须是玩家)
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
 
                 // 3. 要给予的物品实例 (ItemStack)
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT)
                 .build();
     }
 

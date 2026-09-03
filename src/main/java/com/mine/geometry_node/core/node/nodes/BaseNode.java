@@ -59,10 +59,10 @@ public abstract class BaseNode {
 
     @Nullable
     protected Object getRawInput(GraphDataContext ctx, String portName) {
-        Object val = ctx.getInputValue(portName);
-        if (val != null) return val;
-
-        return ctx.getStaticInput(portName);
+        Object value = ctx.getInputValue(portName);
+        return value != null || ctx.hasInputConnection(portName)
+                ? value
+                : ctx.getStaticInput(portName);
     }
 
     @Nullable

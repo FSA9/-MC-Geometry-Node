@@ -52,16 +52,10 @@ public class MakeList extends BaseNode {
         for (int i = 1; i <= portCount; i++) {
             PortDef itemPort = new PortDef("list_item_" + i, Component.literal("Item " + i), PortType.ANY, null, false);
 
-            builder.addRow(new PortRow(
-                    itemPort,
-                    null,
-                    UIHint.DEFAULT,
-                    null,
-                    Map.of(
+            builder.addPassthroughInput(itemPort, UIHint.DEFAULT, null, Map.of(
                             PortMetaKeys.IS_DYNAMIC, true,
                             PortMetaKeys.DYNAMIC_INDEX, i
-                    )
-            ));
+                    ));
         }
 
         return builder.build();

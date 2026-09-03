@@ -32,16 +32,12 @@ public class CountInventoryItem extends BaseNode {
                         .input(StandardPorts.TAG, "tag")
                         .input(StandardPorts.MATCH_MODE, "match_mode")
                         .build())
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TAG.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.MATCH_MODE.toInput(ValueMatchUtils.MODE_COMPONENTS).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.MODE_OPTIONS)
-                ))
+                .addRow(new PortRow(null, StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.TAG.toInput(""), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.MATCH_MODE.toInput(ValueMatchUtils.MODE_COMPONENTS).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.MODE_OPTIONS))
                 .build();
     }
 

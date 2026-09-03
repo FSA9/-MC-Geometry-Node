@@ -11,7 +11,6 @@ import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManage
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
@@ -63,31 +62,23 @@ public final class BehaviorPatrolNode extends BaseNode implements BehaviorExecut
                         .text("lifecycle")
                         .build())
                 .addRow(BehaviorEntityNodeSupport.parentRow())
-                .addRow(new PortRow(StandardPorts.LIST_XYZ.toInput(List.of()), null,
-                        UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.LIST_XYZ.toInput(List.of()), UIHint.DEFAULT)
                 .addRow(BehaviorEntityNodeSupport.input(StandardPorts.SPEED, 1.0f))
-                .addRow(new PortRow(StandardPorts.PATROL_MODE.toInput(mode).hiddenPin(),
-                        null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, new String[]{MODE_EXACT, MODE_REGION},
+                .addPassthroughInput(StandardPorts.PATROL_MODE.toInput(mode).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, new String[]{MODE_EXACT, MODE_REGION},
                                 PortMetaKeys.OPTION_LABELS,
                                 new String[]{"geometry_node.behavior.patrol_mode.exact",
-                                        "geometry_node.behavior.patrol_mode.region"})));
+                                        "geometry_node.behavior.patrol_mode.region"}));
         if (MODE_REGION.equals(mode)) {
             builder.addRow(BehaviorEntityNodeSupport.input(StandardPorts.PATROL_RADIUS, 3.0f));
         } else {
             builder.addRow(BehaviorEntityNodeSupport.input(StandardPorts.ARRIVAL_DISTANCE, 1.5f));
         }
         return builder
-                .addRow(new PortRow(StandardPorts.TICK.toInputWithIndex(1, 0)
-                        .withDisplayName("geometry_node.port.tick.patrol_wait_min"),
-                        null, UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
-                .addRow(new PortRow(StandardPorts.TICK.toInputWithIndex(2, 0)
-                        .withDisplayName("geometry_node.port.tick.patrol_wait_max"),
-                        null, UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
-                .addRow(new PortRow(StandardPorts.LOOP_ENABLED.toInput(true), null,
-                        UIHint.CHECKBOX, null, null))
+                .addPassthroughInput(StandardPorts.TICK.toInputWithIndex(1, 0)
+                        .withDisplayName("geometry_node.port.tick.patrol_wait_min"), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
+                .addPassthroughInput(StandardPorts.TICK.toInputWithIndex(2, 0)
+                        .withDisplayName("geometry_node.port.tick.patrol_wait_max"), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
+                .addPassthroughInput(StandardPorts.LOOP_ENABLED.toInput(true), UIHint.CHECKBOX)
                 .build();
     }
 

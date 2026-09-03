@@ -22,7 +22,8 @@ public class GetItemName extends BaseNode {
                         .output(StandardPorts.NAME, "name")
                         .input(StandardPorts.ITEM_STACK, "item_stack")
                         .build())
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.NAME.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.NAME.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

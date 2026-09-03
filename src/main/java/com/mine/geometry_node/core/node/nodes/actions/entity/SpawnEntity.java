@@ -32,20 +32,15 @@ public class SpawnEntity extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_entity"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.VECTOR.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY_TEMPLATE.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.TYPE.toInput("minecraft:zombie"),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:entity_type")
-                ))
+                .addPassthroughInput(StandardPorts.VECTOR.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.ENTITY_TEMPLATE.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.TYPE.toInput("minecraft:zombie"), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:entity_type"))
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        context.setNodeResult(StandardPorts.ENTITY.getId(), null);
         Vec3 pos = getInput(context, StandardPorts.VECTOR.getId(), Vec3.class);
         EntityTemplateValue template = getInput(context, StandardPorts.ENTITY_TEMPLATE.getId(), EntityTemplateValue.class);
         String typeId = getInput(context, StandardPorts.TYPE.getId(), String.class);
@@ -56,7 +51,7 @@ public class SpawnEntity extends BaseNode {
         if (pos != null && context.getLevel() instanceof ServerLevel serverLevel && template != null && !template.isEmpty()) {
             Entity entity = template.create(serverLevel, pos);
             if (entity != null && serverLevel.addFreshEntity(entity)) {
-                context.setTempData(StandardPorts.ENTITY.getId(), List.of(entity));
+                context.setNodeResult(StandardPorts.ENTITY.getId(), List.of(entity));
             }
         } else if (pos != null && typeId != null && !typeId.isEmpty() && context.getLevel() instanceof ServerLevel serverLevel) {
             Identifier loc = Identifier.tryParse(typeId);
@@ -68,7 +63,7 @@ public class SpawnEntity extends BaseNode {
                     if (entity != null) {
                         entity.teleportTo(pos.x(), pos.y(), pos.z());
                         serverLevel.addFreshEntity(entity);
-                        context.setTempData(StandardPorts.ENTITY.getId(), List.of(entity));
+                        context.setNodeResult(StandardPorts.ENTITY.getId(), List.of(entity));
                     }
                 }
             }
@@ -80,7 +75,7 @@ public class SpawnEntity extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.ENTITY.getId().equals(portName)) {
-            return context.getTempData(StandardPorts.ENTITY.getId());
+            return context.getNodeResult(StandardPorts.ENTITY.getId());
         }
         return null;
     }

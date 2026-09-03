@@ -34,10 +34,10 @@ public final class SetDisplayPosition extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.DISPLAY_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.WORLD_POSITION.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(0)
-                        .withDisplayName("geometry_node.port.tick.teleport"), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.DISPLAY_ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.WORLD_POSITION.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.TICK.toInput(0)
+                        .withDisplayName("geometry_node.port.tick.teleport"), UIHint.INPUT)
                 .build();
     }
 

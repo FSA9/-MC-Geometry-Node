@@ -39,10 +39,11 @@ public class ShowDialoguePage extends BaseNode {
                         UIHint.DEFAULT, null, null
                 ))
                 .addRow(new PortRow(
-                        PortDef.create(TEXT, "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.EMPTY),
                         null,
-                        UIHint.INPUT, null, null
+                        StandardPorts.CLOSED.toExec(),
+                        UIHint.DEFAULT, null, null
                 ))
+                .addPassthroughInput(PortDef.create(TEXT, "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.EMPTY), UIHint.INPUT)
                 .addRow(new PortRow(
                         null,
                         null,
@@ -54,11 +55,6 @@ public class ShowDialoguePage extends BaseNode {
                                 PortMetaKeys.BUTTON_COLOR, 0xFF3D6EA8,
                                 PortMetaKeys.BUTTON_TEXT_COLOR, 0xFFFFFFFF
                         )
-                ))
-                .addRow(new PortRow(
-                        null,
-                        StandardPorts.CLOSED.toExec(),
-                        UIHint.DEFAULT, null, null
                 ))
                 .build();
     }

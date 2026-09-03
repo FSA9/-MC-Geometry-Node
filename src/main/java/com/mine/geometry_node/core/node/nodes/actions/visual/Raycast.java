@@ -43,10 +43,10 @@ public class Raycast extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.IS_HIT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.VECTOR.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.DIST.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.RADIUS.toInput(), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.START_POS.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.VECTOR.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.DIST.toInput(), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.RADIUS.toInput(), UIHint.INPUT)
                 .build();
     }
 

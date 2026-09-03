@@ -17,11 +17,8 @@ public class GetEntityVisibleName extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_visible_name"))
-                .addRow(new PortRow(
-                        StandardPorts.ENTITY.toInput(),
-                        PortDef.create("name", "geometry_node.port.name", PortType.STRING),
-                        UIHint.DEFAULT, null, null
-                ))
+                .addRow(new PortRow(null, PortDef.create("name", "geometry_node.port.name", PortType.STRING), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

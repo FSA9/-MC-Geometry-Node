@@ -4,7 +4,6 @@ import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
@@ -16,8 +15,7 @@ public class StringValue extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.string_value"))
-                // 左右合并在一行，UIHint.INPUT 会在左侧端口旁生成文本框
-                .addRow(new PortRow(StandardPorts.STRING.toInput(""), StandardPorts.STRING.toOutput(), UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.STRING.toInput(""), UIHint.INPUT, null, null)
                 .build();
     }
 

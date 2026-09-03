@@ -32,14 +32,9 @@ public class ClearSlots extends BaseNode {
                         .input(StandardPorts.SCOPE, "scope")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.REMOVED_COUNT.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.SCOPE.toInput(SlotAccessUtils.CLEAR_SCOPE_ALL).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, SlotAccessUtils.CLEAR_SCOPE_OPTIONS)
-                ))
+                .addRow(new PortRow(null, StandardPorts.REMOVED_COUNT.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.SCOPE.toInput(SlotAccessUtils.CLEAR_SCOPE_ALL).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, SlotAccessUtils.CLEAR_SCOPE_OPTIONS))
                 .build();
     }
 
@@ -51,14 +46,14 @@ public class ClearSlots extends BaseNode {
         for (Entity entity : entities) {
             removed += SlotAccessUtils.clearSlots(entity, scope);
         }
-        context.setTempData(StandardPorts.REMOVED_COUNT.getId(), removed);
+        context.setNodeResult(StandardPorts.REMOVED_COUNT.getId(), removed);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.REMOVED_COUNT.getId().equals(portName)) {
-            Object value = context.getTempData(StandardPorts.REMOVED_COUNT.getId());
+            Object value = context.getNodeResult(StandardPorts.REMOVED_COUNT.getId());
             return value instanceof Number number ? number.intValue() : 0;
         }
         return null;

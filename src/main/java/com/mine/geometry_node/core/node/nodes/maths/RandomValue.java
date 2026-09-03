@@ -27,16 +27,8 @@ public class RandomValue extends BaseNode {
                         StandardPorts.FLOAT_VALUE.toOutput(),
                         UIHint.DEFAULT, null, null
                 ))
-                .addRow(new PortRow(
-                        StandardPorts.FLOAT_VALUE.toInputWithIndex(1, 0.0f),
-                        null,
-                        UIHint.INPUT, null, null
-                ))
-                .addRow(new PortRow(
-                        StandardPorts.FLOAT_VALUE.toInputWithIndex(2, 1.0f),
-                        null,
-                        UIHint.INPUT, null, null
-                ))
+                .addPassthroughInput(StandardPorts.FLOAT_VALUE.toInputWithIndex(1, 0.0f), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.FLOAT_VALUE.toInputWithIndex(2, 1.0f), UIHint.INPUT, null, null)
                 .build();
     }
 

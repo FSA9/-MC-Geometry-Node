@@ -32,15 +32,10 @@ public class GetEntitiesbyRotationBox extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entities_by_rotation_box"))
                 .addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.CENTER.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(
-                        PortDef.create(TARGET_PORT, "geometry_node.port.area_target", PortType.STRING, AreaTargetType.ALL.id()).hiddenPin(),
-                        null,
-                        UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, AreaTargetType.OPTIONS)
-                ))
+                .addPassthroughInput(StandardPorts.CENTER.toInput(), UIHint.VECTOR, null, null)
+                .addPassthroughInput(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), UIHint.VECTOR, null, null)
+                .addPassthroughInput(StandardPorts.ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR, null, null)
+                .addPassthroughInput(PortDef.create(TARGET_PORT, "geometry_node.port.area_target", PortType.STRING, AreaTargetType.ALL.id()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, AreaTargetType.OPTIONS))
                 .build();
     }
 

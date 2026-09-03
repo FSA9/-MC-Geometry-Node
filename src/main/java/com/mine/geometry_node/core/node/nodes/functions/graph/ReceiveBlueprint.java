@@ -20,10 +20,7 @@ public class ReceiveBlueprint extends BaseNode {
                         StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null
                 ))
-                .addRow(new PortRow(
-                        PortDef.create("frequency", "geometry_node.port.frequency", PortType.STRING, ""),
-                        null, UIHint.INPUT, null, null
-                ))
+                .addPassthroughInput(PortDef.create("frequency", "geometry_node.port.frequency", PortType.STRING, ""), UIHint.INPUT, null, null)
                 .build();
     }
 

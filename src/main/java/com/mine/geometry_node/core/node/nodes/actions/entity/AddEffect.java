@@ -28,23 +28,11 @@ public class AddEffect extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.add_effect"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.STRING.toInput().hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllEffects().toArray(new String[0]))
-                ))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.STRING.toInput().hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllEffects().toArray(new String[0])))
 
-                .addRow(new PortRow(
-                        StandardPorts.TICK.toInput(),
-                        null,
-                        UIHint.INPUT,
-                        null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)
-                )) // 时长
-                .addRow(new PortRow(StandardPorts.INT.toInput(), null, UIHint.DEFAULT, null, null))   // 等级 (Amplifier)
+                .addPassthroughInput(StandardPorts.TICK.toInput(), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0)) // 时长
+                .addPassthroughInput(StandardPorts.INT.toInput(), UIHint.DEFAULT)   // 等级 (Amplifier)
                 .build();
     }
 

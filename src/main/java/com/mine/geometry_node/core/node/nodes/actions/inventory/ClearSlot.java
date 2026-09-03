@@ -31,9 +31,9 @@ public class ClearSlot extends BaseNode {
                         .input(StandardPorts.SLOT, "slot")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), null, UIHint.SLOT_REF, null, null))
                 .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), UIHint.SLOT_REF)
                 .build();
     }
 
@@ -42,7 +42,7 @@ public class ClearSlot extends BaseNode {
         Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
         SlotRef slotRef = getInput(context, StandardPorts.SLOT.getId(), SlotRef.class);
         ItemStack removed = SlotAccessUtils.clearItem(entity, slotRef != null ? slotRef : SlotRef.DEFAULT);
-        context.setTempData(StandardPorts.ITEM_STACK.getId(), removed);
+        context.setNodeResult(StandardPorts.ITEM_STACK.getId(), removed);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }
@@ -50,7 +50,7 @@ public class ClearSlot extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.ITEM_STACK.getId().equals(portName)) {
-            return context.getTempData(StandardPorts.ITEM_STACK.getId());
+            return context.getNodeResult(StandardPorts.ITEM_STACK.getId());
         }
         return null;
     }

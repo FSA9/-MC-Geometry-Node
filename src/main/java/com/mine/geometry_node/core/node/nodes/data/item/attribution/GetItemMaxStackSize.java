@@ -22,7 +22,8 @@ public class GetItemMaxStackSize extends BaseNode {
                         .output(StandardPorts.COUNT, "count")
                         .input(StandardPorts.ITEM_STACK, "item_stack")
                         .build())
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

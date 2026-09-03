@@ -22,8 +22,8 @@ public class HealEntity extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.heal_entity"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.FLOAT_VALUE.toInput(), null, UIHint.INPUT, null, null)) // 使用 VALUE 作为治疗数值
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.FLOAT_VALUE.toInput(), UIHint.INPUT) // 使用 VALUE 作为治疗数值
                 .build();
     }
 

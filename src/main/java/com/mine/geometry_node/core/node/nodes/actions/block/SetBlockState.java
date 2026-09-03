@@ -28,8 +28,8 @@ public class SetBlockState extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.set_block_state"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.BLOCK_STATE.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.XYZ.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.BLOCK_STATE.toInput(), UIHint.DEFAULT)
                 .build();
     }
 

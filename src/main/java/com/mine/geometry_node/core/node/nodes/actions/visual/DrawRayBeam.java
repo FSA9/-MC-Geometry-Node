@@ -50,21 +50,20 @@ public class DrawRayBeam extends BaseNode {
                         .input(StandardPorts.LIMIT, "limit")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(START_PORT, null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(PITCH_PORT, null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(YAW_PORT, null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(DISTANCE_PORT, null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.COLOR.toInput(ColorValue.WHITE), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(RADIUS_PORT, null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(2), null, UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
+                .addPassthroughInput(StandardPorts.SOURCE_ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(START_PORT, UIHint.VECTOR)
+                .addPassthroughInput(PITCH_PORT, UIHint.INPUT)
+                .addPassthroughInput(YAW_PORT, UIHint.INPUT)
+                .addPassthroughInput(DISTANCE_PORT, UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.COLOR.toInput(ColorValue.WHITE), UIHint.INPUT)
+                .addPassthroughInput(RADIUS_PORT, UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.TICK.toInput(2), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
 
                 // 【新增】：把物理检测规则也传进去
-                .addRow(new PortRow(StandardPorts.PENETRATE_SOLID.toInput(false), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.PENETRATE_TRANS.toInput(true), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.PENETRATE_ENTITIES.toInput(false), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.LIMIT.toInput(1), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.PENETRATE_SOLID.toInput(false), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.PENETRATE_TRANS.toInput(true), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.PENETRATE_ENTITIES.toInput(false), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.LIMIT.toInput(1), UIHint.INPUT)
                 .build();
     }
 

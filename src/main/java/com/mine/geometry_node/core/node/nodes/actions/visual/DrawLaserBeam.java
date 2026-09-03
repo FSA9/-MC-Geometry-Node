@@ -45,15 +45,14 @@ public class DrawLaserBeam extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 【修复3】：必须在节点定义里暴露出这两个实体输入端口，否则玩家无法连线
                 // 注意：如果你的 StandardPorts 里没有 SOURCE_ENTITY，请去那里注册一下，或者直接用自定义 PortDef
-                .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TARGET_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.SOURCE_ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.TARGET_ENTITY.toInput(), UIHint.DEFAULT)
 
-                .addRow(new PortRow(START_PORT, null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(END_PORT, null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.COLOR.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(SIZE_PORT, null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
+                .addPassthroughInput(START_PORT, UIHint.VECTOR)
+                .addPassthroughInput(END_PORT, UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.COLOR.toInput(), UIHint.INPUT)
+                .addPassthroughInput(SIZE_PORT, UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.TICK.toInput(), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
                 .build();
     }
 

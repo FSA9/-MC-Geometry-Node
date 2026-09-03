@@ -5,10 +5,9 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.definition.port.PortDef;
-import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.nodes.*;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
@@ -33,58 +32,55 @@ public final class SetScopedState extends BaseNode {
     private NodeDef buildDefinition(ScopedStateScope scope) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA,
                         Component.translatable("geometry_node.node.set_scoped_state"))
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .output(StandardPorts.STATE_VALUE, "state_value")
+                        .input(StandardPorts.NAME, "name")
+                        .input(StandardPorts.ANY_VALUE, "value")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(ScopedStateNodeSupport.scopeRow(PortDef.create(
-                        ScopedStateNodeSupport.SCOPE_PORT, "geometry_node.port.state_scope", PortType.STRING)));
+                .addRow(new PortRow(null, StandardPorts.STATE_VALUE.toOutput(), UIHint.DEFAULT, null, null));
+        ScopedStateNodeSupport.addScopeInput(builder);
         if (ScopedStateNodeSupport.usesEntity(scope)) {
-            builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null));
+            builder.addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null);
         } else if (scope == ScopedStateScope.WORLD) {
-            builder.addRow(ScopedStateNodeSupport.dimensionRow(StandardPorts.DIMENSION.toOutput()));
+            ScopedStateNodeSupport.addDimensionInput(builder);
         }
-        return builder
-                .addRow(new PortRow(StandardPorts.NAME.toInput(), StandardPorts.NAME.toOutput(), UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.ANY_VALUE.toInput(), StandardPorts.ANY_VALUE.toOutput(), UIHint.INPUT, null, null))
+        return builder.addPassthroughInput(StandardPorts.NAME.toInput(), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.ANY_VALUE.toInput(), UIHint.INPUT, null, null)
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         String attrName = getInput(context, StandardPorts.NAME.getId(), String.class);
+        String key = ScopedStateNodeSupport.requireKey(attrName);
         Object attrValue = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
         ScopedStateScope scope = ScopedStateNodeSupport.selectedScope(context);
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
                 ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
         ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
-        context.setTempData(tempKey(context, ScopedStateNodeSupport.SCOPE_PORT), scope);
-        if (entity != null) context.setTempData(tempKey(context, StandardPorts.ENTITY.getId()), entity);
-        if (scope == ScopedStateScope.WORLD) {
-            context.setTempData(tempKey(context, StandardPorts.DIMENSION.getId()),
-                    ScopedStateNodeSupport.dimension(context));
-        }
-        context.setTempData(tempKey(context, StandardPorts.NAME.getId()), attrName);
-        context.setTempData(tempKey(context, StandardPorts.ANY_VALUE.getId()), attrValue);
-
         if (target == null) {
             throw new IllegalStateException("Scoped state target is unavailable for " + scope);
         }
-        context.setScopedState(target, ScopedStateNodeSupport.requireKey(attrName), attrValue);
+        context.setScopedState(target, key, attrValue);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (ScopedStateNodeSupport.SCOPE_PORT.equals(portName)
-                || StandardPorts.ENTITY.getId().equals(portName)
-                || StandardPorts.DIMENSION.getId().equals(portName)
-                || StandardPorts.NAME.getId().equals(portName)
-                || StandardPorts.ANY_VALUE.getId().equals(portName)) {
-            return context.getTempData(tempKey(context, portName));
-        }
-        return null;
-    }
+        if (!StandardPorts.STATE_VALUE.getId().equals(portName)) return null;
 
-    private String tempKey(ExecutionContext context, String portName) {
-        return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + portName;
+        ScopedStateScope scope = ScopedStateNodeSupport.selectedScope(context);
+        Entity entity = ScopedStateNodeSupport.usesEntity(scope)
+                ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
+        ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
+        if (target == null) {
+            throw new IllegalStateException("Scoped state target is unavailable for " + scope);
+        }
+        String key = ScopedStateNodeSupport.requireKey(
+                getInput(context, StandardPorts.NAME.getId(), String.class));
+        return context.getScopedState(target, key);
     }
 }

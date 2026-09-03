@@ -51,26 +51,14 @@ public class MakeDict extends BaseNode {
 
         for (int i = 1; i <= portCount; i++) {
             PortDef keyPort = new PortDef("dict_key_" + i, Component.literal("Key " + i), PortType.STRING, "", true);
-            builder.addRow(new PortRow(
-                    keyPort,
-                    null,
-                    UIHint.INPUT,
-                    null,
-                    Map.of(
+            builder.addPassthroughInput(keyPort, UIHint.INPUT, null, Map.of(
                             PortMetaKeys.IS_DYNAMIC, true,
                             PortMetaKeys.DYNAMIC_INDEX, i
-                    )
-            ));
+                    ));
             PortDef valPort = new PortDef("dict_value_" + i, Component.literal("Value " + i), PortType.ANY, null, false);
-            builder.addRow(new PortRow(
-                    valPort,
-                    null,
-                    UIHint.DEFAULT,
-                    null,
-                    Map.of(
+            builder.addPassthroughInput(valPort, UIHint.DEFAULT, null, Map.of(
                             PortMetaKeys.IS_DYNAMIC, true
-                    )
-            ));
+                    ));
         }
 
         return builder.build();

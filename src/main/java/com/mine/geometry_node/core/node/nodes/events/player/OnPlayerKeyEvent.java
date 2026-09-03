@@ -40,20 +40,11 @@ public class OnPlayerKeyEvent extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.TICK.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.NAME.toInput(""), null,
-                        UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(PlayerInputKeys.ALL_KEYS)) // 注入按键选项
-                ))
-                .addRow(new PortRow(
-                        StandardPorts.TYPE.toInput(""), null,
-                        UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(VALID_ACTIONS)) // 注入动作选项
-                ))
-                .addRow(new PortRow(
-                        StandardPorts.INTERCEPT.toInput(false), null,
-                        UIHint.CHECKBOX, null, null
-                ))
+                .addPassthroughInput(StandardPorts.NAME.toInput(""), UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(PlayerInputKeys.ALL_KEYS)))
+                .addPassthroughInput(StandardPorts.TYPE.toInput(""), UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.withEmptyOption(VALID_ACTIONS)))
+                .addPassthroughInput(StandardPorts.INTERCEPT.toInput(false), UIHint.CHECKBOX)
                 .build();
     }
 }

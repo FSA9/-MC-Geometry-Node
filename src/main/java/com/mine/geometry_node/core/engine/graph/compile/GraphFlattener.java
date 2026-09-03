@@ -27,6 +27,7 @@ public final class GraphFlattener {
     private final Map<String, List<String>> typeLookup = new HashMap<>();
     private final Map<String, Map<String, Object>> staticInputLookup = new HashMap<>();
     private final Map<String, Set<String>> portLookup = new HashMap<>();
+    private final Map<String, Map<String, String>> dataPassthroughLookup = new HashMap<>();
 
     private final Set<String> allPortNames = new HashSet<>();
 
@@ -118,11 +119,16 @@ public final class GraphFlattener {
     private void collectPorts(String globalId, NodeDef definition) {
         if (definition == null) return;
         Set<String> ports = new HashSet<>();
+        Map<String, String> passthroughs = new HashMap<>();
         for (PortRow row : definition.rows()) {
             if (row.leftPort() != null) ports.add(row.leftPort().id());
             if (row.rightPort() != null) ports.add(row.rightPort().id());
+            if (row.dataPassthrough()) {
+                passthroughs.put(row.rightPort().id(), row.leftPort().id());
+            }
         }
         portLookup.put(globalId, Set.copyOf(ports));
+        dataPassthroughLookup.put(globalId, Map.copyOf(passthroughs));
         allPortNames.addAll(ports);
     }
 
@@ -247,12 +253,21 @@ public final class GraphFlattener {
         if (cached != null) return cached;
 
         if (!visited.add(cacheKey)) {
-            return DataResolution.empty();
+            return DataResolution.staticValue(null);
         }
 
         DataResolution resolved;
+        String passthroughInput = dataPassthroughLookup
+                .getOrDefault(nodeId, Map.of())
+                .get(port);
         GroupBoundary groupBoundary = groupBoundaries.get(nodeId);
-        if (groupBoundary != null) {
+        if (passthroughInput != null) {
+            DataConnectionSource provider = inputLookup.get(
+                    new InputKey(nodeId, passthroughInput));
+            resolved = provider != null
+                    ? resolveDataSource(provider, visited)
+                    : resolvePassthroughInputDefault(nodeId, passthroughInput);
+        } else if (groupBoundary != null) {
             if (groupBoundary.groupOutId == null) {
                 resolved = DataResolution.empty();
             } else {
@@ -280,7 +295,7 @@ public final class GraphFlattener {
                     new InputKey(nodeId, RerouteNodeSupport.INPUT_PORT));
             resolved = rerouteProvider != null
                     ? resolveDataSource(rerouteProvider, visited)
-                    : DataResolution.empty();
+                    : DataResolution.staticValue(null);
 
         } else if (isVirtualNode(nodeId)) {
             resolved = DataResolution.empty();
@@ -344,12 +359,18 @@ public final class GraphFlattener {
 
     private DataResolution resolveGroupInputDefault(String groupId, String port) {
         Map<String, Object> groupInputs = staticInputLookup.get(groupId);
-        if (groupInputs == null || !groupInputs.containsKey(port)) {
-            return DataResolution.empty();
+        if (groupInputs != null && groupInputs.containsKey(port)) {
+            return DataResolution.staticValue(groupInputs.get(port));
         }
+        Set<String> ports = portLookup.get(groupId);
+        return ports != null && ports.contains(port)
+                ? DataResolution.staticValue(null)
+                : DataResolution.empty();
+    }
 
-        Object value = groupInputs.get(port);
-        return value != null ? DataResolution.staticValue(value) : DataResolution.empty();
+    private DataResolution resolvePassthroughInputDefault(String nodeId, String port) {
+        Map<String, Object> inputs = staticInputLookup.get(nodeId);
+        return DataResolution.staticValue(inputs != null ? inputs.get(port) : null);
     }
 
     private TargetConnection getFlowTarget(String sourceId, String port) {
@@ -363,8 +384,8 @@ public final class GraphFlattener {
     }
 
     private void setStaticInput(String nodeId, String portName, Object value) {
-        if (value == null) return;
-        staticInputLookup.computeIfAbsent(nodeId, ignored -> new HashMap<>()).put(portName, value);
+        staticInputLookup.computeIfAbsent(nodeId, ignored -> new HashMap<>())
+                .put(portName, value != null ? value : ExplicitNullInput.INSTANCE);
         allPortNames.add(portName);
     }
 
@@ -376,6 +397,7 @@ public final class GraphFlattener {
             flowOutputLookup.remove(virtualId);
             staticInputLookup.remove(virtualId);
             portLookup.remove(virtualId);
+            dataPassthroughLookup.remove(virtualId);
         }
 
         for (Iterator<Map.Entry<String, List<String>>> iterator = typeLookup.entrySet().iterator(); iterator.hasNext();) {

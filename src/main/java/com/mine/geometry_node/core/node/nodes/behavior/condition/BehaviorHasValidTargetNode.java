@@ -20,7 +20,7 @@ public final class BehaviorHasValidTargetNode extends BaseNode implements Behavi
         return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL,
                         Component.translatable("geometry_node.node.behavior_has_valid_target"))
                 .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
                 .build();
     }
 

@@ -32,6 +32,11 @@ public interface GraphDataContext {
 
     @Nullable Object getInputValue(String portName);
 
+    /** Distinguishes a connected null value from an input with no provider. */
+    default boolean hasInputConnection(String portName) {
+        return false;
+    }
+
     @Nullable Object getStaticInput(String portName);
 
     @Nullable Object getEventData(String key);

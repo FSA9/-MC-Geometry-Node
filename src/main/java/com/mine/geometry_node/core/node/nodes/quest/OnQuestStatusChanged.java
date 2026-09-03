@@ -51,25 +51,19 @@ public final class OnQuestStatusChanged extends BaseEventNode {
                         .build())
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        PortDef.create(SCOPE_PORT, "geometry_node.port.quest_event_scope",
-                                PortType.STRING, SCOPE_GENERAL).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(
-                                PortMetaKeys.OPTIONS, new String[]{SCOPE_GENERAL, SCOPE_SPECIFIC},
-                                PortMetaKeys.OPTION_LABELS, new String[]{
-                                        "geometry_node.quest.event_scope.general",
-                                        "geometry_node.quest.event_scope.specific"
-                                })
-                ))
                 .addRow(output(GraphEventFields.TASK_KEY, "geometry_node.port.quest_task_key"))
                 .addRow(output(GraphEventFields.INSTANCE_ID, "geometry_node.port.quest_instance_id"))
                 .addRow(output(GraphEventFields.OLD_STATUS, "geometry_node.port.quest_old_status"))
                 .addRow(output(GraphEventFields.NEW_STATUS, "geometry_node.port.quest_new_status"))
                 .addRow(output(GraphEventFields.REASON, "geometry_node.port.quest_reason"))
                 .addRow(output(GraphEventFields.REQUEST_SOURCE, "geometry_node.port.quest_request_source"))
+                .addPassthroughInput(PortDef.create(SCOPE_PORT, "geometry_node.port.quest_event_scope",
+                                PortType.STRING, SCOPE_GENERAL).hiddenPin(), UIHint.SELECT, null, Map.of(
+                                PortMetaKeys.OPTIONS, new String[]{SCOPE_GENERAL, SCOPE_SPECIFIC},
+                                PortMetaKeys.OPTION_LABELS, new String[]{
+                                        "geometry_node.quest.event_scope.general",
+                                        "geometry_node.quest.event_scope.specific"
+                                }))
                 .build();
     }
 

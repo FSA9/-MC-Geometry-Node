@@ -23,11 +23,11 @@ public class DamageItemStack extends BaseNode {
                 // 1. 执行流
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 2. 目标物品栈
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT)
                 // 3. 伤害数值
-                .addRow(new PortRow(StandardPorts.INT.toInput(1), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.INT.toInput(1), UIHint.INPUT)
                 // 4. 责任实体 (可选，用于播放物品破碎效果)
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
                 .build();
     }
 

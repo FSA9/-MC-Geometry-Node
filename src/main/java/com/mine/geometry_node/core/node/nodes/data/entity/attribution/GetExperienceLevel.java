@@ -19,11 +19,8 @@ public class GetExperienceLevel extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_experience_level"))
-                .addRow(new PortRow(
-                        StandardPorts.ENTITY.toInput(),
-                        StandardPorts.INT_VALUE.toOutput(),
-                        UIHint.DEFAULT, null, null
-                ))
+                .addRow(new PortRow(null, StandardPorts.INT_VALUE.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

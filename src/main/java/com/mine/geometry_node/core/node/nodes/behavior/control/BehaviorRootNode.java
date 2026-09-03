@@ -32,7 +32,8 @@ public final class BehaviorRootNode extends BaseNode implements BehaviorExecutab
         var port = index == 0
                 ? StandardPorts.TICK.toInput(defaultValue)
                 : StandardPorts.TICK.toInputWithIndex(index, defaultValue);
-        return new PortRow(port.withDisplayName(translationKey).hiddenPin(), null, UIHint.INPUT, null, null);
+        return PortRow.passthrough(port.withDisplayName(translationKey).hiddenPin(),
+                UIHint.INPUT, null, null);
     }
 
     @Override

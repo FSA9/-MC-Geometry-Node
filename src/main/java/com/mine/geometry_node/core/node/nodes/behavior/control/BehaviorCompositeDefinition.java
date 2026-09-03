@@ -29,8 +29,7 @@ final class BehaviorCompositeDefinition {
         NodeDef.Builder builder = NodeDef.builder(typeId, NodeType.FLOW_CONTROL,
                         Component.translatable(titleKey))
                 .addMeta(SchemaKeys.MIN_DYNAMIC_OUTPUT, 1)
-                .addMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT, MAX_CHILD_COUNT)
-                .addRow(new PortRow(parentPort(), null, UIHint.DEFAULT, null, null));
+                .addMeta(SchemaKeys.MAX_DYNAMIC_OUTPUT, MAX_CHILD_COUNT);
         for (int i = 1; i <= count; i++) {
             builder.addRow(new PortRow(
                     null,
@@ -39,6 +38,7 @@ final class BehaviorCompositeDefinition {
                     null,
                     Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_INDEX, i)));
         }
+        builder.addRow(new PortRow(parentPort(), null, UIHint.DEFAULT, null, null));
         return builder.build();
     }
 

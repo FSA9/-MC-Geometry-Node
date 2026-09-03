@@ -18,10 +18,10 @@ public final class BehaviorInverterNode extends BaseNode implements BehaviorExec
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL,
+                return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL,
                         Component.translatable("geometry_node.node.behavior_inverter"))
-                .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(),
-                        StandardPorts.BEHAVIOR_CHILDREN.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.BEHAVIOR_CHILDREN.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(), null, UIHint.DEFAULT, null, null))
                 .build();
     }
 

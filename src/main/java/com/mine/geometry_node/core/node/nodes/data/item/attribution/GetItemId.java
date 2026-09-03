@@ -23,7 +23,8 @@ public class GetItemId extends BaseNode {
                         .output(StandardPorts.ITEM_TYPE, "item_type")
                         .input(StandardPorts.ITEM_STACK, "item_stack")
                         .build())
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_TYPE.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ITEM_TYPE.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

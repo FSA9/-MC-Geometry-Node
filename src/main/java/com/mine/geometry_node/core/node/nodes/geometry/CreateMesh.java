@@ -31,14 +31,8 @@ public class CreateMesh extends BaseNode {
     private NodeDef buildDef(GeometryValue.PrimitiveType shape) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.create_mesh"));
         builder.addRow(new PortRow(null, StandardPorts.GEOMETRY.toOutput(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(
-                StandardPorts.SHAPE.toInput(shape.id()).hiddenPin(),
-                null,
-                UIHint.SELECT,
-                null,
-                Map.of(PortMetaKeys.OPTIONS, GeometryValue.PrimitiveType.OPTIONS)
-        ));
-        builder.addRow(new PortRow(StandardPorts.CENTER.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
+        builder.addPassthroughInput(StandardPorts.SHAPE.toInput(shape.id()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, GeometryValue.PrimitiveType.OPTIONS));
+        builder.addPassthroughInput(StandardPorts.CENTER.toInput(Vec3.ZERO), UIHint.VECTOR);
 
         switch (shape) {
             case CUBE -> addCubeRows(builder);
@@ -50,31 +44,25 @@ public class CreateMesh extends BaseNode {
     }
 
     private static void addCubeRows(NodeDef.Builder builder) {
-        builder.addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null));
-        builder.addRow(new PortRow(StandardPorts.VERTICES_X.toInput(2), null, UIHint.INPUT, null, null));
-        builder.addRow(new PortRow(StandardPorts.VERTICES_Y.toInput(2), null, UIHint.INPUT, null, null));
-        builder.addRow(new PortRow(StandardPorts.VERTICES_Z.toInput(2), null, UIHint.INPUT, null, null));
+        builder.addPassthroughInput(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), UIHint.VECTOR);
+        builder.addPassthroughInput(StandardPorts.VERTICES_X.toInput(2), UIHint.INPUT);
+        builder.addPassthroughInput(StandardPorts.VERTICES_Y.toInput(2), UIHint.INPUT);
+        builder.addPassthroughInput(StandardPorts.VERTICES_Z.toInput(2), UIHint.INPUT);
     }
 
     private static void addCylinderRows(NodeDef.Builder builder) {
-        builder.addRow(new PortRow(
-                StandardPorts.FILL_TYPE.toInput(GeometryValue.CylinderFillType.NGON.id()).hiddenPin(),
-                null,
-                UIHint.SELECT,
-                null,
-                Map.of(PortMetaKeys.OPTIONS, GeometryValue.CylinderFillType.OPTIONS)
-        ));
-        builder.addRow(new PortRow(StandardPorts.VERTICES.toInput(32), null, UIHint.INPUT, null, null));
-        builder.addRow(new PortRow(StandardPorts.SIDE_SEGMENTS.toInput(1), null, UIHint.INPUT, null, null));
-        builder.addRow(new PortRow(StandardPorts.FILL_SEGMENTS.toInput(1), null, UIHint.INPUT, null, null));
-        builder.addRow(new PortRow(StandardPorts.RADIUS.toInput(1.0f), null, UIHint.INPUT, null, null));
-        builder.addRow(new PortRow(StandardPorts.DEPTH.toInput(2.0f), null, UIHint.INPUT, null, null));
+        builder.addPassthroughInput(StandardPorts.FILL_TYPE.toInput(GeometryValue.CylinderFillType.NGON.id()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, GeometryValue.CylinderFillType.OPTIONS));
+        builder.addPassthroughInput(StandardPorts.VERTICES.toInput(32), UIHint.INPUT);
+        builder.addPassthroughInput(StandardPorts.SIDE_SEGMENTS.toInput(1), UIHint.INPUT);
+        builder.addPassthroughInput(StandardPorts.FILL_SEGMENTS.toInput(1), UIHint.INPUT);
+        builder.addPassthroughInput(StandardPorts.RADIUS.toInput(1.0f), UIHint.INPUT);
+        builder.addPassthroughInput(StandardPorts.DEPTH.toInput(2.0f), UIHint.INPUT);
     }
 
     private static void addUvSphereRows(NodeDef.Builder builder) {
-        builder.addRow(new PortRow(StandardPorts.RADIUS.toInput(1.0f), null, UIHint.INPUT, null, null));
-        builder.addRow(new PortRow(StandardPorts.VERTICES.toInput(32), null, UIHint.INPUT, null, null));
-        builder.addRow(new PortRow(StandardPorts.RINGS.toInput(16), null, UIHint.INPUT, null, null));
+        builder.addPassthroughInput(StandardPorts.RADIUS.toInput(1.0f), UIHint.INPUT);
+        builder.addPassthroughInput(StandardPorts.VERTICES.toInput(32), UIHint.INPUT);
+        builder.addPassthroughInput(StandardPorts.RINGS.toInput(16), UIHint.INPUT);
     }
 
     @Override

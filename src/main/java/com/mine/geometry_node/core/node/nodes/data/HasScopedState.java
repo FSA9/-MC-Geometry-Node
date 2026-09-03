@@ -35,16 +35,14 @@ public final class HasScopedState extends BaseNode {
                         .output(StandardPorts.BOOL, "bool")
                         .input(StandardPorts.NAME, "name")
                         .build())
-                .addRow(ScopedStateNodeSupport.scopeRow(null));
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null));
+        ScopedStateNodeSupport.addScopeInput(builder);
         if (ScopedStateNodeSupport.usesEntity(scope)) {
-            builder.addRow(new PortRow(
-                    StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null));
+            builder.addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null);
         } else if (scope == ScopedStateScope.WORLD) {
-            builder.addRow(ScopedStateNodeSupport.dimensionRow(null));
+            ScopedStateNodeSupport.addDimensionInput(builder);
         }
-        return builder
-                .addRow(new PortRow(StandardPorts.NAME.toInput(),
-                        StandardPorts.BOOL.toOutput(), UIHint.INPUT, null, null))
+        return builder.addPassthroughInput(StandardPorts.NAME.toInput(), UIHint.INPUT, null, null)
                 .build();
     }
 

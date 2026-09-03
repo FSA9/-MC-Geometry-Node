@@ -27,15 +27,15 @@ public class SpawnParticle extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_particle"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 粒子类型 (下拉框)
-                .addRow(new PortRow(StandardPorts.PARTICLE.toInput("minecraft:flame"), null, UIHint.SELECT, null, null))
+                .addPassthroughInput(StandardPorts.PARTICLE.toInput("minecraft:flame"), UIHint.SELECT)
                 // 坐标输入 (允许单点或连入 List)
-                .addRow(new PortRow(StandardPorts.XYZ.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
+                .addPassthroughInput(StandardPorts.XYZ.toInput(Vec3.ZERO), UIHint.VECTOR)
                 // 数量
-                .addRow(new PortRow(StandardPorts.COUNT.toInput(10), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.COUNT.toInput(10), UIHint.INPUT)
                 // 扩散范围 (dx, dy, dz)
-                .addRow(new PortRow(StandardPorts.SPREAD.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
+                .addPassthroughInput(StandardPorts.SPREAD.toInput(Vec3.ZERO), UIHint.VECTOR)
                 // 运动速度 (扩散动量倍率)
-                .addRow(new PortRow(StandardPorts.SPEED.toInput(0.1f), null, UIHint.SLIDER, null, null))
+                .addPassthroughInput(StandardPorts.SPEED.toInput(0.1f), UIHint.SLIDER)
                 .build();
     }
 

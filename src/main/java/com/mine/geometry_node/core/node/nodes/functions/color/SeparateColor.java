@@ -43,10 +43,8 @@ public class SeparateColor extends BaseNode {
         builder.addRow(new PortRow(null, outputPort(CHANNEL_2, channelNames[1]), UIHint.DEFAULT, null, null));
         builder.addRow(new PortRow(null, outputPort(CHANNEL_3, channelNames[2]), UIHint.DEFAULT, null, null));
         builder.addRow(new PortRow(null, StandardPorts.ALPHA.toOutput(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(
-                StandardPorts.STRING.toInput(mode).hiddenPin(), null, UIHint.SELECT, null,
-                Map.of(PortMetaKeys.OPTIONS, MODES)));
-        builder.addRow(new PortRow(StandardPorts.COLOR.toInput(ColorValue.WHITE), null, UIHint.INPUT, null, null));
+        builder.addPassthroughInput(StandardPorts.STRING.toInput(mode).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, MODES));
+        builder.addPassthroughInput(StandardPorts.COLOR.toInput(ColorValue.WHITE), UIHint.INPUT, null, null);
         return builder.build();
     }
 

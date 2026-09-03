@@ -59,26 +59,25 @@ public final class DrawImageVisual extends BaseNode {
                         .input(StandardPorts.VISIBILITY_RANGE, "visibility_range")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.PATH.toInput(""), null, UIHint.PATH, null, null))
-                .addRow(new PortRow(POSITION_PORT, null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(ROTATION_PORT, null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.SIZE_MODE.toInput(SIZE_MODE_STRETCH), null, UIHint.SELECT, null,
-                        Map.of(
+                .addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH)
+                .addPassthroughInput(POSITION_PORT, UIHint.VECTOR)
+                .addPassthroughInput(ROTATION_PORT, UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.SIZE_MODE.toInput(SIZE_MODE_STRETCH), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, new String[]{SIZE_MODE_STRETCH, SIZE_MODE_FIT},
                                 PortMetaKeys.OPTION_LABELS, new String[]{
                                         "geometry_node.image.size_mode.stretch",
                                         "geometry_node.image.size_mode.fit"
                                 }
-                        )))
-                .addRow(floatRow(WIDTH_PORT, 0.01f, 1024.0f))
-                .addRow(floatRow(HEIGHT_PORT, 0.01f, 1024.0f))
-                .addRow(floatRow(ALPHA_PORT, 0.0f, 1.0f))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(20), null, UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 1, PortMetaKeys.NUMERIC_MAX, 72000)))
-                .addRow(new PortRow(StandardPorts.VISIBILITY_RANGE.toInput(128.0F), null,
-                        UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 1.0F,
-                                PortMetaKeys.NUMERIC_MAX, 4096.0F)))
+                        ))
+                .addPassthroughInput(WIDTH_PORT, UIHint.INPUT, null,
+                        Map.of(PortMetaKeys.NUMERIC_MIN, 0.01f, PortMetaKeys.NUMERIC_MAX, 1024.0f))
+                .addPassthroughInput(HEIGHT_PORT, UIHint.INPUT, null,
+                        Map.of(PortMetaKeys.NUMERIC_MIN, 0.01f, PortMetaKeys.NUMERIC_MAX, 1024.0f))
+                .addPassthroughInput(ALPHA_PORT, UIHint.INPUT, null,
+                        Map.of(PortMetaKeys.NUMERIC_MIN, 0.0f, PortMetaKeys.NUMERIC_MAX, 1.0f))
+                .addPassthroughInput(StandardPorts.TICK.toInput(20), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 1, PortMetaKeys.NUMERIC_MAX, 72000))
+                .addPassthroughInput(StandardPorts.VISIBILITY_RANGE.toInput(128.0F), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 1.0F,
+                                PortMetaKeys.NUMERIC_MAX, 4096.0F))
                 .build();
     }
 
@@ -146,11 +145,6 @@ public final class DrawImageVisual extends BaseNode {
         }
 
         return next(StandardPorts.FLOW_OUT.getId());
-    }
-
-    private static PortRow floatRow(PortDef port, float min, float max) {
-        return new PortRow(port, null, UIHint.INPUT, null,
-                Map.of(PortMetaKeys.NUMERIC_MIN, min, PortMetaKeys.NUMERIC_MAX, max));
     }
 
     private static float clamp(float value, float min, float max) {

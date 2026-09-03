@@ -24,15 +24,16 @@ public final class GetRegisteredQuestStatus extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.QUEST,
                         Component.translatable("geometry_node.node.get_registered_quest_status"))
-                .addRow(new PortRow(
+                .addRow(new PortRow(null,
+                        PortDef.create(STATUS_PORT, "geometry_node.port.quest_status", PortType.STRING),
+                        UIHint.DEFAULT, null, null))
+                .addPassthroughInput(
                         PortDef.create(SELECTED_STATUS_PORT, "geometry_node.port.quest_status",
                                 PortType.STRING, QuestStatusRegistry.IN_PROGRESS.id()).hiddenPin(),
-                        PortDef.create(STATUS_PORT, "geometry_node.port.quest_status", PortType.STRING),
                         UIHint.SELECT,
                         null,
                         Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID,
-                                QuestStatusRegistry.DYNAMIC_REGISTRY_ID)
-                ))
+                                QuestStatusRegistry.DYNAMIC_REGISTRY_ID))
                 .build();
     }
 

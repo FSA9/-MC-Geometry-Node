@@ -55,17 +55,17 @@ public class MultiRaycast extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null))
 
                 // 输入：起点、角度、距离、半径
-                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.PITCH.toInput(0.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.YAW.toInput(0.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.DIST.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.RADIUS.toInput(0.0f), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.START_POS.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.PITCH.toInput(0.0f), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.YAW.toInput(0.0f), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.DIST.toInput(), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.RADIUS.toInput(0.0f), UIHint.INPUT)
 
                 // 输入：穿透设置 (复用 LIMIT 作为穿透上限)
-                .addRow(new PortRow(StandardPorts.PENETRATE_SOLID.toInput(false), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.PENETRATE_TRANS.toInput(true), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.PENETRATE_ENTITIES.toInput(false), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.LIMIT.toInput(1), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.PENETRATE_SOLID.toInput(false), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.PENETRATE_TRANS.toInput(true), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.PENETRATE_ENTITIES.toInput(false), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.LIMIT.toInput(1), UIHint.INPUT)
                 .build();
     }
 

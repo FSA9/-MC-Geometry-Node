@@ -801,6 +801,13 @@ public class BlueprintProcess {
         private Object computeDataNode(int nodeId, String portName) {
             int prevActive = this.activeNodeId;
             try {
+                if (index.isDataPassthroughOutput(nodeId, portName)) {
+                    CompiledDataIndex.DataConnectionSource source =
+                            index.findInputSource(nodeId, portName);
+                    return source != null
+                            ? executeDataNode(source.sourceNodeId(), source.sourcePortName())
+                            : index.getNodeStaticInput(nodeId, portName);
+                }
                 BaseNode logic = NodeRegistry.INSTANCE.get(index.getNodeType(nodeId));
                 if (logic == null) {
                     System.err.println("[GraphVM] Missing data node type during compute: " +
@@ -969,6 +976,11 @@ public class BlueprintProcess {
         }
 
         @Override
+        public boolean hasInputConnection(String portName) {
+            return activeNodeId != -1 && index.findInputSource(activeNodeId, portName) != null;
+        }
+
+        @Override
         public Object getStaticInput(String portName) {
             return (activeNodeId != -1) ? index.getNodeStaticInput(activeNodeId, portName) : null;
         }
@@ -981,6 +993,7 @@ public class BlueprintProcess {
         @Override
         public void setScopedState(ScopedStateTarget target, String name, Object value) {
             GraphEngineServices.INSTANCE.scopedState().set(runtimeContext(), target, name, value);
+            dataEvaluation.clearValues();
         }
 
         @Override
@@ -995,7 +1008,9 @@ public class BlueprintProcess {
 
         @Override
         public boolean clearScopedState(ScopedStateTarget target, String name) {
-            return GraphEngineServices.INSTANCE.scopedState().clear(runtimeContext(), target, name);
+            boolean changed = GraphEngineServices.INSTANCE.scopedState().clear(runtimeContext(), target, name);
+            if (changed) dataEvaluation.clearValues();
+            return changed;
         }
 
         @Nullable

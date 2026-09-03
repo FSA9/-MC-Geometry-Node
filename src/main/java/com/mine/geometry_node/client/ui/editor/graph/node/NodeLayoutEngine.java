@@ -69,7 +69,9 @@ public class NodeLayoutEngine {
 
             if (row.rightPort() != null) {
                 PortDef port = row.rightPort();
-                layout.outputPortY.put(port.id(), portCenterY);
+                if (!port.hidePin()) {
+                    layout.outputPortY.put(port.id(), portCenterY);
+                }
                 if (!isInlineControl(nodeData, row)) {
                     addLabel(layout, nodeData, port, false, row.uiHint(), currentY, nodeWidth);
                 }

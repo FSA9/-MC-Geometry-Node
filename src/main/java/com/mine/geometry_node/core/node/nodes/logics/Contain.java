@@ -32,12 +32,9 @@ public class Contain extends BaseNode {
                         .input(CONTAINER, "container")
                         .input(StandardPorts.ANY_VALUE, "any_value")
                         .build())
-                .addRow(new PortRow(
-                        new PortDef(CONTAINER, Component.translatable("geometry_node.port.container"), PortType.ANY, null, false),
-                        StandardPorts.BOOL.toOutput(),
-                        UIHint.DEFAULT, null, null
-                ))
-                .addRow(new PortRow(StandardPorts.ANY_VALUE.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(new PortDef(CONTAINER, Component.translatable("geometry_node.port.container"), PortType.ANY, null, false), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.ANY_VALUE.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

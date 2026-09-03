@@ -23,7 +23,7 @@ public class StrikeLightning extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.strike_lightning"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
+                .addPassthroughInput(StandardPorts.XYZ.toInput(), UIHint.VECTOR)
                 .build();
     }
 

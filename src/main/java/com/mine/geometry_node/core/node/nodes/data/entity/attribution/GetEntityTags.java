@@ -17,11 +17,8 @@ public class GetEntityTags extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_tags"))
-                .addRow(new PortRow(
-                        StandardPorts.ENTITY.toInput(),
-                        PortDef.create("tags", "geometry_node.port.tags", PortType.LIST),
-                        UIHint.DEFAULT, null, null
-                ))
+                .addRow(new PortRow(null, PortDef.create("tags", "geometry_node.port.tags", PortType.LIST), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

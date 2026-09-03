@@ -23,7 +23,8 @@ public class HasItemCustomName extends BaseNode {
                         .output(StandardPorts.BOOL, "bool")
                         .input(StandardPorts.ITEM_STACK, "item_stack")
                         .build())
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

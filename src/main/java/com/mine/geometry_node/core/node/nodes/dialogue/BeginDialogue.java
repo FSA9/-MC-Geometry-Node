@@ -33,16 +33,10 @@ public class BeginDialogue extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DIALOGUE, Component.translatable("geometry_node.node.begin_dialogue"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.PLAYER.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.SPEAKER_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.STYLE_ID.toInput(DialogueStyleRegistry.DEFAULT),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, STYLE_OPTIONS)
-                ))
-                .addRow(new PortRow(PortDef.create(ALLOW_MULTI_PLAYER, "geometry_node.port.allow_multi_player", PortType.BOOLEAN, true), null, UIHint.CHECKBOX, null, null))
+                .addPassthroughInput(StandardPorts.PLAYER.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.SPEAKER_ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.STYLE_ID.toInput(DialogueStyleRegistry.DEFAULT), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, STYLE_OPTIONS))
+                .addPassthroughInput(PortDef.create(ALLOW_MULTI_PLAYER, "geometry_node.port.allow_multi_player", PortType.BOOLEAN, true), UIHint.CHECKBOX)
                 .build();
     }
 

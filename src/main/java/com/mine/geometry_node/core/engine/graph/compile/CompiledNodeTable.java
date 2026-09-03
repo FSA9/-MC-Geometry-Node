@@ -47,6 +47,7 @@ public final class CompiledNodeTable {
         String[] types = new String[size];
         @SuppressWarnings("unchecked") Map<String, Object>[] staticInputs = new Map[size];
         @SuppressWarnings("unchecked") Set<String>[] ports = new Set[size];
+        @SuppressWarnings("unchecked") Set<String>[] dataPassthroughOutputs = new Set[size];
 
         for (int nodeIndex = 0; nodeIndex < size; nodeIndex++) {
             String nodeId = nodeIds.get(nodeIndex);
@@ -65,6 +66,7 @@ public final class CompiledNodeTable {
             nodePorts.addAll(catalog.outputs().keySet());
             nodePorts.addAll(flattened.ports().getOrDefault(nodeId, Set.of()));
             ports[nodeIndex] = Set.copyOf(nodePorts);
+            dataPassthroughOutputs[nodeIndex] = catalog.dataPassthroughOutputs();
             descriptors.put(nodeId, new NodeDescriptor(nodeId, nodeIndex, type,
                     catalog.inputs(), catalog.outputs()));
         }
@@ -86,7 +88,8 @@ public final class CompiledNodeTable {
         }
 
         return new CompiledNodeTable(nodeIds, descriptors,
-                new CompiledNodeIndex(ids, types, staticInputs, dataInputs, ports, portKeys));
+                new CompiledNodeIndex(ids, types, staticInputs, dataInputs, ports,
+                        dataPassthroughOutputs, portKeys));
     }
 
     public List<String> nodeIds() {
@@ -109,7 +112,10 @@ public final class CompiledNodeTable {
         if (node == null) return null;
         node.id = nodeId;
         node.restoreDocumentDefaults();
-        node.inputs = new LinkedHashMap<>(flattenedInputs);
+        node.inputs = new LinkedHashMap<>();
+        flattenedInputs.forEach((port, value) -> {
+            if (value != ExplicitNullInput.INSTANCE) node.inputs.put(port, value);
+        });
         return node;
     }
 
@@ -118,6 +124,7 @@ public final class CompiledNodeTable {
         Map<String, Object> result = new LinkedHashMap<>(flattenedInputs);
         for (PortDef input : inputPorts.values()) {
             if (input.type().isFlow()) continue;
+            if (flattenedInputs.get(input.id()) == ExplicitNullInput.INSTANCE) continue;
             Object value = flattenedInputs.containsKey(input.id())
                     ? flattenedInputs.get(input.id()) : input.defaultValue();
             if (value == null) continue;
@@ -150,17 +157,20 @@ public final class CompiledNodeTable {
         }
     }
 
-    private record PortCatalog(Map<String, PortDef> inputs, Map<String, PortDef> outputs) {
+    private record PortCatalog(Map<String, PortDef> inputs, Map<String, PortDef> outputs,
+                               Set<String> dataPassthroughOutputs) {
         private static PortCatalog from(@Nullable NodeDef definition) {
             Map<String, PortDef> inputs = new LinkedHashMap<>();
             Map<String, PortDef> outputs = new LinkedHashMap<>();
+            Set<String> passthroughs = new LinkedHashSet<>();
             if (definition != null) {
                 for (PortRow row : definition.rows()) {
                     addPort(row.leftPort(), inputs);
                     addPort(row.rightPort(), outputs);
+                    if (row.dataPassthrough()) passthroughs.add(row.rightPort().id());
                 }
             }
-            return new PortCatalog(inputs, outputs);
+            return new PortCatalog(inputs, outputs, Set.copyOf(passthroughs));
         }
 
         private static void addPort(@Nullable PortDef port, Map<String, PortDef> target) {

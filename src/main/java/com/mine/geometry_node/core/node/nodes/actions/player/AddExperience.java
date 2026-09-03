@@ -22,11 +22,11 @@ public class AddExperience extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.add_experience"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
                 // 是否为等级 (True = 等级, False = 经验点数)
-                .addRow(new PortRow(StandardPorts.BOOL.toInput(false), null, UIHint.CHECKBOX, null, null))
+                .addPassthroughInput(StandardPorts.BOOL.toInput(false), UIHint.CHECKBOX)
                 // 经验数量
-                .addRow(new PortRow(StandardPorts.INT.toInput(1), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.INT.toInput(1), UIHint.INPUT)
                 .build();
     }
 

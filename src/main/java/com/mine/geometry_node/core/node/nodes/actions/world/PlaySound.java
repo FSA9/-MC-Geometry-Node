@@ -28,17 +28,11 @@ public class PlaySound extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.play_sound"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.STRING.toInput(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllSounds().toArray(new String[0]))
-                ))
+                .addPassthroughInput(StandardPorts.XYZ.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.STRING.toInput(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllSounds().toArray(new String[0])))
                 // 音量与音调
-                .addRow(new PortRow(StandardPorts.VOLUME.toInputWithIndex(0, 1.0f), null, UIHint.SLIDER, null, null))
-                .addRow(new PortRow(StandardPorts.PITCH.toInputWithIndex(1, 1.0f), null, UIHint.SLIDER, null, null))
+                .addPassthroughInput(StandardPorts.VOLUME.toInputWithIndex(0, 1.0f), UIHint.SLIDER)
+                .addPassthroughInput(StandardPorts.PITCH.toInputWithIndex(1, 1.0f), UIHint.SLIDER)
                 .build();
     }
 

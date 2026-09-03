@@ -59,14 +59,12 @@ public class StringExpression extends BaseNode {
                 .comment(comment.build())
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, MAX_PORT_COUNT);
 
-        builder.addRow(new PortRow(StandardPorts.EXPRESSION.toInput(DEFAULT_EXPRESSION), StandardPorts.STRING.toOutput(), UIHint.INPUT, null, null));
+        builder.addRow(new PortRow(null, StandardPorts.STRING.toOutput(), UIHint.DEFAULT, null, null));
+        builder.addPassthroughInput(StandardPorts.EXPRESSION.toInput(DEFAULT_EXPRESSION), UIHint.INPUT, null, null);
 
         for (int i = 1; i <= portCount; i++) {
             PortDef dynamicPort = new PortDef(PORT_IDS[i], COMPONENT_KEYS[i], PortType.ANY, null, false);
-            builder.addRow(new PortRow(
-                    dynamicPort, null, UIHint.DEFAULT, null,
-                    Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_INDEX, i)
-            ));
+            builder.addPassthroughInput(dynamicPort, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_INDEX, i));
         }
 
         return builder.build();

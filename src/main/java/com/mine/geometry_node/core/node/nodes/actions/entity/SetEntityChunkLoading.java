@@ -60,27 +60,20 @@ public final class SetEntityChunkLoading extends BaseNode {
                 .comment(comment.build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        PortDef.create(MODE_PORT, "geometry_node.port.entity_chunk_loading_mode", PortType.STRING, MODE_ENABLED).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(PortDef.create(MODE_PORT, "geometry_node.port.entity_chunk_loading_mode", PortType.STRING, MODE_ENABLED).hiddenPin(), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, new String[]{MODE_ENABLED, MODE_DISABLED},
                                 PortMetaKeys.OPTION_LABELS, new String[]{
                                         "geometry_node.entity_chunk_loading.mode.enabled",
                                         "geometry_node.entity_chunk_loading.mode.disabled"
                                 }
-                        )
-                ));
+                        ));
 
         if (MODE_ENABLED.equals(mode)) {
-            builder.addRow(new PortRow(StandardPorts.CHUNK_RADIUS.toInput(EntityChunkLoadingConfig.MIN_RADIUS), null,
-                    UIHint.INPUT, null, Map.of(
+            builder.addPassthroughInput(StandardPorts.CHUNK_RADIUS.toInput(EntityChunkLoadingConfig.MIN_RADIUS), UIHint.INPUT, null, Map.of(
                     PortMetaKeys.NUMERIC_MIN, EntityChunkLoadingConfig.MIN_RADIUS,
                     PortMetaKeys.NUMERIC_MAX, EntityChunkLoadingConfig.MAX_RADIUS
-            )));
+            ));
         }
         return builder.build();
     }

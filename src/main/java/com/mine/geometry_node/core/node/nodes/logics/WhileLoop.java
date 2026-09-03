@@ -38,9 +38,8 @@ public class WhileLoop extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.LOOP.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COMPLETED.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ITERATION.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.CONDITION.toInput(false), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(DEFAULT_TICK_INTERVAL), null, UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
+                .addPassthroughInput(StandardPorts.CONDITION.toInput(false), UIHint.CHECKBOX, null, null)
+                .addPassthroughInput(StandardPorts.TICK.toInput(DEFAULT_TICK_INTERVAL), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
                 .build();
     }
 

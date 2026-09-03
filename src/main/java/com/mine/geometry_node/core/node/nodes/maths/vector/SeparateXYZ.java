@@ -20,7 +20,7 @@ public class SeparateXYZ extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.X.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.Y.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.Z.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.VECTOR.toInput(), null, UIHint.VECTOR, null, null))
+                .addPassthroughInput(StandardPorts.VECTOR.toInput(), UIHint.VECTOR, null, null)
                 .build();
     }
 

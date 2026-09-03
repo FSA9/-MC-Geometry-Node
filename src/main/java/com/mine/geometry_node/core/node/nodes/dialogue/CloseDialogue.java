@@ -23,7 +23,7 @@ public class CloseDialogue extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DIALOGUE, Component.translatable("geometry_node.node.close_dialogue"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.PLAYER.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.PLAYER.toInput(), UIHint.DEFAULT)
                 .build();
     }
 

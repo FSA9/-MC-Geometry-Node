@@ -41,12 +41,10 @@ public final class GroupNodeDefinitions {
         }
 
         NodeData.PortsConfig config = groupNode.ensurePortConfig();
-        TreeMap<Integer, RowPorts> rows = new TreeMap<>();
-        addPorts(rows, config.execInputs, true);
-        addPorts(rows, config.inputs, true);
-        addPorts(rows, config.execOutputs, false);
-        addPorts(rows, config.outputs, false);
-        appendRows(builder, rows, false);
+        appendGroupOutputs(builder, config.execOutputs);
+        appendGroupOutputs(builder, config.outputs);
+        appendGroupInputs(builder, config.execInputs, false);
+        appendGroupInputs(builder, config.inputs, true);
         return builder.build();
     }
 
@@ -134,6 +132,38 @@ public final class GroupNodeDefinitions {
                 : portId;
         boolean hidden = config != null && Boolean.TRUE.equals(config.hidden);
         return new PortDef(portId, Component.literal(name), type, type.getDefaultValue(), hidden);
+    }
+
+    private static void appendGroupOutputs(NodeDef.Builder builder,
+                                           Map<String, NodeData.PortConfig> ports) {
+        orderedPorts(ports).forEach(entry -> builder.addRow(new PortRow(
+                null, toPortDef(entry.getKey(), entry.getValue()),
+                UIHint.DEFAULT, null, null)));
+    }
+
+    private static void appendGroupInputs(NodeDef.Builder builder,
+                                          Map<String, NodeData.PortConfig> ports,
+                                          boolean passthrough) {
+        orderedPorts(ports).forEach(entry -> {
+            PortDef input = toPortDef(entry.getKey(), entry.getValue());
+            if (passthrough) {
+                builder.addPassthroughInput(input, UIHint.DEFAULT);
+            } else {
+                builder.addRow(new PortRow(input, null, UIHint.DEFAULT, null, null));
+            }
+        });
+    }
+
+    private static java.util.List<Map.Entry<String, NodeData.PortConfig>> orderedPorts(
+            Map<String, NodeData.PortConfig> ports) {
+        if (ports == null || ports.isEmpty()) return java.util.List.of();
+        return ports.entrySet().stream()
+                .sorted(java.util.Comparator
+                        .comparingInt((Map.Entry<String, NodeData.PortConfig> entry) ->
+                                entry.getValue() != null && entry.getValue().order != null
+                                        ? entry.getValue().order : Integer.MAX_VALUE)
+                        .thenComparing(Map.Entry::getKey))
+                .toList();
     }
 
     private static void appendRows(NodeDef.Builder builder, TreeMap<Integer, RowPorts> rows, boolean virtualDynamic) {

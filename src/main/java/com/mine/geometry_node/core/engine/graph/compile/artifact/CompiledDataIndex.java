@@ -19,6 +19,8 @@ public interface CompiledDataIndex {
     @Nullable
     Object getStaticInput(int nodeId, String portName);
 
+    boolean isDataPassthroughOutput(int nodeId, String portName);
+
     boolean hasPort(int nodeId, String portName);
 
     record DataConnectionSource(int sourceNodeId, String sourcePortName) {

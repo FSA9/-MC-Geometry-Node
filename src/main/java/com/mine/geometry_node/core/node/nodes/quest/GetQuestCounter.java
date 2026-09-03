@@ -22,9 +22,10 @@ public final class GetQuestCounter extends BaseNode {
                         .text("summary")
                         .text("initializes_missing")
                         .build())
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.PATH.toInput(""), null, UIHint.PATH, null, null))
-                .addRow(new PortRow(StandardPorts.KEY.toInput(""), StandardPorts.FLOAT_VALUE.toOutput(), UIHint.INPUT, null, null))
+                .addRow(new PortRow(null, StandardPorts.FLOAT_VALUE.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH)
+                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT)
                 .build();
     }
 

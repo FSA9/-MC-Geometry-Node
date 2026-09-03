@@ -19,11 +19,8 @@ public class IsSprinting extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.is_sprinting"))
-                .addRow(new PortRow(
-                        StandardPorts.ENTITY.toInput(),
-                        StandardPorts.BOOL.toOutput(),
-                        UIHint.DEFAULT, null, null
-                ))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

@@ -32,19 +32,15 @@ public class RemoveEnchantment extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.remove_enchantment"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.TYPE.toInput("minecraft:sharpness"),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:enchantment")
-                ))
+                .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.TYPE.toInput("minecraft:sharpness"), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:enchantment"))
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        context.setNodeResult(StandardPorts.ITEM_STACK.getId(), null);
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
 
         String enchantId = getInput(context, StandardPorts.TYPE.getId(), String.class);
@@ -80,7 +76,7 @@ public class RemoveEnchantment extends BaseNode {
         }
 
         if (stack != null) {
-            context.setTempData(StandardPorts.ITEM_STACK.getId(), stack);
+            context.setNodeResult(StandardPorts.ITEM_STACK.getId(), stack);
         }
 
         return next(StandardPorts.FLOW_OUT.getId());
@@ -89,7 +85,7 @@ public class RemoveEnchantment extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.ITEM_STACK.getId().equals(portName)) {
-            return context.getTempData(StandardPorts.ITEM_STACK.getId());
+            return context.getNodeResult(StandardPorts.ITEM_STACK.getId());
         }
         return null;
     }

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.compile.artifact;
 
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
+import com.mine.geometry_node.core.engine.graph.compile.ExplicitNullInput;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import org.jetbrains.annotations.Nullable;
 
@@ -19,6 +20,7 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
     private final Set<String>[] copiedStaticInputs;
     private final Map<Integer, DataConnectionSource>[] dataInputs;
     private final Set<String>[] ports;
+    private final Set<String>[] dataPassthroughOutputs;
     private final Map<String, Integer> portKeys;
     private final String[] portNames;
 
@@ -28,9 +30,11 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
             Map<String, Object>[] staticInputs,
             Map<Integer, DataConnectionSource>[] dataInputs,
             Set<String>[] ports,
+            Set<String>[] dataPassthroughOutputs,
             Map<String, Integer> portKeys) {
         if (nodeIds.length != nodeTypes.length || nodeIds.length != staticInputs.length
-                || nodeIds.length != dataInputs.length || nodeIds.length != ports.length) {
+                || nodeIds.length != dataInputs.length || nodeIds.length != ports.length
+                || nodeIds.length != dataPassthroughOutputs.length) {
             throw new IllegalArgumentException("Compiled node arrays must have the same length");
         }
         this.nodeIds = nodeIds.clone();
@@ -40,6 +44,7 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
         this.copiedStaticInputs = mutableInputKeys(this.staticInputs);
         this.dataInputs = copyIntegerMapArray(dataInputs);
         this.ports = copySetArray(ports);
+        this.dataPassthroughOutputs = copySetArray(dataPassthroughOutputs);
         this.portKeys = Map.copyOf(portKeys);
         this.portNames = buildPortNames(this.portKeys);
     }
@@ -91,6 +96,7 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
     public Object getStaticInput(int nodeId, String portName) {
         if (!validNode(nodeId)) return null;
         Object value = staticInputs[nodeId].get(portName);
+        if (value == ExplicitNullInput.INSTANCE) return null;
         return copiedStaticInputs[nodeId].contains(portName)
                 ? GraphValueSnapshot.snapshot(value) : value;
     }
@@ -98,6 +104,11 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
     public <T> T getStaticInput(int nodeId, String portName, Class<T> type, T defaultValue) {
         T converted = TypeConverter.convert(getStaticInput(nodeId, portName), type, null);
         return converted != null ? converted : defaultValue;
+    }
+
+    @Override
+    public boolean isDataPassthroughOutput(int nodeId, String portName) {
+        return validNode(nodeId) && dataPassthroughOutputs[nodeId].contains(portName);
     }
 
     @Override

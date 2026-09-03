@@ -20,10 +20,11 @@ public final class BehaviorGetBlackboardNode extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA,
-                        Component.translatable("geometry_node.node.behavior_get_blackboard"))
+                Component.translatable("geometry_node.node.behavior_get_blackboard"))
                 .comment(BlackboardNodePorts.comment(TYPE_ID))
+                .addRow(new PortRow(null, StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(scopeRow())
-                .addRow(new PortRow(keyPort(), StandardPorts.ANY_VALUE.toOutput(), UIHint.INPUT, null, null))
+                .addPassthroughInput(keyPort(), UIHint.INPUT)
                 .build();
     }
 

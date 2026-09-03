@@ -30,24 +30,9 @@ public final class CreateQuestCondition extends BaseNode {
                         UIHint.DEFAULT,
                         null,
                         null))
-                .addRow(new PortRow(
-                        PortDef.create(DISPLAY_TEXT_PORT, "geometry_node.port.quest_condition_display_text", PortType.STRING, "").hiddenPin(),
-                        null,
-                        UIHint.INPUT,
-                        null,
-                        null))
-                .addRow(new PortRow(
-                        PortDef.create(CONDITION_PORT, "geometry_node.port.quest_condition_check", PortType.BOOLEAN, false),
-                        null,
-                        UIHint.DEFAULT,
-                        null,
-                        null))
-                .addRow(new PortRow(
-                        PortDef.create(FAILURE_TEXT_PORT, "geometry_node.port.quest_condition_failure_text", PortType.STRING, "").hiddenPin(),
-                        null,
-                        UIHint.INPUT,
-                        null,
-                        null))
+                .addPassthroughInput(PortDef.create(DISPLAY_TEXT_PORT, "geometry_node.port.quest_condition_display_text", PortType.STRING, "").hiddenPin(), UIHint.INPUT)
+                .addPassthroughInput(PortDef.create(CONDITION_PORT, "geometry_node.port.quest_condition_check", PortType.BOOLEAN, false), UIHint.DEFAULT)
+                .addPassthroughInput(PortDef.create(FAILURE_TEXT_PORT, "geometry_node.port.quest_condition_failure_text", PortType.STRING, "").hiddenPin(), UIHint.INPUT)
                 .build();
     }
 

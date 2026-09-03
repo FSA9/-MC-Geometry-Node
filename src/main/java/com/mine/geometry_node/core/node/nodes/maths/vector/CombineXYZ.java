@@ -22,9 +22,9 @@ public class CombineXYZ extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.combine_xyz"))
                 .addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.X.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.Y.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.Z.toInput(), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.X.toInput(), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.Y.toInput(), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.Z.toInput(), UIHint.INPUT, null, null)
                 .build();
     }
 

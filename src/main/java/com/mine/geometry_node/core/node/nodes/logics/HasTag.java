@@ -24,8 +24,9 @@ public class HasTag extends BaseNode {
                         .input(StandardPorts.ANY_VALUE, "any_value")
                         .input(StandardPorts.TAG, "tag")
                         .build())
-                .addRow(new PortRow(StandardPorts.ANY_VALUE.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TAG.toInput(), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ANY_VALUE.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.TAG.toInput(), UIHint.INPUT, null, null)
                 .build();
     }
 

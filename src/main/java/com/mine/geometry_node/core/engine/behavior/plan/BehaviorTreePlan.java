@@ -112,6 +112,11 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
     }
 
     @Override
+    public boolean isDataPassthroughOutput(int nodeId, String portName) {
+        return nodes.isDataPassthroughOutput(nodeId, portName);
+    }
+
+    @Override
     public boolean hasPort(int nodeId, String portName) {
         return nodes.hasPort(nodeId, portName);
     }

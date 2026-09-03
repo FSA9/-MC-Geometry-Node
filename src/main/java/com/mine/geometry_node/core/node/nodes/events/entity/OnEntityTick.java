@@ -23,10 +23,10 @@ public class OnEntityTick extends BaseEventNode {
                         .build())
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(1)
-                        .withDisplayName("geometry_node.port.tick.interval").hiddenPin(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInputWithIndex(1, 0)
-                        .withDisplayName("geometry_node.port.tick.offset").hiddenPin(), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.TICK.toInput(1)
+                        .withDisplayName("geometry_node.port.tick.interval").hiddenPin(), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.TICK.toInputWithIndex(1, 0)
+                        .withDisplayName("geometry_node.port.tick.offset").hiddenPin(), UIHint.INPUT)
                 .build();
     }
 }

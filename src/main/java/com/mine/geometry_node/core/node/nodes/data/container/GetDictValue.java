@@ -18,10 +18,9 @@ public class GetDictValue extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_dict_value"))
-                // 第一行：左侧输入 DICT (源字典)，右侧输出 ANY (提取出的原始值)
-                .addRow(new PortRow(StandardPorts.DICT.toInput(), StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null))
-                // 第二行：左侧输入 STRING (Key)，带输入框 (UIHint.INPUT)
-                .addRow(new PortRow(StandardPorts.KEY.toInput(""), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.DICT.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT, null, null)
                 .build();
     }
 

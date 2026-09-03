@@ -32,10 +32,10 @@ public final class RelativeTransformToWorld extends BaseNode {
                         .build())
                 .addRow(new PortRow(null, StandardPorts.WORLD_POSITION.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.WORLD_ROTATION.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.BASE_POSITION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.BASE_ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.POSITION_OFFSET.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.ROTATION_OFFSET.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
+                .addPassthroughInput(StandardPorts.BASE_POSITION.toInput(Vec3.ZERO), UIHint.VECTOR, null, null)
+                .addPassthroughInput(StandardPorts.BASE_ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR, null, null)
+                .addPassthroughInput(StandardPorts.POSITION_OFFSET.toInput(Vec3.ZERO), UIHint.VECTOR, null, null)
+                .addPassthroughInput(StandardPorts.ROTATION_OFFSET.toInput(Vec3.ZERO), UIHint.VECTOR, null, null)
                 .build();
     }
 

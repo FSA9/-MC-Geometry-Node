@@ -26,11 +26,8 @@ public class GetTags extends BaseNode {
                         .output(TAGS, "tags")
                         .input(StandardPorts.ANY_VALUE, "any_value")
                         .build())
-                .addRow(new PortRow(
-                        StandardPorts.ANY_VALUE.toInput(),
-                        PortDef.create(TAGS, "geometry_node.port.tags", PortType.LIST),
-                        UIHint.DEFAULT, null, null
-                ))
+                .addRow(new PortRow(null, PortDef.create(TAGS, "geometry_node.port.tags", PortType.LIST), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ANY_VALUE.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

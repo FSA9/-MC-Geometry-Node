@@ -35,11 +35,8 @@ public class SetBlockDisplayState extends BaseNode {
                         .input(StandardPorts.BLOCK_STATE, "block_state")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.DISPLAY_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.BLOCK_STATE.toInput(), null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0]))
-                ))
+                .addPassthroughInput(StandardPorts.DISPLAY_ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.BLOCK_STATE.toInput(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0])))
                 .build();
     }
 

@@ -31,7 +31,7 @@ public class ColorRamp extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.COLOR.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ALPHA.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, null, UIHint.CUSTOM, GRADIENT_INPUT, null))
-                .addRow(new PortRow(StandardPorts.FAC.toInput(0.5f), null, UIHint.INPUT, null, NORMALIZED_RANGE))
+                .addPassthroughInput(StandardPorts.FAC.toInput(0.5f), UIHint.INPUT, null, NORMALIZED_RANGE)
                 .build();
     }
 

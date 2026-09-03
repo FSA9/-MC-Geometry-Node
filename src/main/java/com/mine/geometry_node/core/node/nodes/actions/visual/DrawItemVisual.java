@@ -48,14 +48,9 @@ public class DrawItemVisual extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 // 绑定核心实体
-                .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.STRING.toInput(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(
+                .addPassthroughInput(StandardPorts.SOURCE_ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.STRING.toInput(), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, new String[]{"fixed", "none", "third_person_left_hand", "third_person_right_hand", "first_person_left_hand", "first_person_right_hand", "head", "gui", "ground"},
                                 PortMetaKeys.OPTION_LABELS, new String[]{
                                         "geometry_node.display.item_context.fixed",
@@ -68,14 +63,12 @@ public class DrawItemVisual extends BaseNode {
                                         "geometry_node.display.item_context.gui",
                                         "geometry_node.display.item_context.ground"
                                 }
-                        )
-                ))
+                        ))
                 // 核心三大动态矢量
-                .addRow(new PortRow(TRANSLATION_PORT, null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(ROTATION_PORT, null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(SCALE_PORT, null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(20), null, UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
+                .addPassthroughInput(TRANSLATION_PORT, UIHint.VECTOR)
+                .addPassthroughInput(ROTATION_PORT, UIHint.VECTOR)
+                .addPassthroughInput(SCALE_PORT, UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.TICK.toInput(20), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
                 .build();
     }
 

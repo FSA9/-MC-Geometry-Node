@@ -23,10 +23,10 @@ public class AdjustShopTradeUses extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DIALOGUE, Component.translatable("geometry_node.node.adjust_shop_trade_uses"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.SHOP_ID.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.OFFER_ID.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.INT.toInput(1), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.SHOP_DATA.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.SHOP_ID.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.OFFER_ID.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.INT.toInput(1), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.SHOP_DATA.toInput(), UIHint.DEFAULT)
                 .build();
     }
 

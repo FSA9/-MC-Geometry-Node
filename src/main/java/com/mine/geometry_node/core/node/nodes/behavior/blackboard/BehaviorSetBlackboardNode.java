@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.behavior.blackboard;
 
+import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -9,7 +10,6 @@ import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorBlackboardExecutors;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 
@@ -24,8 +24,8 @@ public final class BehaviorSetBlackboardNode extends BaseNode implements Behavio
                 .comment(BlackboardNodePorts.comment(TYPE_ID))
                 .addRow(new PortRow(parentPort(), null, UIHint.DEFAULT, null, null))
                 .addRow(BlackboardNodePorts.scopeRow())
-                .addRow(new PortRow(keyPort(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.ANY_VALUE.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(keyPort(), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.ANY_VALUE.toInput(), UIHint.DEFAULT)
                 .build();
     }
 

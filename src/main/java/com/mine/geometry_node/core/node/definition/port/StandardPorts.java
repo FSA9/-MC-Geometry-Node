@@ -235,6 +235,7 @@ public enum StandardPorts {
     // ANY
     GENERIC_VALUE("value", PortType.ANY),
     ANY_VALUE("any_value", PortType.ANY),
+    STATE_VALUE("state_value", PortType.ANY),
     VARIABLE_VALUE("variable_value", PortType.ANY);
 
     private final String id;

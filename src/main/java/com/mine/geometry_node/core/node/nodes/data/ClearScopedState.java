@@ -9,9 +9,7 @@ import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
-import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
-import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
@@ -38,19 +36,14 @@ public final class ClearScopedState extends BaseNode {
                         .input(StandardPorts.NAME, "name")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(),
-                        StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(ScopedStateNodeSupport.scopeRow(PortDef.create(
-                        ScopedStateNodeSupport.SCOPE_PORT,
-                        "geometry_node.port.state_scope", PortType.STRING)));
+                        StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
+        ScopedStateNodeSupport.addScopeInput(builder);
         if (ScopedStateNodeSupport.usesEntity(scope)) {
-            builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(),
-                    StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null));
+            builder.addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null);
         } else if (scope == ScopedStateScope.WORLD) {
-            builder.addRow(ScopedStateNodeSupport.dimensionRow(StandardPorts.DIMENSION.toOutput()));
+            ScopedStateNodeSupport.addDimensionInput(builder);
         }
-        return builder
-                .addRow(new PortRow(StandardPorts.NAME.toInput(),
-                        StandardPorts.NAME.toOutput(), UIHint.INPUT, null, null))
+        return builder.addPassthroughInput(StandardPorts.NAME.toInput(), UIHint.INPUT, null, null)
                 .build();
     }
 
@@ -63,32 +56,7 @@ public final class ClearScopedState extends BaseNode {
                 ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
         ScopedStateTarget target = ScopedStateNodeSupport.requireTarget(context, scope, entity);
 
-        context.setTempData(tempKey(context, ScopedStateNodeSupport.SCOPE_PORT), scope);
-        if (entity != null) {
-            context.setTempData(tempKey(context, StandardPorts.ENTITY.getId()), entity);
-        }
-        if (scope == ScopedStateScope.WORLD) {
-            context.setTempData(tempKey(context, StandardPorts.DIMENSION.getId()),
-                    ScopedStateNodeSupport.dimension(context));
-        }
-        context.setTempData(tempKey(context, StandardPorts.NAME.getId()), key);
-
         context.clearScopedState(target, key);
         return next(StandardPorts.FLOW_OUT.getId());
-    }
-
-    @Override
-    public Object compute(ExecutionContext context, String portName) {
-        if (ScopedStateNodeSupport.SCOPE_PORT.equals(portName)
-                || StandardPorts.ENTITY.getId().equals(portName)
-                || StandardPorts.DIMENSION.getId().equals(portName)
-                || StandardPorts.NAME.getId().equals(portName)) {
-            return context.getTempData(tempKey(context, portName));
-        }
-        return null;
-    }
-
-    private String tempKey(ExecutionContext context, String portName) {
-        return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + portName;
     }
 }

@@ -48,12 +48,9 @@ public class TargetSelector extends BaseNode {
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 30);
 
         builder.addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null));
+        builder.addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null);
 
-        builder.addRow(new PortRow(
-                StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
-                Map.of(PortMetaKeys.OPTIONS, BASE_TARGETS)
-        ));
+        builder.addPassthroughInput(StandardPorts.STRING.toInput().hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, BASE_TARGETS));
 
         int filterCount = 1;
         List<String> usedFilters = new ArrayList<>();
@@ -86,54 +83,51 @@ public class TargetSelector extends BaseNode {
             availableOptions.removeAll(usedFilters);
             if (!availableOptions.contains(currentFilter)) availableOptions.add(currentFilter);
 
-            builder.addRow(new PortRow(
-                    StandardPorts.STRING.toInputWithIndex(i).hiddenPin(), null, UIHint.SELECT, null,
-                    Map.of(
+            builder.addPassthroughInput(StandardPorts.STRING.toInputWithIndex(i).hiddenPin(), UIHint.SELECT, null, Map.of(
                             PortMetaKeys.OPTIONS, availableOptions.toArray(new String[0]),
                             PortMetaKeys.IS_DYNAMIC, true,
                             PortMetaKeys.DYNAMIC_INDEX, i
-                    )
-            ));
+                    ));
 
-            for (PortRow row : createDataRows(currentFilter, i)) {
-                builder.addRow(row);
-            }
+            addDataRows(builder, currentFilter, i);
         }
 
         return builder.build();
     }
 
-    private List<PortRow> createDataRows(String type, int index) {
-        return switch (type) {
-            case "none" -> List.of();
-            case "center" -> List.of(new PortRow(StandardPorts.CENTER.toInputWithIndex(index), null, UIHint.VECTOR, null, Map.of(PortMetaKeys.IS_DYNAMIC, true)));
-            case "volume" -> List.of(new PortRow(StandardPorts.SIZE_3.toInputWithIndex(index), null, UIHint.VECTOR, null, Map.of(PortMetaKeys.IS_DYNAMIC, true)));
-            case "distance", "x_rotation", "y_rotation" -> List.of(
-                    new PortRow(StandardPorts.MIN_FLOAT.toInputWithIndex(index), null, UIHint.INPUT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true)),
-                    new PortRow(StandardPorts.MAX_FLOAT.toInputWithIndex(index), null, UIHint.INPUT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
-            );
-            case "level" -> List.of(
-                    new PortRow(StandardPorts.MIN_INT.toInputWithIndex(index), null, UIHint.INPUT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true)),
-                    new PortRow(StandardPorts.MAX_INT.toInputWithIndex(index), null, UIHint.INPUT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
-            );
-            case "type" -> List.of(
-                    new PortRow(StandardPorts.TYPE.toInputWithIndex(index).hiddenPin(), null, UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:entity_type")),
-                    new PortRow(StandardPorts.BOOL.toInputWithIndex(index, false), null, UIHint.CHECKBOX, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
-            );
-            case "tag", "name", "team" -> List.of(
-                    new PortRow(StandardPorts.LIST.toInputWithIndex(index), null, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
-            );
-            case "nbt", "scores", "advancements" -> List.of(
-                    new PortRow(StandardPorts.DICT.toInputWithIndex(index), null, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
-            );
-            case "predicate" -> List.of(
-                    new PortRow(StandardPorts.PREDICATE.toInputWithIndex(index), null, UIHint.INPUT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true))
-            );
-            case "sort" -> List.of(new PortRow(StandardPorts.SORT.toInputWithIndex(index).hiddenPin(), null, UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.OPTIONS, SORT_OPTIONS)));
-            case "gamemode" -> List.of(new PortRow(StandardPorts.GAMEMODE.toInputWithIndex(index).hiddenPin(), null, UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.OPTIONS, GAMEMODE_OPTIONS)));
-            case "limit" -> List.of(new PortRow(StandardPorts.LIMIT.toInputWithIndex(index), null, UIHint.INPUT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true)));
-            default -> List.of();
-        };
+    private void addDataRows(NodeDef.Builder builder, String type, int index) {
+        Map<com.mine.geometry_node.core.node.meta.MetaKey<?>, Object> dynamic =
+                Map.of(PortMetaKeys.IS_DYNAMIC, true);
+        switch (type) {
+            case "center" -> builder.addPassthroughInput(StandardPorts.CENTER.toInputWithIndex(index), UIHint.VECTOR, null, dynamic);
+            case "volume" -> builder.addPassthroughInput(StandardPorts.SIZE_3.toInputWithIndex(index), UIHint.VECTOR, null, dynamic);
+            case "distance", "x_rotation", "y_rotation" -> {
+                builder.addPassthroughInput(StandardPorts.MIN_FLOAT.toInputWithIndex(index), UIHint.INPUT, null, dynamic);
+                builder.addPassthroughInput(StandardPorts.MAX_FLOAT.toInputWithIndex(index), UIHint.INPUT, null, dynamic);
+            }
+            case "level" -> {
+                builder.addPassthroughInput(StandardPorts.MIN_INT.toInputWithIndex(index), UIHint.INPUT, null, dynamic);
+                builder.addPassthroughInput(StandardPorts.MAX_INT.toInputWithIndex(index), UIHint.INPUT, null, dynamic);
+            }
+            case "type" -> {
+                builder.addPassthroughInput(StandardPorts.TYPE.toInputWithIndex(index).hiddenPin(), UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.IS_DYNAMIC, true,
+                                PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:entity_type"));
+                builder.addPassthroughInput(StandardPorts.BOOL.toInputWithIndex(index, false), UIHint.CHECKBOX, null, dynamic);
+            }
+            case "tag", "name", "team" ->
+                    builder.addPassthroughInput(StandardPorts.LIST.toInputWithIndex(index), UIHint.DEFAULT, null, dynamic);
+            case "nbt", "scores", "advancements" ->
+                    builder.addPassthroughInput(StandardPorts.DICT.toInputWithIndex(index), UIHint.DEFAULT, null, dynamic);
+            case "predicate" ->
+                    builder.addPassthroughInput(StandardPorts.PREDICATE.toInputWithIndex(index), UIHint.INPUT, null, dynamic);
+            case "sort" -> builder.addPassthroughInput(StandardPorts.SORT.toInputWithIndex(index).hiddenPin(),
+                    UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.OPTIONS, SORT_OPTIONS));
+            case "gamemode" -> builder.addPassthroughInput(StandardPorts.GAMEMODE.toInputWithIndex(index).hiddenPin(),
+                    UIHint.SELECT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.OPTIONS, GAMEMODE_OPTIONS));
+            case "limit" -> builder.addPassthroughInput(StandardPorts.LIMIT.toInputWithIndex(index), UIHint.INPUT, null, dynamic);
+            default -> { }
+        }
     }
 
     @Override

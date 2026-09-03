@@ -31,10 +31,11 @@ public class IF extends BaseNode {
                         UIHint.DEFAULT, null, null
                 ))
                 .addRow(new PortRow(
-                        StandardPorts.BOOL.toInput(),
+                        null,
                         StandardPorts.FLOW_FALSE.toExec(),
                         UIHint.DEFAULT, null, null
                 ))
+                .addPassthroughInput(StandardPorts.BOOL.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

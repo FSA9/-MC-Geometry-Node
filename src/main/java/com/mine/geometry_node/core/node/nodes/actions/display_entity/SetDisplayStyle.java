@@ -32,10 +32,8 @@ public class SetDisplayStyle extends BaseNode {
                         .input(StandardPorts.STRING, "billboard")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.DISPLAY_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
-                        Map.of(
+                .addPassthroughInput(StandardPorts.DISPLAY_ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.STRING.toInput().hiddenPin(), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, new String[]{"fixed", "vertical", "horizontal", "center"},
                                 PortMetaKeys.OPTION_LABELS, new String[]{
                                         "geometry_node.display.billboard.fixed",
@@ -43,15 +41,14 @@ public class SetDisplayStyle extends BaseNode {
                                         "geometry_node.display.billboard.horizontal",
                                         "geometry_node.display.billboard.center"
                                 }
-                        )
-                ))
-                .addRow(new PortRow(StandardPorts.BRIGHTNESS.toInput(-1), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.SHADOW_RADIUS.toInput(0.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.SHADOW_STRENGTH.toInput(1.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.VIEW_RANGE.toInput(1.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.WIDTH.toInput(0.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.HEIGHT.toInput(0.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.GLOW_COLOR.toInput(-1), null, UIHint.INPUT, null, null))
+                        ))
+                .addPassthroughInput(StandardPorts.BRIGHTNESS.toInput(-1), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.SHADOW_RADIUS.toInput(0.0f), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.SHADOW_STRENGTH.toInput(1.0f), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.VIEW_RANGE.toInput(1.0f), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.WIDTH.toInput(0.0f), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.HEIGHT.toInput(0.0f), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.GLOW_COLOR.toInput(-1), UIHint.INPUT)
                 .build();
     }
 

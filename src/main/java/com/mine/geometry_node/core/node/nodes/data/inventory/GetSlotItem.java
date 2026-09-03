@@ -28,10 +28,11 @@ public class GetSlotItem extends BaseNode {
                         .input(StandardPorts.ENTITY, "entity")
                         .input(StandardPorts.SLOT, "slot")
                         .build())
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), null, UIHint.SLOT_REF, null, null))
+                .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), UIHint.SLOT_REF, null, null)
                 .build();
     }
 

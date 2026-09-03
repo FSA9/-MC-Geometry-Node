@@ -22,8 +22,8 @@ public class LeashEntity extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.leash_entity"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null)) // 被牵住的实体 (必须是 Mob)
-                .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null, UIHint.DEFAULT, null, null)) // 牵绳子的实体
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT) // 被牵住的实体 (必须是 Mob)
+                .addPassthroughInput(StandardPorts.SOURCE_ENTITY.toInput(), UIHint.DEFAULT) // 牵绳子的实体
                 .build();
     }
 

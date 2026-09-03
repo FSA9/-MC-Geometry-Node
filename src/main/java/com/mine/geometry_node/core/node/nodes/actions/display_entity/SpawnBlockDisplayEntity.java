@@ -48,25 +48,23 @@ public class SpawnBlockDisplayEntity extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.DISPLAY_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.WORLD_POSITION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.WORLD_ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.BLOCK_STATE.toInput("minecraft:stone"), null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0]))
-                ))
-                .addRow(new PortRow(StandardPorts.PIVOT.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(0)
-                        .withDisplayName("geometry_node.port.tick.teleport"), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInputWithIndex(1, 0)
-                        .withDisplayName("geometry_node.port.tick.interpolation"), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.WORLD_POSITION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.WORLD_ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.BLOCK_STATE.toInput("minecraft:stone"), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0])))
+                .addPassthroughInput(StandardPorts.PIVOT.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.TICK.toInput(0)
+                        .withDisplayName("geometry_node.port.tick.teleport"), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.TICK.toInputWithIndex(1, 0)
+                        .withDisplayName("geometry_node.port.tick.interpolation"), UIHint.INPUT)
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        context.setNodeResult(StandardPorts.DISPLAY_ENTITY.getId(), null);
         Level level = context.getLevel();
         if (level == null) return next(StandardPorts.FLOW_OUT.getId());
 
@@ -111,7 +109,7 @@ public class SpawnBlockDisplayEntity extends BaseNode {
             DisplayTransformController.initializePose(displayEntity, worldRotation, pivot);
 
             level.addFreshEntity(displayEntity);
-            context.setTempData("spawned_block_display", displayEntity);
+            context.setNodeResult(StandardPorts.DISPLAY_ENTITY.getId(), displayEntity);
         }
 
         return next(StandardPorts.FLOW_OUT.getId());
@@ -120,7 +118,7 @@ public class SpawnBlockDisplayEntity extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.DISPLAY_ENTITY.getId().equals(portName)) {
-            return context.getTempData("spawned_block_display");
+            return context.getNodeResult(StandardPorts.DISPLAY_ENTITY.getId());
         }
         return null;
     }

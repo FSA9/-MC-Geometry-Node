@@ -42,17 +42,10 @@ public class ForLoop extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.LOOP.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COMPLETED.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.INDEX.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.MIN_INT.toInput(0), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.MAX_INT.toInput(0), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
-                .addRow(new PortRow(
-                        PortDef.create(COMPLETED_POLICY, "geometry_node.port.completed_policy", PortType.STRING, POLICY_SCHEDULED).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, COMPLETED_POLICY_OPTIONS)
-                ))
+                .addPassthroughInput(StandardPorts.MIN_INT.toInput(0), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.MAX_INT.toInput(0), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.TICK.toInput(), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
+                .addPassthroughInput(PortDef.create(COMPLETED_POLICY, "geometry_node.port.completed_policy", PortType.STRING, POLICY_SCHEDULED).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, COMPLETED_POLICY_OPTIONS))
                 .build();
     }
 

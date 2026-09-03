@@ -27,24 +27,12 @@ public final class SetQuestStatus extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.QUEST, Component.translatable("geometry_node.node.set_quest_status"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.PATH.toInput(""), null, UIHint.PATH, null, null))
-                .addRow(new PortRow(
-                        PortDef.create(STATUS_PORT, "geometry_node.port.quest_status", PortType.STRING,
-                                QuestStatusRegistry.IN_PROGRESS.id()).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID,
-                                QuestStatusRegistry.ASSIGNABLE_DYNAMIC_REGISTRY_ID)
-                ))
-                .addRow(new PortRow(
-                        PortDef.create(REASON_PORT, "geometry_node.port.quest_reason", PortType.STRING, ""),
-                        null,
-                        UIHint.INPUT,
-                        null,
-                        null
-                ))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH)
+                .addPassthroughInput(PortDef.create(STATUS_PORT, "geometry_node.port.quest_status", PortType.STRING,
+                                QuestStatusRegistry.IN_PROGRESS.id()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID,
+                                QuestStatusRegistry.ASSIGNABLE_DYNAMIC_REGISTRY_ID))
+                .addPassthroughInput(PortDef.create(REASON_PORT, "geometry_node.port.quest_reason", PortType.STRING, ""), UIHint.INPUT)
                 .build();
     }
 

@@ -37,17 +37,12 @@ public class RemoveItemsFromInventory extends BaseNode {
                         .input(StandardPorts.MATCH_MODE, "match_mode")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.REMOVED_COUNT.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.COUNT.toInput(1), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TAG.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.MATCH_MODE.toInput(ValueMatchUtils.MODE_COMPONENTS).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.MODE_OPTIONS)
-                ))
+                .addRow(new PortRow(null, StandardPorts.REMOVED_COUNT.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.COUNT.toInput(1), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.TAG.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.MATCH_MODE.toInput(ValueMatchUtils.MODE_COMPONENTS).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.MODE_OPTIONS))
                 .build();
     }
 
@@ -62,14 +57,14 @@ public class RemoveItemsFromInventory extends BaseNode {
         for (Entity entity : entities) {
             removed += SlotAccessUtils.removeMatching(entity, template, tag, count != null ? count : 1, matchMode, context);
         }
-        context.setTempData(StandardPorts.REMOVED_COUNT.getId(), removed);
+        context.setNodeResult(StandardPorts.REMOVED_COUNT.getId(), removed);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.REMOVED_COUNT.getId().equals(portName)) {
-            Object value = context.getTempData(StandardPorts.REMOVED_COUNT.getId());
+            Object value = context.getNodeResult(StandardPorts.REMOVED_COUNT.getId());
             return value instanceof Number number ? number.intValue() : 0;
         }
         return null;

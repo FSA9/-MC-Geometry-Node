@@ -43,9 +43,9 @@ public class RepairSchematicPlacement extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BLOCK_STATS.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.KEY.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.REPAIR_AIR.toInput(true), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.AFFECT_ENTITIES.toInput(true), null, UIHint.CHECKBOX, null, null))
+                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.REPAIR_AIR.toInput(true), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.AFFECT_ENTITIES.toInput(true), UIHint.CHECKBOX)
                 .build();
     }
 

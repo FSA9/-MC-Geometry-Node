@@ -82,14 +82,11 @@ public class MathExpression extends BaseNode {
 
         builder.addRow(new PortRow(null, StandardPorts.FLOAT_VALUE.toOutput(), UIHint.DEFAULT, null, null));
 
-        builder.addRow(new PortRow(StandardPorts.EXPRESSION.toInput(), null, UIHint.INPUT, null, null));
+        builder.addPassthroughInput(StandardPorts.EXPRESSION.toInput(), UIHint.INPUT, null, null);
         for (int i = 1; i <= portCount; i++) {
             PortDef dynamicPort = new PortDef(PORT_IDS[i], COMPONENT_KEYS[i], PortType.FLOAT, 0.0f, false);
 
-            builder.addRow(new PortRow(
-                    dynamicPort, null, UIHint.DEFAULT, null,
-                    Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_INDEX, i)
-            ));
+            builder.addPassthroughInput(dynamicPort, UIHint.DEFAULT, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_INDEX, i));
         }
 
         return builder.build();

@@ -59,15 +59,11 @@ public class ShowDialogueChoices extends BaseNode {
                         null,
                         UIHint.DEFAULT, null, null
                 ))
-                .addRow(new PortRow(
-                        PortDef.create(TEXT, "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.EMPTY),
-                        null,
-                        UIHint.INPUT, null, null
-                ));
+                ;
 
         for (int i = 1; i <= choiceCount; i++) {
             builder.addRow(new PortRow(
-                    StandardPorts.DIALOGUE_CHOICE.toInputWithIndex(i),
+                    null,
                     StandardPorts.SELECTED.toExecWithIndex(i),
                     UIHint.DEFAULT,
                     null,
@@ -83,6 +79,16 @@ public class ShowDialogueChoices extends BaseNode {
                 StandardPorts.CLOSED.toExec(),
                 UIHint.DEFAULT, null, null
         ));
+        builder.addPassthroughInput(
+                PortDef.create(TEXT, "geometry_node.port.message", PortType.RICH_TEXT, RichTextValue.EMPTY),
+                UIHint.INPUT);
+        for (int i = 1; i <= choiceCount; i++) {
+            builder.addPassthroughInput(
+                    StandardPorts.DIALOGUE_CHOICE.toInputWithIndex(i),
+                    UIHint.DEFAULT,
+                    null,
+                    Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_INDEX, i));
+        }
         return builder.build();
     }
 

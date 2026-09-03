@@ -20,11 +20,8 @@ public class GetEntityMaxHealth extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_max_health"))
-                .addRow(new PortRow(
-                        StandardPorts.ENTITY.toInput(),
-                        StandardPorts.FLOAT_VALUE.toOutput(),
-                        UIHint.DEFAULT, null, null
-                ))
+                .addRow(new PortRow(null, StandardPorts.FLOAT_VALUE.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

@@ -40,7 +40,7 @@ public class RemoveEntityTag extends BaseNode {
 //        // 1. 执行流
 //        builder.addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
 //        // 2. 目标实体
-//        builder.addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null));
+//        builder.addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT);
 //
 //        // 3. 动态标签输入行
 //        for (int i = 1; i <= portCount; i++) {

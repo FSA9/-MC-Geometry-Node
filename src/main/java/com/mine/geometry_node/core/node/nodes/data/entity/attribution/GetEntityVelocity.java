@@ -20,11 +20,8 @@ public class GetEntityVelocity extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_velocity"))
-                .addRow(new PortRow(
-                        StandardPorts.ENTITY.toInput(),
-                        PortDef.create("velocity", "geometry_node.port.velocity", PortType.XYZ),
-                        UIHint.DEFAULT, null, null
-                ))
+                .addRow(new PortRow(null, PortDef.create("velocity", "geometry_node.port.velocity", PortType.XYZ), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

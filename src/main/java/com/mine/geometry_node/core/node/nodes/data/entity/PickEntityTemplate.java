@@ -26,19 +26,13 @@ public final class PickEntityTemplate extends BaseNode {
                         .build())
                 .uiWidth(105)
                 .addRow(new PortRow(null, StandardPorts.ENTITY_TEMPLATE.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        new PortDef(
+                .addPassthroughInput(new PortDef(
                                 TEMPLATE_DATA,
                                 Component.translatable("geometry_node.port.entity_template_data"),
                                 PortType.ENTITY_TEMPLATE,
                                 EntityTemplateValue.EMPTY.toMap(),
                                 true
-                        ),
-                        null,
-                        UIHint.ENTITY_TEMPLATE,
-                        null,
-                        null
-                ))
+                        ), UIHint.ENTITY_TEMPLATE, null, null)
                 .build();
     }
 

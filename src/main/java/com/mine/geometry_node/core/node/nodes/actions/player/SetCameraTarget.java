@@ -25,10 +25,10 @@ public class SetCameraTarget extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
 
                 // 2. 目标玩家 (谁的视角将被改变)
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
 
                 // 3. 摄像机实体 (要把视角绑定到哪个实体上。如果不连线或传空，则重置回玩家自己)
-                .addRow(new PortRow(StandardPorts.ENTITY.toInputWithIndex(1), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInputWithIndex(1), UIHint.DEFAULT)
                 .build();
     }
 

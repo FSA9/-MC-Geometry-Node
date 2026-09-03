@@ -76,14 +76,8 @@ public class Switch extends BaseNode {
                     UIHint.DEFAULT, null, null
             ));
 
-            builder.addRow(new PortRow(
-                    StandardPorts.CASE.toInputWithIndex(i, false),
-                    null,
-                    UIHint.CHECKBOX,
-                    null,
-                    Map.of(PortMetaKeys.IS_DYNAMIC, true,
-                            PortMetaKeys.DYNAMIC_INDEX, i)
-            ));
+            builder.addPassthroughInput(StandardPorts.CASE.toInputWithIndex(i, false), UIHint.CHECKBOX, null, Map.of(PortMetaKeys.IS_DYNAMIC, true,
+                            PortMetaKeys.DYNAMIC_INDEX, i));
         }
 
         return builder.build();

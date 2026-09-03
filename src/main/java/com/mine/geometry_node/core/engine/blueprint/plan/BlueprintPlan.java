@@ -194,6 +194,11 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
         return getNodeStaticInput(nodeId, portName);
     }
 
+    @Override
+    public boolean isDataPassthroughOutput(int nodeId, String portName) {
+        return nodes.isDataPassthroughOutput(nodeId, portName);
+    }
+
     /**
      * 查找控制流的下一个目标节点
      * @return 目标节点的 int ID，若分支尽头无连接则返回 -1

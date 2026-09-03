@@ -21,8 +21,8 @@ public class BreakBlock extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.break_block"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.BOOL.toInput(true), null, UIHint.CHECKBOX, null, null))
+                .addPassthroughInput(StandardPorts.XYZ.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.BOOL.toInput(true), UIHint.CHECKBOX)
                 .build();
     }
 

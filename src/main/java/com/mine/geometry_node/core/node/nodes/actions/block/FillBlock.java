@@ -25,9 +25,9 @@ public class FillBlock extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.fill_block"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.END_POS.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.BLOCK_STATE.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.START_POS.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.END_POS.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.BLOCK_STATE.toInput(), UIHint.DEFAULT)
                 .build();
     }
 

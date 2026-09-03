@@ -33,9 +33,11 @@ public class AddItemToInventory extends BaseNode {
                         .input(StandardPorts.ITEM_STACK, "item_stack")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
                 .build();
     }
 
@@ -56,24 +58,24 @@ public class AddItemToInventory extends BaseNode {
             inserted += before - leftover.getCount();
         }
 
-        context.setTempData(StandardPorts.ITEM_STACK.getId(), leftover);
-        context.setTempData(StandardPorts.COUNT.getId(), inserted);
-        context.setTempData(StandardPorts.BOOL.getId(), requested > 0 && inserted >= requested && leftover.isEmpty());
+        context.setNodeResult(StandardPorts.ITEM_STACK.getId(), leftover);
+        context.setNodeResult(StandardPorts.COUNT.getId(), inserted);
+        context.setNodeResult(StandardPorts.BOOL.getId(), requested > 0 && inserted >= requested && leftover.isEmpty());
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.ITEM_STACK.getId().equals(portName)) {
-            Object value = context.getTempData(StandardPorts.ITEM_STACK.getId());
+            Object value = context.getNodeResult(StandardPorts.ITEM_STACK.getId());
             return value instanceof ItemStack stack ? stack : ItemStack.EMPTY;
         }
         if (StandardPorts.COUNT.getId().equals(portName)) {
-            Object value = context.getTempData(StandardPorts.COUNT.getId());
+            Object value = context.getNodeResult(StandardPorts.COUNT.getId());
             return value instanceof Number number ? number.intValue() : 0;
         }
         if (StandardPorts.BOOL.getId().equals(portName)) {
-            Object value = context.getTempData(StandardPorts.BOOL.getId());
+            Object value = context.getNodeResult(StandardPorts.BOOL.getId());
             return value instanceof Boolean bool && bool;
         }
         return null;

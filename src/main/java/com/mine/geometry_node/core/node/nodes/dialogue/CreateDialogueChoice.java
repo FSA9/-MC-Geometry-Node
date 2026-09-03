@@ -26,26 +26,10 @@ public class CreateDialogueChoice extends BaseNode {
                         StandardPorts.DIALOGUE_CHOICE.toOutput(),
                         UIHint.DEFAULT, null, null
                 ))
-                .addRow(new PortRow(
-                        PortDef.create(TEXT, "geometry_node.port.choice_text", PortType.RICH_TEXT, RichTextValue.EMPTY),
-                        null,
-                        UIHint.INPUT, null, null
-                ))
-                .addRow(new PortRow(
-                        StandardPorts.CHOICE_VISIBLE.toInput(true),
-                        null,
-                        UIHint.CHECKBOX, null, null
-                ))
-                .addRow(new PortRow(
-                        StandardPorts.CHOICE_ENABLED.toInput(true),
-                        null,
-                        UIHint.CHECKBOX, null, null
-                ))
-                .addRow(new PortRow(
-                        PortDef.create(DISABLED_REASON, "geometry_node.port.choice_disabled_reason", PortType.RICH_TEXT, RichTextValue.EMPTY),
-                        null,
-                        UIHint.INPUT, null, null
-                ))
+                .addPassthroughInput(PortDef.create(TEXT, "geometry_node.port.choice_text", PortType.RICH_TEXT, RichTextValue.EMPTY), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.CHOICE_VISIBLE.toInput(true), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.CHOICE_ENABLED.toInput(true), UIHint.CHECKBOX)
+                .addPassthroughInput(PortDef.create(DISABLED_REASON, "geometry_node.port.choice_disabled_reason", PortType.RICH_TEXT, RichTextValue.EMPTY), UIHint.INPUT)
                 .build();
     }
 

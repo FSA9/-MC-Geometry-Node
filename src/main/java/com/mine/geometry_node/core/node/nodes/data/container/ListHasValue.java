@@ -18,10 +18,10 @@ public class ListHasValue extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.list_has_value"))
-                // 第一行：左侧输入目标 LIST，右侧输出是否存在 BOOL
-                .addRow(new PortRow(StandardPorts.LIST.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                // 第二行：左侧输入要查询的任意值 ANY，右侧输出该值的下标 INT
-                .addRow(new PortRow(StandardPorts.ANY_VALUE.toInput(), StandardPorts.INT.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.INT.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.LIST.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.ANY_VALUE.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

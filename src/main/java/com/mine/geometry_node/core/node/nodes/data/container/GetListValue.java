@@ -18,8 +18,9 @@ public class GetListValue extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_list_value"))
-                .addRow(new PortRow(StandardPorts.LIST.toInput(), StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.INT.toInput(0), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.LIST.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.INT.toInput(0), UIHint.INPUT, null, null)
                 .build();
     }
 

@@ -47,14 +47,9 @@ abstract class AbstractSetBlockEnumProperty extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(typeId, NodeType.ACTION, Component.translatable("geometry_node.node." + typeId))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.BLOCK_STATE.toInput(), StandardPorts.BLOCK_STATE.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        PortDef.create(portId, "geometry_node.port." + portId, PortType.STRING, defaultValue).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, options)
-                ))
+                .addRow(new PortRow(null, StandardPorts.BLOCK_STATE.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.BLOCK_STATE.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(PortDef.create(portId, "geometry_node.port." + portId, PortType.STRING, defaultValue).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, options))
                 .build();
     }
 

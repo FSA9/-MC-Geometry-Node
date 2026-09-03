@@ -235,7 +235,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
                     canvas.drawCircle(0, UIUtils.dp2px(yDp), UIUtils.dp2px(UIConstants.Node.PORT_VISUAL_RADIUS), mPaint);
                 }
             }
-            if (row.rightPort() != null) {
+            if (row.rightPort() != null && !row.rightPort().hidePin()) {
                 Float yDp = mLayout != null ? mLayout.outputPortY.get(row.rightPort().id()) : null;
                 if (yDp != null) {
                     mPaint.setStyle(Paint.Style.FILL);

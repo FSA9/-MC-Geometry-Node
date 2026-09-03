@@ -60,21 +60,15 @@ public class OpenShop extends BaseNode {
                 .addMeta(SchemaKeys.MIN_DYNAMIC_INPUT, 0)
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, MAX_CONDITION_INPUTS)
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.BUYER.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TITLE.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.SHOP_ID.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.SHOP_DATA.toInput(DEFAULT_SHOP_DATA).hiddenPin(),
-                        null,
-                        UIHint.BUTTON,
-                        null,
-                        Map.of(
+                .addPassthroughInput(StandardPorts.BUYER.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.TITLE.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.SHOP_ID.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.SHOP_DATA.toInput(DEFAULT_SHOP_DATA).hiddenPin(), UIHint.BUTTON, null, Map.of(
                                 PortMetaKeys.BUTTON_LABEL, "geometry_node.button.edit_shop",
                                 PortMetaKeys.BUTTON_ACTION, ACTION_OPEN_SHOP_EDITOR,
                                 PortMetaKeys.BUTTON_COLOR, 0xFF3D6EA8,
                                 PortMetaKeys.BUTTON_TEXT_COLOR, 0xFFFFFFFF
-                        )
-                ))
+                        ))
                 .addRow(new PortRow(
                         null,
                         null,
@@ -89,13 +83,7 @@ public class OpenShop extends BaseNode {
                 ));
 
         for (int i = 1; i <= conditionInputCount; i++) {
-            builder.addRow(new PortRow(
-                    StandardPorts.BOOL.toInputWithIndex(i, false),
-                    null,
-                    UIHint.CHECKBOX,
-                    null,
-                    Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_INDEX, i)
-            ));
+            builder.addPassthroughInput(StandardPorts.BOOL.toInputWithIndex(i, false), UIHint.CHECKBOX, null, Map.of(PortMetaKeys.IS_DYNAMIC, true, PortMetaKeys.DYNAMIC_INDEX, i));
         }
 
         return builder.build();

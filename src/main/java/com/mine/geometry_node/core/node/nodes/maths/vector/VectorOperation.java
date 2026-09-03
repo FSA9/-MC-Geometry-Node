@@ -55,19 +55,18 @@ public class VectorOperation extends BaseNode {
         } else {
             b.addRow(new PortRow(null, (scalar ? StandardPorts.FLOAT_VALUE : StandardPorts.VECTOR).toOutput(), UIHint.DEFAULT, null, null));
         }
-        b.addRow(new PortRow(StandardPorts.STRING.toInput("add").hiddenPin(), null, UIHint.SELECT, null,
-                Map.of(PortMetaKeys.OPTIONS, OPERATORS, PortMetaKeys.OPTION_LABELS, OPERATOR_LABEL_KEYS)));
+        b.addPassthroughInput(StandardPorts.STRING.toInput("add").hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, OPERATORS, PortMetaKeys.OPTION_LABELS, OPERATOR_LABEL_KEYS));
         if (directionToVector) {
             b.addRow(new PortRow(StandardPorts.VECTOR.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
-            b.addRow(new PortRow(StandardPorts.LENGTH.toInput(1.0f), null, UIHint.INPUT, null, null));
+            b.addPassthroughInput(StandardPorts.LENGTH.toInput(1.0f), UIHint.INPUT, null, null);
             return b.build();
         }
-        b.addRow(new PortRow(StandardPorts.VECTOR.toInputWithIndex(1), null, UIHint.VECTOR, null, null));
+        b.addPassthroughInput(StandardPorts.VECTOR.toInputWithIndex(1), UIHint.VECTOR, null, null);
         if (op.equals("add_scalar") || op.equals("subtract_scalar")
                 || op.equals("multiply_scalar") || op.equals("divide_scalar") || op.equals("lerp"))
-            b.addRow(new PortRow(StandardPorts.FLOAT_VALUE.toInputWithIndex(2), null, UIHint.INPUT, null, null));
+            b.addPassthroughInput(StandardPorts.FLOAT_VALUE.toInputWithIndex(2), UIHint.INPUT, null, null);
         else if (!op.equals("length") && !op.equals("normalize") && !op.equals("negate"))
-            b.addRow(new PortRow(StandardPorts.VECTOR.toInputWithIndex(2), null, UIHint.VECTOR, null, null));
+            b.addPassthroughInput(StandardPorts.VECTOR.toInputWithIndex(2), UIHint.VECTOR, null, null);
         return b.build();
     }
 

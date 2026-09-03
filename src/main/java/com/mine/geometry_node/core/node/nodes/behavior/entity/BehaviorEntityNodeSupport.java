@@ -17,12 +17,12 @@ final class BehaviorEntityNodeSupport {
     static PortRow input(StandardPorts port, Object value) {
         UIHint hint = port.getType() == PortType.ENTITY || port.getType() == PortType.LIST
                 ? UIHint.DEFAULT : UIHint.INPUT;
-        return new PortRow(port.toInput(value), null, hint, null, null);
+        return PortRow.passthrough(port.toInput(value), hint, null, null);
     }
 
     static PortRow tickInput(int value, String translationKey) {
-        return new PortRow(StandardPorts.TICK.toInput(value).withDisplayName(translationKey),
-                null, UIHint.INPUT, null, null);
+        return PortRow.passthrough(StandardPorts.TICK.toInput(value).withDisplayName(translationKey),
+                UIHint.INPUT, null, null);
     }
 
     private static PortDef parentPort() {

@@ -17,8 +17,8 @@ public final class BlackboardNodePorts {
     }
 
     public static PortRow scopeRow() {
-        return new PortRow(StandardPorts.BLACKBOARD_SCOPE.toInput("instance").hiddenPin(),
-                null, UIHint.SELECT, null,
+        return PortRow.passthrough(StandardPorts.BLACKBOARD_SCOPE.toInput("instance").hiddenPin(),
+                UIHint.SELECT, null,
                 Map.of(PortMetaKeys.OPTIONS, OPTIONS));
     }
 

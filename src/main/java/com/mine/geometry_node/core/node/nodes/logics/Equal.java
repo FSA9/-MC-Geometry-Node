@@ -34,30 +34,11 @@ public class Equal extends BaseNode {
                         .input(StandardPorts.TYPE, "type")
                         .input(COUNT_MODE, "count_mode")
                         .build())
-                .addRow(new PortRow(
-                        new PortDef(PORT_A, Component.literal("A"), PortType.ANY, null, false),
-                        StandardPorts.BOOL.toOutput(),
-                        UIHint.DEFAULT, null, null
-                ))
-                .addRow(new PortRow(
-                        new PortDef(PORT_B, Component.literal("B"), PortType.ANY, null, false),
-                        null,
-                        UIHint.DEFAULT, null, null
-                ))
-                .addRow(new PortRow(
-                        StandardPorts.TYPE.toInput(ValueMatchUtils.MODE_COMPONENTS).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.MODE_OPTIONS)
-                ))
-                .addRow(new PortRow(
-                        PortDef.create(COUNT_MODE, "geometry_node.port.count_mode", PortType.STRING, ValueMatchUtils.COUNT_IGNORE).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.COUNT_OPTIONS)
-                ))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(new PortDef(PORT_A, Component.literal("A"), PortType.ANY, null, false), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(new PortDef(PORT_B, Component.literal("B"), PortType.ANY, null, false), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.TYPE.toInput(ValueMatchUtils.MODE_COMPONENTS).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.MODE_OPTIONS))
+                .addPassthroughInput(PortDef.create(COUNT_MODE, "geometry_node.port.count_mode", PortType.STRING, ValueMatchUtils.COUNT_IGNORE).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.COUNT_OPTIONS))
                 .build();
     }
 

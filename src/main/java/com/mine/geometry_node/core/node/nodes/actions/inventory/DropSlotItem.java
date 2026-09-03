@@ -31,9 +31,10 @@ public class DropSlotItem extends BaseNode {
                         .input(StandardPorts.COUNT, "count")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), null, UIHint.SLOT_REF, null, null))
-                .addRow(new PortRow(StandardPorts.COUNT.toInput(1), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), UIHint.SLOT_REF)
+                .addPassthroughInput(StandardPorts.COUNT.toInput(1), UIHint.INPUT)
                 .build();
     }
 
@@ -46,14 +47,14 @@ public class DropSlotItem extends BaseNode {
         if (!dropped.isEmpty()) {
             SlotAccessUtils.dropItem(entity, dropped);
         }
-        context.setTempData(StandardPorts.ITEM_STACK.getId(), dropped);
+        context.setNodeResult(StandardPorts.ITEM_STACK.getId(), dropped);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.ITEM_STACK.getId().equals(portName)) {
-            return context.getTempData(StandardPorts.ITEM_STACK.getId());
+            return context.getNodeResult(StandardPorts.ITEM_STACK.getId());
         }
         return null;
     }

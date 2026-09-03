@@ -18,11 +18,8 @@ public class GetGameMode extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_game_mode"))
-                .addRow(new PortRow(
-                        StandardPorts.ENTITY.toInput(),
-                        PortDef.create("gamemode", "geometry_node.port.gamemode", PortType.STRING),
-                        UIHint.DEFAULT, null, null
-                ))
+                .addRow(new PortRow(null, PortDef.create("gamemode", "geometry_node.port.gamemode", PortType.STRING), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

@@ -17,7 +17,7 @@ public class Function_Delay_tick extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL, Component.translatable("geometry_node.node.function_delay_tick"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.TICK.toInput(), UIHint.INPUT, null, null)
                 .build();
     }
 

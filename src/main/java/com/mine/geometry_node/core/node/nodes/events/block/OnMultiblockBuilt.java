@@ -20,19 +20,13 @@ public class OnMultiblockBuilt extends BaseEventNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node.on_multiblock_built"))
-                .addRow(new PortRow(
-                        StandardPorts.TYPE.toInput(MultiblockStructureManager.ANY_STRUCTURE_ID).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, MultiblockStructureManager.DYNAMIC_REGISTRY_ID)
-                ))
                 .addRow(new PortRow(null, StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.NAME.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.DIMENSION.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.XYZ.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BLOCK_STATE.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.TYPE.toInput(MultiblockStructureManager.ANY_STRUCTURE_ID).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, MultiblockStructureManager.DYNAMIC_REGISTRY_ID))
                 .build();
     }
 

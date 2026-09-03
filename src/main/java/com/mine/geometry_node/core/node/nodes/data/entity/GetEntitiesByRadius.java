@@ -33,20 +33,9 @@ public class GetEntitiesByRadius extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entities_by_radius"))
                 .addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.CENTER.toInput(),
-                        null,
-                        UIHint.DEFAULT, null, null
-                ))
-                .addRow(new PortRow(StandardPorts.RADIUS.toInput(),
-                        null,
-                        UIHint.INPUT, null, null
-                ))
-                .addRow(new PortRow(
-                        PortDef.create(TARGET_PORT, "geometry_node.port.area_target", PortType.STRING, AreaTargetType.ALL.id()).hiddenPin(),
-                        null,
-                        UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, AreaTargetType.OPTIONS)
-                ))
+                .addPassthroughInput(StandardPorts.CENTER.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.RADIUS.toInput(), UIHint.INPUT, null, null)
+                .addPassthroughInput(PortDef.create(TARGET_PORT, "geometry_node.port.area_target", PortType.STRING, AreaTargetType.ALL.id()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, AreaTargetType.OPTIONS))
                 .build();
     }
 

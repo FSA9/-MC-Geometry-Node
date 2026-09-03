@@ -29,16 +29,10 @@ public class GetItemStack extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
 
                 // 2. 输入：物品类型图纸 (Item) - 默认苹果，并自带全物品下拉框！
-                .addRow(new PortRow(
-                        StandardPorts.ITEM.toInput("minecraft:apple"),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllItems().toArray(new String[0]))
-                ))
+                .addPassthroughInput(StandardPorts.ITEM.toInput("minecraft:apple"), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllItems().toArray(new String[0])))
 
                 // 3. 输入：数量 (Count) - 默认 1
-                .addRow(new PortRow(StandardPorts.COUNT.toInput(1), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.COUNT.toInput(1), UIHint.INPUT, null, null)
                 .build();
     }
 

@@ -198,6 +198,24 @@ public interface ExecutionContext extends GraphDataContext {
     void removeTempData(String key);
 
     /**
+     * Stores an execution result owned by the current node instance.
+     * Results with the same port ID on different nodes are isolated.
+     */
+    default void setNodeResult(String portName, @Nullable Object value) {
+        setTempData(nodeResultKey(portName), value);
+    }
+
+    /** Reads a result previously stored by the current node instance. */
+    @Nullable
+    default Object getNodeResult(String portName) {
+        return getTempData(nodeResultKey(portName));
+    }
+
+    private String nodeResultKey(String portName) {
+        return "node_result:" + getCurrentNodeId() + ":" + portName;
+    }
+
+    /**
      * 获取当前正在执行（或计算）的节点运行时 ID。
      */
     int getCurrentNodeId();

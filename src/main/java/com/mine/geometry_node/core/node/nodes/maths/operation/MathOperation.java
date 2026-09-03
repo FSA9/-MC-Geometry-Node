@@ -44,15 +44,10 @@ public class MathOperation extends BaseNode {
     private NodeDef buildDef(String operator) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.math_operation"));
         builder.addRow(new PortRow(null, StandardPorts.FLOAT_VALUE.toOutput(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(
-                StandardPorts.STRING.toInput("+").hiddenPin(), null, UIHint.SELECT, null,
-                Map.of(PortMetaKeys.OPTIONS, ALL_OPERATORS)));
-        builder.addRow(new PortRow(StandardPorts.FLOAT_VALUE.toInputWithIndex(1), null, UIHint.INPUT, null, null));
+        builder.addPassthroughInput(StandardPorts.STRING.toInput("+").hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, ALL_OPERATORS));
+        builder.addPassthroughInput(StandardPorts.FLOAT_VALUE.toInputWithIndex(1), UIHint.INPUT, null, null);
         if (isBinaryOperator(operator)) {
-            builder.addRow(new PortRow(
-                    StandardPorts.FLOAT_VALUE.toInputWithIndex(2),
-                    null, UIHint.INPUT, null, null
-            ));
+            builder.addPassthroughInput(StandardPorts.FLOAT_VALUE.toInputWithIndex(2), UIHint.INPUT, null, null);
         }
 
         return builder.build();

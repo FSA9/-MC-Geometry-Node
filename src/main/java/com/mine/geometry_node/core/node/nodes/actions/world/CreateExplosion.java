@@ -21,10 +21,10 @@ public class CreateExplosion extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.create_explosion"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.RADIUS.toInput(4.0f), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.IS_BLOCK_BREAK.toInputWithIndex(0, true), null, UIHint.CHECKBOX, null, null)) // 是否破坏方块
-                .addRow(new PortRow(StandardPorts.IS_FIRE_GEN.toInputWithIndex(1, false), null, UIHint.CHECKBOX, null, null)) // 是否产生火焰
+                .addPassthroughInput(StandardPorts.XYZ.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.RADIUS.toInput(4.0f), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.IS_BLOCK_BREAK.toInputWithIndex(0, true), UIHint.CHECKBOX) // 是否破坏方块
+                .addPassthroughInput(StandardPorts.IS_FIRE_GEN.toInputWithIndex(1, false), UIHint.CHECKBOX) // 是否产生火焰
                 .build();
     }
 

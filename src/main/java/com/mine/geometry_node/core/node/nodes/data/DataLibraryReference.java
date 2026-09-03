@@ -49,12 +49,10 @@ public final class DataLibraryReference extends com.mine.geometry_node.core.node
                         .input(StandardPorts.ENTRY_ID, "id")
                         .output(VALUE, "value")
                         .build())
-                .addRow(new PortRow(
-                        StandardPorts.ENTRY_ID.toInput(),
-                        new PortDef(VALUE,
+                .addRow(new PortRow(null, new PortDef(VALUE,
                                 Component.translatable("geometry_node.port.data_library_value"),
-                                type, type.getDefaultValue(), false),
-                        UIHint.INPUT, null, null))
+                                type, type.getDefaultValue(), false), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTRY_ID.toInput(), UIHint.INPUT, null, null)
                 .addRow(new PortRow(null, null, UIHint.CUSTOM, INFO_WIDGET_ID, null))
                 .build();
     }

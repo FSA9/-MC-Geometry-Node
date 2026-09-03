@@ -44,46 +44,32 @@ public class ShootProjectile extends BaseNode {
                         UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.PROJECTILE.toOutput(),
                         UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.PROJECTILE.toInput(), null,
-                        UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.SOURCE_ENTITY.toInput(), null,
-                        UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null,
-                        UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.VECTOR.toInput(new Vec3(0, 0, 1)), null,
-                        UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.SPEED.toInput(1.5f), null,
-                        UIHint.INPUT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.COLLISION_POLICY
+                .addRow(new PortRow(StandardPorts.PROJECTILE.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.SOURCE_ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.START_POS.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.VECTOR.toInput(new Vec3(0, 0, 1)), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.SPEED.toInput(1.5f), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.COLLISION_POLICY
                                 .toInput(ProjectileCollisionPolicy.VANILLA.id())
-                                .hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(
+                                .hiddenPin(), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, ProjectileCollisionPolicy.OPTION_IDS,
                                 PortMetaKeys.OPTION_LABELS,
                                 ProjectileCollisionPolicy.OPTION_LABEL_KEYS
-                        )
-                ))
-                .addRow(new PortRow(StandardPorts.GRAVITY.toInput(true), null,
-                        UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.IGNORE_AIR_RESISTANCE.toInput(false), null,
-                        UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.INVISIBLE.toInput(false), null,
-                        UIHint.CHECKBOX, null, null))
+                        ))
+                .addPassthroughInput(StandardPorts.GRAVITY.toInput(true), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.IGNORE_AIR_RESISTANCE.toInput(false), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.INVISIBLE.toInput(false), UIHint.CHECKBOX)
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        context.setNodeResult(StandardPorts.PROJECTILE.getId(), null);
         Level level = context.getLevel();
         if (level == null || level.isClientSide()) return next(StandardPorts.FLOW_OUT.getId());
 
         Projectile projectile = getInput(context, StandardPorts.PROJECTILE.getId(), Projectile.class);
         if (projectile == null || projectile.isRemoved() || projectile.level() != level) {
-            context.setTempData("spawned_projectile", null);
             return next(StandardPorts.FLOW_OUT.getId());
         }
 
@@ -120,7 +106,7 @@ public class ShootProjectile extends BaseNode {
         projectile.setInvisible(invisible);
         projectile.shoot(direction.x, direction.y, direction.z, speed, 0.0f);
         ProjectileImpactController.markRelaunched(projectile);
-        context.setTempData("spawned_projectile", projectile);
+        context.setNodeResult(StandardPorts.PROJECTILE.getId(), projectile);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }
@@ -128,7 +114,7 @@ public class ShootProjectile extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.PROJECTILE.getId().equals(portName)) {
-            return context.getTempData("spawned_projectile");
+            return context.getNodeResult(StandardPorts.PROJECTILE.getId());
         }
         return null;
     }

@@ -31,9 +31,10 @@ public class SetSlotItem extends BaseNode {
                         .input(StandardPorts.ITEM_STACK, "item_stack")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), null, UIHint.SLOT_REF, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()), UIHint.SLOT_REF)
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT)
                 .build();
     }
 
@@ -43,14 +44,14 @@ public class SetSlotItem extends BaseNode {
         SlotRef slotRef = getInput(context, StandardPorts.SLOT.getId(), SlotRef.class);
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         boolean success = SlotAccessUtils.setItem(entity, slotRef != null ? slotRef : SlotRef.DEFAULT, stack);
-        context.setTempData(StandardPorts.BOOL.getId(), success);
+        context.setNodeResult(StandardPorts.BOOL.getId(), success);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.BOOL.getId().equals(portName)) {
-            Object value = context.getTempData(StandardPorts.BOOL.getId());
+            Object value = context.getNodeResult(StandardPorts.BOOL.getId());
             return value instanceof Boolean bool && bool;
         }
         return null;

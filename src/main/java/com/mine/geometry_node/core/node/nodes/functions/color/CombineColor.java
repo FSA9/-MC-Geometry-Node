@@ -45,13 +45,11 @@ public class CombineColor extends BaseNode {
 
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.combine_color"));
         builder.addRow(new PortRow(null, StandardPorts.COLOR.toOutput(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(
-                StandardPorts.STRING.toInput(mode).hiddenPin(), null, UIHint.SELECT, null,
-                Map.of(PortMetaKeys.OPTIONS, MODES)));
-        builder.addRow(new PortRow(channelInput(CHANNEL_1, channelNames[0]), null, UIHint.INPUT, null, NORMALIZED_RANGE));
-        builder.addRow(new PortRow(channelInput(CHANNEL_2, channelNames[1]), null, UIHint.INPUT, null, NORMALIZED_RANGE));
-        builder.addRow(new PortRow(channelInput(CHANNEL_3, channelNames[2]), null, UIHint.INPUT, null, NORMALIZED_RANGE));
-        builder.addRow(new PortRow(StandardPorts.ALPHA.toInput(1.0f), null, UIHint.INPUT, null, NORMALIZED_RANGE));
+        builder.addPassthroughInput(StandardPorts.STRING.toInput(mode).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, MODES));
+        builder.addPassthroughInput(channelInput(CHANNEL_1, channelNames[0]), UIHint.INPUT, null, NORMALIZED_RANGE);
+        builder.addPassthroughInput(channelInput(CHANNEL_2, channelNames[1]), UIHint.INPUT, null, NORMALIZED_RANGE);
+        builder.addPassthroughInput(channelInput(CHANNEL_3, channelNames[2]), UIHint.INPUT, null, NORMALIZED_RANGE);
+        builder.addPassthroughInput(StandardPorts.ALPHA.toInput(1.0f), UIHint.INPUT, null, NORMALIZED_RANGE);
         return builder.build();
     }
 

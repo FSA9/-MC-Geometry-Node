@@ -5,7 +5,6 @@ import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.node.value.SlotRef;
@@ -22,14 +21,8 @@ public class GetSlot extends BaseNode {
                         .output(StandardPorts.SLOT, "slot_out")
                         .input(StandardPorts.SLOT, "slot_in")
                         .build())
-                .addRow(new PortRow(null, StandardPorts.SLOT.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()).hiddenPin(),
-                        null,
-                        UIHint.SLOT_REF,
-                        null,
-                        null
-                ))
+                .addPassthroughInput(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()).hiddenPin(),
+                        UIHint.SLOT_REF, null, null)
                 .build();
     }
 

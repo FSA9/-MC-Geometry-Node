@@ -2,8 +2,11 @@ package com.mine.geometry_node.core.node.definition.node;
 
 import com.mine.geometry_node.core.node.meta.MetaKey;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -82,6 +85,16 @@ public record NodeDef(
                 this.rows.add(row);
             }
             return this;
+        }
+
+        public Builder addPassthroughInput(PortDef input, UIHint uiHint) {
+            return addPassthroughInput(input, uiHint, null, null);
+        }
+
+        public Builder addPassthroughInput(PortDef input, UIHint uiHint,
+                                           @Nullable String customWidgetId,
+                                           @Nullable Map<MetaKey<?>, Object> hintParams) {
+            return addRow(PortRow.passthrough(input, uiHint, customWidgetId, hintParams));
         }
 
         public NodeDef build() {

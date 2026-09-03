@@ -5,7 +5,6 @@ import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorEnti
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -46,16 +45,13 @@ public final class BehaviorMoveToNode extends BaseNode implements BehaviorExecut
                         .text("control_conflict")
                         .build())
                 .addRow(BehaviorEntityNodeSupport.parentRow())
-                .addRow(new PortRow(StandardPorts.TARGET_MODE.toInput(mode).hiddenPin(),
-                        null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS,
+                .addPassthroughInput(StandardPorts.TARGET_MODE.toInput(mode).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS,
                                         new String[]{TARGET_MODE_ENTITY, TARGET_MODE_POSITION},
                                 PortMetaKeys.OPTION_LABELS,
                                         new String[]{"geometry_node.behavior.target_mode.entity",
-                                                "geometry_node.behavior.target_mode.position"})));
+                                                "geometry_node.behavior.target_mode.position"}));
         if (TARGET_MODE_POSITION.equals(mode)) {
-            builder.addRow(new PortRow(StandardPorts.TARGET_POSITION.toInput(Vec3.ZERO),
-                    null, UIHint.VECTOR, null, null));
+            builder.addPassthroughInput(StandardPorts.TARGET_POSITION.toInput(Vec3.ZERO), UIHint.VECTOR);
         } else {
             builder.addRow(BehaviorEntityNodeSupport.input(StandardPorts.TARGET_ENTITY, null));
         }

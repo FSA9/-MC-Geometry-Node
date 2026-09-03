@@ -31,10 +31,8 @@ public final class SetDisplayPivot extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.DISPLAY_ENTITY.toInput(), StandardPorts.DISPLAY_ENTITY.toOutput(),
-                        UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.PIVOT.toInput(Vec3.ZERO), null,
-                        UIHint.VECTOR, null, null))
+                .addPassthroughInput(StandardPorts.DISPLAY_ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.PIVOT.toInput(Vec3.ZERO), UIHint.VECTOR)
                 .build();
     }
 

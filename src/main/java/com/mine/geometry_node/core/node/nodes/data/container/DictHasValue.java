@@ -18,10 +18,9 @@ public class DictHasValue extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.dict_has_value"))
-                // 第一行：左侧输入字典 DICT，右侧输出 BOOL
-                .addRow(new PortRow(StandardPorts.DICT.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                // 第二行：左侧输入任意值 ANY_VALUE
-                .addRow(new PortRow(StandardPorts.ANY_VALUE.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.DICT.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.ANY_VALUE.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

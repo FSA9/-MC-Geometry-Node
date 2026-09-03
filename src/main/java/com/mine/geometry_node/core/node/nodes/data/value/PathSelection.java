@@ -4,7 +4,6 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
@@ -15,13 +14,7 @@ public class PathSelection extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.path_selection"))
-                .addRow(new PortRow(
-                        StandardPorts.PATH.toInput(""),
-                        StandardPorts.PATH.toOutput(),
-                        UIHint.PATH,
-                        null,
-                        null
-                ))
+                .addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH, null, null)
                 .build();
     }
 

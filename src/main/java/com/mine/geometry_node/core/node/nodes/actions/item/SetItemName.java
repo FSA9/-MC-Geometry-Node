@@ -22,15 +22,17 @@ public class SetItemName extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
 
                 // 2. 数据流直通：左侧接收物品，右侧输出修改后的同一件物品
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
 
                 // 3. 配置项：要修改的名字
-                .addRow(new PortRow(StandardPorts.NAME.toInput("神兵利器"), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.NAME.toInput("神兵利器"), UIHint.INPUT)
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        context.setNodeResult(StandardPorts.ITEM_STACK.getId(), null);
         // 1. 获取上游传来的物品实例
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         String name = getInput(context, StandardPorts.NAME.getId(), String.class);
@@ -43,7 +45,7 @@ public class SetItemName extends BaseNode {
 
         // 3. 将修改后的物品栈存入临时缓存，供下游节点拉取
         if (stack != null) {
-            context.setTempData(StandardPorts.ITEM_STACK.getId(), stack);
+            context.setNodeResult(StandardPorts.ITEM_STACK.getId(), stack);
         }
 
         // 4. 推动执行流到下一个节点
@@ -54,7 +56,7 @@ public class SetItemName extends BaseNode {
     public Object compute(ExecutionContext context, String portName) {
         // 当下游节点需要 ITEM_STACK 时，直接把我们刚才修改好并存入缓存的对象给它
         if (StandardPorts.ITEM_STACK.getId().equals(portName)) {
-            return context.getTempData(StandardPorts.ITEM_STACK.getId());
+            return context.getNodeResult(StandardPorts.ITEM_STACK.getId());
         }
         return null;
     }

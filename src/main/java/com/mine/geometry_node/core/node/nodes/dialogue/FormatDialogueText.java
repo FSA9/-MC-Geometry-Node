@@ -54,23 +54,12 @@ public class FormatDialogueText extends BaseNode {
                 .comment(comment.build())
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, MAX_VARIABLE_COUNT);
 
-        builder.addRow(new PortRow(
-                StandardPorts.TEMPLATE.toInput(""),
-                StandardPorts.STRING.toOutput(),
-                UIHint.INPUT, null, null
-        ));
+        builder.addRow(new PortRow(null, StandardPorts.STRING.toOutput(), UIHint.DEFAULT, null, null));
+        builder.addPassthroughInput(StandardPorts.TEMPLATE.toInput(""), UIHint.INPUT);
 
         for (int i = 1; i <= variableCount; i++) {
-            builder.addRow(new PortRow(
-                    StandardPorts.VARIABLE_NAME.toInputWithIndex(i, "").hiddenPin(),
-                    null,
-                    UIHint.INPUT, null, dynamicGroupHead(i)
-            ));
-            builder.addRow(new PortRow(
-                    StandardPorts.VARIABLE_VALUE.toInputWithIndex(i),
-                    null,
-                    UIHint.DEFAULT, null, dynamicGroupRow()
-            ));
+            builder.addPassthroughInput(StandardPorts.VARIABLE_NAME.toInputWithIndex(i, "").hiddenPin(), UIHint.INPUT, null, dynamicGroupHead(i));
+            builder.addPassthroughInput(StandardPorts.VARIABLE_VALUE.toInputWithIndex(i), UIHint.DEFAULT, null, dynamicGroupRow());
         }
 
         return builder.build();

@@ -20,11 +20,8 @@ public class GetLength extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_length"))
-                .addRow(new PortRow(
-                        StandardPorts.ANY_VALUE.toInput(),
-                        StandardPorts.INT.toOutput(),
-                        UIHint.DEFAULT, null, null
-                ))
+                .addRow(new PortRow(null, StandardPorts.INT.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ANY_VALUE.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

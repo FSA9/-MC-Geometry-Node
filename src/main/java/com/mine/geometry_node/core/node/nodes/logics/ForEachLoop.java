@@ -46,17 +46,10 @@ public class ForEachLoop extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.COMPLETED.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.INDEX.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.LIST.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.LIMIT.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(), null, UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
-                .addRow(new PortRow(
-                        PortDef.create(COMPLETED_POLICY, "geometry_node.port.completed_policy", PortType.STRING, POLICY_SCHEDULED).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, COMPLETED_POLICY_OPTIONS)
-                ))
+                .addPassthroughInput(StandardPorts.LIST.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.LIMIT.toInput(), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.TICK.toInput(), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
+                .addPassthroughInput(PortDef.create(COMPLETED_POLICY, "geometry_node.port.completed_policy", PortType.STRING, POLICY_SCHEDULED).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, COMPLETED_POLICY_OPTIONS))
                 .build();
     }
 

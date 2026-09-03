@@ -242,6 +242,9 @@ public final class BehaviorTreeEvaluator {
     }
 
     private Object computeDataNode(BehaviorTreeProcess instance, int nodeIndex, String outputPort) {
+        if (instance.plan().isDataPassthroughOutput(nodeIndex, outputPort)) {
+            return resolveInput(instance, nodeIndex, outputPort);
+        }
         BaseNode node = NodeRegistry.INSTANCE.get(instance.plan().getNodeType(nodeIndex));
         if (node == null) {
             throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA,
@@ -576,6 +579,10 @@ public final class BehaviorTreeEvaluator {
 
         @Override public Object getInputValue(String portName) {
             return resolveInput(instance, nodeIndex, portName);
+        }
+
+        @Override public boolean hasInputConnection(String portName) {
+            return instance.plan().findDataInput(nodeIndex, portName) != null;
         }
 
         @Override public Object getStaticInput(String portName) {

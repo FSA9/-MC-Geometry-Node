@@ -17,11 +17,11 @@ public final class BehaviorGuardNode extends BaseNode implements BehaviorExecuta
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL,
+                return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL,
                         Component.translatable("geometry_node.node.behavior_guard"))
-                .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(),
-                        StandardPorts.BEHAVIOR_CHILDREN.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.CONDITION.toInput(), null, UIHint.CHECKBOX, null, null))
+                .addRow(new PortRow(null, StandardPorts.BEHAVIOR_CHILDREN.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.CONDITION.toInput(), UIHint.CHECKBOX)
                 .build();
     }
 

@@ -30,9 +30,9 @@ public class FinishGraph extends BaseNode {
 //                        )
 //                ))
 //                // 第二行：实体
-//                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+//                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
 //                // 第三行：名称 (图 ID，填写时不带 .json)
-//                .addRow(new PortRow(StandardPorts.NAME.toInput(""), null, UIHint.INPUT, null, null))
+//                .addPassthroughInput(StandardPorts.NAME.toInput(""), UIHint.INPUT, null, null)
 //                .build();
         return null;
     }

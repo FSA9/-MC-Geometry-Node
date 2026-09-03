@@ -136,6 +136,7 @@ public class CmdGroupIntoNodeGroup implements ICommand {
                                         NodeData groupNode, BoundaryPorts boundaryPorts) {
         Set<BoundaryInputKey> bridgedInputs = new HashSet<>();
         Set<BoundaryOutputKey> bridgedOutputs = new HashSet<>();
+        Set<BoundaryInputKey> externallyFedInputs = findExternallyFedInputs(scopeNodes, selected);
 
         for (NodeData node : scopeNodes.values()) {
             if (node == null || node.outputs == null) continue;
@@ -168,6 +169,21 @@ public class CmdGroupIntoNodeGroup implements ICommand {
                             groupIn.addDataConnection(groupInputPort, link.targetNodeId(), link.targetPortName());
                         }
                     } else if (sourceInside) {
+                        BoundaryInputKey passthroughInput = new BoundaryInputKey(node.id, outPortId);
+                        if (externallyFedInputs.contains(passthroughInput)
+                                && isDataPassthroughOutput(node, outPortId)) {
+                            String groupInputPort = boundaryPorts.dataInputs.computeIfAbsent(
+                                    passthroughInput,
+                                    ignored -> createDataInputPort(groupNode, node.id, outPortId, scopeNodes)
+                            );
+                            if (bridgedInputs.add(passthroughInput)) {
+                                NodeData groupIn = groupNode.subNodes.get(GroupNodeTypes.GROUP_IN_ID);
+                                groupIn.addDataConnection(groupInputPort, node.id, outPortId);
+                            }
+                            groupNode.addDataConnection(groupInputPort,
+                                    link.targetNodeId(), link.targetPortName());
+                            continue;
+                        }
                         BoundaryOutputKey key = new BoundaryOutputKey(node.id, outPortId);
                         String groupOutputPort = boundaryPorts.dataOutputs.computeIfAbsent(
                                 key,
@@ -183,6 +199,32 @@ public class CmdGroupIntoNodeGroup implements ICommand {
                 }
             }
         }
+    }
+
+    private Set<BoundaryInputKey> findExternallyFedInputs(Map<String, NodeData> scopeNodes,
+                                                           Set<String> selected) {
+        Set<BoundaryInputKey> inputs = new HashSet<>();
+        for (NodeData source : scopeNodes.values()) {
+            if (source == null || selected.contains(source.id) || source.outputs == null) continue;
+            for (List<Connection> links : source.outputs.values()) {
+                if (links == null) continue;
+                for (Connection link : links) {
+                    if (link != null && selected.contains(link.targetNodeId())) {
+                        inputs.add(new BoundaryInputKey(link.targetNodeId(), link.targetPortName()));
+                    }
+                }
+            }
+        }
+        return inputs;
+    }
+
+    private boolean isDataPassthroughOutput(NodeData node, String portId) {
+        NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+        if (definition == null) return false;
+        for (PortRow row : definition.rows()) {
+            if (row.dataPassthrough() && row.rightPort().id().equals(portId)) return true;
+        }
+        return false;
     }
 
     private void rewriteFlowConnections(Map<String, NodeData> scopeNodes, Set<String> selected,

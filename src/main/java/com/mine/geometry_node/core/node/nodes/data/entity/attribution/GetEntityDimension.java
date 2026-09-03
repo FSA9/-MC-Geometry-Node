@@ -19,11 +19,8 @@ public class GetEntityDimension extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.get_entity_dimension"))
-                .addRow(new PortRow(
-                        StandardPorts.ENTITY.toInput(),
-                        StandardPorts.DIMENSION.toOutput(),
-                        UIHint.DEFAULT, null, null
-                ))
+                .addRow(new PortRow(null, StandardPorts.DIMENSION.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
                 .build();
     }
 

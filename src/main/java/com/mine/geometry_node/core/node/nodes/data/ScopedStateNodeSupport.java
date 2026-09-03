@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
@@ -38,18 +39,29 @@ final class ScopedStateNodeSupport {
         return scope == ScopedStateScope.OWNER || scope == ScopedStateScope.GROUP;
     }
 
-    static PortRow scopeRow(@Nullable PortDef output) {
-        PortDef input = PortDef.create(SCOPE_PORT, "geometry_node.port.state_scope",
-                PortType.STRING, DEFAULT_SCOPE.id()).hiddenPin();
-        return new PortRow(input, output, UIHint.SELECT, null, Map.of(
-                PortMetaKeys.OPTIONS, SCOPES
-        ));
+    static void addScopeInput(NodeDef.Builder builder) {
+        addScopeInput(builder, true);
     }
 
-    static PortRow dimensionRow(@Nullable PortDef output) {
-        return new PortRow(StandardPorts.DIMENSION.toInput(DEFAULT_DIMENSION), output,
-                UIHint.SELECT, null,
-                Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, RegistryDataManager.DIMENSION_REGISTRY_ID));
+    static void addScopeInput(NodeDef.Builder builder, boolean passthrough) {
+        PortDef input = PortDef.create(SCOPE_PORT, "geometry_node.port.state_scope",
+                PortType.STRING, DEFAULT_SCOPE.id()).hiddenPin();
+        Map<com.mine.geometry_node.core.node.meta.MetaKey<?>, Object> params =
+                Map.of(PortMetaKeys.OPTIONS, SCOPES);
+        if (passthrough) builder.addPassthroughInput(input, UIHint.SELECT, null, params);
+        else builder.addRow(new PortRow(input, null, UIHint.SELECT, null, params));
+    }
+
+    static void addDimensionInput(NodeDef.Builder builder) {
+        addDimensionInput(builder, true);
+    }
+
+    static void addDimensionInput(NodeDef.Builder builder, boolean passthrough) {
+        PortDef input = StandardPorts.DIMENSION.toInput(DEFAULT_DIMENSION);
+        Map<com.mine.geometry_node.core.node.meta.MetaKey<?>, Object> params =
+                Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, RegistryDataManager.DIMENSION_REGISTRY_ID);
+        if (passthrough) builder.addPassthroughInput(input, UIHint.SELECT, null, params);
+        else builder.addRow(new PortRow(input, null, UIHint.SELECT, null, params));
     }
 
     @Nullable

@@ -18,8 +18,9 @@ public class DictHasKey extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.dict_has_key"))
-                .addRow(new PortRow(StandardPorts.DICT.toInput(), StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.STRING.toInput(""), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.DICT.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.STRING.toInput(""), UIHint.INPUT, null, null)
                 .build();
     }
 

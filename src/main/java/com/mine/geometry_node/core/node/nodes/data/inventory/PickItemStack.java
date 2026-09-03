@@ -28,13 +28,7 @@ public class PickItemStack extends BaseNode {
                         .input(PORT_TARGET_ITEM, "target_item")
                         .build())
                 .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        new PortDef(PORT_TARGET_ITEM, Component.translatable("geometry_node.port.item_storage"), PortType.STRING, "", true),
-                        null,
-                        UIHint.ITEM_SLOT,
-                        null,
-                        null
-                ))
+                .addPassthroughInput(new PortDef(PORT_TARGET_ITEM, Component.translatable("geometry_node.port.item_storage"), PortType.STRING, "", true), UIHint.ITEM_SLOT, null, null)
                 .build();
     }
 

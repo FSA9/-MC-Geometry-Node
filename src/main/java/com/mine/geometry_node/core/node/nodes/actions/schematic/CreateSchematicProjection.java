@@ -105,12 +105,13 @@ public class CreateSchematicProjection extends BaseNode {
                 .comment(comment.build());
 
         builder.addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(StandardPorts.PATH.toInput(""), StandardPorts.PATH.toOutput(), UIHint.PATH, null, null));
-        builder.addRow(new PortRow(StandardPorts.KEY.toInput(""),
+        builder.addRow(new PortRow(null,
                 debugMode ? StandardPorts.RESOURCE_ID.toOutput() : StandardPorts.KEY.toOutput(),
-                UIHint.INPUT, null, null));
-        builder.addRow(new PortRow(StandardPorts.XYZ.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
-        builder.addRow(new PortRow(StandardPorts.DEBUG.toInput(debugMode), null, UIHint.CHECKBOX, null, null));
+                UIHint.DEFAULT, null, null));
+        builder.addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH);
+        builder.addRow(new PortRow(StandardPorts.KEY.toInput(""), null, UIHint.INPUT, null, null));
+        builder.addPassthroughInput(StandardPorts.XYZ.toInput(Vec3.ZERO), UIHint.VECTOR);
+        builder.addPassthroughInput(StandardPorts.DEBUG.toInput(debugMode), UIHint.CHECKBOX);
 
         if (debugMode) {
             addDebugRows(builder);
@@ -122,21 +123,18 @@ public class CreateSchematicProjection extends BaseNode {
     }
 
     private static void addDebugRows(NodeDef.Builder builder) {
-        builder.addRow(new PortRow(StandardPorts.ONLY_SELF_VISIBLE.toInput(true), null, UIHint.CHECKBOX, null, null));
-        builder.addRow(new PortRow(StandardPorts.ALPHA.toInput(DEFAULT_ALPHA), null, UIHint.INPUT, null,
-                Map.of(PortMetaKeys.NUMERIC_MIN, 0.05f, PortMetaKeys.NUMERIC_MAX, 1.0f)));
-        builder.addRow(new PortRow(StandardPorts.TICK.toInput(DEFAULT_DURATION_TICKS), null, UIHint.INPUT, null,
-                Map.of(PortMetaKeys.NUMERIC_MIN, 1)));
-        builder.addRow(new PortRow(StandardPorts.RADIUS.toInput(DEFAULT_VIEW_RANGE), null, UIHint.INPUT, null,
-                Map.of(PortMetaKeys.NUMERIC_MIN, 1.0f)));
+        builder.addPassthroughInput(StandardPorts.ONLY_SELF_VISIBLE.toInput(true), UIHint.CHECKBOX);
+        builder.addPassthroughInput(StandardPorts.ALPHA.toInput(DEFAULT_ALPHA), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0.05f, PortMetaKeys.NUMERIC_MAX, 1.0f));
+        builder.addPassthroughInput(StandardPorts.TICK.toInput(DEFAULT_DURATION_TICKS), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 1));
+        builder.addPassthroughInput(StandardPorts.RADIUS.toInput(DEFAULT_VIEW_RANGE), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 1.0f));
     }
 
     private static void addPlacementRows(NodeDef.Builder builder) {
-        builder.addRow(new PortRow(StandardPorts.UNIQUE_IF_EXISTS.toInput(true), null, UIHint.CHECKBOX, null, null));
-        builder.addRow(new PortRow(StandardPorts.REPLACE_AIR.toInput(false), null, UIHint.CHECKBOX, null, null));
-        builder.addRow(new PortRow(StandardPorts.REPLACE_BLOCKS.toInput(true), null, UIHint.CHECKBOX, null, null));
-        builder.addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
-        builder.addRow(new PortRow(StandardPorts.MIRROR.toInput(new Vec3(1.0D, 1.0D, 1.0D)), null, UIHint.VECTOR, null, null));
+        builder.addPassthroughInput(StandardPorts.UNIQUE_IF_EXISTS.toInput(true), UIHint.CHECKBOX);
+        builder.addPassthroughInput(StandardPorts.REPLACE_AIR.toInput(false), UIHint.CHECKBOX);
+        builder.addPassthroughInput(StandardPorts.REPLACE_BLOCKS.toInput(true), UIHint.CHECKBOX);
+        builder.addPassthroughInput(StandardPorts.ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR);
+        builder.addPassthroughInput(StandardPorts.MIRROR.toInput(new Vec3(1.0D, 1.0D, 1.0D)), UIHint.VECTOR);
     }
 
     @Override

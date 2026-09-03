@@ -23,12 +23,8 @@ public class IsKeyPressed extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.is_key_pressed"))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.NAME.toInput("ctrl"), null,
-                        UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, PlayerInputKeys.options())
-                ))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.NAME.toInput("ctrl"), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, PlayerInputKeys.options()))
                 .build();
     }
 

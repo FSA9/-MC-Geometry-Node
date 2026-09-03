@@ -43,26 +43,17 @@ public class FindInventorySlots extends BaseNode {
                         .input(StandardPorts.LIMIT, "limit")
                         .input(INCLUDE_EMPTY, "include_empty")
                         .build())
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.SLOT.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TAG.toInput(""), StandardPorts.BOOL.toOutput(), UIHint.INPUT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.SCOPE.toInput(SlotAccessUtils.CLEAR_SCOPE_INVENTORY).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, SlotAccessUtils.CLEAR_SCOPE_OPTIONS)
-                ))
-                .addRow(new PortRow(
-                        StandardPorts.MATCH_MODE.toInput(ValueMatchUtils.MODE_COMPONENTS).hiddenPin(),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.MODE_OPTIONS)
-                ))
-                .addRow(new PortRow(StandardPorts.LIMIT.toInput(0), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(PortDef.create(INCLUDE_EMPTY, "geometry_node.port.include_empty", PortType.BOOLEAN, false), null, UIHint.CHECKBOX, null, null))
+                .addRow(new PortRow(null, StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT, null, null)
+                .addPassthroughInput(StandardPorts.TAG.toInput(""), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.SCOPE.toInput(SlotAccessUtils.CLEAR_SCOPE_INVENTORY).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, SlotAccessUtils.CLEAR_SCOPE_OPTIONS))
+                .addPassthroughInput(StandardPorts.MATCH_MODE.toInput(ValueMatchUtils.MODE_COMPONENTS).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, ValueMatchUtils.MODE_OPTIONS))
+                .addPassthroughInput(StandardPorts.LIMIT.toInput(0), UIHint.INPUT, null, null)
+                .addPassthroughInput(PortDef.create(INCLUDE_EMPTY, "geometry_node.port.include_empty", PortType.BOOLEAN, false), UIHint.CHECKBOX, null, null)
                 .build();
     }
 

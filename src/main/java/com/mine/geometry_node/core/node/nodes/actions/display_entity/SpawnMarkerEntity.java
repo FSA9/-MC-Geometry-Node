@@ -29,14 +29,15 @@ public class SpawnMarkerEntity extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_marker_entity"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.XYZ.toInput(), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.TAG.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.DATA.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.XYZ.toInput(), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.TAG.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.DATA.toInput(), UIHint.DEFAULT)
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        context.setNodeResult(StandardPorts.ENTITY.getId(), null);
         Level level = context.getLevel();
         if (level == null || level.isClientSide()) return next(StandardPorts.FLOW_OUT.getId());
 
@@ -63,7 +64,7 @@ public class SpawnMarkerEntity extends BaseNode {
             }
 
             level.addFreshEntity(marker);
-            context.setTempData("spawned_marker_" + context.getCurrentNodeId(), marker);
+            context.setNodeResult(StandardPorts.ENTITY.getId(), marker);
         }
 
         return next(StandardPorts.FLOW_OUT.getId());
@@ -72,7 +73,7 @@ public class SpawnMarkerEntity extends BaseNode {
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.ENTITY.getId().equals(portName)) {
-            return context.getTempData("spawned_marker_" + context.getCurrentNodeId());
+            return context.getNodeResult(StandardPorts.ENTITY.getId());
         }
         return null;
     }

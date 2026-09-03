@@ -88,30 +88,24 @@ public final class CreateArea extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(areaIdPort(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.DIMENSION.toInput(RegistryDataManager.DEFAULT_DIMENSION),
-                        null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, RegistryDataManager.DIMENSION_REGISTRY_ID)))
-                .addRow(new PortRow(
-                        PortDef.create(ANCHOR_PORT, "geometry_node.port.area_anchor", PortType.STRING,
-                                AreaAnchor.WORLD.id()).hiddenPin(),
-                        null, UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, AreaAnchor.OPTIONS)))
-                .addRow(new PortRow(
-                        PortDef.create(SHAPE_PORT, "geometry_node.port.area_shape", PortType.STRING,
-                                AreaShape.BOX.id()).hiddenPin(),
-                        null, UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, AreaShape.OPTIONS)))
-                .addRow(new PortRow(CENTER_PORT, null, UIHint.VECTOR, null, null));
+                .addPassthroughInput(areaIdPort(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.DIMENSION.toInput(RegistryDataManager.DEFAULT_DIMENSION), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, RegistryDataManager.DIMENSION_REGISTRY_ID))
+                .addPassthroughInput(PortDef.create(ANCHOR_PORT, "geometry_node.port.area_anchor", PortType.STRING,
+                                AreaAnchor.WORLD.id()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, AreaAnchor.OPTIONS))
+                .addPassthroughInput(PortDef.create(SHAPE_PORT, "geometry_node.port.area_shape", PortType.STRING,
+                                AreaShape.BOX.id()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, AreaShape.OPTIONS))
+                .addPassthroughInput(CENTER_PORT, UIHint.VECTOR);
 
         switch (shape) {
-            case SPHERE -> builder.addRow(new PortRow(RADIUS_PORT, null, UIHint.INPUT, null, null));
+            case SPHERE -> builder.addPassthroughInput(RADIUS_PORT, UIHint.INPUT);
             case CYLINDER -> {
-                builder.addRow(new PortRow(RADIUS_PORT, null, UIHint.INPUT, null, null));
-                builder.addRow(new PortRow(HEIGHT_INPUT, null, UIHint.INPUT, null, null));
-                builder.addRow(new PortRow(ROTATION_PORT, null, UIHint.VECTOR, null, null));
+                builder.addPassthroughInput(RADIUS_PORT, UIHint.INPUT);
+                builder.addPassthroughInput(HEIGHT_INPUT, UIHint.INPUT);
+                builder.addPassthroughInput(ROTATION_PORT, UIHint.VECTOR);
             }
             case BOX -> {
-                builder.addRow(new PortRow(SIZE_PORT, null, UIHint.VECTOR, null, null));
-                builder.addRow(new PortRow(ROTATION_PORT, null, UIHint.VECTOR, null, null));
+                builder.addPassthroughInput(SIZE_PORT, UIHint.VECTOR);
+                builder.addPassthroughInput(ROTATION_PORT, UIHint.VECTOR);
             }
         }
         return builder.build();

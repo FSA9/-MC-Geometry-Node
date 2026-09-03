@@ -17,7 +17,8 @@ public class SnapshotValue extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.snapshot_value"))
-                .addRow(new PortRow(StandardPorts.GENERIC_VALUE.toInput(), StandardPorts.GENERIC_VALUE.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.GENERIC_VALUE.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.GENERIC_VALUE.toInput(), null, UIHint.DEFAULT, null, null))
                 .build();
     }
 

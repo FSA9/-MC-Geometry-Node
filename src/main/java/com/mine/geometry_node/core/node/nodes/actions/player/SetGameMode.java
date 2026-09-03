@@ -23,9 +23,9 @@ public class SetGameMode extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.set_game_mode"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
                 // 0: 生存, 1: 创造, 2: 冒险, 3: 旁观
-                .addRow(new PortRow(StandardPorts.INT.toInput(0), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.INT.toInput(0), UIHint.INPUT)
                 .build();
     }
 

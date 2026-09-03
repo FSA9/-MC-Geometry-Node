@@ -33,8 +33,8 @@ abstract class AbstractSetEntityBooleanProperty extends EntityPassthroughActionN
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(typeId, NodeType.ACTION, Component.translatable("geometry_node.node." + typeId))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.BOOL.toInput(defaultValue), null, UIHint.CHECKBOX, null, null))
+                .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.BOOL.toInput(defaultValue), UIHint.CHECKBOX)
                 .build();
     }
 

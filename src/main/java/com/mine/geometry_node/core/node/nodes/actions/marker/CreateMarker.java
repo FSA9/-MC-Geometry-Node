@@ -49,27 +49,22 @@ public final class CreateMarker extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.KEY.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.MARKER_TYPE.toInput(MarkerTypeRegistry.DEFAULT_TYPE_ID).hiddenPin(),
-                        null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, MarkerTypeRegistry.DYNAMIC_REGISTRY_ID)))
-                .addRow(new PortRow(StandardPorts.ONLY_SELF_VISIBLE.toInput(true), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.PLAYER.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ANCHOR_TYPE.toInput(ANCHOR_COORDINATE).hiddenPin(),
-                        null, UIHint.SELECT, null,
-                        Map.of(
+                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.MARKER_TYPE.toInput(MarkerTypeRegistry.DEFAULT_TYPE_ID).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, MarkerTypeRegistry.DYNAMIC_REGISTRY_ID))
+                .addPassthroughInput(StandardPorts.ONLY_SELF_VISIBLE.toInput(true), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.PLAYER.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.ANCHOR_TYPE.toInput(ANCHOR_COORDINATE).hiddenPin(), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, new String[]{ANCHOR_COORDINATE, ANCHOR_ENTITY},
                                 PortMetaKeys.OPTION_LABELS, new String[]{
                                         "geometry_node.marker.anchor.coordinate",
                                         "geometry_node.marker.anchor.entity"
                                 }
-                        )))
-                .addRow(new PortRow(StandardPorts.XYZ.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
-                .addRow(new PortRow(StandardPorts.TARGET_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.MESSAGE.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.SHOW_DISTANCE.toInput(true), null, UIHint.CHECKBOX, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(0), null, UIHint.INPUT, null,
-                        Map.of(PortMetaKeys.NUMERIC_MIN, 0)))
+                        ))
+                .addPassthroughInput(StandardPorts.XYZ.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.TARGET_ENTITY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.MESSAGE.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.SHOW_DISTANCE.toInput(true), UIHint.CHECKBOX)
+                .addPassthroughInput(StandardPorts.TICK.toInput(0), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
                 .build();
     }
 

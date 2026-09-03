@@ -27,8 +27,9 @@ public class SetItemCount extends BaseNode {
                         .input(StandardPorts.COUNT, "count")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.COUNT.toInput(1), null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.COUNT.toInput(1), UIHint.INPUT)
                 .build();
     }
 
@@ -43,14 +44,14 @@ public class SetItemCount extends BaseNode {
         } else {
             result.setCount(value);
         }
-        context.setTempData(StandardPorts.ITEM_STACK.getId(), result);
+        context.setNodeResult(StandardPorts.ITEM_STACK.getId(), result);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.ITEM_STACK.getId().equals(portName)) {
-            Object value = context.getTempData(StandardPorts.ITEM_STACK.getId());
+            Object value = context.getNodeResult(StandardPorts.ITEM_STACK.getId());
             return value instanceof ItemStack stack ? stack : ItemStack.EMPTY;
         }
         return null;

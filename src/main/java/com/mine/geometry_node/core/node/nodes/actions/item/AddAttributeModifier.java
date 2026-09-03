@@ -35,37 +35,21 @@ public class AddAttributeModifier extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node." + TYPE_ID))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        StandardPorts.TYPE.toInput("minecraft:generic.attack_damage"),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:attribute")
-                ))
+                .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.TYPE.toInput("minecraft:generic.attack_damage"), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "minecraft:attribute"))
                 // 增量值
-                .addRow(new PortRow(StandardPorts.FLOAT_VALUE.toInput(1.0f), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.FLOAT_VALUE.toInput(1.0f), UIHint.INPUT)
                 // 运算方式下拉框
-                .addRow(new PortRow(
-                        StandardPorts.TYPE.toInputWithIndex(1, "ADD_VALUE"),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, OPERATIONS)
-                ))
+                .addPassthroughInput(StandardPorts.TYPE.toInputWithIndex(1, "ADD_VALUE"), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, OPERATIONS))
                 // 生效槽位下拉框
-                .addRow(new PortRow(
-                        StandardPorts.TYPE.toInputWithIndex(2, "MAINHAND"),
-                        null,
-                        UIHint.SELECT,
-                        null,
-                        Map.of(PortMetaKeys.OPTIONS, SLOTS)
-                ))
+                .addPassthroughInput(StandardPorts.TYPE.toInputWithIndex(2, "MAINHAND"), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, SLOTS))
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        context.setNodeResult(StandardPorts.ITEM_STACK.getId(), null);
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         Float amount = getInput(context, StandardPorts.FLOAT_VALUE.getId(), Float.class);
         String opStr = getInput(context, StandardPorts.TYPE.getIdWithIndex(1), String.class);
@@ -107,14 +91,14 @@ public class AddAttributeModifier extends BaseNode {
                     stack.set(DataComponents.ATTRIBUTE_MODIFIERS, updated);
                 });
             }
-            context.setTempData(StandardPorts.ITEM_STACK.getId(), stack);
+            context.setNodeResult(StandardPorts.ITEM_STACK.getId(), stack);
         }
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (StandardPorts.ITEM_STACK.getId().equals(portName)) return context.getTempData(StandardPorts.ITEM_STACK.getId());
+        if (StandardPorts.ITEM_STACK.getId().equals(portName)) return context.getNodeResult(StandardPorts.ITEM_STACK.getId());
         return null;
     }
 }

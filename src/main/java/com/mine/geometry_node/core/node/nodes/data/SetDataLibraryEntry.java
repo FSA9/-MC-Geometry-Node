@@ -38,14 +38,11 @@ public final class SetDataLibraryEntry extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(
-                        PortDef.create(ENTRY_TYPE, "geometry_node.port.data_library_entry_type",
-                                PortType.STRING, DEFAULT_TYPE.name()).hiddenPin(),
-                        null, UIHint.SELECT, null,
-                        Map.of(PortMetaKeys.OPTIONS, DataLibraryTypes.optionIds())))
-                .addRow(new PortRow(StandardPorts.PATH.toInput(""), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.KEY.toInput(), null, UIHint.INPUT, null, null))
-                .addRow(new PortRow(StandardPorts.ANY_VALUE.toInput(), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(PortDef.create(ENTRY_TYPE, "geometry_node.port.data_library_entry_type",
+                                PortType.STRING, DEFAULT_TYPE.name()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, DataLibraryTypes.optionIds()))
+                .addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.KEY.toInput(), UIHint.INPUT, null, null)
+                .addPassthroughInput(StandardPorts.ANY_VALUE.toInput(), UIHint.INPUT, null, null)
                 .build();
     }
 
@@ -60,6 +57,7 @@ public final class SetDataLibraryEntry extends BaseNode {
             RemoteDataLibraryService.INSTANCE.upsert(
                     context.getLevel().getServer(), path == null ? "" : path,
                     type, key == null ? "" : key, value);
+            context.clearFrameCache();
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to update the server Data Library", exception);
         }

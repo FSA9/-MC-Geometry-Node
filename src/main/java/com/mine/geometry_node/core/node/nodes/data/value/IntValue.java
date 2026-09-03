@@ -4,7 +4,6 @@ import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
@@ -16,7 +15,7 @@ public class IntValue extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.int_value"))
-                .addRow(new PortRow(StandardPorts.INT.toInput(0), StandardPorts.INT.toOutput(), UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.INT.toInput(0), UIHint.INPUT, null, null)
                 .build();
     }
 

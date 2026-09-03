@@ -18,10 +18,8 @@ public final class BehaviorCanNavigateToNode extends BaseNode implements Behavio
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL,
                         Component.translatable("geometry_node.node.behavior_can_navigate_to"))
-                .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(),
-                        null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TARGET.toInput(null),
-                        null, UIHint.INPUT, null, null))
+                .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.TARGET.toInput(null), UIHint.INPUT)
                 .build();
     }
 

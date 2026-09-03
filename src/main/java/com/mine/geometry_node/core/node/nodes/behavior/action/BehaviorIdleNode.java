@@ -20,8 +20,8 @@ public final class BehaviorIdleNode extends BaseNode implements BehaviorExecutab
         return NodeDef.builder(TYPE_ID, NodeType.ACTION,
                         Component.translatable("geometry_node.node.behavior_idle"))
                 .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.TICK.toInput(20)
-                        .withDisplayName("geometry_node.port.tick.recheck"), null, UIHint.INPUT, null, null))
+                .addPassthroughInput(StandardPorts.TICK.toInput(20)
+                        .withDisplayName("geometry_node.port.tick.recheck"), UIHint.INPUT)
                 .build();
     }
 

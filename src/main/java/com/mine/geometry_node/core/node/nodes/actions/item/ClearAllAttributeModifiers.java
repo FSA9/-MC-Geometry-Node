@@ -27,7 +27,8 @@ public class ClearAllAttributeModifiers extends BaseNode {
                         .input(StandardPorts.ITEM_STACK, "item_stack")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
                 .build();
     }
 
@@ -38,14 +39,14 @@ public class ClearAllAttributeModifiers extends BaseNode {
         if (!result.isEmpty()) {
             result.remove(DataComponents.ATTRIBUTE_MODIFIERS);
         }
-        context.setTempData(StandardPorts.ITEM_STACK.getId(), result);
+        context.setNodeResult(StandardPorts.ITEM_STACK.getId(), result);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
         if (StandardPorts.ITEM_STACK.getId().equals(portName)) {
-            Object value = context.getTempData(StandardPorts.ITEM_STACK.getId());
+            Object value = context.getNodeResult(StandardPorts.ITEM_STACK.getId());
             return value instanceof ItemStack stack ? stack : ItemStack.EMPTY;
         }
         return null;
