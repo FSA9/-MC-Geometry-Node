@@ -84,75 +84,7 @@ public enum PortType {
      * @return 如果允许连接返回 true
      */
     public static boolean isCompatible(PortType outputport, PortType inputport) {
-        // null 检查
-        if (outputport == null || inputport == null) return false;
-
-        // 控制流先于 ANY 和数据隐式转换处理，且只允许相同通道连接。
-        if (outputport.isFlow() || inputport.isFlow()) {
-            return outputport == inputport;
-        }
-
-        // ANY 接收一切
-        if (outputport == ANY || inputport == ANY) {
-            return true;
-        }
-
-        // 同类兼容
-        if (outputport == inputport) return true;
-
-        // Shop data is stored as a map, but kept as a distinct editor-facing type.
-        if ((outputport == SHOP && inputport == DICT) || (outputport == DICT && inputport == SHOP)) {
-            return true;
-        }
-
-        // --- 隐式类型转换白名单 ---
-
-        // 1. 基础数值/布尔互转
-        boolean isOutMath = (outputport == INTEGER || outputport == LONG || outputport == FLOAT || outputport == BOOLEAN);
-        boolean isInMath  = (inputport == INTEGER || inputport == LONG || inputport == FLOAT || inputport == BOOLEAN);
-        if (isOutMath && isInMath) return true;
-
-        // Scalar-to-vector broadcasting: v -> [v, v, v].
-        if ((outputport == INTEGER || outputport == FLOAT) && inputport == XYZ) {
-            return true;
-        }
-
-        // 2. 万物皆可转STRING
-        if (inputport == STRING) {
-            if (outputport == INTEGER || outputport == LONG || outputport == FLOAT || outputport == BOOLEAN ||
-                    outputport == RICH_TEXT || outputport == ENTITY || outputport == BLOCK || outputport == SLOT || outputport == XYZ ||
-                    outputport == ITEM || outputport == LIST || outputport == DICT || outputport == SHOP || outputport == PATH) {
-                return true;
-            }
-        }
-
-        // PATH uses String storage but keeps a distinct editor-facing type.
-        if ((outputport == PATH && inputport == STRING) || (outputport == STRING && inputport == PATH)) {
-            return true;
-        }
-
-        // 3. 字符串 (STRING) 反向解析
-        if (outputport == STRING) {
-            if (inputport == RICH_TEXT) return true; // 字符串包装为富文本
-            if (inputport == ENTITY) return true; // 字符串尝试解析为 UUID 寻找实体
-            if (inputport == BLOCK)  return true; // 字符串尝试解析为方块 Registry ID
-            if (inputport == ITEM)   return true; // 字符串尝试解析为物品 Registry ID
-            if (inputport == SLOT)   return true; // 字符串解析为槽位引用
-            if (inputport == BOOLEAN) return true; // 字符串尝试解析为 "true"/"false"
-            if (inputport == INTEGER || inputport == LONG || inputport == FLOAT) return true;
-        }
-
-        // 4. 富文本可降级为字符串
-        if (outputport == RICH_TEXT && inputport == STRING) {
-            return true;
-        }
-
-        // 5. 新颜色值与旧 ARGB 整数端口互通
-        if ((outputport == COLOR && inputport == INTEGER) || (outputport == INTEGER && inputport == COLOR)) {
-            return true;
-        }
-
-        return false;
+        return PortConversionRegistry.isCompatible(outputport, inputport);
     }
 
     /**
@@ -179,6 +111,7 @@ public enum PortType {
         if (value instanceof java.util.List) return LIST;
         if (value instanceof java.util.Map) return DICT;
         if (value instanceof net.minecraft.world.phys.Vec3) return XYZ;
+        if (value instanceof net.minecraft.core.BlockPos) return XYZ;
         // 如果都不是，默认返回 ANY
         return ANY;
     }
