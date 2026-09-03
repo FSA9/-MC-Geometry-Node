@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.MetaKey;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
@@ -37,7 +38,7 @@ public final class GroupNodeDefinitions {
                 getGroupDisplayName(groupNode)
         );
         if (groupNode.comment != null && !groupNode.comment.trim().isEmpty()) {
-            builder.comment(groupNode.comment.trim());
+            builder.comment(NodeComment.builder().literal(groupNode.comment).build());
         }
 
         NodeData.PortsConfig config = groupNode.ensurePortConfig();

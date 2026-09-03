@@ -11,8 +11,8 @@ import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph.TargetCon
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
 import java.util.*;
@@ -22,15 +22,14 @@ public final class GraphFlattener {
     private static final Gson GSON = new Gson();
 
     private final Map<String, JsonObject> nodeDataLookup = new HashMap<>();
+    private final Map<String, NodeData> nodeInstanceLookup = new HashMap<>();
+    private final Map<String, CanonicalNodeSchema> nodeSchemaLookup = new HashMap<>();
     private final Map<String, Map<String, TargetConnection>> flowOutputLookup = new HashMap<>();
     private final Map<InputKey, DataConnectionSource> inputLookup = new HashMap<>();
     private final Map<String, List<String>> typeLookup = new HashMap<>();
+    private final Map<String, Map<String, Object>> authoredStaticInputLookup = new HashMap<>();
+    private final Map<String, Map<String, Object>> bridgedStaticInputLookup = new HashMap<>();
     private final Map<String, Map<String, Object>> staticInputLookup = new HashMap<>();
-    private final Map<String, Set<String>> portLookup = new HashMap<>();
-    private final Map<String, Map<String, String>> dataPassthroughLookup = new HashMap<>();
-
-    private final Set<String> allPortNames = new HashSet<>();
-
     private final Map<String, GroupBoundary> groupBoundaries = new HashMap<>();
     private final Map<String, String> boundaryToGroupMap = new HashMap<>();
     private final Set<String> virtualNodeIds = new HashSet<>();
@@ -50,7 +49,19 @@ public final class GraphFlattener {
         if (rootNodes == null) return;
 
         flattenRecursive("", rootNodes);
-        bridgeGroups();
+        Map<InputKey, DataConnectionSource> unbridgedInputs = new HashMap<>(inputLookup);
+
+        bridgeDataInputs();
+        finalizeNodeSchemas();
+
+        resetBridgedStaticInputs();
+        inputLookup.clear();
+        inputLookup.putAll(unbridgedInputs);
+        dataResolutionCache.clear();
+        bridgeDataInputs();
+        finalizeNodeSchemas();
+
+        bridgeExecutionOutputs();
         removeVirtualNodes();
     }
 
@@ -69,8 +80,10 @@ public final class GraphFlattener {
             NodeData instanceData = GSON.fromJson(nodeObj, NodeData.class);
             instanceData.id = globalId;
             instanceData.restoreDocumentDefaults();
+            nodeInstanceLookup.put(globalId, instanceData);
             NodeDef instanceDefinition = NodeRegistry.INSTANCE.resolveDefinition(instanceData);
-            collectPorts(globalId, instanceDefinition);
+            CanonicalNodeSchema schema = CanonicalNodeSchema.from(type, instanceDefinition);
+            nodeSchemaLookup.put(globalId, schema);
 
             if (isVirtualType(type)) {
                 virtualNodeIds.add(globalId);
@@ -84,7 +97,7 @@ public final class GraphFlattener {
                 if (boundary.groupOutId != null) boundaryToGroupMap.put(boundary.groupOutId, globalId);
             }
 
-            parseStaticInputs(globalId, instanceDefinition, nodeObj);
+            parseStaticInputs(globalId, schema, nodeObj);
             parseExecutionOutputs(globalId, prefix, nodeObj);
             parseDataOutputs(globalId, prefix, nodeObj);
 
@@ -94,42 +107,73 @@ public final class GraphFlattener {
         }
     }
 
-    private void parseStaticInputs(String globalId, NodeDef definition, JsonObject nodeObj) {
-        Map<String, Object> bakedInputs = new HashMap<>();
-        if (definition != null) {
-            for (PortRow row : definition.rows()) {
-                if (row.leftPort() != null && !row.leftPort().type().isFlow()
-                        && row.leftPort().defaultValue() != null) {
-                    bakedInputs.put(row.leftPort().id(), row.leftPort().defaultValue());
-                }
-            }
-        }
-
-        addPortConfigInputDefaults(nodeObj, bakedInputs);
+    private void parseStaticInputs(String globalId, CanonicalNodeSchema schema, JsonObject nodeObj) {
+        Map<String, Object> overrides = new HashMap<>();
+        addPortConfigInputDefaults(nodeObj, overrides);
 
         JsonObject inputs = asObject(nodeObj.get("inputs"));
         if (inputs != null) {
-            bakedInputs.putAll(parseValueMap(inputs));
+            overrides.putAll(parseValueMap(inputs));
         }
+
+        authoredStaticInputLookup.put(globalId, overrides);
+        Map<String, Object> bakedInputs = new HashMap<>(overrides);
+        canonicalizeStaticInputs(bakedInputs, schema);
 
         staticInputLookup.put(globalId, bakedInputs);
-        allPortNames.addAll(bakedInputs.keySet());
     }
 
-    private void collectPorts(String globalId, NodeDef definition) {
-        if (definition == null) return;
-        Set<String> ports = new HashSet<>();
-        Map<String, String> passthroughs = new HashMap<>();
-        for (PortRow row : definition.rows()) {
-            if (row.leftPort() != null) ports.add(row.leftPort().id());
-            if (row.rightPort() != null) ports.add(row.rightPort().id());
-            if (row.dataPassthrough()) {
-                passthroughs.put(row.rightPort().id(), row.leftPort().id());
+    private static void canonicalizeStaticInputs(
+            Map<String, Object> inputs, CanonicalNodeSchema schema) {
+        for (var input : schema.inputs().values()) {
+            if (input.type().isFlow()
+                    || inputs.get(input.id()) == ExplicitNullInput.INSTANCE) {
+                continue;
             }
+            Object value = inputs.containsKey(input.id())
+                    ? inputs.get(input.id()) : input.defaultValue();
+            if (value == null) continue;
+            Object converted = TypeConverter.convertForPort(value, input.type());
+            inputs.put(input.id(), converted != null ? converted : value);
         }
-        portLookup.put(globalId, Set.copyOf(ports));
-        dataPassthroughLookup.put(globalId, Map.copyOf(passthroughs));
-        allPortNames.addAll(ports);
+    }
+
+    /**
+     * Publishes the final schema after group inputs have been bridged. Dynamic definitions may
+     * depend on selector inputs, so the preliminary schema used to flatten connections is not
+     * necessarily the schema that runtime compilation must consume.
+     */
+    private void finalizeNodeSchemas() {
+        for (Map.Entry<String, NodeData> entry : nodeInstanceLookup.entrySet()) {
+            String nodeId = entry.getKey();
+            NodeData instance = entry.getValue();
+            Map<String, Object> staticInputs = staticInputLookup.getOrDefault(nodeId, Map.of());
+            Map<String, Object> definitionInputs = new LinkedHashMap<>();
+            staticInputs.forEach((port, value) -> {
+                if (value != ExplicitNullInput.INSTANCE) definitionInputs.put(port, value);
+            });
+            instance.inputs = definitionInputs;
+
+            NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(instance);
+            CanonicalNodeSchema schema = CanonicalNodeSchema.from(instance.type, definition);
+            nodeSchemaLookup.put(nodeId, schema);
+
+            Map<String, Object> canonicalInputs = new HashMap<>(
+                    authoredStaticInputLookup.getOrDefault(nodeId, Map.of()));
+            canonicalInputs.putAll(bridgedStaticInputLookup.getOrDefault(nodeId, Map.of()));
+            canonicalizeStaticInputs(canonicalInputs, schema);
+            staticInputLookup.put(nodeId, canonicalInputs);
+        }
+    }
+
+    private void resetBridgedStaticInputs() {
+        bridgedStaticInputLookup.clear();
+        for (Map.Entry<String, CanonicalNodeSchema> entry : nodeSchemaLookup.entrySet()) {
+            Map<String, Object> inputs = new HashMap<>(
+                    authoredStaticInputLookup.getOrDefault(entry.getKey(), Map.of()));
+            canonicalizeStaticInputs(inputs, entry.getValue());
+            staticInputLookup.put(entry.getKey(), inputs);
+        }
     }
 
     private void addPortConfigInputDefaults(JsonObject nodeObj, Map<String, Object> bakedInputs) {
@@ -146,7 +190,6 @@ public final class GraphFlattener {
             if (defaultValue != null) {
                 bakedInputs.put(portId, defaultValue);
             }
-            allPortNames.add(portId);
         }
     }
 
@@ -157,7 +200,6 @@ public final class GraphFlattener {
 
         Map<String, TargetConnection> flowMap = new HashMap<>();
         for (String port : execObj.keySet()) {
-            allPortNames.add(port);
 
             TargetConnection target = parseTarget(prefix, execObj.get(port), "flow_in");
             if (target != null) {
@@ -172,7 +214,6 @@ public final class GraphFlattener {
         if (outObj == null) return;
 
         for (String sourcePort : outObj.keySet()) {
-            allPortNames.add(sourcePort);
 
             JsonArray targets = asArray(outObj.get(sourcePort));
             if (targets == null) continue;
@@ -181,18 +222,12 @@ public final class GraphFlattener {
                 TargetConnection target = parseTarget(prefix, targetElement, null);
                 if (target == null || target.targetPortName() == null || target.targetPortName().isBlank()) continue;
 
-                allPortNames.add(target.targetPortName());
                 inputLookup.put(
                         new InputKey(target.targetNodeId(), target.targetPortName()),
                         new DataConnectionSource(globalId, sourcePort)
                 );
             }
         }
-    }
-
-    private void bridgeGroups() {
-        bridgeDataInputs();
-        bridgeExecutionOutputs();
     }
 
     private void bridgeDataInputs() {
@@ -257,9 +292,9 @@ public final class GraphFlattener {
         }
 
         DataResolution resolved;
-        String passthroughInput = dataPassthroughLookup
-                .getOrDefault(nodeId, Map.of())
-                .get(port);
+        CanonicalNodeSchema schema = nodeSchemaLookup.get(nodeId);
+        String passthroughInput = schema != null && schema.isDataPassthroughOutput(port)
+                ? port : null;
         GroupBoundary groupBoundary = groupBoundaries.get(nodeId);
         if (passthroughInput != null) {
             DataConnectionSource provider = inputLookup.get(
@@ -362,8 +397,8 @@ public final class GraphFlattener {
         if (groupInputs != null && groupInputs.containsKey(port)) {
             return DataResolution.staticValue(groupInputs.get(port));
         }
-        Set<String> ports = portLookup.get(groupId);
-        return ports != null && ports.contains(port)
+        CanonicalNodeSchema schema = nodeSchemaLookup.get(groupId);
+        return schema != null && schema.portIds().contains(port)
                 ? DataResolution.staticValue(null)
                 : DataResolution.empty();
     }
@@ -384,9 +419,20 @@ public final class GraphFlattener {
     }
 
     private void setStaticInput(String nodeId, String portName, Object value) {
+        Object canonicalValue = value;
+        CanonicalNodeSchema schema = nodeSchemaLookup.get(nodeId);
+        if (value != null && schema != null) {
+            var input = schema.inputs().get(portName);
+            if (input != null && !input.type().isFlow()) {
+                Object converted = TypeConverter.convertForPort(value, input.type());
+                if (converted != null) canonicalValue = converted;
+            }
+        }
+        Object storedValue = canonicalValue != null ? canonicalValue : ExplicitNullInput.INSTANCE;
+        bridgedStaticInputLookup.computeIfAbsent(nodeId, ignored -> new HashMap<>())
+                .put(portName, storedValue);
         staticInputLookup.computeIfAbsent(nodeId, ignored -> new HashMap<>())
-                .put(portName, value != null ? value : ExplicitNullInput.INSTANCE);
-        allPortNames.add(portName);
+                .put(portName, storedValue);
     }
 
     private void removeVirtualNodes() {
@@ -394,10 +440,12 @@ public final class GraphFlattener {
 
         for (String virtualId : virtualNodeIds) {
             nodeDataLookup.remove(virtualId);
+            nodeInstanceLookup.remove(virtualId);
+            nodeSchemaLookup.remove(virtualId);
             flowOutputLookup.remove(virtualId);
+            authoredStaticInputLookup.remove(virtualId);
+            bridgedStaticInputLookup.remove(virtualId);
             staticInputLookup.remove(virtualId);
-            portLookup.remove(virtualId);
-            dataPassthroughLookup.remove(virtualId);
         }
 
         for (Iterator<Map.Entry<String, List<String>>> iterator = typeLookup.entrySet().iterator(); iterator.hasNext();) {
@@ -534,9 +582,24 @@ public final class GraphFlattener {
     }
 
     private FlattenedGraph snapshot() {
-        return new FlattenedGraph(nodeDataLookup, flowOutputLookup,
-                inputLookup, typeLookup, staticInputLookup, portLookup,
-                allPortNames);
+        return new FlattenedGraph(nodeSchemaLookup, flowOutputLookup,
+                inputLookup, typeLookup, staticInputLookup,
+                collectFinalPortNames());
+    }
+
+    private Set<String> collectFinalPortNames() {
+        Set<String> names = new HashSet<>();
+        nodeSchemaLookup.values().forEach(schema -> names.addAll(schema.portIds()));
+        staticInputLookup.values().forEach(inputs -> names.addAll(inputs.keySet()));
+        flowOutputLookup.values().forEach(outputs -> outputs.forEach((sourcePort, target) -> {
+            names.add(sourcePort);
+            if (target.targetPortName() != null) names.add(target.targetPortName());
+        }));
+        inputLookup.forEach((target, source) -> {
+            names.add(target.portName());
+            names.add(source.sourcePortName());
+        });
+        return names;
     }
 
     private record GroupBoundary(String groupId, String groupInId, String groupOutId) {}

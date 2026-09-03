@@ -110,7 +110,7 @@ public final class OnAreaEvent extends BaseEventNode {
                 .addStaticInput(idPort, UIHint.INPUT)
                 .addStaticInput(StandardPorts.DIMENSION.toInput(RegistryDataManager.DEFAULT_DIMENSION),
                         UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID,
-                                RegistryDataManager.DIMENSION_REGISTRY_ID)))
+                                RegistryDataManager.DIMENSION_REGISTRY_ID))
                 .addStaticInput(PortDef.create(PHASE_PORT, "geometry_node.port.area_phase", PortType.STRING,
                                 PHASE_ENTER), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, PHASE_OPTIONS))
                 .addStaticInput(PortDef.create(TARGET_PORT, "geometry_node.port.area_target", PortType.STRING,

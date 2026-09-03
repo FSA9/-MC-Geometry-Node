@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.container;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -33,8 +34,12 @@ public class ListHasValue extends BaseNode {
 
         int index = -1;
         if (list != null && targetValue != null) {
-            // indexOf 底层自带严格的类型校验和 .equals() 判断
-            index = list.indexOf(targetValue);
+            for (int candidate = 0; candidate < list.size(); candidate++) {
+                if (GraphValueSnapshot.equivalent(list.get(candidate), targetValue)) {
+                    index = candidate;
+                    break;
+                }
+            }
         }
 
         // 2. 根据下游请求的端口分别返回数据

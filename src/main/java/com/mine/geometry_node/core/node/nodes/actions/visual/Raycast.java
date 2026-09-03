@@ -52,18 +52,14 @@ public class Raycast extends BaseNode {
 
     private record RaycastResult(boolean isHit, Vec3 hitPos, Entity hitEntity) {}
 
-    private RaycastResult doTrace(ExecutionContext context) {
-        String cacheKey = "raycast_cache_" + context.getCurrentNodeId();
-        RaycastResult cached = (RaycastResult) context.getTempData(cacheKey);
-        if (cached != null) return cached;
-
+    private RaycastResult trace(ExecutionContext context) {
         Vec3 start = getInput(context, StandardPorts.START_POS.getId(), Vec3.class);
         Vec3 dir = getInput(context, StandardPorts.VECTOR.getId(), Vec3.class);
         Float dist = getInput(context, StandardPorts.DIST.getId(), Float.class);
         Float radius = getInput(context, StandardPorts.RADIUS.getId(), Float.class);
 
         if (start == null || dir == null || dir.lengthSqr() < 0.0001) {
-            return cacheAndReturn(context, cacheKey, new RaycastResult(false, start != null ? start : Vec3.ZERO, null));
+            return new RaycastResult(false, start != null ? start : Vec3.ZERO, null);
         }
         if (dist == null) dist = 20.0f;
         if (radius == null) radius = 0.0f; // 默认无限细
@@ -107,26 +103,25 @@ public class Raycast extends BaseNode {
             finalResult = new RaycastResult(false, end, null);
         }
 
-        return cacheAndReturn(context, cacheKey, finalResult);
-    }
-
-    private RaycastResult cacheAndReturn(ExecutionContext context, String key, RaycastResult result) {
-        context.setTempData(key, result);
-        return result;
+        return finalResult;
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        doTrace(context);
+        RaycastResult result = trace(context);
+        context.setNodeResult(StandardPorts.IS_HIT.getId(), result.isHit());
+        context.setNodeResult(StandardPorts.XYZ.getId(), result.hitPos());
+        context.setNodeResult(StandardPorts.ENTITY.getId(), result.hitEntity());
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        RaycastResult result = doTrace(context);
-        if (StandardPorts.IS_HIT.getId().equals(portName)) return result.isHit();
-        if (StandardPorts.XYZ.getId().equals(portName)) return result.hitPos();
-        if (StandardPorts.ENTITY.getId().equals(portName)) return result.hitEntity();
+        if (StandardPorts.IS_HIT.getId().equals(portName)
+                || StandardPorts.XYZ.getId().equals(portName)
+                || StandardPorts.ENTITY.getId().equals(portName)) {
+            return context.getNodeResult(portName);
+        }
         return null;
     }
 }

@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.engine.graph.compile.validation;
 
-import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
 
@@ -48,8 +47,8 @@ public final class GraphDocumentValidator {
     }
 
     public static Input input(String assetId, FlattenedGraph flattened) {
-        List<Node> nodes = flattened.nodes().entrySet().stream()
-                .map(entry -> new Node(entry.getKey(), readNodeType(entry.getValue())))
+        List<Node> nodes = flattened.nodeSchemas().entrySet().stream()
+                .map(entry -> new Node(entry.getKey(), entry.getValue().typeId()))
                 .toList();
         long connectionCount = flattened.dataInputs().size();
         connectionCount += flattened.executionOutputs().values().stream()
@@ -57,11 +56,6 @@ public final class GraphDocumentValidator {
         int boundedCount = connectionCount > MAX_CONNECTIONS
                 ? MAX_CONNECTIONS + 1 : (int) connectionCount;
         return new Input(assetId, nodes, boundedCount);
-    }
-
-    private static String readNodeType(JsonObject node) {
-        return node != null && node.has("node_type") && node.get("node_type").isJsonPrimitive()
-                ? node.get("node_type").getAsString() : null;
     }
 
     private static GraphDiagnostic diagnostic(String assetId, String code,

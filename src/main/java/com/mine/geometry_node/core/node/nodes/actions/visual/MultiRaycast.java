@@ -71,11 +71,7 @@ public class MultiRaycast extends BaseNode {
 
     private record MultiRaycastResult(boolean isHit, Vec3 endPos, List<Entity> hitEntities) {}
 
-    private MultiRaycastResult doTrace(ExecutionContext context) {
-        String cacheKey = "multi_raycast_cache_" + context.getCurrentNodeId();
-        MultiRaycastResult cached = (MultiRaycastResult) context.getTempData(cacheKey);
-        if (cached != null) return cached;
-
+    private MultiRaycastResult trace(ExecutionContext context) {
         Vec3 start = getInput(context, StandardPorts.START_POS.getId(), Vec3.class);
         Float pitch = getInput(context, StandardPorts.PITCH.getId(), Float.class);
         Float yaw = getInput(context, StandardPorts.YAW.getId(), Float.class);
@@ -163,26 +159,25 @@ public class MultiRaycast extends BaseNode {
         }
 
         boolean isHit = !hitEntitiesList.isEmpty() || actualEnd.distanceToSqr(start) < maxEnd.distanceToSqr(start);
-        MultiRaycastResult result = new MultiRaycastResult(isHit, actualEnd, hitEntitiesList);
-
-        context.setTempData(cacheKey, result);
-        return result;
+        return new MultiRaycastResult(isHit, actualEnd, List.copyOf(hitEntitiesList));
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        doTrace(context);
+        MultiRaycastResult result = trace(context);
+        context.setNodeResult(StandardPorts.IS_HIT.getId(), result.isHit());
+        context.setNodeResult(StandardPorts.XYZ.getId(), result.endPos());
+        context.setNodeResult(StandardPorts.LIST.getId(), result.hitEntities());
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        MultiRaycastResult result = doTrace(context);
-
-        if (StandardPorts.IS_HIT.getId().equals(portName)) return result.isHit();
-        if (StandardPorts.XYZ.getId().equals(portName)) return result.endPos();
-        if (StandardPorts.LIST.getId().equals(portName)) return result.hitEntities();
-
+        if (StandardPorts.IS_HIT.getId().equals(portName)
+                || StandardPorts.XYZ.getId().equals(portName)
+                || StandardPorts.LIST.getId().equals(portName)) {
+            return context.getNodeResult(portName);
+        }
         return null;
     }
 }

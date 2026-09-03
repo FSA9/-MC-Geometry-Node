@@ -8,15 +8,22 @@ import java.util.List;
 
 public record NodeComment(
         List<String> textKeys,
+        List<String> literalTexts,
         List<PortComment> outputs,
         List<PortComment> inputs
 ) {
-    public static final NodeComment EMPTY = new NodeComment(List.of(), List.of(), List.of());
+    public static final NodeComment EMPTY = new NodeComment(List.of(), List.of(), List.of(), List.of());
 
     public NodeComment {
         textKeys = copyNonBlank(textKeys);
+        literalTexts = copyNonBlank(literalTexts);
         outputs = copyNonEmpty(outputs);
         inputs = copyNonEmpty(inputs);
+    }
+
+    /** Preserves the original public constructor used by existing addons. */
+    public NodeComment(List<String> textKeys, List<PortComment> outputs, List<PortComment> inputs) {
+        this(textKeys, List.of(), outputs, inputs);
     }
 
     public static Builder builder() {
@@ -31,7 +38,8 @@ public record NodeComment(
     }
 
     public boolean isEmpty() {
-        return textKeys.isEmpty() && outputs.isEmpty() && inputs.isEmpty();
+        return textKeys.isEmpty() && literalTexts.isEmpty()
+                && outputs.isEmpty() && inputs.isEmpty();
     }
 
     private static List<String> copyNonBlank(@Nullable List<String> values) {
@@ -74,6 +82,7 @@ public record NodeComment(
     public static final class Builder {
         private final String keyPrefix;
         private final List<String> textKeys = new ArrayList<>();
+        private final List<String> literalTexts = new ArrayList<>();
         private final List<PortComment> outputs = new ArrayList<>();
         private final List<PortComment> inputs = new ArrayList<>();
 
@@ -88,6 +97,14 @@ public record NodeComment(
         public Builder text(String translationKey) {
             if (translationKey != null && !translationKey.isBlank()) {
                 textKeys.add(resolveKey(translationKey));
+            }
+            return this;
+        }
+
+        /** Adds runtime-authored text, such as a node group's user comment. */
+        public Builder literal(String text) {
+            if (text != null && !text.isBlank()) {
+                literalTexts.add(text.trim());
             }
             return this;
         }
@@ -111,7 +128,7 @@ public record NodeComment(
         }
 
         public NodeComment build() {
-            return new NodeComment(textKeys, outputs, inputs);
+            return new NodeComment(textKeys, literalTexts, outputs, inputs);
         }
 
         private String resolveKey(String translationKey) {

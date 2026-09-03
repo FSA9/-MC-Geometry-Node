@@ -33,7 +33,7 @@ public final class MissingNodeDefinitions {
                 : "unknown";
 
         NodeDef.Builder builder = NodeDef.builder(typeId, NodeType.CUSTOM, Component.literal("Missing: " + typeId))
-                .comment(COMMENT);
+                .comment(NodeComment.builder().literal(COMMENT).build());
 
         List<PortDef> execInputs = collectConfiguredPorts(data, "exec_inputs", PortType.EXECUTION);
         List<PortDef> inputs = collectInputPorts(data);

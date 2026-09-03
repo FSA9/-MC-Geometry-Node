@@ -1,32 +1,22 @@
 package com.mine.geometry_node.core.engine.graph.compile;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
-import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
-import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * Compiler-facing, graph-family-neutral node table. It owns the canonical
- * node/port/static-input/data-input representation shared by runtime plans.
+ * Compiler-facing, graph-family-neutral node table. It compacts the canonical
+ * flattened schemas and connections into the representation shared by runtime plans.
  */
 public final class CompiledNodeTable {
-    private static final Gson GSON = new Gson();
-
     private final List<String> nodeIds;
     private final Map<String, NodeDescriptor> descriptors;
     private final CompiledNodeIndex index;
@@ -40,7 +30,7 @@ public final class CompiledNodeTable {
     }
 
     public static CompiledNodeTable build(FlattenedGraph flattened) {
-        List<String> nodeIds = flattened.nodes().keySet().stream().sorted().toList();
+        List<String> nodeIds = flattened.nodeSchemas().keySet().stream().sorted().toList();
         int size = nodeIds.size();
         Map<String, NodeDescriptor> descriptors = new LinkedHashMap<>();
         String[] ids = new String[size];
@@ -51,24 +41,16 @@ public final class CompiledNodeTable {
 
         for (int nodeIndex = 0; nodeIndex < size; nodeIndex++) {
             String nodeId = nodeIds.get(nodeIndex);
+            CanonicalNodeSchema schema = flattened.nodeSchemas().get(nodeId);
             Map<String, Object> flattenedInputs =
                     flattened.staticInputs().getOrDefault(nodeId, Map.of());
-            NodeData node = decodeNode(nodeId, flattened.nodes().get(nodeId), flattenedInputs);
-            NodeDef definition = node != null ? NodeRegistry.INSTANCE.resolveDefinition(node) : null;
-            PortCatalog catalog = PortCatalog.from(definition);
-            String type = node != null && node.type != null ? node.type : "unknown";
             ids[nodeIndex] = nodeId;
-            types[nodeIndex] = type;
-            staticInputs[nodeIndex] = canonicalStaticInputs(
-                    flattenedInputs, catalog.inputs());
-            Set<String> nodePorts = new LinkedHashSet<>();
-            nodePorts.addAll(catalog.inputs().keySet());
-            nodePorts.addAll(catalog.outputs().keySet());
-            nodePorts.addAll(flattened.ports().getOrDefault(nodeId, Set.of()));
-            ports[nodeIndex] = Set.copyOf(nodePorts);
-            dataPassthroughOutputs[nodeIndex] = catalog.dataPassthroughOutputs();
-            descriptors.put(nodeId, new NodeDescriptor(nodeId, nodeIndex, type,
-                    catalog.inputs(), catalog.outputs()));
+            types[nodeIndex] = schema.typeId();
+            staticInputs[nodeIndex] = flattenedInputs;
+            ports[nodeIndex] = schema.portIds();
+            dataPassthroughOutputs[nodeIndex] = schema.dataPassthroughOutputs();
+            descriptors.put(nodeId, new NodeDescriptor(nodeId, nodeIndex, schema.typeId(),
+                    schema.inputs(), schema.outputs()));
         }
 
         Map<String, Integer> portKeys = buildPortKeys(ports, flattened.portNames());
@@ -105,40 +87,6 @@ public final class CompiledNodeTable {
         return index;
     }
 
-    private static @Nullable NodeData decodeNode(String nodeId, @Nullable JsonObject encoded,
-                                                 Map<String, Object> flattenedInputs) {
-        if (encoded == null) return null;
-        NodeData node = GSON.fromJson(encoded, NodeData.class);
-        if (node == null) return null;
-        node.id = nodeId;
-        node.restoreDocumentDefaults();
-        node.inputs = new LinkedHashMap<>();
-        flattenedInputs.forEach((port, value) -> {
-            if (value != ExplicitNullInput.INSTANCE) node.inputs.put(port, value);
-        });
-        return node;
-    }
-
-    private static Map<String, Object> canonicalStaticInputs(
-            Map<String, Object> flattenedInputs, Map<String, PortDef> inputPorts) {
-        Map<String, Object> result = new LinkedHashMap<>(flattenedInputs);
-        for (PortDef input : inputPorts.values()) {
-            if (input.type().isFlow()) continue;
-            if (flattenedInputs.get(input.id()) == ExplicitNullInput.INSTANCE) continue;
-            Object value = flattenedInputs.containsKey(input.id())
-                    ? flattenedInputs.get(input.id()) : input.defaultValue();
-            if (value == null) continue;
-            Object converted = TypeConverter.convertForPort(value, input.type());
-            if (converted != null) {
-                result.put(input.id(), converted);
-            } else {
-                // Invalid and world-dependent values remain available to runtime conversion.
-                result.put(input.id(), value);
-            }
-        }
-        return Map.copyOf(result);
-    }
-
     private static Map<String, Integer> buildPortKeys(Set<String>[] ports,
                                                       Set<String> flattenedNames) {
         Set<String> names = new TreeSet<>(flattenedNames);
@@ -154,33 +102,6 @@ public final class CompiledNodeTable {
         public NodeDescriptor {
             inputs = Collections.unmodifiableMap(new LinkedHashMap<>(inputs));
             outputs = Collections.unmodifiableMap(new LinkedHashMap<>(outputs));
-        }
-    }
-
-    private record PortCatalog(Map<String, PortDef> inputs, Map<String, PortDef> outputs,
-                               Set<String> dataPassthroughOutputs) {
-        private static PortCatalog from(@Nullable NodeDef definition) {
-            Map<String, PortDef> inputs = new LinkedHashMap<>();
-            Map<String, PortDef> outputs = new LinkedHashMap<>();
-            Set<String> passthroughs = new LinkedHashSet<>();
-            if (definition != null) {
-                for (PortRow row : definition.rows()) {
-                    addPort(definition.typeId(), "input", row.leftPort(), inputs);
-                    addPort(definition.typeId(), "output", row.rightPort(), outputs);
-                    if (row.dataPassthrough()) passthroughs.add(row.rightPort().id());
-                }
-            }
-            return new PortCatalog(inputs, outputs, Set.copyOf(passthroughs));
-        }
-
-        private static void addPort(String nodeType, String direction,
-                                    @Nullable PortDef port, Map<String, PortDef> target) {
-            if (port == null) return;
-            PortDef previous = target.putIfAbsent(port.id(), port);
-            if (previous != null) {
-                throw new IllegalStateException("Node definition '" + nodeType
-                        + "' contains duplicate " + direction + " port ID '" + port.id() + "'");
-            }
         }
     }
 }

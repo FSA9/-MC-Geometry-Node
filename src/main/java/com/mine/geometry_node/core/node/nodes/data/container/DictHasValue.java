@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.container;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -32,8 +33,8 @@ public class DictHasValue extends BaseNode {
         Object targetValue = getRawInput(context, StandardPorts.ANY_VALUE.getId());
 
         if (dict != null && targetValue != null && !dict.isEmpty()) {
-            // containsValue 同样享受 Java 原生的严格类型校验
-            return dict.containsValue(targetValue);
+            return dict.values().stream()
+                    .anyMatch(value -> GraphValueSnapshot.equivalent(value, targetValue));
         }
 
         return false;

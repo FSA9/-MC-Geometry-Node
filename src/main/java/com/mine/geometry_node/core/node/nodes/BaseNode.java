@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionBinding;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
@@ -14,6 +15,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -87,39 +90,74 @@ public abstract class BaseNode {
         if (expression != null) expressions.put(key, expression);
     }
 
+    /**
+     * Reads a list input as an isolated snapshot. Null slots retain their indexes;
+     * non-null values that cannot be converted to the requested type are omitted.
+     */
     protected <T> List<T> getInputList(GraphDataContext ctx, String portName, Class<T> elementType) {
         Object raw = getRawInput(ctx, portName);
-        if (raw == null) return List.of();
+        if (raw == null) return new ArrayList<>();
 
-        // LIST
         if (raw instanceof List<?> list) {
-            @SuppressWarnings("unchecked")
-            List<T> castedList = (List<T>) list;
-            return castedList;
+            List<T> result = new ArrayList<>(list.size());
+            int rejectedCount = 0;
+            for (Object element : list) {
+                // Preserve null positions: list indexes are observable by loop and lookup nodes.
+                if (element == null) {
+                    result.add(null);
+                    continue;
+                }
+
+                T converted = TypeConverter.convert(element, elementType, ctx);
+                if (converted != null) {
+                    Object snapshot = GraphValueSnapshot.snapshot(converted);
+                    if (elementType.isInstance(snapshot)) {
+                        result.add(elementType.cast(snapshot));
+                    } else {
+                        rejectedCount++;
+                    }
+                } else {
+                    rejectedCount++;
+                }
+            }
+            if (rejectedCount > 0) {
+                System.err.println("[BaseNode] Error: " + portName + " skipped " + rejectedCount
+                        + " value(s) that cannot convert to " + elementType.getSimpleName());
+            }
+            return result;
         }
 
-        // 单体数据
         T converted = TypeConverter.convert(raw, elementType, ctx);
         if (converted != null) {
-            return List.of(converted);
+            Object snapshot = GraphValueSnapshot.snapshot(converted);
+            if (elementType.isInstance(snapshot)) {
+                List<T> result = new ArrayList<>(1);
+                result.add(elementType.cast(snapshot));
+                return result;
+            }
         }
 
         System.err.println("[BaseNode] Error： " + portName + " expect List<" + elementType.getSimpleName() + ">，but received：" + raw.getClass().getSimpleName());
-        return List.of();
+        return new ArrayList<>();
     }
 
+    /** Returns an insertion-ordered snapshot containing only string-keyed entries. */
     protected Map<String, Object> getInputDict(GraphDataContext ctx, String portName) {
         Object raw = getRawInput(ctx, portName);
-        if (raw == null) return new java.util.HashMap<>();
+        if (raw == null) return new LinkedHashMap<>();
 
         if (raw instanceof Map<?, ?> map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> castedMap = (Map<String, Object>) map;
-            return castedMap;
+            Map<String, Object> result = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() instanceof String key) {
+                    result.put(key, GraphValueSnapshot.snapshot(entry.getValue()));
+                }
+            }
+            return result;
         }
 
         System.err.println("[BaseNode] Error：" + portName + " expect DICT (Map), but received：" + raw.getClass().getSimpleName());
-        return new java.util.HashMap<>();
+        return new LinkedHashMap<>();
     }
 
     /**

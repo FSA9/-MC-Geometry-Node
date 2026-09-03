@@ -39,6 +39,7 @@ public final class NodeCommentTextBuilder {
     private static String buildStructured(NodeDef nodeDef, NodeComment nodeComment) {
         StringBuilder builder = new StringBuilder();
         appendTextKeys(builder, nodeComment.textKeys());
+        appendLiteralTexts(builder, nodeComment.literalTexts());
 
         Map<String, PortDef> outputPorts = collectPorts(nodeDef.rows(), false);
         appendPortSection(builder, SECTION_OUTPUTS, nodeComment.outputs(), outputPorts);
@@ -53,6 +54,14 @@ public final class NodeCommentTextBuilder {
             String text = translate(textKey).trim();
             if (!text.isBlank()) {
                 appendLine(builder, text);
+            }
+        }
+    }
+
+    private static void appendLiteralTexts(StringBuilder builder, List<String> literalTexts) {
+        for (String text : literalTexts) {
+            if (text != null && !text.isBlank()) {
+                appendLine(builder, text.trim());
             }
         }
     }
