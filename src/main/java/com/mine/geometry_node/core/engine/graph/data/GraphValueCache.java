@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.data;
 
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
@@ -10,6 +11,9 @@ import java.util.Map;
 public final class GraphValueCache {
     private static final Object CACHE_MISS = new Object();
     private static final Object CACHED_NULL = new Object();
+
+    private record CachedValue(Object value, boolean copyOnRead) {
+    }
 
     private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Map<String, Object>> dynamicFrameCache = new Int2ObjectOpenHashMap<>();
@@ -60,7 +64,9 @@ public final class GraphValueCache {
         if (cached == null) {
             return CACHE_MISS;
         }
-        return cached == CACHED_NULL ? null : cached;
+        if (cached == CACHED_NULL) return null;
+        CachedValue value = (CachedValue) cached;
+        return value.copyOnRead() ? GraphValueSnapshot.snapshot(value.value()) : value.value();
     }
 
     public static boolean isCacheMiss(Object value) {
@@ -68,7 +74,13 @@ public final class GraphValueCache {
     }
 
     public void put(int nodeId, String portName, int portId, Object value) {
-        Object cacheValue = value == null ? CACHED_NULL : value;
+        Object cacheValue;
+        if (value == null) {
+            cacheValue = CACHED_NULL;
+        } else {
+            Object snapshot = GraphValueSnapshot.snapshot(value);
+            cacheValue = new CachedValue(snapshot, GraphValueSnapshot.requiresReadCopy(snapshot));
+        }
         if (portId != -1) {
             frameCache.put(cacheKey(nodeId, portId), cacheValue);
             return;

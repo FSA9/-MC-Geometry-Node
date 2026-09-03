@@ -47,7 +47,7 @@ public final class GraphDataEvaluationSession {
             cache.exitNode(nodeId);
         }
         cache.put(nodeId, portName, portId, value);
-        return value;
+        return cache.get(nodeId, portName, portId);
     }
 
     @FunctionalInterface

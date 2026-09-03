@@ -9,8 +9,10 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 public record NodeDef(
@@ -22,9 +24,68 @@ public record NodeDef(
         List<PortRow> rows
 ) {
     public NodeDef {
+        requireNonBlank(typeId, "node type ID");
+        Objects.requireNonNull(category, "Node category cannot be null: " + typeId);
+        Objects.requireNonNull(displayName, "Node display name cannot be null: " + typeId);
         nodeComment = nodeComment == null ? NodeComment.EMPTY : nodeComment;
         meta = meta == null ? Map.of() : Map.copyOf(meta);
-        rows = rows == null ? List.of() : List.copyOf(rows);
+        List<PortRow> normalizedRows = rows == null ? List.of() : new ArrayList<>(rows);
+        validatePorts(typeId, normalizedRows);
+        rows = List.copyOf(normalizedRows);
+    }
+
+    private static void validatePorts(String typeId, List<PortRow> rows) {
+        Map<String, PortDef> inputs = new LinkedHashMap<>();
+        Map<String, PortDef> outputs = new LinkedHashMap<>();
+        Map<String, PortDef> portsById = new LinkedHashMap<>();
+
+        for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+            PortRow row = rows.get(rowIndex);
+            if (row == null) {
+                throw invalid(typeId, "row " + rowIndex + " is null");
+            }
+            validatePort(typeId, rowIndex, "input", row.leftPort(), inputs, portsById);
+            validatePort(typeId, rowIndex, "output", row.rightPort(), outputs, portsById);
+        }
+    }
+
+    private static void validatePort(String typeId, int rowIndex, String direction,
+                                     @Nullable PortDef port,
+                                     Map<String, PortDef> directionalPorts,
+                                     Map<String, PortDef> portsById) {
+        if (port == null) return;
+
+        requireNonBlank(port.id(), direction + " port ID at row " + rowIndex + " of " + typeId);
+        if (port.type() == null) {
+            throw invalid(typeId, direction + " port '" + port.id()
+                    + "' at row " + rowIndex + " has no type");
+        }
+        if (port.displayName() == null) {
+            throw invalid(typeId, direction + " port '" + port.id()
+                    + "' at row " + rowIndex + " has no display name");
+        }
+
+        PortDef duplicate = directionalPorts.putIfAbsent(port.id(), port);
+        if (duplicate != null) {
+            throw invalid(typeId, "duplicate " + direction + " port ID '" + port.id()
+                    + "' at row " + rowIndex);
+        }
+
+        PortDef existing = portsById.putIfAbsent(port.id(), port);
+        if (existing != null && existing.type() != port.type()) {
+            throw invalid(typeId, "port ID '" + port.id() + "' uses conflicting types "
+                    + existing.type() + " and " + port.type());
+        }
+    }
+
+    private static void requireNonBlank(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Invalid " + field + ": value cannot be blank");
+        }
+    }
+
+    private static IllegalArgumentException invalid(String typeId, String detail) {
+        return new IllegalArgumentException("Invalid node definition '" + typeId + "': " + detail);
     }
 
     @SuppressWarnings("unchecked")

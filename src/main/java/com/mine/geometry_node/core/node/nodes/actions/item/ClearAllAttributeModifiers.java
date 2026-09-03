@@ -22,13 +22,13 @@ public class ClearAllAttributeModifiers extends BaseNode {
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
                         .output(StandardPorts.FLOW_OUT, "flow_out")
-                        .output(StandardPorts.ITEM_STACK, "result_item_stack")
+                        .output(StandardPorts.RESULT_ITEM_STACK, "result_item_stack")
                         .input(StandardPorts.FLOW_IN, "flow_in")
                         .input(StandardPorts.ITEM_STACK, "item_stack")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ITEM_STACK.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.RESULT_ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT)
                 .build();
     }
 
@@ -39,14 +39,14 @@ public class ClearAllAttributeModifiers extends BaseNode {
         if (!result.isEmpty()) {
             result.remove(DataComponents.ATTRIBUTE_MODIFIERS);
         }
-        context.setNodeResult(StandardPorts.ITEM_STACK.getId(), result);
+        context.setNodeResult(StandardPorts.RESULT_ITEM_STACK.getId(), result);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (StandardPorts.ITEM_STACK.getId().equals(portName)) {
-            Object value = context.getNodeResult(StandardPorts.ITEM_STACK.getId());
+        if (StandardPorts.RESULT_ITEM_STACK.getId().equals(portName)) {
+            Object value = context.getNodeResult(StandardPorts.RESULT_ITEM_STACK.getId());
             return value instanceof ItemStack stack ? stack : ItemStack.EMPTY;
         }
         return null;

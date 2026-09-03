@@ -86,6 +86,8 @@
     "geometry_node.port.int_value":  "Value",
     "geometry_node.port.float_value":  "Value",
     "geometry_node.port.generic_value":  "Value",
+    "geometry_node.port.result_item_stack":  "Result Item Stack",
+    "geometry_node.port.result_block_state":  "Result Block State",
     "geometry_node.port.float":  "Float",
     "geometry_node.port.min_float":  "Minimum (F)",
     "geometry_node.port.max_float":  "Maximum (F)",

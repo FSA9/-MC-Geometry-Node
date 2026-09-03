@@ -43,7 +43,7 @@ public class GetSlotItem extends BaseNode {
         ItemStack stack = SlotAccessUtils.getItem(entity, slotRef != null ? slotRef : SlotRef.DEFAULT);
 
         if (StandardPorts.ITEM_STACK.getId().equals(portName)) {
-            return stack;
+            return stack.copy();
         }
         if (StandardPorts.BOOL.getId().equals(portName)) {
             return !stack.isEmpty();

@@ -86,6 +86,8 @@
     "geometry_node.port.int_value":  "值",
     "geometry_node.port.float_value":  "值",
     "geometry_node.port.generic_value":  "值",
+    "geometry_node.port.result_item_stack":  "处理后物品栈",
+    "geometry_node.port.result_block_state":  "处理后方块状态",
     "geometry_node.port.float":  "Float",
     "geometry_node.port.min_float":  "最小值(F)",
     "geometry_node.port.max_float":  "最大值(F)",

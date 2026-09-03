@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -208,13 +209,16 @@ public interface ExecutionContext extends GraphDataContext {
      * Results with the same port ID on different nodes are isolated.
      */
     default void setNodeResult(String portName, @Nullable Object value) {
-        setTempData(nodeResultKey(portName), value);
+        setTempData(nodeResultKey(portName), GraphValueSnapshot.snapshot(value));
+        clearFrameCache();
     }
 
     /** Reads a result previously stored by the current node instance. */
     @Nullable
     default Object getNodeResult(String portName) {
-        return getTempData(nodeResultKey(portName));
+        Object value = getTempData(nodeResultKey(portName));
+        return GraphValueSnapshot.requiresReadCopy(value)
+                ? GraphValueSnapshot.snapshot(value) : value;
     }
 
     private String nodeResultKey(String portName) {

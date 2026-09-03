@@ -165,17 +165,22 @@ public final class CompiledNodeTable {
             Set<String> passthroughs = new LinkedHashSet<>();
             if (definition != null) {
                 for (PortRow row : definition.rows()) {
-                    addPort(row.leftPort(), inputs);
-                    addPort(row.rightPort(), outputs);
+                    addPort(definition.typeId(), "input", row.leftPort(), inputs);
+                    addPort(definition.typeId(), "output", row.rightPort(), outputs);
                     if (row.dataPassthrough()) passthroughs.add(row.rightPort().id());
                 }
             }
             return new PortCatalog(inputs, outputs, Set.copyOf(passthroughs));
         }
 
-        private static void addPort(@Nullable PortDef port, Map<String, PortDef> target) {
-            if (port == null || port.id() == null || port.id().isBlank() || port.type() == null) return;
-            target.putIfAbsent(port.id(), port);
+        private static void addPort(String nodeType, String direction,
+                                    @Nullable PortDef port, Map<String, PortDef> target) {
+            if (port == null) return;
+            PortDef previous = target.putIfAbsent(port.id(), port);
+            if (previous != null) {
+                throw new IllegalStateException("Node definition '" + nodeType
+                        + "' contains duplicate " + direction + " port ID '" + port.id() + "'");
+            }
         }
     }
 }

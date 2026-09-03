@@ -176,6 +176,7 @@ public enum StandardPorts {
 
     // Block
     BLOCK_STATE("block_state", PortType.BLOCK),
+    RESULT_BLOCK_STATE("result_block_state", PortType.BLOCK),
 
     // Geometry
     GEOMETRY("geometry", PortType.GEOMETRY),
@@ -185,6 +186,7 @@ public enum StandardPorts {
 
     // Item Stack
     ITEM_STACK("item_stack", PortType.ITEM_STACK),
+    RESULT_ITEM_STACK("result_item_stack", PortType.ITEM_STACK),
 
     // Slot
     SLOT("slot", PortType.SLOT),

@@ -10,6 +10,7 @@ import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
@@ -68,6 +69,9 @@ public abstract class BaseNode {
     @Nullable
     protected <T> T getInput(GraphDataContext ctx, String portName, Class<T> type) {
         Object raw = getRawInput(ctx, portName);
+        if (raw instanceof ItemStack stack) {
+            raw = stack.copy();
+        }
         return TypeConverter.convert(raw, type, ctx);
     }
 

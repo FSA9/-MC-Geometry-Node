@@ -48,8 +48,8 @@ abstract class AbstractSetBlockEnumProperty extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(typeId, NodeType.ACTION, Component.translatable("geometry_node.node." + typeId))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.BLOCK_STATE.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.BLOCK_STATE.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.RESULT_BLOCK_STATE.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.BLOCK_STATE.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(PortDef.create(portId, "geometry_node.port." + portId, PortType.STRING, defaultValue).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, options))
                 .build();
     }
@@ -61,7 +61,7 @@ abstract class AbstractSetBlockEnumProperty extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        if (!StandardPorts.BLOCK_STATE.getId().equals(portName)) {
+        if (!StandardPorts.RESULT_BLOCK_STATE.getId().equals(portName)) {
             return null;
         }
 

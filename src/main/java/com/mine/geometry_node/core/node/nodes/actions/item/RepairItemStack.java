@@ -19,6 +19,7 @@ public class RepairItemStack extends BaseNode {
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.repair_item_stack"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.RESULT_ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT)
                 // 修复量
                 .addPassthroughInput(StandardPorts.INT.toInput(1), UIHint.INPUT)
@@ -37,6 +38,15 @@ public class RepairItemStack extends BaseNode {
             stack.setDamageValue(Math.max(0, currentDamage - amount));
         }
 
+        context.setNodeResult(StandardPorts.RESULT_ITEM_STACK.getId(),
+                stack != null ? stack : ItemStack.EMPTY);
         return next(StandardPorts.FLOW_OUT.getId());
+    }
+
+    @Override
+    public Object compute(ExecutionContext context, String portName) {
+        if (!StandardPorts.RESULT_ITEM_STACK.getId().equals(portName)) return null;
+        Object value = context.getNodeResult(StandardPorts.RESULT_ITEM_STACK.getId());
+        return value instanceof ItemStack stack ? stack : ItemStack.EMPTY;
     }
 }

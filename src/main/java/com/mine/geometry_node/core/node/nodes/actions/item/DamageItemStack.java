@@ -22,6 +22,7 @@ public class DamageItemStack extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.damage_item_stack"))
                 // 1. 执行流
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.RESULT_ITEM_STACK.toOutput(), UIHint.DEFAULT, null, null))
                 // 2. 目标物品栈
                 .addPassthroughInput(StandardPorts.ITEM_STACK.toInput(), UIHint.DEFAULT)
                 // 3. 伤害数值
@@ -47,6 +48,15 @@ public class DamageItemStack extends BaseNode {
             }
         }
 
+        context.setNodeResult(StandardPorts.RESULT_ITEM_STACK.getId(),
+                stack != null ? stack : ItemStack.EMPTY);
         return next(StandardPorts.FLOW_OUT.getId());
+    }
+
+    @Override
+    public Object compute(ExecutionContext context, String portName) {
+        if (!StandardPorts.RESULT_ITEM_STACK.getId().equals(portName)) return null;
+        Object value = context.getNodeResult(StandardPorts.RESULT_ITEM_STACK.getId());
+        return value instanceof ItemStack stack ? stack : ItemStack.EMPTY;
     }
 }
