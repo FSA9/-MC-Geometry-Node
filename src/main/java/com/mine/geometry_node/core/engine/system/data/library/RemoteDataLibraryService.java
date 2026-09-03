@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.system.data.library;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import net.minecraft.server.MinecraftServer;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -14,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
 import java.util.Collections;
 import java.util.WeakHashMap;
+import java.util.UUID;
 import org.jetbrains.annotations.Nullable;
 
 /** Server-authoritative access to the remote Data Library database. */
@@ -51,42 +53,74 @@ public final class RemoteDataLibraryService {
     }
 
     /**
-     * Resolves an entry through the server snapshot. Mutable values are detached for the caller;
-     * entity entries remain references in the snapshot and are resolved against the current level.
+     * Resolves an entry through its public type + key identity. Mutable values are detached;
+     * entity references are resolved against the current server state.
      */
     @Nullable
-    public Object resolve(MinecraftServer server, DataLibraryEntryKey key) {
-        if (server == null || key == null || isStopped(server)) return null;
+    public Object resolve(MinecraftServer server, PortType type, String key) {
+        if (server == null || !DataLibraryTypes.supports(type) || isStopped(server)) return null;
         try {
-            Object value = ensureLoaded(server).document().find(key)
+            Object value = ensureLoaded(server).document().findByKey(type, key)
                     .map(DataLibraryEntry::value).orElse(null);
             if (value instanceof DataLibraryEntityReference reference) {
                 return reference.resolve(server);
             }
             return GraphValueSnapshot.snapshot(value);
         } catch (IOException | RuntimeException exception) {
-            // Missing entries and temporarily unavailable worlds are valid null results.
             return null;
         }
     }
 
     public DataLibraryLoadResult create(MinecraftServer server, DataLibraryDocument incoming) throws IOException {
         DataLibraryEntryKey key = requireSingle(incoming);
+        DataLibraryEntry entry = incoming.find(key).orElseThrow();
         return update(server, document -> {
             if (document.find(key).isPresent()) {
                 throw new IllegalStateException("Data Library entry already exists: " + key);
             }
-            document.put(key.type(), incoming.find(key).orElseThrow());
+            if (document.findByKey(key.type(), entry.key()).isPresent()) {
+                throw new IllegalStateException("Data Library key already exists: " + entry.key());
+            }
+            document.put(key.type(), entry);
         });
     }
 
     public DataLibraryLoadResult update(MinecraftServer server, DataLibraryDocument incoming) throws IOException {
         DataLibraryEntryKey key = requireSingle(incoming);
+        DataLibraryEntry entry = incoming.find(key).orElseThrow();
         return update(server, document -> {
             if (document.find(key).isEmpty()) {
                 throw new IllegalStateException("Data Library entry does not exist: " + key);
             }
-            document.put(key.type(), incoming.find(key).orElseThrow());
+            document.findByKey(key.type(), entry.key()).ifPresent(existing -> {
+                if (!existing.id().equals(entry.id())) {
+                    throw new IllegalStateException("Data Library key already exists: " + entry.key());
+                }
+            });
+            document.put(key.type(), entry);
+        });
+    }
+
+    /** Creates or replaces a value by its public type + key identity. */
+    public synchronized void upsert(
+            MinecraftServer server, PortType type,
+            String key, @Nullable Object value) throws IOException {
+        if (!DataLibraryTypes.supports(type)) {
+            throw new IllegalArgumentException("Unsupported Data Library type: " + type);
+        }
+        String normalizedKey = key == null ? "" : key;
+        Object storedValue = DataLibraryValueCodec.decode(type,
+                DataLibraryValueCodec.encode(type, value, server.overworld().registryAccess()),
+                server.overworld().registryAccess());
+        CachedLibrary current = ensureLoaded(server);
+        DataLibraryEntry existing = current.document().findByKey(type, normalizedKey).orElse(null);
+        if (existing != null && valuesEqual(server, type, existing.value(), storedValue)) {
+            return;
+        }
+        update(server, document -> {
+            DataLibraryEntry matched = document.findByKey(type, normalizedKey).orElse(null);
+            UUID id = matched != null ? matched.id() : UUID.randomUUID();
+            document.put(type, new DataLibraryEntry(id, normalizedKey, storedValue));
         });
     }
 
@@ -135,7 +169,7 @@ public final class RemoteDataLibraryService {
     private static CachedLibrary freeze(DataLibraryLoadResult result) {
         DataLibraryDocument frozen = new DataLibraryDocument();
         result.document().entriesByType().forEach((type, entries) -> entries.values().forEach(entry ->
-                frozen.put(type, new DataLibraryEntry(entry.id(), entry.name(),
+                frozen.put(type, new DataLibraryEntry(entry.id(), entry.key(),
                         GraphValueSnapshot.snapshot(entry.value())))));
         return new CachedLibrary(frozen, result.diagnostics());
     }
@@ -145,7 +179,7 @@ public final class RemoteDataLibraryService {
             // Never expose the mutable document holder used by the cache itself.
             DataLibraryDocument copy = new DataLibraryDocument();
             document.entriesByType().forEach((type, entries) -> entries.values().forEach(entry ->
-                    copy.put(type, new DataLibraryEntry(entry.id(), entry.name(),
+                    copy.put(type, new DataLibraryEntry(entry.id(), entry.key(),
                             GraphValueSnapshot.snapshot(entry.value())))));
             return new DataLibraryLoadResult(copy, diagnostics);
         }
@@ -157,6 +191,13 @@ public final class RemoteDataLibraryService {
                 .flatMap(group -> group.getValue().keySet().stream()
                         .map(id -> new DataLibraryEntryKey(group.getKey(), id)))
                 .findFirst().orElseThrow();
+    }
+
+    private static boolean valuesEqual(MinecraftServer server,
+                                       PortType type,
+                                       @Nullable Object first, @Nullable Object second) {
+        return DataLibraryValueCodec.encode(type, first, server.overworld().registryAccess())
+                .equals(DataLibraryValueCodec.encode(type, second, server.overworld().registryAccess()));
     }
 
     @FunctionalInterface private interface DocumentMutation { void apply(DataLibraryDocument document); }

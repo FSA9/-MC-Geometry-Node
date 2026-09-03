@@ -32,7 +32,7 @@ public final class DataLibraryJsonCodec {
             JsonObject group = new JsonObject();
             for (DataLibraryEntry entry : entries.values()) {
                 JsonObject jsonEntry = new JsonObject();
-                jsonEntry.addProperty("name", entry.name());
+                jsonEntry.addProperty("key", entry.key());
                 jsonEntry.add("value", DataLibraryValueCodec.encode(type, entry.value(), registries));
                 group.add(entry.id().toString(), jsonEntry);
             }
@@ -75,14 +75,17 @@ public final class DataLibraryJsonCodec {
                     throw new IllegalArgumentException("Entry must be an object");
                 }
                 JsonObject jsonEntry = rawEntry.getValue().getAsJsonObject();
-                JsonElement nameElement = jsonEntry.get("name");
-                if (nameElement == null || !nameElement.isJsonPrimitive()
-                        || !nameElement.getAsJsonPrimitive().isString()) {
-                    throw new IllegalArgumentException("Entry name must be a string");
+                JsonElement keyElement = jsonEntry.get("key");
+                // One-time migration for databases written before key became the public identity.
+                if (keyElement == null) keyElement = jsonEntry.get("name");
+                if (keyElement == null || !keyElement.isJsonPrimitive()
+                        || !keyElement.getAsJsonPrimitive().isString()) {
+                    throw new IllegalArgumentException("Entry key must be a string");
                 }
                 // An omitted value and an explicit JSON null both represent the Java null value.
                 Object value = DataLibraryValueCodec.decode(type, jsonEntry.get("value"), registries);
-                document.put(type, new DataLibraryEntry(id, nameElement.getAsString(), value));
+                String key = keyElement.getAsString();
+                document.put(type, new DataLibraryEntry(id, key, value));
             } catch (RuntimeException exception) {
                 diagnostics.add(new DataLibraryDiagnostic(path, readableMessage(exception)));
             }

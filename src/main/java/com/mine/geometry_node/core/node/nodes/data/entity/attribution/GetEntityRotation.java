@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.entity.attribution;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.runtime.display.DisplayTransformController;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -36,7 +37,7 @@ public class GetEntityRotation extends BaseNode {
         if (entities.isEmpty()) return null;
 
         Entity target = entities.getFirst();
-        Vec3 rotation = new Vec3(target.getXRot(), target.getYRot(), 0.0);
+        Vec3 rotation = DisplayTransformController.worldRotation(target);
         return bindDynamicVector(rotation, target, "rotation");
     }
 }

@@ -242,6 +242,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/display_entity", new SetBlockDisplayState());
         registry.register("actions/display_entity", new SetDisplayStyle());
         registry.register("actions/display_entity", new SetDisplayTransform());
+        registry.register("actions/display_entity", new SetDisplayPivot());
         registry.register("actions/display_entity", new SetDisplayPosition());
 
         // Actions/Inventory
@@ -300,6 +301,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data", new HasScopedState());
         registry.register("data", new ClearScopedState());
         registry.register("data", new DataLibraryReference());
+        registry.register("data", new SetDataLibraryEntry());
         registry.register("data/player", new IsKeyPressed());
 
         // Data/World
@@ -536,6 +538,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("maths/vector", new ReflectVector());
         registry.register("maths/vector", new SeparateXYZ());
         registry.register("maths/vector", new CombineXYZ());
+        registry.register("maths/vector", new RelativeTransformToWorld());
 
         System.out.println("[BuiltinNodesPlugin] Register Finished");
     }

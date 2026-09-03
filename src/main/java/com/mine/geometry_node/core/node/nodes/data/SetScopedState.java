@@ -59,7 +59,7 @@ public final class SetScopedState extends BaseNode {
         if (entity != null) context.setTempData(tempKey(context, StandardPorts.ENTITY.getId()), entity);
         if (scope == ScopedStateScope.WORLD) {
             context.setTempData(tempKey(context, StandardPorts.DIMENSION.getId()),
-                    context.getStaticInput(StandardPorts.DIMENSION.getId()));
+                    ScopedStateNodeSupport.dimension(context));
         }
         context.setTempData(tempKey(context, StandardPorts.NAME.getId()), attrName);
         context.setTempData(tempKey(context, StandardPorts.ANY_VALUE.getId()), attrValue);

@@ -69,7 +69,7 @@ public final class ClearScopedState extends BaseNode {
         }
         if (scope == ScopedStateScope.WORLD) {
             context.setTempData(tempKey(context, StandardPorts.DIMENSION.getId()),
-                    context.getStaticInput(StandardPorts.DIMENSION.getId()));
+                    ScopedStateNodeSupport.dimension(context));
         }
         context.setTempData(tempKey(context, StandardPorts.NAME.getId()), key);
 

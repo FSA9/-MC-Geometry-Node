@@ -31,11 +31,11 @@ public class SetBlockDisplayState extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.set_block_display_state"))
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
-                        .input(StandardPorts.ENTITY, "entity")
+                        .input(StandardPorts.DISPLAY_ENTITY, "display_entity")
                         .input(StandardPorts.BLOCK_STATE, "block_state")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.DISPLAY_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.BLOCK_STATE.toInput(), null, UIHint.SELECT, null,
                         Map.of(PortMetaKeys.OPTIONS, RegistryDataManager.getAllBlocks().toArray(new String[0]))
@@ -45,7 +45,7 @@ public class SetBlockDisplayState extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputList(context, StandardPorts.DISPLAY_ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return next(StandardPorts.FLOW_OUT.getId());
 
         BlockState blockState = getInput(context, StandardPorts.BLOCK_STATE.getId(), BlockState.class);

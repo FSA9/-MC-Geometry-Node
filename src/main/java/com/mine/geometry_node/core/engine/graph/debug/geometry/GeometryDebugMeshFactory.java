@@ -32,21 +32,87 @@ public final class GeometryDebugMeshFactory {
                                                       String localId,
                                                       GeometryValue geometry,
                                                       int limit,
-                                                      Vec3 translation) {
+                                                      Vec3 worldPosition,
+                                                      Vec3 worldRotation,
+                                                      Vec3 pivot,
+                                                      Vec3 translation,
+                                                      Vec3 localRotation,
+                                                      Vec3 scale) {
         if (geometry == null || geometry.isEmpty() || limit <= 0) {
             return List.of();
         }
 
         GeometryValue.Primitive[] primitives = geometry.primitives();
         List<GeometryDebugElement> meshes = new ArrayList<>(Math.min(limit, primitives.length));
-        Vec3 safeTranslation = translation != null ? translation : Vec3.ZERO;
+        GeometryTransform transform = GeometryTransform.of(
+                worldPosition, worldRotation, pivot, translation, localRotation, scale);
         String safeLocalId = localId != null && !localId.isBlank() ? localId : "geometry";
         for (int i = 0; i < primitives.length && meshes.size() < limit; i++) {
             String elementId = primitives.length > 1 ? safeLocalId + ":" + i : safeLocalId;
             String id = DebugSourceIdCodec.element(sourceId, elementId);
-            meshes.add(buildPrimitiveMesh(id, graphId, primitives[i], safeTranslation));
+            meshes.add(transform(buildPrimitiveMesh(id, graphId, primitives[i], Vec3.ZERO), transform));
         }
         return meshes;
+    }
+
+    private static GeometryDebugElement transform(GeometryDebugElement mesh, GeometryTransform transform) {
+        Vector3f localCenter = new Vector3f(
+                (float) mesh.center().x,
+                (float) mesh.center().y,
+                (float) mesh.center().z);
+        localCenter.sub(transform.pivot()).mul(transform.scale());
+        transform.localRotation().transform(localCenter);
+        localCenter.add(transform.pivot()).add(transform.translation());
+        transform.worldRotation().transform(localCenter);
+        localCenter.add(transform.worldPosition());
+
+        float[] vertices = mesh.vertices().clone();
+        Vector3f vertex = new Vector3f();
+        for (int i = 0; i + 2 < vertices.length; i += 3) {
+            vertex.set(vertices[i], vertices[i + 1], vertices[i + 2])
+                    .mul(transform.scale());
+            transform.localRotation().transform(vertex);
+            transform.worldRotation().transform(vertex);
+            vertices[i] = vertex.x;
+            vertices[i + 1] = vertex.y;
+            vertices[i + 2] = vertex.z;
+        }
+
+        return new GeometryDebugElement(
+                mesh.id(), mesh.graphId(), mesh.type(), mesh.color(), mesh.showPoints(),
+                new Vec3(localCenter.x, localCenter.y, localCenter.z),
+                mesh.size(), Vec3.ZERO, vertices, mesh.edges(), mesh.faces());
+    }
+
+    private record GeometryTransform(Vector3f worldPosition,
+                                     Quaternionf worldRotation,
+                                     Vector3f pivot,
+                                     Vector3f translation,
+                                     Quaternionf localRotation,
+                                     Vector3f scale) {
+        private static GeometryTransform of(Vec3 worldPosition, Vec3 worldRotation, Vec3 pivot,
+                                            Vec3 translation, Vec3 localRotation, Vec3 scale) {
+            return new GeometryTransform(
+                    vector(worldPosition, Vec3.ZERO),
+                    quaternion(worldRotation),
+                    vector(pivot, Vec3.ZERO),
+                    vector(translation, Vec3.ZERO),
+                    quaternion(localRotation),
+                    vector(scale, new Vec3(1, 1, 1)));
+        }
+
+        private static Vector3f vector(Vec3 value, Vec3 fallback) {
+            Vec3 resolved = value != null ? value : fallback;
+            return new Vector3f((float) resolved.x, (float) resolved.y, (float) resolved.z);
+        }
+
+        private static Quaternionf quaternion(Vec3 rotation) {
+            Vec3 resolved = rotation != null ? rotation : Vec3.ZERO;
+            return new Quaternionf().rotationYXZ(
+                    (float) Math.toRadians(-resolved.y),
+                    (float) Math.toRadians(resolved.x),
+                    (float) Math.toRadians(resolved.z));
+        }
     }
 
     public static GeometryDebugElement buildPrimitiveMesh(String id,

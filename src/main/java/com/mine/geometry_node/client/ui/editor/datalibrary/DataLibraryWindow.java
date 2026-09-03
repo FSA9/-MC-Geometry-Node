@@ -180,8 +180,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         EnumMap<PortType, List<DataLibraryUiRepository.Entry>> grouped = new EnumMap<>(PortType.class);
         for (DataLibraryUiRepository.Entry entry : repository.entries()) {
             if (entry == null || entry.type() == null || !SUPPORTED_TYPES.contains(entry.type())) continue;
-            if (!search.isEmpty() && (entry.name() == null
-                    || !entry.name().toLowerCase(Locale.ROOT).contains(search))) continue;
+            if (!search.isEmpty() && (entry.key() == null
+                    || !entry.key().toLowerCase(Locale.ROOT).contains(search))) continue;
             grouped.computeIfAbsent(entry.type(), ignored -> new ArrayList<>()).add(entry);
         }
         for (PortType type : SUPPORTED_TYPES) {
@@ -273,7 +273,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
         EditText name = new EditText(getContext());
         name.setSingleLine(true);
-        name.setText(entry.name() == null ? "" : entry.name());
+        name.setText(entry.key() == null ? "" : entry.key());
         name.setTextColor(TEXT);
         name.setBackground(null);
         name.setPadding(px(2), 0, px(2), 0);
@@ -282,7 +282,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             if (!focused) {
                 DataLibraryUiRepository.Entry latest = current.get();
                 String updatedName = name.getText().toString();
-                if (Objects.equals(latest.name(), updatedName)) return;
+                if (Objects.equals(latest.key(), updatedName)) return;
                 DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
                         latest.type(), latest.id(), updatedName, latest.value());
                 current.set(updated);
@@ -413,7 +413,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
             @Override public void onDragStarted(MotionEvent event) {
                 WorkspaceDragService.INSTANCE.begin(
-                        new DataLibraryDragPayload(entry.type(), entry.id(), entry.name()),
+                        new DataLibraryDragPayload(entry.type(), entry.key()),
                         WorkspaceDragOperation.LINK, DataLibraryWindow.this);
             }
 
@@ -655,7 +655,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         valueCheckBox.setOnCheckedChangeListener((button, checked) -> {
             DataLibraryUiRepository.Entry latest = current.get();
             DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
-                    latest.type(), latest.id(), latest.name(), checked);
+                    latest.type(), latest.id(), latest.key(), checked);
             current.set(updated);
             repository.update(updated);
         });
@@ -791,7 +791,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             return;
         }
         DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
-                latest.type(), latest.id(), latest.name(), value);
+                latest.type(), latest.id(), latest.key(), value);
         current.set(updated);
         repository.update(updated);
     }
@@ -818,8 +818,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private void selectAllVisible(boolean checked) {
         for (DataLibraryUiRepository.Entry entry : repository.entries()) {
             if (entry == null || !SUPPORTED_TYPES.contains(entry.type())) continue;
-            if (!search.isEmpty() && (entry.name() == null
-                    || !entry.name().toLowerCase(Locale.ROOT).contains(search))) continue;
+            if (!search.isEmpty() && (entry.key() == null
+                    || !entry.key().toLowerCase(Locale.ROOT).contains(search))) continue;
             if (checked) selected.add(key(entry)); else selected.remove(key(entry));
         }
         rebuild();
@@ -845,8 +845,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private boolean isVisible(DataLibraryUiRepository.Entry entry) {
         if (entry == null || entry.type() == null || !SUPPORTED_TYPES.contains(entry.type())) return false;
-        return search.isEmpty() || (entry.name() != null
-                && entry.name().toLowerCase(Locale.ROOT).contains(search));
+        return search.isEmpty() || (entry.key() != null
+                && entry.key().toLowerCase(Locale.ROOT).contains(search));
     }
 
     private String serializedValue(DataLibraryUiRepository.Entry entry) {
@@ -869,7 +869,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             if (DataLibraryValueCodec.encode(entry.type(), entry.value(), registries)
                     .equals(DataLibraryValueCodec.encode(entry.type(), value, registries))) return;
             DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
-                    entry.type(), entry.id(), entry.name(), value);
+                    entry.type(), entry.id(), entry.key(), value);
             current.set(updated);
             repository.update(updated);
         } catch (RuntimeException ignored) {

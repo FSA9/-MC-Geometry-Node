@@ -17,6 +17,7 @@ import com.mine.geometry_node.client.ui.editor.graph.node.UINode;
 import com.mine.geometry_node.client.ui.editor.graph.node.UIRerouteNode;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.data.DataLibraryReference;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -248,14 +249,14 @@ public class ViewportController implements EditorContext.EditorListener,
 
     /** Adds a stable Data Library reference through the normal command history. */
     public boolean executeAddDataLibraryReference(float screenX, float screenY,
-                                                  PortType type, UUID entryId, String displayName) {
-        if (mEditorContext == null || type == null || entryId == null) return false;
+                                                  PortType type, String key) {
+        if (mEditorContext == null || type == null || key == null) return false;
         float uiX = mViewport.getCamera().screenToUIX(screenX);
         float uiY = mViewport.getCamera().screenToUIY(screenY);
         NodeData data = new NodeData(UUID.randomUUID().toString(), DataLibraryReference.TYPE_ID, uiX, uiY);
-        if (displayName != null && !displayName.isBlank()) data.customName = displayName;
+        if (!key.isBlank()) data.customName = key;
         data.inputs.put(DataLibraryReference.ENTRY_TYPE, type.name());
-        data.inputs.put(DataLibraryReference.ENTRY_ID, entryId.toString());
+        data.inputs.put(StandardPorts.KEY.getId(), key);
         CmdAddNode command = new CmdAddNode(mEditorContext.getGraphController(), data);
         if (!command.canExecute()) return false;
         mEditorContext.getCommandManager().execute(command);

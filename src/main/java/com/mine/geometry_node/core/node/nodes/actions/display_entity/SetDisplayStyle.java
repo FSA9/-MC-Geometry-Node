@@ -28,11 +28,11 @@ public class SetDisplayStyle extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.set_display_style"))
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
-                        .input(StandardPorts.ENTITY, "entity")
+                        .input(StandardPorts.DISPLAY_ENTITY, "display_entity")
                         .input(StandardPorts.STRING, "billboard")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.DISPLAY_ENTITY.toInput(), null, UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
                         Map.of(
@@ -57,7 +57,7 @@ public class SetDisplayStyle extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputList(context, StandardPorts.DISPLAY_ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return next(StandardPorts.FLOW_OUT.getId());
 
         String billboard = getInput(context, StandardPorts.STRING.getId(), String.class);

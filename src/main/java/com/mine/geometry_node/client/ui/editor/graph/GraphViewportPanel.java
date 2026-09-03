@@ -193,7 +193,7 @@ public class GraphViewportPanel extends LinearLayout {
         float viewportX = rawX - viewportLoc[0];
         float viewportY = rawY - viewportLoc[1];
         return mViewport.getController().executeAddDataLibraryReference(
-                viewportX, viewportY, payload.type(), payload.id(), payload.name());
+                viewportX, viewportY, payload.type(), payload.key());
     }
 
     private boolean importDraggedGraph(AssetEntry entry, float viewportX, float viewportY, GraphSession targetSession) {

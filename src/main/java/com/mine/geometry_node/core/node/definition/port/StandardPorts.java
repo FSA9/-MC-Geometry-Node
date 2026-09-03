@@ -157,6 +157,7 @@ public enum StandardPorts {
 
     // Entity
     ENTITY("entity", PortType.ENTITY),
+    DISPLAY_ENTITY("display_entity", PortType.ENTITY),
     PROJECTILE("projectile", PortType.ENTITY),
     HIT_ENTITY("hit_entity", PortType.ENTITY),
     PLAYER("player", PortType.ENTITY),
@@ -215,11 +216,18 @@ public enum StandardPorts {
     VECTOR("vector", PortType.XYZ),
     NORMAL("normal", PortType.XYZ),
     ROTATION("rotation", PortType.XYZ),
+    PIVOT("pivot", PortType.XYZ),
     MIRROR("mirror", PortType.XYZ),
     SIZE_3("size_3", PortType.XYZ),
     SPREAD("spread", PortType.XYZ),
     TRANSLATION("translation", PortType.XYZ),
     TARGET_POSITION("target_position", PortType.XYZ),
+    BASE_POSITION("base_position", PortType.XYZ),
+    BASE_ROTATION("base_rotation", PortType.XYZ),
+    POSITION_OFFSET("position_offset", PortType.XYZ),
+    ROTATION_OFFSET("rotation_offset", PortType.XYZ),
+    WORLD_POSITION("world_position", PortType.XYZ),
+    WORLD_ROTATION("world_rotation", PortType.XYZ),
 
     // Color
     COLOR("color", PortType.COLOR),

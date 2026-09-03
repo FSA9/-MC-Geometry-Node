@@ -18,7 +18,7 @@ final class DataLibraryUiMapper {
     static DataLibraryDocument toDocument(List<DataLibraryUiRepository.Entry> entries) {
         DataLibraryDocument document = new DataLibraryDocument();
         for (DataLibraryUiRepository.Entry entry : entries) {
-            document.put(entry.type(), new DataLibraryEntry(entry.id(), entry.name(), entry.value()));
+            document.put(entry.type(), new DataLibraryEntry(entry.id(), entry.key(), entry.value()));
         }
         return document;
     }
@@ -26,7 +26,7 @@ final class DataLibraryUiMapper {
     static List<DataLibraryUiRepository.Entry> fromDocument(DataLibraryLoadResult loaded) {
         List<DataLibraryUiRepository.Entry> result = new ArrayList<>();
         loaded.document().entriesByType().forEach((type, values) -> values.values().forEach(entry ->
-                result.add(new DataLibraryUiRepository.Entry(type, entry.id(), entry.name(), entry.value()))));
+                result.add(new DataLibraryUiRepository.Entry(type, entry.id(), entry.key(), entry.value()))));
         return List.copyOf(result);
     }
 

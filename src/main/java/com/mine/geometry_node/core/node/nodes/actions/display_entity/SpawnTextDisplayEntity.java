@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.display_entity;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.graph.runtime.display.DisplayTransformController;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
@@ -13,8 +14,6 @@ import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.utils.nbt.EntityNbtCompat;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.FloatTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.world.entity.Display;
@@ -22,7 +21,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Quaternionf;
 
 import java.util.Map;
 
@@ -32,21 +30,26 @@ public class SpawnTextDisplayEntity extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.spawn_text_display_entity"))
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION,
+                        Component.translatable("geometry_node.node.spawn_text_display_entity"))
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
-                        .input(StandardPorts.START_POS, "start_pos")
+                        .output(StandardPorts.DISPLAY_ENTITY, "display_entity")
+                        .input(StandardPorts.WORLD_POSITION, "world_position")
+                        .input(StandardPorts.WORLD_ROTATION, "world_rotation")
                         .input(StandardPorts.MESSAGE, "message")
                         .input(StandardPorts.STRING, "alignment")
                         .input(StandardPorts.TEXT_LINE_WIDTH, "line_width")
+                        .input(StandardPorts.PIVOT, "pivot")
                         .input(StandardPorts.TRANSLATION, "translation")
                         .input(StandardPorts.ROTATION, "rotation")
                         .input(StandardPorts.SIZE_3, "size_3")
                         .input(StandardPorts.TICK, "teleport_tick")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.START_POS.toInput(), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(null, StandardPorts.DISPLAY_ENTITY.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.WORLD_POSITION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.WORLD_ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.MESSAGE.toInput("Hello World"), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(
                         StandardPorts.STRING.toInput().hiddenPin(), null, UIHint.SELECT, null,
@@ -64,6 +67,7 @@ public class SpawnTextDisplayEntity extends BaseNode {
                 .addRow(new PortRow(StandardPorts.TEXT_OPACITY.toInput(1.0f), null, UIHint.INPUT, null, null))
                 .addRow(new PortRow(StandardPorts.TEXT_SHADOW.toInput(true), null, UIHint.CHECKBOX, null, null))
                 .addRow(new PortRow(StandardPorts.SEE_THROUGH.toInput(false), null, UIHint.CHECKBOX, null, null))
+                .addRow(new PortRow(StandardPorts.PIVOT.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
@@ -79,8 +83,10 @@ public class SpawnTextDisplayEntity extends BaseNode {
         Level level = context.getLevel();
         if (level == null) return next(StandardPorts.FLOW_OUT.getId());
 
-        Vec3 pos = getInput(context, StandardPorts.START_POS.getId(), Vec3.class);
+        Vec3 pos = getInput(context, StandardPorts.WORLD_POSITION.getId(), Vec3.class);
         if (pos == null) pos = Vec3.ZERO;
+        Vec3 worldRotation = getInput(context, StandardPorts.WORLD_ROTATION.getId(), Vec3.class);
+        if (worldRotation == null) worldRotation = Vec3.ZERO;
 
         String message = getInput(context, StandardPorts.MESSAGE.getId(), String.class);
         if (message == null) message = "";
@@ -95,20 +101,16 @@ public class SpawnTextDisplayEntity extends BaseNode {
         Boolean seeThrough = getInput(context, StandardPorts.SEE_THROUGH.getId(), Boolean.class);
 
         Vec3 translation = getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class);
+        if (translation == null) translation = Vec3.ZERO;
+        Vec3 pivot = getInput(context, StandardPorts.PIVOT.getId(), Vec3.class);
+        if (pivot == null) pivot = Vec3.ZERO;
         Vec3 rotation = getInput(context, StandardPorts.ROTATION.getId(), Vec3.class);
         Vec3 scaleVec = getInput(context, StandardPorts.SIZE_3.getId(), Vec3.class);
-        if (translation == null) translation = Vec3.ZERO;
         if (rotation == null) rotation = Vec3.ZERO;
         if (scaleVec == null) scaleVec = new Vec3(1, 1, 1);
 
         Integer tpDuration = getInput(context, StandardPorts.TICK.getId(), Integer.class);
         Integer interpDuration = getInput(context, StandardPorts.TICK.getIdWithIndex(1), Integer.class);
-
-        Quaternionf leftRotation = new Quaternionf().rotationYXZ(
-                (float) Math.toRadians(-rotation.y),
-                (float) Math.toRadians(rotation.x),
-                (float) Math.toRadians(rotation.z)
-        );
 
         Display.TextDisplay displayEntity = EntityType.TEXT_DISPLAY.create(level, EntitySpawnReason.COMMAND);
         if (displayEntity != null) {
@@ -137,18 +139,14 @@ public class SpawnTextDisplayEntity extends BaseNode {
                 nbt.putBoolean("default_background", true);
             }
 
-            CompoundTag transTag = new CompoundTag();
-            transTag.put("translation", createFloatList((float) translation.x, (float) translation.y, (float) translation.z));
-            transTag.put("scale", createFloatList((float) scaleVec.x, (float) scaleVec.y, (float) scaleVec.z));
-            transTag.put("left_rotation", createFloatList(leftRotation.x(), leftRotation.y(), leftRotation.z(), leftRotation.w()));
-            transTag.put("right_rotation", createFloatList(0f, 0f, 0f, 1f));
-            nbt.put("transformation", transTag);
+            DisplayTransformController.writeTransform(nbt, worldRotation, translation, rotation, scaleVec, pivot);
 
             nbt.putInt("teleport_duration", tpDuration != null ? Math.max(0, tpDuration) : 0);
             nbt.putInt("interpolation_duration", interpDuration != null ? Math.max(0, interpDuration) : 0);
             nbt.putInt("start_interpolation", 0);
 
             EntityNbtCompat.load(displayEntity, nbt);
+            DisplayTransformController.initializePose(displayEntity, worldRotation, pivot);
             level.addFreshEntity(displayEntity);
             context.setTempData("spawn_text_display", displayEntity);
         }
@@ -158,17 +156,9 @@ public class SpawnTextDisplayEntity extends BaseNode {
 
     @Override
     public Object compute(ExecutionContext context, String portName) {
-        if (StandardPorts.ENTITY.getId().equals(portName)) {
+        if (StandardPorts.DISPLAY_ENTITY.getId().equals(portName)) {
             return context.getTempData("spawn_text_display");
         }
         return null;
-    }
-
-    private ListTag createFloatList(float... values) {
-        ListTag list = new ListTag();
-        for (float v : values) {
-            list.add(FloatTag.valueOf(v));
-        }
-        return list;
     }
 }

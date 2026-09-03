@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.actions.entity;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.graph.runtime.display.DisplayTransformController;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
@@ -9,6 +10,7 @@ import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Display;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -33,7 +35,9 @@ public class SetEntityRotation extends EntityPassthroughActionNode {
 
         if (rotation != null && !entities.isEmpty()) {
             for (Entity entity : entities) {
-                if (entity instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                if (entity instanceof Display display) {
+                    DisplayTransformController.setWorldRotation(display, rotation);
+                } else if (entity instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                     serverPlayer.connection.teleport(
                             serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
                             (float) rotation.y, (float) rotation.x

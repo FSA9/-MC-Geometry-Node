@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.expression;
 
+import com.mine.geometry_node.core.engine.graph.runtime.display.DisplayTransformController;
 import net.minecraft.world.entity.Entity;
 
 /** Shared property semantics for typed entity expression bindings. */
@@ -21,7 +22,7 @@ public final class EntityExpressionValues {
             case POS_Z -> entity.getPosition(partialTick).z;
             case ROTATION_X, PITCH -> entity.getXRot();
             case ROTATION_Y, YAW -> entity.getYRot();
-            case ROTATION_Z -> 0.0;
+            case ROTATION_Z -> DisplayTransformController.worldRotation(entity).z;
             case YAW_HEAD -> entity.getYHeadRot();
         };
     }

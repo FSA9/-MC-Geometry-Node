@@ -14,6 +14,8 @@ import java.util.UUID;
 public final class DataLibraryDocument {
     private final EnumMap<PortType, LinkedHashMap<UUID, DataLibraryEntry>> entries =
             new EnumMap<>(PortType.class);
+    private final EnumMap<PortType, LinkedHashMap<String, UUID>> idsByKey =
+            new EnumMap<>(PortType.class);
 
     public Map<UUID, DataLibraryEntry> entries(PortType type) {
         Map<UUID, DataLibraryEntry> values = entries.get(type);
@@ -35,17 +37,42 @@ public final class DataLibraryDocument {
         return find(key.type(), key.id());
     }
 
+    public Optional<DataLibraryEntry> findByKey(PortType type, String key) {
+        String normalized = key == null ? "" : key;
+        Map<String, UUID> typeIndex = idsByKey.get(type);
+        UUID id = typeIndex != null ? typeIndex.get(normalized) : null;
+        return id != null ? find(type, id) : Optional.empty();
+    }
+
     public void put(PortType type, DataLibraryEntry entry) {
         if (!DataLibraryTypes.supports(type)) {
             throw new IllegalArgumentException("Unsupported Data Library type: " + type);
         }
-        entries.computeIfAbsent(type, ignored -> new LinkedHashMap<>()).put(entry.id(), entry);
+        LinkedHashMap<UUID, DataLibraryEntry> values =
+                entries.computeIfAbsent(type, ignored -> new LinkedHashMap<>());
+        LinkedHashMap<String, UUID> typeIndex =
+                idsByKey.computeIfAbsent(type, ignored -> new LinkedHashMap<>());
+        UUID keyOwner = typeIndex.get(entry.key());
+        if (keyOwner != null && !keyOwner.equals(entry.id())) {
+            throw new IllegalArgumentException("Duplicate Data Library key: " + entry.key());
+        }
+        DataLibraryEntry previous = values.put(entry.id(), entry);
+        if (previous != null && !previous.key().equals(entry.key())) {
+            typeIndex.remove(previous.key(), entry.id());
+        }
+        typeIndex.put(entry.key(), entry.id());
     }
 
     public boolean remove(PortType type, UUID id) {
         LinkedHashMap<UUID, DataLibraryEntry> values = entries.get(type);
-        if (values == null || values.remove(id) == null) return false;
-        if (values.isEmpty()) entries.remove(type);
+        DataLibraryEntry removed;
+        if (values == null || (removed = values.remove(id)) == null) return false;
+        LinkedHashMap<String, UUID> typeIndex = idsByKey.get(type);
+        if (typeIndex != null) typeIndex.remove(removed.key(), id);
+        if (values.isEmpty()) {
+            entries.remove(type);
+            idsByKey.remove(type);
+        }
         return true;
     }
 
@@ -64,7 +91,7 @@ public final class DataLibraryDocument {
     public DataLibraryDocument copy() {
         DataLibraryDocument copy = new DataLibraryDocument();
         entries.forEach((type, values) -> values.values().forEach(entry -> copy.put(type,
-                new DataLibraryEntry(entry.id(), entry.name(), GraphValueSnapshot.snapshot(entry.value())))));
+                new DataLibraryEntry(entry.id(), entry.key(), GraphValueSnapshot.snapshot(entry.value())))));
         return copy;
     }
 

@@ -10,7 +10,7 @@ import java.util.UUID;
 public interface DataLibraryUiRepository {
     record EntryKey(PortType type, UUID id) {}
 
-    record Entry(PortType type, UUID id, String name, Object value) {}
+    record Entry(PortType type, UUID id, String key, Object value) {}
 
     List<Entry> entries();
 

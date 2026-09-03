@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -31,9 +32,28 @@ public class CreateGeometryDebugMesh extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.create_geometry_debug_mesh"))
+                .comment(NodeComment.builder(TYPE_ID)
+                        .text("summary")
+                        .input(StandardPorts.FLOW_IN, "flow_in")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .input(StandardPorts.GEOMETRY, "geometry")
+                        .input(StandardPorts.WORLD_POSITION, "world_position")
+                        .input(StandardPorts.WORLD_ROTATION, "world_rotation")
+                        .input(StandardPorts.PIVOT, "pivot")
+                        .input(StandardPorts.TRANSLATION, "translation")
+                        .input(StandardPorts.ROTATION, "rotation")
+                        .input(StandardPorts.SIZE_3, "size_3")
+                        .input(StandardPorts.KEY, "key")
+                        .output(StandardPorts.RESOURCE_ID, "resource_id")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(StandardPorts.GEOMETRY.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(StandardPorts.WORLD_POSITION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.WORLD_ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.PIVOT.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.ROTATION.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), null, UIHint.VECTOR, null, null))
                 .addRow(new PortRow(StandardPorts.KEY.toInput(""), StandardPorts.RESOURCE_ID.toOutput(), UIHint.INPUT, null, null))
                 .build();
     }
@@ -49,7 +69,12 @@ public class CreateGeometryDebugMesh extends BaseNode {
             return next(StandardPorts.FLOW_OUT.getId());
         }
 
-        Vec3 translation = getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class);
+        Vec3 worldPosition = valueOr(getInput(context, StandardPorts.WORLD_POSITION.getId(), Vec3.class), Vec3.ZERO);
+        Vec3 worldRotation = valueOr(getInput(context, StandardPorts.WORLD_ROTATION.getId(), Vec3.class), Vec3.ZERO);
+        Vec3 pivot = valueOr(getInput(context, StandardPorts.PIVOT.getId(), Vec3.class), Vec3.ZERO);
+        Vec3 translation = valueOr(getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class), Vec3.ZERO);
+        Vec3 rotation = valueOr(getInput(context, StandardPorts.ROTATION.getId(), Vec3.class), Vec3.ZERO);
+        Vec3 scale = valueOr(getInput(context, StandardPorts.SIZE_3.getId(), Vec3.class), new Vec3(1, 1, 1));
         String key = getInput(context, StandardPorts.KEY.getId(), String.class);
         GraphResourceId resourceId = GraphResourceIds.forKey(context, stableNodeId(context),
                 GraphResourceTypeRegistry.GEOMETRY_DEBUG, key);
@@ -61,7 +86,12 @@ public class CreateGeometryDebugMesh extends BaseNode {
                 "created",
                 geometry,
                 MAX_MESHES_PER_EXECUTION,
-                translation
+                worldPosition,
+                worldRotation,
+                pivot,
+                translation,
+                rotation,
+                scale
         );
         if (!meshes.isEmpty()) {
             DebugRendererSessionManager.replaceSourceGeometry(level, sourceId, meshes);
@@ -86,6 +116,10 @@ public class CreateGeometryDebugMesh extends BaseNode {
         String stableId = context.getCurrentNodeStableId();
         return stableId == null || stableId.isBlank()
                 ? Integer.toString(context.getCurrentNodeId()) : stableId;
+    }
+
+    private static <T> T valueOr(T value, T fallback) {
+        return value != null ? value : fallback;
     }
 
 }

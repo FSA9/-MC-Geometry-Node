@@ -23,7 +23,7 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
 
     @Override
     public void create(PortType type) {
-        Entry entry = new Entry(type, UUID.randomUUID(), uniqueName(type), type.getDefaultValue());
+        Entry entry = new Entry(type, UUID.randomUUID(), uniqueKey(type), type.getDefaultValue());
         remote.create(entry, this::notifyChanged);
     }
 
@@ -45,14 +45,14 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
         remote.refresh(completion);
     }
 
-    private String uniqueName(PortType type) {
+    private String uniqueKey(PortType type) {
         String base = type.name().toLowerCase(java.util.Locale.ROOT);
-        Set<String> names = entries().stream().map(Entry::name)
+        Set<String> keys = entries().stream().filter(entry -> entry.type() == type).map(Entry::key)
                 .collect(java.util.stream.Collectors.toSet());
-        if (!names.contains(base)) return base;
+        if (!keys.contains(base)) return base;
         for (int suffix = 2; ; suffix++) {
             String candidate = base + " " + suffix;
-            if (!names.contains(candidate)) return candidate;
+            if (!keys.contains(candidate)) return candidate;
         }
     }
 

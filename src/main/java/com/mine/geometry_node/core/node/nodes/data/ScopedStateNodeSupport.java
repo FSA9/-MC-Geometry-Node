@@ -59,8 +59,7 @@ final class ScopedStateNodeSupport {
             case SHARED -> ScopedStateTarget.shared();
             case GROUP -> entity != null ? ScopedStateTarget.group(entity) : null;
             case WORLD -> {
-                Object value = context.getStaticInput(StandardPorts.DIMENSION.getId());
-                String dimension = value instanceof String text && !text.isBlank() ? text : DEFAULT_DIMENSION;
+                String dimension = dimension(context);
                 yield ScopedStateTarget.world(dimension);
             }
             case INSTANCE -> null;
@@ -74,6 +73,12 @@ final class ScopedStateNodeSupport {
             throw new IllegalStateException("Scoped state target is unavailable for " + scope);
         }
         return target;
+    }
+
+    static String dimension(ExecutionContext context) {
+        Object value = context.getInputValue(StandardPorts.DIMENSION.getId());
+        if (value == null) value = context.getStaticInput(StandardPorts.DIMENSION.getId());
+        return value instanceof String text && !text.isBlank() ? text : DEFAULT_DIMENSION;
     }
 
     static String requireKey(@Nullable String name) {

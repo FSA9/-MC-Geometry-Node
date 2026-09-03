@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.system.data.library;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 
 import java.util.EnumSet;
+import java.util.Locale;
 import java.util.Set;
 
 /** The single source of truth for values that may be stored in a Data Library. */
@@ -37,5 +38,22 @@ public final class DataLibraryTypes {
 
     public static boolean supports(PortType type) {
         return type != null && SUPPORTED.contains(type);
+    }
+
+    public static String[] optionIds() {
+        return java.util.Arrays.stream(PortType.values())
+                .filter(DataLibraryTypes::supports)
+                .map(Enum::name)
+                .toArray(String[]::new);
+    }
+
+    public static PortType resolve(Object value) {
+        if (!(value instanceof String text) || text.isBlank()) return null;
+        try {
+            PortType type = PortType.valueOf(text.trim().toUpperCase(Locale.ROOT));
+            return supports(type) ? type : null;
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 }
