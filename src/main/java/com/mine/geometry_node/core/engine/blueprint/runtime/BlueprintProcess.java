@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandler;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandlerRegistry;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
+import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -917,8 +918,7 @@ public class BlueprintProcess {
                 if (val != null) {
                     ServerLevel currentLevel = getLevel();
                     if (val instanceof UUID uuid && currentLevel != null) {
-                        Entity res = currentLevel.getEntity(uuid);
-                        return (res == null || res.isRemoved()) ? null : res;
+                        return GraphEntityReferenceResolver.resolve(uuid, currentLevel);
                     }
                     return val;
                 }
@@ -956,8 +956,7 @@ public class BlueprintProcess {
 
             ServerLevel currentLevel = getLevel();
             if (val instanceof UUID uuid && currentLevel != null) {
-                Entity res = currentLevel.getEntity(uuid);
-                return (res == null || res.isRemoved()) ? null : res;
+                return GraphEntityReferenceResolver.resolve(uuid, currentLevel);
             }
             return val;
         }

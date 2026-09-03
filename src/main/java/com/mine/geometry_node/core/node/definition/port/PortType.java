@@ -95,6 +95,8 @@ public enum PortType {
         if (value instanceof Integer) return INTEGER;
         if (value instanceof Long) return LONG;
         if (value instanceof Float || value instanceof Double) return FLOAT;
+        if (value instanceof Byte || value instanceof Short) return INTEGER;
+        if (value instanceof Number) return FLOAT;
         if (value instanceof Boolean) return BOOLEAN;
         if (value instanceof String) return STRING;
         if (value instanceof RichTextValue) return RICH_TEXT;
@@ -102,6 +104,7 @@ public enum PortType {
         if (value instanceof GeometryValue) return GEOMETRY;
         if (value instanceof SlotRef) return SLOT;
         if (value instanceof net.minecraft.world.entity.Entity) return ENTITY;
+        if (value instanceof java.util.UUID) return ENTITY;
         if (value instanceof EntityTemplateValue) return ENTITY_TEMPLATE;
         if (value instanceof net.minecraft.world.item.Item) return ITEM;
         if (value instanceof net.minecraft.world.item.ItemStack) return ITEM_STACK;

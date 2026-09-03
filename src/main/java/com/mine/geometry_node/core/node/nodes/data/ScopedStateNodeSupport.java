@@ -78,15 +78,6 @@ final class ScopedStateNodeSupport {
         };
     }
 
-    static ScopedStateTarget requireTarget(
-            GraphDataContext context, ScopedStateScope scope, @Nullable Entity entity) {
-        ScopedStateTarget target = resolveTarget(context, scope, entity);
-        if (target == null) {
-            throw new IllegalStateException("Scoped state target is unavailable for " + scope);
-        }
-        return target;
-    }
-
     static String dimension(GraphDataContext context) {
         Object value = context.getInputValue(StandardPorts.DIMENSION.getId());
         if (value == null) value = context.getStaticInput(StandardPorts.DIMENSION.getId());

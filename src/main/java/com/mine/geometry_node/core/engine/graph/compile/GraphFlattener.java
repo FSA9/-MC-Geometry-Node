@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph.DataConne
 import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph.InputKey;
 import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph.TargetConnection;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
+import com.mine.geometry_node.core.node.value.GraphNumberNormalizer;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.port.PortType;
@@ -543,24 +544,24 @@ public final class GraphFlattener {
         if (element.isJsonPrimitive()) {
             var primitive = element.getAsJsonPrimitive();
             if (primitive.isBoolean()) return primitive.getAsBoolean();
-            if (primitive.isNumber()) return primitive.getAsNumber();
+            if (primitive.isNumber()) return GraphNumberNormalizer.normalize(primitive.getAsNumber());
             if (primitive.isString()) return primitive.getAsString();
         }
         if (element.isJsonArray()) {
             List<Object> values = new ArrayList<>();
             for (JsonElement item : element.getAsJsonArray()) {
                 Object value = unwrapJsonElement(item);
-                if (value != null) values.add(value);
+                values.add(value);
             }
-            return List.copyOf(values);
+            return Collections.unmodifiableList(values);
         }
         if (element.isJsonObject()) {
             Map<String, Object> values = new HashMap<>();
             for (String key : element.getAsJsonObject().keySet()) {
                 Object value = unwrapJsonElement(element.getAsJsonObject().get(key));
-                if (value != null) values.put(key, value);
+                values.put(key, value);
             }
-            return Map.copyOf(values);
+            return Collections.unmodifiableMap(values);
         }
         return null;
     }

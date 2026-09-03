@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.value;
 
+import com.mine.geometry_node.core.node.value.GraphNumberNormalizer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.Entity;
 
@@ -20,6 +21,7 @@ public final class GraphValueSnapshot {
 
     public static Object snapshot(Object value) {
         if (value == null) return null;
+        if (value instanceof Number number) return GraphNumberNormalizer.normalize(number);
         if (value instanceof ItemStack stack) return stack.copy();
         if (value instanceof Map<?, ?> map) {
             Map<Object, Object> copy = new LinkedHashMap<>();

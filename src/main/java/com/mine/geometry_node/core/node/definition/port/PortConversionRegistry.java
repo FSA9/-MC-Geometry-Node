@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.definition.port;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
@@ -20,6 +21,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Canonical registry for implicit data-port conversions. Connection checks and
@@ -46,8 +48,16 @@ public final class PortConversionRegistry {
 
         PortType source = PortType.getTypeOf(value);
         if (source == target) {
-            if (target == PortType.FLOAT && value instanceof Number number) {
-                return number.floatValue();
+            if (target == PortType.ENTITY && value instanceof UUID entityId) {
+                return resolveEntity(entityId, context);
+            }
+            if (value instanceof Number number) {
+                return switch (target) {
+                    case INTEGER -> number.intValue();
+                    case LONG -> number.longValue();
+                    case FLOAT -> number.floatValue();
+                    default -> value;
+                };
             }
             if (target == PortType.XYZ && value instanceof BlockPos pos) {
                 return new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
@@ -57,6 +67,11 @@ public final class PortConversionRegistry {
 
         Converter converter = RULES.getOrDefault(source, Map.of()).get(target);
         return converter != null ? converter.convert(value, context) : null;
+    }
+
+    @Nullable
+    private static Entity resolveEntity(UUID entityId, @Nullable GraphDataContext context) {
+        return GraphEntityReferenceResolver.resolve(entityId, context);
     }
 
     private static Map<PortType, Map<PortType, Converter>> createRules() {

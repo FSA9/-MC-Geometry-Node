@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.value;
 
 import com.mine.geometry_node.core.node.value.SlotRef;
+import com.mine.geometry_node.core.node.value.GraphNumberNormalizer;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -151,6 +152,9 @@ public final class GraphValueCodecRegistry {
         if (value instanceof Float f) return FloatTag.valueOf(f);
         if (value instanceof String s) return StringTag.valueOf(s);
         if (value instanceof Boolean b) return ByteTag.valueOf(b);
+        if (value instanceof Number number) {
+            return toTag(GraphNumberNormalizer.normalize(number), provider);
+        }
 
         // List
         if (value instanceof List<?> list) {
@@ -252,7 +256,7 @@ public final class GraphValueCodecRegistry {
         // --- 快车道 ---
         if (tag instanceof IntTag i) return i.intValue();
         if (tag instanceof LongTag l) return l.longValue();
-        if (tag instanceof ShortTag s) return s.shortValue();
+        if (tag instanceof ShortTag s) return s.intValue();
         if (tag instanceof DoubleTag d) return d.doubleValue();
         if (tag instanceof FloatTag f) return f.floatValue();
         if (tag instanceof StringTag s) return s.value();
@@ -296,10 +300,15 @@ public final class GraphValueCodecRegistry {
     public static boolean isSupported(Object value) {
         if (value == null) return false;
         if (value instanceof Entity ||
-                value instanceof Integer || value instanceof Long || value instanceof Short ||
-                value instanceof Double || value instanceof Float ||
-                value instanceof String || value instanceof Boolean ||
-                value instanceof List || value instanceof Map) return true;
+                value instanceof Number || value instanceof String || value instanceof Boolean) return true;
+
+        if (value instanceof List<?> list) {
+            return list.stream().allMatch(GraphValueCodecRegistry::isSupported);
+        }
+        if (value instanceof Map<?, ?> map) {
+            return map.entrySet().stream().allMatch(entry ->
+                    entry.getKey() instanceof String && isSupported(entry.getValue()));
+        }
 
         for (Class<?> supportedClass : CLASS_TO_SERIALIZER.keySet()) {
             if (supportedClass.isInstance(value)) return true;

@@ -61,10 +61,9 @@ public final class SetScopedState extends BaseNode {
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
                 ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
         ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
-        if (target == null) {
-            throw new IllegalStateException("Scoped state target is unavailable for " + scope);
+        if (target != null) {
+            context.setScopedState(target, key, attrValue);
         }
-        context.setScopedState(target, key, attrValue);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }
@@ -77,9 +76,7 @@ public final class SetScopedState extends BaseNode {
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
                 ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
         ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
-        if (target == null) {
-            throw new IllegalStateException("Scoped state target is unavailable for " + scope);
-        }
+        if (target == null) return null;
         String key = ScopedStateNodeSupport.requireKey(
                 getInput(context, StandardPorts.NAME.getId(), String.class));
         return context.getScopedState(target, key);

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.util;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -92,7 +93,7 @@ public final class SlotAccessUtils {
         return false;
     }
 
-    public static int countMatching(Entity target, ItemStack template, String tag, String matchMode, ExecutionContext context) {
+    public static int countMatching(Entity target, ItemStack template, String tag, String matchMode, GraphDataContext context) {
         if (target == null) {
             return 0;
         }
@@ -145,7 +146,7 @@ public final class SlotAccessUtils {
         return snapshot;
     }
 
-    public static List<SlotRef> findMatchingSlots(Entity target, String scope, ItemStack template, String tag, String matchMode, boolean includeEmpty, int limit, ExecutionContext context) {
+    public static List<SlotRef> findMatchingSlots(Entity target, String scope, ItemStack template, String tag, String matchMode, boolean includeEmpty, int limit, GraphDataContext context) {
         List<SlotRef> result = new ArrayList<>();
         if (target == null) {
             return result;
@@ -547,10 +548,10 @@ public final class SlotAccessUtils {
         private final ItemStack template;
         private final String tag;
         private final String matchMode;
-        private final ExecutionContext context;
+        private final GraphDataContext context;
         private int count;
 
-        private Counter(ItemStack template, String tag, String matchMode, ExecutionContext context) {
+        private Counter(ItemStack template, String tag, String matchMode, GraphDataContext context) {
             this.template = template;
             this.tag = tag;
             this.matchMode = matchMode;
@@ -602,7 +603,7 @@ public final class SlotAccessUtils {
         }
     }
 
-    private static boolean matches(ItemStack current, ItemStack template, String tag, String matchMode, ExecutionContext context) {
+    private static boolean matches(ItemStack current, ItemStack template, String tag, String matchMode, GraphDataContext context) {
         if (current == null || current.isEmpty()) {
             return false;
         }
@@ -612,7 +613,7 @@ public final class SlotAccessUtils {
         return ValueMatchUtils.itemStackMatches(current, template, matchMode, context);
     }
 
-    private static boolean matchesQuery(ItemStack current, ItemStack template, String tag, String matchMode, boolean includeEmpty, ExecutionContext context) {
+    private static boolean matchesQuery(ItemStack current, ItemStack template, String tag, String matchMode, boolean includeEmpty, GraphDataContext context) {
         if (current == null || current.isEmpty()) {
             return includeEmpty;
         }

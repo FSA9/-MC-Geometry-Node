@@ -55,7 +55,7 @@ public final class HasScopedState extends BaseNode {
         ScopedStateScope scope = ScopedStateNodeSupport.selectedScope(context);
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
                 ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
-        ScopedStateTarget target = ScopedStateNodeSupport.requireTarget(context, scope, entity);
-        return context.getScopedState(target, key) != null;
+        ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
+        return target != null && context.getScopedState(target, key) != null;
     }
 }
