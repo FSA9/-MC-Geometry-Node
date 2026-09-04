@@ -25,7 +25,6 @@ import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryValueCodec;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryEntityReference;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryTypes;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.definition.port.PortType;
@@ -113,7 +112,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private boolean syncingSelectAll;
     private boolean internalDragActive;
     private boolean rebuildPending;
-    private static DataLibraryEntityReference entityReferenceClipboard;
+    private static UUID entityReferenceClipboard;
     private static boolean hasEntityReferenceClipboard;
 
     public DataLibraryWindow(Context context) {
@@ -501,8 +500,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
             EntityTemplatePreviewView preview = createEntityPreview(entry, current);
             if (entry.value() instanceof EntityTemplateValue template) preview.setDisplayTemplate(template);
-            else if (entry.value() instanceof DataLibraryEntityReference reference) {
-                Entity entity = resolveClientEntity(reference);
+            else if (entry.value() instanceof UUID entityId) {
+                Entity entity = resolveClientEntity(entityId);
                 if (entity != null) preview.setDisplayTemplate(EntityTemplateValue.capture(entity));
             }
             content.addView(centeredPreview(preview), new LayoutParams(
@@ -1023,7 +1022,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (copy != null && copy.matches(event)) {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 Object value = current.get().value();
-                entityReferenceClipboard = value instanceof DataLibraryEntityReference reference ? reference : null;
+                entityReferenceClipboard = value instanceof UUID entityId ? entityId : null;
                 hasEntityReferenceClipboard = true;
             }
             return true;
@@ -1184,13 +1183,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
     }
 
-    private static Entity resolveClientEntity(DataLibraryEntityReference reference) {
+    private static Entity resolveClientEntity(UUID entityId) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null) return null;
-        for (Entity entity : minecraft.level.entitiesForRendering()) {
-            if (entity.getUUID().equals(reference.entityId())) return entity;
-        }
-        return null;
+        return minecraft.level.getEntity(entityId);
     }
 
     private static DataLibraryUiRepository.EntryKey key(DataLibraryUiRepository.Entry entry) {

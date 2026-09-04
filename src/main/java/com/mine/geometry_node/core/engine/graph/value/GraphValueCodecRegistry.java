@@ -45,6 +45,9 @@ public final class GraphValueCodecRegistry {
     // 包装盒的标准字段名
     private static final String TYPE_KEY = "_gn_type";
     private static final String DATA_KEY = "data";
+    private static final String NULL_TYPE_ID = "_gn_null";
+    private static final String LIST_TYPE_ID = "_gn_list";
+    private static final String DICT_TYPE_ID = "_gn_dict";
 
     private GraphValueCodecRegistry() {
     }
@@ -60,7 +63,7 @@ public final class GraphValueCodecRegistry {
         if (typeId.isBlank()) {
             throw new IllegalArgumentException("Graph value codec type id cannot be blank");
         }
-        if ("_gn_list".equals(typeId) || "_gn_dict".equals(typeId)) {
+        if (NULL_TYPE_ID.equals(typeId) || LIST_TYPE_ID.equals(typeId) || DICT_TYPE_ID.equals(typeId)) {
             throw new IllegalArgumentException("Graph value codec type id is reserved: " + typeId);
         }
         if (CLASS_TO_SERIALIZER.containsKey(targetClass)) {
@@ -376,17 +379,18 @@ public final class GraphValueCodecRegistry {
         // List
         if (value instanceof List<?> list) {
             CompoundTag wrapper = new CompoundTag();
-            wrapper.putString(TYPE_KEY, "_gn_list"); // 专用 ID
+            wrapper.putString(TYPE_KEY, LIST_TYPE_ID);
             ListTag nbtList = new ListTag();
 
             for (Object item : list) {
                 Tag elementTag = toTag(item, provider);
-                if (elementTag != null) {
-                    // 强制包一层 Compound，打破 ListTag 必须同类型的诅咒
-                    CompoundTag elementWrapper = new CompoundTag();
-                    elementWrapper.put("v", elementTag);
-                    nbtList.add(elementWrapper);
+                if (item != null && elementTag == null) {
+                    continue;
                 }
+                // Every element is wrapped so ListTag can contain heterogeneous values.
+                CompoundTag elementWrapper = new CompoundTag();
+                elementWrapper.put("v", elementTag != null ? elementTag : nullTag());
+                nbtList.add(elementWrapper);
             }
             wrapper.put(DATA_KEY, nbtList);
             return wrapper;
@@ -395,15 +399,16 @@ public final class GraphValueCodecRegistry {
         // Dict
         if (value instanceof Map<?, ?> map) {
             CompoundTag wrapper = new CompoundTag();
-            wrapper.putString(TYPE_KEY, "_gn_dict"); // 专用 ID
+            wrapper.putString(TYPE_KEY, DICT_TYPE_ID);
             CompoundTag dataTag = new CompoundTag();
 
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (entry.getKey() instanceof String key) {
-                    Tag elementTag = toTag(entry.getValue(), provider); // 递归序列化 Value
-                    if (elementTag != null) {
-                        dataTag.put(key, elementTag);
+                    Tag elementTag = toTag(entry.getValue(), provider);
+                    if (entry.getValue() != null && elementTag == null) {
+                        continue;
                     }
+                    dataTag.put(key, elementTag != null ? elementTag : nullTag());
                 }
             }
             wrapper.put(DATA_KEY, dataTag);
@@ -437,11 +442,11 @@ public final class GraphValueCodecRegistry {
         }
         if (value instanceof List<?> list) {
             CompoundTag wrapper = new CompoundTag();
-            wrapper.putString(TYPE_KEY, "_gn_list");
+            wrapper.putString(TYPE_KEY, LIST_TYPE_ID);
             ListTag encoded = new ListTag();
             for (Object item : list) {
                 CompoundTag element = new CompoundTag();
-                element.put("v", toTagStrict(item, provider));
+                element.put("v", toNestedTagStrict(item, provider));
                 encoded.add(element);
             }
             wrapper.put(DATA_KEY, encoded);
@@ -449,13 +454,13 @@ public final class GraphValueCodecRegistry {
         }
         if (value instanceof Map<?, ?> map) {
             CompoundTag wrapper = new CompoundTag();
-            wrapper.putString(TYPE_KEY, "_gn_dict");
+            wrapper.putString(TYPE_KEY, DICT_TYPE_ID);
             CompoundTag encoded = new CompoundTag();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (!(entry.getKey() instanceof String key)) {
                     throw new IllegalArgumentException("Graph map keys must be strings");
                 }
-                encoded.put(key, toTagStrict(entry.getValue(), provider));
+                encoded.put(key, toNestedTagStrict(entry.getValue(), provider));
             }
             wrapper.put(DATA_KEY, encoded);
             return wrapper;
@@ -485,8 +490,12 @@ public final class GraphValueCodecRegistry {
         if (tag instanceof CompoundTag compound && compound.contains(TYPE_KEY)) {
             String typeId = compound.getStringOr(TYPE_KEY, "");
 
+            if (NULL_TYPE_ID.equals(typeId)) {
+                return null;
+            }
+
             // List
-            if ("_gn_list".equals(typeId) && compound.contains(DATA_KEY)) {
+            if (LIST_TYPE_ID.equals(typeId) && compound.contains(DATA_KEY)) {
                 ListTag nbtList = compound.getListOrEmpty(DATA_KEY);
                 List<Object> resultList = new ArrayList<>();
                 for (int i = 0; i < nbtList.size(); i++) {
@@ -496,7 +505,7 @@ public final class GraphValueCodecRegistry {
                 return resultList;
             }
             // Dict
-            if ("_gn_dict".equals(typeId) && compound.contains(DATA_KEY)) {
+            if (DICT_TYPE_ID.equals(typeId) && compound.contains(DATA_KEY)) {
                 CompoundTag dataTag = compound.getCompoundOrEmpty(DATA_KEY);
                 Map<String, Object> resultMap = new HashMap<>();
                 for (String key : dataTag.keySet()) {
@@ -524,16 +533,30 @@ public final class GraphValueCodecRegistry {
 
         if (value instanceof List<?> list) {
             return supportsPortType(PortType.LIST)
-                    && list.stream().allMatch(GraphValueCodecRegistry::isSupported);
+                    && list.stream().allMatch(GraphValueCodecRegistry::isSupportedNested);
         }
         if (value instanceof Map<?, ?> map) {
             return supportsPortType(PortType.DICT) && map.entrySet().stream().allMatch(entry ->
-                    entry.getKey() instanceof String && isSupported(entry.getValue()));
+                    entry.getKey() instanceof String && isSupportedNested(entry.getValue()));
         }
 
         if (CLASS_TO_SERIALIZER.containsKey(value.getClass())) return true;
         return PORT_TYPE_REGISTRATIONS.values().stream()
                 .anyMatch(registration -> registration.valueClass().isInstance(value));
+    }
+
+    private static Tag toNestedTagStrict(@Nullable Object value, HolderLookup.Provider provider) {
+        return value == null ? nullTag() : toTagStrict(value, provider);
+    }
+
+    private static CompoundTag nullTag() {
+        CompoundTag marker = new CompoundTag();
+        marker.putString(TYPE_KEY, NULL_TYPE_ID);
+        return marker;
+    }
+
+    private static boolean isSupportedNested(@Nullable Object value) {
+        return value == null || isSupported(value);
     }
 
     private static String requireString(Tag tag, String valueType) {

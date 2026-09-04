@@ -27,6 +27,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /** Compiles editable behavior documents into immutable runtime plans. */
@@ -43,12 +44,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     }
 
     @Override
-    public BehaviorTreePlan compile(JsonObject document) {
-        return compile(GraphCompileContext.ANONYMOUS, document);
-    }
-
-    @Override
     public BehaviorTreePlan compile(GraphCompileContext context, JsonObject document) {
+        Objects.requireNonNull(context, "context");
         Compilation compilation = inspectDocument(context, document);
         if (!compilation.diagnostics.isEmpty()) {
             throw new GraphValidationException(compilation.diagnostics);
@@ -57,7 +54,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
     }
 
     private Compilation inspectDocument(GraphCompileContext context, JsonObject document) {
-        String assetId = context != null ? context.diagnosticAssetId() : "<anonymous>";
+        String assetId = context.diagnosticAssetId();
         if (document == null) {
             return failedCompilation(diagnostic(assetId, "DOCUMENT_MALFORMED",
                     "Behavior tree document is missing", "", "", ""));
@@ -75,7 +72,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
 
     private Compilation inspect(GraphCompileContext context, JsonObject document,
                                 FlattenedGraph flattened) {
-        String assetId = context != null ? context.diagnosticAssetId() : "<anonymous>";
+        String assetId = context.diagnosticAssetId();
         List<GraphDiagnostic> diagnostics = new ArrayList<>();
         GraphValidationResult common = GraphDocumentValidator.validate(
                 GraphDocumentValidator.input(assetId, flattened));
@@ -147,7 +144,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             for (int child : children[nodeIndex]) parents[child] = nodeIndex;
         }
         return BehaviorTreePlan.createCompiled(
-                context != null ? context.assetId() : "", nodes, resources,
+                context.assetId(), nodes, resources,
                 root, parents, children,
                 compilation.rootSchedule);
     }

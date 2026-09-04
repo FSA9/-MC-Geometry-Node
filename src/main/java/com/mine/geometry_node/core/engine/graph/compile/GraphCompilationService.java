@@ -67,6 +67,7 @@ public final class GraphCompilationService {
     }
 
     private CompiledGraph compile(GraphCompileContext context, JsonObject document) {
+        Objects.requireNonNull(context, "context");
         Objects.requireNonNull(document, "document");
         GraphType type = GraphDocumentType.require(document);
         GraphCompiler<? extends CompiledGraph> compiler;

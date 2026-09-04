@@ -12,6 +12,7 @@ import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAtt
 import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileControlAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
+import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceIndex;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
 import com.mine.geometry_node.core.engine.runtime.ServerEngineDriver;
 import com.mine.geometry_node.core.engine.runtime.ServerEngineRegistry;
@@ -169,6 +170,7 @@ public class GeometryNode {
 
         GraphEngineServices.INSTANCE.setScopedStateStore(new ServerScopedStateStore());
         GraphResourceLifecycleManager.INSTANCE.init();
+        GraphEntityReferenceIndex.INSTANCE.init();
         AssetLifecycleRegistry.INSTANCE.register(
                 AssetTypeCatalog.GRAPH_TYPE_ID,
                 DynamicGraphManager::loadAllFromDisk);

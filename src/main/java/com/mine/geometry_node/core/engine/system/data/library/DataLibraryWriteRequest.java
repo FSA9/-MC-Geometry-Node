@@ -20,7 +20,7 @@ public record DataLibraryWriteRequest(
         type = Objects.requireNonNull(type, "type");
         key = key == null ? "" : key;
         value = value instanceof Entity entity
-                ? DataLibraryEntityReference.capture(entity)
+                ? entity.getUUID()
                 : GraphValueSnapshot.snapshot(value);
     }
 }

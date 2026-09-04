@@ -2,7 +2,6 @@ package com.mine.geometry_node.core.engine.blueprint.compile;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
@@ -26,11 +25,11 @@ import com.mine.geometry_node.core.node.nodes.functions.graph.ReceiveBlueprint;
 import com.mine.geometry_node.core.node.nodes.events.block.OnMultiblockBuilt;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
-import java.io.Reader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -43,25 +42,14 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
     private BlueprintCompiler() {
     }
 
-    @SuppressWarnings("unchecked")
-    public static BlueprintPlan compile(Reader jsonReader) {
-        JsonObject root = JsonParser.parseReader(jsonReader).getAsJsonObject();
-        return compileDocument(GraphCompileContext.ANONYMOUS, root);
-    }
-
     @Override
     public GraphKind runtimeKind() {
         return GraphKind.BLUEPRINT;
     }
 
     @Override
-    public BlueprintPlan compile(JsonObject document) {
-        return compileDocument(GraphCompileContext.ANONYMOUS, document);
-    }
-
-    @Override
     public BlueprintPlan compile(GraphCompileContext context, JsonObject document) {
-        return compileDocument(context, document);
+        return compileDocument(Objects.requireNonNull(context, "context"), document);
     }
 
     @SuppressWarnings("unchecked")
@@ -82,7 +70,7 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
 
         FlattenedGraph flattened = GraphFlattener.flatten(rootNodes);
         GraphDocumentValidator.requireValid(GraphDocumentValidator.input(
-                context != null ? context.diagnosticAssetId() : "<anonymous>",
+                context.diagnosticAssetId(),
                 flattened));
         CompiledNodeTable nodeTable = CompiledNodeTable.build(flattened);
         CompiledNodeIndex nodes = nodeTable.index();

@@ -63,8 +63,8 @@ public final class RemoteDataLibraryService {
             if (cached == null) return null;
             DataLibraryEntry entry = cached.document().find(entryId).orElse(null);
             if (entry == null || expectedType != null && entry.type() != expectedType) return null;
-            if (entry.value() instanceof DataLibraryEntityReference reference) {
-                return GraphEntityReferenceResolver.resolve(reference.entityId(), server);
+            if (entry.type() == PortType.ENTITY && entry.value() instanceof UUID entityId) {
+                return GraphEntityReferenceResolver.resolve(entityId, server);
             }
             return GraphValueSnapshot.snapshot(entry.value());
         } catch (RuntimeException exception) {

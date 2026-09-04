@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryEntityReference;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.mc.MuiModApi;
 import net.minecraft.client.Minecraft;
@@ -10,6 +9,7 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.neoforged.neoforge.client.event.InputEvent;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.UUID;
 import java.util.function.BiConsumer;
 
 /** Temporarily returns to the world and captures an entity reference plus a preview snapshot. */
@@ -18,7 +18,7 @@ public final class DataLibraryEntityPickerController {
 
     private DataLibraryEntityPickerController() {}
 
-    public static boolean open(BiConsumer<DataLibraryEntityReference, EntityTemplateValue> picked,
+    public static boolean open(BiConsumer<UUID, EntityTemplateValue> picked,
                                Runnable dismissed) {
         Minecraft minecraft = Minecraft.getInstance();
         if (!minecraft.isSameThread()) {
@@ -38,7 +38,7 @@ public final class DataLibraryEntityPickerController {
         event.setSwingHand(false);
         Minecraft minecraft = Minecraft.getInstance();
         if (!(minecraft.hitResult instanceof EntityHitResult hit)) return;
-        finish(session, DataLibraryEntityReference.capture(hit.getEntity()),
+        finish(session, hit.getEntity().getUUID(),
                 EntityTemplateValue.capture(hit.getEntity()));
     }
 
@@ -52,7 +52,7 @@ public final class DataLibraryEntityPickerController {
         active = null;
     }
 
-    private static void finish(Session session, DataLibraryEntityReference reference,
+    private static void finish(Session session, UUID reference,
                                EntityTemplateValue preview) {
         if (active != session) return;
         active = null;
@@ -64,6 +64,6 @@ public final class DataLibraryEntityPickerController {
     }
 
     private record Session(Screen previousScreen,
-                           BiConsumer<DataLibraryEntityReference, EntityTemplateValue> picked,
+                           BiConsumer<UUID, EntityTemplateValue> picked,
                            Runnable dismissed) {}
 }

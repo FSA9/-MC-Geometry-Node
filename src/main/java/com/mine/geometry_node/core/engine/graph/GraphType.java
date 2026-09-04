@@ -10,11 +10,6 @@ import java.util.Objects;
  */
 public record GraphType(String id, String translationKey, int assetIconColor, GraphKind runtimeKind,
                         boolean authorable) {
-    /** Preserves the existing extension API; custom legacy graph types use the blueprint runtime. */
-    public GraphType(String id, String translationKey, int assetIconColor) {
-        this(id, translationKey, assetIconColor, GraphKind.BLUEPRINT, true);
-    }
-
     public GraphType {
         id = normalizeId(id);
         if (id.isEmpty()) {

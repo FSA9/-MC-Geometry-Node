@@ -20,7 +20,7 @@ import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
+import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.document.Connection;
@@ -37,7 +37,6 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
 
 import java.nio.charset.StandardCharsets;
-import java.io.StringReader;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -157,7 +156,7 @@ public final class GraphPatchTransactionService {
         String afterJson = canonicalGraphJson(trialRoot);
         if (beforeJson.equals(afterJson)) throw fail("PATCH_NO_CHANGES", "GraphPatch 没有产生任何变化");
         try {
-            BlueprintCompiler.compile(new StringReader(afterJson));
+            GraphCompilationService.INSTANCE.compile(afterJson);
         } catch (RuntimeException failure) {
             throw fail("GRAPH_COMPILE_FAILED", "GraphPatch 事务预检编译失败: " + safeMessage(failure));
         }

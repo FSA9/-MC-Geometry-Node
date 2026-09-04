@@ -94,16 +94,14 @@ public final class DataLibraryValueCodec {
     }
 
     private static JsonObject encodeEntity(Object value) {
-        DataLibraryEntityReference reference = value instanceof Entity entity
-                ? DataLibraryEntityReference.capture(entity)
-                : (DataLibraryEntityReference) value;
+        UUID entityId = value instanceof Entity entity ? entity.getUUID() : (UUID) value;
         JsonObject json = new JsonObject();
-        json.addProperty("uuid", reference.entityId().toString());
+        json.addProperty("uuid", entityId.toString());
         return json;
     }
 
-    private static DataLibraryEntityReference decodeEntity(JsonObject value) {
-        return new DataLibraryEntityReference(UUID.fromString(value.get("uuid").getAsString()));
+    private static UUID decodeEntity(JsonObject value) {
+        return UUID.fromString(value.get("uuid").getAsString());
     }
 
     private static JsonObject encodeEntityTemplate(EntityTemplateValue value) {
@@ -251,7 +249,7 @@ public final class DataLibraryValueCodec {
 
     private static JsonElement encodeDynamic(Object value, HolderLookup.Provider registries) {
         if (value == null) return JsonNull.INSTANCE;
-        PortType type = value instanceof DataLibraryEntityReference ? PortType.ENTITY : PortType.getTypeOf(value);
+        PortType type = PortType.getTypeOf(value);
         if (!DataLibraryTypes.supports(type)) {
             throw new IllegalArgumentException("Unsupported nested Data Library value: " + value.getClass().getName());
         }
