@@ -249,15 +249,15 @@ public final class BehaviorTreeEngine {
     }
 
     public void graphAssetsChanged(@Nullable MinecraftServer minecraftServer,
-                                   Set<String> affectedAssetIds) {
-        if (affectedAssetIds == null || affectedAssetIds.isEmpty()) return;
+                                   Set<String> assetIds) {
+        if (assetIds == null || assetIds.isEmpty()) return;
         if (minecraftServer != null) {
             ServerState server = servers.get(minecraftServer);
-            if (server != null) server.enqueueAssetReloads(affectedAssetIds);
+            if (server != null) server.enqueueAssetReloads(assetIds);
             return;
         }
         for (ServerState server : List.copyOf(servers.values())) {
-            server.enqueueAssetReloads(affectedAssetIds);
+            server.enqueueAssetReloads(assetIds);
         }
     }
 
@@ -402,8 +402,8 @@ public final class BehaviorTreeEngine {
             spentNanos = 0L;
         }
 
-        private void enqueueAssetReloads(Set<String> affectedAssetIds) {
-            for (String assetId : affectedAssetIds) {
+        private void enqueueAssetReloads(Set<String> assetIds) {
+            for (String assetId : assetIds) {
                 Set<UUID> ids = assetInstances.get(assetId);
                 if (ids != null) pendingAssetReloads.addAll(ids);
             }

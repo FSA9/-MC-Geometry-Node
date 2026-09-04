@@ -233,6 +233,6 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     }
 
     private void onGraphAssetsChanged(GraphAssetLifecycleIndex.Change change) {
-        engine.graphAssetsChanged(change.server(), change.affectedAssetIds());
+        engine.graphAssetsChanged(change.server(), change.assetIds());
     }
 }

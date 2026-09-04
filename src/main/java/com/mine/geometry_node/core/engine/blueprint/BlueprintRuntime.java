@@ -267,7 +267,7 @@ public final class BlueprintRuntime implements GraphRuntime {
     }
 
     private void onGraphAssetsChanged(GraphAssetLifecycleIndex.Change change) {
-        for (String graphId : change.affectedAssetIds()) {
+        for (String graphId : change.assetIds()) {
             BlueprintPlan index = GraphAssetLifecycleIndex.INSTANCE
                     .getArtifact(graphId, GraphKind.BLUEPRINT) instanceof BlueprintPlan value
                     ? value : null;
