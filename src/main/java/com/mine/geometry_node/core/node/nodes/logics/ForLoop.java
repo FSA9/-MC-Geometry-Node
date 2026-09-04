@@ -25,6 +25,8 @@ public class ForLoop extends BaseNode {
     private static final String COMPLETED_POLICY = "completed_policy";
     private static final String POLICY_SCHEDULED = "scheduled";
     private static final String POLICY_JOINED = "joined";
+    private static final String INTERNAL_LOOP_TICK = "internal_loop_tick";
+    private static final String INTERNAL_BRANCH_COMPLETE = "internal_branch_complete";
     private static final String[] COMPLETED_POLICY_OPTIONS = { POLICY_SCHEDULED, POLICY_JOINED };
 
     @Override
@@ -65,7 +67,8 @@ public class ForLoop extends BaseNode {
         String cursorKey = "ForLoop_" + myNodeId + "_cursor";
 
         // ✨ 关键修复点 1：通过进入端口，判断是谁触发了当前节点
-        boolean isInternalTick = "internal_loop_tick".equals(context.getEntryPort());
+        boolean isInternalTick = INTERNAL_LOOP_TICK.equals(context.getEntryPort())
+                || INTERNAL_BRANCH_COMPLETE.equals(context.getEntryPort());
 
         int currentIndex;
         if (isInternalTick) {
@@ -100,19 +103,18 @@ public class ForLoop extends BaseNode {
             context.setNodeResult(StandardPorts.INDEX.getId(), currentIndex);
             context.setTempData(cursorKey, currentIndex + step);
 
-            context.scheduleNode(myNodeId, delay, "internal_loop_tick");
+            context.scheduleNode(myNodeId, delay, INTERNAL_LOOP_TICK);
             return next(StandardPorts.LOOP.getId());
-        } else { // 瞬间同步模式
-            int iterations = 0;
-            for (int i = currentIndex; (step > 0 ? i <= end : i >= end); i += step) {
-                if (iterations++ > 10000) break;
-                context.setNodeResult(StandardPorts.INDEX.getId(), i);
-                context.executeBranchSync(StandardPorts.LOOP.getId());
-            }
-            context.removeTempData(indexKey);
-            context.removeTempData(cursorKey);
-            return next(StandardPorts.COMPLETED.getId());
         }
+
+        context.setNodeResult(StandardPorts.INDEX.getId(), currentIndex);
+        context.setTempData(cursorKey, currentIndex + step);
+        if (context.executeBranchThenResume(StandardPorts.LOOP.getId(), INTERNAL_BRANCH_COMPLETE)) {
+            return finish();
+        }
+        context.removeTempData(indexKey);
+        context.removeTempData(cursorKey);
+        return next(StandardPorts.COMPLETED.getId());
     }
 
     private ExecutionResult executeJoinedLoop(ExecutionContext context,

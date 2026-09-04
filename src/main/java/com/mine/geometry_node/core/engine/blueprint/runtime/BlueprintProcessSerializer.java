@@ -104,13 +104,22 @@ public class BlueprintProcessSerializer {
             for (BlueprintProcess.BranchJoin join : process.getBranchJoinsForSerialization()) {
                 CompoundTag joinTag = new CompoundTag();
                 joinTag.putString("JoinId", join.id);
-                joinTag.putString("OwnerNodeId", index.getIdToString(join.ownerNodeId));
-                joinTag.putString("CompletedPortName", join.completedPortName);
+                String completionNodeId = index.getIdToString(join.completionNodeId);
+                if (completionNodeId != null) {
+                    joinTag.putString("CompletionNodeId", completionNodeId);
+                    joinTag.putString("CompletionEntryPort", join.completionEntryPort);
+                }
                 joinTag.putInt("PendingChildren", join.pendingChildren);
                 joinTag.putBoolean("LaunchFinished", join.launchFinished);
                 String eventSourceNodeId = index.getIdToString(join.eventSourceNodeId);
                 if (eventSourceNodeId != null) {
                     joinTag.putString("EventSourceNodeId", eventSourceNodeId);
+                }
+                if (join.threadDimensionId != null) {
+                    joinTag.putString("ContextDimension", join.threadDimensionId);
+                }
+                if (join.threadEntityUuid != null) {
+                    joinTag.putString("ContextEntity", join.threadEntityUuid.toString());
                 }
 
                 CompoundTag regTag = new CompoundTag();
@@ -212,10 +221,10 @@ public class BlueprintProcessSerializer {
             ListTag list = tag.getListOrEmpty("BranchJoins");
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag joinTag = list.getCompoundOrEmpty(i);
-                int ownerNodeId = index.getStringToId(joinTag.getStringOr("OwnerNodeId", ""));
-                String completedPortName = joinTag.getStringOr("CompletedPortName", "");
+                int completionNodeId = index.getStringToId(joinTag.getStringOr("CompletionNodeId", ""));
+                String completionEntryPort = joinTag.getStringOr("CompletionEntryPort", "");
                 String joinId = joinTag.getStringOr("JoinId", "");
-                if (ownerNodeId == -1 || joinId.isBlank() || completedPortName.isBlank()) {
+                if (joinId.isBlank()) {
                     continue;
                 }
 
@@ -235,9 +244,12 @@ public class BlueprintProcessSerializer {
 
                 BlueprintProcess.BranchJoin join = new BlueprintProcess.BranchJoin(
                         joinId,
-                        ownerNodeId,
-                        completedPortName,
+                        completionNodeId,
+                        completionEntryPort,
                         index.getStringToId(joinTag.getStringOr("EventSourceNodeId", "")),
+                        joinTag.contains("ContextDimension")
+                                ? joinTag.getStringOr("ContextDimension", "") : null,
+                        parseUuid(joinTag.getStringOr("ContextEntity", "")),
                         registers.statics(),
                         registers.dynamics(),
                         tempData
@@ -250,6 +262,17 @@ public class BlueprintProcessSerializer {
         process.restoreDrainingForSerialization(tag.getBooleanOr("Draining", false));
 
         return process;
+    }
+
+    private static UUID parseUuid(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private static void saveRegistersToTag(CompoundTag tag, Object[] statics, Map<String, Object> dynamics,

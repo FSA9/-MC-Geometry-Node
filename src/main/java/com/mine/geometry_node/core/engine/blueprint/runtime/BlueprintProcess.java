@@ -53,6 +53,8 @@ public class BlueprintProcess {
     final PriorityQueue<ExecutionThread> sleepingThreads = new PriorityQueue<>(Comparator.comparingLong(t -> t.wakeUpTick));  // 挂起的协程线程
     private final Set<ExecutionThread> externalWaitingThreads = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<ExecutionThread> liveThreads = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final ArrayDeque<ExecutionThread> readyThreads = new ArrayDeque<>();
+    private boolean dispatchingReadyThreads;
     boolean needsTimeRebase = false;  // 读档标记
     private final Map<String, BranchJoin> branchJoins = new HashMap<>();
     private Runnable tickScheduleCallback = () -> {};
@@ -66,9 +68,11 @@ public class BlueprintProcess {
 
     static final class BranchJoin {
         final String id;
-        final int ownerNodeId;
-        final String completedPortName;
+        final int completionNodeId;
+        final String completionEntryPort;
         final int eventSourceNodeId;
+        final String threadDimensionId;
+        final UUID threadEntityUuid;
         final Object[] eventRegisters;
         final Map<String, Object> dynamicEventData;
         final Map<String, Object> tempData;
@@ -76,16 +80,20 @@ public class BlueprintProcess {
         boolean launchFinished;
 
         BranchJoin(String id,
-                   int ownerNodeId,
-                   String completedPortName,
+                   int completionNodeId,
+                   String completionEntryPort,
                    int eventSourceNodeId,
+                   @Nullable String threadDimensionId,
+                   @Nullable UUID threadEntityUuid,
                    Object[] eventRegisters,
                    @Nullable Map<String, Object> dynamicEventData,
                    Map<String, Object> tempData) {
             this.id = id;
-            this.ownerNodeId = ownerNodeId;
-            this.completedPortName = completedPortName;
+            this.completionNodeId = completionNodeId;
+            this.completionEntryPort = completionEntryPort;
             this.eventSourceNodeId = eventSourceNodeId;
+            this.threadDimensionId = threadDimensionId;
+            this.threadEntityUuid = threadEntityUuid;
             this.eventRegisters = eventRegisters;
             this.dynamicEventData = dynamicEventData != null ? new HashMap<>(dynamicEventData) : null;
             this.tempData = new HashMap<>(tempData);
@@ -114,6 +122,28 @@ public class BlueprintProcess {
     private void activateThread(ExecutionThread thread) {
         if (thread != null) {
             liveThreads.add(thread);
+        }
+    }
+
+    private void dispatchThread(ExecutionThread thread) {
+        if (thread == null || shutDown) {
+            return;
+        }
+        readyThreads.addLast(thread);
+        if (dispatchingReadyThreads) {
+            return;
+        }
+        dispatchingReadyThreads = true;
+        try {
+            ExecutionThread ready;
+            while (!shutDown && (ready = readyThreads.pollFirst()) != null) {
+                ready.run();
+            }
+        } finally {
+            dispatchingReadyThreads = false;
+            if (shutDown) {
+                readyThreads.clear();
+            }
         }
     }
 
@@ -257,7 +287,7 @@ public class BlueprintProcess {
         thread.eventSourceNodeId = startNodeId;
         thread.applyEventData(eventData);
 
-        thread.run();
+        dispatchThread(thread);
     }
 
     /**
@@ -290,7 +320,7 @@ public class BlueprintProcess {
         if (awakeThreads != null) {
             for (ExecutionThread thread : awakeThreads) {
                 thread.state = ExecutionThread.State.RUNNING;
-                thread.run();
+                dispatchThread(thread);
             }
         }
     }
@@ -307,6 +337,7 @@ public class BlueprintProcess {
         this.drainCompletion = null;
         String closeReason = reason == null || reason.isBlank() ? "graph_unloaded" : reason;
         branchJoins.clear();
+        readyThreads.clear();
         for (ExecutionThread thread : new ArrayList<>(liveThreads)) {
             thread.cancelForShutdown(closeReason);
         }
@@ -353,18 +384,19 @@ public class BlueprintProcess {
             return;
         }
 
-        BlueprintPlan.IntFlowTarget completedTarget = index.findFlowTarget(join.ownerNodeId, join.completedPortName);
-        if (completedTarget == null) {
+        if (join.completionNodeId < 0 || join.completionEntryPort == null
+                || join.completionEntryPort.isBlank()) {
             return;
         }
 
-        ExecutionThread completionThread = borrowThread(completedTarget.targetNodeId(), completedTarget.targetPortName());
+        ExecutionThread completionThread = borrowThread(join.completionNodeId, join.completionEntryPort);
+        completionThread.restoreEnvironment(join.threadDimensionId, join.threadEntityUuid);
         completionThread.parentJoinId = null;
         completionThread.eventSourceNodeId = join.eventSourceNodeId;
         completionThread.eventRegisters = Arrays.copyOf(join.eventRegisters, join.eventRegisters.length);
         completionThread.dynamicEventData = join.dynamicEventData != null ? new HashMap<>(join.dynamicEventData) : null;
         completionThread.tempData.putAll(join.tempData);
-        completionThread.run();
+        dispatchThread(completionThread);
     }
 
     // ================================
@@ -701,7 +733,9 @@ public class BlueprintProcess {
             this.currentFlowId = target.targetNodeId();
             this.currentEntryPort = target.targetPortName();
             this.state = State.RUNNING;
-            this.run();
+            if (this.runDepth == 0) {
+                BlueprintProcess.this.dispatchThread(this);
+            }
             return true;
         }
 
@@ -982,34 +1016,44 @@ public class BlueprintProcess {
         }
 
         @Override
-        public void executeBranchSync(String portName) {
-            if (activeNodeId == -1) return;
-            BlueprintPlan.IntFlowTarget target = index.findFlowTarget(activeNodeId, portName);
-            if (target == null) return;
+        public boolean executeBranchThenResume(String branchPortName, String resumeEntryPort) {
+            if (activeNodeId == -1 || resumeEntryPort == null || resumeEntryPort.isBlank()) {
+                return false;
+            }
+            BlueprintPlan.IntFlowTarget branchTarget = index.findFlowTarget(activeNodeId, branchPortName);
+            if (branchTarget == null) {
+                return false;
+            }
 
-            int savedId = this.currentFlowId;
-            String savedPort = this.currentEntryPort;
-            List<BlueprintPlan.IntFlowTarget> savedStack = new ArrayList<>(this.executionStack);
-
-            this.currentFlowId = target.targetNodeId();
-            this.currentEntryPort = target.targetPortName();
-            this.executionStack.clear();
-            this.run(); // 递归执行子树
-
-            this.currentFlowId = savedId;
-            this.currentEntryPort = savedPort;
-            this.executionStack.clear();
-            this.executionStack.addAll(savedStack);
+            String joinId = createBranchJoin(activeNodeId, resumeEntryPort);
+            if (!spawnBranch(branchPortName, null, joinId)) {
+                BlueprintProcess.this.branchJoins.remove(joinId);
+                return false;
+            }
+            BlueprintProcess.this.finishBranchJoin(joinId);
+            return true;
         }
 
         @Override
         public String createBranchJoin(String completedPortName) {
+            BlueprintPlan.IntFlowTarget completedTarget = activeNodeId >= 0
+                    ? index.findFlowTarget(activeNodeId, completedPortName)
+                    : null;
+            return createBranchJoin(
+                    completedTarget != null ? completedTarget.targetNodeId() : -1,
+                    completedTarget != null ? completedTarget.targetPortName() : ""
+            );
+        }
+
+        private String createBranchJoin(int completionNodeId, String completionEntryPort) {
             String joinId = UUID.randomUUID().toString();
             BranchJoin join = new BranchJoin(
                     joinId,
-                    activeNodeId,
-                    completedPortName,
+                    completionNodeId,
+                    completionEntryPort,
                     this.eventSourceNodeId,
+                    getThreadDimensionId(),
+                    getThreadEntityUuid(),
                     Arrays.copyOf(this.eventRegisters, this.eventRegisters.length),
                     this.dynamicEventData,
                     this.tempData
@@ -1046,7 +1090,7 @@ public class BlueprintProcess {
             if (tempDataOverride != null) {
                 child.tempData.putAll(tempDataOverride);
             }
-            child.run();
+            BlueprintProcess.this.dispatchThread(child);
             return true;
         }
 

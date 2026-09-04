@@ -28,6 +28,8 @@ public class ForEachLoop extends BaseNode {
     private static final String COMPLETED_POLICY = "completed_policy";
     private static final String POLICY_SCHEDULED = "scheduled";
     private static final String POLICY_JOINED = "joined";
+    private static final String INTERNAL_LOOP_TICK = "internal_loop_tick";
+    private static final String INTERNAL_BRANCH_COMPLETE = "internal_branch_complete";
     private static final String[] COMPLETED_POLICY_OPTIONS = { POLICY_SCHEDULED, POLICY_JOINED };
 
     @Override
@@ -70,7 +72,8 @@ public class ForEachLoop extends BaseNode {
         String elementKey = ExecutionContext.nodeResultKey(myNodeId, StandardPorts.ANY_VALUE.getId());
         String cursorKey = "ForEach_" + myNodeId + "_cursor";
 
-        boolean isInternalTick = "internal_loop_tick".equals(context.getEntryPort());
+        boolean isInternalTick = INTERNAL_LOOP_TICK.equals(context.getEntryPort())
+                || INTERNAL_BRANCH_COMPLETE.equals(context.getEntryPort());
 
         int currentIndex;
         if (isInternalTick) {
@@ -110,23 +113,21 @@ public class ForEachLoop extends BaseNode {
             context.setTempData(cursorKey, currentIndex + 1);
 
             // 唤醒自己
-            context.scheduleNode(myNodeId, delay, "internal_loop_tick");
+            context.scheduleNode(myNodeId, delay, INTERNAL_LOOP_TICK);
             return next(StandardPorts.LOOP.getId());
-
-        } else { // --- 瞬间同步模式 ---
-            for (int i = currentIndex; i < targetIterations; i++) {
-                Object currentElement = list.get(i);
-                context.setNodeResult(StandardPorts.INDEX.getId(), i);
-                context.setNodeResult(StandardPorts.ANY_VALUE.getId(), currentElement);
-
-                context.executeBranchSync(StandardPorts.LOOP.getId());
-            }
-
-            context.removeTempData(indexKey);
-            context.removeTempData(elementKey);
-            context.removeTempData(cursorKey);
-            return next(StandardPorts.COMPLETED.getId());
         }
+
+        Object currentElement = list.get(currentIndex);
+        context.setNodeResult(StandardPorts.INDEX.getId(), currentIndex);
+        context.setNodeResult(StandardPorts.ANY_VALUE.getId(), currentElement);
+        context.setTempData(cursorKey, currentIndex + 1);
+        if (context.executeBranchThenResume(StandardPorts.LOOP.getId(), INTERNAL_BRANCH_COMPLETE)) {
+            return finish();
+        }
+        context.removeTempData(indexKey);
+        context.removeTempData(elementKey);
+        context.removeTempData(cursorKey);
+        return next(StandardPorts.COMPLETED.getId());
     }
 
     private ExecutionResult executeJoinedLoop(ExecutionContext context,

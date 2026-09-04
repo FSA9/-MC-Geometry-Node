@@ -130,13 +130,14 @@ public interface ExecutionContext extends GraphDataContext {
     void clearFrameCache();
 
     /**
-     * [同步分支执行] 挂起当前节点的执行流，立即将指定的输出分支压入子栈并同步跑完。
-     * 只有当该分支（及其所有的后续连线）彻底触底结束后，此方法才会返回 (阻塞式调用)。
-     * 专用于 ForEachLoop 等需要往复执行的循环节点。
+     * Starts one child branch and resumes the current node only after that branch has
+     * fully completed, including any tick or external waits inside it.
      *
-     * @param portName 当前节点的输出执行端口名 (如 "loop")
+     * @param branchPortName current node output used to start the child branch
+     * @param resumeEntryPort entry name used when the current node is resumed
+     * @return whether a connected child branch was started
      */
-    void executeBranchSync(String portName);
+    boolean executeBranchThenResume(String branchPortName, String resumeEntryPort);
 
     /**
      * [子分支汇合] 创建一个 join group。调用方可以启动多个子分支，

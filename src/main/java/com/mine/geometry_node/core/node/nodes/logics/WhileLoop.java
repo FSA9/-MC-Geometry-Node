@@ -22,6 +22,7 @@ public class WhileLoop extends BaseNode {
     public static final String TYPE_ID = "while_loop";
 
     private static final String INTERNAL_LOOP_TICK = "internal_loop_tick";
+    private static final String INTERNAL_BRANCH_COMPLETE = "internal_branch_complete";
     private static final int DEFAULT_TICK_INTERVAL = 1;
     private static final int MAX_SYNC_ITERATIONS = 10_000;
 
@@ -50,7 +51,8 @@ public class WhileLoop extends BaseNode {
         int nodeId = context.getCurrentNodeId();
         String iterationKey = ExecutionContext.nodeResultKey(nodeId, StandardPorts.ITERATION.getId());
         String cursorKey = tempKey(nodeId, "cursor");
-        boolean internalTick = INTERNAL_LOOP_TICK.equals(context.getEntryPort());
+        boolean internalTick = INTERNAL_LOOP_TICK.equals(context.getEntryPort())
+                || INTERNAL_BRANCH_COMPLETE.equals(context.getEntryPort());
         int currentIteration = internalTick ? readIteration(context.getTempData(cursorKey)) : 0;
 
         context.setNodeResult(StandardPorts.ITERATION.getId(), currentIteration);
@@ -60,7 +62,7 @@ public class WhileLoop extends BaseNode {
         if (tickInterval > 0) {
             return executeScheduledIteration(context, nodeId, iterationKey, cursorKey, currentIteration, tickInterval);
         }
-        return executeSynchronousLoop(context, iterationKey, cursorKey, currentIteration);
+        return executeSequentialIteration(context, iterationKey, cursorKey, currentIteration);
     }
 
     private ExecutionResult executeScheduledIteration(ExecutionContext context,
@@ -79,30 +81,27 @@ public class WhileLoop extends BaseNode {
         return next(StandardPorts.LOOP.getId());
     }
 
-    private ExecutionResult executeSynchronousLoop(ExecutionContext context,
-                                                    String iterationKey,
-                                                    String cursorKey,
-                                                    int startIteration) {
-        int currentIteration = startIteration;
-        int executedIterations = 0;
-
-        while (true) {
-            context.setNodeResult(StandardPorts.ITERATION.getId(), currentIteration);
-            if (!conditionIsTrue(context)) {
-                clearState(context, iterationKey, cursorKey);
-                return next(StandardPorts.COMPLETED.getId());
-            }
-            if (executedIterations >= MAX_SYNC_ITERATIONS) {
-                clearState(context, iterationKey, cursorKey);
-                String message = "WhileLoop exceeded the synchronous iteration limit of " + MAX_SYNC_ITERATIONS;
-                System.err.println("[WhileLoop] " + message);
-                return ExecutionResult.error(message);
-            }
-            context.setTempData(cursorKey, currentIteration + 1);
-            context.executeBranchSync(StandardPorts.LOOP.getId());
-            currentIteration++;
-            executedIterations++;
+    private ExecutionResult executeSequentialIteration(ExecutionContext context,
+                                                       String iterationKey,
+                                                       String cursorKey,
+                                                       int currentIteration) {
+        context.setNodeResult(StandardPorts.ITERATION.getId(), currentIteration);
+        if (!conditionIsTrue(context)) {
+            clearState(context, iterationKey, cursorKey);
+            return next(StandardPorts.COMPLETED.getId());
         }
+        if (currentIteration >= MAX_SYNC_ITERATIONS) {
+            clearState(context, iterationKey, cursorKey);
+            String message = "WhileLoop exceeded the synchronous iteration limit of " + MAX_SYNC_ITERATIONS;
+            System.err.println("[WhileLoop] " + message);
+            return ExecutionResult.error(message);
+        }
+        context.setTempData(cursorKey, currentIteration + 1);
+        if (context.executeBranchThenResume(StandardPorts.LOOP.getId(), INTERNAL_BRANCH_COMPLETE)) {
+            return finish();
+        }
+        clearState(context, iterationKey, cursorKey);
+        return next(StandardPorts.COMPLETED.getId());
     }
 
     private boolean conditionIsTrue(ExecutionContext context) {
