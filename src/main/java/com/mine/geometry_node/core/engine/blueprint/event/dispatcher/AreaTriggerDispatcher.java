@@ -154,13 +154,13 @@ public final class AreaTriggerDispatcher {
         if (nodeIds.isEmpty()) return List.of();
         List<CompiledListener> listeners = new ArrayList<>(nodeIds.size());
         for (int nodeId : nodeIds) {
-            String dimension = plan.getNodeStaticInput(nodeId, StandardPorts.DIMENSION.getId(), String.class,
+            String dimension = plan.getNodeStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_DIMENSION_PORT, String.class,
                     RegistryDataManager.DEFAULT_DIMENSION);
             AreaSource source = AreaSource.fromId(plan.getNodeStaticInput(nodeId,
-                    OnAreaEvent.SOURCE_PORT, String.class, OnAreaEvent.SOURCE_AREA));
+                    OnAreaEvent.SUBSCRIPTION_SOURCE_PORT, String.class, OnAreaEvent.SOURCE_AREA));
             String sourceId = source == AreaSource.FORCE_FIELD
-                    ? plan.getNodeStaticInput(nodeId, StandardPorts.FORCE_FIELD_ID.getId(), String.class, "")
-                    : plan.getNodeStaticInput(nodeId, StandardPorts.AREA_ID.getId(), String.class, "");
+                    ? plan.getNodeStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_FORCE_FIELD_ID_PORT, String.class, "")
+                    : plan.getNodeStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_AREA_ID_PORT, String.class, "");
             AreaTargetType target = AreaTargetType.fromId(plan.getNodeStaticInput(nodeId,
                     OnAreaEvent.TARGET_PORT, String.class, AreaTargetType.ALL.id()));
             int interval = Math.max(1, plan.getNodeStaticInput(nodeId,

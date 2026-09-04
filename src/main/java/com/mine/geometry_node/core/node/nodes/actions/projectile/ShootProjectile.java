@@ -40,13 +40,13 @@ public class ShootProjectile extends BaseNode {
                         .input(StandardPorts.PROJECTILE, "projectile")
                         .input(StandardPorts.SOURCE_ENTITY, "source_entity")
                         .input(StandardPorts.IGNORE_AIR_RESISTANCE, "ignore_air_resistance")
-                        .output(StandardPorts.PROJECTILE, "projectile_output")
+                        .output(StandardPorts.RESULT_PROJECTILE, "projectile_output")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.PROJECTILE.toOutput(),
+                .addRow(new PortRow(null, StandardPorts.RESULT_PROJECTILE.toOutput(),
                         UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.PROJECTILE.toInput(), null, UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.PROJECTILE.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(StandardPorts.SOURCE_ENTITY.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(StandardPorts.START_POS.toInput(), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.VECTOR.toInput(new Vec3(0, 0, 1)), UIHint.VECTOR)
@@ -66,7 +66,7 @@ public class ShootProjectile extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        context.setNodeResult(StandardPorts.PROJECTILE.getId(), null);
+        context.setNodeResult(StandardPorts.RESULT_PROJECTILE.getId(), null);
         Level level = context.getLevel();
         if (level == null || level.isClientSide()) return next(StandardPorts.FLOW_OUT.getId());
 
@@ -108,15 +108,15 @@ public class ShootProjectile extends BaseNode {
         projectile.setInvisible(invisible);
         projectile.shoot(direction.x, direction.y, direction.z, speed, 0.0f);
         ProjectileImpactController.markRelaunched(projectile);
-        context.setNodeResult(StandardPorts.PROJECTILE.getId(), projectile);
+        context.setNodeResult(StandardPorts.RESULT_PROJECTILE.getId(), projectile);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        if (StandardPorts.PROJECTILE.getId().equals(portName)) {
-            return context.getNodeResult(StandardPorts.PROJECTILE.getId());
+        if (StandardPorts.RESULT_PROJECTILE.getId().equals(portName)) {
+            return context.getNodeResult(StandardPorts.RESULT_PROJECTILE.getId());
         }
         return null;
     }

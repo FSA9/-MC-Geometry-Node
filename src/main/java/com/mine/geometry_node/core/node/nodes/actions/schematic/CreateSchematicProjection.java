@@ -82,6 +82,7 @@ public class CreateSchematicProjection extends BaseNode {
                 .text("summary")
                 .output(StandardPorts.FLOW_OUT, "flow_out")
                 .output(StandardPorts.PATH, "path_out")
+                .output(StandardPorts.RESULT_RESOURCE_ID, "resource_id")
                 .input(StandardPorts.FLOW_IN, "flow_in")
                 .input(StandardPorts.PATH, "path")
                 .input(StandardPorts.KEY, "key")
@@ -89,14 +90,12 @@ public class CreateSchematicProjection extends BaseNode {
                 .input(StandardPorts.DEBUG, "debug");
 
         if (debugMode) {
-            comment.output(StandardPorts.RESOURCE_ID, "resource_id")
-                    .input(StandardPorts.ONLY_SELF_VISIBLE, "only_self_visible")
+            comment.input(StandardPorts.ONLY_SELF_VISIBLE, "only_self_visible")
                     .input(StandardPorts.ALPHA, "alpha")
                     .input(StandardPorts.TICK, "tick")
                     .input(StandardPorts.RADIUS, "radius");
         } else {
-            comment.output(StandardPorts.KEY, "key_out")
-                    .input(StandardPorts.UNIQUE_IF_EXISTS, "unique_if_exists")
+            comment.input(StandardPorts.UNIQUE_IF_EXISTS, "unique_if_exists")
                     .input(StandardPorts.REPLACE_AIR, "replace_air")
                     .input(StandardPorts.REPLACE_BLOCKS, "replace_blocks")
                     .input(StandardPorts.ROTATION, "rotation")
@@ -107,11 +106,10 @@ public class CreateSchematicProjection extends BaseNode {
                 .comment(comment.build());
 
         builder.addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(null,
-                debugMode ? StandardPorts.RESOURCE_ID.toOutput() : StandardPorts.KEY.toOutput(),
+        builder.addRow(new PortRow(null, StandardPorts.RESULT_RESOURCE_ID.toOutput(),
                 UIHint.DEFAULT, null, null));
         builder.addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH);
-        builder.addRow(new PortRow(StandardPorts.KEY.toInput(""), null, UIHint.INPUT, null, null));
+        builder.addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT);
         builder.addPassthroughInput(StandardPorts.XYZ.toInput(Vec3.ZERO), UIHint.VECTOR);
         builder.addPassthroughInput(StandardPorts.DEBUG.toInput(debugMode), UIHint.CHECKBOX);
 
@@ -141,6 +139,7 @@ public class CreateSchematicProjection extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        context.setNodeResult(StandardPorts.RESULT_RESOURCE_ID.getId(), null);
         ServerLevel level = context.getLevel();
         if (level == null) {
             return next(StandardPorts.FLOW_OUT.getId());
@@ -173,7 +172,7 @@ public class CreateSchematicProjection extends BaseNode {
                 SchematicData data = SchematicReader.read(path, replaceAir);
                 actualKey = placeSchematic(context, level, data, originValue, actualKey, replaceAir);
             }
-            context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), actualKey);
+            context.setNodeResult(StandardPorts.RESULT_RESOURCE_ID.getId(), actualKey);
         } catch (Exception e) {
             GeometryNode.LOGGER.warn("[GeometryNode] Failed to place schematic projection from '{}': {}", pathValue, e.getMessage());
         }
@@ -183,11 +182,8 @@ public class CreateSchematicProjection extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        if (StandardPorts.KEY.getId().equals(portName) || StandardPorts.RESOURCE_ID.getId().equals(portName)) {
-            return context.getNodeResult(StandardPorts.RESOURCE_ID.getId());
-        }
-        if (StandardPorts.PATH.getId().equals(portName)) {
-            return getInput(context, StandardPorts.PATH.getId(), String.class);
+        if (StandardPorts.RESULT_RESOURCE_ID.getId().equals(portName)) {
+            return context.getNodeResult(StandardPorts.RESULT_RESOURCE_ID.getId());
         }
         return null;
     }

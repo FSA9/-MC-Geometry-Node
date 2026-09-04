@@ -84,7 +84,7 @@ public final class PortValueTypeRegistry {
         register(types, EntityTemplateValue.class, PortType.ENTITY_TEMPLATE);
         register(types, Item.class, PortType.ITEM);
         register(types, ItemStack.class, PortType.ITEM_STACK);
-        register(types, BlockState.class, PortType.BLOCK);
+        register(types, BlockState.class, PortType.BLOCK_STATE);
         register(types, DialogueChoiceValue.class, PortType.DIALOGUE_CHOICE);
         register(types, QuestConditionValue.class, PortType.QUEST_CONDITION);
         register(types, Vec3.class, PortType.XYZ);

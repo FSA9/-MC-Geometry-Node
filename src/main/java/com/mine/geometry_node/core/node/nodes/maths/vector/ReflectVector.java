@@ -20,19 +20,19 @@ public class ReflectVector extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.reflect_vector"))
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
-                        .output(StandardPorts.VECTOR, "output_vector")
+                        .output(StandardPorts.RESULT_VECTOR, "output_vector")
                         .input(StandardPorts.VECTOR, "input_vector")
                         .input(StandardPorts.NORMAL, "normal")
                         .build())
-                .addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.VECTOR.toInput(), null, UIHint.VECTOR, null, null))
+                .addRow(new PortRow(null, StandardPorts.RESULT_VECTOR.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.VECTOR.toInput(), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.NORMAL.toInput(), UIHint.VECTOR, null, null)
                 .build();
     }
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        if (!StandardPorts.VECTOR.getId().equals(portName)) {
+        if (!StandardPorts.RESULT_VECTOR.getId().equals(portName)) {
             return null;
         }
 

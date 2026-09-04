@@ -29,7 +29,7 @@ public enum PortType {
     ITEM(0xFFFF8A65, null),
     ITEM_STACK(0xFFFF7043, null),
     SLOT(0xFFB0BEC5, SlotRef.DEFAULT.serialize()),
-    BLOCK(0xFF8D6E63, null),
+    BLOCK_STATE(0xFF8D6E63, null),
     GEOMETRY(0xFF26A69A, GeometryValue.EMPTY),
     XYZ(0xFF00BCD4, Vec3.ZERO),
     COLOR(0xFFFFD54F, ColorValue.WHITE),

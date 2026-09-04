@@ -912,45 +912,6 @@ public class BlueprintProcess {
         }
 
         @Override
-        public Object getVariable(String name) {
-            int id = index.getKeyId(name);
-            for (VariableScope scope : BlueprintProcess.this.variableStack) {
-                Object val = null;
-                if (id != -1 && id < scope.statics.length && scope.statics[id] != null) {
-                    val = scope.statics[id];
-                } else if (id == -1 && scope.dynamics != null && scope.dynamics.containsKey(name)) {
-                    val = scope.dynamics.get(name);
-                }
-
-                if (val != null) {
-                    ServerLevel currentLevel = getLevel();
-                    if (val instanceof UUID uuid && currentLevel != null) {
-                        return GraphEntityReferenceResolver.resolve(uuid, currentLevel);
-                    }
-                    return val;
-                }
-            }
-            return null;
-        }
-
-        @Override
-        public void setVariable(String name, Object value) {
-            VariableScope scope = BlueprintProcess.this.variableStack.peek();
-            if (scope == null) return;
-
-            int id = index.getKeyId(name);
-            Object finalValue = (value instanceof Entity ent) ? ent.getUUID() : value;
-
-            if (id != -1) {
-                if (id < scope.statics.length) scope.statics[id] = finalValue;
-            } else {
-                if (scope.dynamics == null) scope.dynamics = new HashMap<>();
-                if (finalValue == null) scope.dynamics.remove(name);
-                else scope.dynamics.put(name, finalValue);
-            }
-        }
-
-        @Override
         public Object getEventData(String key) {
             int id = index.getKeyId(key);
             Object val = null;
@@ -1162,20 +1123,6 @@ public class BlueprintProcess {
             delayThread.tempData.putAll(this.tempData);
             BlueprintProcess.this.sleepingThreads.add(delayThread);
             BlueprintProcess.this.notifyTickScheduleChanged();
-        }
-
-        @Override
-        public void broadcastVisual(String effectType, int sourceEntityId, Vec3 startPos,
-                                    int targetEntityId, Vec3 endPos,
-                                    int color, float size, int durationTicks) {
-
-            ServerLevel currentLevel = getLevel();
-            if (currentLevel == null) return;
-
-            GraphVisualEmitter.broadcastVisual(currentLevel, effectType,
-                    sourceEntityId, startPos,
-                    targetEntityId, endPos,
-                    color, size, durationTicks);
         }
 
         @Override

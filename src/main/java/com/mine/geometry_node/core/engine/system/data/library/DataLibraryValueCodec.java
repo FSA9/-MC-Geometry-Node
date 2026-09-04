@@ -56,7 +56,7 @@ public final class DataLibraryValueCodec {
             case ITEM -> new JsonPrimitive(itemId(value).toString());
             case ITEM_STACK -> encodeWithRegistries(ItemStack.CODEC, (ItemStack) value, registries);
             case SLOT -> new JsonPrimitive(value instanceof SlotRef slot ? slot.serialize() : String.valueOf(value));
-            case BLOCK -> encodeWithRegistries(BlockState.CODEC, (BlockState) value, registries);
+            case BLOCK_STATE -> encodeWithRegistries(BlockState.CODEC, (BlockState) value, registries);
             case GEOMETRY -> encodeGeometry((GeometryValue) value);
             case XYZ -> encodeXyz(value);
             case COLOR -> GSON.toJsonTree(requireColor(value));
@@ -83,7 +83,7 @@ public final class DataLibraryValueCodec {
             case ITEM -> decodeItem(value.getAsString());
             case ITEM_STACK -> decodeWithRegistries(ItemStack.CODEC, value, registries);
             case SLOT -> SlotRef.parse(value.getAsString());
-            case BLOCK -> decodeWithRegistries(BlockState.CODEC, value, registries);
+            case BLOCK_STATE -> decodeWithRegistries(BlockState.CODEC, value, registries);
             case GEOMETRY -> decodeGeometry(value.getAsJsonArray());
             case XYZ -> decodeXyzVector(value.getAsJsonArray());
             case COLOR -> GSON.fromJson(value, ColorValue.class);

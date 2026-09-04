@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.node.nodes.data.inventory;
 
-import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -24,14 +23,5 @@ public class GetSlot extends BaseNode {
                 .addPassthroughInput(StandardPorts.SLOT.toInput(SlotRef.DEFAULT.serialize()).hiddenPin(),
                         UIHint.SLOT_REF, null, null)
                 .build();
-    }
-
-    @Override
-    public Object compute(GraphDataContext context, String portName) {
-        if (!StandardPorts.SLOT.getId().equals(portName)) {
-            return null;
-        }
-        SlotRef slotRef = getInput(context, StandardPorts.SLOT.getId(), SlotRef.class);
-        return slotRef != null ? slotRef : SlotRef.DEFAULT;
     }
 }

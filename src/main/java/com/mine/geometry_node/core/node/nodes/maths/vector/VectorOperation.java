@@ -50,14 +50,14 @@ public class VectorOperation extends BaseNode {
         NodeDef.Builder b = NodeDef.builder(TYPE_ID, NodeType.MATH,
                 Component.translatable("geometry_node.node.vector_operation"));
         if (vectorToDirection) {
-            b.addRow(new PortRow(null, StandardPorts.VECTOR.toOutput(), UIHint.VECTOR, null, null));
+            b.addRow(new PortRow(null, StandardPorts.RESULT_VECTOR.toOutput(), UIHint.VECTOR, null, null));
             b.addRow(new PortRow(null, StandardPorts.LENGTH.toOutput(), UIHint.DEFAULT, null, null));
         } else {
-            b.addRow(new PortRow(null, (scalar ? StandardPorts.FLOAT_VALUE : StandardPorts.VECTOR).toOutput(), UIHint.DEFAULT, null, null));
+            b.addRow(new PortRow(null, (scalar ? StandardPorts.FLOAT_VALUE : StandardPorts.RESULT_VECTOR).toOutput(), UIHint.DEFAULT, null, null));
         }
         b.addPassthroughInput(StandardPorts.STRING.toInput("add").hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, OPERATORS, PortMetaKeys.OPTION_LABELS, OPERATOR_LABEL_KEYS));
         if (directionToVector) {
-            b.addRow(new PortRow(StandardPorts.VECTOR.toInput(Vec3.ZERO), null, UIHint.VECTOR, null, null));
+            b.addPassthroughInput(StandardPorts.VECTOR.toInput(Vec3.ZERO), UIHint.VECTOR);
             b.addPassthroughInput(StandardPorts.LENGTH.toInput(1.0f), UIHint.INPUT, null, null);
             return b.build();
         }

@@ -126,7 +126,7 @@ public final class PortConversionRegistry {
         register(rules, PortType.DICT, PortType.SLOT,
                 (value, context) -> SlotRef.from(value));
 
-        register(rules, PortType.STRING, PortType.BLOCK, PortConversionRegistry::parseBlockState);
+        register(rules, PortType.STRING, PortType.BLOCK_STATE, PortConversionRegistry::parseBlockState);
         register(rules, PortType.STRING, PortType.ITEM, PortConversionRegistry::parseItem);
         register(rules, PortType.STRING, PortType.SLOT,
                 (value, context) -> SlotRef.parse((String) value));
@@ -191,7 +191,7 @@ public final class PortConversionRegistry {
             case INTEGER -> number.intValue();
             case LONG -> number.longValue();
             case FLOAT -> number.floatValue();
-            case BOOLEAN -> number.floatValue() > 0.0f;
+            case BOOLEAN -> number.doubleValue() != 0.0d;
             default -> null;
         };
     }

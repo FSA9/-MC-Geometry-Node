@@ -16,7 +16,7 @@ import java.util.Map;
  * <p>
  * 定义了节点在执行期间可以访问的“环境能力”。
  * 这是一个 {@code Facade} (外观模式) 接口，用于向节点隐藏 {@link BlueprintProcess} 的底层复杂性（如指针操作、序列化逻辑）。
- * 节点只能通过此接口与世界交互或读写变量。
+ * 节点通过此接口读取图数据，并使用明确的运行时能力与世界交互。
  */
 public interface ExecutionContext extends GraphDataContext {
 
@@ -39,26 +39,6 @@ public interface ExecutionContext extends GraphDataContext {
      */
     @Nullable
     Entity getGraphOwnerEntity();
-
-    /**
-     * [变量读取] 获取局部变量。
-     * <p>
-     * 这里的变量系统应设计为强类型安全，建议后续配合 VarType 使用。
-     * @param name 变量名
-     * @return 变量值，若不存在则返回 null
-     */
-    @Nullable
-    Object getVariable(String name);
-
-    /**
-     * [变量写入] 设置局部变量。
-     * <p>
-     * 实现类需在此处进行类型白名单检查 (Int/Float/String/UUID/BlockPos)，
-     * 拒绝不支持序列化的复杂对象。
-     * @param name 变量名
-     * @param value 变量值
-     */
-    void setVariable(String name, Object value);
 
     /**
      * 获取当前节点被激活时，对应的执行输入端口名。
@@ -255,23 +235,6 @@ public interface ExecutionContext extends GraphDataContext {
      * @param entryPortName 唤醒时进入的执行输入端口名 (例如 "flow_in_A")
      */
     void scheduleNode(int nodeId, long delayTicks, String entryPortName);
-
-    /**
-     * [视觉特效广播]
-     * 向世界中指定坐标附近的客户端下发纯视觉渲染指令。
-     * * @param effectType 特效类型标识 (如 "debug_line")
-     * @param sourceEntityId 起点绑定的实体ID (-1 表示不绑定，使用死坐标)
-     * @param startPos 起点绝对坐标 (或锚点的局部偏移量)
-     * @param targetEntityId 终点绑定的实体ID (-1 表示不绑定)
-     * @param endPos 终点绝对坐标 (或锚点的局部偏移量)
-     * @param color 颜色 (ARGB)
-     * @param size 尺寸/粗细
-     * @param durationTicks 持续时间
-     */
-    void broadcastVisual(String effectType, int sourceEntityId, net.minecraft.world.phys.Vec3 startPos,
-                         int targetEntityId, net.minecraft.world.phys.Vec3 endPos,
-                         int color, float size, int durationTicks);
-
 
     /**
      * [重构后] 视觉特效广播

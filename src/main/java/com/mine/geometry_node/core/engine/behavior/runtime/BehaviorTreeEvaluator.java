@@ -554,26 +554,6 @@ public final class BehaviorTreeEvaluator {
         @Override public String getCurrentNodeStableId() { return instance.plan().getNodeId(nodeIndex); }
 
         @Override
-        public Object getVariable(String name) {
-            try {
-                return instance.blackboard().get(
-                        ScopedStateScope.INSTANCE, name);
-            } catch (ScopedStateAccessException exception) {
-                return null;
-            }
-        }
-
-        @Override
-        public boolean hasVariable(String name) {
-            try {
-                return instance.blackboard().contains(
-                        ScopedStateScope.INSTANCE, name);
-            } catch (ScopedStateAccessException exception) {
-                return false;
-            }
-        }
-
-        @Override
         public Object getBlackboard(
                 ScopedStateScope scope,
                 String name) {

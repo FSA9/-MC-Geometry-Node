@@ -570,7 +570,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 case STRING -> createPlainTextValueEditor(current);
                 case PATH -> createPathValueEditor(current);
                 case RICH_TEXT -> createRichTextValueEditor(current);
-                case ITEM, BLOCK -> createRegistryValueEditor(entry.type(), current);
+                case ITEM, BLOCK_STATE -> createRegistryValueEditor(entry.type(), current);
                 default -> createValueEditor(entry, current);
             };
             LayoutParams valueLp = new LayoutParams(0, px(26), 0.66f);
@@ -847,7 +847,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (type == PortType.ITEM) {
             return BuiltInRegistries.ITEM.getOptional(identifier).orElse(null);
         }
-        if (type == PortType.BLOCK) {
+        if (type == PortType.BLOCK_STATE) {
             return BuiltInRegistries.BLOCK.getOptional(identifier)
                     .map(block -> block.defaultBlockState())
                     .orElse(null);
@@ -859,7 +859,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (type == PortType.ITEM && value instanceof Item item) {
             return BuiltInRegistries.ITEM.getKey(item).toString();
         }
-        if (type == PortType.BLOCK && value instanceof BlockState state) {
+        if (type == PortType.BLOCK_STATE && value instanceof BlockState state) {
             return BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         }
         return "-";
@@ -976,7 +976,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private static boolean isInlineValueType(PortType type) {
         return type == PortType.INTEGER || type == PortType.LONG || type == PortType.FLOAT
                 || type == PortType.BOOLEAN || type == PortType.STRING || type == PortType.PATH
-                || type == PortType.RICH_TEXT || type == PortType.ITEM || type == PortType.BLOCK
+                || type == PortType.RICH_TEXT || type == PortType.ITEM || type == PortType.BLOCK_STATE
                 || type == PortType.COLOR;
     }
 

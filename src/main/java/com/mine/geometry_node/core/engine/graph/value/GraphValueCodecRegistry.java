@@ -56,7 +56,7 @@ public final class GraphValueCodecRegistry {
             PortType.ITEM,
             PortType.ITEM_STACK,
             PortType.SLOT,
-            PortType.BLOCK,
+            PortType.BLOCK_STATE,
             PortType.GEOMETRY,
             PortType.XYZ,
             PortType.COLOR,

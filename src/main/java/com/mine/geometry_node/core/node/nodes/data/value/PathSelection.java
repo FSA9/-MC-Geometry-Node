@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.node.nodes.data.value;
 
-import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -16,13 +15,5 @@ public class PathSelection extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.path_selection"))
                 .addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH, null, null)
                 .build();
-    }
-
-    @Override
-    public Object compute(GraphDataContext context, String portName) {
-        if (StandardPorts.PATH.getId().equals(portName)) {
-            return getInput(context, StandardPorts.PATH.getId(), String.class);
-        }
-        return null;
     }
 }

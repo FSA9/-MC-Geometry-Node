@@ -47,8 +47,8 @@ public class MakeList extends BaseNode {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.make_list"))
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 30);
 
-        builder.addRow(new PortRow(null, StandardPorts.LIST.toOutput(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(StandardPorts.LIST.toInput(), null, UIHint.DEFAULT, null, null));
+        builder.addRow(new PortRow(null, StandardPorts.RESULT_LIST.toOutput(), UIHint.DEFAULT, null, null));
+        builder.addPassthroughInput(StandardPorts.LIST.toInput(), UIHint.DEFAULT);
         for (int i = 1; i <= portCount; i++) {
             PortDef itemPort = new PortDef("list_item_" + i, Component.literal("Item " + i), PortType.ANY, null, false);
 
@@ -63,7 +63,7 @@ public class MakeList extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        if (!StandardPorts.LIST.getId().equals(portName)) return null;
+        if (!StandardPorts.RESULT_LIST.getId().equals(portName)) return null;
 
         List<Object> resultList = new ArrayList<>();
 

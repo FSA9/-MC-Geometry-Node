@@ -10,10 +10,12 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 public record NodeDef(
         String typeId,
@@ -64,6 +66,7 @@ public record NodeDef(
         Map<String, PortDef> inputs = new LinkedHashMap<>();
         Map<String, PortDef> outputs = new LinkedHashMap<>();
         Map<String, PortDef> portsById = new LinkedHashMap<>();
+        Set<String> passthroughIds = new HashSet<>();
 
         for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
             PortRow row = rows.get(rowIndex);
@@ -72,6 +75,16 @@ public record NodeDef(
             }
             validatePort(typeId, rowIndex, "input", row.leftPort(), inputs, portsById);
             validatePort(typeId, rowIndex, "output", row.rightPort(), outputs, portsById);
+            if (row.dataPassthrough()) {
+                passthroughIds.add(row.leftPort().id());
+            }
+        }
+
+        for (String inputId : inputs.keySet()) {
+            if (outputs.containsKey(inputId) && !passthroughIds.contains(inputId)) {
+                throw invalid(typeId, "port ID '" + inputId
+                        + "' is both input and output without an explicit passthrough row");
+            }
         }
     }
 

@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.node.nodes.data.value;
 
-import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -17,13 +16,5 @@ public class IntValue extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.int_value"))
                 .addPassthroughInput(StandardPorts.INT.toInput(0), UIHint.INPUT, null, null)
                 .build();
-    }
-
-    @Override
-    public Object compute(GraphDataContext context, String portName) {
-        if (StandardPorts.INT.getId().equals(portName)) {
-            return getInput(context, StandardPorts.INT.getId(), Integer.class);
-        }
-        return null;
     }
 }

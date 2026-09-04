@@ -46,8 +46,8 @@ public class MakeDict extends BaseNode {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.make_dict"))
                 .addMeta(SchemaKeys.MAX_DYNAMIC_INPUT, 30);
 
-        builder.addRow(new PortRow(null, StandardPorts.DICT.toOutput(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(StandardPorts.DICT.toInput(), null, UIHint.DEFAULT, null, null));
+        builder.addRow(new PortRow(null, StandardPorts.RESULT_DICT.toOutput(), UIHint.DEFAULT, null, null));
+        builder.addPassthroughInput(StandardPorts.DICT.toInput(), UIHint.DEFAULT);
 
         for (int i = 1; i <= portCount; i++) {
             PortDef keyPort = new PortDef("dict_key_" + i, Component.literal("Key " + i), PortType.STRING, "", true);
@@ -66,7 +66,7 @@ public class MakeDict extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        if (!StandardPorts.DICT.getId().equals(portName)) return null;
+        if (!StandardPorts.RESULT_DICT.getId().equals(portName)) return null;
 
         Map<String, Object> resultDict = new HashMap<>();
 

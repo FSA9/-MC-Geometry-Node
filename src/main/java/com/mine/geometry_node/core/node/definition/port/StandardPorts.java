@@ -142,6 +142,7 @@ public enum StandardPorts {
     OFFER_ID("offer_id", PortType.STRING),
     GRAPH_ID("graph_id", PortType.STRING),
     RESOURCE_ID("resource_id", PortType.STRING),
+    RESULT_RESOURCE_ID("result_resource_id", PortType.STRING),
     TEMPLATE("template", PortType.STRING),
     STYLE_ID("style_id", PortType.STRING),
     VARIABLE_NAME("variable_name", PortType.STRING),
@@ -159,6 +160,7 @@ public enum StandardPorts {
     ENTITY("entity", PortType.ENTITY),
     DISPLAY_ENTITY("display_entity", PortType.ENTITY),
     PROJECTILE("projectile", PortType.ENTITY),
+    RESULT_PROJECTILE("result_projectile", PortType.ENTITY),
     HIT_ENTITY("hit_entity", PortType.ENTITY),
     PLAYER("player", PortType.ENTITY),
     BUYER("buyer", PortType.ENTITY),
@@ -175,8 +177,8 @@ public enum StandardPorts {
     ENTITY_TEMPLATE("entity_template", PortType.ENTITY_TEMPLATE),
 
     // Block
-    BLOCK_STATE("block_state", PortType.BLOCK),
-    RESULT_BLOCK_STATE("result_block_state", PortType.BLOCK),
+    BLOCK_STATE("block_state", PortType.BLOCK_STATE),
+    RESULT_BLOCK_STATE("result_block_state", PortType.BLOCK_STATE),
 
     // Geometry
     GEOMETRY("geometry", PortType.GEOMETRY),
@@ -193,6 +195,7 @@ public enum StandardPorts {
 
     // LIST
     LIST("list", PortType.LIST),
+    RESULT_LIST("result_list", PortType.LIST),
     LIST_XYZ("list_xyz", PortType.LIST),
     COSTS("costs", PortType.LIST),
     REWARDS("rewards", PortType.LIST),
@@ -203,6 +206,7 @@ public enum StandardPorts {
 
     // DICT
     DICT("dict", PortType.DICT),
+    RESULT_DICT("result_dict", PortType.DICT),
     DATA("data", PortType.DICT),
     BLOCK_STATS("block_stats", PortType.DICT),
     SHOP_DATA("shop_data", PortType.SHOP),
@@ -216,6 +220,7 @@ public enum StandardPorts {
     END_POS("end_pos", PortType.XYZ),
     CENTER("center", PortType.XYZ),
     VECTOR("vector", PortType.XYZ),
+    RESULT_VECTOR("result_vector", PortType.XYZ),
     NORMAL("normal", PortType.XYZ),
     ROTATION("rotation", PortType.XYZ),
     PIVOT("pivot", PortType.XYZ),
@@ -236,6 +241,7 @@ public enum StandardPorts {
 
     // ANY
     GENERIC_VALUE("generic_value", PortType.ANY),
+    RESULT_VALUE("result_value", PortType.ANY),
     ANY_VALUE("any_value", PortType.ANY),
     STATE_VALUE("state_value", PortType.ANY),
     VARIABLE_VALUE("variable_value", PortType.ANY);

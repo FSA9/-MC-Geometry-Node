@@ -22,6 +22,10 @@ public final class OnAreaEvent extends BaseEventNode {
     public static final String TYPE_ID = "on_area_event";
     public static final String PHASE_PORT = "area_phase";
     public static final String SOURCE_PORT = "area_source";
+    public static final String SUBSCRIPTION_SOURCE_PORT = "subscription_area_source";
+    public static final String SUBSCRIPTION_AREA_ID_PORT = "subscription_area_id";
+    public static final String SUBSCRIPTION_FORCE_FIELD_ID_PORT = "subscription_force_field_id";
+    public static final String SUBSCRIPTION_DIMENSION_PORT = "subscription_dimension";
     public static final String TARGET_PORT = "area_target";
     public static final String INSIDE_COUNT_PORT = "inside_count";
     public static final String INTERVAL_TICK_PORT = StandardPorts.TICK.getId();
@@ -42,7 +46,7 @@ public final class OnAreaEvent extends BaseEventNode {
 
     @Override
     public NodeDef getDefinition(NodeData instanceData) {
-        Object value = instanceData != null ? instanceData.inputs.get(SOURCE_PORT) : null;
+        Object value = instanceData != null ? instanceData.inputs.get(SUBSCRIPTION_SOURCE_PORT) : null;
         return buildDefinition(SOURCE_FORCE_FIELD.equals(value) ? SOURCE_FORCE_FIELD : SOURCE_AREA);
     }
 
@@ -66,18 +70,20 @@ public final class OnAreaEvent extends BaseEventNode {
                         .output(SOURCE_PORT, "source")
                         .output(StandardPorts.DIMENSION, "dimension")
                         .output(INSIDE_COUNT_PORT, "inside_count")
-                        .input(SOURCE_PORT, "source")
-                        .input(StandardPorts.DIMENSION, "dimension")
+                        .input(SUBSCRIPTION_SOURCE_PORT, "source")
+                        .input(SUBSCRIPTION_DIMENSION_PORT, "dimension")
                         .input(PHASE_PORT, "phase")
                         .input(TARGET_PORT, "target")
                         .input(INTERVAL_TICK_PORT, "interval")
                         .input(OFFSET_TICK_PORT, "offset");
-        if (SOURCE_FORCE_FIELD.equals(source)) comment.input(StandardPorts.FORCE_FIELD_ID, "force_field_id");
-        else comment.input(StandardPorts.AREA_ID, "area_id");
+        if (SOURCE_FORCE_FIELD.equals(source)) comment.input(SUBSCRIPTION_FORCE_FIELD_ID_PORT, "force_field_id");
+        else comment.input(SUBSCRIPTION_AREA_ID_PORT, "area_id");
 
         PortDef idPort = SOURCE_FORCE_FIELD.equals(source)
-                ? StandardPorts.FORCE_FIELD_ID.toInput("")
-                : StandardPorts.AREA_ID.toInput("");
+                ? PortDef.create(SUBSCRIPTION_FORCE_FIELD_ID_PORT,
+                        "geometry_node.port.force_field_id", PortType.STRING, "")
+                : PortDef.create(SUBSCRIPTION_AREA_ID_PORT,
+                        "geometry_node.port.area_id", PortType.STRING, "");
         return NodeDef.builder(TYPE_ID, NodeType.EVENT,
                         Component.translatable("geometry_node.node." + TYPE_ID))
                 .comment(comment.build())
@@ -100,7 +106,7 @@ public final class OnAreaEvent extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.DIMENSION.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, PortDef.create(INSIDE_COUNT_PORT,
                         "geometry_node.port.inside_count", PortType.INTEGER), UIHint.DEFAULT, null, null))
-                .addStaticInput(PortDef.create(SOURCE_PORT, "geometry_node.port.area_source",
+                .addStaticInput(PortDef.create(SUBSCRIPTION_SOURCE_PORT, "geometry_node.port.area_source",
                                 PortType.STRING, SOURCE_AREA), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, SOURCE_OPTIONS,
                                 PortMetaKeys.OPTION_LABELS, new String[]{
@@ -108,7 +114,9 @@ public final class OnAreaEvent extends BaseEventNode {
                                         "geometry_node.area.source.force_field"
                                 }))
                 .addStaticInput(idPort, UIHint.INPUT)
-                .addStaticInput(StandardPorts.DIMENSION.toInput(RegistryDataManager.DEFAULT_DIMENSION),
+                .addStaticInput(PortDef.create(SUBSCRIPTION_DIMENSION_PORT,
+                                "geometry_node.port.dimension", PortType.STRING,
+                                RegistryDataManager.DEFAULT_DIMENSION),
                         UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID,
                                 RegistryDataManager.DIMENSION_REGISTRY_ID))
                 .addStaticInput(PortDef.create(PHASE_PORT, "geometry_node.port.area_phase", PortType.STRING,

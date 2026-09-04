@@ -17,13 +17,15 @@ public class SnapshotValue extends BaseNode {
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.MATH, Component.translatable("geometry_node.node.snapshot_value"))
-                .addRow(new PortRow(null, StandardPorts.GENERIC_VALUE.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(StandardPorts.GENERIC_VALUE.toInput(), null, UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.RESULT_VALUE.toOutput(), UIHint.DEFAULT, null, null))
+                .addPassthroughInput(StandardPorts.GENERIC_VALUE.toInput(), UIHint.DEFAULT)
                 .build();
     }
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
+        if (!StandardPorts.RESULT_VALUE.getId().equals(portName)) return null;
+
         // 1. 获取上游数据（不指定具体类，拿到最原始的 Object）
         Object rawInput = getRawInput(context, StandardPorts.GENERIC_VALUE.getId());
 

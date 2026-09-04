@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.node.nodes.data.value;
 
-import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -17,14 +16,5 @@ public class StringValue extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.DATA, Component.translatable("geometry_node.node.string_value"))
                 .addPassthroughInput(StandardPorts.STRING.toInput(""), UIHint.INPUT, null, null)
                 .build();
-    }
-
-    @Override
-    public Object compute(GraphDataContext context, String portName) {
-        if (StandardPorts.STRING.getId().equals(portName)) {
-            // getInput 会自动判断：如果左边连了线，就取线上的值；没连线，就取玩家在输入框敲的值
-            return getInput(context, StandardPorts.STRING.getId(), String.class);
-        }
-        return null;
     }
 }

@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.node.nodes.data.type;
 
-import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -21,13 +20,5 @@ public class GetPortType extends BaseNode {
                 .addPassthroughInput(StandardPorts.STRING.toInput().hiddenPin(), UIHint.SELECT, null,
                         Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, "geometry_node:port_types"))
                 .build();
-    }
-
-    @Override
-    public Object compute(GraphDataContext context, String portName) {
-        if (StandardPorts.STRING.getId().equals(portName)) {
-            return getInput(context, StandardPorts.STRING.getId(), String.class);
-        }
-        return null;
     }
 }

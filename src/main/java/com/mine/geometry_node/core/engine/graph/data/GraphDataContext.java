@@ -29,12 +29,6 @@ public interface GraphDataContext {
         return null;
     }
 
-    @Nullable Object getVariable(String name);
-
-    default boolean hasVariable(String name) {
-        return getVariable(name) != null;
-    }
-
     /**
      * Returns a connected input value. Mutable graph values must be isolated
      * from their producer before they cross this context boundary.
