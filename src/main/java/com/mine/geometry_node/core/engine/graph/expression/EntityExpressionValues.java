@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.expression;
 
-import com.mine.geometry_node.core.engine.graph.runtime.display.DisplayTransformController;
+import com.mine.geometry_node.core.engine.system.display.DisplayTransformController;
 import net.minecraft.world.entity.Entity;
 
 /** Shared property semantics for typed entity expression bindings. */

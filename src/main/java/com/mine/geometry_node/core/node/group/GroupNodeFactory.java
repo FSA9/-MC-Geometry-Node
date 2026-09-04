@@ -135,6 +135,8 @@ public final class GroupNodeFactory {
         String sourceCategory = findPortCategory(groupNode, portId);
         String source = sourceCategory != null ? sourceCategory : preferredCategory;
         NodeData.PortConfig config = getPortConfig(groupNode, source, portId);
+        boolean existingPort = config != null;
+        PortType previousType = existingPort ? config.type : null;
         if (config == null) {
             config = new NodeData.PortConfig();
             config.order = nextFreeOrder(groupNode, isInputSide(preferredCategory));
@@ -156,7 +158,11 @@ public final class GroupNodeFactory {
             if (groupNode.inputs == null) {
                 groupNode.inputs = new java.util.HashMap<>();
             }
-            groupNode.inputs.putIfAbsent(portId, type.getDefaultValue());
+            if (existingPort && previousType != type) {
+                groupNode.inputs.remove(portId);
+            } else {
+                groupNode.inputs.putIfAbsent(portId, type.getDefaultValue());
+            }
         } else if (GroupNodeTypes.CATEGORY_EXEC_INPUTS.equals(target) && groupNode.inputs != null) {
             groupNode.inputs.remove(portId);
         }

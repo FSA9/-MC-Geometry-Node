@@ -2,11 +2,10 @@ package com.mine.geometry_node.client.ui.persistence;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.mine.geometry_node.core.engine.graph.GraphType;
+import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
@@ -81,19 +80,11 @@ public final class GraphTagIO {
             return tags;
         }
 
-        boolean needsLegacyKindMigration = !root.has("graph_kind")
-                || GraphType.normalizeId(root.get("graph_kind").getAsString()).isEmpty();
         Set<String> seen = new LinkedHashSet<>();
         for (JsonElement element : root.getAsJsonArray("tags")) {
             if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) continue;
 
             String tag = element.getAsString();
-            GraphType kind = GraphTypeRegistry.INSTANCE.get(tag);
-            if (needsLegacyKindMigration && kind != null) {
-                needsLegacyKindMigration = false;
-                continue;
-            }
-
             String normalized = normalizeTag(tag);
             if (!normalized.isEmpty() && seen.add(normalized)) {
                 tags.add(normalized);
@@ -113,10 +104,7 @@ public final class GraphTagIO {
 
     private static void writeMetadataRoot(JsonObject root, String graphTypeId, String comment,
                                           List<String> tags, QuestDefinition questDefinition) {
-        String normalizedTypeId = GraphType.normalizeId(graphTypeId);
-        if (normalizedTypeId.isEmpty()) {
-            throw new IllegalArgumentException("Graph type cannot be empty");
-        }
+        String normalizedTypeId = GraphTypeRegistry.INSTANCE.require(graphTypeId).id();
         root.remove("graph_name");
         root.addProperty("graph_kind", normalizedTypeId);
         if (comment != null) root.addProperty("comment", comment);
@@ -133,25 +121,7 @@ public final class GraphTagIO {
     }
 
     public static String resolveGraphTypeId(JsonObject root) {
-        if (root.has("graph_kind")) {
-            String explicitId = GraphType.normalizeId(root.get("graph_kind").getAsString());
-            if (!explicitId.isEmpty()) {
-                return explicitId;
-            }
-        }
-
-        if (root.has("tags") && root.get("tags").isJsonArray()) {
-            JsonArray tags = root.getAsJsonArray("tags");
-            for (JsonElement element : tags) {
-                if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) continue;
-                GraphType kind = GraphTypeRegistry.INSTANCE.get(element.getAsString());
-                if (kind != null) {
-                    return kind.id();
-                }
-            }
-        }
-
-        return GraphTypeRegistry.BLUEPRINT.id();
+        return GraphDocumentType.requireId(root);
     }
 
     public static String normalizeTag(String raw) {

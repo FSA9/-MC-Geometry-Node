@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
-import com.mine.geometry_node.core.engine.blueprint.attachment.GraphContainer;
+import com.mine.geometry_node.core.engine.blueprint.attachment.BlueprintProcessContainer;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import net.minecraft.core.HolderLookup;
@@ -10,31 +10,36 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.UUID;
 
 
 public class BlueprintProcessSerializer {
     public static CompoundTag save(BlueprintProcess process, CompoundTag tag, HolderLookup.Provider provider) {
+        CompoundTag snapshot = saveSnapshot(process, provider);
+        replaceContents(tag, snapshot);
+        return tag;
+    }
+
+    private static void replaceContents(CompoundTag target, CompoundTag source) {
+        for (String key : new HashSet<>(target.keySet())) {
+            target.remove(key);
+        }
+        for (String key : source.keySet()) {
+            target.put(key, source.get(key).copy());
+        }
+    }
+
+    private static CompoundTag saveSnapshot(BlueprintProcess process, HolderLookup.Provider provider) {
+        CompoundTag tag = new CompoundTag();
         BlueprintPlan index = process.getIndex();
         tag.putString("GraphId", process.getGraphId());
         if (process.isDraining()) {
             tag.putBoolean("Draining", true);
         }
 
-        // 1. 保存变量栈
-        ListTag stackTag = new ListTag();
-        Iterator<BlueprintProcess.VariableScope> it = process.getVariableScopesDescendingForSerialization();
-        while (it.hasNext()) {
-            CompoundTag scopeTag = new CompoundTag();
-            BlueprintProcess.VariableScope scope = it.next();
-            saveVariablesToTag(scopeTag, scope.statics, scope.dynamics, index, provider);
-            stackTag.add(scopeTag);
-        }
-        tag.put("VariableStack", stackTag);
-
-        // 2. 保存休眠线程
+        // 保存休眠线程
         if (process.hasSleepingThreadsForSerialization()) {
             ListTag threadsTag = new ListTag();
             for (BlueprintProcess.ExecutionThread thread : process.getSleepingThreadsForSerialization()) {
@@ -76,16 +81,17 @@ public class BlueprintProcessSerializer {
                 }
                 tTag.put("ExecutionStack", execStackTag);
 
-                // 存线程寄存器 (静态 + 动态)
+                // 存线程事件寄存器（索引化 + 动态键）
                 CompoundTag regTag = new CompoundTag();
-                saveVariablesToTag(regTag, thread.getEventRegistersForSerialization(), thread.getDynamicEventDataForSerialization(), index, provider);
+                saveRegistersToTag(regTag, thread.getEventRegistersForSerialization(), thread.getDynamicEventDataForSerialization(), index, provider);
                 tTag.put("Registers", regTag);
 
                 // 存临时黑板
                 CompoundTag tempTag = new CompoundTag();
                 for (Map.Entry<String, Object> entry : thread.tempData.entrySet()) {
-                    Tag s = GraphValueCodecRegistry.toTag(entry.getValue(), provider);
-                    if (s != null) tempTag.put(entry.getKey(), s);
+                    if (entry.getValue() != null) {
+                        tempTag.put(entry.getKey(), GraphValueCodecRegistry.toTagStrict(entry.getValue(), provider));
+                    }
                 }
                 if (!tempTag.isEmpty()) tTag.put("TempData", tempTag);
 
@@ -108,13 +114,14 @@ public class BlueprintProcessSerializer {
                 }
 
                 CompoundTag regTag = new CompoundTag();
-                saveVariablesToTag(regTag, join.eventRegisters, join.dynamicEventData, index, provider);
+                saveRegistersToTag(regTag, join.eventRegisters, join.dynamicEventData, index, provider);
                 joinTag.put("Registers", regTag);
 
                 CompoundTag tempTag = new CompoundTag();
                 for (Map.Entry<String, Object> entry : join.tempData.entrySet()) {
-                    Tag s = GraphValueCodecRegistry.toTag(entry.getValue(), provider);
-                    if (s != null) tempTag.put(entry.getKey(), s);
+                    if (entry.getValue() != null) {
+                        tempTag.put(entry.getKey(), GraphValueCodecRegistry.toTagStrict(entry.getValue(), provider));
+                    }
                 }
                 if (!tempTag.isEmpty()) joinTag.put("TempData", tempTag);
 
@@ -128,23 +135,10 @@ public class BlueprintProcessSerializer {
     public static BlueprintProcess load(CompoundTag tag, BlueprintPlan index, HolderLookup.Provider provider) {
         String graphId = tag.getStringOr("GraphId", "");
         BlueprintProcess process = new BlueprintProcess(graphId, index);
-        process.clearVariableScopesForSerialization(); // 清理构造函数默认放入的空栈
 
         int exactSize = index.getRegisterCount() + 8;
 
-        // 1. 恢复变量栈
-        if (tag.contains("VariableStack")) {
-            ListTag list = tag.getListOrEmpty("VariableStack");
-            for (int i = 0; i < list.size(); i++) {
-                BlueprintProcess.VariableScope scope = new BlueprintProcess.VariableScope(exactSize);
-                loadVariablesFromTag(list.getCompoundOrEmpty(i), scope.statics, scope, index, provider);
-                process.addVariableScopeLastForSerialization(scope);
-            }
-        } else {
-            process.pushVariableScopeForSerialization(new BlueprintProcess.VariableScope(exactSize));
-        }
-
-        // 2. 恢复线程
+        // 恢复线程
         if (tag.contains("SleepingThreads")) {
             ListTag list = tag.getListOrEmpty("SleepingThreads");
             for (int i = 0; i < list.size(); i++) {
@@ -195,10 +189,10 @@ public class BlueprintProcessSerializer {
                     thread.wakeUpTick = tTag.getLongOr("WaitRemaining", 0L);
                     thread.state = BlueprintProcess.ExecutionThread.State.WAITING;
 
-                    BlueprintProcess.VariableScope tempScope = new BlueprintProcess.VariableScope(exactSize);
-                    loadVariablesFromTag(tTag.getCompoundOrEmpty("Registers"), tempScope.statics, tempScope, index, provider);
-                    thread.setEventRegistersForSerialization(tempScope.statics);
-                    thread.setDynamicEventDataForSerialization(tempScope.dynamics);
+                    DecodedRegisters registers = loadRegisters(
+                            tTag.getCompoundOrEmpty("Registers"), exactSize, index, provider);
+                    thread.setEventRegistersForSerialization(registers.statics());
+                    thread.setDynamicEventDataForSerialization(registers.dynamics());
 
                     process.addSleepingThreadForSerialization(thread);
 
@@ -225,8 +219,8 @@ public class BlueprintProcessSerializer {
                     continue;
                 }
 
-                BlueprintProcess.VariableScope regScope = new BlueprintProcess.VariableScope(exactSize);
-                loadVariablesFromTag(joinTag.getCompoundOrEmpty("Registers"), regScope.statics, regScope, index, provider);
+                DecodedRegisters registers = loadRegisters(
+                        joinTag.getCompoundOrEmpty("Registers"), exactSize, index, provider);
 
                 Map<String, Object> tempData = new HashMap<>();
                 if (joinTag.contains("TempData")) {
@@ -244,8 +238,8 @@ public class BlueprintProcessSerializer {
                         ownerNodeId,
                         completedPortName,
                         index.getStringToId(joinTag.getStringOr("EventSourceNodeId", "")),
-                        regScope.statics,
-                        regScope.dynamics,
+                        registers.statics(),
+                        registers.dynamics(),
                         tempData
                 );
                 join.pendingChildren = Math.max(0, joinTag.getIntOr("PendingChildren", 0));
@@ -258,23 +252,29 @@ public class BlueprintProcessSerializer {
         return process;
     }
 
-    private static void saveVariablesToTag(CompoundTag tag, Object[] statics, Map<String, Object> dynamics, BlueprintPlan index, HolderLookup.Provider provider) {
+    private static void saveRegistersToTag(CompoundTag tag, Object[] statics, Map<String, Object> dynamics,
+                                           BlueprintPlan index, HolderLookup.Provider provider) {
         for (int i = 0; i < statics.length; i++) {
             if (statics[i] != null) {
                 String key = index.getKeyFromId(i);
-                Tag s = GraphValueCodecRegistry.toTag(statics[i], provider);
-                if (s != null && key != null) tag.put(key, s);
+                if (key != null) {
+                    tag.put(key, GraphValueCodecRegistry.toTagStrict(statics[i], provider));
+                }
             }
         }
         if (dynamics != null) {
             for (Map.Entry<String, Object> entry : dynamics.entrySet()) {
-                Tag s = GraphValueCodecRegistry.toTag(entry.getValue(), provider);
-                if (s != null) tag.put(entry.getKey(), s);
+                if (entry.getValue() != null) {
+                    tag.put(entry.getKey(), GraphValueCodecRegistry.toTagStrict(entry.getValue(), provider));
+                }
             }
         }
     }
 
-    private static void loadVariablesFromTag(CompoundTag tag, Object[] statics, BlueprintProcess.VariableScope scope, BlueprintPlan index, HolderLookup.Provider provider) {
+    private static DecodedRegisters loadRegisters(CompoundTag tag, int size, BlueprintPlan index,
+                                                  HolderLookup.Provider provider) {
+        Object[] statics = new Object[size];
+        Map<String, Object> dynamics = null;
         for (String key : tag.keySet()) {
             Object obj = GraphValueCodecRegistry.fromTag(tag.get(key), provider);
             if (obj != null) {
@@ -282,14 +282,18 @@ public class BlueprintProcessSerializer {
                 if (id != -1 && id < statics.length) {
                     statics[id] = obj;
                 } else {
-                    if (scope.dynamics == null) scope.dynamics = new HashMap<>();
-                    scope.dynamics.put(key, obj);
+                    if (dynamics == null) dynamics = new HashMap<>();
+                    dynamics.put(key, obj);
                 }
             }
         }
+        return new DecodedRegisters(statics, dynamics);
     }
 
-    public static CompoundTag saveContainer(GraphContainer container, CompoundTag tag, HolderLookup.Provider provider) {
+    private record DecodedRegisters(Object[] statics, Map<String, Object> dynamics) {}
+
+    public static CompoundTag saveContainer(BlueprintProcessContainer container, CompoundTag tag, HolderLookup.Provider provider) {
+        CompoundTag snapshot = new CompoundTag();
         if (!container.getProcessesMap().isEmpty()) {
             ListTag processList = new ListTag();
             for (BlueprintProcess process : container.getProcessesMap().values()) {
@@ -297,12 +301,13 @@ public class BlueprintProcessSerializer {
                 save(process, processTag, provider);
                 processList.add(processTag);
             }
-            tag.put("ActiveProcesses", processList);
+            snapshot.put("ActiveProcesses", processList);
         }
+        replaceContents(tag, snapshot);
         return tag;
     }
 
-    public static void loadContainer(GraphContainer container, CompoundTag tag, HolderLookup.Provider provider) {
+    public static void loadContainer(BlueprintProcessContainer container, CompoundTag tag, HolderLookup.Provider provider) {
         container.clearProcessesForSerialization();
         if (tag.contains("ActiveProcesses")) {
             ListTag list = tag.getListOrEmpty("ActiveProcesses");

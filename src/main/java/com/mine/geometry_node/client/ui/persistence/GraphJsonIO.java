@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.persistence;
 
 import com.google.gson.*;
-import com.mine.geometry_node.core.engine.graph.GraphType;
+import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.node.document.Connection;
@@ -71,9 +71,9 @@ public final class GraphJsonIO {
     public static NodeGraph fromJson(String json) {
         JsonObject root = JsonParser.parseString(json).getAsJsonObject();
         NodeGraph g = new NodeGraph();
-        g.graphKind = root.has("graph_kind") ? root.get("graph_kind").getAsString() : GraphTypeRegistry.BLUEPRINT.id();
+        g.graphKind = GraphDocumentType.requireId(root);
         g.version = root.has("version") ? root.get("version").getAsString() : "1.0";
-        g.tags = readUserTags(root, g);
+        g.tags = readUserTags(root);
         g.comment = root.has("comment") && root.get("comment").isJsonPrimitive()
                 ? root.get("comment").getAsString()
                 : "";
@@ -170,26 +170,15 @@ public final class GraphJsonIO {
         }
     }
 
-    private static List<String> readUserTags(JsonObject root, NodeGraph graph) {
+    private static List<String> readUserTags(JsonObject root) {
         List<String> tags = new ArrayList<>();
         if (!root.has("tags") || !root.get("tags").isJsonArray()) {
             return tags;
         }
 
-        boolean needsLegacyKindMigration = !root.has("graph_kind")
-                || GraphType.normalizeId(graph.graphKind).isEmpty();
         for (JsonElement element : root.getAsJsonArray("tags")) {
             if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) continue;
-
-            String tag = element.getAsString();
-            GraphType kind = GraphTypeRegistry.INSTANCE.get(tag);
-            if (needsLegacyKindMigration && kind != null) {
-                graph.graphKind = kind.id();
-                needsLegacyKindMigration = false;
-                continue;
-            }
-
-            tags.add(tag);
+            tags.add(element.getAsString());
         }
         return tags;
     }

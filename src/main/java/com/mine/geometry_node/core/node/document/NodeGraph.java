@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.node.document;
 
 import com.google.gson.annotations.SerializedName;
-import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 
@@ -41,20 +40,7 @@ public class NodeGraph {
     public NodeGraph() {}
 
     public String getGraphTypeId() {
-        String explicitId = GraphType.normalizeId(graphKind);
-        if (!explicitId.isEmpty()) {
-            return explicitId;
-        }
-
-        if (tags != null) {
-            for (String tag : tags) {
-                String legacyId = GraphType.normalizeId(tag);
-                if (GraphTypeRegistry.INSTANCE.get(legacyId) != null) {
-                    return legacyId;
-                }
-            }
-        }
-        return GraphTypeRegistry.BLUEPRINT.id();
+        return GraphTypeRegistry.INSTANCE.require(graphKind).id();
     }
 
     /**

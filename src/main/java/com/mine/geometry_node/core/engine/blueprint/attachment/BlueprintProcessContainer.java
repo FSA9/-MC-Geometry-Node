@@ -25,7 +25,7 @@ import java.util.function.Consumer;
  * [蓝图运行容器核心] (组合模式)
  * 抽离了 Entity 和 Level 共用的虚拟机调度、属性存储和存档逻辑。
  */
-public class GraphContainer {
+public class BlueprintProcessContainer {
 
     private final Map<String, BlueprintProcess> processes = new HashMap<>();
     private final DueTickScheduler<String, BlueprintProcess> tickScheduler = new DueTickScheduler<>();
@@ -35,16 +35,16 @@ public class GraphContainer {
     private final Runnable scheduleChangedCallback;
     private final Consumer<BlueprintProcess> processRemovedCallback;
 
-    public GraphContainer(Runnable dirtyMarker) {
+    public BlueprintProcessContainer(Runnable dirtyMarker) {
         this(dirtyMarker, () -> {}, ignored -> {});
     }
 
-    public GraphContainer(Runnable dirtyMarker, Runnable scheduleChangedCallback) {
+    public BlueprintProcessContainer(Runnable dirtyMarker, Runnable scheduleChangedCallback) {
         this(dirtyMarker, scheduleChangedCallback, ignored -> {});
     }
 
-    public GraphContainer(Runnable dirtyMarker, Runnable scheduleChangedCallback,
-                          Consumer<BlueprintProcess> processRemovedCallback) {
+    public BlueprintProcessContainer(Runnable dirtyMarker, Runnable scheduleChangedCallback,
+                                     Consumer<BlueprintProcess> processRemovedCallback) {
         this.dirtyMarker = dirtyMarker != null ? dirtyMarker : () -> {};
         this.scheduleChangedCallback = scheduleChangedCallback != null ? scheduleChangedCallback : () -> {};
         this.processRemovedCallback = processRemovedCallback != null ? processRemovedCallback : ignored -> {};

@@ -11,21 +11,18 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 
 /**
- * Event subscription index for bound blueprint graphs.
- * BlueprintPlan owns graph-local node lookup; this class expands bound graphs
- * into cached event-node subscriptions and keeps graph-level lookups for
- * stateful/special dispatchers.
+ * Event subscription index for bound blueprint graphs. A graph's identity and
+ * subscriptions share one index entry so registration cannot become partially stale.
  */
 public final class GraphSubscriptionIndex {
-    private final Map<String, Set<String>> globalEventGraphs = new HashMap<>();
-    private final Map<String, Map<Entity, Set<String>>> entityEventGraphs = new HashMap<>();
-    private final Map<String, List<EventSubscription>> globalEventSubscriptions = new HashMap<>();
-    private final Map<String, Map<Entity, List<EventSubscription>>> entityEventSubscriptions = new HashMap<>();
+    private final Map<String, Map<String, List<EventSubscription>>> globalSubscriptions = new HashMap<>();
+    private final Map<String, Map<Entity, Map<String, List<EventSubscription>>>> entitySubscriptions = new HashMap<>();
     private final Map<String, BlueprintPlan> registeredGlobalGraphs = new HashMap<>();
     private final Map<Entity, Map<String, BlueprintPlan>> registeredEntityGraphs = new WeakHashMap<>();
 
@@ -41,249 +38,159 @@ public final class GraphSubscriptionIndex {
         return Set.copyOf(result);
     }
 
-    public void registerGlobalGraph(String graphId, BlueprintPlan index) {
+    public void registerGlobalGraph(String graphId, BlueprintPlan plan) {
         BlueprintPlan previous = registeredGlobalGraphs.get(graphId);
-        if (previous == index) return;
-        if (previous != null) {
-            removeGraphFromLookup(globalEventGraphs, graphId, previous);
-            removeGraphSubscriptionsFromLookup(globalEventSubscriptions, graphId, previous);
-        }
-        registeredGlobalGraphs.put(graphId, index);
-        addGraphSubscriptions(globalEventGraphs, globalEventSubscriptions, graphId, index);
+        if (previous == plan) return;
+        if (previous != null) removeGlobalSubscriptions(graphId, previous);
+        registeredGlobalGraphs.put(graphId, plan);
+        addGlobalSubscriptions(graphId, plan);
     }
 
-    public void unregisterGlobalGraph(String graphId, @Nullable BlueprintPlan index) {
-        BlueprintPlan registeredIndex = registeredGlobalGraphs.remove(graphId);
-        BlueprintPlan cleanupIndex = registeredIndex != null ? registeredIndex : index;
-        if (cleanupIndex == null) {
-            removeGraphFromLookup(globalEventGraphs, graphId);
-            removeGraphSubscriptionsFromLookup(globalEventSubscriptions, graphId);
-            return;
-        }
-        for (String eventType : eventTypes(cleanupIndex)) {
-            removeGraph(globalEventGraphs, eventType, graphId);
-            removeGraphSubscriptions(globalEventSubscriptions, eventType, graphId);
+    public void unregisterGlobalGraph(String graphId, @Nullable BlueprintPlan plan) {
+        BlueprintPlan registered = registeredGlobalGraphs.remove(graphId);
+        BlueprintPlan cleanupPlan = registered != null ? registered : plan;
+        if (cleanupPlan != null) {
+            removeGlobalSubscriptions(graphId, cleanupPlan);
+        } else {
+            globalSubscriptions.values().removeIf(graphs -> {
+                graphs.remove(graphId);
+                return graphs.isEmpty();
+            });
         }
     }
 
-    public void registerEntityGraph(Entity entity, String graphId, BlueprintPlan index) {
-        Map<String, BlueprintPlan> entityIndexes = registeredEntityGraphs.computeIfAbsent(entity, ignored -> new HashMap<>());
-        BlueprintPlan previous = entityIndexes.get(graphId);
-        if (previous == index) return;
-        if (previous != null) {
-            removeEntityGraphFromLookup(entity, graphId, previous);
-            removeEntityGraphSubscriptionsFromLookup(entity, graphId, previous);
-        }
-        entityIndexes.put(graphId, index);
-        addEntityGraphSubscriptions(entity, graphId, index);
+    public void registerEntityGraph(Entity entity, String graphId, BlueprintPlan plan) {
+        Map<String, BlueprintPlan> graphs = registeredEntityGraphs.computeIfAbsent(entity, ignored -> new HashMap<>());
+        BlueprintPlan previous = graphs.get(graphId);
+        if (previous == plan) return;
+        if (previous != null) removeEntitySubscriptions(entity, graphId, previous);
+        graphs.put(graphId, plan);
+        addEntitySubscriptions(entity, graphId, plan);
     }
 
-    public void unregisterEntityGraph(Entity entity, String graphId, @Nullable BlueprintPlan index) {
-        Map<String, BlueprintPlan> entityIndexes = registeredEntityGraphs.get(entity);
-        BlueprintPlan registeredIndex = entityIndexes != null ? entityIndexes.remove(graphId) : null;
-        if (entityIndexes != null && entityIndexes.isEmpty()) {
-            registeredEntityGraphs.remove(entity);
-        }
+    public void unregisterEntityGraph(Entity entity, String graphId, @Nullable BlueprintPlan plan) {
+        Map<String, BlueprintPlan> graphs = registeredEntityGraphs.get(entity);
+        BlueprintPlan registered = graphs != null ? graphs.remove(graphId) : null;
+        if (graphs != null && graphs.isEmpty()) registeredEntityGraphs.remove(entity);
 
-        BlueprintPlan cleanupIndex = registeredIndex != null ? registeredIndex : index;
-        if (cleanupIndex == null) {
-            removeEntityGraphFromLookup(entity, graphId);
-            removeEntityGraphSubscriptionsFromLookup(entity, graphId);
-            return;
-        }
-        for (String eventType : eventTypes(cleanupIndex)) {
-            removeEntityGraph(eventType, entity, graphId);
-            removeEntityGraphSubscription(eventType, entity, graphId);
+        BlueprintPlan cleanupPlan = registered != null ? registered : plan;
+        if (cleanupPlan != null) {
+            removeEntitySubscriptions(entity, graphId, cleanupPlan);
+        } else {
+            entitySubscriptions.values().removeIf(entities -> {
+                removeEntityGraph(entities, entity, graphId);
+                return entities.isEmpty();
+            });
         }
     }
 
     public Set<String> globalGraphsFor(String eventType) {
-        Set<String> graphIds = globalEventGraphs.get(canonicalEventType(eventType));
-        return graphIds != null ? Set.copyOf(graphIds) : Collections.emptySet();
+        Map<String, List<EventSubscription>> graphs = globalSubscriptions.get(canonicalEventType(eventType));
+        return graphs != null ? Set.copyOf(graphs.keySet()) : Collections.emptySet();
+    }
+
+    public boolean hasGlobalSubscriptions(String eventType) {
+        Map<String, List<EventSubscription>> graphs = globalSubscriptions.get(canonicalEventType(eventType));
+        return graphs != null && !graphs.isEmpty();
     }
 
     public Set<String> entityGraphsFor(Entity entity, String eventType) {
-        Map<Entity, Set<String>> entities = entityEventGraphs.get(canonicalEventType(eventType));
+        Map<Entity, Map<String, List<EventSubscription>>> entities = entitySubscriptions.get(canonicalEventType(eventType));
         if (entities == null) return Collections.emptySet();
-        Set<String> graphIds = entities.get(entity);
-        return graphIds != null ? Set.copyOf(graphIds) : Collections.emptySet();
+        Map<String, List<EventSubscription>> graphs = entities.get(entity);
+        return graphs != null ? Set.copyOf(graphs.keySet()) : Collections.emptySet();
+    }
+
+    public boolean hasEntitySubscriptions(Entity entity, String eventType) {
+        Map<Entity, Map<String, List<EventSubscription>>> entities =
+                entitySubscriptions.get(canonicalEventType(eventType));
+        Map<String, List<EventSubscription>> graphs = entities != null ? entities.get(entity) : null;
+        return graphs != null && !graphs.isEmpty();
     }
 
     public List<EventSubscription> globalSubscriptionsFor(String eventType) {
-        List<EventSubscription> subscriptions = globalEventSubscriptions.get(canonicalEventType(eventType));
-        return subscriptions != null ? List.copyOf(subscriptions) : Collections.emptyList();
+        Map<String, List<EventSubscription>> graphs = globalSubscriptions.get(canonicalEventType(eventType));
+        return flatten(graphs);
     }
 
     public List<EventSubscription> entitySubscriptionsFor(Entity entity, String eventType) {
-        Map<Entity, List<EventSubscription>> entities = entityEventSubscriptions.get(canonicalEventType(eventType));
-        if (entities == null) return Collections.emptyList();
-        List<EventSubscription> subscriptions = entities.get(entity);
-        return subscriptions != null ? List.copyOf(subscriptions) : Collections.emptyList();
+        Map<Entity, Map<String, List<EventSubscription>>> entities = entitySubscriptions.get(canonicalEventType(eventType));
+        return entities != null ? flatten(entities.get(entity)) : Collections.emptyList();
     }
 
-    private static String canonicalEventType(String eventType) {
-        return eventType == null || eventType.isBlank() ? "" : NodeDef.canonicalTypeId(eventType);
-    }
-
-    private void addEntityGraphSubscriptions(Entity entity, String graphId, BlueprintPlan index) {
-        for (String eventType : eventTypes(index)) {
-            List<EventSubscription> subscriptions = buildSubscriptions(graphId, index, eventType);
-            if (subscriptions.isEmpty()) continue;
-
-            entityEventGraphs
-                    .computeIfAbsent(eventType, ignored -> new WeakHashMap<>())
-                    .computeIfAbsent(entity, ignored -> new HashSet<>())
-                    .add(graphId);
-            entityEventSubscriptions
-                    .computeIfAbsent(eventType, ignored -> new WeakHashMap<>())
-                    .computeIfAbsent(entity, ignored -> new ArrayList<>())
-                    .addAll(subscriptions);
+    private void addGlobalSubscriptions(String graphId, BlueprintPlan plan) {
+        for (String eventType : eventTypes(plan)) {
+            List<EventSubscription> subscriptions = buildSubscriptions(graphId, plan, eventType);
+            if (!subscriptions.isEmpty()) {
+                globalSubscriptions.computeIfAbsent(eventType, ignored -> new LinkedHashMap<>())
+                        .put(graphId, subscriptions);
+            }
         }
     }
 
-    private static void addGraphSubscriptions(Map<String, Set<String>> graphLookup,
-                                              Map<String, List<EventSubscription>> subscriptionLookup,
-                                              String graphId,
-                                              BlueprintPlan index) {
-        for (String eventType : eventTypes(index)) {
-            List<EventSubscription> subscriptions = buildSubscriptions(graphId, index, eventType);
-            if (subscriptions.isEmpty()) continue;
-
-            graphLookup.computeIfAbsent(eventType, ignored -> new HashSet<>()).add(graphId);
-            subscriptionLookup.computeIfAbsent(eventType, ignored -> new ArrayList<>()).addAll(subscriptions);
+    private void addEntitySubscriptions(Entity entity, String graphId, BlueprintPlan plan) {
+        for (String eventType : eventTypes(plan)) {
+            List<EventSubscription> subscriptions = buildSubscriptions(graphId, plan, eventType);
+            if (!subscriptions.isEmpty()) {
+                entitySubscriptions.computeIfAbsent(eventType, ignored -> new WeakHashMap<>())
+                        .computeIfAbsent(entity, ignored -> new LinkedHashMap<>())
+                        .put(graphId, subscriptions);
+            }
         }
     }
 
-    private static List<EventSubscription> buildSubscriptions(String graphId, BlueprintPlan index, String eventType) {
-        List<Integer> nodeIds = index.findNodesByType(eventType);
-        if (nodeIds.isEmpty()) {
-            return Collections.emptyList();
+    private void removeGlobalSubscriptions(String graphId, BlueprintPlan plan) {
+        for (String eventType : eventTypes(plan)) {
+            Map<String, List<EventSubscription>> graphs = globalSubscriptions.get(eventType);
+            if (graphs == null) continue;
+            graphs.remove(graphId);
+            if (graphs.isEmpty()) globalSubscriptions.remove(eventType);
         }
+    }
+
+    private void removeEntitySubscriptions(Entity entity, String graphId, BlueprintPlan plan) {
+        for (String eventType : eventTypes(plan)) {
+            Map<Entity, Map<String, List<EventSubscription>>> entities = entitySubscriptions.get(eventType);
+            if (entities == null) continue;
+            removeEntityGraph(entities, entity, graphId);
+            if (entities.isEmpty()) entitySubscriptions.remove(eventType);
+        }
+    }
+
+    private static void removeEntityGraph(Map<Entity, Map<String, List<EventSubscription>>> entities,
+                                          Entity entity, String graphId) {
+        Map<String, List<EventSubscription>> graphs = entities.get(entity);
+        if (graphs == null) return;
+        graphs.remove(graphId);
+        if (graphs.isEmpty()) entities.remove(entity);
+    }
+
+    private static List<EventSubscription> buildSubscriptions(String graphId, BlueprintPlan plan, String eventType) {
+        List<Integer> nodeIds = plan.findNodesByType(eventType);
+        if (nodeIds.isEmpty()) return Collections.emptyList();
 
         List<EventSubscription> subscriptions = new ArrayList<>(nodeIds.size());
         for (int nodeId : nodeIds) {
             subscriptions.add(new EventSubscription(
-                    graphId, index, nodeId, eventType,
-                    EventPrecheckRegistry.build(graphId, index, nodeId, eventType)));
+                    graphId, plan, nodeId, eventType,
+                    EventPrecheckRegistry.build(graphId, plan, nodeId, eventType)));
         }
-        return subscriptions;
+        return List.copyOf(subscriptions);
     }
 
-    private static Set<String> eventTypes(BlueprintPlan index) {
-        return index.getEventTypes();
+    private static List<EventSubscription> flatten(@Nullable Map<String, List<EventSubscription>> graphs) {
+        if (graphs == null || graphs.isEmpty()) return Collections.emptyList();
+        int size = graphs.values().stream().mapToInt(List::size).sum();
+        List<EventSubscription> result = new ArrayList<>(size);
+        graphs.values().forEach(result::addAll);
+        return List.copyOf(result);
     }
 
-    private static void removeGraphFromLookup(Map<String, Set<String>> lookup, String graphId) {
-        lookup.entrySet().removeIf(entry -> {
-            entry.getValue().remove(graphId);
-            return entry.getValue().isEmpty();
-        });
+    private static Set<String> eventTypes(BlueprintPlan plan) {
+        return plan.getEventTypes();
     }
 
-    private static void removeGraphFromLookup(Map<String, Set<String>> lookup, String graphId, BlueprintPlan index) {
-        for (String eventType : eventTypes(index)) {
-            removeGraph(lookup, eventType, graphId);
-        }
-    }
-
-    private static void removeGraphSubscriptionsFromLookup(Map<String, List<EventSubscription>> lookup, String graphId) {
-        lookup.entrySet().removeIf(entry -> {
-            entry.getValue().removeIf(subscription -> subscription.graphId().equals(graphId));
-            return entry.getValue().isEmpty();
-        });
-    }
-
-    private static void removeGraphSubscriptionsFromLookup(Map<String, List<EventSubscription>> lookup, String graphId, BlueprintPlan index) {
-        for (String eventType : eventTypes(index)) {
-            removeGraphSubscriptions(lookup, eventType, graphId);
-        }
-    }
-
-    private void removeEntityGraphFromLookup(Entity entity, String graphId) {
-        entityEventGraphs.entrySet().removeIf(entry -> {
-            Map<Entity, Set<String>> entities = entry.getValue();
-            Set<String> graphIds = entities.get(entity);
-            if (graphIds != null) {
-                graphIds.remove(graphId);
-                if (graphIds.isEmpty()) {
-                    entities.remove(entity);
-                }
-            }
-            return entities.isEmpty();
-        });
-    }
-
-    private void removeEntityGraphFromLookup(Entity entity, String graphId, BlueprintPlan index) {
-        for (String eventType : eventTypes(index)) {
-            removeEntityGraph(eventType, entity, graphId);
-        }
-    }
-
-    private void removeEntityGraphSubscriptionsFromLookup(Entity entity, String graphId) {
-        entityEventSubscriptions.entrySet().removeIf(entry -> {
-            Map<Entity, List<EventSubscription>> entities = entry.getValue();
-            List<EventSubscription> subscriptions = entities.get(entity);
-            if (subscriptions != null) {
-                subscriptions.removeIf(subscription -> subscription.graphId().equals(graphId));
-                if (subscriptions.isEmpty()) {
-                    entities.remove(entity);
-                }
-            }
-            return entities.isEmpty();
-        });
-    }
-
-    private void removeEntityGraphSubscriptionsFromLookup(Entity entity, String graphId, BlueprintPlan index) {
-        for (String eventType : eventTypes(index)) {
-            removeEntityGraphSubscription(eventType, entity, graphId);
-        }
-    }
-
-    private static void removeGraph(Map<String, Set<String>> lookup, String eventType, String graphId) {
-        Set<String> graphIds = lookup.get(eventType);
-        if (graphIds == null) return;
-        graphIds.remove(graphId);
-        if (graphIds.isEmpty()) {
-            lookup.remove(eventType);
-        }
-    }
-
-    private static void removeGraphSubscriptions(Map<String, List<EventSubscription>> lookup, String eventType, String graphId) {
-        List<EventSubscription> subscriptions = lookup.get(eventType);
-        if (subscriptions == null) return;
-        subscriptions.removeIf(subscription -> subscription.graphId().equals(graphId));
-        if (subscriptions.isEmpty()) {
-            lookup.remove(eventType);
-        }
-    }
-
-    private void removeEntityGraph(String eventType, Entity entity, String graphId) {
-        Map<Entity, Set<String>> entities = entityEventGraphs.get(eventType);
-        if (entities == null) return;
-        Set<String> graphIds = entities.get(entity);
-        if (graphIds != null) {
-            graphIds.remove(graphId);
-            if (graphIds.isEmpty()) {
-                entities.remove(entity);
-            }
-        }
-        if (entities.isEmpty()) {
-            entityEventGraphs.remove(eventType);
-        }
-    }
-
-    private void removeEntityGraphSubscription(String eventType, Entity entity, String graphId) {
-        Map<Entity, List<EventSubscription>> entities = entityEventSubscriptions.get(eventType);
-        if (entities == null) return;
-        List<EventSubscription> subscriptions = entities.get(entity);
-        if (subscriptions != null) {
-            subscriptions.removeIf(subscription -> subscription.graphId().equals(graphId));
-            if (subscriptions.isEmpty()) {
-                entities.remove(entity);
-            }
-        }
-        if (entities.isEmpty()) {
-            entityEventSubscriptions.remove(eventType);
-        }
+    private static String canonicalEventType(String eventType) {
+        return eventType == null || eventType.isBlank() ? "" : NodeDef.canonicalTypeId(eventType);
     }
 }

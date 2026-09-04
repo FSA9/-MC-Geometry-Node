@@ -84,13 +84,10 @@ public final class PlayerInputStateManager {
         return keys != null && keys.contains(keyId);
     }
 
-    public void syncInterceptions(ServerPlayer player, Set<String> interceptedKeys) {
+    public void syncInterceptions(ServerPlayer player, int interceptionMask) {
         if (player == null) return;
         ServerState state = servers.computeIfAbsent(player.level().getServer(), ignored -> new ServerState());
-        int mask = 0;
-        for (int i = 0; i < PlayerInputKeys.ALL_KEYS.size(); i++) {
-            if (interceptedKeys.contains(PlayerInputKeys.ALL_KEYS.get(i))) mask |= 1 << i;
-        }
+        int mask = interceptionMask & PlayerInputKeys.allMask();
         Integer previous = state.interceptionMasks.put(player.getUUID(), mask);
         if (previous == null || previous != mask) {
             NetworkHandler.sendToPlayer(player, new PacketPlayerInputInterceptions(mask));

@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.command.server;
 
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -17,7 +16,6 @@ public class ServerGraphListCommand {
                         .then(Commands.literal("server")
                                 .executes(context -> {
                                     Set<String> dynamicGraphs = DynamicGraphManager.getAllDynamicGraphIds();
-                                    Set<String> datapackGraphs = GraphResourceManager.getInstance().getAllGraphIds();
                                     CommandSourceStack source = context.getSource();
 
                                     if (dynamicGraphs.isEmpty()) {
@@ -27,14 +25,7 @@ public class ServerGraphListCommand {
                                         source.sendSuccess(() -> Component.translatable("geometry_node.command.graph_list.dynamic", list), false);
                                     }
 
-                                    if (datapackGraphs.isEmpty()) {
-                                        source.sendSuccess(() -> Component.translatable("geometry_node.command.graph_list.datapack_empty"), false);
-                                    } else {
-                                        String list = String.join("\n- ", datapackGraphs);
-                                        source.sendSuccess(() -> Component.translatable("geometry_node.command.graph_list.datapack", list), false);
-                                    }
-
-                                    return dynamicGraphs.size() + datapackGraphs.size();
+                                    return dynamicGraphs.size();
                                 })
                         )
         );

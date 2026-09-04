@@ -26,7 +26,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Set;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -77,7 +76,6 @@ public final class BlueprintRuntime implements GraphRuntime {
     @Override
     public void tickLevel(ServerLevel level) {
         eventHandler.tickLevel(level);
-        syncPlayerInputInterceptions(level);
     }
 
     @Override
@@ -95,10 +93,12 @@ public final class BlueprintRuntime implements GraphRuntime {
 
     public void bindGraph(Entity entity, String graphId) {
         engine.bindGraph(entity, graphId);
+        syncPlayerInputInterception(entity);
     }
 
     public void bindGlobalGraph(ServerLevel level, String graphId) {
         engine.bindGlobalGraph(level, graphId);
+        syncAllPlayerInputInterceptions(level.getServer());
     }
 
     public void unbindGraph(Entity entity, String graphId) {
@@ -107,6 +107,7 @@ public final class BlueprintRuntime implements GraphRuntime {
 
     public void unbindGraph(Entity entity, String graphId, GraphCloseMode closeMode) {
         engine.unbindGraph(entity, graphId, closeMode);
+        syncPlayerInputInterception(entity);
     }
 
     public void unbindGlobalGraph(ServerLevel level, String graphId) {
@@ -115,14 +116,17 @@ public final class BlueprintRuntime implements GraphRuntime {
 
     public void unbindGlobalGraph(ServerLevel level, String graphId, GraphCloseMode closeMode) {
         engine.unbindGlobalGraph(level, graphId, closeMode);
+        syncAllPlayerInputInterceptions(level.getServer());
     }
 
     public void unbindAllGraphs(Entity entity) {
         engine.unbindAllGraphs(entity);
+        syncPlayerInputInterception(entity);
     }
 
     public void unbindAllGlobalGraphs(ServerLevel level) {
         engine.unbindAllGlobalGraphs(level);
+        syncAllPlayerInputInterceptions(level.getServer());
     }
 
     public Set<String> getBoundGraphs(Entity entity) {
@@ -166,6 +170,10 @@ public final class BlueprintRuntime implements GraphRuntime {
         return engine.getEntityGraphsForEvent(entity, eventType);
     }
 
+    public boolean hasEntityEventSubscription(Entity entity, String eventType) {
+        return engine.hasEntityEventSubscription(entity, eventType);
+    }
+
     public void dispatchBoundEntityEvent(ServerLevel level, Entity target, String eventNodeId,
                                          @Nullable Map<String, Object> eventData) {
         engine.dispatchBoundEntityEvent(level, target, eventNodeId, eventData);
@@ -182,6 +190,7 @@ public final class BlueprintRuntime implements GraphRuntime {
 
     public void registerEntityListeners(Entity entity) {
         engine.registerEntityListeners(entity);
+        syncPlayerInputInterception(entity);
     }
 
     public void executeEventNode(ServerLevel level, @Nullable Entity target, String graphId,
@@ -213,17 +222,23 @@ public final class BlueprintRuntime implements GraphRuntime {
         playerInput.clearPlayer(player);
     }
 
-    private void syncPlayerInputInterceptions(ServerLevel level) {
-        Set<String> globalGraphs = engine.getGlobalGraphsForEvent(level, OnPlayerKeyEvent.TYPE_ID);
-        for (ServerPlayer player : level.players()) {
-            Set<String> interceptedKeys = new HashSet<>();
-            collectInterceptedKeys(globalGraphs, interceptedKeys);
-            collectInterceptedKeys(engine.getEntityGraphsForEvent(player, OnPlayerKeyEvent.TYPE_ID), interceptedKeys);
-            playerInput.syncInterceptions(player, interceptedKeys);
+    private void syncAllPlayerInputInterceptions(MinecraftServer server) {
+        if (server == null) return;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            syncPlayerInputInterception(player);
         }
     }
 
-    private void collectInterceptedKeys(Set<String> graphIds, Set<String> destination) {
+    private void syncPlayerInputInterception(Entity entity) {
+        if (!(entity instanceof ServerPlayer player)) return;
+        int mask = collectInterceptionMask(engine.getGlobalGraphsForEvent(
+                player.serverLevel(), OnPlayerKeyEvent.TYPE_ID));
+        mask |= collectInterceptionMask(engine.getEntityGraphsForEvent(player, OnPlayerKeyEvent.TYPE_ID));
+        playerInput.syncInterceptions(player, mask);
+    }
+
+    private int collectInterceptionMask(Set<String> graphIds) {
+        int mask = 0;
         for (String graphId : graphIds) {
             BlueprintPlan plan = engine.getGraphIndex(graphId);
             if (plan == null) continue;
@@ -231,20 +246,17 @@ public final class BlueprintRuntime implements GraphRuntime {
                 if (!plan.getNodeStaticInput(nodeId, StandardPorts.INTERCEPT.getId(), Boolean.class, false)) continue;
                 String keyId = plan.getNodeStaticInput(nodeId, StandardPorts.NAME.getId(), String.class, "");
                 if (keyId == null || keyId.isBlank()) {
-                    destination.addAll(PlayerInputKeys.ALL_KEYS);
+                    return PlayerInputKeys.allMask();
                 } else {
-                    destination.add(keyId);
+                    mask |= PlayerInputKeys.maskOf(keyId);
                 }
             }
         }
+        return mask;
     }
 
     public void tickEntityInventory(ServerLevel level, Entity entity, boolean listening) {
         inventoryGainTracker.tick(level, entity, listening);
-    }
-
-    public void clearEntityInventoryTracking(Entity entity) {
-        inventoryGainTracker.clear(entity);
     }
 
     public boolean shouldInterceptProjectileHit(ServerLevel level, Entity target,
@@ -261,6 +273,7 @@ public final class BlueprintRuntime implements GraphRuntime {
                     ? value : null;
             refreshGraphSubscriptions(change.server(), graphId, index);
         }
+        syncAllPlayerInputInterceptions(change.server());
     }
 
 }

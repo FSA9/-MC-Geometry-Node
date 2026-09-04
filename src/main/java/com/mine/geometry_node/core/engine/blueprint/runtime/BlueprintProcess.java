@@ -33,8 +33,7 @@ import java.util.*;
 /**
  * [蓝图虚拟机进程 - 内存主板]
  * * 代表一个蓝图图纸在某个实体或维度上的运行实例。
- * 它不再直接持有指令指针，而是作为“内存黑板”管理变量和环境。
- * 具体的执行逻辑由内部类 ExecutionThread 承担。
+ * 它维护运行环境、等待线程和分支联结；具体执行由内部类 ExecutionThread 承担。
  */
 public class BlueprintProcess {
 
@@ -49,17 +48,6 @@ public class BlueprintProcess {
     private ServerLevel level;
     private Entity entity;
     private UUID graphOwnerEntityUuid;
-
-    public static class VariableScope {
-        public final Object[] statics;
-        public Map<String, Object> dynamics = null; // 懒加载
-
-        public VariableScope(int staticSize) {
-            this.statics = new Object[staticSize];
-        }
-    }
-
-    final Deque<VariableScope> variableStack = new ArrayDeque<>(8);
 
     // --- 执行流管理 ---
     final PriorityQueue<ExecutionThread> sleepingThreads = new PriorityQueue<>(Comparator.comparingLong(t -> t.wakeUpTick));  // 挂起的协程线程
@@ -136,8 +124,6 @@ public class BlueprintProcess {
     public BlueprintProcess(String graphId, BlueprintPlan index) {
         this.graphId = GraphAssetId.require(graphId);
         this.index = Objects.requireNonNull(index, "index");
-        int exactSize = index.getRegisterCount() + 8;
-        this.variableStack.push(new VariableScope(exactSize));
     }
 
     public void setEnvironment(ServerLevel level, @Nullable Entity entity) {
@@ -190,22 +176,6 @@ public class BlueprintProcess {
 
     private void notifyTickScheduleChanged() {
         tickScheduleCallback.run();
-    }
-
-    public Iterator<VariableScope> getVariableScopesDescendingForSerialization() {
-        return variableStack.descendingIterator();
-    }
-
-    public void clearVariableScopesForSerialization() {
-        variableStack.clear();
-    }
-
-    public void addVariableScopeLastForSerialization(VariableScope scope) {
-        variableStack.addLast(scope);
-    }
-
-    public void pushVariableScopeForSerialization(VariableScope scope) {
-        variableStack.push(scope);
     }
 
     public Iterable<ExecutionThread> getSleepingThreadsForSerialization() {

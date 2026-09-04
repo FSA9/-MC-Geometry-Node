@@ -6,6 +6,7 @@ import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
+import com.mine.geometry_node.core.node.nodes.events.area.OnAreaEvent;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.projectile.OnProjectileShoot;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
@@ -113,19 +114,20 @@ public class EntityDispatcher {
             ServerLevel level = (ServerLevel) entity.level();
             EntityGraphAttachment attachment = entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
             if (attachment == null || attachment.getBoundGraphs().isEmpty()) {
-                BlueprintRuntime.INSTANCE.clearEntityInventoryTracking(entity);
                 return;
             }
-            attachment.attachOwner(entity);
-            BlueprintRuntime.INSTANCE.markActive(entity);
-
             long currentTick = level.getGameTime();
-            BlueprintRuntime.INSTANCE.tickEntityAreas(level, entity, attachment, currentTick);
-            BlueprintRuntime.INSTANCE.dispatchBoundEntityEvent(level, entity, OnEntityTick.TYPE_ID, EventPayload.of(
-                    StandardPorts.ENTITY.getId(), entity
-            ).values());
-            BlueprintRuntime.INSTANCE.tickEntityInventory(level, entity,
-                    !BlueprintRuntime.INSTANCE.getEntityGraphsForEvent(entity, OnEntityGainItem.TYPE_ID).isEmpty());
+            if (BlueprintRuntime.INSTANCE.hasEntityEventSubscription(entity, OnAreaEvent.TYPE_ID)) {
+                BlueprintRuntime.INSTANCE.tickEntityAreas(level, entity, attachment, currentTick);
+            }
+            if (BlueprintRuntime.INSTANCE.hasEntityEventSubscription(entity, OnEntityTick.TYPE_ID)) {
+                BlueprintRuntime.INSTANCE.dispatchBoundEntityEvent(level, entity, OnEntityTick.TYPE_ID, EventPayload.of(
+                        StandardPorts.ENTITY.getId(), entity
+                ).values());
+            }
+            if (BlueprintRuntime.INSTANCE.hasEntityEventSubscription(entity, OnEntityGainItem.TYPE_ID)) {
+                BlueprintRuntime.INSTANCE.tickEntityInventory(level, entity, true);
+            }
         });
 
         bus.addListener((BabyEntitySpawnEvent event) -> {

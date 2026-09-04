@@ -145,23 +145,7 @@ public class RegistryDataManager {
     }
 
     public static List<String> getDimensions(RegistryAccess access) {
-        List<String> dims = new java.util.ArrayList<>();
-
-        try {
-            if (net.minecraft.client.Minecraft.getInstance().getConnection() != null) {
-                List<String> dynamicDims = net.minecraft.client.Minecraft.getInstance().getConnection().levels()
-                        .stream()
-                        .map(key -> key.identifier().toString())
-                        .sorted()
-                        .toList();
-
-                dims.addAll(dynamicDims);
-            }
-        } catch (NoClassDefFoundError | Exception e) {
-            System.err.println("[RegistryDataManager] Fail to get Dimensions from client: " + e.getMessage());
-        }
-
-        return dims;
+        return getDynamicRegistryKeys(access, Registries.DIMENSION);
     }
 
     @Nullable

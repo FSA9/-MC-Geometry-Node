@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.graph.runtime.display;
+package com.mine.geometry_node.core.engine.system.display;
 
 import com.mine.geometry_node.core.utils.nbt.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;

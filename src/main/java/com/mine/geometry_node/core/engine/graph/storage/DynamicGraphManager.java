@@ -7,6 +7,8 @@ import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
@@ -79,9 +81,11 @@ public class DynamicGraphManager {
         Files.move(tempPath, filePath, StandardCopyOption.REPLACE_EXISTING);
 
         try {
-            CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(normalizedId, jsonContent);
+            JsonObject document = JsonParser.parseString(jsonContent).getAsJsonObject();
+            CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(normalizedId, document);
             GraphAssetDescriptor descriptor = new GraphAssetDescriptor(normalizedId,
-                    GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact);
+                    GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact,
+                    GraphAssetFingerprint.of(document));
             dynamicGraphCache.put(normalizedId, descriptor);
             invalidDynamicGraphIds.remove(normalizedId);
             GraphAssetLifecycleIndex.INSTANCE.replaceDynamicGraphs(server, dynamicGraphCache,
@@ -125,11 +129,12 @@ public class DynamicGraphManager {
                         .forEach(file -> {
                             try {
                                 String graphId = GraphPathMapper.pathToId(folder, file);
-                                try (BufferedReader reader = Files.newBufferedReader(
-                                        file, StandardCharsets.UTF_8)) {
-                                    CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(graphId, reader);
+                                try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+                                    JsonObject document = JsonParser.parseReader(reader).getAsJsonObject();
+                                    CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(graphId, document);
                                     dynamicGraphCache.put(graphId, new GraphAssetDescriptor(graphId,
-                                            GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact));
+                                            GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact,
+                                            GraphAssetFingerprint.of(document)));
                                 }
                             } catch (Exception e) {
                                 try {

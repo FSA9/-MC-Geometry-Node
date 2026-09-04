@@ -1,10 +1,8 @@
 package com.mine.geometry_node.core.engine.system.asset;
 
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.mine.geometry_node.core.engine.graph.GraphType;
-import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
 import com.mine.geometry_node.core.engine.system.visual.image.ImageAssetFormats;
 
@@ -148,12 +146,7 @@ public final class AssetTypeCatalog {
 
     private static String inspectGraphType(JsonElement parsed) {
         if (parsed == null || !parsed.isJsonObject()) return "";
-        JsonObject root = parsed.getAsJsonObject();
-        JsonElement kind = root.get("graph_kind");
-        if (kind == null || !kind.isJsonPrimitive() || !kind.getAsJsonPrimitive().isString()) return "";
-
-        String typeId = GraphType.normalizeId(kind.getAsString());
-        return GraphTypeRegistry.INSTANCE.get(typeId) != null ? typeId : "";
+        return GraphDocumentType.requireId(parsed.getAsJsonObject());
     }
 
     private static String normalizePath(String path) {

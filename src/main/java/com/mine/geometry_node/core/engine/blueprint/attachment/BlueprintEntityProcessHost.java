@@ -17,7 +17,7 @@ import java.util.Collection;
 
 /** Owns blueprint process state attached to one entity. */
 public final class BlueprintEntityProcessHost {
-    private final GraphContainer container = new GraphContainer(
+    private final BlueprintProcessContainer container = new BlueprintProcessContainer(
             () -> {}, this::onScheduleChanged, this::onProcessRemoved);
     private WeakReference<Entity> owner = new WeakReference<>(null);
 

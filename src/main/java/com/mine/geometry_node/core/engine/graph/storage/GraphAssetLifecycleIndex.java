@@ -25,16 +25,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Event-driven effective graph view. Dynamic assets shadow packaged assets, including a
- * dynamically stored document that currently fails compilation. Dependency validation and
- * reverse dependency traversal are centralized here so runtimes do not need cache scans.
+ * Event-driven runtime view of graphs published by the server graph repository.
+ * Dependency validation and reverse dependency traversal are centralized here so runtimes
+ * do not need cache scans.
  */
 public final class GraphAssetLifecycleIndex {
     public static final GraphAssetLifecycleIndex INSTANCE = new GraphAssetLifecycleIndex();
 
     private final Map<GraphKind, CopyOnWriteArrayList<ChangeListener>> listeners =
             new ConcurrentHashMap<>();
-    private Map<String, GraphAssetDescriptor> packaged = Map.of();
     private Map<String, GraphAssetDescriptor> dynamic = Map.of();
     private Set<String> invalidDynamicIds = Set.of();
     private Snapshot snapshot = Snapshot.EMPTY;
@@ -62,15 +61,10 @@ public final class GraphAssetLifecycleIndex {
                 .addIfAbsent(listener);
     }
 
-    public void replacePackagedGraphs(@Nullable MinecraftServer server,
-                                      Map<String, GraphAssetDescriptor> graphs) {
-        update(server, graphs, null, null);
-    }
-
     public void replaceDynamicGraphs(MinecraftServer server,
                                      Map<String, GraphAssetDescriptor> graphs,
                                      Set<String> invalidIds) {
-        update(server, null, graphs, invalidIds);
+        update(server, graphs, invalidIds);
     }
 
     @Nullable
@@ -121,18 +115,14 @@ public final class GraphAssetLifecycleIndex {
     }
 
     private void update(@Nullable MinecraftServer server,
-                        @Nullable Map<String, GraphAssetDescriptor> packagedReplacement,
-                        @Nullable Map<String, GraphAssetDescriptor> dynamicReplacement,
-                        @Nullable Set<String> invalidDynamicReplacement) {
+                        Map<String, GraphAssetDescriptor> dynamicReplacement,
+                        Set<String> invalidDynamicReplacement) {
         Map<GraphKind, Change> changes;
         synchronized (this) {
             Snapshot previous = snapshot;
-            if (packagedReplacement != null) packaged = canonicalizeDescriptors(packagedReplacement);
-            if (dynamicReplacement != null) dynamic = canonicalizeDescriptors(dynamicReplacement);
-            if (invalidDynamicReplacement != null) {
-                invalidDynamicIds = canonicalizeIds(invalidDynamicReplacement);
-            }
-            snapshot = buildSnapshot(packaged, dynamic, invalidDynamicIds);
+            dynamic = canonicalizeDescriptors(dynamicReplacement);
+            invalidDynamicIds = canonicalizeIds(invalidDynamicReplacement);
+            snapshot = buildSnapshot(dynamic, invalidDynamicIds);
             changes = calculateChanges(server, previous, snapshot);
         }
         changes.forEach(this::notifyListeners);
@@ -169,19 +159,12 @@ public final class GraphAssetLifecycleIndex {
         }
     }
 
-    private static Snapshot buildSnapshot(Map<String, GraphAssetDescriptor> packaged,
-                                          Map<String, GraphAssetDescriptor> dynamic,
+    private static Snapshot buildSnapshot(Map<String, GraphAssetDescriptor> dynamic,
                                           Set<String> invalidDynamicIds) {
         Map<String, GraphAssetDescriptor> selected = new LinkedHashMap<>();
-        Set<String> allIds = new TreeSet<>(packaged.keySet());
-        allIds.addAll(dynamic.keySet());
-        allIds.addAll(invalidDynamicIds);
-        for (String graphId : allIds) {
-            if (invalidDynamicIds.contains(graphId)) continue;
-            GraphAssetDescriptor descriptor = dynamic.get(graphId);
-            if (descriptor == null) descriptor = packaged.get(graphId);
-            if (descriptor != null) selected.put(graphId, descriptor);
-        }
+        dynamic.forEach((graphId, descriptor) -> {
+            if (!invalidDynamicIds.contains(graphId)) selected.put(graphId, descriptor);
+        });
 
         Map<String, Set<String>> reverse = new HashMap<>();
         selected.forEach((graphId, descriptor) -> dependenciesOf(descriptor.artifact())
@@ -247,8 +230,8 @@ public final class GraphAssetLifecycleIndex {
         ids.addAll(previous.diagnostics.keySet());
         ids.addAll(current.diagnostics.keySet());
         for (String graphId : ids) {
-            if (previous.effective.get(graphId) != current.effective.get(graphId)
-                    || previous.selected.get(graphId) != current.selected.get(graphId)
+            if (!sameContent(previous.effective.get(graphId), current.effective.get(graphId))
+                    || !sameContent(previous.selected.get(graphId), current.selected.get(graphId))
                     || !previous.diagnostics.getOrDefault(graphId, List.of())
                     .equals(current.diagnostics.getOrDefault(graphId, List.of()))) {
                 changedAssets.add(graphId);
@@ -276,6 +259,11 @@ public final class GraphAssetLifecycleIndex {
         affectedByKind.forEach((kind, affectedIds) -> result.put(kind, new Change(server, kind,
                 changedByKind.getOrDefault(kind, Set.of()), affectedIds)));
         return result;
+    }
+
+    private static boolean sameContent(@Nullable GraphAssetDescriptor first,
+                                       @Nullable GraphAssetDescriptor second) {
+        return first == second || first != null && first.hasSameContent(second);
     }
 
     private static Set<GraphKind> kindsOf(String graphId, Snapshot previous, Snapshot current) {

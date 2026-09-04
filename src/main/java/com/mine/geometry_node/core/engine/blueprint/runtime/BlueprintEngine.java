@@ -116,7 +116,7 @@ public final class BlueprintEngine {
         ServerState serverState = state(level);
 
         // 处理全局图
-        refreshGlobalSubscriptions(level);
+        ensureGlobalSubscriptions(level);
         LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
         GlobalGraphStorage globalStorage = GlobalGraphStorage.get(level.getServer().overworld());
 
@@ -344,13 +344,16 @@ public final class BlueprintEngine {
     }
 
     public Set<String> getGlobalGraphsForEvent(@NotNull ServerLevel level, String eventType) {
-        refreshGlobalSubscriptions(level);
+        ensureGlobalSubscriptions(level);
         return state(level).graphSubscriptions.globalGraphsFor(eventType);
     }
 
     public Set<String> getEntityGraphsForEvent(@NotNull Entity entity, String eventType) {
-        registerEntityListeners(entity);
         return state(entity).graphSubscriptions.entityGraphsFor(entity, eventType);
+    }
+
+    public boolean hasEntityEventSubscription(@NotNull Entity entity, String eventType) {
+        return state(entity).graphSubscriptions.hasEntitySubscriptions(entity, eventType);
     }
 
     public void dispatchBoundEntityEvent(@NotNull ServerLevel level,
@@ -400,12 +403,13 @@ public final class BlueprintEngine {
     }
 
     private List<EventSubscription> getEntitySubscriptionsForEvent(@NotNull Entity entity, String eventType) {
-        registerEntityListeners(entity);
         return state(entity).graphSubscriptions.entitySubscriptionsFor(entity, eventType);
     }
 
-    private void refreshGlobalSubscriptions(@NotNull ServerLevel level) {
-        GraphSubscriptionIndex graphSubscriptions = state(level).graphSubscriptions;
+    private void ensureGlobalSubscriptions(@NotNull ServerLevel level) {
+        ServerState state = state(level);
+        if (state.globalSubscriptionsInitialized) return;
+        GraphSubscriptionIndex graphSubscriptions = state.graphSubscriptions;
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         for (String graphId : storage.getGraphs()) {
             BlueprintPlan index = getGraphIndex(graphId);
@@ -413,6 +417,7 @@ public final class BlueprintEngine {
                 graphSubscriptions.registerGlobalGraph(graphId, index);
             }
         }
+        state.globalSubscriptionsInitialized = true;
     }
 
     // ==========================================
@@ -548,6 +553,9 @@ public final class BlueprintEngine {
         for (String graphId : attachment.getBoundGraphs()) {
             registerEntityForGraph(entity, graphId);
         }
+        if (state(entity).graphSubscriptions.hasEntitySubscriptions(entity, OnEntityGainItem.TYPE_ID)) {
+            inventoryGainTracker.beginTracking(entity);
+        }
     }
 
     private void registerEntityForGraph(Entity entity, String graphId) {
@@ -591,7 +599,7 @@ public final class BlueprintEngine {
         Map<String, Object> eventPayload = snapshotEventData(eventData);
         ServerState serverState = state(level);
 
-        refreshGlobalSubscriptions(level);
+        ensureGlobalSubscriptions(level);
         GlobalGraphStorage globalStorage = GlobalGraphStorage.get(level.getServer().overworld());
         for (EventSubscription subscription : serverState.graphSubscriptions.globalSubscriptionsFor(eventNodeId)) {
             if (!globalStorage.getGraphs().contains(subscription.graphId())
@@ -654,6 +662,13 @@ public final class BlueprintEngine {
                 }
             }
         }
+        for (Entity entity : registeredEntities) {
+            if (graphSubscriptions.hasEntitySubscriptions(entity, OnEntityGainItem.TYPE_ID)) {
+                inventoryGainTracker.beginTracking(entity);
+            } else {
+                inventoryGainTracker.clear(entity);
+            }
+        }
         DebugRendererSessionManager.markDirty();
     }
 
@@ -693,5 +708,6 @@ public final class BlueprintEngine {
     private static final class ServerState {
         private final Map<String, Map<Entity, Set<String>>> eventSubscribers = new HashMap<>();
         private final GraphSubscriptionIndex graphSubscriptions = new GraphSubscriptionIndex();
+        private boolean globalSubscriptionsInitialized;
     }
 }

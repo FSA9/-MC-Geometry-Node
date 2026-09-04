@@ -59,6 +59,9 @@ public class TypeConverter {
     @Nullable
     public static Object convertForPort(@Nullable Object value, PortType type,
                                         @Nullable GraphDataContext context) {
+        if (value instanceof DynamicData dynamic) {
+            value = dynamic.value();
+        }
         Object converted = PortConversionRegistry.convert(value, type, context);
         return converted;
     }

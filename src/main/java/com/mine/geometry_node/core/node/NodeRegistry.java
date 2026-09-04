@@ -25,7 +25,6 @@ public class NodeRegistry {
     private final Map<String, NodeDef> defaultDefCache = new LinkedHashMap<>();
     private boolean initialized = false;
     private boolean initializing = false;
-    private String activeAddonId = "legacy";
 
     // 前端根目录
     public final NodeCategory ROOT = new NodeCategory("geometry_node.menu.root");
@@ -64,17 +63,7 @@ public class NodeRegistry {
                 try {
                     plugin.registerMarkerTypes(new PluginMarkerRegistrationContext(addonId));
 
-                    PluginNodeRegistrationContext nodeContext = new PluginNodeRegistrationContext(addonId);
-                    plugin.registerNodes(nodeContext);
-                    if (nodeContext.registeredCount() == 0) {
-                        String previousAddonId = activeAddonId;
-                        activeAddonId = addonId;
-                        try {
-                            plugin.registerNodes(this);
-                        } finally {
-                            activeAddonId = previousAddonId;
-                        }
-                    }
+                    plugin.registerNodes(new PluginNodeRegistrationContext(addonId));
                 } catch (Exception e) {
                     System.err.println("[NodeRegistry] Plugin registration failed: " + addonId + " (" + plugin.getClass().getName() + ")");
                     e.printStackTrace();
@@ -89,11 +78,7 @@ public class NodeRegistry {
         }
     }
 
-    public void register(String path, BaseNode node) {
-        register(path, node, activeAddonId);
-    }
-
-    public void register(String path, BaseNode node, String addonId) {
+    private void register(String path, BaseNode node, String addonId) {
         try {
             NodeCategory category = getOrCreateCategory(path);
             registerNode(category, node, addonId);
@@ -102,7 +87,7 @@ public class NodeRegistry {
         }
     }
 
-    public NodeCategory getOrCreateCategory(String path) {
+    private NodeCategory getOrCreateCategory(String path) {
         if (path == null || path.trim().isEmpty()) {
             return ROOT;
         }
@@ -125,19 +110,6 @@ public class NodeRegistry {
         }
 
         return current;
-    }
-
-    public void register(NodeCategory category, BaseNode node) {
-        register(category, node, activeAddonId);
-    }
-
-    public void register(NodeCategory category, BaseNode node, String addonId) {
-        try {
-            registerNode(category, node, addonId);
-        } catch (Exception | LinkageError error) {
-            String path = category != null ? category.translationKey : "<null-category>";
-            logNodeRegistrationFailure(path, node, addonId, error);
-        }
     }
 
     private synchronized void registerNode(NodeCategory category, BaseNode node, String addonId) {
@@ -205,7 +177,7 @@ public class NodeRegistry {
 
         BaseNode b = registry.get(data.type);
         if (b != null) {
-            return b.getDefinition(data);
+            return b.hasDynamicDefinition() ? b.getDefinition(data) : defaultDefCache.get(data.type);
         }
         NodeDef defaultDef = getDefaultDefinition(data.type);
         return defaultDef != null ? defaultDef : MissingNodeDefinitions.resolve(data);
@@ -241,13 +213,11 @@ public class NodeRegistry {
     }
 
     private static boolean isBuiltinAddon(String addonId) {
-        return "geometry_node".equals(addonId) || "legacy".equals(addonId);
+        return "geometry_node".equals(addonId);
     }
 
     private final class PluginNodeRegistrationContext implements NodeRegistrationContext {
         private final String addonId;
-        private int registeredCount = 0;
-
         private PluginNodeRegistrationContext(String addonId) {
             this.addonId = addonId;
         }
@@ -260,11 +230,6 @@ public class NodeRegistry {
         @Override
         public void registerNode(String menuPath, BaseNode node) {
             NodeRegistry.this.register(menuPath, node, addonId);
-            registeredCount++;
-        }
-
-        private int registeredCount() {
-            return registeredCount;
         }
     }
 

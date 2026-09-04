@@ -66,7 +66,6 @@ public final class BlueprintEventHandler {
         LevelGraphAttachment.get(level).tick(level);
         ForceFieldTickService.INSTANCE.tickLevel(level);
         AreaResourceStore.INSTANCE.tickDebug(level);
-        ForceFieldResourceStore.INSTANCE.tickDebug(level);
         areaTriggers.tickLevel(level);
         // 2. 驱动到期实体的局部蓝图
         tickScheduledEntities(level);

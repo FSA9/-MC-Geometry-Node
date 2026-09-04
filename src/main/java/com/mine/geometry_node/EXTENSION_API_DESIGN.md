@@ -65,17 +65,13 @@ public interface GeometryNodePlugin {
 
     default void registerNodes(NodeRegistrationContext registry) {
     }
-
-    @Deprecated
-    default void registerNodes(NodeRegistry registry) {
-    }
 }
 ```
 
 说明：
 
-- 新 Addon 使用 `registerNodes(NodeRegistrationContext)`。
-- 旧 Addon 仍可使用 `registerNodes(NodeRegistry)`。
+- Addon 使用唯一入口 `registerNodes(NodeRegistrationContext)`。
+- Addon 不直接依赖或访问内部 `NodeRegistry`。
 - `addonId()` 应返回 Mod ID，例如 `create_geometry`。
 - 内置插件 `BuiltinNodesPlugin` 返回 `geometry_node`。
 
@@ -85,7 +81,7 @@ public interface GeometryNodePlugin {
 - 幂等初始化，避免重复注册。
 - 隔离坏 provider，避免一个坏 Addon 阻断后续 Addon。
 - 记录插件来源。
-- 先调用新节点注册入口；如果没有注册节点，再回退旧入口。
+- 只调用公开的 `NodeRegistrationContext` 节点注册入口。
 
 ## 节点注册 API
 
@@ -475,14 +471,13 @@ Addon 和核心中的普通事件统一使用 `GeometryNodeEvents`，不直接�
 
 - `api/GeometryNodePlugin.java`
   - 新增 `addonId()`
-  - 新增标准 `registerNodes(NodeRegistrationContext)`
-  - 保留旧 `registerNodes(NodeRegistry)`
+  - 使用唯一的 `registerNodes(NodeRegistrationContext)`
 
 - `core/node/NodeRegistry.java`
   - `init()` 幂等
   - ServiceLoader provider 错误隔离
   - 插件来源追踪
-  - 新旧注册入口兼容
+  - 只接受 `NodeRegistrationContext` 注册入口
   - 节点命名空间约束
 
 - `core/node/BuiltinNodesPlugin.java`
@@ -506,13 +501,12 @@ Addon 和核心中的普通事件统一使用 `GeometryNodeEvents`，不直接�
 应验证：
 
 1. 内置节点仍能注册。
-2. 旧 `GeometryNodePlugin.registerNodes(NodeRegistry)` 写法仍能注册节点。
-3. 新 `registerNodes(NodeRegistrationContext)` 写法能注册节点。
-4. 第三方裸 ID 会被拒绝，且只隔离该节点的注册失败。
-5. 只有 `NodeType.EVENT` 节点会进入运行时订阅索引。
-6. Addon 可通过 `GeometryNodeEvents.dispatch(...)` 派发事件。
-7. Addon 不需要引用 `BlueprintProcess.ExecutionThread`。
-8. 玩家按键事件仍能触发 `OnPlayerKeyEvent`。
+2. `registerNodes(NodeRegistrationContext)` 写法能注册节点。
+3. 第三方裸 ID 会被拒绝，且只隔离该节点的注册失败。
+4. 只有 `NodeType.EVENT` 节点会进入运行时订阅索引。
+5. Addon 可通过 `GeometryNodeEvents.dispatch(...)` 派发事件。
+6. Addon 不需要引用 `BlueprintProcess.ExecutionThread`。
+7. 玩家按键事件仍能触发 `OnPlayerKeyEvent`。
 
 ## 后续建议
 

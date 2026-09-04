@@ -40,6 +40,15 @@ public final class PlayerInputKeys {
         return ALL_KEYS.indexOf(keyId);
     }
 
+    public static int maskOf(String keyId) {
+        int index = indexOf(keyId);
+        return index >= 0 ? 1 << index : 0;
+    }
+
+    public static int allMask() {
+        return (1 << trackedCount()) - 1;
+    }
+
     public static String skillId(int zeroBasedIndex) {
         if (zeroBasedIndex < 0 || zeroBasedIndex >= SKILL_COUNT) {
             throw new IndexOutOfBoundsException("Invalid skill index: " + zeroBasedIndex);

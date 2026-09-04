@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -52,7 +53,8 @@ public final class SetDataLibraryEntry extends BaseNode {
         if (type == null) type = DEFAULT_TYPE;
         String path = getInput(context, StandardPorts.PATH.getId(), String.class);
         String key = getInput(context, StandardPorts.KEY.getId(), String.class);
-        Object value = getRawInput(context, StandardPorts.ANY_VALUE.getId());
+        Object value = TypeConverter.convertForPort(
+                getRawInput(context, StandardPorts.ANY_VALUE.getId()), type, context);
         try {
             RemoteDataLibraryService.INSTANCE.upsert(
                     context.getLevel().getServer(), path == null ? "" : path,

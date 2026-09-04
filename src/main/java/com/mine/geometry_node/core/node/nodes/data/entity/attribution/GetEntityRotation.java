@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.data.entity.attribution;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
-import com.mine.geometry_node.core.engine.graph.runtime.display.DisplayTransformController;
+import com.mine.geometry_node.core.engine.system.display.DisplayTransformController;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;

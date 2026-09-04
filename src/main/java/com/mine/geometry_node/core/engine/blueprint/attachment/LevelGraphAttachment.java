@@ -20,7 +20,7 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * [世界级运行容器 - 组合版]
- * 继承 SavedData 实现持久化，内部委托 GraphContainer 执行具体逻辑。
+ * 继承 SavedData 实现持久化，内部委托 BlueprintProcessContainer 执行具体逻辑。
  */
 public class LevelGraphAttachment extends SavedData {
 
@@ -31,7 +31,7 @@ public class LevelGraphAttachment extends SavedData {
     );
 
     @Nullable private ServerLevel level;
-    private final GraphContainer container = new GraphContainer(
+    private final BlueprintProcessContainer container = new BlueprintProcessContainer(
             this::setDirty, () -> {}, this::onProcessRemoved);
 
     public static LevelGraphAttachment get(ServerLevel level) {

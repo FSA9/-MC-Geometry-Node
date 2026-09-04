@@ -18,7 +18,7 @@ import java.util.*;
 
 /**
  * [实体附加层 - 组合版]
- * 作为实体的背包，持有绑定关系，并委托 GraphContainer 执行具体逻辑。
+ * 作为实体的背包，持有绑定关系，并委托 BlueprintProcessContainer 执行具体逻辑。
  */
 public class EntityGraphAttachment {
 

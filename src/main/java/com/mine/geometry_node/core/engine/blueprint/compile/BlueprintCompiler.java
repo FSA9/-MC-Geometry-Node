@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
+import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
@@ -65,13 +66,8 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
 
     @SuppressWarnings("unchecked")
     private static BlueprintPlan compileDocument(GraphCompileContext context, JsonObject root) {
-        String graphTypeId = root.has("graph_kind")
-                ? GraphType.normalizeId(root.get("graph_kind").getAsString())
-                : GraphTypeRegistry.BLUEPRINT.id();
-        if (graphTypeId.isEmpty()) {
-            graphTypeId = GraphTypeRegistry.BLUEPRINT.id();
-        }
-        GraphType graphType = GraphTypeRegistry.INSTANCE.require(graphTypeId);
+        GraphType graphType = GraphDocumentType.require(root);
+        String graphTypeId = graphType.id();
         if (graphType.runtimeKind() != GraphKind.BLUEPRINT) {
             throw new IllegalArgumentException(
                     "Blueprint compiler cannot compile graph type: " + graphType.id());

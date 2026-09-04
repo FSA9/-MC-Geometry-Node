@@ -2,9 +2,9 @@ package com.mine.geometry_node.core.engine.graph.compile;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.GraphType;
-import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 
 import java.io.Reader;
@@ -68,14 +68,7 @@ public final class GraphCompilationService {
 
     private CompiledGraph compile(GraphCompileContext context, JsonObject document) {
         Objects.requireNonNull(document, "document");
-        String rawType = document.has("graph_kind")
-                ? document.get("graph_kind").getAsString()
-                : GraphTypeRegistry.BLUEPRINT.id();
-        String typeId = GraphType.normalizeId(rawType);
-        if (typeId.isEmpty()) {
-            typeId = GraphTypeRegistry.BLUEPRINT.id();
-        }
-        GraphType type = GraphTypeRegistry.INSTANCE.require(typeId);
+        GraphType type = GraphDocumentType.require(document);
         GraphCompiler<? extends CompiledGraph> compiler;
         synchronized (this) {
             compiler = compilers.get(type.runtimeKind());

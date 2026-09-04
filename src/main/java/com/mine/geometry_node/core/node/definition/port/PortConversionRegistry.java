@@ -67,7 +67,7 @@ public final class PortConversionRegistry {
                     && (target == PortType.INTEGER || target == PortType.LONG
                     || target == PortType.FLOAT)) {
                 return switch (target) {
-                    case INTEGER -> number.intValue();
+                    case INTEGER -> roundToInteger(number);
                     case LONG -> number.longValue();
                     case FLOAT -> number.floatValue();
                     default -> throw new IllegalStateException("Unexpected numeric port: " + target);
@@ -188,7 +188,7 @@ public final class PortConversionRegistry {
         }
         if (!(value instanceof Number number)) return null;
         return switch (target) {
-            case INTEGER -> number.intValue();
+            case INTEGER -> roundToInteger(number);
             case LONG -> number.longValue();
             case FLOAT -> number.floatValue();
             case BOOLEAN -> number.doubleValue() != 0.0d;
@@ -201,7 +201,7 @@ public final class PortConversionRegistry {
         try {
             double number = Double.parseDouble(value);
             return switch (target) {
-                case INTEGER -> (int) number;
+                case INTEGER -> roundToInteger(number);
                 case LONG -> (long) number;
                 case FLOAT -> (float) number;
                 default -> null;
@@ -216,6 +216,13 @@ public final class PortConversionRegistry {
         if ("true".equalsIgnoreCase(value)) return true;
         if ("false".equalsIgnoreCase(value)) return false;
         return null;
+    }
+
+    private static int roundToInteger(Number value) {
+        long rounded = Math.round(value.doubleValue());
+        if (rounded < Integer.MIN_VALUE) return Integer.MIN_VALUE;
+        if (rounded > Integer.MAX_VALUE) return Integer.MAX_VALUE;
+        return (int) rounded;
     }
 
     private static Vec3 scalarVector(Object value, @Nullable GraphDataContext context) {

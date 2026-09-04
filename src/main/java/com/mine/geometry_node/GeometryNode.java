@@ -10,7 +10,6 @@ import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileControlAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.graph.storage.GraphResourceManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
 import com.mine.geometry_node.core.engine.runtime.ServerEngineDriver;
@@ -189,12 +188,6 @@ public class GeometryNode {
         SchematicPlacementDebugSync.register();
         SchematicProjectionService.INSTANCE.init();
 
-        // 注册蓝图资源管理器
-        ReloadListenerRegistry.register(
-                PackType.SERVER_DATA,
-                GraphResourceManager.getInstance(),
-                Identifier.fromNamespaceAndPath(MODID, "graphs")
-        );
         ReloadListenerRegistry.register(
                 PackType.SERVER_DATA,
                 MultiblockStructureManager.getInstance(),

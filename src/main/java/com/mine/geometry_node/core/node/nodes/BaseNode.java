@@ -23,10 +23,26 @@ import java.util.Map;
  */
 public abstract class BaseNode {
 
+    private static final ClassValue<Boolean> DYNAMIC_DEFINITION_TYPES = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            try {
+                return type.getMethod("getDefinition", NodeData.class).getDeclaringClass() != BaseNode.class;
+            } catch (NoSuchMethodException e) {
+                throw new IllegalStateException("Node definition contract is unavailable for " + type.getName(), e);
+            }
+        }
+    };
+
     public abstract NodeDef getDefaultDefinition();
 
     public NodeDef getDefinition(NodeData instanceData) {
         return getDefaultDefinition();
+    }
+
+    /** A node is dynamic precisely when it overrides the instance-definition entry point. */
+    public final boolean hasDynamicDefinition() {
+        return DYNAMIC_DEFINITION_TYPES.get(getClass());
     }
 
     public final String getTypeId() {
@@ -70,7 +86,7 @@ public abstract class BaseNode {
 
     /**
      * Converts a list input. Input isolation is owned by the graph data context;
-     * null slots retain their indexes and rejected values are omitted.
+     * null and rejected slots retain their indexes.
      */
     protected <T> List<T> getInputList(GraphDataContext ctx, String portName, Class<T> elementType) {
         Object raw = getRawInput(ctx, portName);
@@ -90,12 +106,13 @@ public abstract class BaseNode {
                 if (converted != null) {
                     result.add(converted);
                 } else {
+                    result.add(null);
                     rejectedCount++;
                 }
             }
             if (rejectedCount > 0) {
-                System.err.println("[BaseNode] Error: " + portName + " skipped " + rejectedCount
-                        + " value(s) that cannot convert to " + elementType.getSimpleName());
+                System.err.println("[BaseNode] Error: " + portName + " replaced " + rejectedCount
+                        + " unconvertible value(s) with null for " + elementType.getSimpleName());
             }
             return result;
         }
