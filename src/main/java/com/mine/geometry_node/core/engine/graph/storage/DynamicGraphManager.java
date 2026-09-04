@@ -1,11 +1,12 @@
 package com.mine.geometry_node.core.engine.graph.storage;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
+import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
+import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.server.MinecraftServer;
@@ -43,16 +44,22 @@ public final class DynamicGraphManager {
             try (java.util.stream.Stream<Path> walk = java.nio.file.Files.walk(folder)) {
                 walk.filter(p -> java.nio.file.Files.isRegularFile(p) && !java.nio.file.Files.isSymbolicLink(p))
                         .filter(p -> p.toString().endsWith(".json"))
-                        .filter(p -> AssetTypeCatalog.GRAPH_TYPE_ID.equals(
-                                AssetTypeCatalog.inspect(p).typeId()))
                         .forEach(file -> {
                             try {
                                 String graphId = GraphPathMapper.pathToId(folder, file);
                                 try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                                    JsonObject document = JsonParser.parseReader(reader).getAsJsonObject();
+                                    JsonElement parsed = JsonParser.parseReader(reader);
+                                    if (!parsed.isJsonObject()) return;
+                                    JsonObject document = parsed.getAsJsonObject();
+                                    GraphType type;
+                                    try {
+                                        type = GraphDocumentType.require(document);
+                                    } catch (RuntimeException ignored) {
+                                        return;
+                                    }
                                     CompiledGraph artifact = GraphCompilationService.INSTANCE.compile(graphId, document);
                                     loadedGraphs.put(graphId, new GraphAssetDescriptor(graphId,
-                                            GraphTypeRegistry.INSTANCE.require(artifact.graphTypeId()), artifact,
+                                            type, artifact,
                                             GraphAssetFingerprint.of(document)));
                                 }
                             } catch (Exception e) {
@@ -63,7 +70,6 @@ public final class DynamicGraphManager {
             publishDynamicSnapshot(server, loadedGraphs);
             GeometryNode.LOGGER.info("[DynamicGraphManager] Total load {} graphs。", loadedGraphs.size());
         } catch (Exception e) {
-            publishDynamicSnapshot(server, loadedGraphs);
             GeometryNode.LOGGER.error("[DynamicGraphManager] Load content failed! ", e);
         }
     }

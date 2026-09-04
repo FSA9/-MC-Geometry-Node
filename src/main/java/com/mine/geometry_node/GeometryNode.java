@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileControlAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceIndex;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
@@ -177,6 +178,7 @@ public class GeometryNode {
 
         // 初始化图运行时注册表
         ServerEngineDriver.init();
+        ServerEngineRegistry.INSTANCE.register(GraphAssetLifecycleIndex.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BehaviorTreeRuntime.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);

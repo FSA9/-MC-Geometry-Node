@@ -66,6 +66,16 @@ public abstract class BaseNode {
 
     @Nullable
     protected Object getRawInput(GraphDataContext ctx, String portName) {
+        Object value = getTransportInput(ctx, portName);
+        return value instanceof DynamicData dynamic ? dynamic.value() : value;
+    }
+
+    /**
+     * Reads the internal graph transport value, including expression metadata.
+     * Ordinary nodes must use {@link #getRawInput(GraphDataContext, String)}.
+     */
+    @Nullable
+    protected final Object getTransportInput(GraphDataContext ctx, String portName) {
         return ctx.resolveInput(portName).value();
     }
 
@@ -76,7 +86,7 @@ public abstract class BaseNode {
 
     @Nullable
     protected ExpressionData getInputExpression(GraphDataContext ctx, String portName) {
-        Object raw = getRawInput(ctx, portName);
+        Object raw = getTransportInput(ctx, portName);
         return raw instanceof DynamicData dynamic ? dynamic.expression() : null;
     }
 

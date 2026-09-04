@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.util;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 
 public final class ValueTagUtils {
     private ValueTagUtils() {
@@ -114,6 +116,9 @@ public final class ValueTagUtils {
             addBlock(subjects, block);
         } else if (value instanceof Entity entity) {
             addEntityType(subjects, entity.getType());
+        } else if (value instanceof UUID entityId) {
+            Entity entity = GraphEntityReferenceResolver.resolve(entityId, context);
+            if (entity != null) addEntityType(subjects, entity.getType());
         } else if (value instanceof EntityType<?> entityType) {
             addEntityType(subjects, entityType);
         } else if (value instanceof DamageSource source) {

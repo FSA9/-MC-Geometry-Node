@@ -14,14 +14,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Objects;
+import java.util.UUID;
 
-/** Creates detached snapshots of mutable graph values. */
+/**
+ * Creates detached graph-value snapshots. Live entity objects are represented by UUIDs,
+ * including when nested inside lists, maps, sets, or arrays.
+ */
 public final class GraphValueSnapshot {
     private GraphValueSnapshot() {
     }
 
     public static Object snapshot(Object value) {
         if (value == null) return null;
+        if (value instanceof Entity entity) return entity.getUUID();
         if (value instanceof Number number) return GraphNumberNormalizer.normalize(number);
         if (value instanceof ItemStack stack) return stack.copy();
         if (value instanceof RichTextValue richText) return snapshotRichText(richText);
@@ -117,12 +122,15 @@ public final class GraphValueSnapshot {
     /** Compares detached graph values without relying on mutable-object identity. */
     public static boolean equivalent(Object first, Object second) {
         if (first == second) return true;
-        if (first == null || second == null || first.getClass() != second.getClass()) return false;
+        if (first == null || second == null) return false;
+        UUID firstEntityId = entityReferenceId(first);
+        UUID secondEntityId = entityReferenceId(second);
+        if (firstEntityId != null || secondEntityId != null) {
+            return Objects.equals(firstEntityId, secondEntityId);
+        }
+        if (first.getClass() != second.getClass()) return false;
         if (first instanceof ItemStack left && second instanceof ItemStack right) {
             return ItemStack.matches(left, right);
-        }
-        if (first instanceof Entity left && second instanceof Entity right) {
-            return left.getUUID().equals(right.getUUID());
         }
         if (first instanceof List<?> left && second instanceof List<?> right) {
             if (left.size() != right.size()) return false;
@@ -151,5 +159,10 @@ public final class GraphValueSnapshot {
             return true;
         }
         return Objects.equals(first, second);
+    }
+
+    private static UUID entityReferenceId(Object value) {
+        if (value instanceof Entity entity) return entity.getUUID();
+        return value instanceof UUID entityId ? entityId : null;
     }
 }

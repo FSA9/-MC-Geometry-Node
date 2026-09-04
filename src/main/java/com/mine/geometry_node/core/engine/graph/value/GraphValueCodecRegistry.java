@@ -346,7 +346,7 @@ public final class GraphValueCodecRegistry {
     }
 
     @Nullable
-    public static Tag toTag(Object value, HolderLookup.Provider provider) {
+    private static Tag encodeScalar(Object value, HolderLookup.Provider provider) {
         if (value == null) return null;
 
         if (value instanceof Entity entity) {
@@ -362,7 +362,7 @@ public final class GraphValueCodecRegistry {
         if (value instanceof String s) return StringTag.valueOf(s);
         if (value instanceof Boolean b) return ByteTag.valueOf(b);
         if (value instanceof Number number) {
-            return toTag(GraphNumberNormalizer.normalize(number), provider);
+            return encodeScalar(GraphNumberNormalizer.normalize(number), provider);
         }
 
         // Item implementations may use concrete subclasses. This is an explicit adapter to the
@@ -373,45 +373,6 @@ public final class GraphValueCodecRegistry {
             CompoundTag wrapper = new CompoundTag();
             wrapper.putString(TYPE_KEY, itemCodec.getTypeId());
             wrapper.put(DATA_KEY, itemCodec.serialize(item, provider));
-            return wrapper;
-        }
-
-        // List
-        if (value instanceof List<?> list) {
-            CompoundTag wrapper = new CompoundTag();
-            wrapper.putString(TYPE_KEY, LIST_TYPE_ID);
-            ListTag nbtList = new ListTag();
-
-            for (Object item : list) {
-                Tag elementTag = toTag(item, provider);
-                if (item != null && elementTag == null) {
-                    continue;
-                }
-                // Every element is wrapped so ListTag can contain heterogeneous values.
-                CompoundTag elementWrapper = new CompoundTag();
-                elementWrapper.put("v", elementTag != null ? elementTag : nullTag());
-                nbtList.add(elementWrapper);
-            }
-            wrapper.put(DATA_KEY, nbtList);
-            return wrapper;
-        }
-
-        // Dict
-        if (value instanceof Map<?, ?> map) {
-            CompoundTag wrapper = new CompoundTag();
-            wrapper.putString(TYPE_KEY, DICT_TYPE_ID);
-            CompoundTag dataTag = new CompoundTag();
-
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                if (entry.getKey() instanceof String key) {
-                    Tag elementTag = toTag(entry.getValue(), provider);
-                    if (entry.getValue() != null && elementTag == null) {
-                        continue;
-                    }
-                    dataTag.put(key, elementTag != null ? elementTag : nullTag());
-                }
-            }
-            wrapper.put(DATA_KEY, dataTag);
             return wrapper;
         }
 
@@ -433,8 +394,7 @@ public final class GraphValueCodecRegistry {
     }
 
     /**
-     * Encodes a complete value or fails. Unlike the permissive legacy entry point,
-     * this method never drops unsupported list elements, map keys, or map values.
+     * Encodes a complete graph persistence value or fails.
      */
     public static Tag toTagStrict(Object value, HolderLookup.Provider provider) {
         if (value == null) {
@@ -465,7 +425,7 @@ public final class GraphValueCodecRegistry {
             wrapper.put(DATA_KEY, encoded);
             return wrapper;
         }
-        Tag encoded = toTag(value, provider);
+        Tag encoded = encodeScalar(value, provider);
         if (encoded == null) {
             throw new IllegalArgumentException("Unsupported graph value type: "
                     + value.getClass().getName());

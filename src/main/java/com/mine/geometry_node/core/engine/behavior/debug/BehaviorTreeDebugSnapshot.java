@@ -126,7 +126,7 @@ public record BehaviorTreeDebugSnapshot(
 
     private static String valueKind(@Nullable Object value) {
         if (value == null) return "null";
-        if (value instanceof Entity) return "entity";
+        if (value instanceof Entity || value instanceof UUID) return "entity";
         if (value instanceof Map<?, ?>) return "map";
         if (value instanceof List<?>) return "list";
         if (value instanceof Number) return "number";
@@ -147,6 +147,8 @@ public record BehaviorTreeDebugSnapshot(
             appendBounded(output, "null");
         } else if (value instanceof Entity entity) {
             appendBounded(output, entity.getUUID().toString());
+        } else if (value instanceof UUID entityId) {
+            appendBounded(output, entityId.toString());
         } else if (depth >= MAX_VALUE_DEPTH) {
             appendBounded(output, "...");
         } else if (value instanceof Map<?, ?> map) {

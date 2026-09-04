@@ -97,7 +97,8 @@ public final class BehaviorEntityExecutors {
                 if (++inspected > MAX_TARGET_CANDIDATES) {
                     throw new BehaviorBudgetExceededException("Target candidate limit exceeded");
                 }
-                if (!(value instanceof LivingEntity candidate)
+                LivingEntity candidate = context.convertValue(value, LivingEntity.class);
+                if (candidate == null
                         || !validAttackTarget(owner, candidate)) continue;
                 double distance = owner.distanceToSqr(candidate);
                 if (distance < nearestDistance) {

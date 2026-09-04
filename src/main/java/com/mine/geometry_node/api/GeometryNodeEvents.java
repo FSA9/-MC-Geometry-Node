@@ -1,8 +1,10 @@
 package com.mine.geometry_node.api;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -46,8 +48,14 @@ public final class GeometryNodeEvents {
         for (var entry : values.entrySet()) {
             Object value = entry.getValue();
             if (value != null && !GraphValueCodecRegistry.isSupported(value)) {
-                System.err.println("[GeometryNodeEvents] Skip unsupported event payload value: event=" +
-                        eventTypeId + ", input=" + entry.getKey() + ", type=" + value.getClass().getName());
+                String valueType = value.getClass().getName();
+                String diagnosticKey = "event-payload:unsupported:" + eventTypeId + ':'
+                        + entry.getKey() + ':' + valueType;
+                if (RateLimitedLog.acquire(diagnosticKey)) {
+                    GeometryNode.LOGGER.warn(
+                            "Skipping unsupported event payload value: event={}, input={}, type={}",
+                            eventTypeId, entry.getKey(), valueType);
+                }
                 if (sanitized == null) {
                     sanitized = new LinkedHashMap<>(values);
                 }

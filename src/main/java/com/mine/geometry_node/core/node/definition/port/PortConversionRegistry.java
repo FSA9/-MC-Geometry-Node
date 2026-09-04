@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
+import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -58,33 +59,40 @@ public final class PortConversionRegistry {
                                  @Nullable GraphDataContext context) {
         if (value == null || target == null || target.isFlow()) return null;
         if (target == PortType.ANY) return value;
+
+        DynamicData dynamic = value instanceof DynamicData wrapped ? wrapped : null;
+        if (dynamic != null) {
+            value = dynamic.value();
+            if (value == null) return null;
+        }
         if (source == null || source == PortType.ANY) source = PortType.getTypeOf(value);
         if (source == target) {
+            Object converted;
             if (target == PortType.ENTITY && value instanceof UUID entityId) {
-                return resolveEntity(entityId, context);
-            }
-            if (value instanceof Number number
+                converted = resolveEntity(entityId, context);
+            } else if (value instanceof Number number
                     && (target == PortType.INTEGER || target == PortType.LONG
                     || target == PortType.FLOAT)) {
-                return switch (target) {
+                converted = switch (target) {
                     case INTEGER -> roundToInteger(number);
                     case LONG -> number.longValue();
                     case FLOAT -> number.floatValue();
                     default -> throw new IllegalStateException("Unexpected numeric port: " + target);
                 };
-            }
-            if (target == PortType.XYZ && value instanceof BlockPos pos) {
-                return new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-            }
-            if (target == PortType.XYZ && value instanceof List<?>) {
-                return listVector(value, context);
-            }
-            PortType actual = PortType.getTypeOf(value);
-            if (actual != source) {
+            } else if (target == PortType.XYZ && value instanceof BlockPos pos) {
+                converted = new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+            } else if (target == PortType.XYZ && value instanceof List<?>) {
+                converted = listVector(value, context);
+            } else {
+                PortType actual = PortType.getTypeOf(value);
                 Converter canonicalizer = RULES.getOrDefault(actual, Map.of()).get(target);
-                return canonicalizer != null ? canonicalizer.convert(value, context) : null;
+                converted = actual != source
+                        ? (canonicalizer != null ? canonicalizer.convert(value, context) : null)
+                        : value;
             }
-            return value;
+            return dynamic != null && converted != null
+                    ? new DynamicData(converted, dynamic.expression())
+                    : converted;
         }
 
         Converter converter = RULES.getOrDefault(source, Map.of()).get(target);

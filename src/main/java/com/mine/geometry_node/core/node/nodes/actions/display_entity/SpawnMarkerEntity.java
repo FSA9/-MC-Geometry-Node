@@ -1,6 +1,8 @@
 package com.mine.geometry_node.core.node.nodes.actions.display_entity;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueNbtConverter;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
@@ -10,8 +12,8 @@ import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import com.mine.geometry_node.core.utils.nbt.EntityNbtCompat;
-import com.mine.geometry_node.core.utils.nbt.NbtDictConverter; // 引入我们的工具类
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntityType;
@@ -58,11 +60,16 @@ public class SpawnMarkerEntity extends BaseNode {
             }
 
             if (dataDict != null && !dataDict.isEmpty()) {
-                CompoundTag nbt = EntityNbtCompat.saveWithoutId(marker);
-
-                nbt.put("data", NbtDictConverter.dictToNbt(dataDict, level.registryAccess()));
-
-                EntityNbtCompat.load(marker, nbt);
+                try {
+                    CompoundTag nbt = EntityNbtCompat.saveWithoutId(marker);
+                    nbt.put("data", GraphValueNbtConverter.toCompound(dataDict, level.registryAccess()));
+                    EntityNbtCompat.load(marker, nbt);
+                } catch (IllegalArgumentException exception) {
+                    if (RateLimitedLog.acquire(context, "spawn_marker_entity:data")) {
+                        GeometryNode.LOGGER.warn("[SpawnMarkerEntity] Cannot encode marker data: {}",
+                                exception.getMessage());
+                    }
+                }
             }
 
             level.addFreshEntity(marker);

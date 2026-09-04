@@ -155,7 +155,7 @@ public class MathExpression extends BaseNode {
                 evalVars[varIdx] = numVal;
             }
 
-            ExpressionData inputExpr = getInput(context, portId, ExpressionData.class);
+            ExpressionData inputExpr = getInputExpression(context, portId);
 
             if (inputExpr != null && inputExpr.formula() != null && !inputExpr.formula().isEmpty() && !inputExpr.formula().equals("0")) {
                 ASTNode subAst = compiledAst(inputExpr.formula()).node();

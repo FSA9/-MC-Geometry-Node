@@ -14,7 +14,6 @@ import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
-import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityGainItem;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -113,7 +112,6 @@ public final class BlueprintEngine {
      * 逻辑：查找关联的常驻进程 -> 从进程中派发轻量级执行线程
      */
     public void dispatchEvent(@NotNull ServerLevel level, @Nullable Entity target, String eventNodeId, @Nullable Map<String, Object> eventData) {
-        Map<String, Object> eventPayload = snapshotEventData(eventData);
         ServerState serverState = state(level);
 
         // 处理全局图
@@ -123,7 +121,7 @@ public final class BlueprintEngine {
 
         for (EventSubscription subscription : serverState.graphSubscriptions.globalSubscriptionsFor(eventNodeId)) {
             if (!globalStorage.getGraphs().contains(subscription.graphId())) continue;
-            triggerSubscriptionOnProcess(level, target, subscription, eventPayload,
+            triggerSubscriptionOnProcess(level, target, subscription, eventData,
                     id -> levelAttachment.getProcess(id),
                     levelAttachment::addProcess);
         }
@@ -134,7 +132,7 @@ public final class BlueprintEngine {
             if (entityAttachment != null) {
                 for (EventSubscription subscription : getEntitySubscriptionsForEvent(target, eventNodeId)) {
                     if (!entityAttachment.getBoundGraphs().contains(subscription.graphId())) continue;
-                    triggerSubscriptionOnProcess(level, target, subscription, eventPayload,
+                    triggerSubscriptionOnProcess(level, target, subscription, eventData,
                             id -> entityAttachment.getProcess(id),
                             process -> {
                                 entityAttachment.addProcess(process);
@@ -150,7 +148,6 @@ public final class BlueprintEngine {
      */
     public void dispatchCustomEvent(@NotNull ServerLevel currentLevel, String frequency, @Nullable Map<String, Object> eventData) {
         if (frequency == null || frequency.trim().isEmpty()) return;
-        Map<String, Object> eventPayload = snapshotEventData(eventData);
 
         // 全局作用域
         Set<String> globalGraphIds = getGlobalGraphsForEvent(currentLevel, RECEIVE_BLUEPRINT_EVENT_TYPE);
@@ -158,7 +155,7 @@ public final class BlueprintEngine {
             LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
             for (String graphId : globalGraphIds) {
                 if (!GlobalGraphStorage.get(level.getServer().overworld()).getGraphs().contains(graphId)) continue;
-                triggerCustomOnProcess(level, null, graphId, frequency, eventPayload,
+                triggerCustomOnProcess(level, null, graphId, frequency, eventData,
                         id -> levelAttachment.getProcess(id),
                         levelAttachment::addProcess);
             }
@@ -177,7 +174,7 @@ public final class BlueprintEngine {
                         if (graphIds == null || graphIds.isEmpty()) continue;
                         for (String graphId : new ArrayList<>(entityAttachment.getBoundGraphs())) {
                             if (!graphIds.contains(normalizeSubscriptionGraphId(graphId))) continue;
-                            triggerCustomOnProcess(targetLevel, target, graphId, frequency, eventPayload,
+                            triggerCustomOnProcess(targetLevel, target, graphId, frequency, eventData,
                                     id -> entityAttachment.getProcess(id),
                                     entityAttachment::addProcess);
                         }
@@ -212,12 +209,11 @@ public final class BlueprintEngine {
                                                String structureId,
                                                @Nullable Map<String, Object> eventData) {
         if (structureId == null || structureId.isBlank()) return;
-        Map<String, Object> eventPayload = snapshotEventData(eventData);
 
         LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
         for (String graphId : getGlobalGraphsForEvent(level, MULTIBLOCK_BUILT_EVENT_TYPE)) {
             if (!GlobalGraphStorage.get(level.getServer().overworld()).getGraphs().contains(graphId)) continue;
-            triggerMultiblockOnProcess(level, target, graphId, structureId, eventPayload,
+            triggerMultiblockOnProcess(level, target, graphId, structureId, eventData,
                     id -> levelAttachment.getProcess(id),
                     levelAttachment::addProcess);
         }
@@ -227,7 +223,7 @@ public final class BlueprintEngine {
             if (entityAttachment != null) {
                 for (String graphId : getEntityGraphsForEvent(target, MULTIBLOCK_BUILT_EVENT_TYPE)) {
                     if (!entityAttachment.getBoundGraphs().contains(graphId)) continue;
-                    triggerMultiblockOnProcess(level, target, graphId, structureId, eventPayload,
+                    triggerMultiblockOnProcess(level, target, graphId, structureId, eventData,
                             id -> entityAttachment.getProcess(id),
                             entityAttachment::addProcess);
                 }
@@ -323,7 +319,7 @@ public final class BlueprintEngine {
         }
 
         process.setEnvironment(level, target);
-        process.executeEvent(nodeId, snapshotEventData(eventData));
+        process.executeEvent(nodeId, eventData);
         if (target != null) {
             activityMarker.accept(target);
         }
@@ -334,14 +330,6 @@ public final class BlueprintEngine {
         if (index != null) {
             structureIds.addAll(index.getMultiblockStructureIds());
         }
-    }
-
-    @Nullable
-    private static Map<String, Object> snapshotEventData(@Nullable Map<String, Object> eventData) {
-        if (eventData == null || eventData.isEmpty()) {
-            return null;
-        }
-        return GraphValueSnapshot.snapshotValues(eventData);
     }
 
     public Set<String> getGlobalGraphsForEvent(@NotNull ServerLevel level, String eventType) {
@@ -361,14 +349,12 @@ public final class BlueprintEngine {
                                                 @NotNull Entity target,
                                                 String eventNodeId,
                                                 @Nullable Map<String, Object> eventData) {
-        Map<String, Object> eventPayload = snapshotEventData(eventData);
-
         EntityGraphAttachment entityAttachment = getAttachment(target);
         if (entityAttachment == null) return;
 
         for (EventSubscription subscription : getEntitySubscriptionsForEvent(target, eventNodeId)) {
             if (!entityAttachment.getBoundGraphs().contains(subscription.graphId())) continue;
-            triggerSubscriptionOnProcess(level, target, subscription, eventPayload,
+            triggerSubscriptionOnProcess(level, target, subscription, eventData,
                     entityAttachment::getProcess,
                     entityAttachment::addProcess);
         }
@@ -394,10 +380,9 @@ public final class BlueprintEngine {
         BlueprintPlan index = getGraphIndex(resolvedGraphId);
         if (index == null) return;
 
-        Map<String, Object> eventPayload = snapshotEventData(eventData);
         for (int nodeId : index.findNodesByType(eventNodeId)) {
             if (!attachment.getBoundGraphs().contains(resolvedGraphId)) break;
-            executeEventNode(level, target, resolvedGraphId, index, nodeId, eventPayload,
+            executeEventNode(level, target, resolvedGraphId, index, nodeId, eventData,
                     attachment::getProcess,
                     attachment::addProcess);
         }
@@ -597,14 +582,13 @@ public final class BlueprintEngine {
     public boolean hasMatchingStaticEventFlag(@NotNull ServerLevel level, @Nullable Entity target,
                                               String eventNodeId, @Nullable Map<String, Object> eventData,
                                               String staticInputId) {
-        Map<String, Object> eventPayload = snapshotEventData(eventData);
         ServerState serverState = state(level);
 
         ensureGlobalSubscriptions(level);
         GlobalGraphStorage globalStorage = GlobalGraphStorage.get(level.getServer().overworld());
         for (EventSubscription subscription : serverState.graphSubscriptions.globalSubscriptionsFor(eventNodeId)) {
             if (!globalStorage.getGraphs().contains(subscription.graphId())
-                    || !subscription.shouldDispatch(level, target, eventPayload)) continue;
+                    || !subscription.shouldDispatch(level, target, eventData)) continue;
             if (subscription.index().getStaticInput(subscription.nodeId(), staticInputId,
                     Boolean.class, false)) return true;
         }
@@ -614,7 +598,7 @@ public final class BlueprintEngine {
         if (attachment == null) return false;
         for (EventSubscription subscription : getEntitySubscriptionsForEvent(target, eventNodeId)) {
             if (!attachment.getBoundGraphs().contains(subscription.graphId())
-                    || !subscription.shouldDispatch(level, target, eventPayload)) continue;
+                    || !subscription.shouldDispatch(level, target, eventData)) continue;
             if (subscription.index().getStaticInput(subscription.nodeId(), staticInputId,
                     Boolean.class, false)) return true;
         }

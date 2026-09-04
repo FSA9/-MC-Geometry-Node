@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 
 import com.mine.geometry_node.core.engine.behavior.blackboard.BehaviorBlackboard;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
@@ -100,13 +101,21 @@ public final class BehaviorNodeContext {
     @Nullable
     public Object input(String portName) {
         ensureValid();
-        return evaluator.resolveInput(instance, nodeIndex, portName);
+        Object value = evaluator.resolveInput(instance, nodeIndex, portName);
+        return value instanceof DynamicData dynamic ? dynamic.value() : value;
     }
 
     @Nullable
     public <T> T input(String portName, Class<T> type) {
         ensureValid();
         return evaluator.resolveInput(instance, nodeIndex, portName, type);
+    }
+
+    /** Converts one already-read graph value through the canonical port conversion registry. */
+    @Nullable
+    public <T> T convertValue(Object value, Class<T> type) {
+        ensureValid();
+        return evaluator.convertInput(instance, nodeIndex, value, type);
     }
 
     /** Reads an optional input while distinguishing absence from a conversion failure. */

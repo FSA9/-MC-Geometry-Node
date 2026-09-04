@@ -27,7 +27,7 @@ public class SnapshotValue extends BaseNode {
         if (!StandardPorts.RESULT_VALUE.getId().equals(portName)) return null;
 
         // 1. 获取上游数据（不指定具体类，拿到最原始的 Object）
-        Object rawInput = getRawInput(context, StandardPorts.GENERIC_VALUE.getId());
+        Object rawInput = getTransportInput(context, StandardPorts.GENERIC_VALUE.getId());
 
         // 2. 如果上游传过来的是包装好的双模数据，强行拆包，只返回死数值
         if (rawInput instanceof DynamicData dyn) {

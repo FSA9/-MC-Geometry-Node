@@ -232,7 +232,7 @@ public final class BlueprintRuntime implements GraphRuntime {
     private void syncPlayerInputInterception(Entity entity) {
         if (!(entity instanceof ServerPlayer player)) return;
         int mask = collectInterceptionMask(engine.getGlobalGraphsForEvent(
-                player.serverLevel(), OnPlayerKeyEvent.TYPE_ID));
+                player.level(), OnPlayerKeyEvent.TYPE_ID));
         mask |= collectInterceptionMask(engine.getEntityGraphsForEvent(player, OnPlayerKeyEvent.TYPE_ID));
         playerInput.syncInterceptions(player, mask);
     }

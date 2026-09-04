@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.graph.storage;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
+import com.mine.geometry_node.core.engine.runtime.ServerEngine;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
@@ -22,7 +23,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * Event-driven runtime view of graphs published by the server graph repository.
  * Publishes complete immutable snapshots and notifies each runtime about its changed assets.
  */
-public final class GraphAssetLifecycleIndex {
+public final class GraphAssetLifecycleIndex implements ServerEngine {
     public static final GraphAssetLifecycleIndex INSTANCE = new GraphAssetLifecycleIndex();
 
     private final Map<GraphKind, CopyOnWriteArrayList<ChangeListener>> listeners =
@@ -30,6 +31,23 @@ public final class GraphAssetLifecycleIndex {
     private volatile Snapshot snapshot = Snapshot.EMPTY;
 
     GraphAssetLifecycleIndex() {
+    }
+
+    @Override
+    public String id() {
+        return "geometry_node:graph_asset_lifecycle";
+    }
+
+    @Override
+    public int tickOrder() {
+        return Integer.MAX_VALUE;
+    }
+
+    @Override
+    public void shutdown(MinecraftServer server) {
+        synchronized (this) {
+            if (snapshot.belongsTo(server)) snapshot = Snapshot.EMPTY;
+        }
     }
 
     @FunctionalInterface

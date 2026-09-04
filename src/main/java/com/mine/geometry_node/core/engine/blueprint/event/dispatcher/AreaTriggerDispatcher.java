@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.*;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaTargetType;
+import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldAddress;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldResource;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldResourceStore;
@@ -197,7 +198,8 @@ public final class AreaTriggerDispatcher {
 
         for (UUID entityId : entityIds) {
             AreaEntityQuery.Hit hit = result.hitsById().get(entityId);
-            Entity trigger = hit != null ? hit.entity() : areaLevel.getEntity(entityId);
+            Entity trigger = hit != null ? hit.entity()
+                    : GraphEntityReferenceResolver.resolve(entityId, areaLevel);
             if (trigger == null || trigger.isRemoved()) continue;
             Entity eventEntity = owner != null ? owner : trigger;
             Map<String, Object> eventData = EventPayload.of(

@@ -39,9 +39,9 @@ public class CombineXYZ extends BaseNode {
         Vec3 physicalVec = new Vec3(xVal != null ? xVal : 0, yVal != null ? yVal : 0, zVal != null ? zVal : 0);
 
         // 2. 协议层：获取三个轴的表达式
-        ExpressionData xExpr = getInput(context, StandardPorts.X.getId(), ExpressionData.class);
-        ExpressionData yExpr = getInput(context, StandardPorts.Y.getId(), ExpressionData.class);
-        ExpressionData zExpr = getInput(context, StandardPorts.Z.getId(), ExpressionData.class);
+        ExpressionData xExpr = getInputExpression(context, StandardPorts.X.getId());
+        ExpressionData yExpr = getInputExpression(context, StandardPorts.Y.getId());
+        ExpressionData zExpr = getInputExpression(context, StandardPorts.Z.getId());
 
         // 3. 组装 vec3 协议文本并合并绑定关系
         Map<String, ExpressionBinding> mergedBindings = new HashMap<>();

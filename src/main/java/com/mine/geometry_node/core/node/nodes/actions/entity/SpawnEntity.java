@@ -21,7 +21,6 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.List;
 import java.util.Map;
 
 public class SpawnEntity extends BaseNode {
@@ -53,7 +52,7 @@ public class SpawnEntity extends BaseNode {
         if (pos != null && context.getLevel() instanceof ServerLevel serverLevel && template != null && !template.isEmpty()) {
             Entity entity = template.create(serverLevel, pos);
             if (entity != null && serverLevel.addFreshEntity(entity)) {
-                context.setNodeResult(StandardPorts.ENTITY.getId(), List.of(entity));
+                context.setNodeResult(StandardPorts.ENTITY.getId(), entity);
             }
         } else if (pos != null && typeId != null && !typeId.isEmpty() && context.getLevel() instanceof ServerLevel serverLevel) {
             Identifier loc = Identifier.tryParse(typeId);
@@ -64,8 +63,9 @@ public class SpawnEntity extends BaseNode {
                     Entity entity = entityType.create(serverLevel, EntitySpawnReason.COMMAND);
                     if (entity != null) {
                         entity.teleportTo(pos.x(), pos.y(), pos.z());
-                        serverLevel.addFreshEntity(entity);
-                        context.setNodeResult(StandardPorts.ENTITY.getId(), List.of(entity));
+                        if (serverLevel.addFreshEntity(entity)) {
+                            context.setNodeResult(StandardPorts.ENTITY.getId(), entity);
+                        }
                     }
                 }
             }

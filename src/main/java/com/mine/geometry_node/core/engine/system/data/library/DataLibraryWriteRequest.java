@@ -3,7 +3,6 @@ package com.mine.geometry_node.core.engine.system.data.library;
 import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.definition.port.PortType;
-import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -19,8 +18,6 @@ public record DataLibraryWriteRequest(
         path = path == null ? "" : path;
         type = Objects.requireNonNull(type, "type");
         key = key == null ? "" : key;
-        value = value instanceof Entity entity
-                ? entity.getUUID()
-                : GraphValueSnapshot.snapshot(value);
+        value = GraphValueSnapshot.snapshot(value);
     }
 }

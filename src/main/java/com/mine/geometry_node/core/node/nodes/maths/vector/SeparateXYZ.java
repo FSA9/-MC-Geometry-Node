@@ -39,7 +39,7 @@ public class SeparateXYZ extends BaseNode {
         }
 
         // 2. 获取协议层公式
-        ExpressionData inExpr = getInput(context, StandardPorts.VECTOR.getId(), ExpressionData.class);
+        ExpressionData inExpr = getInputExpression(context, StandardPorts.VECTOR.getId());
         ExpressionData outExpr = ExpressionData.ZERO;
 
         if (inExpr != null) {

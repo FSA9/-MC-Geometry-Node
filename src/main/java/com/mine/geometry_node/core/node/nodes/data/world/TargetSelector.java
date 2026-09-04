@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.node.nodes.data.world;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
-import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueNbtConverter;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
@@ -14,7 +14,6 @@ import com.mine.geometry_node.core.node.definition.port.*;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.permissions.PermissionSet;
@@ -192,10 +191,16 @@ public class TargetSelector extends BaseNode {
                 case "nbt" -> {
                     Map<String, Object> dict = getInputDict(context, StandardPorts.DICT.getIdWithIndex(i));
                     if (!dict.isEmpty() && context.getLevel() != null) {
-                        Tag gnTag = GraphValueCodecRegistry.toTag(
-                                dict, context.getLevel().registryAccess());
-                        if (gnTag instanceof CompoundTag c && c.contains("data")) {
-                            arguments.add("nbt=" + c.getCompoundOrEmpty("data"));
+                        try {
+                            CompoundTag nbt = GraphValueNbtConverter.toCompound(
+                                    dict, context.getLevel().registryAccess());
+                            arguments.add("nbt=" + nbt);
+                        } catch (IllegalArgumentException exception) {
+                            if (RateLimitedLog.acquire(context, "target_selector:nbt")) {
+                                GeometryNode.LOGGER.warn(
+                                        "[TargetSelector] Cannot encode NBT filter: {}",
+                                        exception.getMessage());
+                            }
                         }
                     }
                 }

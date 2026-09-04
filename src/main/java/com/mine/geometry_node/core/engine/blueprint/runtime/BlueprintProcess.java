@@ -955,9 +955,7 @@ public class BlueprintProcess {
         @Override
         public void setEventData(String key, Object value) {
             int id = index.getPortKey(key);
-            Object finalValue = (value instanceof Entity ent)
-                    ? ent.getUUID()
-                    : GraphValueSnapshot.snapshot(value);
+            Object finalValue = GraphValueSnapshot.snapshot(value);
 
             if (id != -1) {
                 if (id < eventRegisters.length) eventRegisters[id] = finalValue;
@@ -1117,7 +1115,9 @@ public class BlueprintProcess {
         }
 
         @Override
-        public void setTempData(String key, Object value) { this.tempData.put(key, value); }
+        public void setTempData(String key, Object value) {
+            this.tempData.put(key, GraphValueSnapshot.snapshot(value));
+        }
 
         @Override
         public Object getTempData(String key) { return this.tempData.get(key); }

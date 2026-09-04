@@ -190,7 +190,7 @@ public interface ExecutionContext extends GraphDataContext {
      * Results with the same port ID on different nodes are isolated.
      */
     default void setNodeResult(String portName, @Nullable Object value) {
-        setTempData(nodeResultKey(getCurrentNodeId(), portName), GraphValueSnapshot.snapshot(value));
+        setTempData(nodeResultKey(getCurrentNodeId(), portName), value);
         clearFrameCache();
     }
 

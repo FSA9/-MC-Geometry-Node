@@ -2,16 +2,12 @@ package com.mine.geometry_node.core.node.definition.port;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
-import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
-import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.List;
 
 /**
  * [核心基建] 类型转换中心
- * 将类类型调用适配到 {@link PortConversionRegistry}。除表达式包装协议外，
- * 此类不再自行声明隐式转换规则。
+ * 将类类型调用适配到 {@link PortConversionRegistry}。动态表达式包装会在
+ * 此边界被透明解包；表达式元数据只能通过节点的专用内部接口读取。
  */
 public class TypeConverter {
 
@@ -27,16 +23,7 @@ public class TypeConverter {
         if (val == null || type == null) return null;
 
         if (val instanceof DynamicData dyn) {
-            if (type == ExpressionData.class) {
-                return type.cast(dyn.expression());
-            }
             val = dyn.value();
-        } else if (type == ExpressionData.class && val instanceof Number num) {
-            return type.cast(new ExpressionData(String.valueOf(num.floatValue()), java.util.Map.of()));
-        }
-
-        if (type == ExpressionData.class && (val instanceof List || val instanceof Vec3)) {
-            return null;
         }
 
         PortType target = PortValueTypeRegistry.forJavaClass(type);
