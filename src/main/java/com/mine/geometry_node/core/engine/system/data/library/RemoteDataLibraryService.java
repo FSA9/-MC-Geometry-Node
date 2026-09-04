@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.data.library;
 
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import net.minecraft.server.MinecraftServer;
@@ -60,7 +61,9 @@ public final class RemoteDataLibraryService {
         try {
             DataLibraryEntry entry = ensureLoaded(server).document().find(entryId).orElse(null);
             if (entry == null || expectedType != null && entry.type() != expectedType) return null;
-            if (entry.value() instanceof DataLibraryEntityReference reference) return reference.resolve(server);
+            if (entry.value() instanceof DataLibraryEntityReference reference) {
+                return GraphEntityReferenceResolver.resolve(reference.entityId(), server);
+            }
             return GraphValueSnapshot.snapshot(entry.value());
         } catch (IOException | RuntimeException exception) {
             return null;

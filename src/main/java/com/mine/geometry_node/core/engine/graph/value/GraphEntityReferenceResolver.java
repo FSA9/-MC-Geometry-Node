@@ -27,13 +27,23 @@ public final class GraphEntityReferenceResolver {
         Entity entity = preferredLevel.getEntity(entityId);
         if (isAvailable(entity)) return entity;
 
-        MinecraftServer server = preferredLevel.getServer();
+        return resolve(entityId, preferredLevel.getServer(), preferredLevel);
+    }
+
+    @Nullable
+    public static Entity resolve(UUID entityId, MinecraftServer server) {
+        if (entityId == null || server == null) return null;
+        return resolve(entityId, server, null);
+    }
+
+    @Nullable
+    private static Entity resolve(UUID entityId, MinecraftServer server, @Nullable ServerLevel excludedLevel) {
         Entity player = server.getPlayerList().getPlayer(entityId);
         if (isAvailable(player)) return player;
 
         for (ServerLevel level : server.getAllLevels()) {
-            if (level == preferredLevel) continue;
-            entity = level.getEntity(entityId);
+            if (level == excludedLevel) continue;
+            Entity entity = level.getEntity(entityId);
             if (isAvailable(entity)) return entity;
         }
         return null;

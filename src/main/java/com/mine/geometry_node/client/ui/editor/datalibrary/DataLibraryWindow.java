@@ -1186,8 +1186,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private static Entity resolveClientEntity(DataLibraryEntityReference reference) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null
-                || !minecraft.level.dimension().identifier().equals(reference.dimension())) return null;
+        if (minecraft.level == null) return null;
         for (Entity entity : minecraft.level.entitiesForRendering()) {
             if (entity.getUUID().equals(reference.entityId())) return entity;
         }
