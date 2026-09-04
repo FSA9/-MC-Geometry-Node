@@ -18,6 +18,7 @@ import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.node.definition.port.PortConversionRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import net.minecraft.server.level.ServerLevel;
@@ -223,8 +224,16 @@ public final class BehaviorTreeEvaluator {
         CompiledDataIndex.DataConnectionSource source = instance.plan()
                 .findDataInput(targetNodeIndex, portName);
         if (source == null) return instance.plan().getStaticInput(targetNodeIndex, portName);
-        return instance.dataEvaluation().evaluate(source.sourceNodeId(), source.sourcePortName(),
+        return resolveConnectedInput(instance, targetNodeIndex, source);
+    }
+
+    @Nullable
+    private Object resolveConnectedInput(BehaviorTreeProcess instance, int targetNodeIndex,
+                                         CompiledDataIndex.DataConnectionSource source) {
+        Object value = instance.dataEvaluation().evaluate(source.sourceNodeId(), source.sourcePortName(),
                 (nodeIndex, outputPort) -> computeDataNode(instance, nodeIndex, outputPort));
+        return PortConversionRegistry.convert(value, source.sourceType(), source.targetType(),
+                new BehaviorDataContext(instance, targetNodeIndex));
     }
 
     @Nullable
@@ -579,7 +588,9 @@ public final class BehaviorTreeEvaluator {
         }
 
         @Override public Object getInputValue(String portName) {
-            return resolveInput(instance, nodeIndex, portName);
+            CompiledDataIndex.DataConnectionSource source =
+                    instance.plan().findDataInput(nodeIndex, portName);
+            return source != null ? resolveConnectedInput(instance, nodeIndex, source) : null;
         }
 
         @Override public boolean hasInputConnection(String portName) {

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.schematic;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
@@ -171,7 +173,7 @@ public class CreateSchematicProjection extends BaseNode {
                 SchematicData data = SchematicReader.read(path, replaceAir);
                 actualKey = placeSchematic(context, level, data, originValue, actualKey, replaceAir);
             }
-            context.setTempData(tempKey(context), actualKey);
+            context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), actualKey);
         } catch (Exception e) {
             GeometryNode.LOGGER.warn("[GeometryNode] Failed to place schematic projection from '{}': {}", pathValue, e.getMessage());
         }
@@ -180,9 +182,9 @@ public class CreateSchematicProjection extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.KEY.getId().equals(portName) || StandardPorts.RESOURCE_ID.getId().equals(portName)) {
-            return context.getTempData(tempKey(context));
+            return context.getNodeResult(StandardPorts.RESOURCE_ID.getId());
         }
         if (StandardPorts.PATH.getId().equals(portName)) {
             return getInput(context, StandardPorts.PATH.getId(), String.class);
@@ -480,10 +482,6 @@ public class CreateSchematicProjection extends BaseNode {
 
     private static String formatPos(BlockPos pos) {
         return pos.getX() + "," + pos.getY() + "," + pos.getZ();
-    }
-
-    private static String tempKey(ExecutionContext context) {
-        return TYPE_ID + ":input:" + context.getCurrentNodeId();
     }
 
     private static boolean resolveDebugMode(NodeData data) {

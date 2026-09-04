@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.schematic;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
@@ -47,21 +49,17 @@ public class RemoveSchematicProjection extends BaseNode {
                 success = SchematicProjectionService.INSTANCE.remove(level.getServer(), resourceId);
             }
         }
-        context.setTempData(tempKey(context, StandardPorts.BOOL.getId()), success);
+        context.setNodeResult(StandardPorts.BOOL.getId(), success);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.BOOL.getId().equals(portName)) {
-            Object value = context.getTempData(tempKey(context, portName));
+            Object value = context.getNodeResult(portName);
             return value instanceof Boolean bool && bool;
         }
         return null;
-    }
-
-    private static String tempKey(ExecutionContext context, String port) {
-        return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + port;
     }
 
     private GraphResourceId resolveResourceId(ExecutionContext context) {

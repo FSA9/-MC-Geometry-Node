@@ -4,8 +4,8 @@ import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 
 import java.util.Map;
@@ -16,9 +16,8 @@ public final class BlackboardNodePorts {
     private BlackboardNodePorts() {
     }
 
-    public static PortRow scopeRow() {
-        return PortRow.passthrough(StandardPorts.BLACKBOARD_SCOPE.toInput("instance").hiddenPin(),
-                UIHint.SELECT, null,
+    public static void addScopeInput(NodeDef.Builder builder) {
+        builder.addStaticInput(StandardPorts.BLACKBOARD_SCOPE.toInput("instance"), UIHint.SELECT, null,
                 Map.of(PortMetaKeys.OPTIONS, OPTIONS));
     }
 

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.projectile;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileCollisionPolicy;
 import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileImpactController;
@@ -112,7 +114,7 @@ public class ShootProjectile extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.PROJECTILE.getId().equals(portName)) {
             return context.getNodeResult(StandardPorts.PROJECTILE.getId());
         }

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.logics;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
@@ -46,13 +48,12 @@ public class WhileLoop extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         int nodeId = context.getCurrentNodeId();
-        String iterationKey = tempKey(nodeId, "iteration");
+        String iterationKey = ExecutionContext.nodeResultKey(nodeId, StandardPorts.ITERATION.getId());
         String cursorKey = tempKey(nodeId, "cursor");
         boolean internalTick = INTERNAL_LOOP_TICK.equals(context.getEntryPort());
         int currentIteration = internalTick ? readIteration(context.getTempData(cursorKey)) : 0;
 
-        context.setTempData(iterationKey, currentIteration);
-        context.clearFrameCache();
+        context.setNodeResult(StandardPorts.ITERATION.getId(), currentIteration);
         Integer configuredTick = getInput(context, StandardPorts.TICK.getId(), Integer.class);
         int tickInterval = Math.max(0, configuredTick != null ? configuredTick : DEFAULT_TICK_INTERVAL);
 
@@ -86,8 +87,7 @@ public class WhileLoop extends BaseNode {
         int executedIterations = 0;
 
         while (true) {
-            context.setTempData(iterationKey, currentIteration);
-            context.clearFrameCache();
+            context.setNodeResult(StandardPorts.ITERATION.getId(), currentIteration);
             if (!conditionIsTrue(context)) {
                 clearState(context, iterationKey, cursorKey);
                 return next(StandardPorts.COMPLETED.getId());
@@ -134,9 +134,9 @@ public class WhileLoop extends BaseNode {
 
     @Override
     @Nullable
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.ITERATION.getId().equals(portName)) {
-            return context.getTempData(tempKey(context.getCurrentNodeId(), "iteration"));
+            return context.getNodeResult(portName);
         }
         return null;
     }

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.events;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -15,8 +17,8 @@ public abstract class BaseEventNode extends BaseNode {
 
     @Override
     @Nullable
-    public Object compute(ExecutionContext context, String portName) {
-        if (context.getCurrentNodeId() != context.getEventSourceNodeId()) {
+    public Object compute(GraphDataContext context, String portName) {
+        if (!context.isCurrentEventSourceNode()) {
             return null;
         }
         Object eventValue = context.getEventData(portName);

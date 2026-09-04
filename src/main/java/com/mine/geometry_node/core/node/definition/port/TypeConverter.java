@@ -1,19 +1,8 @@
 package com.mine.geometry_node.core.node.definition.port;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
-import com.mine.geometry_node.core.node.value.color.ColorValue;
-import com.mine.geometry_node.core.node.value.DialogueChoiceValue;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
-import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
-import com.mine.geometry_node.core.node.value.QuestConditionValue;
-import com.mine.geometry_node.core.node.value.RichTextValue;
-import com.mine.geometry_node.core.node.value.SlotRef;
-import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
@@ -50,7 +39,7 @@ public class TypeConverter {
             return null;
         }
 
-        PortType target = portTypeForClass(type);
+        PortType target = PortValueTypeRegistry.forJavaClass(type);
         if (target == null) {
             return type.isInstance(val) ? type.cast(val) : null;
         }
@@ -71,9 +60,7 @@ public class TypeConverter {
     public static Object convertForPort(@Nullable Object value, PortType type,
                                         @Nullable GraphDataContext context) {
         Object converted = PortConversionRegistry.convert(value, type, context);
-        if (converted == null || type != PortType.XYZ) return converted;
-        if (!(converted instanceof Vec3 vector)) return null;
-        return List.of((float) vector.x, (float) vector.y, (float) vector.z);
+        return converted;
     }
 
     @Nullable
@@ -81,27 +68,4 @@ public class TypeConverter {
         return convertForPort(value, type, null);
     }
 
-    @Nullable
-    private static PortType portTypeForClass(Class<?> type) {
-        if (type == Integer.class) return PortType.INTEGER;
-        if (type == Long.class) return PortType.LONG;
-        if (type == Float.class || type == Double.class) return PortType.FLOAT;
-        if (type == Boolean.class) return PortType.BOOLEAN;
-        if (type == String.class) return PortType.STRING;
-        if (type == RichTextValue.class) return PortType.RICH_TEXT;
-        if (type == Entity.class) return PortType.ENTITY;
-        if (type == EntityTemplateValue.class) return PortType.ENTITY_TEMPLATE;
-        if (type == Item.class) return PortType.ITEM;
-        if (type == ItemStack.class) return PortType.ITEM_STACK;
-        if (type == SlotRef.class) return PortType.SLOT;
-        if (type == BlockState.class) return PortType.BLOCK;
-        if (type == GeometryValue.class) return PortType.GEOMETRY;
-        if (type == Vec3.class) return PortType.XYZ;
-        if (type == ColorValue.class) return PortType.COLOR;
-        if (type == List.class) return PortType.LIST;
-        if (type == java.util.Map.class) return PortType.DICT;
-        if (type == DialogueChoiceValue.class) return PortType.DIALOGUE_CHOICE;
-        if (type == QuestConditionValue.class) return PortType.QUEST_CONDITION;
-        return null;
-    }
 }

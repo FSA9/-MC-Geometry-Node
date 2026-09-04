@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,7 +17,17 @@ import java.util.List;
 import java.util.Map;
 
 public final class GraphJsonIO {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    private static final Gson GSON = new GsonBuilder()
+            .registerTypeAdapter(Vec3.class, (JsonSerializer<Vec3>) (value, type, context) -> {
+                JsonArray array = new JsonArray();
+                array.add(value.x);
+                array.add(value.y);
+                array.add(value.z);
+                return array;
+            })
+            .setPrettyPrinting()
+            .disableHtmlEscaping()
+            .create();
 
     private GraphJsonIO() {}
 

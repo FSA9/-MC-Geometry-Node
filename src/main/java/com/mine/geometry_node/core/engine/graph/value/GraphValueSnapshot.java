@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.value;
 
+import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.GraphNumberNormalizer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.Entity;
@@ -23,6 +24,7 @@ public final class GraphValueSnapshot {
         if (value == null) return null;
         if (value instanceof Number number) return GraphNumberNormalizer.normalize(number);
         if (value instanceof ItemStack stack) return stack.copy();
+        if (value instanceof RichTextValue richText) return snapshotRichText(richText);
         if (value instanceof Map<?, ?> map) {
             Map<Object, Object> copy = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
@@ -49,6 +51,17 @@ public final class GraphValueSnapshot {
             return Collections.unmodifiableList(copy);
         }
         return value;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static RichTextValue snapshotRichText(RichTextValue value) {
+        List<RichTextValue.Segment> segments = new ArrayList<>(value.segments().size());
+        for (RichTextValue.Segment segment : value.segments()) {
+            Map<String, Object> style = (Map<String, Object>) snapshot(segment.style());
+            segments.add(new RichTextValue.Segment(
+                    segment.kind(), segment.text(), segment.source(), segment.display(), style));
+        }
+        return new RichTextValue(value.type(), value.version(), value.plain(), segments);
     }
 
     /** Whether a frozen value still contains a mutable leaf that must be copied for readers. */

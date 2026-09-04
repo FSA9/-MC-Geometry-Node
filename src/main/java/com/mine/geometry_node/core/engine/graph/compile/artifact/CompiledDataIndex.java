@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.compile.artifact;
 
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import org.jetbrains.annotations.Nullable;
 
 /** Immutable, graph-family-neutral view of compiled data connections. */
@@ -23,6 +24,7 @@ public interface CompiledDataIndex {
 
     boolean hasPort(int nodeId, String portName);
 
-    record DataConnectionSource(int sourceNodeId, String sourcePortName) {
+    record DataConnectionSource(int sourceNodeId, String sourcePortName,
+                                PortType sourceType, PortType targetType) {
     }
 }

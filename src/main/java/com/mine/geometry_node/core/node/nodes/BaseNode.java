@@ -41,19 +41,6 @@ public abstract class BaseNode {
 
     @Nullable
     public Object compute(GraphDataContext context, String portName) {
-        if (context instanceof ExecutionContext blueprintContext) {
-            return compute(blueprintContext, portName);
-        }
-        return null;
-    }
-
-    /**
-     * Legacy blueprint-specific data entry point. New pure data nodes should
-     * override {@link #compute(GraphDataContext, String)} instead.
-     */
-    @Deprecated
-    @Nullable
-    public Object compute(ExecutionContext context, String portName) {
         return null;
     }
 
@@ -63,10 +50,7 @@ public abstract class BaseNode {
 
     @Nullable
     protected Object getRawInput(GraphDataContext ctx, String portName) {
-        Object value = ctx.getInputValue(portName);
-        return value != null || ctx.hasInputConnection(portName)
-                ? value
-                : ctx.getStaticInput(portName);
+        return ctx.resolveInput(portName).value();
     }
 
     @Nullable

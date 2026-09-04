@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.item;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -53,7 +55,7 @@ public class SetItemName extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         // 当下游节点需要 ITEM_STACK 时，直接把我们刚才修改好并存入缓存的对象给它
         if (StandardPorts.RESULT_ITEM_STACK.getId().equals(portName)) {
             return context.getNodeResult(StandardPorts.RESULT_ITEM_STACK.getId());

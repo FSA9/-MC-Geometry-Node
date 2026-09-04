@@ -15,9 +15,16 @@ public final class ScopedStateValueCodec {
             if (encoded != null) return encoded;
         } catch (RuntimeException exception) {
             throw new ScopedStateAccessException(
-                    "Persistent blackboard value cannot be encoded: " + location);
+                    "Persistent blackboard value cannot be encoded: " + location
+                            + " [type=" + runtimeType(value) + "]",
+                    exception);
         }
         throw new ScopedStateAccessException(
-                "Persistent blackboard value cannot be encoded: " + location);
+                "Persistent blackboard value cannot be encoded: " + location
+                        + " [type=" + runtimeType(value) + "]");
+    }
+
+    private static String runtimeType(Object value) {
+        return value != null ? value.getClass().getName() : "null";
     }
 }

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.item;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -44,7 +46,7 @@ public class SetUnbreakable extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.RESULT_ITEM_STACK.getId().equals(portName)) return context.getNodeResult(StandardPorts.RESULT_ITEM_STACK.getId());
         return null;
     }

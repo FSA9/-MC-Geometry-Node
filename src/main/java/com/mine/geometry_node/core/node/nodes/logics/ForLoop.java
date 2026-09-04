@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.logics;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
@@ -59,7 +61,7 @@ public class ForLoop extends BaseNode {
         int end = endInt != null ? endInt : 0;
 
         int myNodeId = context.getCurrentNodeId();
-        String indexKey = "ForLoop_" + myNodeId + "_index";
+        String indexKey = ExecutionContext.nodeResultKey(myNodeId, StandardPorts.INDEX.getId());
         String cursorKey = "ForLoop_" + myNodeId + "_cursor";
 
         // ✨ 关键修复点 1：通过进入端口，判断是谁触发了当前节点
@@ -95,8 +97,7 @@ public class ForLoop extends BaseNode {
         }
 
         if (delay > 0) { // 异步跨帧模式
-            context.setTempData(indexKey, currentIndex);
-            context.clearFrameCache();
+            context.setNodeResult(StandardPorts.INDEX.getId(), currentIndex);
             context.setTempData(cursorKey, currentIndex + step);
 
             context.scheduleNode(myNodeId, delay, "internal_loop_tick");
@@ -105,8 +106,7 @@ public class ForLoop extends BaseNode {
             int iterations = 0;
             for (int i = currentIndex; (step > 0 ? i <= end : i >= end); i += step) {
                 if (iterations++ > 10000) break;
-                context.setTempData(indexKey, i);
-                context.clearFrameCache();
+                context.setNodeResult(StandardPorts.INDEX.getId(), i);
                 context.executeBranchSync(StandardPorts.LOOP.getId());
             }
             context.removeTempData(indexKey);
@@ -165,9 +165,9 @@ public class ForLoop extends BaseNode {
 
     @Override
     @Nullable
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.INDEX.getId().equals(portName)) {
-            return context.getTempData("ForLoop_" + context.getCurrentNodeId() + "_index");
+            return context.getNodeResult(portName);
         }
         return null;
     }

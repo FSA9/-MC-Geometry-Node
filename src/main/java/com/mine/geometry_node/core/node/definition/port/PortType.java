@@ -1,12 +1,11 @@
 package com.mine.geometry_node.core.node.definition.port;
 
 import com.mine.geometry_node.core.node.value.color.ColorValue;
-import com.mine.geometry_node.core.node.value.DialogueChoiceValue;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
-import com.mine.geometry_node.core.node.value.QuestConditionValue;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
@@ -32,7 +31,7 @@ public enum PortType {
     SLOT(0xFFB0BEC5, SlotRef.DEFAULT.serialize()),
     BLOCK(0xFF8D6E63, null),
     GEOMETRY(0xFF26A69A, GeometryValue.EMPTY),
-    XYZ(0xFF00BCD4, List.of(0.0f, 0.0f, 0.0f)),
+    XYZ(0xFF00BCD4, Vec3.ZERO),
     COLOR(0xFFFFD54F, ColorValue.WHITE),
     LIST(0xFFFF9800, List.of()),
     DIALOGUE_CHOICE(0xFFFF80AB, null),
@@ -91,31 +90,6 @@ public enum PortType {
      * 根据 Java 对象的实际类型，反推它的几何节点端口类型
      */
     public static PortType getTypeOf(Object value) {
-        if (value == null) return ANY;
-        if (value instanceof Integer) return INTEGER;
-        if (value instanceof Long) return LONG;
-        if (value instanceof Float || value instanceof Double) return FLOAT;
-        if (value instanceof Byte || value instanceof Short) return INTEGER;
-        if (value instanceof Number) return FLOAT;
-        if (value instanceof Boolean) return BOOLEAN;
-        if (value instanceof String) return STRING;
-        if (value instanceof RichTextValue) return RICH_TEXT;
-        if (value instanceof ColorValue) return COLOR;
-        if (value instanceof GeometryValue) return GEOMETRY;
-        if (value instanceof SlotRef) return SLOT;
-        if (value instanceof net.minecraft.world.entity.Entity) return ENTITY;
-        if (value instanceof java.util.UUID) return ENTITY;
-        if (value instanceof EntityTemplateValue) return ENTITY_TEMPLATE;
-        if (value instanceof net.minecraft.world.item.Item) return ITEM;
-        if (value instanceof net.minecraft.world.item.ItemStack) return ITEM_STACK;
-        if (value instanceof net.minecraft.world.level.block.state.BlockState) return BLOCK;
-        if (value instanceof DialogueChoiceValue) return DIALOGUE_CHOICE;
-        if (value instanceof QuestConditionValue) return QUEST_CONDITION;
-        if (value instanceof java.util.List) return LIST;
-        if (value instanceof java.util.Map) return DICT;
-        if (value instanceof net.minecraft.world.phys.Vec3) return XYZ;
-        if (value instanceof net.minecraft.core.BlockPos) return XYZ;
-        // 如果都不是，默认返回 ANY
-        return ANY;
+        return PortValueTypeRegistry.infer(value);
     }
 }

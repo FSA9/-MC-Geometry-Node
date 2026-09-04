@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.inventory;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
@@ -62,7 +64,7 @@ public class RemoveItemsFromInventory extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.REMOVED_COUNT.getId().equals(portName)) {
             Object value = context.getNodeResult(StandardPorts.REMOVED_COUNT.getId());
             return value instanceof Number number ? number.intValue() : 0;

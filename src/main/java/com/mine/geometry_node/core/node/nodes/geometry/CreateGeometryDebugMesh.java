@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.geometry;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
 import com.mine.geometry_node.core.engine.graph.debug.DebugSourceId;
@@ -96,21 +98,17 @@ public class CreateGeometryDebugMesh extends BaseNode {
         );
         if (!meshes.isEmpty()) {
             DebugRendererSessionManager.replaceSourceGeometry(level, sourceId, meshes);
-            context.setTempData(tempKey(context), GraphResourceIdCodec.encode(resourceId));
+            context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), GraphResourceIdCodec.encode(resourceId));
         }
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.RESOURCE_ID.getId().equals(portName)) {
-            return context.getTempData(tempKey(context));
+            return context.getNodeResult(StandardPorts.RESOURCE_ID.getId());
         }
         return null;
-    }
-
-    private static String tempKey(ExecutionContext context) {
-        return TYPE_ID + ":input:" + context.getCurrentNodeId();
     }
 
     private static String stableNodeId(ExecutionContext context) {

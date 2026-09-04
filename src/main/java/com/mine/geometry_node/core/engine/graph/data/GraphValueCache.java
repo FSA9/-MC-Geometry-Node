@@ -24,21 +24,18 @@ public final class GraphValueCache {
     }
 
     public void reset() {
-        frameCache.clear();
-        dynamicFrameCache.clear();
+        clearValues();
         Arrays.fill(recursionGuard, false);
     }
 
     public void beginEpoch() {
-        frameCache.clear();
+        clearValues();
         Arrays.fill(recursionGuard, false);
     }
 
     public void clearValues() {
         frameCache.clear();
-        for (Map<String, Object> map : dynamicFrameCache.values()) {
-            map.clear();
-        }
+        dynamicFrameCache.clear();
     }
 
     public boolean isRecursing(int nodeId) {

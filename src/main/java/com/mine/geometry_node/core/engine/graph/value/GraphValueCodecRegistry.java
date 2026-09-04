@@ -2,23 +2,33 @@ package com.mine.geometry_node.core.engine.graph.value;
 
 import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.GraphNumberNormalizer;
+import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.value.RichTextValue;
+import com.mine.geometry_node.core.node.value.color.ColorValue;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
+import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.*;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 变量序列化注册表。
@@ -26,8 +36,34 @@ import java.util.UUID;
  */
 public final class GraphValueCodecRegistry {
 
-    private static final Map<Class<?>, GraphValueCodec<?>> CLASS_TO_SERIALIZER = new HashMap<>();
-    private static final Map<String, GraphValueCodec<?>> ID_TO_SERIALIZER = new HashMap<>();
+    private static final Map<Class<?>, GraphValueCodec<?>> CLASS_TO_SERIALIZER = new ConcurrentHashMap<>();
+    private static final Map<String, GraphValueCodec<?>> ID_TO_SERIALIZER = new ConcurrentHashMap<>();
+
+    /**
+     * Graph port types with a complete persistent representation. Meta types such as ANY and
+     * domain-runtime values such as dialogue choices are intentionally absent.
+     */
+    private static final Set<PortType> PERSISTENT_PORT_TYPES = Collections.unmodifiableSet(EnumSet.of(
+            PortType.INTEGER,
+            PortType.LONG,
+            PortType.FLOAT,
+            PortType.BOOLEAN,
+            PortType.STRING,
+            PortType.PATH,
+            PortType.RICH_TEXT,
+            PortType.ENTITY,
+            PortType.ENTITY_TEMPLATE,
+            PortType.ITEM,
+            PortType.ITEM_STACK,
+            PortType.SLOT,
+            PortType.BLOCK,
+            PortType.GEOMETRY,
+            PortType.XYZ,
+            PortType.COLOR,
+            PortType.LIST,
+            PortType.DICT,
+            PortType.SHOP
+    ));
 
     // 包装盒的标准字段名
     private static final String TYPE_KEY = "_gn_type";
@@ -36,9 +72,25 @@ public final class GraphValueCodecRegistry {
     private GraphValueCodecRegistry() {
     }
 
-    public static <T> void register(GraphValueCodec<T> serializer) {
-        CLASS_TO_SERIALIZER.put(serializer.getTargetClass(), serializer);
-        ID_TO_SERIALIZER.put(serializer.getTypeId(), serializer);
+    public static synchronized <T> void register(GraphValueCodec<T> serializer) {
+        Objects.requireNonNull(serializer, "serializer");
+        Class<T> targetClass = Objects.requireNonNull(serializer.getTargetClass(), "serializer target class");
+        String typeId = Objects.requireNonNull(serializer.getTypeId(), "serializer type id");
+        if (typeId.isBlank()) {
+            throw new IllegalArgumentException("Graph value codec type id cannot be blank");
+        }
+        if ("_gn_list".equals(typeId) || "_gn_dict".equals(typeId)) {
+            throw new IllegalArgumentException("Graph value codec type id is reserved: " + typeId);
+        }
+        if (CLASS_TO_SERIALIZER.containsKey(targetClass)) {
+            throw new IllegalStateException("Graph value codec already registered for class: "
+                    + targetClass.getName());
+        }
+        if (ID_TO_SERIALIZER.containsKey(typeId)) {
+            throw new IllegalStateException("Graph value codec type id already registered: " + typeId);
+        }
+        CLASS_TO_SERIALIZER.put(targetClass, serializer);
+        ID_TO_SERIALIZER.put(typeId, serializer);
     }
 
     static {
@@ -97,23 +149,15 @@ public final class GraphValueCodecRegistry {
         register(new GraphValueCodec<ItemStack>() {
             @Override public String getTypeId() { return "item_stack"; }
             @Override public Class<ItemStack> getTargetClass() { return ItemStack.class; }
-
-            // 旧方法直接返回空或报错即可，因为不会再被调用
-            @Override public Tag serialize(ItemStack value) { return null; }
-            @Override public ItemStack deserialize(Tag tag) { return null; }
-
-            // 重写带 Provider 的方法
             @Override public Tag serialize(ItemStack value, HolderLookup.Provider provider) {
                 return ItemStack.OPTIONAL_CODEC
                         .encodeStart(provider.createSerializationContext(NbtOps.INSTANCE), value)
-                        .result()
-                        .orElseGet(CompoundTag::new);
+                        .getOrThrow(IllegalArgumentException::new);
             }
             @Override public ItemStack deserialize(Tag tag, HolderLookup.Provider provider) {
                 return ItemStack.OPTIONAL_CODEC
                         .parse(provider.createSerializationContext(NbtOps.INSTANCE), tag)
-                        .result()
-                        .orElse(ItemStack.EMPTY);
+                        .getOrThrow(IllegalArgumentException::new);
             }
         });
 
@@ -127,13 +171,161 @@ public final class GraphValueCodecRegistry {
                 return tag;
             }
             @Override public EntityTemplateValue deserialize(Tag tag) {
-                if (!(tag instanceof CompoundTag compound)) return EntityTemplateValue.EMPTY;
+                CompoundTag compound = requireCompound(tag, "entity_template");
+                if (!compound.contains("entity_type")
+                        || !(compound.get("entity_data") instanceof CompoundTag entityData)) {
+                    throw new IllegalArgumentException("Invalid entity_template graph value");
+                }
                 return new EntityTemplateValue(
                         compound.getStringOr("entity_type", ""),
-                        compound.getCompoundOrEmpty("entity_data")
+                        entityData
                 );
             }
         });
+
+        register(new GraphValueCodec<Item>() {
+            @Override public String getTypeId() { return "item"; }
+            @Override public Class<Item> getTargetClass() { return Item.class; }
+            @Override public Tag serialize(Item value) {
+                return StringTag.valueOf(BuiltInRegistries.ITEM.getKey(value).toString());
+            }
+            @Override public Item deserialize(Tag tag) {
+                String id = requireString(tag, "item");
+                return BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.parse(id))
+                        .orElseThrow(() -> new IllegalArgumentException("Unknown item: " + id));
+            }
+        });
+
+        register(new GraphValueCodec<ColorValue>() {
+            @Override public String getTypeId() { return "color"; }
+            @Override public Class<ColorValue> getTargetClass() { return ColorValue.class; }
+            @Override public Tag serialize(ColorValue value) {
+                ListTag channels = new ListTag();
+                channels.add(FloatTag.valueOf(value.r()));
+                channels.add(FloatTag.valueOf(value.g()));
+                channels.add(FloatTag.valueOf(value.b()));
+                channels.add(FloatTag.valueOf(value.a()));
+                return channels;
+            }
+            @Override public ColorValue deserialize(Tag tag) {
+                ListTag channels = requireList(tag, "color");
+                if (channels.size() != 4) {
+                    throw new IllegalArgumentException("Color value must contain four channels");
+                }
+                return new ColorValue(
+                        channels.getFloatOr(0, 0.0F),
+                        channels.getFloatOr(1, 0.0F),
+                        channels.getFloatOr(2, 0.0F),
+                        channels.getFloatOr(3, 1.0F));
+            }
+        });
+
+        register(new GraphValueCodec<RichTextValue>() {
+            @Override public String getTypeId() { return "rich_text"; }
+            @Override public Class<RichTextValue> getTargetClass() { return RichTextValue.class; }
+            @Override public Tag serialize(RichTextValue value, HolderLookup.Provider provider) {
+                CompoundTag result = new CompoundTag();
+                result.putString("type", value.type());
+                result.putInt("version", value.version());
+                result.putString("plain", value.plain());
+                ListTag segments = new ListTag();
+                for (RichTextValue.Segment segment : value.segments()) {
+                    CompoundTag encoded = new CompoundTag();
+                    encoded.putString("kind", segment.kind());
+                    encoded.putString("text", segment.text());
+                    encoded.putString("source", segment.source());
+                    encoded.putString("display", segment.display());
+                    encoded.put("style", toTagStrict(segment.style(), provider));
+                    segments.add(encoded);
+                }
+                result.put("segments", segments);
+                return result;
+            }
+            @Override public RichTextValue deserialize(Tag tag, HolderLookup.Provider provider) {
+                CompoundTag encoded = requireCompound(tag, "rich_text");
+                List<RichTextValue.Segment> segments = new ArrayList<>();
+                for (Tag rawSegment : encoded.getListOrEmpty("segments")) {
+                    CompoundTag segment = requireCompound(rawSegment, "rich_text segment");
+                    Object rawStyle = fromTag(segment.get("style"), provider);
+                    Map<String, Object> style = stringKeyMap(rawStyle, "rich_text segment style");
+                    segments.add(new RichTextValue.Segment(
+                            segment.getStringOr("kind", RichTextValue.KIND_TEXT),
+                            segment.getStringOr("text", ""),
+                            segment.getStringOr("source", ""),
+                            segment.getStringOr("display", "inline"),
+                            style));
+                }
+                return new RichTextValue(
+                        encoded.getStringOr("type", RichTextValue.TYPE),
+                        encoded.getIntOr("version", RichTextValue.VERSION),
+                        encoded.getStringOr("plain", ""),
+                        segments);
+            }
+        });
+
+        register(new GraphValueCodec<GeometryValue>() {
+            @Override public String getTypeId() { return "geometry"; }
+            @Override public Class<GeometryValue> getTargetClass() { return GeometryValue.class; }
+            @Override public Tag serialize(GeometryValue value) {
+                ListTag primitives = new ListTag();
+                for (GeometryValue.Primitive primitive : value.primitives()) {
+                    CompoundTag encoded = new CompoundTag();
+                    encoded.putString("type", primitive.type().id());
+                    putVector(encoded, "center", primitive.center());
+                    putVector(encoded, "size", primitive.size());
+                    encoded.putInt("vertices_x", primitive.verticesX());
+                    encoded.putInt("vertices_y", primitive.verticesY());
+                    encoded.putInt("vertices_z", primitive.verticesZ());
+                    encoded.putInt("radial_vertices", primitive.radialVertices());
+                    encoded.putInt("side_segments", primitive.sideSegments());
+                    encoded.putInt("fill_segments", primitive.fillSegments());
+                    encoded.putString("fill_type", primitive.fillType().id());
+                    primitives.add(encoded);
+                }
+                return primitives;
+            }
+            @Override public GeometryValue deserialize(Tag tag) {
+                ListTag encoded = requireList(tag, "geometry");
+                List<GeometryValue.Primitive> primitives = new ArrayList<>(encoded.size());
+                for (Tag rawPrimitive : encoded) {
+                    CompoundTag primitive = requireCompound(rawPrimitive, "geometry primitive");
+                    GeometryValue.PrimitiveType type = GeometryValue.PrimitiveType.fromId(
+                            primitive.getStringOr("type", ""));
+                    Vec3 center = readVector(primitive, "center");
+                    Vec3 size = readVector(primitive, "size");
+                    primitives.add(switch (type) {
+                        case CUBE -> GeometryValue.Primitive.cube(
+                                center, size,
+                                primitive.getIntOr("vertices_x", 1),
+                                primitive.getIntOr("vertices_y", 1),
+                                primitive.getIntOr("vertices_z", 1));
+                        case CYLINDER -> GeometryValue.Primitive.cylinder(
+                                center,
+                                primitive.getIntOr("radial_vertices", 3),
+                                primitive.getIntOr("side_segments", 1),
+                                primitive.getIntOr("fill_segments", 1),
+                                (float) (size.x * 0.5D),
+                                (float) size.y,
+                                GeometryValue.CylinderFillType.fromId(
+                                        primitive.getStringOr("fill_type", "")));
+                        case UV_SPHERE -> GeometryValue.Primitive.uvSphere(
+                                center,
+                                primitive.getIntOr("radial_vertices", 3),
+                                primitive.getIntOr("side_segments", 1),
+                                (float) (size.x * 0.5D));
+                    });
+                }
+                return GeometryValue.of(primitives.toArray(GeometryValue.Primitive[]::new));
+            }
+        });
+    }
+
+    public static Set<PortType> supportedPortTypes() {
+        return PERSISTENT_PORT_TYPES;
+    }
+
+    public static boolean supportsPortType(@Nullable PortType type) {
+        return type != null && PERSISTENT_PORT_TYPES.contains(type);
     }
 
     @Nullable
@@ -154,6 +346,17 @@ public final class GraphValueCodecRegistry {
         if (value instanceof Boolean b) return ByteTag.valueOf(b);
         if (value instanceof Number number) {
             return toTag(GraphNumberNormalizer.normalize(number), provider);
+        }
+
+        // Item implementations may use concrete subclasses. This is an explicit adapter to the
+        // ITEM contract, not an order-dependent polymorphic codec lookup.
+        if (value instanceof Item item) {
+            @SuppressWarnings("unchecked")
+            GraphValueCodec<Item> itemCodec = (GraphValueCodec<Item>) CLASS_TO_SERIALIZER.get(Item.class);
+            CompoundTag wrapper = new CompoundTag();
+            wrapper.putString(TYPE_KEY, itemCodec.getTypeId());
+            wrapper.put(DATA_KEY, itemCodec.serialize(item, provider));
+            return wrapper;
         }
 
         // List
@@ -193,15 +396,14 @@ public final class GraphValueCodecRegistry {
             return wrapper;
         }
 
-        // --- 慢车道：多态遍历查找 ---
-        for (Map.Entry<Class<?>, GraphValueCodec<?>> entry : CLASS_TO_SERIALIZER.entrySet()) {
-            if (entry.getKey().isInstance(value)) {
-                GraphValueCodec<Object> serializer = (GraphValueCodec<Object>) entry.getValue();
-                CompoundTag wrapper = new CompoundTag();
-                wrapper.putString(TYPE_KEY, serializer.getTypeId());
-                wrapper.put(DATA_KEY, serializer.serialize(value, provider)); // 传下去
-                return wrapper;
-            }
+        // Registered graph values use exact runtime classes. Polymorphic codecs must
+        // provide an explicit adapter instead of depending on map iteration order.
+        GraphValueCodec<Object> serializer = (GraphValueCodec<Object>) CLASS_TO_SERIALIZER.get(value.getClass());
+        if (serializer != null) {
+            CompoundTag wrapper = new CompoundTag();
+            wrapper.putString(TYPE_KEY, serializer.getTypeId());
+            wrapper.put(DATA_KEY, serializer.serialize(value, provider));
+            return wrapper;
         }
 
         System.err.println("[GeometryNode] Unsupported variable type for saving: " + value.getClass().getName());
@@ -300,7 +502,8 @@ public final class GraphValueCodecRegistry {
     public static boolean isSupported(Object value) {
         if (value == null) return false;
         if (value instanceof Entity ||
-                value instanceof Number || value instanceof String || value instanceof Boolean) return true;
+                value instanceof Item || value instanceof Number ||
+                value instanceof String || value instanceof Boolean) return true;
 
         if (value instanceof List<?> list) {
             return list.stream().allMatch(GraphValueCodecRegistry::isSupported);
@@ -310,9 +513,54 @@ public final class GraphValueCodecRegistry {
                     entry.getKey() instanceof String && isSupported(entry.getValue()));
         }
 
-        for (Class<?> supportedClass : CLASS_TO_SERIALIZER.keySet()) {
-            if (supportedClass.isInstance(value)) return true;
+        return CLASS_TO_SERIALIZER.containsKey(value.getClass());
+    }
+
+    private static String requireString(Tag tag, String valueType) {
+        return tag.asString().orElseThrow(() ->
+                new IllegalArgumentException("Invalid " + valueType + " graph value"));
+    }
+
+    private static CompoundTag requireCompound(Tag tag, String valueType) {
+        if (tag instanceof CompoundTag compound) return compound;
+        throw new IllegalArgumentException("Invalid " + valueType + " graph value");
+    }
+
+    private static ListTag requireList(Tag tag, String valueType) {
+        if (tag instanceof ListTag list) return list;
+        throw new IllegalArgumentException("Invalid " + valueType + " graph value");
+    }
+
+    private static Map<String, Object> stringKeyMap(Object value, String valueType) {
+        if (!(value instanceof Map<?, ?> raw)) {
+            throw new IllegalArgumentException("Invalid " + valueType);
         }
-        return false;
+        Map<String, Object> result = new HashMap<>();
+        for (Map.Entry<?, ?> entry : raw.entrySet()) {
+            if (!(entry.getKey() instanceof String key)) {
+                throw new IllegalArgumentException("Invalid " + valueType + " key");
+            }
+            result.put(key, entry.getValue());
+        }
+        return result;
+    }
+
+    private static void putVector(CompoundTag target, String key, Vec3 value) {
+        ListTag vector = new ListTag();
+        vector.add(DoubleTag.valueOf(value.x));
+        vector.add(DoubleTag.valueOf(value.y));
+        vector.add(DoubleTag.valueOf(value.z));
+        target.put(key, vector);
+    }
+
+    private static Vec3 readVector(CompoundTag source, String key) {
+        ListTag vector = source.getListOrEmpty(key);
+        if (vector.size() != 3) {
+            throw new IllegalArgumentException("Geometry vector must contain exactly three numbers: " + key);
+        }
+        return new Vec3(
+                vector.getDoubleOr(0, 0.0D),
+                vector.getDoubleOr(1, 0.0D),
+                vector.getDoubleOr(2, 0.0D));
     }
 }

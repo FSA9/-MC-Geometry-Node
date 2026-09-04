@@ -213,10 +213,7 @@ public final class SlotAccessUtils {
         if (context == null || portId == null) {
             return SlotRef.DEFAULT;
         }
-        Object value = context.getInputValue(portId);
-        if (value == null) {
-            value = context.getStaticInput(portId);
-        }
+        Object value = context.resolveInput(portId).value();
         SlotRef slotRef = SlotRef.from(value);
         return slotRef != null ? slotRef : SlotRef.DEFAULT;
     }

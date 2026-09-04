@@ -18,13 +18,13 @@ public final class BehaviorBlackboardValueChangedNode extends BaseNode
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL,
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.FLOW_CONTROL,
                         Component.translatable(
                                 "geometry_node.node.behavior_blackboard_value_changed"))
                 .comment(BlackboardNodePorts.comment(TYPE_ID))
-                .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(), null, UIHint.DEFAULT, null, null))
-                .addRow(BlackboardNodePorts.scopeRow())
-                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT)
+                .addRow(new PortRow(StandardPorts.BEHAVIOR_PARENT.toInput(), null, UIHint.DEFAULT, null, null));
+        BlackboardNodePorts.addScopeInput(builder);
+        return builder.addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT)
                 .build();
     }
 

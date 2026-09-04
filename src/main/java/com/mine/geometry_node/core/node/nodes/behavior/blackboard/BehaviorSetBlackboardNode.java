@@ -19,12 +19,12 @@ public final class BehaviorSetBlackboardNode extends BaseNode implements Behavio
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.ACTION,
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION,
                         Component.translatable("geometry_node.node.behavior_set_blackboard"))
                 .comment(BlackboardNodePorts.comment(TYPE_ID))
-                .addRow(new PortRow(parentPort(), null, UIHint.DEFAULT, null, null))
-                .addRow(BlackboardNodePorts.scopeRow())
-                .addPassthroughInput(keyPort(), UIHint.INPUT)
+                .addRow(new PortRow(parentPort(), null, UIHint.DEFAULT, null, null));
+        BlackboardNodePorts.addScopeInput(builder);
+        return builder.addPassthroughInput(keyPort(), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.ANY_VALUE.toInput(), UIHint.DEFAULT)
                 .build();
     }

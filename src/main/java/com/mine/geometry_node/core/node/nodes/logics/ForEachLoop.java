@@ -1,7 +1,10 @@
 package com.mine.geometry_node.core.node.nodes.logics;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -63,8 +66,8 @@ public class ForEachLoop extends BaseNode {
         int targetIterations = (limitInt != null && limitInt > 0) ? Math.min(listSize, limitInt) : listSize;
 
         int myNodeId = context.getCurrentNodeId();
-        String indexKey = "ForEach_" + myNodeId + "_index";
-        String elementKey = "ForEach_" + myNodeId + "_element";
+        String indexKey = ExecutionContext.nodeResultKey(myNodeId, StandardPorts.INDEX.getId());
+        String elementKey = ExecutionContext.nodeResultKey(myNodeId, StandardPorts.ANY_VALUE.getId());
         String cursorKey = "ForEach_" + myNodeId + "_cursor";
 
         boolean isInternalTick = "internal_loop_tick".equals(context.getEntryPort());
@@ -102,9 +105,8 @@ public class ForEachLoop extends BaseNode {
         if (delay > 0) { // --- 异步跨帧模式 ---
             Object currentElement = list.get(currentIndex);
 
-            context.setTempData(indexKey, currentIndex);
-            context.setTempData(elementKey, currentElement);
-            context.clearFrameCache();
+            context.setNodeResult(StandardPorts.INDEX.getId(), currentIndex);
+            context.setNodeResult(StandardPorts.ANY_VALUE.getId(), currentElement);
             context.setTempData(cursorKey, currentIndex + 1);
 
             // 唤醒自己
@@ -114,9 +116,8 @@ public class ForEachLoop extends BaseNode {
         } else { // --- 瞬间同步模式 ---
             for (int i = currentIndex; i < targetIterations; i++) {
                 Object currentElement = list.get(i);
-                context.setTempData(indexKey, i);
-                context.setTempData(elementKey, currentElement);
-                context.clearFrameCache();
+                context.setNodeResult(StandardPorts.INDEX.getId(), i);
+                context.setNodeResult(StandardPorts.ANY_VALUE.getId(), currentElement);
 
                 context.executeBranchSync(StandardPorts.LOOP.getId());
             }
@@ -184,19 +185,18 @@ public class ForEachLoop extends BaseNode {
     private Map<String, Object> branchTempData(String indexKey, int index, String elementKey, Object element) {
         Map<String, Object> tempData = new HashMap<>();
         tempData.put(indexKey, index);
-        tempData.put(elementKey, element);
+        tempData.put(elementKey, GraphValueSnapshot.snapshot(element));
         return tempData;
     }
 
     @Override
     @Nullable
-    public Object compute(ExecutionContext context, String portName) {
-        int myNodeId = context.getCurrentNodeId();
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.INDEX.getId().equals(portName)) {
-            return context.getTempData("ForEach_" + myNodeId + "_index");
+            return context.getNodeResult(portName);
         }
         if (StandardPorts.ANY_VALUE.getId().equals(portName)) {
-            return context.getTempData("ForEach_" + myNodeId + "_element");
+            return context.getNodeResult(portName);
         }
         return null;
     }

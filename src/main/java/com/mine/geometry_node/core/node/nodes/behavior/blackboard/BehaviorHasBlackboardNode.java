@@ -18,12 +18,12 @@ public final class BehaviorHasBlackboardNode extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.DATA,
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA,
                 Component.translatable("geometry_node.node.behavior_has_blackboard"))
                 .comment(BlackboardNodePorts.comment(TYPE_ID))
-                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(BlackboardNodePorts.scopeRow())
-                .addPassthroughInput(keyPort(), UIHint.INPUT)
+                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null));
+        BlackboardNodePorts.addScopeInput(builder);
+        return builder.addPassthroughInput(keyPort(), UIHint.INPUT)
                 .build();
     }
 

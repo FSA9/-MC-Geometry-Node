@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.quest;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
@@ -43,20 +45,17 @@ public final class SubmitQuest extends BaseNode {
         String questPath = getInput(context, StandardPorts.PATH.getId(), String.class);
         QuestOperationResult result = QuestService.INSTANCE.submit(
                 owner, questPath, "", QuestService.REQUEST_SOURCE_BLUEPRINT);
-        context.setTempData(tempKey(context, SUCCESS_PORT), result.successful());
-        context.setTempData(tempKey(context, FAILURE_REASON_PORT), result.message());
+        context.setNodeResult(SUCCESS_PORT, result.successful());
+        context.setNodeResult(FAILURE_REASON_PORT, result.message());
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (SUCCESS_PORT.equals(portName) || FAILURE_REASON_PORT.equals(portName)) {
-            return context.getTempData(tempKey(context, portName));
+            return context.getNodeResult(portName);
         }
         return null;
     }
 
-    private static String tempKey(ExecutionContext context, String portName) {
-        return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + portName;
-    }
 }

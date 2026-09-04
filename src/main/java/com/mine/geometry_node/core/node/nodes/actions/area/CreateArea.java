@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.area;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
@@ -168,13 +170,13 @@ public final class CreateArea extends BaseNode {
                 }
             }
         }
-        context.setTempData(tempKey(context), success);
+        context.setNodeResult(StandardPorts.BOOL.getId(), success);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
-        return StandardPorts.BOOL.getId().equals(portName) ? context.getTempData(tempKey(context)) : null;
+    public Object compute(GraphDataContext context, String portName) {
+        return StandardPorts.BOOL.getId().equals(portName) ? context.getNodeResult(portName) : null;
     }
 
     private static LiveValue<Vec3> captureXyz(PortDef port, Vec3 snapshot, ExpressionData expression) {
@@ -197,10 +199,6 @@ public final class CreateArea extends BaseNode {
 
     private static float positive(float value) {
         return Float.isFinite(value) ? Math.max(0.001F, Math.abs(value)) : 1.0F;
-    }
-
-    private static String tempKey(ExecutionContext context) {
-        return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + StandardPorts.BOOL.getId();
     }
 
     private static <T> T valueOr(T value, T fallback) {

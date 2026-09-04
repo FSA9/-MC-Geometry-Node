@@ -44,23 +44,45 @@ public final class PortConversionRegistry {
     public static Object convert(@Nullable Object value, PortType target,
                                  @Nullable GraphDataContext context) {
         if (value == null || target == null || target.isFlow()) return null;
-        if (target == PortType.ANY) return value;
-
         PortType source = PortType.getTypeOf(value);
+        return convert(value, source, target, context);
+    }
+
+    /**
+     * Converts across declared schema types. Runtime-class inference is used
+     * only when an ANY source has no stronger type information.
+     */
+    @Nullable
+    public static Object convert(@Nullable Object value, @Nullable PortType source,
+                                 @Nullable PortType target,
+                                 @Nullable GraphDataContext context) {
+        if (value == null || target == null || target.isFlow()) return null;
+        if (target == PortType.ANY) return value;
+        if (source == null || source == PortType.ANY) source = PortType.getTypeOf(value);
         if (source == target) {
             if (target == PortType.ENTITY && value instanceof UUID entityId) {
                 return resolveEntity(entityId, context);
             }
-            if (value instanceof Number number) {
+            if (value instanceof Number number
+                    && (target == PortType.INTEGER || target == PortType.LONG
+                    || target == PortType.FLOAT)) {
                 return switch (target) {
                     case INTEGER -> number.intValue();
                     case LONG -> number.longValue();
                     case FLOAT -> number.floatValue();
-                    default -> value;
+                    default -> throw new IllegalStateException("Unexpected numeric port: " + target);
                 };
             }
             if (target == PortType.XYZ && value instanceof BlockPos pos) {
                 return new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+            }
+            if (target == PortType.XYZ && value instanceof List<?>) {
+                return listVector(value, context);
+            }
+            PortType actual = PortType.getTypeOf(value);
+            if (actual != source) {
+                Converter canonicalizer = RULES.getOrDefault(actual, Map.of()).get(target);
+                return canonicalizer != null ? canonicalizer.convert(value, context) : null;
             }
             return value;
         }

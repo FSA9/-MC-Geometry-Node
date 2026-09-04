@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.marker;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.system.marker.MarkerService;
@@ -91,13 +93,13 @@ public final class CreateMarker extends BaseNode {
                 success = false;
             }
         }
-        context.setTempData(tempKey(context), success);
+        context.setNodeResult(StandardPorts.BOOL.getId(), success);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
-        return StandardPorts.BOOL.getId().equals(portName) ? context.getTempData(tempKey(context)) : null;
+    public Object compute(GraphDataContext context, String portName) {
+        return StandardPorts.BOOL.getId().equals(portName) ? context.getNodeResult(portName) : null;
     }
 
     private MarkerAddress resolveAddress(ExecutionContext context, String key, boolean onlySelf) {
@@ -119,10 +121,6 @@ public final class CreateMarker extends BaseNode {
         }
         Vec3 position = valueOr(getInput(context, StandardPorts.XYZ.getId(), Vec3.class), Vec3.ZERO);
         return new MarkerAnchor.Coordinate(fallbackLevel.dimension(), position);
-    }
-
-    private static String tempKey(ExecutionContext context) {
-        return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + StandardPorts.BOOL.getId();
     }
 
     private static <T> T valueOr(T value, T fallback) {

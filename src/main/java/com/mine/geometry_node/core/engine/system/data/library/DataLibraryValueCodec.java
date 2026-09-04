@@ -86,7 +86,7 @@ public final class DataLibraryValueCodec {
             case SLOT -> SlotRef.parse(value.getAsString());
             case BLOCK -> decodeWithRegistries(BlockState.CODEC, value, registries);
             case GEOMETRY -> decodeGeometry(value.getAsJsonArray());
-            case XYZ -> decodeXyz(value.getAsJsonArray());
+            case XYZ -> decodeXyzVector(value.getAsJsonArray());
             case COLOR -> GSON.fromJson(value, ColorValue.class);
             case LIST -> decodeList(value.getAsJsonArray(), registries);
             case DICT, SHOP -> decodeMap(value.getAsJsonObject(), registries);

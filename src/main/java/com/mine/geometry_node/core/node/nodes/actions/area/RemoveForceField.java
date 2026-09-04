@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.area;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldAddress;
@@ -56,16 +58,13 @@ public final class RemoveForceField extends BaseNode {
                 success = true;
             }
         }
-        context.setTempData(tempKey(context), success);
+        context.setNodeResult(StandardPorts.BOOL.getId(), success);
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
-        return StandardPorts.BOOL.getId().equals(portName) ? context.getTempData(tempKey(context)) : null;
+    public Object compute(GraphDataContext context, String portName) {
+        return StandardPorts.BOOL.getId().equals(portName) ? context.getNodeResult(portName) : null;
     }
 
-    private static String tempKey(ExecutionContext context) {
-        return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + StandardPorts.BOOL.getId();
-    }
 }

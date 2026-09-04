@@ -40,16 +40,11 @@ final class ScopedStateNodeSupport {
     }
 
     static void addScopeInput(NodeDef.Builder builder) {
-        addScopeInput(builder, true);
-    }
-
-    static void addScopeInput(NodeDef.Builder builder, boolean passthrough) {
         PortDef input = PortDef.create(SCOPE_PORT, "geometry_node.port.state_scope",
-                PortType.STRING, DEFAULT_SCOPE.id()).hiddenPin();
+                PortType.STRING, DEFAULT_SCOPE.id());
         Map<com.mine.geometry_node.core.node.meta.MetaKey<?>, Object> params =
                 Map.of(PortMetaKeys.OPTIONS, SCOPES);
-        if (passthrough) builder.addPassthroughInput(input, UIHint.SELECT, null, params);
-        else builder.addRow(new PortRow(input, null, UIHint.SELECT, null, params));
+        builder.addStaticInput(input, UIHint.SELECT, null, params);
     }
 
     static void addDimensionInput(NodeDef.Builder builder) {
@@ -79,8 +74,7 @@ final class ScopedStateNodeSupport {
     }
 
     static String dimension(GraphDataContext context) {
-        Object value = context.getInputValue(StandardPorts.DIMENSION.getId());
-        if (value == null) value = context.getStaticInput(StandardPorts.DIMENSION.getId());
+        Object value = context.resolveInput(StandardPorts.DIMENSION.getId()).value();
         return value instanceof String text && !text.isBlank() ? text : DEFAULT_DIMENSION;
     }
 

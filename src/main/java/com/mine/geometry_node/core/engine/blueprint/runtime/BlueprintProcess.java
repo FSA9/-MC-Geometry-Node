@@ -15,6 +15,7 @@ import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolv
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.node.definition.port.PortConversionRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -814,6 +815,12 @@ public class BlueprintProcess {
             return dataEvaluation.evaluate(nodeId, portName, dataNodeEvaluator);
         }
 
+        private Object resolveConnectedInput(CompiledDataIndex.DataConnectionSource source) {
+            Object value = executeDataNode(source.sourceNodeId(), source.sourcePortName());
+            return PortConversionRegistry.convert(value, source.sourceType(),
+                    source.targetType(), this);
+        }
+
         private Object computeDataNode(int nodeId, String portName) {
             int prevActive = this.activeNodeId;
             try {
@@ -821,7 +828,7 @@ public class BlueprintProcess {
                     CompiledDataIndex.DataConnectionSource source =
                             index.findInputSource(nodeId, portName);
                     return source != null
-                            ? executeDataNode(source.sourceNodeId(), source.sourcePortName())
+                            ? resolveConnectedInput(source)
                             : index.getNodeStaticInput(nodeId, portName);
                 }
                 BaseNode logic = NodeRegistry.INSTANCE.get(index.getNodeType(nodeId));
@@ -991,7 +998,7 @@ public class BlueprintProcess {
             if (activeNodeId == -1) return null;
             CompiledDataIndex.DataConnectionSource src = index.findInputSource(activeNodeId, portName);
             if (src == null) return null;
-            return executeDataNode(src.sourceNodeId(), src.sourcePortName());
+            return resolveConnectedInput(src);
         }
 
         @Override

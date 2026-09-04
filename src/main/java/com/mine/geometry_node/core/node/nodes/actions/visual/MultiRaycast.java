@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.visual;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
@@ -172,7 +174,7 @@ public class MultiRaycast extends BaseNode {
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.IS_HIT.getId().equals(portName)
                 || StandardPorts.XYZ.getId().equals(portName)
                 || StandardPorts.LIST.getId().equals(portName)) {

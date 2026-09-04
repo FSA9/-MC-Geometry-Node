@@ -19,12 +19,12 @@ public final class BehaviorGetBlackboardNode extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.DATA,
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA,
                 Component.translatable("geometry_node.node.behavior_get_blackboard"))
                 .comment(BlackboardNodePorts.comment(TYPE_ID))
-                .addRow(new PortRow(null, StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(scopeRow())
-                .addPassthroughInput(keyPort(), UIHint.INPUT)
+                .addRow(new PortRow(null, StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null));
+        BlackboardNodePorts.addScopeInput(builder);
+        return builder.addPassthroughInput(keyPort(), UIHint.INPUT)
                 .build();
     }
 
@@ -39,10 +39,6 @@ public final class BehaviorGetBlackboardNode extends BaseNode {
 
     private static PortDef keyPort() {
         return StandardPorts.KEY.toInput("").hiddenPin();
-    }
-
-    static PortRow scopeRow() {
-        return BlackboardNodePorts.scopeRow();
     }
 
     private static ScopedStateScope scope(GraphDataContext context) {

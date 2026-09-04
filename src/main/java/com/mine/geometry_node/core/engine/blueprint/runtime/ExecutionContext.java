@@ -209,20 +209,26 @@ public interface ExecutionContext extends GraphDataContext {
      * Results with the same port ID on different nodes are isolated.
      */
     default void setNodeResult(String portName, @Nullable Object value) {
-        setTempData(nodeResultKey(portName), GraphValueSnapshot.snapshot(value));
+        setTempData(nodeResultKey(getCurrentNodeId(), portName), GraphValueSnapshot.snapshot(value));
         clearFrameCache();
     }
 
     /** Reads a result previously stored by the current node instance. */
+    @Override
     @Nullable
     default Object getNodeResult(String portName) {
-        Object value = getTempData(nodeResultKey(portName));
+        Object value = getTempData(nodeResultKey(getCurrentNodeId(), portName));
         return GraphValueSnapshot.requiresReadCopy(value)
                 ? GraphValueSnapshot.snapshot(value) : value;
     }
 
-    private String nodeResultKey(String portName) {
-        return "node_result:" + getCurrentNodeId() + ":" + portName;
+    @Override
+    default boolean isCurrentEventSourceNode() {
+        return getCurrentNodeId() == getEventSourceNodeId();
+    }
+
+    static String nodeResultKey(int nodeId, String portName) {
+        return "node_result:" + nodeId + ":" + portName;
     }
 
     /**

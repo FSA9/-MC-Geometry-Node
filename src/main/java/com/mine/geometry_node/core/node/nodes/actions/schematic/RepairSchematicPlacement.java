@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.schematic;
 
+import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
@@ -76,24 +78,20 @@ public class RepairSchematicPlacement extends BaseNode {
             }
         }
 
-        context.setTempData(tempKey(context, StandardPorts.BOOL.getId()), affected(result));
-        context.setTempData(tempKey(context, StandardPorts.COUNT.getId()), result.blocks());
-        context.setTempData(tempKey(context, StandardPorts.BLOCK_STATS.getId()), result.blockStats());
+        context.setNodeResult(StandardPorts.BOOL.getId(), affected(result));
+        context.setNodeResult(StandardPorts.COUNT.getId(), result.blocks());
+        context.setNodeResult(StandardPorts.BLOCK_STATS.getId(), result.blockStats());
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
     @Override
-    public Object compute(ExecutionContext context, String portName) {
+    public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.BOOL.getId().equals(portName)
                 || StandardPorts.COUNT.getId().equals(portName)
                 || StandardPorts.BLOCK_STATS.getId().equals(portName)) {
-            return context.getTempData(tempKey(context, portName));
+            return context.getNodeResult(portName);
         }
         return null;
-    }
-
-    private static String tempKey(ExecutionContext context, String port) {
-        return TYPE_ID + ":" + context.getCurrentNodeId() + ":" + port;
     }
 
     private static void logMissing(ServerLevel level, String key) {

@@ -21,6 +21,13 @@ public record PortRow(
     }
 
     public PortRow {
+        // Select widgets are editor configuration controls. Their values may still
+        // participate in evaluation, but the widget itself owns the interaction;
+        // exposing a pin beside it creates two competing ways to edit one value.
+        if (uiHint == UIHint.SELECT) {
+            if (leftPort != null) leftPort = leftPort.hiddenPin();
+            if (rightPort != null) rightPort = rightPort.hiddenPin();
+        }
         if (dataPassthrough) {
             if (leftPort == null || rightPort == null
                     || leftPort.type().isFlow() || rightPort.type().isFlow()

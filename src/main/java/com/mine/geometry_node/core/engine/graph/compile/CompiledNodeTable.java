@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.graph.compile;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
@@ -64,9 +65,12 @@ public final class CompiledNodeTable {
             if (source == null || target == null) continue;
             Integer portKey = portKeys.get(entry.getKey().portName());
             if (portKey == null) continue;
+            PortDef sourcePort = source.outputs().get(entry.getValue().sourcePortName());
+            PortDef targetPort = target.inputs().get(entry.getKey().portName());
             dataInputs[target.index()].putIfAbsent(portKey,
                     new CompiledDataIndex.DataConnectionSource(
-                            source.index(), entry.getValue().sourcePortName()));
+                            source.index(), entry.getValue().sourcePortName(),
+                            portType(sourcePort), portType(targetPort)));
         }
 
         return new CompiledNodeTable(nodeIds, descriptors,
@@ -94,6 +98,10 @@ public final class CompiledNodeTable {
         Map<String, Integer> keys = new LinkedHashMap<>();
         for (String name : names) keys.put(name, keys.size());
         return Map.copyOf(keys);
+    }
+
+    private static PortType portType(@Nullable PortDef port) {
+        return port != null && port.type() != null ? port.type() : PortType.ANY;
     }
 
     public record NodeDescriptor(String id, int index, String type,
