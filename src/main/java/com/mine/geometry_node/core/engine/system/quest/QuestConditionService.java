@@ -85,7 +85,7 @@ public final class QuestConditionService {
 
         int conditionNodeId = conditionNodes.getFirst();
         int conditionCount = BaseQuestConditionsNode.resolveConditionCount(
-                index.getNodeStaticInput(
+                index.getStaticInput(
                         conditionNodeId,
                         StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id()));
         List<QuestConditionCheck> checks = new ArrayList<>(conditionCount);
@@ -94,7 +94,7 @@ public final class QuestConditionService {
         process.setEnvironment(level, owner);
         try {
             for (int i = 1; i <= conditionCount; i++) {
-                CompiledDataIndex.DataConnectionSource source = index.findInputSource(
+                CompiledDataIndex.DataConnectionSource source = index.findDataInput(
                         conditionNodeId,
                         BaseQuestConditionsNode.conditionPort(i));
                 if (source == null) continue;

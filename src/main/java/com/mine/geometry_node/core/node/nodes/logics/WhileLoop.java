@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.logics;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
@@ -12,6 +13,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
@@ -93,7 +95,9 @@ public class WhileLoop extends BaseNode {
         if (currentIteration >= MAX_SYNC_ITERATIONS) {
             clearState(context, iterationKey, cursorKey);
             String message = "WhileLoop exceeded the synchronous iteration limit of " + MAX_SYNC_ITERATIONS;
-            System.err.println("[WhileLoop] " + message);
+            if (RateLimitedLog.acquire(context, "while_loop:sync_limit")) {
+                GeometryNode.LOGGER.warn(message);
+            }
             return ExecutionResult.error(message);
         }
         context.setTempData(cursorKey, currentIteration + 1);

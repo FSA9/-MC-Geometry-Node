@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.actions.block;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -10,6 +11,7 @@ import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
@@ -67,7 +69,10 @@ public class SetBlocksOnGeometry extends BaseNode {
 
         long estimate = geometry.estimateBlockCount(mode, translation);
         if (estimate > maxBlocks) {
-            System.err.println("[GeometryNode] SetBlocksOnGeometry blocked: estimated block count " + estimate + " exceeds max_blocks=" + maxBlocks + ".");
+            if (RateLimitedLog.acquire(context, "set_blocks_on_geometry:estimate_limit")) {
+                GeometryNode.LOGGER.warn("SetBlocksOnGeometry blocked: estimated block count {} exceeds max_blocks={}",
+                        estimate, maxBlocks);
+            }
             return next(StandardPorts.FLOW_OUT.getId());
         }
 
@@ -83,7 +88,9 @@ public class SetBlocksOnGeometry extends BaseNode {
         });
 
         if (!completed || truncated[0]) {
-            System.err.println("[GeometryNode] SetBlocksOnGeometry blocked: geometry expansion exceeded max_blocks=" + maxBlocks + ".");
+            if (RateLimitedLog.acquire(context, "set_blocks_on_geometry:expansion_limit")) {
+                GeometryNode.LOGGER.warn("SetBlocksOnGeometry blocked: geometry expansion exceeded max_blocks={}", maxBlocks);
+            }
             return next(StandardPorts.FLOW_OUT.getId());
         }
 

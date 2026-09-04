@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.api.GeometryNodePlugin;
 import com.mine.geometry_node.api.MarkerRegistrationContext;
 import com.mine.geometry_node.api.NodeRegistrationContext;
@@ -77,7 +78,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
     @Override
     public void registerNodes(NodeRegistrationContext registry) {
-        System.out.println("[BuiltinNodesPlugin] Start to register Nodes...");
+        GeometryNode.LOGGER.info("Starting built-in node registration");
 
         registry.register("behavior/control", new BehaviorRootNode());
         registry.register("behavior/control", new BehaviorSequenceNode());
@@ -420,7 +421,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("quest", new GetQuestCounter());
         registry.register("quest", new SubmitQuest());
         registry.register("quest", new OpenQuestScreen());
-        OnQuestStatusChanged.registerEventPrecheck();
         registry.register("quest", new OnQuestStatusChanged());
 
         // --- EVENTS ---
@@ -542,7 +542,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("maths/vector", new CombineXYZ());
         registry.register("maths/vector", new RelativeTransformToWorld());
 
-        System.out.println("[BuiltinNodesPlugin] Register Finished");
+        GeometryNode.LOGGER.info("Built-in node registration finished");
     }
 
 }

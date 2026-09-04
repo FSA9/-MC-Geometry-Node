@@ -29,6 +29,7 @@ import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -158,11 +159,11 @@ public final class CreateArea extends BaseNode {
                                     context, StandardPorts.RADIUS.getId())));
                     LiveValue<Float> liveHeight = LiveValues.captureFloat(HEIGHT_INPUT, height,
                             ExpressionSpec.fromScalar(getInputExpression(context, HEIGHT_PORT)));
-                    reportDiagnostics(address.id(), "center", liveCenter);
-                    reportDiagnostics(address.id(), "size", liveSize);
-                    reportDiagnostics(address.id(), "rotation", liveRotation);
-                    reportDiagnostics(address.id(), "radius", liveRadius);
-                    reportDiagnostics(address.id(), "height", liveHeight);
+                    reportDiagnostics(context, address.id(), "center", liveCenter);
+                    reportDiagnostics(context, address.id(), "size", liveSize);
+                    reportDiagnostics(context, address.id(), "rotation", liveRotation);
+                    reportDiagnostics(context, address.id(), "radius", liveRadius);
+                    reportDiagnostics(context, address.id(), "height", liveHeight);
                     AreaResourceStore.INSTANCE.upsert(hostLevel.getServer(), address, resourceOwner,
                             shape, areaLevel.getGameTime(), liveCenter, liveSize, liveRotation,
                             liveRadius, liveHeight, anchorId);
@@ -186,10 +187,13 @@ public final class CreateArea extends BaseNode {
                 ExpressionSpec.fromComponent(expression, 2));
     }
 
-    private static void reportDiagnostics(String areaId, String property, LiveValue<?> value) {
+    private static void reportDiagnostics(GraphDataContext context, String areaId,
+                                          String property, LiveValue<?> value) {
         for (String diagnostic : value.diagnostics()) {
-            GeometryNode.LOGGER.warn("Invalid Area expression for '{}' property '{}': {}",
-                    areaId, property, diagnostic);
+            if (RateLimitedLog.acquire(context, "area_expression:" + areaId + ':' + property + ':' + diagnostic)) {
+                GeometryNode.LOGGER.warn("Invalid Area expression for '{}' property '{}': {}",
+                        areaId, property, diagnostic);
+            }
         }
     }
 

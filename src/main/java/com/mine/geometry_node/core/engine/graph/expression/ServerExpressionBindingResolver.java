@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.expression;
 
+import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -28,7 +29,7 @@ public final class ServerExpressionBindingResolver implements ExpressionEvaluati
         ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION, dimensionId);
         ServerLevel targetLevel = server.getLevel(dimension);
         if (targetLevel == null) return Double.NaN;
-        Entity entity = targetLevel.getEntity(entityBinding.entityUuid());
+        Entity entity = GraphEntityReferenceResolver.resolve(entityBinding.entityUuid(), targetLevel);
         return EntityExpressionValues.resolve(entityBinding, entity, 1.0F);
     }
 }

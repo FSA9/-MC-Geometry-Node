@@ -24,6 +24,7 @@ import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 
@@ -89,8 +90,11 @@ public final class CreateForceField extends BaseNode {
                 LiveValue<Float> strength = LiveValues.captureFloat(
                         STRENGTH_PORT, strengthSnapshot, strengthExpression);
                 for (String diagnostic : strength.diagnostics()) {
-                    GeometryNode.LOGGER.warn("Invalid force field strength expression for '{}': {}",
-                            address.id(), diagnostic);
+                    if (RateLimitedLog.acquire(context,
+                            "force_field_expression:" + address.id() + ':' + diagnostic)) {
+                        GeometryNode.LOGGER.warn("Invalid force field strength expression for '{}': {}",
+                                address.id(), diagnostic);
+                    }
                 }
                 ForceFieldResourceStore.INSTANCE.upsert(hostLevel.getServer(), address, owner, area,
                         fieldLevel.getGameTime(), strength);

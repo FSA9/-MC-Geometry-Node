@@ -19,6 +19,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import com.mine.geometry_node.core.schematic.SchematicData;
 import com.mine.geometry_node.core.schematic.LegacySchematicBlockStateMapper;
 import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
@@ -174,7 +175,11 @@ public class CreateSchematicProjection extends BaseNode {
             }
             context.setNodeResult(StandardPorts.RESULT_RESOURCE_ID.getId(), actualKey);
         } catch (Exception e) {
-            GeometryNode.LOGGER.warn("[GeometryNode] Failed to place schematic projection from '{}': {}", pathValue, e.getMessage());
+            if (RateLimitedLog.acquire(context,
+                    "schematic_projection:" + pathValue + ':' + e.getClass().getName())) {
+                GeometryNode.LOGGER.warn("Failed to place schematic projection from '{}': {}",
+                        pathValue, e.getMessage());
+            }
         }
 
         return next(StandardPorts.FLOW_OUT.getId());

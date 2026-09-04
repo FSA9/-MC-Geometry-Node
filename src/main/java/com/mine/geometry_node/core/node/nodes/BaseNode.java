@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
@@ -9,6 +10,7 @@ import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -111,8 +113,11 @@ public abstract class BaseNode {
                 }
             }
             if (rejectedCount > 0) {
-                System.err.println("[BaseNode] Error: " + portName + " replaced " + rejectedCount
-                        + " unconvertible value(s) with null for " + elementType.getSimpleName());
+                String logKey = "base_node:list_elements:" + portName + ":" + elementType.getName();
+                if (RateLimitedLog.acquire(ctx, logKey)) {
+                    GeometryNode.LOGGER.warn("[BaseNode] {} replaced {} unconvertible value(s) with null for {}",
+                            portName, rejectedCount, elementType.getSimpleName());
+                }
             }
             return result;
         }
@@ -124,7 +129,11 @@ public abstract class BaseNode {
             return result;
         }
 
-        System.err.println("[BaseNode] Error： " + portName + " expect List<" + elementType.getSimpleName() + ">，but received：" + raw.getClass().getSimpleName());
+        String logKey = "base_node:list_input:" + portName + ":" + elementType.getName();
+        if (RateLimitedLog.acquire(ctx, logKey)) {
+            GeometryNode.LOGGER.warn("[BaseNode] {} expected List<{}>, but received {}",
+                    portName, elementType.getSimpleName(), raw.getClass().getSimpleName());
+        }
         return new ArrayList<>();
     }
 
@@ -143,7 +152,11 @@ public abstract class BaseNode {
             return result;
         }
 
-        System.err.println("[BaseNode] Error：" + portName + " expect DICT (Map), but received：" + raw.getClass().getSimpleName());
+        String logKey = "base_node:dict_input:" + portName;
+        if (RateLimitedLog.acquire(ctx, logKey)) {
+            GeometryNode.LOGGER.warn("[BaseNode] {} expected DICT (Map), but received {}",
+                    portName, raw.getClass().getSimpleName());
+        }
         return new LinkedHashMap<>();
     }
 

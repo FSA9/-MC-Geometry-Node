@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.container;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -7,6 +8,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -35,7 +37,9 @@ public class GetListValue extends BaseNode {
             if (index >= 0 && index < list.size()) {
                 return list.get(index);
             } else {
-                System.err.println("[GeometryNode] GetListValue illegal index: try to use " + index + " ，but len(list) is " + list.size());
+                if (RateLimitedLog.acquire(context, "get_list_value:index")) {
+                    GeometryNode.LOGGER.warn("GetListValue index {} is outside list length {}", index, list.size());
+                }
             }
         }
 

@@ -14,6 +14,7 @@ import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityGainItem;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -340,7 +341,7 @@ public final class BlueprintEngine {
         if (eventData == null || eventData.isEmpty()) {
             return null;
         }
-        return new LinkedHashMap<>(eventData);
+        return GraphValueSnapshot.snapshotValues(eventData);
     }
 
     public Set<String> getGlobalGraphsForEvent(@NotNull ServerLevel level, String eventType) {
@@ -604,7 +605,7 @@ public final class BlueprintEngine {
         for (EventSubscription subscription : serverState.graphSubscriptions.globalSubscriptionsFor(eventNodeId)) {
             if (!globalStorage.getGraphs().contains(subscription.graphId())
                     || !subscription.shouldDispatch(level, target, eventPayload)) continue;
-            if (subscription.index().getNodeStaticInput(subscription.nodeId(), staticInputId,
+            if (subscription.index().getStaticInput(subscription.nodeId(), staticInputId,
                     Boolean.class, false)) return true;
         }
 
@@ -614,7 +615,7 @@ public final class BlueprintEngine {
         for (EventSubscription subscription : getEntitySubscriptionsForEvent(target, eventNodeId)) {
             if (!attachment.getBoundGraphs().contains(subscription.graphId())
                     || !subscription.shouldDispatch(level, target, eventPayload)) continue;
-            if (subscription.index().getNodeStaticInput(subscription.nodeId(), staticInputId,
+            if (subscription.index().getStaticInput(subscription.nodeId(), staticInputId,
                     Boolean.class, false)) return true;
         }
         return false;

@@ -1,4 +1,6 @@
 package com.mine.geometry_node.core.engine.system.dialogue;
+
+import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -82,7 +84,6 @@ public final class DialogueContext {
         if (level == null || entityId == null) {
             return null;
         }
-        Entity entity = level.getEntity(entityId);
-        return entity == null || entity.isRemoved() ? null : entity;
+        return GraphEntityReferenceResolver.resolve(entityId, level);
     }
 }

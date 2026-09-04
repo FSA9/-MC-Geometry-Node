@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.value;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.GraphNumberNormalizer;
 import com.mine.geometry_node.core.node.definition.port.PortType;
@@ -7,6 +8,7 @@ import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -418,7 +420,10 @@ public final class GraphValueCodecRegistry {
             return wrapper;
         }
 
-        System.err.println("[GeometryNode] Unsupported variable type for saving: " + value.getClass().getName());
+        String valueClass = value.getClass().getName();
+        if (RateLimitedLog.acquire("graph_value_codec:unsupported:" + valueClass)) {
+            GeometryNode.LOGGER.warn("Unsupported graph value type for persistence: {}", valueClass);
+        }
         return null;
     }
 
@@ -504,7 +509,9 @@ public final class GraphValueCodecRegistry {
             if (serializer != null && compound.contains(DATA_KEY)) {
                 return serializer.deserialize(compound.get(DATA_KEY), provider);
             } else {
-                System.err.println("[GeometryNode] Missing serializer for type: " + typeId);
+                if (RateLimitedLog.acquire("graph_value_codec:missing:" + typeId)) {
+                    GeometryNode.LOGGER.warn("Missing graph value serializer for type: {}", typeId);
+                }
             }
         }
 

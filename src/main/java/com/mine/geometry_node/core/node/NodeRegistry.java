@@ -1,10 +1,13 @@
 package com.mine.geometry_node.core.node;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.api.GeometryNodePlugin;
 import com.mine.geometry_node.api.NodeRegistrationContext;
 import com.mine.geometry_node.api.MarkerRegistrationContext;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
+import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckProvider;
+import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckRegistry;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.node.MissingNodeDefinitions;
 import com.mine.geometry_node.core.node.group.GroupNodeDefinitions;
@@ -37,7 +40,7 @@ public class NodeRegistry {
         }
         initializing = true;
 
-        System.out.println("[NodeRegistry] Start node registry");
+        GeometryNode.LOGGER.info("Starting node registry");
 
         boolean completed = false;
         try {
@@ -52,26 +55,26 @@ public class NodeRegistry {
                     }
                     plugin = iterator.next();
                 } catch (ServiceConfigurationError error) {
-                    System.err.println("[NodeRegistry] Skip invalid GeometryNodePlugin provider: " + error.getMessage());
-                    error.printStackTrace();
+                    GeometryNode.LOGGER.error("Skipping invalid GeometryNodePlugin provider", error);
                     continue;
                 }
 
                 String addonId = sanitizeAddonId(plugin.addonId(), plugin);
-                System.out.println("[NodeRegistry] Find plugin: " + addonId + " (" + plugin.getClass().getName() + ")");
+                GeometryNode.LOGGER.info("Discovered node plugin: addon={}, provider={}",
+                        addonId, plugin.getClass().getName());
 
                 try {
                     plugin.registerMarkerTypes(new PluginMarkerRegistrationContext(addonId));
 
                     plugin.registerNodes(new PluginNodeRegistrationContext(addonId));
                 } catch (Exception e) {
-                    System.err.println("[NodeRegistry] Plugin registration failed: " + addonId + " (" + plugin.getClass().getName() + ")");
-                    e.printStackTrace();
+                    GeometryNode.LOGGER.error("Node plugin registration failed: addon={}, provider={}",
+                            addonId, plugin.getClass().getName(), e);
                 }
             }
 
             completed = true;
-            System.out.println("[NodeRegistry] Load finished. Total nodes: " + registry.size());
+            GeometryNode.LOGGER.info("Node registry loaded: nodes={}", registry.size());
         } finally {
             initialized = completed;
             initializing = false;
@@ -115,21 +118,23 @@ public class NodeRegistry {
     private synchronized void registerNode(NodeCategory category, BaseNode node, String addonId) {
         // 1. 基础校验
         if (node == null || category == null) {
-            System.err.println("[NodeRegistry] Skip: Cannot register null node or null category");
+            GeometryNode.LOGGER.error("Skipping node registration with a null node or category");
             return; // 跳过，不中断后续
         }
 
         // 2. 获取定义并校验（防止 NPE）
         NodeDef def = node.getDefaultDefinition();
         if (def == null) {
-            System.err.println("[NodeRegistry] Skip: Node " + node.getClass().getSimpleName() + " returned a null definition!");
+            GeometryNode.LOGGER.error("Skipping node with a null definition: node={}",
+                    node.getClass().getName());
             return; // 跳过这个非法节点
         }
 
         // 3. 获取 ID 并校验
         String typeId = def.typeId();
         if (typeId == null || typeId.isEmpty()) {
-            System.err.println("[NodeRegistry] Skip: Node " + node.getClass().getSimpleName() + " has a null or empty typeId!");
+            GeometryNode.LOGGER.error("Skipping node with an empty type ID: node={}",
+                    node.getClass().getName());
             return;
         }
 
@@ -141,10 +146,8 @@ public class NodeRegistry {
         // 4. 重复检查
         BaseNode existing = registry.get(typeId);
         if (existing != null) {
-            System.err.println("[NodeRegistry] Skip: Duplicate node type registered: " + typeId +
-                    " existing=" + existing.getClass().getName() +
-                    " new=" + node.getClass().getName() +
-                    " addon=" + addonId);
+            GeometryNode.LOGGER.error("Skipping duplicate node type: type={}, existing={}, new={}, addon={}",
+                    typeId, existing.getClass().getName(), node.getClass().getName(), addonId);
             return;
         }
 
@@ -153,6 +156,11 @@ public class NodeRegistry {
                 "Behavior executor cannot be null: " + typeId) : null;
         if (behaviorExecutor != null) {
             BehaviorNodeExecutorRegistry.INSTANCE.register(typeId, behaviorExecutor);
+        }
+        if (node instanceof EventPrecheckProvider provider) {
+            EventPrecheckRegistry.register(typeId,
+                    Objects.requireNonNull(provider.eventPrecheckFactory(),
+                            "Event precheck factory cannot be null: " + typeId));
         }
 
         registry.put(typeId, node);
@@ -164,9 +172,8 @@ public class NodeRegistry {
     private static void logNodeRegistrationFailure(String path, @Nullable BaseNode node,
                                                    String addonId, Throwable error) {
         String nodeClass = node != null ? node.getClass().getName() : "<null-node>";
-        System.err.println("[NodeRegistry] Skip node after registration failure: addon=" + addonId
-                + ", path=" + path + ", node=" + nodeClass + ", error=" + error.getMessage());
-        error.printStackTrace();
+        GeometryNode.LOGGER.error("Skipping node after registration failure: addon={}, path={}, node={}",
+                addonId, path, nodeClass, error);
     }
 
     @Nullable

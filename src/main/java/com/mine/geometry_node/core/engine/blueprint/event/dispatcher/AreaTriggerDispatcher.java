@@ -154,22 +154,22 @@ public final class AreaTriggerDispatcher {
         if (nodeIds.isEmpty()) return List.of();
         List<CompiledListener> listeners = new ArrayList<>(nodeIds.size());
         for (int nodeId : nodeIds) {
-            String dimension = plan.getNodeStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_DIMENSION_PORT, String.class,
+            String dimension = plan.getStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_DIMENSION_PORT, String.class,
                     RegistryDataManager.DEFAULT_DIMENSION);
-            AreaSource source = AreaSource.fromId(plan.getNodeStaticInput(nodeId,
+            AreaSource source = AreaSource.fromId(plan.getStaticInput(nodeId,
                     OnAreaEvent.SUBSCRIPTION_SOURCE_PORT, String.class, OnAreaEvent.SOURCE_AREA));
             String sourceId = source == AreaSource.FORCE_FIELD
-                    ? plan.getNodeStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_FORCE_FIELD_ID_PORT, String.class, "")
-                    : plan.getNodeStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_AREA_ID_PORT, String.class, "");
-            AreaTargetType target = AreaTargetType.fromId(plan.getNodeStaticInput(nodeId,
+                    ? plan.getStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_FORCE_FIELD_ID_PORT, String.class, "")
+                    : plan.getStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_AREA_ID_PORT, String.class, "");
+            AreaTargetType target = AreaTargetType.fromId(plan.getStaticInput(nodeId,
                     OnAreaEvent.TARGET_PORT, String.class, AreaTargetType.ALL.id()));
-            int interval = Math.max(1, plan.getNodeStaticInput(nodeId,
+            int interval = Math.max(1, plan.getStaticInput(nodeId,
                     OnAreaEvent.INTERVAL_TICK_PORT, Integer.class, 1));
-            int offset = Math.floorMod(plan.getNodeStaticInput(nodeId,
+            int offset = Math.floorMod(plan.getStaticInput(nodeId,
                     OnAreaEvent.OFFSET_TICK_PORT, Integer.class, 0), interval);
             ListenerKey key = new ListenerKey(dimension == null ? "" : dimension.trim(), source,
                     sourceId == null ? "" : sourceId.trim(), target, interval, offset);
-            AreaPhase phase = AreaPhase.fromId(plan.getNodeStaticInput(nodeId,
+            AreaPhase phase = AreaPhase.fromId(plan.getStaticInput(nodeId,
                     OnAreaEvent.PHASE_PORT, String.class, OnAreaEvent.PHASE_ENTER));
             listeners.add(new CompiledListener(nodeId, key, phase));
         }

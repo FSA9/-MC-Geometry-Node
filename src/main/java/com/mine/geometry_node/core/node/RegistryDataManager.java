@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;
@@ -178,7 +179,7 @@ public class RegistryDataManager {
             case QuestStatusRegistry.ASSIGNABLE_DYNAMIC_REGISTRY_ID -> QuestStatusRegistry.INSTANCE.assignableIds();
             case MarkerTypeRegistry.DYNAMIC_REGISTRY_ID -> MarkerTypeRegistry.INSTANCE.allIds();
             default -> {
-                System.err.println("[RegistryDataManager] 未知的动态注册表 ID: " + registryId);
+                GeometryNode.LOGGER.warn("[RegistryDataManager] Unknown dynamic registry ID: {}", registryId);
                 yield List.of();
             }
         };
@@ -210,8 +211,8 @@ public class RegistryDataManager {
                     .toList();
 
         } catch (Exception e) {
-            System.err.println("[RegistryDataManager] Failed to fetch dynamic registry: " + registryKey.identifier());
-            e.printStackTrace();
+            GeometryNode.LOGGER.error("[RegistryDataManager] Failed to fetch dynamic registry: {}",
+                    registryKey.identifier(), e);
             return List.of();
         }
     }

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
@@ -12,11 +13,13 @@ import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandlerRegis
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.definition.port.PortConversionRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.*;
@@ -46,7 +49,7 @@ public class BlueprintProcess {
 
     // --- 环境上下文 ---
     private ServerLevel level;
-    private Entity entity;
+    private UUID entityUuid;
     private UUID graphOwnerEntityUuid;
 
     // --- 执行流管理 ---
@@ -94,9 +97,10 @@ public class BlueprintProcess {
             this.eventSourceNodeId = eventSourceNodeId;
             this.threadDimensionId = threadDimensionId;
             this.threadEntityUuid = threadEntityUuid;
-            this.eventRegisters = eventRegisters;
-            this.dynamicEventData = dynamicEventData != null ? new HashMap<>(dynamicEventData) : null;
-            this.tempData = new HashMap<>(tempData);
+            this.eventRegisters = GraphValueSnapshot.snapshotElements(eventRegisters);
+            this.dynamicEventData = dynamicEventData != null
+                    ? GraphValueSnapshot.snapshotValues(dynamicEventData) : null;
+            this.tempData = GraphValueSnapshot.snapshotValues(tempData);
         }
     }
 
@@ -158,7 +162,7 @@ public class BlueprintProcess {
 
     public void setEnvironment(ServerLevel level, @Nullable Entity entity) {
         this.level = level;
-        this.entity = entity;
+        this.entityUuid = entity != null ? entity.getUUID() : null;
     }
 
     public void setGraphOwner(@Nullable Entity owner) {
@@ -169,7 +173,7 @@ public class BlueprintProcess {
     public BlueprintPlan getIndex() { return index; }
     @Nullable
     public Entity getEntity() {
-        return entity != null && !entity.isRemoved() ? entity : null;
+        return level != null ? GraphEntityReferenceResolver.resolve(entityUuid, level) : null;
     }
 
     @Nullable
@@ -183,9 +187,10 @@ public class BlueprintProcess {
         try {
             return thread.evaluateDataOutput(nodeId, portName);
         } catch (Exception e) {
-            System.err.println("[GraphVM] Failed to evaluate data output " + portName
-                    + " at node " + index.getIdToString(nodeId));
-            e.printStackTrace();
+            if (RateLimitedLog.acquire(diagnosticKey("data_output", nodeId, portName))) {
+                GeometryNode.LOGGER.error("Blueprint data output evaluation failed: graph={}, node={}, port={}",
+                        graphId, index.getNodeId(nodeId), portName, e);
+            }
             return null;
         } finally {
             thread.finishDetachedEvaluation();
@@ -393,9 +398,10 @@ public class BlueprintProcess {
         completionThread.restoreEnvironment(join.threadDimensionId, join.threadEntityUuid);
         completionThread.parentJoinId = null;
         completionThread.eventSourceNodeId = join.eventSourceNodeId;
-        completionThread.eventRegisters = Arrays.copyOf(join.eventRegisters, join.eventRegisters.length);
-        completionThread.dynamicEventData = join.dynamicEventData != null ? new HashMap<>(join.dynamicEventData) : null;
-        completionThread.tempData.putAll(join.tempData);
+        completionThread.eventRegisters = GraphValueSnapshot.snapshotElements(join.eventRegisters);
+        completionThread.dynamicEventData = join.dynamicEventData != null
+                ? GraphValueSnapshot.snapshotValues(join.dynamicEventData) : null;
+        GraphValueSnapshot.putSnapshotValues(completionThread.tempData, join.tempData);
         dispatchThread(completionThread);
     }
 
@@ -475,7 +481,7 @@ public class BlueprintProcess {
         void captureEnvironment() {
             this.threadLevel = BlueprintProcess.this.level;
             this.threadDimensionId = this.threadLevel != null ? this.threadLevel.dimension().identifier().toString() : null;
-            this.threadEntityUuid = BlueprintProcess.this.entity != null ? BlueprintProcess.this.entity.getUUID() : null;
+            this.threadEntityUuid = BlueprintProcess.this.entityUuid;
         }
 
         public void restoreEnvironment(@Nullable ServerLevel level, @Nullable UUID entityUuid) {
@@ -519,7 +525,7 @@ public class BlueprintProcess {
         }
 
         public void setEventRegistersForSerialization(Object[] eventRegisters) {
-            this.eventRegisters = eventRegisters;
+            this.eventRegisters = GraphValueSnapshot.snapshotElements(eventRegisters);
         }
 
         public int getEventSourceNodeIdForSerialization() {
@@ -536,7 +542,8 @@ public class BlueprintProcess {
         }
 
         public void setDynamicEventDataForSerialization(@Nullable Map<String, Object> dynamicEventData) {
-            this.dynamicEventData = dynamicEventData;
+            this.dynamicEventData = dynamicEventData != null
+                    ? GraphValueSnapshot.snapshotValues(dynamicEventData) : null;
         }
 
         @Nullable
@@ -570,7 +577,10 @@ public class BlueprintProcess {
                     }
 
                     if (steps++ > MAX_STEPS) {
-                        System.err.println("[GraphVM] Infinite loop detected!");
+                        if (RateLimitedLog.acquire(diagnosticKey("step_limit", currentFlowId, null))) {
+                            GeometryNode.LOGGER.error("Blueprint synchronous step limit exceeded: graph={}, node={}",
+                                    graphId, index.getNodeId(currentFlowId));
+                        }
                         state = State.ERROR;
                         return; // return 会自动触发 finally 块的清理
                     }
@@ -578,8 +588,10 @@ public class BlueprintProcess {
                     String nodeType = index.getNodeType(currentFlowId);
                     BaseNode logic = NodeRegistry.INSTANCE.get(nodeType);
                     if (logic == null) {
-                        System.err.println("[GraphVM] Missing node type during execution: " + nodeType +
-                                " at node " + index.getIdToString(currentFlowId));
+                        if (RateLimitedLog.acquire(diagnosticKey("missing_execution_node", currentFlowId, nodeType))) {
+                            GeometryNode.LOGGER.error("Blueprint execution node type is unavailable: graph={}, node={}, type={}",
+                                    graphId, index.getNodeId(currentFlowId), nodeType);
+                        }
                         state = State.ERROR;
                         currentFlowId = -1;
                         executionStack.clear();
@@ -602,8 +614,11 @@ public class BlueprintProcess {
                         }
 
                     } catch (Exception e) {
-                        System.err.println("[GraphVM] Critical error in node " + index.getIdToString(currentFlowId));
-                        e.printStackTrace();
+                        if (RateLimitedLog.acquire(diagnosticKey("node_execution", currentFlowId,
+                                e.getClass().getName()))) {
+                            GeometryNode.LOGGER.error("Blueprint node execution failed: graph={}, node={}, type={}",
+                                    graphId, index.getNodeId(currentFlowId), nodeType, e);
+                        }
                         state = State.ERROR;
                         // [新增修正] 节点抛出异常时强制断开执行流，避免死循环
                         currentFlowId = -1;
@@ -830,16 +845,17 @@ public class BlueprintProcess {
             try {
                 if (index.isDataPassthroughOutput(nodeId, portName)) {
                     CompiledDataIndex.DataConnectionSource source =
-                            index.findInputSource(nodeId, portName);
+                            index.findDataInput(nodeId, portName);
                     return source != null
                             ? resolveConnectedInput(source)
-                            : index.getNodeStaticInput(nodeId, portName);
+                            : index.getStaticInput(nodeId, portName);
                 }
                 BaseNode logic = NodeRegistry.INSTANCE.get(index.getNodeType(nodeId));
                 if (logic == null) {
-                    System.err.println("[GraphVM] Missing data node type during compute: " +
-                            index.getNodeType(nodeId) + " at node " + index.getIdToString(nodeId) +
-                            ", port " + portName);
+                    if (RateLimitedLog.acquire(diagnosticKey("missing_data_node", nodeId, portName))) {
+                        GeometryNode.LOGGER.error("Blueprint data node type is unavailable: graph={}, node={}, type={}, port={}",
+                                graphId, index.getNodeId(nodeId), index.getNodeType(nodeId), portName);
+                    }
                     return null;
                 }
 
@@ -890,8 +906,7 @@ public class BlueprintProcess {
         public Entity getEntity() {
             ServerLevel currentLevel = getLevel();
             if (this.threadEntityUuid != null && currentLevel != null) {
-                Entity res = currentLevel.getEntity(this.threadEntityUuid);
-                return (res == null || res.isRemoved()) ? null : res;
+                return GraphEntityReferenceResolver.resolve(this.threadEntityUuid, currentLevel);
             }
             return null;
         }
@@ -901,8 +916,7 @@ public class BlueprintProcess {
             ServerLevel currentLevel = getLevel();
             UUID ownerUuid = BlueprintProcess.this.graphOwnerEntityUuid;
             if (ownerUuid != null && currentLevel != null) {
-                Entity owner = currentLevel.getEntity(ownerUuid);
-                return owner == null || owner.isRemoved() ? null : owner;
+                return GraphEntityReferenceResolver.resolve(ownerUuid, currentLevel);
             }
             return null;
         }
@@ -917,7 +931,7 @@ public class BlueprintProcess {
 
         @Override
         public Object getEventData(String key) {
-            int id = index.getKeyId(key);
+            int id = index.getPortKey(key);
             Object val = null;
 
             if (id != -1 && id < eventRegisters.length) {
@@ -940,8 +954,10 @@ public class BlueprintProcess {
 
         @Override
         public void setEventData(String key, Object value) {
-            int id = index.getKeyId(key);
-            Object finalValue = (value instanceof Entity ent) ? ent.getUUID() : value;
+            int id = index.getPortKey(key);
+            Object finalValue = (value instanceof Entity ent)
+                    ? ent.getUUID()
+                    : GraphValueSnapshot.snapshot(value);
 
             if (id != -1) {
                 if (id < eventRegisters.length) eventRegisters[id] = finalValue;
@@ -961,19 +977,19 @@ public class BlueprintProcess {
         @Override
         public Object getInputValue(String portName) {
             if (activeNodeId == -1) return null;
-            CompiledDataIndex.DataConnectionSource src = index.findInputSource(activeNodeId, portName);
+            CompiledDataIndex.DataConnectionSource src = index.findDataInput(activeNodeId, portName);
             if (src == null) return null;
             return resolveConnectedInput(src);
         }
 
         @Override
         public boolean hasInputConnection(String portName) {
-            return activeNodeId != -1 && index.findInputSource(activeNodeId, portName) != null;
+            return activeNodeId != -1 && index.findDataInput(activeNodeId, portName) != null;
         }
 
         @Override
         public Object getStaticInput(String portName) {
-            return (activeNodeId != -1) ? index.getNodeStaticInput(activeNodeId, portName) : null;
+            return (activeNodeId != -1) ? index.getStaticInput(activeNodeId, portName) : null;
         }
 
         @Override
@@ -1054,7 +1070,7 @@ public class BlueprintProcess {
                     this.eventSourceNodeId,
                     getThreadDimensionId(),
                     getThreadEntityUuid(),
-                    Arrays.copyOf(this.eventRegisters, this.eventRegisters.length),
+                    this.eventRegisters,
                     this.dynamicEventData,
                     this.tempData
             );
@@ -1084,11 +1100,12 @@ public class BlueprintProcess {
             child.restoreEnvironment(getLevel(), getThreadEntityUuid());
             child.parentJoinId = joinId;
             child.eventSourceNodeId = this.eventSourceNodeId;
-            child.eventRegisters = Arrays.copyOf(this.eventRegisters, this.eventRegisters.length);
-            child.dynamicEventData = this.dynamicEventData != null ? new HashMap<>(this.dynamicEventData) : null;
-            child.tempData.putAll(this.tempData);
+            child.eventRegisters = GraphValueSnapshot.snapshotElements(this.eventRegisters);
+            child.dynamicEventData = this.dynamicEventData != null
+                    ? GraphValueSnapshot.snapshotValues(this.dynamicEventData) : null;
+            GraphValueSnapshot.putSnapshotValues(child.tempData, this.tempData);
             if (tempDataOverride != null) {
-                child.tempData.putAll(tempDataOverride);
+                GraphValueSnapshot.putSnapshotValues(child.tempData, tempDataOverride);
             }
             BlueprintProcess.this.dispatchThread(child);
             return true;
@@ -1113,7 +1130,7 @@ public class BlueprintProcess {
 
         @Override
         public String getCurrentNodeStableId() {
-            return activeNodeId >= 0 ? index.getIdToString(activeNodeId) : null;
+            return activeNodeId >= 0 ? index.getNodeId(activeNodeId) : null;
         }
 
         @Override
@@ -1128,13 +1145,13 @@ public class BlueprintProcess {
             delayThread.state = State.WAITING;
             delayThread.eventSourceNodeId = this.eventSourceNodeId;
 
-            System.arraycopy(this.eventRegisters, 0, delayThread.eventRegisters, 0, this.eventRegisters.length);
+            delayThread.eventRegisters = GraphValueSnapshot.snapshotElements(this.eventRegisters);
 
             if (this.dynamicEventData != null) {
-                delayThread.dynamicEventData = new HashMap<>(this.dynamicEventData);
+                delayThread.dynamicEventData = GraphValueSnapshot.snapshotValues(this.dynamicEventData);
             }
 
-            delayThread.tempData.putAll(this.tempData);
+            GraphValueSnapshot.putSnapshotValues(delayThread.tempData, this.tempData);
             BlueprintProcess.this.sleepingThreads.add(delayThread);
             BlueprintProcess.this.notifyTickScheduleChanged();
         }
@@ -1171,6 +1188,10 @@ public class BlueprintProcess {
     // ================================
 
     public ServerLevel getLevel() { return this.level; }
+
+    private String diagnosticKey(String kind, int nodeId, @Nullable String detail) {
+        return "blueprint:" + graphId + ':' + kind + ':' + nodeId + ':' + (detail != null ? detail : "");
+    }
 
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
         return BlueprintProcessSerializer.save(this, tag, provider);

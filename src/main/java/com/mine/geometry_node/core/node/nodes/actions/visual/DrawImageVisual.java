@@ -16,18 +16,16 @@ import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /** Displays an image as a temporary plane in world space. */
 public final class DrawImageVisual extends BaseNode {
@@ -39,8 +37,6 @@ public final class DrawImageVisual extends BaseNode {
     public static final PortDef WIDTH_PORT = StandardPorts.WIDTH.toInput(1.0F).liveExpression();
     public static final PortDef HEIGHT_PORT = StandardPorts.HEIGHT.toInput(1.0F).liveExpression();
     public static final PortDef ALPHA_PORT = StandardPorts.ALPHA.toInput(1.0F).liveExpression();
-    private static final Set<String> REPORTED_FAILURES = Collections.synchronizedSet(new HashSet<>());
-
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.draw_image_visual"))
@@ -141,7 +137,10 @@ public final class DrawImageVisual extends BaseNode {
                     assets
             );
         } catch (IOException | IllegalArgumentException exception) {
-            reportOnce(rawPath, exception);
+            if (RateLimitedLog.acquire(context,
+                    "image_visual:" + rawPath + ':' + exception.getClass().getName())) {
+                GeometryNode.LOGGER.warn("Unable to display image '{}': {}", rawPath, exception.getMessage());
+            }
         }
 
         return next(StandardPorts.FLOW_OUT.getId());
@@ -155,10 +154,4 @@ public final class DrawImageVisual extends BaseNode {
         return value != null ? value : fallback;
     }
 
-    private static void reportOnce(String path, Exception exception) {
-        String key = path + '\n' + exception.getMessage();
-        if (REPORTED_FAILURES.add(key)) {
-            GeometryNode.LOGGER.warn("Unable to display image '{}': {}", path, exception.getMessage());
-        }
-    }
 }

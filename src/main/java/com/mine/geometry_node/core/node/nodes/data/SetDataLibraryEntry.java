@@ -3,7 +3,8 @@ package com.mine.geometry_node.core.node.nodes.data;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryTypes;
-import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryService;
+import com.mine.geometry_node.core.engine.system.data.library.DataLibraryWriteRequest;
+import com.mine.geometry_node.core.engine.system.data.library.DataLibraryWriteRuntime;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -17,7 +18,6 @@ import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import net.minecraft.network.chat.Component;
 
-import java.io.IOException;
 import java.util.Map;
 
 /** Creates or replaces one server Data Library entry by path + type + public key. */
@@ -28,7 +28,7 @@ public final class SetDataLibraryEntry extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.DATA,
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION,
                         Component.translatable("geometry_node.node.set_data_library_entry"))
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
@@ -36,8 +36,13 @@ public final class SetDataLibraryEntry extends BaseNode {
                         .input(ENTRY_TYPE, "type")
                         .input(StandardPorts.KEY, "key")
                         .input(StandardPorts.ANY_VALUE, "value")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(DataLibraryWriteRuntime.FAILURE_PORT, "failed")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
+                        UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null,
+                        PortDef.exec(DataLibraryWriteRuntime.FAILURE_PORT, "geometry_node.port.failed"),
                         UIHint.DEFAULT, null, null))
                 .addPassthroughInput(PortDef.create(ENTRY_TYPE, "geometry_node.port.data_library_entry_type",
                                 PortType.STRING, DEFAULT_TYPE.name()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, DataLibraryTypes.optionIds()))
@@ -55,14 +60,7 @@ public final class SetDataLibraryEntry extends BaseNode {
         String key = getInput(context, StandardPorts.KEY.getId(), String.class);
         Object value = TypeConverter.convertForPort(
                 getRawInput(context, StandardPorts.ANY_VALUE.getId()), type, context);
-        try {
-            RemoteDataLibraryService.INSTANCE.upsert(
-                    context.getLevel().getServer(), path == null ? "" : path,
-                    type, key == null ? "" : key, value);
-            context.clearFrameCache();
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to update the server Data Library", exception);
-        }
-        return next(StandardPorts.FLOW_OUT.getId());
+        return ExecutionResult.externalWait(DataLibraryWriteRuntime.ID,
+                new DataLibraryWriteRequest(path, type, key, value));
     }
 }

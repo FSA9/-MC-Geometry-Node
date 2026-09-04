@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.actions.block;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -8,6 +9,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -50,7 +52,9 @@ public class FillBlock extends BaseNode {
 
             long volume = (long) (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
             if (volume > MAX_VOLUME) {
-                System.err.println("[GeometryNode] FillBlock 警告：尝试填充体积过大 (" + volume + " > " + MAX_VOLUME + ")，已拦截操作。");
+                if (RateLimitedLog.acquire(context, "fill_block:volume_limit")) {
+                    GeometryNode.LOGGER.warn("FillBlock blocked: volume {} exceeds maximum {}", volume, MAX_VOLUME);
+                }
                 return next(StandardPorts.FLOW_OUT.getId());
             }
 

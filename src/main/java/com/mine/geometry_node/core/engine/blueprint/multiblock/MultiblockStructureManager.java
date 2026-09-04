@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.multiblock;
 
+import com.mine.geometry_node.GeometryNode;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -61,8 +62,7 @@ public class MultiblockStructureManager extends SimplePreparableReloadListener<M
             try (BufferedReader reader = resource.openAsReader()) {
                 objects.put(id, JsonParser.parseReader(reader));
             } catch (Exception e) {
-                System.err.println("[MultiblockStructureManager]: Error loading multiblock " + fileId);
-                e.printStackTrace();
+                GeometryNode.LOGGER.error("[MultiblockStructureManager] Failed to load multiblock {}", fileId, e);
             }
         });
         return objects;
@@ -79,8 +79,7 @@ public class MultiblockStructureManager extends SimplePreparableReloadListener<M
                     loaded.put(structure.id(), structure);
                 }
             } catch (Exception e) {
-                System.err.println("[MultiblockStructureManager]: Error parsing multiblock " + location);
-                e.printStackTrace();
+                GeometryNode.LOGGER.error("[MultiblockStructureManager] Failed to parse multiblock {}", location, e);
             }
         });
 
@@ -90,7 +89,7 @@ public class MultiblockStructureManager extends SimplePreparableReloadListener<M
 
         this.structures = Map.copyOf(loaded);
         this.optionIds = List.copyOf(options);
-        System.out.println("[MultiblockStructureManager]: Loaded " + structures.size() + " multiblock structure(s).");
+        GeometryNode.LOGGER.info("[MultiblockStructureManager] Loaded {} multiblock structure(s)", structures.size());
     }
 
     public List<Match> findMatches(ServerLevel level, BlockPos changedPos, BlockState changedState, Set<String> interestedStructureIds) {

@@ -117,9 +117,9 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
     // 4. 字典与映射 API (Dictionaries & Mappings)
     // ====================================================
 
-    /** 通过 String ID 获取运行时的 Int 索引 (常用于读档恢复) */
-    public int getStringToId(String strId) {
-        return nodes.getNodeKey(strId);
+    /** Resolves a stable node ID to its compiled integer key. */
+    public int getNodeKey(String nodeId) {
+        return nodes.getNodeKey(nodeId);
     }
 
     public String getGraphTypeId() {
@@ -144,30 +144,21 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
         return questConditionOverview;
     }
 
-    /** 通过 Int 索引还原原始的 String ID (常用于报错日志与存档持久化) */
-    public String getIdToString(int id) {
-        return nodes.getNodeId(id);
-    }
-
     @Override
     @Nullable
     public String getNodeId(int nodeId) {
-        return getIdToString(nodeId);
-    }
-
-    public int getKeyId(String key) {
-        return nodes.getPortKey(key);
+        return nodes.getNodeId(nodeId);
     }
 
     @Override
     public int getPortKey(String portName) {
-        return getKeyId(portName);
+        return nodes.getPortKey(portName);
     }
 
-    /** 将 Int 寄存器 ID 翻译回原始的 String (用于序列化保存) */
+    /** Resolves a compiled port key to its stable port name. */
     @Nullable
-    public String getKeyFromId(int id) {
-        return nodes.getPortName(id);
+    public String getPortName(int portKey) {
+        return nodes.getPortName(portKey);
     }
 
 
@@ -185,19 +176,14 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> T getNodeStaticInput(int nodeId, String portId, Class<T> type, T defaultValue) {
+    public <T> T getStaticInput(int nodeId, String portId, Class<T> type, T defaultValue) {
         return nodes.getStaticInput(nodeId, portId, type, defaultValue);
-    }
-
-    @Nullable
-    public Object getNodeStaticInput(int nodeId, String portName) {
-        return nodes.getStaticInput(nodeId, portName);
     }
 
     @Override
     @Nullable
     public Object getStaticInput(int nodeId, String portName) {
-        return getNodeStaticInput(nodeId, portName);
+        return nodes.getStaticInput(nodeId, portName);
     }
 
     @Override
@@ -212,7 +198,7 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
     @Nullable
     public IntFlowTarget findFlowTarget(int currentNodeId, String outputPortName) {
         if (currentNodeId < 0 || currentNodeId >= flowOutputArray.length) return null;
-        int portId = getKeyId(outputPortName);
+        int portId = getPortKey(outputPortName);
         return portId >= 0 ? flowOutputArray[currentNodeId].get(portId) : null;
     }
 
@@ -220,11 +206,6 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
      * 向上游索要数据流的源头
      * @return 包装了源节点 ID 与端口名的记录类，若未连接则返回 null
      */
-    @Nullable
-    public DataConnectionSource findInputSource(int targetNodeId, String inputPortName) {
-        return nodes.findDataInput(targetNodeId, inputPortName);
-    }
-
     @Override
     @Nullable
     public DataConnectionSource findDataInput(int targetNodeId, String inputPortName) {

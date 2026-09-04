@@ -49,7 +49,7 @@ public class BlueprintProcessSerializer {
                 long remaining = (process.getLevel() != null) ? Math.max(0, thread.wakeUpTick - currentTime) : thread.wakeUpTick;
                 tTag.putLong("WaitRemaining", remaining);
 
-                String currentFlowNodeId = index.getIdToString(thread.getCurrentFlowIdForSerialization());
+                String currentFlowNodeId = index.getNodeId(thread.getCurrentFlowIdForSerialization());
                 if (currentFlowNodeId != null) {
                     tTag.putString("CurrentFlowId", currentFlowNodeId);
                 }
@@ -59,7 +59,7 @@ public class BlueprintProcessSerializer {
                 if (thread.getParentJoinIdForSerialization() != null) {
                     tTag.putString("ParentJoinId", thread.getParentJoinIdForSerialization());
                 }
-                String eventSourceNodeId = index.getIdToString(thread.getEventSourceNodeIdForSerialization());
+                String eventSourceNodeId = index.getNodeId(thread.getEventSourceNodeIdForSerialization());
                 if (eventSourceNodeId != null) {
                     tTag.putString("EventSourceNodeId", eventSourceNodeId);
                 }
@@ -75,7 +75,7 @@ public class BlueprintProcessSerializer {
                 ListTag execStackTag = new ListTag();
                 for (BlueprintPlan.IntFlowTarget frame : thread.getExecutionStackForSerialization()) {
                     CompoundTag frameTag = new CompoundTag();
-                    frameTag.putString("TargetNodeId", index.getIdToString(frame.targetNodeId()));
+                    frameTag.putString("TargetNodeId", index.getNodeId(frame.targetNodeId()));
                     frameTag.putString("TargetPortName", frame.targetPortName());
                     execStackTag.add(frameTag);
                 }
@@ -104,14 +104,14 @@ public class BlueprintProcessSerializer {
             for (BlueprintProcess.BranchJoin join : process.getBranchJoinsForSerialization()) {
                 CompoundTag joinTag = new CompoundTag();
                 joinTag.putString("JoinId", join.id);
-                String completionNodeId = index.getIdToString(join.completionNodeId);
+                String completionNodeId = index.getNodeId(join.completionNodeId);
                 if (completionNodeId != null) {
                     joinTag.putString("CompletionNodeId", completionNodeId);
                     joinTag.putString("CompletionEntryPort", join.completionEntryPort);
                 }
                 joinTag.putInt("PendingChildren", join.pendingChildren);
                 joinTag.putBoolean("LaunchFinished", join.launchFinished);
-                String eventSourceNodeId = index.getIdToString(join.eventSourceNodeId);
+                String eventSourceNodeId = index.getNodeId(join.eventSourceNodeId);
                 if (eventSourceNodeId != null) {
                     joinTag.putString("EventSourceNodeId", eventSourceNodeId);
                 }
@@ -156,7 +156,7 @@ public class BlueprintProcessSerializer {
                 Tag currentFlowTag = tTag.get("CurrentFlowId");
                 if (currentFlowTag != null) {
                     if (currentFlowTag.asString().isPresent()) {
-                        currentFlowId = index.getStringToId(currentFlowTag.asString().orElse(""));
+                        currentFlowId = index.getNodeKey(currentFlowTag.asString().orElse(""));
                     } else if (currentFlowTag.asInt().isPresent()) {
                         currentFlowId = currentFlowTag.asInt().orElse(-1);
                     }
@@ -166,7 +166,7 @@ public class BlueprintProcessSerializer {
 
                 BlueprintProcess.ExecutionThread thread = process.new ExecutionThread(currentFlowId, currentPort);
                 thread.setEventSourceNodeIdForSerialization(
-                        index.getStringToId(tTag.getStringOr("EventSourceNodeId", ""))
+                        index.getNodeKey(tTag.getStringOr("EventSourceNodeId", ""))
                 );
                 if (tTag.contains("ParentJoinId")) {
                     thread.setParentJoinIdForSerialization(tTag.getStringOr("ParentJoinId", ""));
@@ -186,7 +186,7 @@ public class BlueprintProcessSerializer {
                     ListTag stackList = tTag.getListOrEmpty("ExecutionStack");
                     for (int j = 0; j < stackList.size(); j++) {
                         CompoundTag frameTag = stackList.getCompoundOrEmpty(j);
-                        int targetId = index.getStringToId(frameTag.getStringOr("TargetNodeId", ""));
+                        int targetId = index.getNodeKey(frameTag.getStringOr("TargetNodeId", ""));
                         String portName = frameTag.getStringOr("TargetPortName", "");
                         if (targetId != -1) {
                             thread.getExecutionStackForSerialization().add(new BlueprintPlan.IntFlowTarget(targetId, portName));
@@ -221,7 +221,7 @@ public class BlueprintProcessSerializer {
             ListTag list = tag.getListOrEmpty("BranchJoins");
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag joinTag = list.getCompoundOrEmpty(i);
-                int completionNodeId = index.getStringToId(joinTag.getStringOr("CompletionNodeId", ""));
+                int completionNodeId = index.getNodeKey(joinTag.getStringOr("CompletionNodeId", ""));
                 String completionEntryPort = joinTag.getStringOr("CompletionEntryPort", "");
                 String joinId = joinTag.getStringOr("JoinId", "");
                 if (joinId.isBlank()) {
@@ -246,7 +246,7 @@ public class BlueprintProcessSerializer {
                         joinId,
                         completionNodeId,
                         completionEntryPort,
-                        index.getStringToId(joinTag.getStringOr("EventSourceNodeId", "")),
+                        index.getNodeKey(joinTag.getStringOr("EventSourceNodeId", "")),
                         joinTag.contains("ContextDimension")
                                 ? joinTag.getStringOr("ContextDimension", "") : null,
                         parseUuid(joinTag.getStringOr("ContextEntity", "")),
@@ -279,7 +279,7 @@ public class BlueprintProcessSerializer {
                                            BlueprintPlan index, HolderLookup.Provider provider) {
         for (int i = 0; i < statics.length; i++) {
             if (statics[i] != null) {
-                String key = index.getKeyFromId(i);
+                String key = index.getPortName(i);
                 if (key != null) {
                     tag.put(key, GraphValueCodecRegistry.toTagStrict(statics[i], provider));
                 }
@@ -301,7 +301,7 @@ public class BlueprintProcessSerializer {
         for (String key : tag.keySet()) {
             Object obj = GraphValueCodecRegistry.fromTag(tag.get(key), provider);
             if (obj != null) {
-                int id = index.getKeyId(key);
+                int id = index.getPortKey(key);
                 if (id != -1 && id < statics.length) {
                     statics[id] = obj;
                 } else {

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.container;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -8,6 +9,7 @@ import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -51,7 +53,10 @@ public class GetLength extends BaseNode {
             return geometry.primitiveCount();
         }
 
-        System.err.println("[GetLength] Warning: Unsupported type: " + rawValue.getClass().getSimpleName());
+        String valueClass = rawValue.getClass().getName();
+        if (RateLimitedLog.acquire(context, "get_length:unsupported:" + valueClass)) {
+            GeometryNode.LOGGER.warn("[GetLength] Unsupported value type: {}", valueClass);
+        }
         return 0;
     }
 }

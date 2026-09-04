@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.event.GraphEventFields;
 import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheck;
 import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckContext;
 import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckFactory;
-import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckRegistry;
+import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckProvider;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.QuestEventTypes;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
@@ -21,7 +21,7 @@ import net.minecraft.network.chat.Component;
 
 import java.util.Map;
 
-public final class OnQuestStatusChanged extends BaseEventNode {
+public final class OnQuestStatusChanged extends BaseEventNode implements EventPrecheckProvider {
     public static final String TYPE_ID = QuestEventTypes.STATUS_CHANGED;
     public static final String SCOPE_PORT = "quest_scope";
     public static final String SCOPE_GENERAL = "general";
@@ -29,8 +29,9 @@ public final class OnQuestStatusChanged extends BaseEventNode {
 
     private static final EventPrecheckFactory SCOPE_PRECHECK = OnQuestStatusChanged::createScopePrecheck;
 
-    public static void registerEventPrecheck() {
-        EventPrecheckRegistry.register(TYPE_ID, SCOPE_PRECHECK);
+    @Override
+    public EventPrecheckFactory eventPrecheckFactory() {
+        return SCOPE_PRECHECK;
     }
 
     @Override

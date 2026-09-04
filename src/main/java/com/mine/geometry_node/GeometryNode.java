@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
+import com.mine.geometry_node.core.engine.system.data.library.DataLibraryWriteRuntime;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileControlAttachment;
@@ -177,8 +178,10 @@ public class GeometryNode {
         GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BehaviorTreeRuntime.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(DataLibraryWriteRuntime.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphDebugEngine.INSTANCE);
         ExternalWaitHandlerRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
+        ExternalWaitHandlerRegistry.INSTANCE.register(DataLibraryWriteRuntime.INSTANCE);
 
         QuestService.INSTANCE.init();
         QuestScreenService.INSTANCE.init();

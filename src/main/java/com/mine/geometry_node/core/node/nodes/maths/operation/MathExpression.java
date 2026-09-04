@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.maths.operation;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionBinding;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -17,6 +18,7 @@ import com.mine.geometry_node.core.utils.expression.ASTNode;
 import com.mine.geometry_node.core.utils.expression.ASTNodes;
 import com.mine.geometry_node.core.utils.expression.ExpressionCompiler;
 import com.mine.geometry_node.core.utils.expression.VariableRegistry;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.network.chat.Component;
 
 import java.util.HashMap;
@@ -171,7 +173,9 @@ public class MathExpression extends BaseNode {
             String finalFormula = graftedAst.toFormulaString();
             return new DynamicData((float) resultValue, new ExpressionData(finalFormula, mergedBindings));
         } catch (Exception e) {
-            System.err.println("[MathExpression] Compute Error: " + e.getMessage());
+            if (RateLimitedLog.acquire(context, "math_expression:compute")) {
+                GeometryNode.LOGGER.warn("[MathExpression] Compute failed: {}", e.getMessage());
+            }
             return new DynamicData(0.0f, ExpressionData.ZERO);
         }
     }

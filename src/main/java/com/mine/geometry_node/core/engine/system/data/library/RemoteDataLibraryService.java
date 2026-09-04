@@ -59,13 +59,15 @@ public final class RemoteDataLibraryService {
     public Object resolve(MinecraftServer server, UUID entryId, @Nullable PortType expectedType) {
         if (server == null || entryId == null || isStopped(server)) return null;
         try {
-            DataLibraryEntry entry = ensureLoaded(server).document().find(entryId).orElse(null);
+            CachedLibrary cached = caches.get(server);
+            if (cached == null) return null;
+            DataLibraryEntry entry = cached.document().find(entryId).orElse(null);
             if (entry == null || expectedType != null && entry.type() != expectedType) return null;
             if (entry.value() instanceof DataLibraryEntityReference reference) {
                 return GraphEntityReferenceResolver.resolve(reference.entityId(), server);
             }
             return GraphValueSnapshot.snapshot(entry.value());
-        } catch (IOException | RuntimeException exception) {
+        } catch (RuntimeException exception) {
             return null;
         }
     }
@@ -75,11 +77,13 @@ public final class RemoteDataLibraryService {
     public DataLibraryEntry resolveEntry(MinecraftServer server, UUID entryId) {
         if (server == null || entryId == null || isStopped(server)) return null;
         try {
-            return ensureLoaded(server).document().find(entryId)
+            CachedLibrary cached = caches.get(server);
+            if (cached == null) return null;
+            return cached.document().find(entryId)
                     .map(entry -> new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(),
                             GraphValueSnapshot.snapshot(entry.value())))
                     .orElse(null);
-        } catch (IOException | RuntimeException exception) {
+        } catch (RuntimeException exception) {
             return null;
         }
     }

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.world;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -10,6 +11,7 @@ import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.*;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -241,7 +243,9 @@ public class TargetSelector extends BaseNode {
             return new net.minecraft.commands.arguments.selector.EntitySelectorParser(new com.mojang.brigadier.StringReader(finalSelector), true).parse().findEntities(source);
 
         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
-            System.err.println("[TargetSelector] 语法错误: " + finalSelector + " | 原因: " + e.getMessage());
+            if (RateLimitedLog.acquire(context, "target_selector:syntax:" + finalSelector)) {
+                GeometryNode.LOGGER.warn("[TargetSelector] Invalid selector {}: {}", finalSelector, e.getMessage());
+            }
         }
         return List.of();
     }

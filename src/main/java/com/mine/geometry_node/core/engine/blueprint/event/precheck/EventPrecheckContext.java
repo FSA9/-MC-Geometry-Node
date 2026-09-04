@@ -15,7 +15,7 @@ public record EventPrecheckContext(String graphId, BlueprintPlan index, int node
 
     @Nullable
     public Object staticInput(String portId) {
-        return index.getNodeStaticInput(nodeId, portId);
+        return index.getStaticInput(nodeId, portId);
     }
 
     @Nullable
@@ -24,7 +24,7 @@ public record EventPrecheckContext(String graphId, BlueprintPlan index, int node
     }
 
     public <T> T staticInput(String portId, Class<T> type, T defaultValue) {
-        return index.getNodeStaticInput(nodeId, portId, type, defaultValue);
+        return index.getStaticInput(nodeId, portId, type, defaultValue);
     }
 
     public <T> T staticInput(StandardPorts port, Class<T> type, T defaultValue) {

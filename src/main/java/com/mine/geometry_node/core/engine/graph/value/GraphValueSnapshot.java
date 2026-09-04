@@ -53,6 +53,36 @@ public final class GraphValueSnapshot {
         return value;
     }
 
+    /** Creates an independently owned register array and snapshots every stored value. */
+    public static Object[] snapshotElements(Object[] values) {
+        if (values == null || values.length == 0) {
+            return new Object[0];
+        }
+        Object[] copy = new Object[values.length];
+        for (int index = 0; index < values.length; index++) {
+            copy[index] = snapshot(values[index]);
+        }
+        return copy;
+    }
+
+    /** Creates a mutable state map whose values are detached graph-value snapshots. */
+    public static Map<String, Object> snapshotValues(Map<String, ?> values) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        if (values == null || values.isEmpty()) {
+            return copy;
+        }
+        values.forEach((key, value) -> copy.put(key, snapshot(value)));
+        return copy;
+    }
+
+    /** Adds detached values to an existing mutable runtime-state map. */
+    public static void putSnapshotValues(Map<String, Object> target, Map<String, ?> values) {
+        if (target == null || values == null || values.isEmpty()) {
+            return;
+        }
+        values.forEach((key, value) -> target.put(key, snapshot(value)));
+    }
+
     @SuppressWarnings("unchecked")
     private static RichTextValue snapshotRichText(RichTextValue value) {
         List<RichTextValue.Segment> segments = new ArrayList<>(value.segments().size());

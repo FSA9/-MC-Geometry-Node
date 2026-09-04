@@ -243,8 +243,8 @@ public final class BlueprintRuntime implements GraphRuntime {
             BlueprintPlan plan = engine.getGraphIndex(graphId);
             if (plan == null) continue;
             for (int nodeId : plan.findNodesByType(OnPlayerKeyEvent.TYPE_ID)) {
-                if (!plan.getNodeStaticInput(nodeId, StandardPorts.INTERCEPT.getId(), Boolean.class, false)) continue;
-                String keyId = plan.getNodeStaticInput(nodeId, StandardPorts.NAME.getId(), String.class, "");
+                if (!plan.getStaticInput(nodeId, StandardPorts.INTERCEPT.getId(), Boolean.class, false)) continue;
+                String keyId = plan.getStaticInput(nodeId, StandardPorts.NAME.getId(), String.class, "");
                 if (keyId == null || keyId.isBlank()) {
                     return PlayerInputKeys.allMask();
                 } else {

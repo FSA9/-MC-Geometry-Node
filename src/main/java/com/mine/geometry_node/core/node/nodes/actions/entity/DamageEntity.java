@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.actions.entity;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -9,6 +10,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -56,7 +58,9 @@ public class DamageEntity extends BaseNode {
                         finalSource = new DamageSource(holder);
                     }
                 } catch (Exception e) {
-                    System.err.println("[DamageEntity] Illegal damage type ID: " + damageTypeId);
+                    if (RateLimitedLog.acquire(context, "damage_entity:damage_type:" + damageTypeId)) {
+                        GeometryNode.LOGGER.warn("[DamageEntity] Invalid damage type ID: {}", damageTypeId);
+                    }
                 }
             }
 
