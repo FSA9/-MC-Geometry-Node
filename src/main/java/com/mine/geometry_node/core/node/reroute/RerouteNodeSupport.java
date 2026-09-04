@@ -22,11 +22,11 @@ public final class RerouteNodeSupport {
     }
 
     public static boolean isReroute(NodeData node) {
-        return node != null && RerouteNode.TYPE_ID.equals(node.type);
+        return node != null && isRerouteType(node.type);
     }
 
     public static boolean isRerouteType(String type) {
-        return RerouteNode.TYPE_ID.equals(type);
+        return type != null && NodeDef.canonicalTypeId(RerouteNode.TYPE_ID).equals(type);
     }
 
     public static PortType resolveLockedType(NodeData node) {

@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Set;
 
 public final class BehaviorPatrolNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_patrol";
+    public static final String TYPE_ID = "behavior_patrol";
     public static final String MODE_EXACT = "exact";
     public static final String MODE_REGION = "region";
 
@@ -54,7 +54,7 @@ public final class BehaviorPatrolNode extends BaseNode implements BehaviorExecut
         String mode = patrolMode(instanceData);
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION,
                         Component.translatable("geometry_node.node.behavior_patrol"))
-                .comment(NodeComment.builder("behavior_patrol")
+                .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
                         .text("exact")
                         .text("region")

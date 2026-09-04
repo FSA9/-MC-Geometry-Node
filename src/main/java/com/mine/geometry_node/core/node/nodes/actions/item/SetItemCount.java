@@ -39,7 +39,7 @@ public class SetItemCount extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         Integer count = getInput(context, StandardPorts.COUNT.getId(), Integer.class);
-        ItemStack result = stack != null ? stack.copy() : ItemStack.EMPTY;
+        ItemStack result = stack != null ? stack : ItemStack.EMPTY;
         int value = count != null ? count : 1;
         if (result.isEmpty() || value <= 0) {
             result = ItemStack.EMPTY;

@@ -1,9 +1,9 @@
 package com.mine.geometry_node.core.node.group;
 
 public final class GroupNodeTypes {
-    public static final String NODE_GROUP = "node_group";
-    public static final String GROUP_IN = "group_in";
-    public static final String GROUP_OUT = "group_out";
+    public static final String NODE_GROUP = "geometry_node:node_group";
+    public static final String GROUP_IN = "geometry_node:group_in";
+    public static final String GROUP_OUT = "geometry_node:group_out";
 
     public static final String GROUP_IN_ID = "__group_in";
     public static final String GROUP_OUT_ID = "__group_out";

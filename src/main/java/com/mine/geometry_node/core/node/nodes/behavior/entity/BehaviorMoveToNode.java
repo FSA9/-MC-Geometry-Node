@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.Set;
 
 public final class BehaviorMoveToNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_move_to";
+    public static final String TYPE_ID = "behavior_move_to";
     public static final String TARGET_MODE_ENTITY = "entity";
     public static final String TARGET_MODE_POSITION = "position";
 
@@ -36,7 +36,7 @@ public final class BehaviorMoveToNode extends BaseNode implements BehaviorExecut
         String mode = targetMode(instanceData);
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION,
                         Component.translatable("geometry_node.node.behavior_move_to"))
-                .comment(NodeComment.builder("behavior_move_to")
+                .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
                         .text("position_mode")
                         .text("entity_mode")

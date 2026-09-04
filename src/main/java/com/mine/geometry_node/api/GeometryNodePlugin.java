@@ -30,13 +30,6 @@ public interface GeometryNodePlugin {
     }
 
     /**
-     * 标准事件注册入口。
-     * 用于声明 Addon 提供的事件类型，并获取标准事件派发器。
-     */
-    default void registerEvents(EventRegistrationContext registry) {
-    }
-
-    /**
      * 旧节点注册入口。
      * 现有内置节点和旧 Addon 可以继续使用；新代码优先使用 NodeRegistrationContext。
      */

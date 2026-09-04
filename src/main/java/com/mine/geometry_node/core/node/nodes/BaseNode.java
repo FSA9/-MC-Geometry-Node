@@ -4,14 +4,12 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionBinding;
-import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
@@ -55,11 +53,7 @@ public abstract class BaseNode {
 
     @Nullable
     protected <T> T getInput(GraphDataContext ctx, String portName, Class<T> type) {
-        Object raw = getRawInput(ctx, portName);
-        if (raw instanceof ItemStack stack) {
-            raw = stack.copy();
-        }
-        return TypeConverter.convert(raw, type, ctx);
+        return TypeConverter.convert(getRawInput(ctx, portName), type, ctx);
     }
 
     @Nullable
@@ -75,8 +69,8 @@ public abstract class BaseNode {
     }
 
     /**
-     * Reads a list input as an isolated snapshot. Null slots retain their indexes;
-     * non-null values that cannot be converted to the requested type are omitted.
+     * Converts a list input. Input isolation is owned by the graph data context;
+     * null slots retain their indexes and rejected values are omitted.
      */
     protected <T> List<T> getInputList(GraphDataContext ctx, String portName, Class<T> elementType) {
         Object raw = getRawInput(ctx, portName);
@@ -94,12 +88,7 @@ public abstract class BaseNode {
 
                 T converted = TypeConverter.convert(element, elementType, ctx);
                 if (converted != null) {
-                    Object snapshot = GraphValueSnapshot.snapshot(converted);
-                    if (elementType.isInstance(snapshot)) {
-                        result.add(elementType.cast(snapshot));
-                    } else {
-                        rejectedCount++;
-                    }
+                    result.add(converted);
                 } else {
                     rejectedCount++;
                 }
@@ -113,12 +102,9 @@ public abstract class BaseNode {
 
         T converted = TypeConverter.convert(raw, elementType, ctx);
         if (converted != null) {
-            Object snapshot = GraphValueSnapshot.snapshot(converted);
-            if (elementType.isInstance(snapshot)) {
-                List<T> result = new ArrayList<>(1);
-                result.add(elementType.cast(snapshot));
-                return result;
-            }
+            List<T> result = new ArrayList<>(1);
+            result.add(converted);
+            return result;
         }
 
         System.err.println("[BaseNode] Error： " + portName + " expect List<" + elementType.getSimpleName() + ">，but received：" + raw.getClass().getSimpleName());
@@ -134,7 +120,7 @@ public abstract class BaseNode {
             Map<String, Object> result = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (entry.getKey() instanceof String key) {
-                    result.put(key, GraphValueSnapshot.snapshot(entry.getValue()));
+                    result.put(key, entry.getValue());
                 }
             }
             return result;

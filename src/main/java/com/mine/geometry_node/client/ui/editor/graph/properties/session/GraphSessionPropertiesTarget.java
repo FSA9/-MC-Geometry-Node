@@ -10,6 +10,7 @@ import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.nodes.quest.CreateQuestCondition;
 
 import java.util.List;
@@ -112,9 +113,9 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
 
     private static boolean isQuestConditionNode(NodeData nodeData) {
         if (nodeData == null || nodeData.type == null) return false;
-        if (CreateQuestCondition.TYPE_ID.equals(nodeData.type)) return true;
+        if (NodeDef.canonicalTypeId(CreateQuestCondition.TYPE_ID).equals(nodeData.type)) return true;
         for (QuestConditionKind kind : QuestConditionKind.all()) {
-            if (kind.nodeTypeId().equals(nodeData.type)) return true;
+            if (NodeDef.canonicalTypeId(kind.nodeTypeId()).equals(nodeData.type)) return true;
         }
         return false;
     }

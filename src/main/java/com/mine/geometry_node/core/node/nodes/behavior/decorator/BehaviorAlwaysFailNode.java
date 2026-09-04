@@ -7,7 +7,7 @@ import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 
 public final class BehaviorAlwaysFailNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_always_fail";
+    public static final String TYPE_ID = "behavior_always_fail";
 
     @Override
     public NodeDef getDefaultDefinition() {

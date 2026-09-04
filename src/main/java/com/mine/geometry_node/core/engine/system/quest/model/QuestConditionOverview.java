@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.system.quest.model;
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.nodes.quest.BaseQuestConditionsNode;
 import com.mine.geometry_node.core.node.nodes.quest.CreateQuestCondition;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
@@ -87,7 +88,8 @@ public record QuestConditionOverview(
         if (source == null || !visited.add(source.nodeId())) return null;
         NodeData node = nodes.get(source.nodeId());
         if (node == null) return null;
-        if (CreateQuestCondition.TYPE_ID.equals(node.type)
+        if (NodeDef.canonicalTypeId(CreateQuestCondition.TYPE_ID).equals(
+                NodeDef.canonicalTypeId(node.type))
                 && CreateQuestCondition.OUTPUT_PORT.equals(source.portName())) {
             return node;
         }
@@ -129,7 +131,8 @@ public record QuestConditionOverview(
     private static QuestConditionKind findKind(String nodeTypeId) {
         if (nodeTypeId == null) return null;
         for (QuestConditionKind kind : QuestConditionKind.all()) {
-            if (kind.nodeTypeId().equals(nodeTypeId)) return kind;
+            if (NodeDef.canonicalTypeId(kind.nodeTypeId()).equals(
+                    NodeDef.canonicalTypeId(nodeTypeId))) return kind;
         }
         return null;
     }

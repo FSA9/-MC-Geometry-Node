@@ -14,7 +14,7 @@ import net.minecraft.network.chat.Component;
 
 /** Tests whether a dynamic key currently exists in an explicit scope. */
 public final class BehaviorHasBlackboardNode extends BaseNode {
-    public static final String TYPE_ID = "geometry_node:behavior_has_blackboard";
+    public static final String TYPE_ID = "behavior_has_blackboard";
 
     @Override
     public NodeDef getDefaultDefinition() {

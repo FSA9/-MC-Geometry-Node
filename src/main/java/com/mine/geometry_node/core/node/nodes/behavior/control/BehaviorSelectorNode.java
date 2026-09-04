@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorCont
 
 /** Ordered, memory-form fallback selector. */
 public final class BehaviorSelectorNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_selector";
+    public static final String TYPE_ID = "behavior_selector";
 
     @Override
     public NodeDef getDefaultDefinition() {

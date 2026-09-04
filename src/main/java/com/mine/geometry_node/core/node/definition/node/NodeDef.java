@@ -23,8 +23,10 @@ public record NodeDef(
         Map<MetaKey<?>, Object> meta,
         List<PortRow> rows
 ) {
+    public static final String BUILTIN_NAMESPACE = "geometry_node";
+
     public NodeDef {
-        requireNonBlank(typeId, "node type ID");
+        typeId = canonicalTypeId(typeId);
         Objects.requireNonNull(category, "Node category cannot be null: " + typeId);
         Objects.requireNonNull(displayName, "Node display name cannot be null: " + typeId);
         nodeComment = nodeComment == null ? NodeComment.EMPTY : nodeComment;
@@ -32,6 +34,30 @@ public record NodeDef(
         List<PortRow> normalizedRows = rows == null ? List.of() : new ArrayList<>(rows);
         validatePorts(typeId, normalizedRows);
         rows = List.copyOf(normalizedRows);
+    }
+
+    /** Expands a built-in declaration ID while preserving explicit addon namespaces. */
+    public static String canonicalTypeId(String declaredTypeId) {
+        requireNonBlank(declaredTypeId, "node type ID");
+        String normalized = declaredTypeId.trim();
+        if (normalized.chars().anyMatch(Character::isWhitespace)) {
+            throw new IllegalArgumentException("Invalid node type ID: whitespace is not allowed");
+        }
+        int separator = normalized.indexOf(':');
+        if (separator < 0) return BUILTIN_NAMESPACE + ":" + normalized;
+        if (separator == 0 || separator == normalized.length() - 1
+                || separator != normalized.lastIndexOf(':')) {
+            throw new IllegalArgumentException("Invalid node type ID: " + normalized);
+        }
+        return normalized;
+    }
+
+    /** Returns the model-facing short ID for a built-in node, or an empty string for addons. */
+    public static String builtinShortTypeId(String canonicalTypeId) {
+        if (canonicalTypeId == null) return "";
+        String prefix = BUILTIN_NAMESPACE + ":";
+        String normalized = canonicalTypeId.trim();
+        return normalized.startsWith(prefix) ? normalized.substring(prefix.length()) : "";
     }
 
     private static void validatePorts(String typeId, List<PortRow> rows) {

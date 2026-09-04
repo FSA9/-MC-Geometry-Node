@@ -17,7 +17,11 @@ import com.mine.geometry_node.core.engine.graph.compile.CompiledNodeTable;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
+import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.document.NodeGraph;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.node.NodeType;
+import com.mine.geometry_node.core.node.nodes.functions.graph.ReceiveBlueprint;
 import com.mine.geometry_node.core.node.nodes.events.block.OnMultiblockBuilt;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
@@ -26,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Compiles blueprint JSON into the immutable runtime index used by the VM.
@@ -120,9 +125,13 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
             }
             typeToIntList.put(entry.getKey(), List.copyOf(intList));
         }
+        Set<String> eventTypes = typeToIntList.keySet().stream()
+                .filter(BlueprintCompiler::isEventType)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
         Map<String, List<Integer>> receiveLookup = new HashMap<>();
-        List<Integer> receiveNodes = typeToIntList.getOrDefault("receive_blueprint", List.of());
+        List<Integer> receiveNodes = typeToIntList.getOrDefault(
+                NodeDef.canonicalTypeId(ReceiveBlueprint.TYPE_ID), List.of());
         for (int nodeId : receiveNodes) {
             Object frequency = nodes.getStaticInput(nodeId, "frequency");
             if (frequency == null) {
@@ -142,7 +151,8 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
         }
 
         Map<String, List<Integer>> multiblockLookup = new HashMap<>();
-        List<Integer> multiblockNodes = typeToIntList.getOrDefault(OnMultiblockBuilt.TYPE_ID, List.of());
+        List<Integer> multiblockNodes = typeToIntList.getOrDefault(
+                NodeDef.canonicalTypeId(OnMultiblockBuilt.TYPE_ID), List.of());
         for (int nodeId : multiblockNodes) {
             Object configuredId = nodes.getStaticInput(nodeId, StandardPorts.TYPE.getId());
             String structureId = configuredId != null ? String.valueOf(configuredId).trim() : "";
@@ -164,8 +174,14 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
                 nodes,
                 flowOutputArray,
                 typeToIntList,
+                eventTypes,
                 Map.copyOf(receiveLookupImmutable),
                 Map.copyOf(multiblockLookupImmutable)
         );
+    }
+
+    private static boolean isEventType(String nodeType) {
+        NodeDef definition = NodeRegistry.INSTANCE.getDefaultDefinition(nodeType);
+        return definition != null && definition.category() == NodeType.EVENT;
     }
 }

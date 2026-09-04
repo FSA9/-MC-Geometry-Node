@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 import java.util.Set;
 
 public final class BehaviorStopMovingNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_stop_moving";
+    public static final String TYPE_ID = "behavior_stop_moving";
 
     @Override
     public NodeDef getDefaultDefinition() {

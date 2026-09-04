@@ -9,7 +9,7 @@ public class SetEntityMaxHealth extends AbstractSetEntityFloatProperty {
     public static final String TYPE_ID = "set_entity_max_health";
 
     public SetEntityMaxHealth() {
-        super(TYPE_ID, (entity, maxHealth) -> {
+        super(TYPE_ID, 20.0f, 1.0f, (entity, maxHealth) -> {
             if (entity instanceof LivingEntity living) {
                 AttributeInstance maxHealthAttr = living.getAttribute(Attributes.MAX_HEALTH);
                 if (maxHealthAttr != null) {

@@ -12,7 +12,7 @@ import net.minecraft.network.chat.Component;
 import java.util.Set;
 
 public final class BehaviorLookAtNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_look_at";
+    public static final String TYPE_ID = "behavior_look_at";
 
     @Override
     public NodeDef getDefaultDefinition() {

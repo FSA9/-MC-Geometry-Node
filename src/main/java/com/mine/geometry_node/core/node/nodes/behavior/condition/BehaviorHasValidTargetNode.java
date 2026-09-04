@@ -13,7 +13,7 @@ import net.minecraft.network.chat.Component;
 
 /** Checks whether an entity reference still names a live server entity. */
 public final class BehaviorHasValidTargetNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_has_valid_target";
+    public static final String TYPE_ID = "behavior_has_valid_target";
 
     @Override
     public NodeDef getDefaultDefinition() {

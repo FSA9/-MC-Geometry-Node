@@ -15,7 +15,7 @@ import net.minecraft.network.chat.Component;
 
 /** Pure data view of one dynamically stored value in an explicit scope. */
 public final class BehaviorGetBlackboardNode extends BaseNode {
-    public static final String TYPE_ID = "geometry_node:behavior_get_blackboard";
+    public static final String TYPE_ID = "behavior_get_blackboard";
 
     @Override
     public NodeDef getDefaultDefinition() {

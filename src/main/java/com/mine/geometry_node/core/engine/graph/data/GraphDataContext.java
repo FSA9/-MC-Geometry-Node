@@ -35,6 +35,10 @@ public interface GraphDataContext {
         return getVariable(name) != null;
     }
 
+    /**
+     * Returns a connected input value. Mutable graph values must be isolated
+     * from their producer before they cross this context boundary.
+     */
     @Nullable Object getInputValue(String portName);
 
     /** Distinguishes a connected null value from an input with no provider. */
@@ -52,6 +56,7 @@ public interface GraphDataContext {
                 connected ? getInputValue(portName) : getStaticInput(portName));
     }
 
+    /** Returns an authored input value, isolated when its representation is mutable. */
     @Nullable Object getStaticInput(String portName);
 
     @Nullable Object getEventData(String key);

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.event.precheck;
 
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,17 +19,19 @@ public final class EventPrecheckRegistry {
             throw new IllegalArgumentException("eventType must not be blank");
         }
 
-        EventPrecheckFactory previous = FACTORIES.putIfAbsent(eventType, factory);
+        String canonicalType = NodeDef.canonicalTypeId(eventType);
+        EventPrecheckFactory previous = FACTORIES.putIfAbsent(canonicalType, factory);
         if (previous != null && previous != factory) {
-            throw new IllegalStateException("Event precheck factory already registered for " + eventType);
+            throw new IllegalStateException("Event precheck factory already registered for " + canonicalType);
         }
     }
 
     public static EventPrecheck build(String graphId, BlueprintPlan index, int nodeId, String eventType) {
-        EventPrecheckContext context = new EventPrecheckContext(graphId, index, nodeId, eventType);
+        String canonicalType = NodeDef.canonicalTypeId(eventType);
+        EventPrecheckContext context = new EventPrecheckContext(graphId, index, nodeId, canonicalType);
         EventPrecheck specPrecheck = EventPrecheckCompiler.compile(context);
 
-        EventPrecheckFactory factory = FACTORIES.get(eventType);
+        EventPrecheckFactory factory = FACTORIES.get(canonicalType);
         if (factory == null) {
             return specPrecheck;
         }

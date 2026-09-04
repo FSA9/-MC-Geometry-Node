@@ -14,7 +14,7 @@ public final class EventPayload {
     private final Map<String, Object> values;
 
     private EventPayload(Map<String, Object> values) {
-        this.values = Collections.unmodifiableMap(new LinkedHashMap<>(values));
+        this.values = values;
     }
 
     public static EventPayload empty() {
@@ -23,6 +23,29 @@ public final class EventPayload {
 
     public static Builder builder() {
         return new Builder();
+    }
+
+    /** Creates a payload from alternating port ID/value pairs. Null values are omitted. */
+    public static EventPayload of(Object... entries) {
+        if (entries == null || entries.length == 0) {
+            return EMPTY;
+        }
+        if ((entries.length & 1) != 0) {
+            throw new IllegalArgumentException("Event payload must contain port ID/value pairs");
+        }
+
+        Builder builder = builder();
+        for (int index = 0; index < entries.length; index += 2) {
+            Object key = entries[index];
+            if (!(key instanceof String portId) || portId.isBlank()) {
+                throw new IllegalArgumentException("Event payload port ID must be a non-empty string");
+            }
+            Object value = entries[index + 1];
+            if (value != null) {
+                builder.put(portId, value);
+            }
+        }
+        return builder.build();
     }
 
     public Map<String, Object> values() {
@@ -44,7 +67,7 @@ public final class EventPayload {
             if (values.isEmpty()) {
                 return EMPTY;
             }
-            return new EventPayload(values);
+            return new EventPayload(Collections.unmodifiableMap(new LinkedHashMap<>(values)));
         }
     }
 }

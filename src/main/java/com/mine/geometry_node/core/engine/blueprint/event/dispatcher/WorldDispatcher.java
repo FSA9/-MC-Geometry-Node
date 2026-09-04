@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
-import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
+import com.mine.geometry_node.api.EventPayload;
+import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.node.nodes.events.world.*;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import net.minecraft.server.level.ServerLevel;
@@ -18,7 +18,7 @@ public class WorldDispatcher {
 
         bus.addListener((ChunkEvent.Load event) -> {
             if (event.getLevel() instanceof ServerLevel serverLevel) {
-                BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, null, OnChunkLoad.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch(serverLevel, null, OnChunkLoad.TYPE_ID, EventPayload.of(
                         StandardPorts.XYZ.getId(), event.getChunk().getPos().getMiddleBlockPosition(64),
                         StandardPorts.DIMENSION.getId(), serverLevel.dimension().identifier().toString()
                 ));
@@ -28,7 +28,7 @@ public class WorldDispatcher {
         bus.addListener((ExplosionEvent.Detonate event) -> {
             if (!event.getLevel().isClientSide()) {
                 ServerLevel serverLevel = (ServerLevel) event.getLevel();
-                BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, event.getExplosion().getIndirectSourceEntity(), OnExplosion.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch(serverLevel, event.getExplosion().getIndirectSourceEntity(), OnExplosion.TYPE_ID, EventPayload.of(
                         StandardPorts.XYZ.getId(), event.getExplosion().center(),
                         StandardPorts.FLOAT_VALUE.getId(), event.getExplosion().radius(),
                         StandardPorts.ENTITY.getId(), event.getExplosion().getIndirectSourceEntity()
@@ -38,7 +38,7 @@ public class WorldDispatcher {
 
         bus.addListener((EntityJoinLevelEvent event) -> {
             if (!event.getLevel().isClientSide() && event.getEntity() instanceof net.minecraft.world.entity.LightningBolt lightning) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getLevel(), null, OnLightningStrike.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getLevel(), null, OnLightningStrike.TYPE_ID, EventPayload.of(
                         StandardPorts.XYZ.getId(), lightning.position()
                 ));
             }
@@ -46,7 +46,7 @@ public class WorldDispatcher {
 
         bus.addListener((BlockEvent.PortalSpawnEvent event) -> {
             if (event.getLevel() instanceof ServerLevel serverLevel) {
-                BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, null, OnPortalCreate.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch(serverLevel, null, OnPortalCreate.TYPE_ID, EventPayload.of(
                         StandardPorts.XYZ.getId(), event.getPos(),
                         StandardPorts.DIMENSION.getId(), serverLevel.dimension().identifier().toString()
                 ));

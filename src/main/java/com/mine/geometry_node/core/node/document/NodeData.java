@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.document;
 
 import com.google.gson.annotations.SerializedName;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
@@ -92,7 +93,7 @@ public class NodeData {
 
     public NodeData(String id, String type, float x, float y) {
         this.id = id;
-        this.type = type;
+        this.type = NodeDef.canonicalTypeId(type);
         this.uiPos[0] = x;
         this.uiPos[1] = y;
     }
@@ -140,6 +141,7 @@ public class NodeData {
 
     /** Restores collection and coordinate invariants after document deserialization. */
     public void restoreDocumentDefaults() {
+        if (type != null && !type.isBlank()) type = NodeDef.canonicalTypeId(type);
         if (uiPos == null || uiPos.length < 2) {
             float[] restoredPosition = new float[2];
             if (uiPos != null) {

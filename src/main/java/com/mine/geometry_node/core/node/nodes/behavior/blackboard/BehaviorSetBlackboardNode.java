@@ -15,7 +15,7 @@ import net.minecraft.network.chat.Component;
 
 /** Creates or overwrites one dynamic value in an explicit scope. */
 public final class BehaviorSetBlackboardNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_set_blackboard";
+    public static final String TYPE_ID = "behavior_set_blackboard";
 
     @Override
     public NodeDef getDefaultDefinition() {

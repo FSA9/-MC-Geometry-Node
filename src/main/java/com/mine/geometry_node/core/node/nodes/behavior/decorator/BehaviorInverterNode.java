@@ -14,7 +14,7 @@ import net.minecraft.network.chat.Component;
 
 /** Inverts normal success and failure while preserving Running. */
 public final class BehaviorInverterNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_inverter";
+    public static final String TYPE_ID = "behavior_inverter";
 
     @Override
     public NodeDef getDefaultDefinition() {

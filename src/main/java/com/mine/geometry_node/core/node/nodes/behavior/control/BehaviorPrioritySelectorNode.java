@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 
 public final class BehaviorPrioritySelectorNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_priority_selector";
+    public static final String TYPE_ID = "behavior_priority_selector";
 
     @Override
     public NodeDef getDefaultDefinition() {

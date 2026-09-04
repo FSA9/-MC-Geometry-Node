@@ -1,7 +1,7 @@
 package com.mine.geometry_node.mixin;
 
-import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.api.EventPayload;
+import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.node.nodes.events.projectile.OnProjectileShoot;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import net.minecraft.server.level.ServerLevel;
@@ -34,7 +34,7 @@ public abstract class ProjectileShootMixin {
             // 路由逻辑与 Hit 事件保持一致：优先以发射者为主体触发，兜底为投掷物本身
             Entity dispatchTarget = (owner != null) ? owner : projectile;
 
-            BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, dispatchTarget, OnProjectileShoot.TYPE_ID, GraphEventData.of(
+            GeometryNodeEvents.dispatch(serverLevel, dispatchTarget, OnProjectileShoot.TYPE_ID, EventPayload.of(
                     StandardPorts.PROJECTILE.getId(), projectile,
                     StandardPorts.XYZ.getId(), pos,
                     StandardPorts.VECTOR.getId(), motion,

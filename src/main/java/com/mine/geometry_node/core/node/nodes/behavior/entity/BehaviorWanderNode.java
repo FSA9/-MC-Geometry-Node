@@ -12,7 +12,7 @@ import net.minecraft.network.chat.Component;
 import java.util.Set;
 
 public final class BehaviorWanderNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_wander";
+    public static final String TYPE_ID = "behavior_wander";
 
     @Override
     public NodeDef getDefaultDefinition() {

@@ -11,7 +11,6 @@ import java.util.List;
 
 /** Model-facing projection of GeometryNode's authoritative node menu tree. */
 public final class NodeCatalogIndex {
-    private static final String NAMESPACE = "geometry_node:";
     private static final String MENU_PREFIX = "geometry_node.menu.";
 
     private NodeCatalogIndex() {}
@@ -23,12 +22,11 @@ public final class NodeCatalogIndex {
         if (shortTypeId == null || shortTypeId.isBlank() || shortTypeId.indexOf(':') >= 0) {
             throw new IllegalArgumentException("type_id must be a non-empty GeometryNode short ID without namespace");
         }
-        return NAMESPACE + shortTypeId.trim();
+        return NodeDef.canonicalTypeId(shortTypeId);
     }
 
     public static String shortTypeId(String canonicalTypeId) {
-        if (canonicalTypeId == null || !canonicalTypeId.startsWith(NAMESPACE)) return "";
-        return canonicalTypeId.substring(NAMESPACE.length());
+        return NodeDef.builtinShortTypeId(canonicalTypeId);
     }
 
     public static List<Entry> entries() {

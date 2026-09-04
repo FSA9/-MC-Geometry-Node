@@ -74,7 +74,7 @@ public final class GraphFlattener {
             if (nodeObj == null) continue;
 
             String globalId = prefix + localId;
-            String type = readString(nodeObj, "node_type", "unknown");
+            String type = NodeDef.canonicalTypeId(readString(nodeObj, "node_type", "unknown"));
 
             nodeDataLookup.put(globalId, nodeObj);
             typeLookup.computeIfAbsent(type, ignored -> new ArrayList<>()).add(globalId);
@@ -468,7 +468,8 @@ public final class GraphFlattener {
             JsonObject sub = asObject(subNodes.get(localId));
             if (sub == null) continue;
 
-            String type = readString(sub, "node_type", "");
+            String declaredType = readString(sub, "node_type", null);
+            String type = declaredType != null ? NodeDef.canonicalTypeId(declaredType) : "";
             String globalId = groupId + "/" + localId;
             if (GroupNodeTypes.GROUP_IN_ID.equals(localId) || GroupNodeTypes.GROUP_IN.equals(type)) {
                 inId = globalId;

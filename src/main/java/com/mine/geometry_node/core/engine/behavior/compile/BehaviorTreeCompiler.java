@@ -14,6 +14,7 @@ import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocument
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationException;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationResult;
 import com.mine.geometry_node.core.node.NodeRegistry;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import com.mine.geometry_node.core.node.nodes.behavior.control.BehaviorRootNode;
@@ -30,6 +31,7 @@ import java.util.Set;
 
 /** Compiles editable behavior documents into immutable runtime plans. */
 public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePlan> {
+    private static final String ROOT_TYPE_ID = NodeDef.canonicalTypeId(BehaviorRootNode.TYPE_ID);
     public static final BehaviorTreeCompiler INSTANCE = new BehaviorTreeCompiler();
 
     private BehaviorTreeCompiler() {
@@ -138,7 +140,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             BaseNode node = NodeRegistry.INSTANCE.get(descriptor.type());
             resources[nodeIndex] = node instanceof BehaviorExecutableNode executable
                     ? executable.requiredResources() : Set.of();
-            if (root < 0 && BehaviorRootNode.TYPE_ID.equals(descriptor.type())) root = nodeIndex;
+            if (root < 0 && ROOT_TYPE_ID.equals(descriptor.type())) root = nodeIndex;
 
             List<String> childIds = compilation.structure.getOrDefault(nodeId, List.of());
             children[nodeIndex] = childIds.stream().mapToInt(nodes::getNodeKey).toArray();
@@ -154,7 +156,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         CompiledNodeTable.NodeDescriptor root = null;
         for (String nodeId : table.nodeIds()) {
             CompiledNodeTable.NodeDescriptor descriptor = table.descriptor(nodeId);
-            if (!BehaviorRootNode.TYPE_ID.equals(descriptor.type())) continue;
+            if (!ROOT_TYPE_ID.equals(descriptor.type())) continue;
             root = descriptor;
             break;
         }

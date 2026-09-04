@@ -35,7 +35,7 @@ public final class OnQuestStatusChanged extends BaseEventNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.QUEST, Component.translatable("geometry_node.node.on_quest_status_changed"))
+        return NodeDef.builder(TYPE_ID, NodeType.EVENT, Component.translatable("geometry_node.node.on_quest_status_changed"))
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
                         .text("scope_behavior")

@@ -13,7 +13,7 @@ import net.minecraft.network.chat.Component;
 
 /** Runs one child while its boolean guard remains true. */
 public final class BehaviorGuardNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_guard";
+    public static final String TYPE_ID = "behavior_guard";
 
     @Override
     public NodeDef getDefaultDefinition() {

@@ -22,8 +22,7 @@ public final class BlackboardNodePorts {
     }
 
     public static NodeComment comment(String nodeTypeId) {
-        String path = nodeTypeId.substring(nodeTypeId.indexOf(':') + 1);
-        return NodeComment.builder(path)
+        return NodeComment.builder(nodeTypeId)
                 .text("summary")
                 .text("geometry_node.node.behavior_blackboard.comment.dynamic")
                 .text("geometry_node.node.behavior_blackboard.comment.instance")

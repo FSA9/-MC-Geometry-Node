@@ -15,7 +15,7 @@ import net.minecraft.network.chat.Component;
 
 /** Idempotently removes one dynamic key and its value from an explicit scope. */
 public final class BehaviorClearBlackboardNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_clear_blackboard";
+    public static final String TYPE_ID = "behavior_clear_blackboard";
 
     @Override
     public NodeDef getDefaultDefinition() {

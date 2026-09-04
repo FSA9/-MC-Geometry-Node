@@ -2,7 +2,8 @@ package com.mine.geometry_node.core.engine.system.quest;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.api.EventPayload;
+import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventFields;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
@@ -412,8 +413,8 @@ public final class QuestService {
         if (!(owner.level() instanceof ServerLevel level)) return;
         // Lifecycle changes are entity-level events. Each subscribed node decides
         // whether it listens to every task or only to its owning quest graph.
-        BlueprintRuntime.INSTANCE.dispatchEvent(level, owner, eventType,
-                GraphEventData.of(
+        GeometryNodeEvents.dispatch(level, owner, eventType,
+                EventPayload.of(
                         GraphEventFields.TASK_KEY, taskKey,
                         GraphEventFields.INSTANCE_ID, instance.instanceId().toString(),
                         GraphEventFields.OLD_STATUS, normalizeText(oldStatus),

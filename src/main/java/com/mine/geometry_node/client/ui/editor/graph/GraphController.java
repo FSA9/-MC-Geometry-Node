@@ -176,7 +176,7 @@ public class GraphController {
         } else {
             node.inputs.put(portId, value);
         }
-        if (BehaviorMoveToNode.TYPE_ID.equals(node.type)
+        if (NodeDef.canonicalTypeId(BehaviorMoveToNode.TYPE_ID).equals(node.type)
                 && StandardPorts.TARGET_MODE.getId().equals(portId)) {
             String inactivePort = BehaviorMoveToNode.TARGET_MODE_POSITION.equals(value)
                     ? StandardPorts.TARGET_ENTITY.getId() : StandardPorts.TARGET_POSITION.getId();

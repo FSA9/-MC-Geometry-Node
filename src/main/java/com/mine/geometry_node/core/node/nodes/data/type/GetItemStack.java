@@ -9,9 +9,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -41,32 +39,17 @@ public class GetItemStack extends BaseNode {
         // 数据节点只响应它自己的输出端口
         if (!StandardPorts.ITEM_STACK.getId().equals(portName)) return null;
 
-        // 1. 获取物品图纸 (可能是 String 也可能是 Item 对象) 和数量
-        Object rawItem = getRawInput(context, StandardPorts.ITEM.getId());
+        // TypeConverter resolves the authored registry ID through the shared conversion registry.
+        Item item = getInput(context, StandardPorts.ITEM.getId(), Item.class);
         Integer count = getInput(context, StandardPorts.COUNT.getId(), Integer.class);
 
         // 防呆：数量如果不合法，默认给 1 个
         if (count == null || count <= 0) count = 1;
 
-        Item item = Items.AIR;
-
-        // 2. 智能解析物品图纸 (因为 PortType.ITEM 允许接收 STRING)
-        if (rawItem instanceof Item i) {
-            item = i;
-        } else if (rawItem instanceof String s) {
-            Identifier loc = Identifier.tryParse(s);
-            if (loc != null) {
-                // 在 1.21 中，从注册表安全获取 Item
-                item = BuiltInRegistries.ITEM.getOptional(loc).orElse(Items.AIR);
-            }
-        }
-
-        // 如果最终解析出来是空气（比如玩家乱填了一个不存在的 ID），直接返回空物品栈
-        if (item == Items.AIR) {
+        if (item == null || item == Items.AIR) {
             return ItemStack.EMPTY;
         }
 
-        // 3. 核心：将抽象的图纸，实例化为内存中具体的物品栈对象！
         return new ItemStack(item, count);
     }
 }

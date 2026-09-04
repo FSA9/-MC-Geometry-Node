@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.behavior.runtime.executor.BehaviorCont
 
 /** Ordered, memory-form sequence structural node. */
 public final class BehaviorSequenceNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_sequence";
+    public static final String TYPE_ID = "behavior_sequence";
 
     @Override
     public NodeDef getDefaultDefinition() {

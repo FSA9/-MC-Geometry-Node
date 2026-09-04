@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataInd
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -39,6 +40,7 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
 
     // --- 分类与查询辅助 ---
     private final Map<String, List<Integer>> typeLookup;                  // 按节点类型归类 (常用于查找事件起始节点)
+    private final Set<String> eventTypes;
     private final Map<String, List<Integer>> receiveBlueprintLookup;
     private final Map<String, List<Integer>> multiblockStructureLookup;
 
@@ -52,6 +54,7 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
                               CompiledNodeIndex nodes,
                               Map<Integer, IntFlowTarget>[] flowOutputArray,
                               Map<String, List<Integer>> typeLookup,
+                              Set<String> eventTypes,
                               Map<String, List<Integer>> receiveBlueprintLookup,
                               Map<String, List<Integer>> multiblockStructureLookup) {
         this.graphTypeId = graphTypeId;
@@ -62,6 +65,7 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
         this.nodes = nodes;
         this.flowOutputArray = copyMapArray(flowOutputArray);
         this.typeLookup = copyLookup(typeLookup);
+        this.eventTypes = Set.copyOf(eventTypes);
         this.receiveBlueprintLookup = copyLookup(receiveBlueprintLookup);
         this.multiblockStructureLookup = copyLookup(multiblockStructureLookup);
     }
@@ -93,6 +97,7 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
                                                    CompiledNodeIndex nodes,
                                                    Map<Integer, IntFlowTarget>[] flowOutputArray,
                                                    Map<String, List<Integer>> typeLookup,
+                                                   Set<String> eventTypes,
                                                    Map<String, List<Integer>> receiveBlueprintLookup,
                                                    Map<String, List<Integer>> multiblockStructureLookup) {
         return new BlueprintPlan(
@@ -102,6 +107,7 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
                 nodes,
                 flowOutputArray,
                 typeLookup,
+                eventTypes,
                 receiveBlueprintLookup,
                 multiblockStructureLookup
         );
@@ -229,11 +235,17 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
      * 获取指定类型的所有节点 (常用于查找引擎分发事件的入口节点)
      */
     public List<Integer> findNodesByType(String nodeType) {
-        return typeLookup.getOrDefault(nodeType, List.of());
+        if (nodeType == null || nodeType.isBlank()) return List.of();
+        return typeLookup.getOrDefault(NodeDef.canonicalTypeId(nodeType), List.of());
     }
 
     public Set<String> getNodeTypes() {
         return typeLookup.keySet();
+    }
+
+    /** Event types derived from registered node definitions during compilation. */
+    public Set<String> getEventTypes() {
+        return eventTypes;
     }
 
     public List<Integer> findReceiveBlueprintNodes(String frequency) {

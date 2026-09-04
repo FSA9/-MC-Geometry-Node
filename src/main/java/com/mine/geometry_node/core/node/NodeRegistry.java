@@ -1,12 +1,7 @@
 package com.mine.geometry_node.core.node;
 
-import com.mine.geometry_node.api.EventRegistrationContext;
 import com.mine.geometry_node.api.GeometryNodePlugin;
-import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.api.NodeRegistrationContext;
-import com.mine.geometry_node.api.EventDef;
-import com.mine.geometry_node.api.EventScope;
-import com.mine.geometry_node.api.GeometryEventDispatcher;
 import com.mine.geometry_node.api.MarkerRegistrationContext;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
@@ -15,12 +10,9 @@ import com.mine.geometry_node.core.node.definition.node.MissingNodeDefinitions;
 import com.mine.geometry_node.core.node.group.GroupNodeDefinitions;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
-import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutorRegistry;
-import com.mine.geometry_node.core.node.definition.port.PortDef;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -31,9 +23,6 @@ public class NodeRegistry {
     // 后端核心存储
     private final Map<String, BaseNode> registry = new HashMap<>();
     private final Map<String, NodeDef> defaultDefCache = new LinkedHashMap<>();
-    private final Map<String, EventDef> eventRegistry = new LinkedHashMap<>();
-    private final Map<String, String> eventOwners = new HashMap<>();
-    private final Set<String> registeredEventIds = new HashSet<>();
     private boolean initialized = false;
     private boolean initializing = false;
     private String activeAddonId = "legacy";
@@ -86,9 +75,6 @@ public class NodeRegistry {
                             activeAddonId = previousAddonId;
                         }
                     }
-
-                    PluginEventRegistrationContext eventContext = new PluginEventRegistrationContext(addonId);
-                    plugin.registerEvents(eventContext);
                 } catch (Exception e) {
                     System.err.println("[NodeRegistry] Plugin registration failed: " + addonId + " (" + plugin.getClass().getName() + ")");
                     e.printStackTrace();
@@ -96,7 +82,7 @@ public class NodeRegistry {
             }
 
             completed = true;
-            System.out.println("[NodeRegistry] Load finished. Total nodes: " + registry.size() + ", total events: " + eventRegistry.size());
+            System.out.println("[NodeRegistry] Load finished. Total nodes: " + registry.size());
         } finally {
             initialized = completed;
             initializing = false;
@@ -175,8 +161,9 @@ public class NodeRegistry {
             return;
         }
 
-        if (!isBuiltinAddon(addonId) && !isNamespaced(typeId)) {
-            System.err.println("[NodeRegistry] Warning: Addon node type should be namespaced: " + typeId + " from " + addonId);
+        if (!isBuiltinAddon(addonId) && !typeId.startsWith(addonId + ":")) {
+            throw new IllegalArgumentException("Addon node type must use namespace '"
+                    + addonId + "': " + typeId);
         }
 
         // 4. 重复检查
@@ -200,10 +187,6 @@ public class NodeRegistry {
         defaultDefCache.put(typeId, def);
 
         category.addNode(node);
-
-        if (def.category() == NodeType.EVENT) {
-            registerEvent(createEventDef(def), addonId);
-        }
     }
 
     private static void logNodeRegistrationFailure(String path, @Nullable BaseNode node,
@@ -212,30 +195,6 @@ public class NodeRegistry {
         System.err.println("[NodeRegistry] Skip node after registration failure: addon=" + addonId
                 + ", path=" + path + ", node=" + nodeClass + ", error=" + error.getMessage());
         error.printStackTrace();
-    }
-
-    public void registerEvent(EventDef eventDef, String addonId) {
-        if (eventDef == null) {
-            System.err.println("[NodeRegistry] Skip: Cannot register null event definition");
-            return;
-        }
-
-        String eventId = eventDef.eventId();
-        if (!isBuiltinAddon(addonId) && !isNamespaced(eventId)) {
-            System.err.println("[NodeRegistry] Warning: Addon event id should be namespaced: " + eventId + " from " + addonId);
-        }
-
-        String existingOwner = eventOwners.get(eventId);
-        if (existingOwner != null && !existingOwner.equals(addonId)) {
-            System.err.println("[NodeRegistry] Skip: Duplicate event registered: " + eventId +
-                    " existingAddon=" + existingOwner +
-                    " newAddon=" + addonId);
-            return;
-        }
-
-        eventRegistry.put(eventId, eventDef);
-        eventOwners.put(eventId, addonId);
-        registeredEventIds.add(eventId);
     }
 
     @Nullable
@@ -274,40 +233,11 @@ public class NodeRegistry {
         return Collections.unmodifiableCollection(defaultDefCache.values());
     }
 
-    public boolean hasEvent(String eventId) {
-        return registeredEventIds.contains(eventId);
-    }
-
-    @Nullable
-    public EventDef getEventDefinition(String eventId) {
-        return eventRegistry.get(eventId);
-    }
-
-    public Collection<EventDef> getAllEventDefinitions() {
-        return Collections.unmodifiableCollection(eventRegistry.values());
-    }
-
-    private static EventDef createEventDef(NodeDef def) {
-        List<PortDef> outputs = new ArrayList<>();
-        for (PortRow row : def.rows()) {
-            PortDef rightPort = row.rightPort();
-            if (rightPort != null && !rightPort.type().isFlow()) {
-                outputs.add(rightPort);
-            }
-        }
-        return new EventDef(def.typeId(), def.displayName(), EventScope.LEVEL, outputs);
-    }
-
     private static String sanitizeAddonId(String addonId, GeometryNodePlugin plugin) {
         if (addonId == null || addonId.isBlank()) {
             return plugin.getClass().getName();
         }
         return addonId.trim();
-    }
-
-    private static boolean isNamespaced(String id) {
-        int split = id.indexOf(':');
-        return split > 0 && split < id.length() - 1;
     }
 
     private static boolean isBuiltinAddon(String addonId) {
@@ -353,29 +283,6 @@ public class NodeRegistry {
         @Override
         public void registerMarkerType(MarkerType type) {
             MarkerTypeRegistry.INSTANCE.register(type);
-        }
-    }
-
-    private final class PluginEventRegistrationContext implements EventRegistrationContext {
-        private final String addonId;
-
-        private PluginEventRegistrationContext(String addonId) {
-            this.addonId = addonId;
-        }
-
-        @Override
-        public String addonId() {
-            return addonId;
-        }
-
-        @Override
-        public GeometryEventDispatcher dispatcher() {
-            return GeometryNodeEvents.dispatcher();
-        }
-
-        @Override
-        public void registerEvent(EventDef eventDef) {
-            NodeRegistry.this.registerEvent(eventDef, addonId);
         }
     }
 }

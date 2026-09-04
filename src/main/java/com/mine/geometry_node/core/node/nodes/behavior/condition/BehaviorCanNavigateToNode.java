@@ -12,7 +12,7 @@ import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import net.minecraft.network.chat.Component;
 
 public final class BehaviorCanNavigateToNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_can_navigate_to";
+    public static final String TYPE_ID = "behavior_can_navigate_to";
 
     @Override
     public NodeDef getDefaultDefinition() {

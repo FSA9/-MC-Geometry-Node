@@ -12,7 +12,7 @@ import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import net.minecraft.network.chat.Component;
 
 public class RerouteNode extends BaseNode {
-    public static final String TYPE_ID = "geometry_node:reroute";
+    public static final String TYPE_ID = "reroute";
 
     @Override
     public NodeDef getDefaultDefinition() {

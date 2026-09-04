@@ -14,7 +14,7 @@ import net.minecraft.network.chat.Component;
 
 public final class BehaviorBlackboardValueChangedNode extends BaseNode
         implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_blackboard_value_changed";
+    public static final String TYPE_ID = "behavior_blackboard_value_changed";
 
     @Override
     public NodeDef getDefaultDefinition() {

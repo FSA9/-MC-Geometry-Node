@@ -341,6 +341,7 @@
     "geometry_node.node.set_entity_move_speed":  "Set Entity Move Speed",
     "geometry_node.node.set_entity_step_height":  "Set Entity Step Height",
     "geometry_node.node.set_entity_health":  "Set Entity Health",
+    "geometry_node.node.set_entity_max_health":  "Set Entity Max Health",
     "--- ACTIONS/INVENTORY ---":  "--- Inventory Actions ---",
     "geometry_node.node.clear_slots":  "Clear Slots",
     "geometry_node.node.clear_slot":  "Clear Slot",

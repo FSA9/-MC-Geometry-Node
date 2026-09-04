@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Set;
 
 public final class BehaviorSelectTargetNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_select_target";
+    public static final String TYPE_ID = "behavior_select_target";
 
     @Override
     public NodeDef getDefaultDefinition() {

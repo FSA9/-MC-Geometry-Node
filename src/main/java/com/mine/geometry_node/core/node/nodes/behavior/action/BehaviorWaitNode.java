@@ -13,7 +13,7 @@ import net.minecraft.network.chat.Component;
 
 /** Cancellable tick-based delay that succeeds at its deadline. */
 public final class BehaviorWaitNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_wait";
+    public static final String TYPE_ID = "behavior_wait";
 
     @Override
     public NodeDef getDefaultDefinition() {

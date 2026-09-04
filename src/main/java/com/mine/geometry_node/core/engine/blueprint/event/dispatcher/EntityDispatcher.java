@@ -1,7 +1,8 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.api.EventPayload;
+import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
@@ -34,7 +35,7 @@ public class EntityDispatcher {
         EntityEvent.ADD.register((entity, level) -> {
             if (!level.isClientSide() && level instanceof ServerLevel serverLevel) {
                 BlueprintRuntime.INSTANCE.registerEntityListeners(entity);
-                BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, entity, OnEntitySpawn.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch(serverLevel, entity, OnEntitySpawn.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), entity,
                         StandardPorts.XYZ.getId(), entity.position()
                 ));
@@ -54,7 +55,7 @@ public class EntityDispatcher {
                     return EventResult.interruptFalse();
                 }
 
-                BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, entity, OnEntityHurt.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch(serverLevel, entity, OnEntityHurt.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), entity,
                         StandardPorts.FLOAT_VALUE.getId(), amount,
                         StandardPorts.DAMAGE_TYPE.getId(), damageTypeId,
@@ -63,7 +64,7 @@ public class EntityDispatcher {
                 ));
 
                 if (attacker != null) {
-                    BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, attacker, OnEntityDealDamage.TYPE_ID, GraphEventData.of(
+                    GeometryNodeEvents.dispatch(serverLevel, attacker, OnEntityDealDamage.TYPE_ID, EventPayload.of(
                             StandardPorts.TRIGGER_ENTITY.getId(), attacker,
                             StandardPorts.ENTITY.getId(), entity,
                             StandardPorts.FLOAT_VALUE.getId(), amount,
@@ -83,7 +84,7 @@ public class EntityDispatcher {
                 Entity directSource = source.getDirectEntity();
                 String damageTypeId = EntityImmunityAttachment.damageTypeId(source);
 
-                BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, entity, OnEntityDeath.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch(serverLevel, entity, OnEntityDeath.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), entity,
                         StandardPorts.DAMAGE_TYPE.getId(), damageTypeId,
                         StandardPorts.ATTACK_SOURCE.getId(), attacker,
@@ -91,7 +92,7 @@ public class EntityDispatcher {
                 ));
 
                 if (attacker != null) {
-                    BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, attacker, OnEntityKill.TYPE_ID, GraphEventData.of(
+                    GeometryNodeEvents.dispatch(serverLevel, attacker, OnEntityKill.TYPE_ID, EventPayload.of(
                             StandardPorts.ENTITY.getId(), entity,
                             StandardPorts.DAMAGE_TYPE.getId(), damageTypeId,
                             StandardPorts.ATTACK_SOURCE.getId(), attacker,
@@ -120,16 +121,16 @@ public class EntityDispatcher {
 
             long currentTick = level.getGameTime();
             BlueprintRuntime.INSTANCE.tickEntityAreas(level, entity, attachment, currentTick);
-            BlueprintRuntime.INSTANCE.dispatchBoundEntityEvent(level, entity, OnEntityTick.TYPE_ID, GraphEventData.of(
+            BlueprintRuntime.INSTANCE.dispatchBoundEntityEvent(level, entity, OnEntityTick.TYPE_ID, EventPayload.of(
                     StandardPorts.ENTITY.getId(), entity
-            ));
+            ).values());
             BlueprintRuntime.INSTANCE.tickEntityInventory(level, entity,
                     !BlueprintRuntime.INSTANCE.getEntityGraphsForEvent(entity, OnEntityGainItem.TYPE_ID).isEmpty());
         });
 
         bus.addListener((BabyEntitySpawnEvent event) -> {
             if (event.getParentA() != null && !event.getParentA().level().isClientSide()) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getParentA().level(), event.getParentA(), OnEntityBreed.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getParentA().level(), event.getParentA(), OnEntityBreed.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getParentA(),
                         StandardPorts.SOURCE_ENTITY.getId(), event.getChild(),
                         StandardPorts.TRIGGER_ENTITY.getId(), event.getCausedByPlayer()
@@ -139,7 +140,7 @@ public class EntityDispatcher {
 
         bus.addListener((EntityTravelToDimensionEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityChangeDimension.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityChangeDimension.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.DIMENSION.getId(), event.getDimension().identifier().toString()
                 ));
@@ -149,7 +150,7 @@ public class EntityDispatcher {
         bus.addListener((LivingDropsEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
                 for (var drop : event.getDrops()) {
-                    BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityDropItem.TYPE_ID, GraphEventData.of(
+                    GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityDropItem.TYPE_ID, EventPayload.of(
                             StandardPorts.ENTITY.getId(), event.getEntity(),
                             StandardPorts.ITEM.getId(), drop.getItem()
                     ));
@@ -159,7 +160,7 @@ public class EntityDispatcher {
 
         bus.addListener((EntityMobGriefingEvent event) -> {
             if (event.getEntity() != null && !event.getEntity().level().isClientSide()) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityGriefBlock.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityGriefBlock.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity()
                 ));
             }
@@ -167,7 +168,7 @@ public class EntityDispatcher {
 
         bus.addListener((LivingHealEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityHeal.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityHeal.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.FLOAT_VALUE.getId(), event.getAmount()
                 ));
@@ -176,7 +177,7 @@ public class EntityDispatcher {
 
         bus.addListener((LivingEvent.LivingJumpEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityJump.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityJump.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity()
                 ));
             }
@@ -184,7 +185,7 @@ public class EntityDispatcher {
 
         bus.addListener((EntityMountEvent event) -> {
             if (!event.getLevel().isClientSide() && event.isMounting()) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getLevel(), event.getEntityMounting(), OnEntityMount.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getLevel(), event.getEntityMounting(), OnEntityMount.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntityMounting(),
                         StandardPorts.SOURCE_ENTITY.getId(), event.getEntityBeingMounted()
                 ));
@@ -193,7 +194,7 @@ public class EntityDispatcher {
 
         bus.addListener((AnimalTameEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityTame.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityTame.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.TRIGGER_ENTITY.getId(), event.getTamer()
                 ));
@@ -202,7 +203,7 @@ public class EntityDispatcher {
 
         bus.addListener((EntityTeleportEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityTeleport.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityTeleport.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.START_POS.getId(), event.getPrev(),
                         StandardPorts.END_POS.getId(), event.getTarget()
@@ -212,7 +213,7 @@ public class EntityDispatcher {
 
         bus.addListener((LivingChangeTargetEvent event) -> {
             if (!event.getEntity().level().isClientSide() && event.getNewAboutToBeSetTarget() != null) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnTargetChange.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnTargetChange.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.TRIGGER_ENTITY.getId(), event.getNewAboutToBeSetTarget()
                 ));
@@ -221,7 +222,7 @@ public class EntityDispatcher {
 
         bus.addListener((LivingConversionEvent.Post event) -> {
             if (!event.getEntity().level().isClientSide() && event.getEntity() instanceof ZombieVillager && event.getOutcome() instanceof Villager) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getOutcome(), OnVillagerCure.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getOutcome(), OnVillagerCure.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity()
                 ));
             }
@@ -229,7 +230,7 @@ public class EntityDispatcher {
 
         bus.addListener((TradeWithVillagerEvent event) -> {
             if (!event.getEntity().level().isClientSide()) {
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getAbstractVillager(), OnVillagerTrade.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getAbstractVillager(), OnVillagerTrade.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getAbstractVillager(),
                         StandardPorts.TRIGGER_ENTITY.getId(), event.getEntity()
                 ));
@@ -243,7 +244,7 @@ public class EntityDispatcher {
                 ItemStack weapon = projectile instanceof AbstractArrow arrow && arrow.getWeaponItem() != null
                         ? arrow.getWeaponItem().copy()
                         : ItemStack.EMPTY;
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getLevel(), dispatchTarget, OnProjectileShoot.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getLevel(), dispatchTarget, OnProjectileShoot.TYPE_ID, EventPayload.of(
                         StandardPorts.PROJECTILE.getId(), projectile,
                         StandardPorts.SOURCE_ENTITY.getId(), owner,
                         StandardPorts.ITEM_STACK.getId(), weapon,
@@ -256,7 +257,7 @@ public class EntityDispatcher {
         bus.addListener((MobEffectEvent.Added event) -> {
             if (!event.getEntity().level().isClientSide() && event.getEffectInstance() != null) {
                 String effectId = event.getEffectInstance().getEffect().unwrapKey().map(key -> key.identifier().toString()).orElse("unknown");
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityPotionEffectApply.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityPotionEffectApply.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.TYPE.getId(), effectId,
                         StandardPorts.INT_VALUE.getId(), event.getEffectInstance().getAmplifier()
@@ -267,7 +268,7 @@ public class EntityDispatcher {
         bus.addListener((MobEffectEvent.Expired event) -> {
             if (!event.getEntity().level().isClientSide() && event.getEffectInstance() != null) {
                 String effectId = event.getEffectInstance().getEffect().unwrapKey().map(key -> key.identifier().toString()).orElse("unknown");
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityPotionEffectExpire.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityPotionEffectExpire.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.TYPE.getId(), effectId
                 ));
@@ -277,7 +278,7 @@ public class EntityDispatcher {
         bus.addListener((MobEffectEvent.Remove event) -> {
             if (!event.getEntity().level().isClientSide() && event.getEffectInstance() != null) {
                 String effectId = event.getEffectInstance().getEffect().unwrapKey().map(key -> key.identifier().toString()).orElse("unknown");
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityPotionEffectRemove.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) event.getEntity().level(), event.getEntity(), OnEntityPotionEffectRemove.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), event.getEntity(),
                         StandardPorts.TYPE.getId(), effectId
                 ));

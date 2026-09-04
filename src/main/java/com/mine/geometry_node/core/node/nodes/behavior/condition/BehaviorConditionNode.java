@@ -13,7 +13,7 @@ import net.minecraft.network.chat.Component;
 
 /** Converts one boolean data value into a behavior result. */
 public final class BehaviorConditionNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_condition";
+    public static final String TYPE_ID = "behavior_condition";
 
     @Override
     public NodeDef getDefaultDefinition() {

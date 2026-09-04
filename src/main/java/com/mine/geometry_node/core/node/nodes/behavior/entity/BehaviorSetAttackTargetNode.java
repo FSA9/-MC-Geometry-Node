@@ -13,13 +13,13 @@ import net.minecraft.network.chat.Component;
 import java.util.Set;
 
 public final class BehaviorSetAttackTargetNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_attack_target";
+    public static final String TYPE_ID = "behavior_attack_target";
 
     @Override
     public NodeDef getDefaultDefinition() {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION,
                         Component.translatable("geometry_node.node.behavior_attack_target"))
-                .comment(NodeComment.builder("behavior_attack_target")
+                .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
                         .text("range")
                         .text("delegation")

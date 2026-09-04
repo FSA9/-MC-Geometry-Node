@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 import java.util.Set;
 
 public final class BehaviorClearTargetNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_clear_target";
+    public static final String TYPE_ID = "behavior_clear_target";
 
     @Override
     public NodeDef getDefaultDefinition() {

@@ -49,7 +49,7 @@ public class AddItemToInventory extends BaseNode {
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         int requested = stack != null ? stack.getCount() : 0;
         int inserted = 0;
-        ItemStack leftover = stack != null ? stack.copy() : ItemStack.EMPTY;
+        ItemStack leftover = stack != null ? stack : ItemStack.EMPTY;
 
         for (Entity entity : entities) {
             if (leftover.isEmpty()) {

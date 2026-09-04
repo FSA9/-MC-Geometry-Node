@@ -31,10 +31,16 @@ public record NodeComment(
     }
 
     public static Builder builder(String nodeTypeId) {
-        String keyPrefix = nodeTypeId == null || nodeTypeId.isBlank()
-                ? ""
-                : "geometry_node.node." + nodeTypeId.trim() + ".comment.";
+        String keyPrefix = commentKeyPrefix(nodeTypeId);
         return new Builder(keyPrefix);
+    }
+
+    private static String commentKeyPrefix(@Nullable String nodeTypeId) {
+        if (nodeTypeId == null || nodeTypeId.isBlank()) return "";
+        String canonical = NodeDef.canonicalTypeId(nodeTypeId);
+        int separator = canonical.indexOf(':');
+        return canonical.substring(0, separator) + ".node."
+                + canonical.substring(separator + 1) + ".comment.";
     }
 
     public boolean isEmpty() {

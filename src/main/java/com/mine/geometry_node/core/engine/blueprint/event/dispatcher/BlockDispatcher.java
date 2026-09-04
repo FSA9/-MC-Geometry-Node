@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.api.EventPayload;
+import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventFields;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
@@ -22,7 +23,7 @@ public class BlockDispatcher {
             if (!level.isClientSide()) {
                 String dimensionId = level.dimension().identifier().toString();
 
-                BlueprintRuntime.INSTANCE.dispatchEvent((ServerLevel) level, player, OnBlockBreak.TYPE_ID, GraphEventData.of(
+                GeometryNodeEvents.dispatch((ServerLevel) level, player, OnBlockBreak.TYPE_ID, EventPayload.of(
                         StandardPorts.XYZ.getId(), pos,
                         StandardPorts.BLOCK_STATE.getId(), state,
                         GraphEventFields.BLOCK_TYPE, blockTypeId(state),
@@ -40,7 +41,7 @@ public class BlockDispatcher {
                 String dimensionId = level.dimension().identifier().toString();
 
                 if (entity != null) {
-                    BlueprintRuntime.INSTANCE.dispatchEvent(serverLevel, entity, OnBlockPlace.TYPE_ID, GraphEventData.of(
+                    GeometryNodeEvents.dispatch(serverLevel, entity, OnBlockPlace.TYPE_ID, EventPayload.of(
                             StandardPorts.XYZ.getId(), pos,
                             StandardPorts.BLOCK_STATE.getId(), state,
                             GraphEventFields.BLOCK_TYPE, blockTypeId(state),
@@ -52,13 +53,13 @@ public class BlockDispatcher {
                 Set<String> interestedIds = BlueprintRuntime.INSTANCE.getInterestedMultiblockStructureIds(serverLevel, entity);
                 if (!interestedIds.isEmpty()) {
                     for (MultiblockStructureManager.Match match : MultiblockStructureManager.getInstance().findMatches(serverLevel, pos, state, interestedIds)) {
-                        BlueprintRuntime.INSTANCE.dispatchMultiblockBuilt(serverLevel, entity, match.structureId(), GraphEventData.of(
+                        BlueprintRuntime.INSTANCE.dispatchMultiblockBuilt(serverLevel, entity, match.structureId(), EventPayload.of(
                                 StandardPorts.NAME.getId(), match.structureId(),
                                 StandardPorts.XYZ.getId(), match.origin(),
                                 StandardPorts.BLOCK_STATE.getId(), state,
                                 StandardPorts.DIMENSION.getId(), dimensionId,
                                 StandardPorts.ENTITY.getId(), entity
-                        ));
+                        ).values());
                     }
                 }
             }

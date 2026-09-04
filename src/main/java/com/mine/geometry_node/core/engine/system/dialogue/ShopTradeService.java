@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.dialogue;
 
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
-import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
+import com.mine.geometry_node.api.EventPayload;
+import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayload;
 import com.mine.geometry_node.core.node.nodes.events.dialogue.OnShopTradeSuccess;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
@@ -117,7 +117,7 @@ final class ShopTradeService {
                                                  ShopPagePayload shop,
                                                  List<ItemStack> costs,
                                                  List<ItemStack> rewards) {
-        BlueprintRuntime.INSTANCE.dispatchEvent(player.level(), player, OnShopTradeSuccess.TYPE_ID, GraphEventData.of(
+        GeometryNodeEvents.dispatch(player.level(), player, OnShopTradeSuccess.TYPE_ID, EventPayload.of(
                 StandardPorts.BUYER.getId(), player,
                 StandardPorts.SELLER.getId(), seller,
                 StandardPorts.SHOP_ID.getId(), shop.shopId(),

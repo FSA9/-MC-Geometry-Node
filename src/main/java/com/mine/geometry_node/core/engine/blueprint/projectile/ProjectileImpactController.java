@@ -2,7 +2,8 @@ package com.mine.geometry_node.core.engine.blueprint.projectile;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.api.EventPayload;
+import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.nodes.events.projectile.OnProjectileHit;
 import com.mine.geometry_node.mixin.AbstractArrowAccessor;
@@ -21,7 +22,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Map;
 
 /** Owns projectile-impact dispatch, interception, re-launch precedence and terminal lifecycle. */
 public final class ProjectileImpactController {
@@ -53,15 +53,15 @@ public final class ProjectileImpactController {
         if (control.retained()) return true;
         Entity owner = projectile.getOwner();
         Entity dispatchTarget = owner != null ? owner : projectile;
-        Map<String, Object> payload = eventPayload(level, projectile, owner, hitResult);
+        EventPayload payload = eventPayload(level, projectile, owner, hitResult);
         boolean intercept = BlueprintRuntime.INSTANCE.shouldInterceptProjectileHit(
-                level, dispatchTarget, payload);
+                level, dispatchTarget, payload.values());
 
         ImpactFrame frame = new ImpactFrame(projectile);
         Deque<ImpactFrame> frames = ACTIVE_IMPACTS.get();
         frames.push(frame);
         try {
-            BlueprintRuntime.INSTANCE.dispatchEvent(
+            GeometryNodeEvents.dispatch(
                     level, dispatchTarget, OnProjectileHit.TYPE_ID, payload);
         } finally {
             frames.pop();
@@ -135,8 +135,8 @@ public final class ProjectileImpactController {
         projectile.getData(GeometryNode.PROJECTILE_CONTROL_ATTACHMENT).setRetained(true);
     }
 
-    private static Map<String, Object> eventPayload(ServerLevel level, Projectile projectile,
-                                                     Entity owner, HitResult result) {
+    private static EventPayload eventPayload(ServerLevel level, Projectile projectile,
+                                             Entity owner, HitResult result) {
         Entity hitEntity = result instanceof EntityHitResult entityHit ? entityHit.getEntity() : null;
         BlockState hitBlock = null;
         Vec3 hitNormal = null;
@@ -147,7 +147,7 @@ public final class ProjectileImpactController {
             hitNormal = new Vec3(direction.getStepX(), direction.getStepY(), direction.getStepZ());
         }
 
-        return GraphEventData.of(
+        return EventPayload.of(
                 StandardPorts.PROJECTILE.getId(), projectile,
                 StandardPorts.XYZ.getId(), result.getLocation(),
                 StandardPorts.HIT_NORMAL.getId(), hitNormal,

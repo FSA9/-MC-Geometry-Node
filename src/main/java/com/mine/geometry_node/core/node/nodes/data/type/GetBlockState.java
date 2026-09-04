@@ -9,11 +9,9 @@ import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.Map;
 
@@ -35,17 +33,7 @@ public class GetBlockState extends BaseNode {
             return null;
         }
 
-        String blockId = getInput(context, StandardPorts.STRING.getId(), String.class);
-        if (blockId == null || blockId.isBlank()) {
-            return Blocks.AIR.defaultBlockState();
-        }
-
-        Identifier id = Identifier.tryParse(blockId);
-        if (id == null) {
-            return Blocks.AIR.defaultBlockState();
-        }
-
-        Block block = BuiltInRegistries.BLOCK.getOptional(id).orElse(Blocks.AIR);
-        return block.defaultBlockState();
+        BlockState state = getInput(context, StandardPorts.STRING.getId(), BlockState.class);
+        return state != null ? state : Blocks.AIR.defaultBlockState();
     }
 }

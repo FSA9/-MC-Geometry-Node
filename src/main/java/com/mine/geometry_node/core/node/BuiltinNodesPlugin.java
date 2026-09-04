@@ -223,6 +223,8 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/entity", new SetEntitySilent());
         registry.register("actions/entity", new SetEntityMoveSpeed());
         registry.register("actions/entity", new SetEntityStepHeight());
+        registry.register("actions/entity", new SetEntityHealth());
+        registry.register("actions/entity", new SetEntityMaxHealth());
         registry.register("actions/entity", new AddEntityTag());
         registry.register("actions/entity", new ClearEntityTags());
         registry.register("actions/entity", new RemoveEntityTag());

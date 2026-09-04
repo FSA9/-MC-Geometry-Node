@@ -14,7 +14,7 @@ import net.minecraft.network.chat.Component;
 
 /** Unique structural entry point of a behavior tree. */
 public final class BehaviorRootNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_root";
+    public static final String TYPE_ID = "behavior_root";
     public static final String RECHECK_TICK_PORT = StandardPorts.TICK.getId();
     public static final String SCHEDULE_TICK_PORT = StandardPorts.TICK.getIdWithIndex(1);
 

@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.event.subscription;
 
 import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckRegistry;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
@@ -59,7 +60,7 @@ public final class GraphSubscriptionIndex {
             removeGraphSubscriptionsFromLookup(globalEventSubscriptions, graphId);
             return;
         }
-        for (String eventType : cleanupIndex.getNodeTypes()) {
+        for (String eventType : eventTypes(cleanupIndex)) {
             removeGraph(globalEventGraphs, eventType, graphId);
             removeGraphSubscriptions(globalEventSubscriptions, eventType, graphId);
         }
@@ -90,38 +91,42 @@ public final class GraphSubscriptionIndex {
             removeEntityGraphSubscriptionsFromLookup(entity, graphId);
             return;
         }
-        for (String eventType : cleanupIndex.getNodeTypes()) {
+        for (String eventType : eventTypes(cleanupIndex)) {
             removeEntityGraph(eventType, entity, graphId);
             removeEntityGraphSubscription(eventType, entity, graphId);
         }
     }
 
     public Set<String> globalGraphsFor(String eventType) {
-        Set<String> graphIds = globalEventGraphs.get(eventType);
+        Set<String> graphIds = globalEventGraphs.get(canonicalEventType(eventType));
         return graphIds != null ? Set.copyOf(graphIds) : Collections.emptySet();
     }
 
     public Set<String> entityGraphsFor(Entity entity, String eventType) {
-        Map<Entity, Set<String>> entities = entityEventGraphs.get(eventType);
+        Map<Entity, Set<String>> entities = entityEventGraphs.get(canonicalEventType(eventType));
         if (entities == null) return Collections.emptySet();
         Set<String> graphIds = entities.get(entity);
         return graphIds != null ? Set.copyOf(graphIds) : Collections.emptySet();
     }
 
     public List<EventSubscription> globalSubscriptionsFor(String eventType) {
-        List<EventSubscription> subscriptions = globalEventSubscriptions.get(eventType);
+        List<EventSubscription> subscriptions = globalEventSubscriptions.get(canonicalEventType(eventType));
         return subscriptions != null ? List.copyOf(subscriptions) : Collections.emptyList();
     }
 
     public List<EventSubscription> entitySubscriptionsFor(Entity entity, String eventType) {
-        Map<Entity, List<EventSubscription>> entities = entityEventSubscriptions.get(eventType);
+        Map<Entity, List<EventSubscription>> entities = entityEventSubscriptions.get(canonicalEventType(eventType));
         if (entities == null) return Collections.emptyList();
         List<EventSubscription> subscriptions = entities.get(entity);
         return subscriptions != null ? List.copyOf(subscriptions) : Collections.emptyList();
     }
 
+    private static String canonicalEventType(String eventType) {
+        return eventType == null || eventType.isBlank() ? "" : NodeDef.canonicalTypeId(eventType);
+    }
+
     private void addEntityGraphSubscriptions(Entity entity, String graphId, BlueprintPlan index) {
-        for (String eventType : index.getNodeTypes()) {
+        for (String eventType : eventTypes(index)) {
             List<EventSubscription> subscriptions = buildSubscriptions(graphId, index, eventType);
             if (subscriptions.isEmpty()) continue;
 
@@ -140,7 +145,7 @@ public final class GraphSubscriptionIndex {
                                               Map<String, List<EventSubscription>> subscriptionLookup,
                                               String graphId,
                                               BlueprintPlan index) {
-        for (String eventType : index.getNodeTypes()) {
+        for (String eventType : eventTypes(index)) {
             List<EventSubscription> subscriptions = buildSubscriptions(graphId, index, eventType);
             if (subscriptions.isEmpty()) continue;
 
@@ -164,6 +169,10 @@ public final class GraphSubscriptionIndex {
         return subscriptions;
     }
 
+    private static Set<String> eventTypes(BlueprintPlan index) {
+        return index.getEventTypes();
+    }
+
     private static void removeGraphFromLookup(Map<String, Set<String>> lookup, String graphId) {
         lookup.entrySet().removeIf(entry -> {
             entry.getValue().remove(graphId);
@@ -172,7 +181,7 @@ public final class GraphSubscriptionIndex {
     }
 
     private static void removeGraphFromLookup(Map<String, Set<String>> lookup, String graphId, BlueprintPlan index) {
-        for (String eventType : index.getNodeTypes()) {
+        for (String eventType : eventTypes(index)) {
             removeGraph(lookup, eventType, graphId);
         }
     }
@@ -185,7 +194,7 @@ public final class GraphSubscriptionIndex {
     }
 
     private static void removeGraphSubscriptionsFromLookup(Map<String, List<EventSubscription>> lookup, String graphId, BlueprintPlan index) {
-        for (String eventType : index.getNodeTypes()) {
+        for (String eventType : eventTypes(index)) {
             removeGraphSubscriptions(lookup, eventType, graphId);
         }
     }
@@ -205,7 +214,7 @@ public final class GraphSubscriptionIndex {
     }
 
     private void removeEntityGraphFromLookup(Entity entity, String graphId, BlueprintPlan index) {
-        for (String eventType : index.getNodeTypes()) {
+        for (String eventType : eventTypes(index)) {
             removeEntityGraph(eventType, entity, graphId);
         }
     }
@@ -225,7 +234,7 @@ public final class GraphSubscriptionIndex {
     }
 
     private void removeEntityGraphSubscriptionsFromLookup(Entity entity, String graphId, BlueprintPlan index) {
-        for (String eventType : index.getNodeTypes()) {
+        for (String eventType : eventTypes(index)) {
             removeEntityGraphSubscription(eventType, entity, graphId);
         }
     }

@@ -13,7 +13,7 @@ import net.minecraft.network.chat.Component;
 
 /** Indefinite cancellable fallback with a configurable reevaluation interval. */
 public final class BehaviorIdleNode extends BaseNode implements BehaviorExecutableNode {
-    public static final String TYPE_ID = "geometry_node:behavior_idle";
+    public static final String TYPE_ID = "behavior_idle";
 
     @Override
     public NodeDef getDefaultDefinition() {

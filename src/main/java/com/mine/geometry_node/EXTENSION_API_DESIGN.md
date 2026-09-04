@@ -5,7 +5,6 @@
 本轮标准化覆盖：
 
 - 节点注册 API
-- 事件定义 API
 - 事件派发 API
 - 插件来源与命名空间规范
 
@@ -24,11 +23,7 @@ geometry_node
   api/
     GeometryNodePlugin
     NodeRegistrationContext
-    EventRegistrationContext
-    EventDef
-    EventScope
     EventPayload
-    GeometryEventDispatcher
     GeometryNodeEvents
 
   core/node/
@@ -46,7 +41,7 @@ geometry_node
 addon
   - 实现 GeometryNodePlugin
   - registerNodes(ctx) 注册 BaseNode
-  - registerEvents(ctx) 声明 EventDef
+  - 用 NodeType.EVENT 声明事件节点
   - 用 GeometryNodeEvents 派发事件
 ```
 
@@ -71,9 +66,6 @@ public interface GeometryNodePlugin {
     default void registerNodes(NodeRegistrationContext registry) {
     }
 
-    default void registerEvents(EventRegistrationContext registry) {
-    }
-
     @Deprecated
     default void registerNodes(NodeRegistry registry) {
     }
@@ -94,7 +86,6 @@ public interface GeometryNodePlugin {
 - 隔离坏 provider，避免一个坏 Addon 阻断后续 Addon。
 - 记录插件来源。
 - 先调用新节点注册入口；如果没有注册节点，再回退旧入口。
-- 调用事件注册入口。
 
 ## 节点注册 API
 
@@ -163,9 +154,9 @@ public static final String TYPE_ID = "example_action";
 
 当前策略：
 
-- 内置 `geometry_node` 节点继续允许裸 ID。
-- 第三方 Addon 裸 ID 会打印 warning。
-- 暂不强制 reject，避免开发期过于僵硬。
+- 内置节点在类中声明短 ID，由 `NodeDef` 统一规范化为 `geometry_node:*`。
+- 第三方 Addon 必须声明带自身 Addon ID 的完整命名空间 ID。
+- 图文档和编译产物始终使用规范化后的完整 ID。
 
 ## 节点编写契约
 
@@ -226,68 +217,20 @@ public final class ExampleDataNode extends BaseNode {
 
 ## 事件 API
 
-事件系统分为两部分：
+事件系统只有一份静态定义和一条运行时订阅链：
 
 ```text
-事件定义：EventDef
-事件派发：GeometryNodeEvents / GeometryEventDispatcher
+静态定义：NodeDef(category = NodeType.EVENT)
+运行时订阅：BlueprintPlan -> GraphSubscriptionIndex
+事件派发：GeometryNodeEvents
 ```
 
-### EventDef
+事件 ID、显示名称和输出端口全部来自事件节点自己的 `NodeDef`，不再维护平行的
+`EventDef`。事件的全局或实体作用域由图的实际绑定方式决定，不再声明容易失真的
+静态 `EventScope`。
 
-```java
-public record EventDef(
-        String eventId,
-        Component displayName,
-        EventScope scope,
-        List<PortDef> outputs
-) {}
-```
-
-`eventId` 必须和事件节点 `TYPE_ID` 一致。
-
-事件作用域：
-
-```java
-public enum EventScope {
-    GLOBAL,
-    LEVEL,
-    ENTITY
-}
-```
-
-事件节点注册时，如果 `NodeDef.category() == NodeType.EVENT`，`NodeRegistry` 会自动生成一份默认 `EventDef`。
-
-Addon 可以在 `registerEvents(...)` 中覆盖同一个 Addon 自己的事件定义，用于补充更准确的 scope 或输出 schema。
-
-### EventRegistrationContext
-
-```java
-public interface EventRegistrationContext {
-    String addonId();
-
-    GeometryEventDispatcher dispatcher();
-
-    void registerEvent(EventDef eventDef);
-}
-```
-
-示例：
-
-```java
-@Override
-public void registerEvents(EventRegistrationContext registry) {
-    registry.registerEvent(new EventDef(
-            "example_geometry:on_machine_tick",
-            Component.translatable("example_geometry.event.on_machine_tick"),
-            EventScope.LEVEL,
-            List.of(
-                    StandardPorts.ENTITY.toOutput(),
-                    StandardPorts.FLOAT_VALUE.toOutput()
-            )
-    ));
-}
-```
+`GraphSubscriptionIndex` 只为已注册且 `NodeDef.category() == NodeType.EVENT` 的
+节点建立订阅。普通节点即使具有相同的 type ID 查询能力，也不会进入事件索引。
 
 ## 事件节点编写
 
@@ -327,13 +270,6 @@ GeometryNodeEvents.dispatch(level, target, "example_geometry:on_machine_tick",
 );
 ```
 
-也可以拿 dispatcher：
-
-```java
-GeometryEventDispatcher dispatcher = GeometryNodeEvents.dispatcher();
-dispatcher.dispatch(level, target, eventId, payload);
-```
-
 `EventPayload`：
 
 ```java
@@ -346,27 +282,14 @@ EventPayload.builder()
 
 - payload key 必须和事件节点输出端口 ID 一致。
 - 第一版事件只负责触发蓝图，不负责取消或修改原 NeoForge 事件。
-- payload 值应尽量使用 `VariableRegistry` 已支持的类型，例如数字、字符串、布尔、Entity、Vec3、ItemStack、BlockState、List、Map。
+- payload 值应使用 `GraphValueCodecRegistry` 支持的类型，例如数字、字符串、布尔、Entity、Vec3、ItemStack、BlockState、List、Map。
 
 ## 内部事件入口状态
 
-`BlueprintEngine.dispatchEvent(... Consumer<BlueprintProcess.ExecutionThread>)` 已标记为 deprecated。
-
-保留原因：
-
-- 内置 dispatcher 当前仍大量使用它。
-- 直接全部迁移会扩大改动面。
-
-对外规则：
-
-- Addon 使用 `GeometryNodeEvents`。
-- 后续核心内部 dispatcher 可以逐步迁移到 `GeometryNodeEvents`。
-- 最终再考虑收紧 `BlueprintEngine` 的 public API。
-
-当前已迁移示例：
-
-- `PlayerInputStateManager` 的玩家按键事件已经改用 `GeometryNodeEvents`。
-- `OnPlayerKeyEvent` 已调整为 `NodeType.EVENT`。
+Addon 和核心中的普通事件统一使用 `GeometryNodeEvents`，不直接接触
+`BlueprintEngine`、`BlueprintProcess` 或订阅索引。Area、实体 Tick、多方块结构等
+专用路径仍可调用 `BlueprintRuntime` 的定向执行入口，因为它们执行的是已经筛选好的
+订阅或具体事件节点，不是第二套通用派发入口。
 
 ## Dialogue MVP 后端范围
 
@@ -545,11 +468,7 @@ EventPayload.builder()
 新增 API：
 
 - `api/NodeRegistrationContext.java`
-- `api/EventRegistrationContext.java`
-- `api/EventDef.java`
-- `api/EventScope.java`
 - `api/EventPayload.java`
-- `api/GeometryEventDispatcher.java`
 - `api/GeometryNodeEvents.java`
 
 修改：
@@ -557,7 +476,6 @@ EventPayload.builder()
 - `api/GeometryNodePlugin.java`
   - 新增 `addonId()`
   - 新增标准 `registerNodes(NodeRegistrationContext)`
-  - 新增 `registerEvents(EventRegistrationContext)`
   - 保留旧 `registerNodes(NodeRegistry)`
 
 - `core/node/NodeRegistry.java`
@@ -565,9 +483,7 @@ EventPayload.builder()
   - ServiceLoader provider 错误隔离
   - 插件来源追踪
   - 新旧注册入口兼容
-  - 节点命名空间 warning
-  - 事件定义注册表
-  - `NodeType.EVENT` 自动注册默认 `EventDef`
+  - 节点命名空间约束
 
 - `core/node/BuiltinNodesPlugin.java`
   - 使用新 `NodeRegistrationContext`
@@ -579,6 +495,9 @@ EventPayload.builder()
 - `core/engine/blueprint/event/PlayerInputStateManager.java`
   - 改用 `GeometryNodeEvents`
 
+- 内置事件 dispatcher、投射物、任务和商店事件
+  - 普通事件统一改用 `GeometryNodeEvents` 和 `EventPayload`
+
 - `core/node/nodes/events/player/OnPlayerKeyEvent.java`
   - 改为 `NodeType.EVENT`
 
@@ -589,8 +508,8 @@ EventPayload.builder()
 1. 内置节点仍能注册。
 2. 旧 `GeometryNodePlugin.registerNodes(NodeRegistry)` 写法仍能注册节点。
 3. 新 `registerNodes(NodeRegistrationContext)` 写法能注册节点。
-4. 第三方裸 ID 会 warning，但不阻断。
-5. `NodeType.EVENT` 节点会进入事件定义表。
+4. 第三方裸 ID 会被拒绝，且只隔离该节点的注册失败。
+5. 只有 `NodeType.EVENT` 节点会进入运行时订阅索引。
 6. Addon 可通过 `GeometryNodeEvents.dispatch(...)` 派发事件。
 7. Addon 不需要引用 `BlueprintProcess.ExecutionThread`。
 8. 玩家按键事件仍能触发 `OnPlayerKeyEvent`。
@@ -600,6 +519,5 @@ EventPayload.builder()
 下一步优先级：
 
 1. 写一个最小 example addon。
-2. 把一两个内置 dispatcher 迁到 `GeometryNodeEvents`，验证 facade 适合内部使用。
-3. 给未知节点做最小不崩溃处理。
-4. 后续再单独设计自定义端口类型。
+2. 给未知节点做最小不崩溃处理。
+3. 后续再单独设计自定义端口类型。

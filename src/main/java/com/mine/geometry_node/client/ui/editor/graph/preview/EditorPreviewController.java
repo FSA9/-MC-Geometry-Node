@@ -16,6 +16,7 @@ import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistr
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
 import com.mine.geometry_node.core.node.document.NodeData;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.meta.StaticKeys;
 import com.mine.geometry_node.core.node.nodes.dialogue.OpenShop;
 import com.mine.geometry_node.core.node.nodes.dialogue.ShowDialoguePage;
@@ -36,7 +37,7 @@ public final class EditorPreviewController {
     }
 
     public static boolean previewDialogue(NodeData node) {
-        if (node == null || !ShowDialoguePage.TYPE_ID.equals(node.type)) {
+        if (node == null || !NodeDef.canonicalTypeId(ShowDialoguePage.TYPE_ID).equals(node.type)) {
             return false;
         }
         RichTextValue body = RichTextValue.from(input(node, ShowDialoguePage.TEXT));
@@ -52,7 +53,7 @@ public final class EditorPreviewController {
     }
 
     public static boolean previewShop(NodeData node) {
-        if (node == null || !OpenShop.TYPE_ID.equals(node.type)) {
+        if (node == null || !NodeDef.canonicalTypeId(OpenShop.TYPE_ID).equals(node.type)) {
             return false;
         }
         String title = stringValue(input(node, OpenShop.TITLE), "");

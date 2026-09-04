@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
-import com.mine.geometry_node.core.engine.blueprint.event.GraphEventData;
+import com.mine.geometry_node.api.EventPayload;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.*;
@@ -200,7 +200,7 @@ public final class AreaTriggerDispatcher {
             Entity trigger = hit != null ? hit.entity() : areaLevel.getEntity(entityId);
             if (trigger == null || trigger.isRemoved()) continue;
             Entity eventEntity = owner != null ? owner : trigger;
-            Map<String, Object> eventData = GraphEventData.of(
+            Map<String, Object> eventData = EventPayload.of(
                     StandardPorts.ENTITY.getId(), eventEntity,
                     StandardPorts.TRIGGER_ENTITY.getId(), trigger,
                     StandardPorts.HIT_POS.getId(), hit != null ? hit.hitPos() : trigger.position(),
@@ -218,7 +218,7 @@ public final class AreaTriggerDispatcher {
                     StandardPorts.DIMENSION.getId(), resource.address().dimension().identifier().toString(),
                     OnAreaEvent.INSIDE_COUNT_PORT, insideCount,
                     OnAreaEvent.TARGET_PORT, group.key.targetType().id()
-            );
+            ).values();
             for (int nodeId : nodes) {
                 // The process keeps its host level; the selected dimension only controls Area lookup and querying.
                 BlueprintRuntime.INSTANCE.executeEventNode(hostLevel, owner, graphId, plan, nodeId,
