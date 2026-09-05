@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.system.asset;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
+import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
 import com.mine.geometry_node.core.engine.system.visual.image.ImageAssetFormats;
 
@@ -42,7 +43,7 @@ public final class AssetTypeCatalog {
         register(new AssetTypeDefinition(GRAPH_TYPE_ID, new AssetTypeRecognizer() {
             @Override
             public boolean supportsCandidatePath(String normalizedPath) {
-                return normalizedPath.endsWith(".json");
+                return GraphPathMapper.isGraphJsonPath(normalizedPath);
             }
 
             @Override
@@ -90,10 +91,10 @@ public final class AssetTypeCatalog {
      * This supports verified upload temporary files whose temporary suffix differs from the target.
      */
     public static AssetMetadata inspect(Path file, String logicalPath) {
-        String lowerPath = normalizePath(logicalPath);
+        String normalizedPath = normalizePath(logicalPath);
         for (AssetTypeDefinition definition : definitions()) {
-            if (!definition.supportsCandidatePath(lowerPath)) continue;
-            AssetMetadata metadata = definition.inspect(file, lowerPath);
+            if (!definition.supportsCandidatePath(normalizedPath)) continue;
+            AssetMetadata metadata = definition.inspect(file, normalizedPath);
             if (metadata != null && metadata.isKnown()) return metadata;
         }
         return AssetMetadata.UNKNOWN;
@@ -104,9 +105,9 @@ public final class AssetTypeCatalog {
      * Callers handling an existing file must use {@link #inspect(Path, String)} instead.
      */
     public static boolean isCandidatePath(String path) {
-        String lowerPath = normalizePath(path);
+        String normalizedPath = normalizePath(path);
         for (AssetTypeDefinition definition : definitions()) {
-            if (definition.supportsCandidatePath(lowerPath)) return true;
+            if (definition.supportsCandidatePath(normalizedPath)) return true;
         }
         return false;
     }
@@ -150,7 +151,7 @@ public final class AssetTypeCatalog {
     }
 
     private static String normalizePath(String path) {
-        return path == null ? "" : path.trim().replace('\\', '/').toLowerCase(Locale.ROOT);
+        return path == null ? "" : path.trim().replace('\\', '/');
     }
 
     private static String normalizeId(String id) {
@@ -162,8 +163,9 @@ public final class AssetTypeCatalog {
         return new AssetTypeRecognizer() {
             @Override
             public boolean supportsCandidatePath(String normalizedPath) {
+                String lowerPath = normalizedPath.toLowerCase(Locale.ROOT);
                 for (String suffix : suffixes) {
-                    if (normalizedPath.endsWith(suffix)) return true;
+                    if (lowerPath.endsWith(suffix)) return true;
                 }
                 return false;
             }

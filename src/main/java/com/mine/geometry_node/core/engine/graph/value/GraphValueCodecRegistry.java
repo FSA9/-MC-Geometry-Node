@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.value;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.GraphNumberNormalizer;
@@ -53,10 +55,23 @@ public final class GraphValueCodecRegistry {
     }
 
     public static synchronized <T> void register(GraphValueCodec<T> serializer) {
-        register(serializer, new PortType[0]);
+        registerNbtOnly(serializer);
     }
 
-    public static synchronized <T> void register(GraphValueCodec<T> serializer, PortType... portTypes) {
+    private static synchronized <T> void registerNbtOnly(GraphValueCodec<T> serializer) {
+        registerCodec(serializer);
+    }
+
+    public static synchronized <T> void register(GraphValueCodec<T> serializer,
+                                                 GraphValueJsonCodec jsonCodec,
+                                                 PortType... portTypes) {
+        Objects.requireNonNull(jsonCodec, "persistent JSON codec");
+        validatePersistentTypes(portTypes);
+        registerCodec(serializer);
+        registerPersistentTypes(serializer.getTargetClass(), serializer, jsonCodec, portTypes);
+    }
+
+    private static <T> void registerCodec(GraphValueCodec<T> serializer) {
         Objects.requireNonNull(serializer, "serializer");
         Class<T> targetClass = Objects.requireNonNull(serializer.getTargetClass(), "serializer target class");
         String typeId = Objects.requireNonNull(serializer.getTypeId(), "serializer type id");
@@ -73,15 +88,16 @@ public final class GraphValueCodecRegistry {
         if (ID_TO_SERIALIZER.containsKey(typeId)) {
             throw new IllegalStateException("Graph value codec type id already registered: " + typeId);
         }
-        validatePersistentTypes(portTypes);
         CLASS_TO_SERIALIZER.put(targetClass, serializer);
         ID_TO_SERIALIZER.put(typeId, serializer);
-        registerPersistentTypes(targetClass, serializer, portTypes);
     }
 
-    private static synchronized void registerNative(Class<?> valueClass, PortType... portTypes) {
+    private static synchronized void registerNative(Class<?> valueClass,
+                                                    GraphValueJsonCodec jsonCodec,
+                                                    PortType... portTypes) {
+        Objects.requireNonNull(jsonCodec, "persistent JSON codec");
         validatePersistentTypes(portTypes);
-        registerPersistentTypes(valueClass, null, portTypes);
+        registerPersistentTypes(valueClass, null, jsonCodec, portTypes);
     }
 
     private static void validatePersistentTypes(PortType... portTypes) {
@@ -94,22 +110,27 @@ public final class GraphValueCodecRegistry {
         }
     }
 
-    private static void registerPersistentTypes(Class<?> valueClass, @Nullable GraphValueCodec<?> codec,
+    private static void registerPersistentTypes(Class<?> valueClass, @Nullable GraphValueCodec<?> nbtCodec,
+                                                GraphValueJsonCodec jsonCodec,
                                                 PortType... portTypes) {
         Objects.requireNonNull(valueClass, "persistent value class");
+        Objects.requireNonNull(jsonCodec, "persistent JSON codec");
         if (portTypes == null) return;
         for (PortType portType : portTypes) {
-            PersistentTypeRegistration registration = new PersistentTypeRegistration(valueClass, codec);
+            PersistentTypeRegistration registration =
+                    new PersistentTypeRegistration(portType, valueClass, nbtCodec, jsonCodec);
             PORT_TYPE_REGISTRATIONS.put(portType, registration);
         }
     }
 
     static {
-        registerNative(Number.class, PortType.INTEGER, PortType.LONG, PortType.FLOAT);
-        registerNative(Boolean.class, PortType.BOOLEAN);
-        registerNative(String.class, PortType.STRING, PortType.PATH);
-        registerNative(List.class, PortType.LIST);
-        registerNative(Map.class, PortType.DICT, PortType.SHOP);
+        registerNative(Number.class, GraphValueJsonCodecs.INTEGER, PortType.INTEGER);
+        registerNative(Number.class, GraphValueJsonCodecs.LONG, PortType.LONG);
+        registerNative(Number.class, GraphValueJsonCodecs.FLOAT, PortType.FLOAT);
+        registerNative(Boolean.class, GraphValueJsonCodecs.BOOLEAN, PortType.BOOLEAN);
+        registerNative(String.class, GraphValueJsonCodecs.STRING, PortType.STRING, PortType.PATH);
+        registerNative(List.class, GraphValueJsonCodecs.LIST, PortType.LIST);
+        registerNative(Map.class, GraphValueJsonCodecs.MAP, PortType.DICT, PortType.SHOP);
 
         // UUID
         register(new GraphValueCodec<UUID>() {
@@ -117,10 +138,10 @@ public final class GraphValueCodecRegistry {
             @Override public Class<UUID> getTargetClass() { return UUID.class; }
             @Override public Tag serialize(UUID value) { return StringTag.valueOf(value.toString()); }
             @Override public UUID deserialize(Tag tag) { return UUID.fromString(tag.asString().orElse("")); }
-        }, PortType.ENTITY);
+        }, GraphValueJsonCodecs.ENTITY, PortType.ENTITY);
 
         // BlockPos
-        register(new GraphValueCodec<BlockPos>() {
+        registerNbtOnly(new GraphValueCodec<BlockPos>() {
             @Override public String getTypeId() { return "block_pos"; }
             @Override public Class<BlockPos> getTargetClass() { return BlockPos.class; }
             @Override public Tag serialize(BlockPos value) { return LongTag.valueOf(value.asLong()); }
@@ -142,7 +163,7 @@ public final class GraphValueCodecRegistry {
                 ListTag list = (ListTag) tag;
                 return new Vec3(list.getDoubleOr(0, 0.0), list.getDoubleOr(1, 0.0), list.getDoubleOr(2, 0.0));
             }
-        }, PortType.XYZ);
+        }, GraphValueJsonCodecs.XYZ, PortType.XYZ);
 
         // SlotRef
         register(new GraphValueCodec<SlotRef>() {
@@ -150,7 +171,7 @@ public final class GraphValueCodecRegistry {
             @Override public Class<SlotRef> getTargetClass() { return SlotRef.class; }
             @Override public Tag serialize(SlotRef value) { return StringTag.valueOf(value.serialize()); }
             @Override public SlotRef deserialize(Tag tag) { return SlotRef.parse(tag.asString().orElse("")); }
-        }, PortType.SLOT);
+        }, GraphValueJsonCodecs.SLOT, PortType.SLOT);
 
         // BlockState
         register(new GraphValueCodec<BlockState>() {
@@ -160,7 +181,7 @@ public final class GraphValueCodecRegistry {
             @Override public BlockState deserialize(Tag tag) {
                 return NbtUtils.readBlockState(BuiltInRegistries.BLOCK, (CompoundTag) tag);
             }
-        }, PortType.BLOCK_STATE);
+        }, GraphValueJsonCodecs.BLOCK_STATE, PortType.BLOCK_STATE);
 
         // ItemStack
         register(new GraphValueCodec<ItemStack>() {
@@ -176,7 +197,7 @@ public final class GraphValueCodecRegistry {
                         .parse(provider.createSerializationContext(NbtOps.INSTANCE), tag)
                         .getOrThrow(IllegalArgumentException::new);
             }
-        }, PortType.ITEM_STACK);
+        }, GraphValueJsonCodecs.ITEM_STACK, PortType.ITEM_STACK);
 
         register(new GraphValueCodec<EntityTemplateValue>() {
             @Override public String getTypeId() { return "entity_template"; }
@@ -198,7 +219,7 @@ public final class GraphValueCodecRegistry {
                         entityData
                 );
             }
-        }, PortType.ENTITY_TEMPLATE);
+        }, GraphValueJsonCodecs.ENTITY_TEMPLATE, PortType.ENTITY_TEMPLATE);
 
         register(new GraphValueCodec<Item>() {
             @Override public String getTypeId() { return "item"; }
@@ -211,7 +232,7 @@ public final class GraphValueCodecRegistry {
                 return BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.parse(id))
                         .orElseThrow(() -> new IllegalArgumentException("Unknown item: " + id));
             }
-        }, PortType.ITEM);
+        }, GraphValueJsonCodecs.ITEM, PortType.ITEM);
 
         register(new GraphValueCodec<ColorValue>() {
             @Override public String getTypeId() { return "color"; }
@@ -235,7 +256,7 @@ public final class GraphValueCodecRegistry {
                         channels.getFloatOr(2, 0.0F),
                         channels.getFloatOr(3, 1.0F));
             }
-        }, PortType.COLOR);
+        }, GraphValueJsonCodecs.COLOR, PortType.COLOR);
 
         register(new GraphValueCodec<RichTextValue>() {
             @Override public String getTypeId() { return "rich_text"; }
@@ -278,7 +299,7 @@ public final class GraphValueCodecRegistry {
                         encoded.getStringOr("plain", ""),
                         segments);
             }
-        }, PortType.RICH_TEXT);
+        }, GraphValueJsonCodecs.RICH_TEXT, PortType.RICH_TEXT);
 
         register(new GraphValueCodec<GeometryValue>() {
             @Override public String getTypeId() { return "geometry"; }
@@ -334,7 +355,7 @@ public final class GraphValueCodecRegistry {
                 }
                 return GeometryValue.of(primitives.toArray(GeometryValue.Primitive[]::new));
             }
-        }, PortType.GEOMETRY);
+        }, GraphValueJsonCodecs.GEOMETRY, PortType.GEOMETRY);
     }
 
     public static Set<PortType> supportedPortTypes() {
@@ -343,6 +364,26 @@ public final class GraphValueCodecRegistry {
 
     public static boolean supportsPortType(@Nullable PortType type) {
         return type != null && PORT_TYPE_REGISTRATIONS.containsKey(type);
+    }
+
+    public static JsonElement toJson(PortType type, Object value, HolderLookup.Provider provider) {
+        PersistentTypeRegistration registration = requirePersistentType(type);
+        if (value == null) return JsonNull.INSTANCE;
+        return registration.jsonCodec().encode(value, provider);
+    }
+
+    public static Object fromJson(PortType type, JsonElement value, HolderLookup.Provider provider) {
+        PersistentTypeRegistration registration = requirePersistentType(type);
+        if (value == null || value.isJsonNull()) return null;
+        return registration.jsonCodec().decode(value, provider);
+    }
+
+    private static PersistentTypeRegistration requirePersistentType(@Nullable PortType type) {
+        PersistentTypeRegistration registration = type == null ? null : PORT_TYPE_REGISTRATIONS.get(type);
+        if (registration == null) {
+            throw new IllegalArgumentException("Unsupported persistent graph value type: " + type);
+        }
+        return registration;
     }
 
     @Nullable
@@ -548,7 +589,10 @@ public final class GraphValueCodecRegistry {
         return result;
     }
 
-    private record PersistentTypeRegistration(Class<?> valueClass, @Nullable GraphValueCodec<?> codec) {}
+    private record PersistentTypeRegistration(PortType portType,
+                                              Class<?> valueClass,
+                                              @Nullable GraphValueCodec<?> nbtCodec,
+                                              GraphValueJsonCodec jsonCodec) {}
 
     private static void putVector(CompoundTag target, String key, Vec3 value) {
         ListTag vector = new ListTag();

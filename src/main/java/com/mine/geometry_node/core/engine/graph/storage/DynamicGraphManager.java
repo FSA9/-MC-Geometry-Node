@@ -43,7 +43,7 @@ public final class DynamicGraphManager {
             // 递归遍历服务端文件
             try (java.util.stream.Stream<Path> walk = java.nio.file.Files.walk(folder)) {
                 walk.filter(p -> java.nio.file.Files.isRegularFile(p) && !java.nio.file.Files.isSymbolicLink(p))
-                        .filter(p -> p.toString().endsWith(".json"))
+                        .filter(p -> GraphPathMapper.isGraphJsonPath(p.toString()))
                         .forEach(file -> {
                             try {
                                 String graphId = GraphPathMapper.pathToId(folder, file);

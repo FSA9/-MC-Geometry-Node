@@ -8,6 +8,7 @@ import java.nio.file.Path;
  * 负责处理 蓝图ID (A/B/C.json) 与 物理路径 (A/B/C.json) 之间的映射
  */
 public class GraphPathMapper {
+    public static final String JSON_EXTENSION = ".json";
 
     /**
      * 将 蓝图ID 转化为 相对物理路径
@@ -30,11 +31,24 @@ public class GraphPathMapper {
         String pathStr = ServerAssetPaths.normalizeRelativePath(path, !ensureJsonExtension);
         if (pathStr.isEmpty()) return "";
 
-        // 容错：如果玩家在指令里偷懒没有敲 .json，我们自动帮他补上
-        if (ensureJsonExtension && !pathStr.endsWith(".json")) {
-            pathStr += ".json";
+        if (ensureJsonExtension) {
+            if (hasJsonExtensionIgnoreCase(pathStr)) {
+                pathStr = pathStr.substring(0, pathStr.length() - JSON_EXTENSION.length()) + JSON_EXTENSION;
+            } else {
+                pathStr += JSON_EXTENSION;
+            }
         }
         return ServerAssetPaths.normalizeRelativePath(pathStr, false);
+    }
+
+    /** Returns whether an existing repository path uses the canonical graph extension. */
+    public static boolean isGraphJsonPath(String path) {
+        return path != null && path.endsWith(JSON_EXTENSION);
+    }
+
+    private static boolean hasJsonExtensionIgnoreCase(String path) {
+        int offset = path.length() - JSON_EXTENSION.length();
+        return offset >= 0 && path.regionMatches(true, offset, JSON_EXTENSION, 0, JSON_EXTENSION.length());
     }
 
     /**
@@ -44,5 +58,4 @@ public class GraphPathMapper {
         // 直接返回原汁原味的相对路径，保留 .json 后缀
         return ServerAssetPaths.pathToId(rootDir, file);
     }
-
 }
