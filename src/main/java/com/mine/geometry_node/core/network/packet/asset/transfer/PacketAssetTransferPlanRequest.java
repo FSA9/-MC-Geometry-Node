@@ -37,6 +37,10 @@ public record PacketAssetTransferPlanRequest(int requestId, AssetTransferPlanKin
         paths = paths == null ? List.of() : List.copyOf(paths);
         AssetPacketLimits.requireCount(paths.size(), AssetPacketLimits.MAX_TRANSFER_PLAN_PATHS,
                 "transfer plan path");
+        paths = paths.stream()
+                .map(path -> AssetTransferPacketCodecs.requireBounded(
+                        path, AssetPacketLimits.MAX_PATH_LENGTH, "Transfer plan path"))
+                .toList();
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

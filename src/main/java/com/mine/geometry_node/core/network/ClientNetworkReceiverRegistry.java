@@ -14,12 +14,7 @@ import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePicker
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
 import com.mine.geometry_node.client.asset.preview.protocol.ClientAssetPreviewProtocol;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAccepted;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferQueued;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadChunk;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadComplete;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferServerResult;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferUploadAck;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileResponse;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
@@ -37,10 +32,7 @@ import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteA
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewAccepted;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewChunk;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewComplete;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResult;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResponse;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
 import com.mine.geometry_node.client.ui.editor.datalibrary.NetworkRemoteDataLibraryGateway;
 
@@ -55,20 +47,10 @@ public final class ClientNetworkReceiverRegistry {
         if (initialized) return;
         initialized = true;
 
-        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferAccepted.TYPE,
-                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferQueued.TYPE,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetFileResponse.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferPlanResponse.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferPlanState.handle(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferDownloadChunk.TYPE,
-                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferUploadAck.TYPE,
-                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferDownloadComplete.TYPE,
-                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetTransferServerResult.TYPE,
-                (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketSpawnDynamicVisual.TYPE,
                 (payload, context) -> context.queue(() -> ClientVisualManager.spawnEffectFromPacket(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketVisualAssetData.TYPE,
@@ -101,13 +83,7 @@ public final class ClientNetworkReceiverRegistry {
                 (payload, context) -> context.queue(() -> ClientMarkerStore.handleRemove(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketCaptureEntityTemplateResponse.TYPE,
                 (payload, context) -> context.queue(() -> EntityTemplatePickerController.handleResponse(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetPreviewAccepted.TYPE,
-                (payload, context) -> context.queue(() -> ClientAssetPreviewProtocol.handle(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetPreviewChunk.TYPE,
-                (payload, context) -> context.queue(() -> ClientAssetPreviewProtocol.handle(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetPreviewComplete.TYPE,
-                (payload, context) -> context.queue(() -> ClientAssetPreviewProtocol.handle(payload)));
-        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetPreviewResult.TYPE,
+        ClientboundPayloadRegistry.registerClientReceiver(PacketAssetPreviewResponse.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetPreviewProtocol.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketRemoteDataLibraryResponse.TYPE,
                 (payload, context) -> context.queue(() -> NetworkRemoteDataLibraryGateway.INSTANCE.handle(payload)));

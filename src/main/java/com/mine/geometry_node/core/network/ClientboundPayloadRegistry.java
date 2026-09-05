@@ -1,12 +1,7 @@
 package com.mine.geometry_node.core.network;
 
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAccepted;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferQueued;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadChunk;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadComplete;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileResponse;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanResponse;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferServerResult;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferUploadAck;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
@@ -23,10 +18,7 @@ import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteA
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewAccepted;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewChunk;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewComplete;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResult;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResponse;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
 import dev.architectury.networking.NetworkManager;
 import dev.architectury.platform.Platform;
@@ -44,13 +36,8 @@ public final class ClientboundPayloadRegistry {
     private static final Map<Identifier, Entry<?>> ENTRIES = new LinkedHashMap<>();
 
     static {
-        add(PacketAssetTransferAccepted.TYPE, PacketAssetTransferAccepted.STREAM_CODEC);
-        add(PacketAssetTransferQueued.TYPE, PacketAssetTransferQueued.STREAM_CODEC);
+        add(PacketAssetFileResponse.TYPE, PacketAssetFileResponse.STREAM_CODEC);
         add(PacketAssetTransferPlanResponse.TYPE, PacketAssetTransferPlanResponse.STREAM_CODEC);
-        add(PacketAssetTransferDownloadChunk.TYPE, PacketAssetTransferDownloadChunk.STREAM_CODEC);
-        add(PacketAssetTransferUploadAck.TYPE, PacketAssetTransferUploadAck.STREAM_CODEC);
-        add(PacketAssetTransferDownloadComplete.TYPE, PacketAssetTransferDownloadComplete.STREAM_CODEC);
-        add(PacketAssetTransferServerResult.TYPE, PacketAssetTransferServerResult.STREAM_CODEC);
         add(PacketSpawnDynamicVisual.TYPE, PacketSpawnDynamicVisual.STREAM_CODEC);
         add(PacketVisualAssetData.TYPE, PacketVisualAssetData.STREAM_CODEC);
         add(PacketGeometryDebugSnapshot.TYPE, PacketGeometryDebugSnapshot.STREAM_CODEC);
@@ -67,10 +54,7 @@ public final class ClientboundPayloadRegistry {
         add(PacketMarkerUpsert.TYPE, PacketMarkerUpsert.STREAM_CODEC);
         add(PacketMarkerRemove.TYPE, PacketMarkerRemove.STREAM_CODEC);
         add(PacketCaptureEntityTemplateResponse.TYPE, PacketCaptureEntityTemplateResponse.STREAM_CODEC);
-        add(PacketAssetPreviewAccepted.TYPE, PacketAssetPreviewAccepted.STREAM_CODEC);
-        add(PacketAssetPreviewChunk.TYPE, PacketAssetPreviewChunk.STREAM_CODEC);
-        add(PacketAssetPreviewComplete.TYPE, PacketAssetPreviewComplete.STREAM_CODEC);
-        add(PacketAssetPreviewResult.TYPE, PacketAssetPreviewResult.STREAM_CODEC);
+        add(PacketAssetPreviewResponse.TYPE, PacketAssetPreviewResponse.STREAM_CODEC);
         add(PacketRemoteDataLibraryResponse.TYPE, PacketRemoteDataLibraryResponse.STREAM_CODEC);
     }
 

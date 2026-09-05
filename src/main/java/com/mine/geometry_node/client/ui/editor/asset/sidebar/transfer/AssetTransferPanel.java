@@ -123,7 +123,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
             for (AssetTransferJobSnapshot job : jobs) {
                 host.addView(jobHeader(job), match(28));
                 for (AssetTransferFileSnapshot file : job.files()) {
-                    host.addView(fileRow(file, rowIndex++ % 2 == 0), match(52));
+                    host.addView(fileRow(file, rowIndex++ % 2 == 0), match(30));
                 }
             }
         });
@@ -135,56 +135,38 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(px(8), 0, px(4), 0);
         row.setBackground(rect(0xFF272727, 1, COLOR_BORDER));
-        TextView title = label(directionText(job.direction()) + "  " + job.completedFileCount() + "/" + job.files().size(),
+        TextView title = label(directionText(job.direction()) + "  " + job.processedFileCount() + "/" + job.files().size(),
                 10, job.direction() == AssetTransferDirection.UPLOAD ? COLOR_UPLOAD : COLOR_DOWNLOAD);
         row.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
-        row.addView(iconButton(SvgIconView.Icon.CLOSE, COLOR_ERROR,
-                        tr("geometry_node.asset_transfer.action.cancel"), () -> ClientAssetTransferService.INSTANCE.cancel(job.jobId())),
-                new LinearLayout.LayoutParams(px(24), px(24)));
         return row;
     }
 
     private View fileRow(AssetTransferFileSnapshot file, boolean alternate) {
         LinearLayout row = new LinearLayout(getContext());
-        row.setOrientation(LinearLayout.VERTICAL);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(px(8), px(5), px(8), px(5));
         row.setBackground(rect(alternate ? COLOR_ROW : COLOR_ROW_ALT, 1, COLOR_BORDER));
 
-        LinearLayout top = new LinearLayout(getContext());
-        top.setOrientation(LinearLayout.HORIZONTAL);
-        top.setGravity(Gravity.CENTER_VERTICAL);
         TextView name = label(fileName(file), 10, COLOR_TEXT);
         name.setSingleLine(true);
-        top.addView(name, new LinearLayout.LayoutParams(0, px(19), 1));
+        row.addView(name, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
         TextView state = label(stateText(file.state()), 9, stateColor(file.state()));
         state.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        top.addView(state, new LinearLayout.LayoutParams(px(58), px(19)));
-        row.addView(top, match(19));
-
-        row.addView(new TransferProgressView(getContext(), file.progress()), match(5));
-        TextView detail = label(formatBytes(file.transferredBytes()) + " / " + formatBytes(file.totalBytes())
-                + (file.bytesPerSecond() > 0 ? "  " + formatBytes(file.bytesPerSecond()) + "/s" : ""), 8, COLOR_MUTED);
-        row.addView(detail, match(17));
+        row.addView(state, new LinearLayout.LayoutParams(px(58), ViewGroup.LayoutParams.MATCH_PARENT));
         return row;
     }
 
     private void addTotalSection(List<AssetTransferJobSnapshot> jobs) {
-        long totalBytes = jobs.stream().mapToLong(AssetTransferJobSnapshot::totalBytes).sum();
-        long transferred = jobs.stream().mapToLong(AssetTransferJobSnapshot::transferredBytes).sum();
         long totalFiles = jobs.stream().mapToLong(job -> job.files().size()).sum();
-        long completedFiles = jobs.stream().mapToLong(AssetTransferJobSnapshot::completedFileCount).sum();
-        long speed = jobs.stream().flatMap(job -> job.files().stream())
-                .mapToLong(AssetTransferFileSnapshot::bytesPerSecond).sum();
+        long processedFiles = jobs.stream().mapToLong(AssetTransferJobSnapshot::processedFileCount).sum();
 
         addSection(Section.TOTAL, tr("geometry_node.asset_transfer.panel.total"), null, host -> {
             LinearLayout block = new LinearLayout(getContext());
             block.setOrientation(LinearLayout.VERTICAL);
             block.setPadding(px(8), px(7), px(8), px(7));
-            block.addView(new TransferProgressView(getContext(), totalBytes == 0 ? 0 : (double) transferred / totalBytes), match(7));
-            TextView bytes = label(formatBytes(transferred) + " / " + formatBytes(totalBytes), 9, COLOR_TEXT);
-            block.addView(bytes, match(18));
-            TextView files = label(completedFiles + " / " + totalFiles + " "
-                    + tr("geometry_node.asset_transfer.panel.files") + "  " + formatBytes(speed) + "/s", 9, COLOR_MUTED);
+            TextView files = label(processedFiles + " / " + totalFiles + " "
+                    + tr("geometry_node.asset_transfer.panel.files"), 9, COLOR_TEXT);
             block.addView(files, match(18));
             host.addView(block, wrapMatch());
         });
@@ -239,7 +221,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         text.addView(name, match(18));
         String secondary = hasIssue
                 ? Component.translatable(file.failure().messageKey(), file.failure().messageArguments().toArray()).getString()
-                : formatBytes(file.totalBytes());
+                : stateText(file.state());
         TextView detail = label(secondary, 8, COLOR_MUTED);
         detail.setSingleLine(true);
         text.addView(detail, match(17));
@@ -340,15 +322,6 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         }
     }
 
-    private static String formatBytes(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        double kib = bytes / 1024.0;
-        if (kib < 1024) return String.format(java.util.Locale.ROOT, "%.1f KiB", kib);
-        double mib = kib / 1024.0;
-        if (mib < 1024) return String.format(java.util.Locale.ROOT, "%.1f MiB", mib);
-        return String.format(java.util.Locale.ROOT, "%.1f GiB", mib / 1024.0);
-    }
-
     private static String directionText(AssetTransferDirection direction) {
         return tr(direction == AssetTransferDirection.UPLOAD
                 ? "geometry_node.asset_transfer.direction.upload"
@@ -362,7 +335,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     private static int stateColor(AssetTransferState state) {
         return switch (state) {
             case COMPLETED -> COLOR_DOWNLOAD;
-            case FAILED, CANCELLED -> COLOR_ERROR;
+            case FAILED -> COLOR_ERROR;
             case QUEUED -> COLOR_MUTED;
             default -> COLOR_UPLOAD;
         };

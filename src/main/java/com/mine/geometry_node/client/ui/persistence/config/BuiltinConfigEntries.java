@@ -2,7 +2,6 @@ package com.mine.geometry_node.client.ui.persistence.config;
 
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.shortcut.KeyScope;
-import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferConfigKeys;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -14,7 +13,6 @@ public final class BuiltinConfigEntries {
     public static final ConfigCategory VIEWPORT = category("viewport", 100);
     public static final ConfigCategory NODE = category("node", 200);
     public static final ConfigCategory ASSET_BROWSER = category("asset_browser", 300);
-    public static final ConfigCategory NETWORK_TRANSFER = category("network_transfer", 350);
     public static final ConfigCategory PREVIEW_CACHE = category("preview_cache", 375);
     public static final ConfigCategory SHORTCUT_GLOBAL = category("shortcut_global", 400);
     public static final ConfigCategory SHORTCUT_VIEWPORT = category("shortcut_viewport", 500);
@@ -57,41 +55,6 @@ public final class BuiltinConfigEntries {
             .normalize(value -> List.of("LIST", "ICON_SMALL", "ICON_MEDIUM", "ICON_LARGE").contains(value) ? value : null)
             .build();
 
-    public static final ConfigEntry<Integer> TRANSFER_MAX_UPLOAD_FILE_MIB = integer(
-            AssetTransferConfigKeys.clientId(AssetTransferConfigKeys.MAX_UPLOAD_FILE_SIZE_MIB), NETWORK_TRANSFER, 100, 1, 2048,
-            ConfigEntry.SettingsVisibility.VISIBLE,
-            config -> config.networkTransfer.maxUploadFileSizeMiB,
-            (config, value) -> config.networkTransfer.maxUploadFileSizeMiB = value);
-    public static final ConfigEntry<Integer> TRANSFER_MAX_DOWNLOAD_FILE_MIB = integer(
-            AssetTransferConfigKeys.clientId(AssetTransferConfigKeys.MAX_DOWNLOAD_FILE_SIZE_MIB), NETWORK_TRANSFER, 200, 1, 2048,
-            ConfigEntry.SettingsVisibility.VISIBLE,
-            config -> config.networkTransfer.maxDownloadFileSizeMiB,
-            (config, value) -> config.networkTransfer.maxDownloadFileSizeMiB = value);
-    public static final ConfigEntry<Integer> TRANSFER_CHUNK_SIZE_KIB = integer(
-            AssetTransferConfigKeys.clientId(AssetTransferConfigKeys.CHUNK_SIZE_KIB), NETWORK_TRANSFER, 300, 4, 24,
-            ConfigEntry.SettingsVisibility.VISIBLE,
-            config -> config.networkTransfer.chunkSizeKiB,
-            (config, value) -> config.networkTransfer.chunkSizeKiB = value);
-    public static final ConfigEntry<Integer> TRANSFER_UPLOAD_RATE_KIBPS = integer(
-            AssetTransferConfigKeys.clientId(AssetTransferConfigKeys.UPLOAD_RATE_LIMIT_KIBPS), NETWORK_TRANSFER, 400, 0, 1_048_576,
-            ConfigEntry.SettingsVisibility.VISIBLE,
-            config -> config.networkTransfer.uploadRateLimitKiBps,
-            (config, value) -> config.networkTransfer.uploadRateLimitKiBps = value);
-    public static final ConfigEntry<Integer> TRANSFER_DOWNLOAD_RATE_KIBPS = integer(
-            AssetTransferConfigKeys.clientId(AssetTransferConfigKeys.DOWNLOAD_RATE_LIMIT_KIBPS), NETWORK_TRANSFER, 500, 0, 1_048_576,
-            ConfigEntry.SettingsVisibility.VISIBLE,
-            config -> config.networkTransfer.downloadRateLimitKiBps,
-            (config, value) -> config.networkTransfer.downloadRateLimitKiBps = value);
-    public static final ConfigEntry<Integer> TRANSFER_COMPLETED_HISTORY_LIMIT = integer(
-            "networkTransfer.completedHistoryLimit", NETWORK_TRANSFER, 600, 0, 1000,
-            ConfigEntry.SettingsVisibility.VISIBLE,
-            config -> config.networkTransfer.completedHistoryLimit,
-            (config, value) -> config.networkTransfer.completedHistoryLimit = value);
-    public static final ConfigEntry<Integer> TRANSFER_FAILED_HISTORY_LIMIT = integer(
-            "networkTransfer.failedHistoryLimit", NETWORK_TRANSFER, 700, 0, 1000,
-            ConfigEntry.SettingsVisibility.VISIBLE,
-            config -> config.networkTransfer.failedHistoryLimit,
-            (config, value) -> config.networkTransfer.failedHistoryLimit = value);
     public static final ConfigEntry<Integer> PREVIEW_MAX_SIZE_MIB = integer(
             "previewCache.maxSizeMiB", PREVIEW_CACHE, 100, 32, 16_384,
             ConfigEntry.SettingsVisibility.VISIBLE,
@@ -154,9 +117,6 @@ public final class BuiltinConfigEntries {
     private static final List<ConfigEntry<?>> ALL = List.of(
             VIEWPORT_GRID_SIZE, VIEWPORT_SNAP_TO_GRID, VIEWPORT_SHOW_GRID_AND_AXIS,
             NODE_CORNER_RADIUS, ASSET_QUICK_ACCESS_PATHS, ASSET_VIEW_MODE,
-            TRANSFER_MAX_UPLOAD_FILE_MIB, TRANSFER_MAX_DOWNLOAD_FILE_MIB, TRANSFER_CHUNK_SIZE_KIB,
-            TRANSFER_UPLOAD_RATE_KIBPS, TRANSFER_DOWNLOAD_RATE_KIBPS,
-            TRANSFER_COMPLETED_HISTORY_LIMIT, TRANSFER_FAILED_HISTORY_LIMIT,
             PREVIEW_MAX_SIZE_MIB, PREVIEW_LOCATION,
             GLOBAL_UNDO, GLOBAL_REDO, GLOBAL_SAVE, GLOBAL_COPY, GLOBAL_PASTE, GLOBAL_CUT, GLOBAL_DELETE, GLOBAL_RENAME,
             VIEWPORT_SELECT_ALL, VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
@@ -165,7 +125,7 @@ public final class BuiltinConfigEntries {
     private BuiltinConfigEntries() {}
 
     static void register(ConfigRegistry registry) {
-        for (ConfigCategory category : List.of(VIEWPORT, NODE, ASSET_BROWSER, NETWORK_TRANSFER, PREVIEW_CACHE,
+        for (ConfigCategory category : List.of(VIEWPORT, NODE, ASSET_BROWSER, PREVIEW_CACHE,
                 SHORTCUT_GLOBAL, SHORTCUT_VIEWPORT, SHORTCUT_SHOP)) {
             registry.registerCategory(category);
         }

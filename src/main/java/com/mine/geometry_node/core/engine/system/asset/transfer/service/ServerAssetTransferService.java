@@ -1,126 +1,158 @@
 package com.mine.geometry_node.core.engine.system.asset.transfer.service;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetRepositoryService;
-import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferProtocolLimits;
-import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferServerConfig;
-import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferServerPolicy;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.IncomingAssetTransferFile;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.OutgoingAssetTransferFile;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.VerifiedAssetCommitter;
+import com.mine.geometry_node.core.engine.system.asset.transfer.io.AtomicAssetCommitter;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferDirection;
-import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferPurpose;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryJsonCodec;
-import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryService;
-import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryTransferStaging;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferErrorCode;
+import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferPurpose;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferState;
+import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryRepositoryService;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAccepted;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAck;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferCancel;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferChunk;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferComplete;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadChunk;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferDownloadComplete;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferOpen;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferQueued;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferResult;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferServerResult;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferUploadAck;
+import com.mine.geometry_node.core.network.packet.asset.transfer.AssetTransferPlanKind;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileDownloadRequest;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileResponse;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileUpload;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanRequest;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanResponse;
-import dev.architectury.event.events.common.LifecycleEvent;
-import dev.architectury.event.events.common.PlayerEvent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.nio.file.Files;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Map;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.WeakHashMap;
+import java.util.concurrent.CompletableFuture;
 
-public final class ServerAssetTransferService implements AutoCloseable {
+/** Handles one complete file per request; NeoForge performs transport-level packet splitting. */
+public final class ServerAssetTransferService {
     public static final ServerAssetTransferService INSTANCE = new ServerAssetTransferService();
+    private static final int MAX_ACTIVE_REQUESTS = 8;
+    private static final int MAX_ACTIVE_REQUESTS_PER_PLAYER = 1;
+    private static final int COMPLETED_REQUEST_HISTORY = 4_096;
 
-    private final AssetTransferIoExecutor io = new AssetTransferIoExecutor("GeometryNode-AssetTransfer-ServerIO", 2, 128);
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(task -> {
-        Thread thread = new Thread(task, "GeometryNode-AssetTransfer-ServerRate");
-        thread.setDaemon(true);
-        return thread;
-    });
-    private final Map<UUID, PlayerContext> players = new ConcurrentHashMap<>();
-    private final ServerAssetTransferScheduler transferScheduler = new ServerAssetTransferScheduler();
-    private volatile boolean initialized;
+    private final Map<MinecraftServer, RequestRegistry> requestRegistries = new WeakHashMap<>();
 
     private ServerAssetTransferService() {
     }
 
-    public synchronized void init() {
-        if (initialized) return;
-        initialized = true;
-        PlayerEvent.PLAYER_QUIT.register(this::closePlayer);
-        LifecycleEvent.SERVER_STOPPING.register(server -> closeAllPlayers());
-        scheduler.scheduleAtFixedRate(this::expireIdleSessions, 1L, 1L, TimeUnit.SECONDS);
-    }
-
-    public void handleOpen(ServerPlayer player, PacketAssetTransferOpen packet) {
-        if (!hasPermissionForOpen(player, packet)) {
-            sendFailure(player, packet.transferId(), AssetTransferErrorCode.PERMISSION_DENIED, "permission_denied", "");
+    public void handleUpload(ServerPlayer player, PacketAssetFileUpload packet) {
+        if (!hasUploadPermission(player, packet.purpose())) {
+            sendFailure(player, packet.transferId(), AssetTransferErrorCode.PERMISSION_DENIED,
+                    "permission_denied", "");
             return;
         }
-        AssetTransferServerPolicy policy = AssetTransferServerConfig.policy();
-        PlayerContext owner = players.computeIfAbsent(player.getUUID(), ignored -> new PlayerContext(policy));
-        owner.applyPolicy(policy);
-        int chunkBytes = Math.min(packet.requestedChunkBytes(), policy.maxChunkBytes());
-        ServerSession session;
-        synchronized (owner) {
-            if (owner.sessions.containsKey(packet.transferId())) {
-                sendFailure(player, packet.transferId(), AssetTransferErrorCode.INVALID_SEQUENCE, "duplicate_transfer_id", "");
-                return;
-            }
-            session = new ServerSession(player, packet, chunkBytes, policy);
-            owner.sessions.put(packet.transferId(), session);
+
+        MinecraftServer server = player.level().getServer();
+        RequestKey requestKey = new RequestKey(player.getUUID(), packet.transferId());
+        if (!admit(player, server, requestKey)) return;
+
+        CompletableFuture<UploadOutcome> operation;
+        try {
+            operation = switch (packet.purpose()) {
+                case ASSET_REPOSITORY -> RemoteAssetRepositoryService.INSTANCE.commitUpload(
+                                server, packet.remotePath(), packet.content(), packet.conflictPolicy())
+                        .thenApply(ServerAssetTransferService::assetUploadOutcome);
+                case DATA_LIBRARY_CREATE -> RemoteDataLibraryRepositoryService.INSTANCE
+                        .createAsync(player, packet.content())
+                        .thenApply(ignored -> UploadOutcome.committed(packet.content().length));
+                case DATA_LIBRARY_UPDATE -> RemoteDataLibraryRepositoryService.INSTANCE
+                        .updateAsync(player, packet.content())
+                        .thenApply(ignored -> UploadOutcome.committed(packet.content().length));
+                case DATA_LIBRARY_DOWNLOAD -> CompletableFuture.failedFuture(
+                        new IllegalArgumentException("Invalid upload purpose"));
+            };
+        } catch (Throwable throwable) {
+            completeRequest(server, requestKey);
+            sendFailure(player, packet.transferId(), errorCode(throwable),
+                    "commit_failed", rootMessage(throwable));
+            return;
         }
-        ServerAssetTransferScheduler.Submission submission = transferScheduler.submit(
-                key(session), packet.direction(), policy);
-        switch (submission.disposition()) {
-            case FULL -> {
-                owner.sessions.remove(packet.transferId(), session);
-                startPromoted(submission.promoted());
-                sendFailure(player, packet.transferId(), AssetTransferErrorCode.SERVER_BUSY,
-                        "server_queue_full", "");
+
+        operation.whenComplete((outcome, throwable) -> server.execute(() -> {
+            completeRequest(server, requestKey);
+            if (throwable != null) {
+                Throwable cause = rootCause(throwable);
+                if (packet.purpose() != AssetTransferPurpose.ASSET_REPOSITORY) {
+                    GeometryNode.LOGGER.warn("Data Library upload {} failed for player {}: {}",
+                            packet.purpose(), player.getGameProfile().name(), rootMessage(cause), cause);
+                }
+                boolean staleObject = rootMessage(cause).startsWith("STALE_OBJECT:");
+                sendFailure(player, packet.transferId(),
+                        staleObject ? AssetTransferErrorCode.STALE_OBJECT : errorCode(cause),
+                        staleObject ? "stale_object" : "commit_failed", rootMessage(cause));
                 return;
             }
-            case DUPLICATE -> {
-                owner.sessions.remove(packet.transferId(), session);
-                sendFailure(player, packet.transferId(), AssetTransferErrorCode.INVALID_SEQUENCE,
-                        "duplicate_transfer_id", "");
-                return;
-            }
-            case QUEUED -> NetworkHandler.sendToPlayer(player, new PacketAssetTransferQueued(packet.transferId()));
-            case ADMITTED -> { }
+            boolean refreshWarning = !outcome.refreshWarning().isEmpty();
+            NetworkHandler.sendToPlayer(player, new PacketAssetFileResponse(
+                    packet.transferId(), AssetTransferState.COMPLETED,
+                    refreshWarning ? AssetTransferErrorCode.GRAPH_RELOAD_FAILED : AssetTransferErrorCode.NONE,
+                    refreshWarning ? "geometry_node.asset_transfer.error.asset_refresh_failed" : "",
+                    outcome.refreshWarning(), outcome.committed(), outcome.sourceSize(),
+                    outcome.sourceLastModified(), new byte[0]));
+        }));
+    }
+
+    public void handleDownloadRequest(ServerPlayer player, PacketAssetFileDownloadRequest packet) {
+        if (!hasDownloadPermission(player, packet.purpose())) {
+            sendFailure(player, packet.transferId(), AssetTransferErrorCode.PERMISSION_DENIED,
+                    "permission_denied", "");
+            return;
         }
-        startPromoted(submission.promoted());
+
+        MinecraftServer server = player.level().getServer();
+        RequestKey requestKey = new RequestKey(player.getUUID(), packet.transferId());
+        if (!admit(player, server, requestKey)) return;
+
+        CompletableFuture<DownloadOutcome> operation;
+        try {
+            operation = switch (packet.purpose()) {
+                case ASSET_REPOSITORY -> RemoteAssetRepositoryService.INSTANCE
+                        .readTransferFile(server, packet.remotePath())
+                        .thenApply(file -> new DownloadOutcome(
+                                file.content(), file.size(), file.lastModified()));
+                case DATA_LIBRARY_DOWNLOAD -> RemoteDataLibraryRepositoryService.INSTANCE.readSnapshot(player)
+                        .thenApply(content -> new DownloadOutcome(content, content.length, 0L));
+                case DATA_LIBRARY_CREATE, DATA_LIBRARY_UPDATE -> CompletableFuture.failedFuture(
+                        new IllegalArgumentException("Invalid download purpose"));
+            };
+        } catch (Throwable throwable) {
+            completeRequest(server, requestKey);
+            sendFailure(player, packet.transferId(), errorCode(throwable),
+                    "read_failed", rootMessage(throwable));
+            return;
+        }
+
+        operation.whenComplete((outcome, throwable) -> server.execute(() -> {
+            completeRequest(server, requestKey);
+            if (throwable != null) {
+                Throwable cause = rootCause(throwable);
+                sendFailure(player, packet.transferId(), errorCode(cause),
+                        "read_failed", rootMessage(cause));
+                return;
+            }
+            NetworkHandler.sendToPlayer(player, new PacketAssetFileResponse(
+                    packet.transferId(), AssetTransferState.COMPLETED, AssetTransferErrorCode.NONE,
+                    "", "", false, outcome.sourceSize(), outcome.sourceLastModified(), outcome.content()));
+        }));
     }
 
     public void handlePlan(ServerPlayer player, PacketAssetTransferPlanRequest packet) {
-        if (!hasPermission(player, packet.kind() == com.mine.geometry_node.core.network.packet.asset.transfer.AssetTransferPlanKind.UPLOAD_CONFLICTS
-                ? AssetTransferDirection.UPLOAD : AssetTransferDirection.DOWNLOAD)) {
+        AssetTransferDirection direction = packet.kind() == AssetTransferPlanKind.UPLOAD_CONFLICTS
+                ? AssetTransferDirection.UPLOAD : AssetTransferDirection.DOWNLOAD;
+        if (!hasAssetPermission(player, direction)) {
             NetworkHandler.sendToPlayer(player, new PacketAssetTransferPlanResponse(
                     packet.requestId(), packet.kind(), false, "permission_denied", List.of(), List.of()));
             return;
         }
         MinecraftServer server = player.level().getServer();
-        java.util.concurrent.CompletableFuture<PacketAssetTransferPlanResponse> plan = switch (packet.kind()) {
+        CompletableFuture<PacketAssetTransferPlanResponse> plan = switch (packet.kind()) {
             case UPLOAD_CONFLICTS -> RemoteAssetRepositoryService.INSTANCE
                     .findUploadConflicts(server, packet.paths())
                     .thenApply(conflicts -> new PacketAssetTransferPlanResponse(
@@ -135,499 +167,120 @@ public final class ServerAssetTransferService implements AutoCloseable {
                         packet.requestId(), packet.kind(), false, rootMessage(throwable), List.of(), List.of()))));
     }
 
-    public void handleChunk(ServerPlayer player, PacketAssetTransferChunk packet) {
-        SessionLookup lookup = findTransferring(player, packet.transferId(), AssetTransferDirection.UPLOAD);
-        if (lookup == null) return;
-        ServerSession session = lookup.session;
-        session.touch();
-        io.submit(() -> session.incoming.writeChunk(packet.sequence(), packet.offset(), packet.content()))
-                .whenComplete((ignored, throwable) -> player.level().getServer().execute(() -> {
-                    if (lookup.owner.sessions.get(session.transferId) != session) return;
-                    if (throwable != null) {
-                        failAndClose(lookup.owner, session, AssetTransferErrorCode.INVALID_SEQUENCE,
-                                "invalid_sequence", rootMessage(throwable));
-                    } else {
-                        long delay = lookup.owner.uploadLimiter.reserveDelayNanos(packet.content().length);
-                        scheduler.schedule(() -> player.level().getServer().execute(() -> {
-                            if (lookup.owner.sessions.get(session.transferId) == session) {
-                                NetworkHandler.sendToPlayer(player, new PacketAssetTransferUploadAck(
-                                        session.transferId, session.incoming.nextSequence(), session.incoming.nextOffset()));
-                            }
-                        }), delay, TimeUnit.NANOSECONDS);
-                    }
-                }));
+    private static UploadOutcome assetUploadOutcome(RemoteAssetFileService.UploadCommitResult result) {
+        if (result.commit() != AtomicAssetCommitter.CommitResult.COMMITTED) return UploadOutcome.SKIPPED;
+        String refreshWarning = result.refreshFailure() == null ? "" : rootMessage(result.refreshFailure());
+        return new UploadOutcome(true, result.sourceSize(), result.sourceLastModified(), refreshWarning);
     }
 
-    public void handleAck(ServerPlayer player, PacketAssetTransferAck packet) {
-        SessionLookup lookup = findTransferring(player, packet.transferId(), AssetTransferDirection.DOWNLOAD);
-        if (lookup == null) return;
-        ServerSession session = lookup.session;
-        synchronized (session) {
-            if (session.sendInProgress) return;
-            if (packet.nextSequence() != session.nextSequence || packet.nextOffset() != session.nextOffset) {
-                failAndClose(lookup.owner, session, AssetTransferErrorCode.INVALID_SEQUENCE,
-                        "invalid_acknowledgement", "");
-                return;
-            }
-            session.sendInProgress = true;
-        }
-        session.touch();
-        sendNextDownloadChunk(lookup.owner, session);
-    }
-
-    public void handleComplete(ServerPlayer player, PacketAssetTransferComplete packet) {
-        SessionLookup lookup = findTransferring(player, packet.transferId(), AssetTransferDirection.UPLOAD);
-        if (lookup == null) return;
-        ServerSession session = lookup.session;
-        MinecraftServer server = player.level().getServer();
-        synchronized (session) {
-            if (session.state != AssetTransferState.TRANSFERRING) return;
-            session.state = AssetTransferState.VERIFYING;
-        }
-        session.touch();
-        io.submit(() -> prepareCommit(lookup.owner, session)).thenCompose(prepared -> {
-            if (prepared.immediate != null) {
-                return java.util.concurrent.CompletableFuture.completedFuture(prepared.immediate);
-            }
-            return RemoteAssetRepositoryService.INSTANCE.commitVerifiedUpload(
-                            server, session.remotePath, prepared.temporary,
-                            session.open.conflictPolicy())
-                    .thenApply(result -> {
-                        if (result.commit() != VerifiedAssetCommitter.CommitResult.COMMITTED) {
-                            return CommitOutcome.SKIPPED;
-                        }
-                        String refreshWarning = result.refreshFailure() == null
-                                ? "" : rootMessage(result.refreshFailure());
-                        return new CommitOutcome(true, prepared.sourceSize,
-                                prepared.sourceLastModified, refreshWarning);
-                    }).whenComplete((ignored, throwable) -> {
-                        if (throwable != null) deleteQuietly(prepared.temporary);
-                    });
-        }).whenComplete((outcome, throwable) -> server.execute(() -> {
-            if (lookup.owner.sessions.get(session.transferId) != session) return;
-            if (throwable != null) {
-                String detail = rootMessage(throwable);
-                if (session.open.purpose() != AssetTransferPurpose.ASSET_REPOSITORY) {
-                    GeometryNode.LOGGER.warn("Data Library transfer {} commit failed for player {}: {}",
-                            session.open.purpose(), session.player.getGameProfile().name(), detail, throwable);
-                }
-                boolean staleObject = session.open.purpose() != AssetTransferPurpose.ASSET_REPOSITORY
-                        && detail.startsWith("STALE_OBJECT:");
-                failAndClose(lookup.owner, session,
-                        staleObject ? AssetTransferErrorCode.STALE_OBJECT : AssetTransferErrorCode.HASH_MISMATCH,
-                        staleObject ? "stale_object" : "verification_or_commit_failed", detail);
-            } else {
-                completeAndClose(lookup.owner, session, outcome);
-            }
-        }));
-    }
-
-    private CommitPreparation prepareCommit(PlayerContext owner, ServerSession session) throws Exception {
-        java.nio.file.Path temporary = null;
-        try {
-            session.incoming.verifyAndClose();
-            temporary = session.incoming.retainVerifiedFile();
-            synchronized (session) {
-                if (owner.sessions.get(session.transferId) != session
-                        || session.state != AssetTransferState.VERIFYING) {
-                    Files.deleteIfExists(temporary);
-                    return CommitPreparation.immediate(CommitOutcome.ABORTED);
-                }
-                session.state = AssetTransferState.COMMITTING;
-            }
-            BasicFileAttributes revision = Files.readAttributes(temporary, BasicFileAttributes.class);
-            if (session.open.purpose() == AssetTransferPurpose.ASSET_REPOSITORY) {
-                return new CommitPreparation(temporary, revision.size(),
-                        revision.lastModifiedTime().toMillis(), null);
-            }
-            commitDataLibraryUpload(session, temporary);
-            Files.deleteIfExists(temporary);
-            return CommitPreparation.immediate(new CommitOutcome(
-                    true, revision.size(), revision.lastModifiedTime().toMillis(), ""));
-        } catch (Throwable throwable) {
-            if (temporary != null) {
-                Files.deleteIfExists(temporary);
-            }
-            if (throwable instanceof Exception exception) throw exception;
-            if (throwable instanceof Error error) throw error;
-            throw new RuntimeException(throwable);
-        }
-    }
-
-    public void handleResult(ServerPlayer player, PacketAssetTransferResult packet) {
-        SessionLookup lookup = findActive(player, packet.transferId(), AssetTransferDirection.DOWNLOAD);
-        if (lookup != null) closeSession(lookup.owner, lookup.session);
-    }
-
-    public void handleCancel(ServerPlayer player, PacketAssetTransferCancel packet) {
-        SessionLookup lookup = find(player, packet.transferId(), null);
-        if (lookup == null) return;
-        synchronized (lookup.session) {
-            if (lookup.session.state == AssetTransferState.COMMITTING) return;
-            lookup.session.state = AssetTransferState.CANCELLED;
-        }
-        closeSession(lookup.owner, lookup.session);
-        NetworkHandler.sendToPlayer(player, new PacketAssetTransferServerResult(packet.transferId(),
-                AssetTransferState.CANCELLED, AssetTransferErrorCode.CANCELLED,
-                "geometry_node.asset_transfer.error.cancelled", packet.reason(), false, 0L, 0L));
-    }
-
-    private void openUpload(PlayerContext owner, UUID transferId) {
-        ServerSession session = owner.sessions.get(transferId);
-        if (session == null) return;
-        session.state = AssetTransferState.PREFLIGHT;
-        session.touch();
-        if (session.open.totalBytes() > session.policy.maxUploadFileBytes()) {
-            failAndClose(owner, session, AssetTransferErrorCode.FILE_TOO_LARGE, "file_too_large", "");
-            return;
-        }
-        io.submit(() -> IncomingAssetTransferFile.create(
-                RemoteAssetFileService.transferTemporaryDirectory(session.player.level().getServer()),
-                session.open.totalBytes(), session.open.sha256())).whenComplete((incoming, throwable) ->
-                session.player.level().getServer().execute(() -> {
-                    if (owner.sessions.get(transferId) != session) {
-                        closeQuietly(incoming);
-                        return;
-                    }
-                    if (throwable != null) {
-                        closeQuietly(incoming);
-                        failAndClose(owner, session, AssetTransferErrorCode.IO_FAILURE,
-                                "open_failed", rootMessage(throwable));
-                        return;
-                    }
-                    session.incoming = incoming;
-                    session.state = AssetTransferState.TRANSFERRING;
-                    session.touch();
-                    NetworkHandler.sendToPlayer(session.player, new PacketAssetTransferAccepted(
-                            transferId, session.open.totalBytes(), session.open.sha256(), session.chunkBytes));
-                }));
-    }
-
-    private void openDownload(PlayerContext owner, UUID transferId) {
-        ServerSession session = owner.sessions.get(transferId);
-        if (session == null) return;
-        session.state = AssetTransferState.PREFLIGHT;
-        session.touch();
-        io.submit(() -> {
-            java.nio.file.Path source = session.open.purpose() == AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD
-                    ? RemoteDataLibraryTransferStaging.INSTANCE.claimDownload(session.player, session.remotePath)
-                    : RemoteAssetFileService.resolveTransferSource(session.player.level().getServer(), session.remotePath);
-            session.downloadSource = source;
-            session.deleteDownloadSource = session.open.purpose() == AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD;
-            return OutgoingAssetTransferFile.open(source, session.policy.maxDownloadFileBytes());
-        }).whenComplete((outgoing, throwable) ->
-                session.player.level().getServer().execute(() -> {
-                    if (owner.sessions.get(transferId) != session) {
-                        closeQuietly(outgoing);
-                        return;
-                    }
-                    if (throwable != null) {
-                        closeQuietly(outgoing);
-                        failAndClose(owner, session, AssetTransferErrorCode.IO_FAILURE,
-                                "open_failed", rootMessage(throwable));
-                        return;
-                    }
-                    session.outgoing = outgoing;
-                    session.state = AssetTransferState.TRANSFERRING;
-                    session.touch();
-                    NetworkHandler.sendToPlayer(session.player, new PacketAssetTransferAccepted(
-                            transferId, outgoing.totalBytes(), outgoing.sha256(), session.chunkBytes));
-                }));
-    }
-
-    private void sendNextDownloadChunk(PlayerContext owner, ServerSession session) {
-        if (session.nextOffset >= session.outgoing.totalBytes()) {
-            io.run(session.outgoing::verifyUnchanged).whenComplete((ignored, throwable) -> session.player.level().getServer().execute(() -> {
-                if (owner.sessions.get(session.transferId) != session) return;
-                session.sendInProgress = false;
-                if (throwable != null) failAndClose(owner, session, AssetTransferErrorCode.SOURCE_CHANGED,
-                        "source_changed", rootMessage(throwable));
-                else {
-                    session.state = AssetTransferState.VERIFYING;
-                    session.touch();
-                    NetworkHandler.sendToPlayer(session.player, new PacketAssetTransferDownloadComplete(session.transferId));
-                }
-            }));
-            return;
-        }
-        long offset = session.nextOffset;
-        int sequence = session.nextSequence;
-        io.submit(() -> session.outgoing.readChunk(offset, session.chunkBytes)).whenComplete((content, throwable) -> {
-            if (throwable != null) {
-                session.player.level().getServer().execute(() -> {
-                    if (owner.sessions.get(session.transferId) == session) {
-                        failAndClose(owner, session, AssetTransferErrorCode.IO_FAILURE,
-                                "read_failed", rootMessage(throwable));
-                    }
-                });
-                return;
-            }
-            long delay = owner.downloadLimiter.reserveDelayNanos(content.length);
-            scheduler.schedule(() -> session.player.level().getServer().execute(() -> {
-                synchronized (session) {
-                    if (owner.sessions.get(session.transferId) != session) return;
-                    session.nextSequence++;
-                    session.nextOffset += content.length;
-                    session.sendInProgress = false;
-                }
-                NetworkHandler.sendToPlayer(session.player,
-                        new PacketAssetTransferDownloadChunk(session.transferId, sequence, offset, content));
-            }), delay, TimeUnit.NANOSECONDS);
-        });
-    }
-
-    private SessionLookup find(ServerPlayer player, UUID transferId, AssetTransferDirection direction) {
-        PlayerContext owner = players.get(player.getUUID());
-        if (owner == null) return null;
-        ServerSession session = owner.sessions.get(transferId);
-        if (session == null || session.player != player || (direction != null && session.direction != direction)) return null;
-        return new SessionLookup(owner, session);
-    }
-
-    private SessionLookup findActive(ServerPlayer player, UUID transferId, AssetTransferDirection direction) {
-        SessionLookup lookup = find(player, transferId, direction);
-        return lookup == null || lookup.session.state == AssetTransferState.QUEUED ? null : lookup;
-    }
-
-    private SessionLookup findTransferring(ServerPlayer player, UUID transferId, AssetTransferDirection direction) {
-        SessionLookup lookup = find(player, transferId, direction);
-        return lookup != null && lookup.session.state == AssetTransferState.TRANSFERRING ? lookup : null;
-    }
-
-    private void expireIdleSessions() {
-        long now = System.nanoTime();
-        for (PlayerContext owner : players.values()) {
-            for (ServerSession session : owner.sessions.values()) {
-                if (session.state == AssetTransferState.QUEUED || session.state == AssetTransferState.COMMITTING
-                        || now - session.lastActivityNanos < session.policy.idleTimeout().toNanos()) continue;
-                session.player.level().getServer().execute(() -> {
-                    synchronized (session) {
-                        if (owner.sessions.get(session.transferId) != session
-                                || session.state == AssetTransferState.QUEUED
-                                || session.state == AssetTransferState.COMMITTING
-                                || System.nanoTime() - session.lastActivityNanos < session.policy.idleTimeout().toNanos()) {
-                            return;
-                        }
-                        session.state = AssetTransferState.FAILED;
-                    }
-                    failAndClose(owner, session, AssetTransferErrorCode.TIMEOUT, "timeout", "");
-                });
-            }
-        }
-    }
-
-    private void completeAndClose(PlayerContext owner, ServerSession session, CommitOutcome outcome) {
-        synchronized (session) {
-            session.state = AssetTransferState.COMPLETED;
-        }
-        closeSession(owner, session);
-        if (!session.detached) {
-            boolean refreshWarning = !outcome.refreshWarning.isEmpty();
-            NetworkHandler.sendToPlayer(session.player, new PacketAssetTransferServerResult(session.transferId,
-                    AssetTransferState.COMPLETED,
-                    refreshWarning ? AssetTransferErrorCode.GRAPH_RELOAD_FAILED : AssetTransferErrorCode.NONE,
-                    refreshWarning ? "geometry_node.asset_transfer.error.asset_refresh_failed" : "",
-                    outcome.refreshWarning, outcome.committed,
-                    outcome.sourceSize, outcome.sourceLastModified));
-        }
-    }
-
-    private void failAndClose(PlayerContext owner, ServerSession session, AssetTransferErrorCode code,
-                              String message, String detail) {
-        closeSession(owner, session);
-        if (!session.detached) sendFailure(session.player, session.transferId, code, message, detail);
-    }
-
-    private void closeSession(PlayerContext owner, ServerSession session) {
-        if (!owner.sessions.remove(session.transferId, session)) return;
-        closeQuietly(session);
-        startPromoted(transferScheduler.remove(key(session)));
-    }
-
-    private void closePlayer(ServerPlayer player) {
-        PlayerContext owner = players.remove(player.getUUID());
-        if (owner != null) {
-            List<ServerAssetTransferScheduler.TransferKey> promoted = new java.util.ArrayList<>();
-            for (ServerSession session : List.copyOf(owner.sessions.values())) {
-                boolean cancel;
-                synchronized (session) {
-                    session.detached = true;
-                    cancel = session.state != AssetTransferState.COMMITTING;
-                    if (cancel) session.state = AssetTransferState.CANCELLED;
-                }
-                if (cancel && owner.sessions.remove(session.transferId, session)) {
-                    closeQuietly(session);
-                    promoted.addAll(transferScheduler.remove(key(session)));
-                }
-            }
-            startPromoted(promoted);
-        }
-    }
-
-    private void closeAllPlayers() {
-        for (PlayerContext owner : players.values()) owner.close();
-        players.clear();
-        transferScheduler.clear();
-    }
-
-    @Override public void close() {
-        closeAllPlayers();
-        scheduler.shutdownNow();
-        io.close();
-    }
-
-    private static boolean hasPermissionForOpen(ServerPlayer player, PacketAssetTransferOpen open) {
-        return switch (open.purpose()) {
-            case ASSET_REPOSITORY -> open.direction() == AssetTransferDirection.UPLOAD
-                    ? RemoteAssetPermissions.canUploadAssets(player) : RemoteAssetPermissions.canDownloadAssets(player);
-            case DATA_LIBRARY_CREATE, DATA_LIBRARY_UPDATE ->
-                    open.direction() == AssetTransferDirection.UPLOAD && RemoteAssetPermissions.canUploadAssets(player);
-            case DATA_LIBRARY_DOWNLOAD -> open.direction() == AssetTransferDirection.DOWNLOAD
-                    && RemoteAssetPermissions.canBrowseRemoteAssets(player)
-                    && RemoteAssetPermissions.canDownloadAssets(player);
+    private static boolean hasUploadPermission(ServerPlayer player, AssetTransferPurpose purpose) {
+        return switch (purpose) {
+            case ASSET_REPOSITORY, DATA_LIBRARY_CREATE, DATA_LIBRARY_UPDATE ->
+                    RemoteAssetPermissions.canUploadAssets(player);
+            case DATA_LIBRARY_DOWNLOAD -> false;
         };
     }
 
-    private static boolean hasPermission(ServerPlayer player, AssetTransferDirection direction) {
+    private static boolean hasDownloadPermission(ServerPlayer player, AssetTransferPurpose purpose) {
+        return switch (purpose) {
+            case ASSET_REPOSITORY -> RemoteAssetPermissions.canDownloadAssets(player);
+            case DATA_LIBRARY_DOWNLOAD -> RemoteAssetPermissions.canBrowseRemoteAssets(player)
+                    && RemoteAssetPermissions.canDownloadAssets(player);
+            case DATA_LIBRARY_CREATE, DATA_LIBRARY_UPDATE -> false;
+        };
+    }
+
+    private static boolean hasAssetPermission(ServerPlayer player, AssetTransferDirection direction) {
         return direction == AssetTransferDirection.UPLOAD
-                ? RemoteAssetPermissions.canUploadAssets(player) : RemoteAssetPermissions.canDownloadAssets(player);
+                ? RemoteAssetPermissions.canUploadAssets(player)
+                : RemoteAssetPermissions.canDownloadAssets(player);
     }
 
-    private static void commitDataLibraryUpload(ServerSession session, java.nio.file.Path temporary) throws Exception {
-        String json = Files.readString(temporary, java.nio.charset.StandardCharsets.UTF_8);
-        var server = session.player.level().getServer();
-        var incoming = DataLibraryJsonCodec.decode(json, server.overworld().registryAccess());
-        if (!incoming.diagnostics().isEmpty()) {
-            String details = incoming.diagnostics().stream()
-                    .map(diagnostic -> diagnostic.path() + ": " + diagnostic.message())
-                    .collect(java.util.stream.Collectors.joining("; "));
-            throw new IllegalArgumentException("Uploaded Data Library contains invalid entries: " + details);
+    private boolean admit(ServerPlayer player, MinecraftServer server, RequestKey key) {
+        Admission admission = beginRequest(server, key);
+        if (admission == Admission.ADMITTED) return true;
+        if (admission == Admission.BUSY) {
+            sendFailure(player, key.transferId(), AssetTransferErrorCode.SERVER_BUSY,
+                    "server_busy", "");
         }
-        switch (session.open.purpose()) {
-            case DATA_LIBRARY_CREATE -> RemoteDataLibraryService.INSTANCE.create(server, incoming.document());
-            case DATA_LIBRARY_UPDATE -> RemoteDataLibraryService.INSTANCE.update(
-                    server, incoming.document(), incoming.expectedFingerprints());
-            default -> throw new IllegalArgumentException("Invalid Data Library upload purpose");
-        }
+        return false;
     }
 
+    private synchronized Admission beginRequest(MinecraftServer server, RequestKey key) {
+        RequestRegistry registry = requestRegistries.computeIfAbsent(server, ignored -> new RequestRegistry());
+        if (registry.active.contains(key) || registry.completed.containsKey(key)) return Admission.DUPLICATE;
+        if (registry.active.size() >= MAX_ACTIVE_REQUESTS) return Admission.BUSY;
+        long playerRequests = registry.active.stream()
+                .filter(active -> active.playerId().equals(key.playerId()))
+                .count();
+        if (playerRequests >= MAX_ACTIVE_REQUESTS_PER_PLAYER) return Admission.BUSY;
+        registry.active.add(key);
+        return Admission.ADMITTED;
+    }
+
+    private synchronized void completeRequest(MinecraftServer server, RequestKey key) {
+        RequestRegistry registry = requestRegistries.get(server);
+        if (registry == null || !registry.active.remove(key)) return;
+        registry.completed.put(key, Boolean.TRUE);
+        while (registry.completed.size() > COMPLETED_REQUEST_HISTORY) {
+            Iterator<RequestKey> oldest = registry.completed.keySet().iterator();
+            oldest.next();
+            oldest.remove();
+        }
+    }
 
     private static void sendFailure(ServerPlayer player, UUID transferId, AssetTransferErrorCode code,
                                     String message, String detail) {
-        NetworkHandler.sendToPlayer(player, new PacketAssetTransferServerResult(transferId, AssetTransferState.FAILED, code,
-                "geometry_node.asset_transfer.error." + message, detail, false, 0L, 0L));
+        NetworkHandler.sendToPlayer(player, new PacketAssetFileResponse(
+                transferId, AssetTransferState.FAILED, code,
+                "geometry_node.asset_transfer.error." + message, detail,
+                false, 0L, 0L, new byte[0]));
+    }
+
+    private static AssetTransferErrorCode errorCode(Throwable throwable) {
+        String message = rootMessage(throwable).toLowerCase(java.util.Locale.ROOT);
+        if (message.contains("file limit") || message.contains("too large") || message.contains("exceeds")) {
+            return AssetTransferErrorCode.FILE_TOO_LARGE;
+        }
+        if (throwable instanceof IllegalArgumentException) return AssetTransferErrorCode.INVALID_PATH;
+        return AssetTransferErrorCode.IO_FAILURE;
+    }
+
+    private static Throwable rootCause(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null && current.getCause() != current) current = current.getCause();
+        return current;
     }
 
     private static String rootMessage(Throwable throwable) {
         if (throwable == null) return "";
-        Throwable current = throwable;
-        while (current.getCause() != null) current = current.getCause();
-        return current.getMessage() != null ? current.getMessage() : current.getClass().getSimpleName();
+        Throwable cause = rootCause(throwable);
+        return cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
     }
 
-    private static void closeQuietly(AutoCloseable value) {
-        if (value == null) return;
-        try { value.close(); } catch (Exception ignored) { }
+    private record DownloadOutcome(byte[] content, long sourceSize, long sourceLastModified) {
     }
 
-    private static void deleteQuietly(java.nio.file.Path path) {
-        if (path == null) return;
-        try { Files.deleteIfExists(path); } catch (Exception ignored) { }
+    private enum Admission {
+        ADMITTED,
+        DUPLICATE,
+        BUSY
     }
 
-    private void startPromoted(List<ServerAssetTransferScheduler.TransferKey> promoted) {
-        java.util.ArrayDeque<ServerAssetTransferScheduler.TransferKey> pending = new java.util.ArrayDeque<>(promoted);
-        while (!pending.isEmpty()) {
-            ServerAssetTransferScheduler.TransferKey key = pending.removeFirst();
-            PlayerContext owner = players.get(key.playerId());
-            ServerSession session = owner != null ? owner.sessions.get(key.transferId()) : null;
-            if (session == null) {
-                pending.addAll(transferScheduler.remove(key));
-                continue;
-            }
-            if (session.direction == AssetTransferDirection.UPLOAD) openUpload(owner, session.transferId);
-            else openDownload(owner, session.transferId);
-        }
+    private record RequestKey(UUID playerId, UUID transferId) {
     }
 
-    private static ServerAssetTransferScheduler.TransferKey key(ServerSession session) {
-        return new ServerAssetTransferScheduler.TransferKey(session.player.getUUID(), session.transferId);
+    private static final class RequestRegistry {
+        private final Set<RequestKey> active = new HashSet<>();
+        private final LinkedHashMap<RequestKey, Boolean> completed = new LinkedHashMap<>();
     }
 
-    private final class PlayerContext implements AutoCloseable {
-        private final Map<UUID, ServerSession> sessions = new ConcurrentHashMap<>();
-        private final ByteRateLimiter uploadLimiter;
-        private final ByteRateLimiter downloadLimiter;
-
-        private PlayerContext(AssetTransferServerPolicy policy) {
-            uploadLimiter = new ByteRateLimiter(policy.uploadRateBytesPerSecond());
-            downloadLimiter = new ByteRateLimiter(policy.downloadRateBytesPerSecond());
-        }
-
-        private void applyPolicy(AssetTransferServerPolicy policy) {
-            uploadLimiter.setRate(policy.uploadRateBytesPerSecond());
-            downloadLimiter.setRate(policy.downloadRateBytesPerSecond());
-        }
-
-        @Override public void close() {
-            for (ServerSession session : sessions.values()) closeQuietly(session);
-            sessions.clear();
-        }
-    }
-
-    private static final class ServerSession implements AutoCloseable {
-        private final ServerPlayer player;
-        private final PacketAssetTransferOpen open;
-        private final UUID transferId;
-        private final AssetTransferDirection direction;
-        private final String remotePath;
-        private final int chunkBytes;
-        private final AssetTransferServerPolicy policy;
-        private volatile IncomingAssetTransferFile incoming;
-        private volatile OutgoingAssetTransferFile outgoing;
-        private volatile long lastActivityNanos = System.nanoTime();
-        private volatile AssetTransferState state = AssetTransferState.QUEUED;
-        private volatile boolean detached;
-        private int nextSequence;
-        private long nextOffset;
-        private boolean sendInProgress;
-        private volatile java.nio.file.Path downloadSource;
-        private volatile boolean deleteDownloadSource;
-
-        private ServerSession(ServerPlayer player, PacketAssetTransferOpen open, int chunkBytes,
-                              AssetTransferServerPolicy policy) {
-            this.player = player;
-            this.open = open;
-            transferId = open.transferId();
-            direction = open.direction();
-            remotePath = open.relativePath();
-            this.chunkBytes = Math.clamp(chunkBytes, AssetTransferProtocolLimits.MIN_CHUNK_BYTES,
-                    AssetTransferProtocolLimits.MAX_CHUNK_BYTES);
-            this.policy = policy;
-        }
-
-        private void touch() { lastActivityNanos = System.nanoTime(); }
-        @Override public void close() {
-            closeQuietly(incoming);
-            closeQuietly(outgoing);
-            if (deleteDownloadSource && downloadSource != null) {
-                try { Files.deleteIfExists(downloadSource); } catch (Exception ignored) { }
-            }
-        }
-    }
-
-    private record SessionLookup(PlayerContext owner, ServerSession session) { }
-
-    private record CommitOutcome(boolean committed, long sourceSize, long sourceLastModified,
+    private record UploadOutcome(boolean committed, long sourceSize, long sourceLastModified,
                                  String refreshWarning) {
-        private static final CommitOutcome ABORTED = new CommitOutcome(false, 0L, 0L, "");
-        private static final CommitOutcome SKIPPED = new CommitOutcome(false, 0L, 0L, "");
-    }
+        private static final UploadOutcome SKIPPED = new UploadOutcome(false, 0L, 0L, "");
 
-    private record CommitPreparation(java.nio.file.Path temporary, long sourceSize,
-                                     long sourceLastModified, CommitOutcome immediate) {
-        private static CommitPreparation immediate(CommitOutcome outcome) {
-            return new CommitPreparation(null, 0L, 0L, outcome);
+        private static UploadOutcome committed(long sourceSize) {
+            return new UploadOutcome(true, sourceSize, 0L, "");
         }
     }
 }

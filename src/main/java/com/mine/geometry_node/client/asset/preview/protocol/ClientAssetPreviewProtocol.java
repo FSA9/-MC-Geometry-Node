@@ -7,18 +7,14 @@ import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransfer
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewCancel;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewRequest;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewAccepted;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewChunk;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewComplete;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResult;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResponse;
 
-import java.io.ByteArrayOutputStream;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Validates and assembles bounded nativepreview packets; persistence is owned by the client nativepreview service. */
+/** Validates complete native preview responses; persistence is owned by the client preview service. */
 public final class ClientAssetPreviewProtocol {
     private static final Map<UUID, Pending> PENDING = new ConcurrentHashMap<>();
 
@@ -33,8 +29,11 @@ public final class ClientAssetPreviewProtocol {
     }
 
     public static void cancel(UUID id) {
-        if (id != null && PENDING.remove(id) != null) {
+        if (id == null || PENDING.remove(id) == null) return;
+        try {
             NetworkHandler.sendToServer(new PacketAssetPreviewCancel(id));
+        } catch (RuntimeException ignored) {
+            // Cancellation is best-effort when the connection is already closing.
         }
     }
 
@@ -42,40 +41,18 @@ public final class ClientAssetPreviewProtocol {
         PENDING.clear();
     }
 
-    public static void handle(PacketAssetPreviewAccepted packet) {
-        Pending pending = PENDING.get(packet.requestId());
-        if (pending != null && !pending.accept(packet.descriptor())) {
-            fail(packet.requestId(), AssetPreviewResultCode.INVALID_REQUEST, "invalid_accept");
-        }
-    }
-
-    public static void handle(PacketAssetPreviewChunk packet) {
-        Pending pending = PENDING.get(packet.requestId());
-        if (pending != null && !pending.chunk(packet)) {
-            fail(packet.requestId(), AssetPreviewResultCode.INVALID_REQUEST, "invalid_sequence");
-        }
-    }
-
-    public static void handle(PacketAssetPreviewComplete packet) {
+    public static void handle(PacketAssetPreviewResponse packet) {
         Pending pending = PENDING.remove(packet.requestId());
         if (pending == null) return;
+        if (packet.code() != AssetPreviewResultCode.AVAILABLE) {
+            pending.listener.failed(packet.code(), packet.detail());
+            return;
+        }
         try {
-            pending.complete();
+            pending.complete(packet.descriptor(), packet.content());
         } catch (Exception exception) {
             pending.listener.failed(AssetPreviewResultCode.IO_FAILURE, "verification_failed");
         }
-    }
-
-    public static void handle(PacketAssetPreviewResult packet) {
-        Pending pending = PENDING.remove(packet.requestId());
-        if (pending != null) pending.listener.failed(packet.code(), packet.detail());
-    }
-
-    private static void fail(UUID id, AssetPreviewResultCode code, String detail) {
-        Pending pending = PENDING.remove(id);
-        if (pending == null) return;
-        NetworkHandler.sendToServer(new PacketAssetPreviewCancel(id));
-        pending.listener.failed(code, detail);
     }
 
     public interface Listener {
@@ -87,40 +64,20 @@ public final class ClientAssetPreviewProtocol {
     private static final class Pending {
         private final AssetPreviewRevision expectedRevision;
         private final Listener listener;
-        private final ByteArrayOutputStream output = new ByteArrayOutputStream();
-        private AssetPreviewDescriptor descriptor;
-        private int sequence;
 
         private Pending(AssetPreviewRevision expectedRevision, Listener listener) {
             this.expectedRevision = Objects.requireNonNull(expectedRevision, "expectedRevision");
             this.listener = Objects.requireNonNull(listener, "listener");
         }
 
-        private boolean accept(AssetPreviewDescriptor value) {
-            if (descriptor != null || value == null || !expectedRevision.equals(value.revision())) return false;
-            descriptor = value;
-            return true;
-        }
-
-        private boolean chunk(PacketAssetPreviewChunk packet) {
-            byte[] content = packet.content();
-            if (descriptor == null || packet.sequence() != sequence || packet.offset() != output.size()
-                    || output.size() + content.length > descriptor.encodedBytes()) {
-                return false;
+        private void complete(AssetPreviewDescriptor descriptor, byte[] content) {
+            if (descriptor == null || !expectedRevision.equals(descriptor.revision())
+                    || content.length != descriptor.encodedBytes()) {
+                throw new IllegalStateException("Invalid native preview response");
             }
-            output.writeBytes(content);
-            sequence++;
-            return true;
-        }
-
-        private void complete() {
-            byte[] bytes = output.toByteArray();
-            if (descriptor == null || bytes.length != descriptor.encodedBytes()) {
-                throw new IllegalStateException("Incomplete nativepreview response");
-            }
-            String sha256 = AssetTransferHashing.toHex(AssetTransferHashing.newSha256().digest(bytes));
+            String sha256 = AssetTransferHashing.toHex(AssetTransferHashing.newSha256().digest(content));
             if (!sha256.equals(descriptor.sha256())) throw new IllegalStateException("Preview SHA-256 mismatch");
-            listener.completed(descriptor, bytes);
+            listener.completed(descriptor, content);
         }
     }
 }

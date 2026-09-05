@@ -9,9 +9,6 @@ public record AssetTransferFileSnapshot(
         String sourcePath,
         String targetPath,
         AssetTransferState state,
-        long totalBytes,
-        long transferredBytes,
-        long bytesPerSecond,
         AssetTransferFailure failure
 ) {
     public AssetTransferFileSnapshot {
@@ -20,16 +17,8 @@ public record AssetTransferFileSnapshot(
         sourcePath = Objects.requireNonNullElse(sourcePath, "");
         targetPath = Objects.requireNonNullElse(targetPath, "");
         state = Objects.requireNonNull(state, "state");
-        totalBytes = Math.max(0L, totalBytes);
-        transferredBytes = Math.clamp(transferredBytes, 0L, totalBytes);
-        bytesPerSecond = Math.max(0L, bytesPerSecond);
         if (state == AssetTransferState.FAILED && failure == null) {
             throw new IllegalArgumentException("failed transfer requires failure metadata");
         }
-    }
-
-    public double progress() {
-        return totalBytes == 0L ? (state == AssetTransferState.COMPLETED ? 1.0 : 0.0)
-                : (double) transferredBytes / totalBytes;
     }
 }

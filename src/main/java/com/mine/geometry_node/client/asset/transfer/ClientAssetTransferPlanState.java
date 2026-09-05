@@ -19,11 +19,16 @@ public final class ClientAssetTransferPlanState {
     public static int request(
             AssetTransferPlanKind kind,
             List<String> paths,
-            Consumer<PacketAssetTransferPlanResponse> callback
+        Consumer<PacketAssetTransferPlanResponse> callback
     ) {
         int requestId = REQUESTS.register(PacketAssetTransferPlanResponse.class, callback);
-        NetworkHandler.sendToServer(new PacketAssetTransferPlanRequest(requestId, kind, paths));
-        return requestId;
+        try {
+            NetworkHandler.sendToServer(new PacketAssetTransferPlanRequest(requestId, kind, paths));
+            return requestId;
+        } catch (RuntimeException exception) {
+            REQUESTS.cancel(requestId);
+            throw exception;
+        }
     }
 
     public static void handle(PacketAssetTransferPlanResponse response) {

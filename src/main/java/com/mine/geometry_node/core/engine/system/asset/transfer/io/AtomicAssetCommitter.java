@@ -8,16 +8,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
-public final class VerifiedAssetCommitter {
-    private VerifiedAssetCommitter() {
+public final class AtomicAssetCommitter {
+    private AtomicAssetCommitter() {
     }
 
-    public static CommitResult commit(Path verifiedTemporaryFile, Path target,
+    public static CommitResult commit(Path stagingFile, Path target,
                                       AssetTransferConflictPolicy conflictPolicy) throws IOException {
-        Path source = verifiedTemporaryFile.toAbsolutePath().normalize();
+        Path source = stagingFile.toAbsolutePath().normalize();
         Path destination = target.toAbsolutePath().normalize();
         if (!Files.isRegularFile(source) || Files.isSymbolicLink(source)) {
-            throw new IOException("Verified transfer file is unavailable");
+            throw new IOException("Transfer staging file is unavailable");
         }
         if (Files.exists(destination)) {
             if (!Files.isRegularFile(destination) || Files.isSymbolicLink(destination)) {

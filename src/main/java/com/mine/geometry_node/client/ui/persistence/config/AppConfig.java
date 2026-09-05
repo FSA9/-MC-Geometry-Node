@@ -7,7 +7,6 @@ public class AppConfig {
     public AssetBrowserConfig assetBrowser = new AssetBrowserConfig();
     public ViewportConfig viewport = new ViewportConfig();
     public NodeConfig node = new NodeConfig();
-    public NetworkTransferConfig networkTransfer = new NetworkTransferConfig();
     public PreviewCacheConfig previewCache = new PreviewCacheConfig();
     public KeyBindingsConfig keyBindings = new KeyBindingsConfig();
 
@@ -20,7 +19,6 @@ public class AppConfig {
         copy.assetBrowser = assetBrowser != null ? assetBrowser.copy() : null;
         copy.viewport = viewport != null ? viewport.copy() : null;
         copy.node = node != null ? node.copy() : null;
-        copy.networkTransfer = networkTransfer != null ? networkTransfer.copy() : null;
         copy.previewCache = previewCache != null ? previewCache.copy() : null;
         copy.keyBindings = keyBindings != null ? keyBindings.copy() : null;
         return copy;
@@ -72,28 +70,6 @@ public class AppConfig {
         NodeConfig copy() {
             NodeConfig copy = new NodeConfig();
             copy.cornerRadius = cornerRadius;
-            return copy;
-        }
-    }
-
-    public static class NetworkTransferConfig {
-        public int maxUploadFileSizeMiB = 32;
-        public int maxDownloadFileSizeMiB = 32;
-        public int chunkSizeKiB = 24;
-        public int uploadRateLimitKiBps = 1024;
-        public int downloadRateLimitKiBps = 1024;
-        public int completedHistoryLimit = 50;
-        public int failedHistoryLimit = 50;
-
-        NetworkTransferConfig copy() {
-            NetworkTransferConfig copy = new NetworkTransferConfig();
-            copy.maxUploadFileSizeMiB = maxUploadFileSizeMiB;
-            copy.maxDownloadFileSizeMiB = maxDownloadFileSizeMiB;
-            copy.chunkSizeKiB = chunkSizeKiB;
-            copy.uploadRateLimitKiBps = uploadRateLimitKiBps;
-            copy.downloadRateLimitKiBps = downloadRateLimitKiBps;
-            copy.completedHistoryLimit = completedHistoryLimit;
-            copy.failedHistoryLimit = failedHistoryLimit;
             return copy;
         }
     }

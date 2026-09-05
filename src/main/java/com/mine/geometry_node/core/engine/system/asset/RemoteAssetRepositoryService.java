@@ -1,13 +1,16 @@
 package com.mine.geometry_node.core.engine.system.asset;
 
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.VerifiedAssetCommitter;
+import com.mine.geometry_node.core.engine.system.asset.transfer.AssetTransferLimits;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import net.minecraft.server.MinecraftServer;
 
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -57,6 +60,29 @@ public final class RemoteAssetRepositoryService {
                 () -> RemoteAssetFileService.flattenSelection(server, selectedPaths)));
     }
 
+    public CompletableFuture<TransferFile> readTransferFile(MinecraftServer server, String assetPath) {
+        return reads.submit(() -> read(() -> {
+            Path source = RemoteAssetFileService.resolveTransferSource(server, assetPath);
+            BasicFileAttributes before = Files.readAttributes(
+                    source, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            if (before.size() > AssetTransferLimits.MAX_FILE_BYTES) {
+                throw new java.io.IOException("Transfer source exceeds file limit: " + before.size());
+            }
+            byte[] content = Files.readAllBytes(source);
+            if (content.length > AssetTransferLimits.MAX_FILE_BYTES) {
+                throw new java.io.IOException("Transfer source exceeds file limit: " + content.length);
+            }
+            BasicFileAttributes after = Files.readAttributes(
+                    source, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            if (before.size() != after.size()
+                    || !before.lastModifiedTime().equals(after.lastModifiedTime())
+                    || !Objects.equals(before.fileKey(), after.fileKey())) {
+                throw new java.io.IOException("Transfer source changed while it was being read");
+            }
+            return new TransferFile(content, content.length, after.lastModifiedTime().toMillis());
+        }));
+    }
+
     public CompletableFuture<RemoteAssetOperationResult> delete(
             MinecraftServer server,
             List<String> paths
@@ -99,21 +125,47 @@ public final class RemoteAssetRepositoryService {
                 () -> RemoteAssetFileService.rename(server, sourcePath, destinationPath)));
     }
 
-    public CompletableFuture<RemoteAssetFileService.UploadCommitResult> commitVerifiedUpload(
+    public CompletableFuture<RemoteAssetFileService.UploadCommitResult> commitUpload(
             MinecraftServer server,
             String targetPath,
-            Path verifiedTemporaryFile,
+            byte[] content,
             AssetTransferConflictPolicy conflictPolicy
     ) {
+        if (content == null || content.length > AssetTransferLimits.MAX_FILE_BYTES) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Uploaded file exceeds file limit"));
+        }
         return mutations.submit(() -> {
             repositoryLock.writeLock().lock();
+            Path temporary = null;
             try {
-                return RemoteAssetFileService.commitVerifiedUpload(
-                        server, targetPath, verifiedTemporaryFile, conflictPolicy);
+                Path temporaryDirectory = RemoteAssetFileService.transferTemporaryDirectory(server);
+                Files.createDirectories(temporaryDirectory);
+                temporary = Files.createTempFile(temporaryDirectory, ".geometrynode-upload-", ".part");
+                Files.write(temporary, content);
+                Path committedTemporary = temporary;
+                return RemoteAssetFileService.commitUpload(
+                                server, targetPath, committedTemporary, conflictPolicy)
+                        .whenComplete((ignored, throwable) -> {
+                            if (throwable != null) deleteQuietly(committedTemporary);
+                        });
+            } catch (Exception exception) {
+                deleteQuietly(temporary);
+                throw exception;
+            } catch (Error error) {
+                deleteQuietly(temporary);
+                throw error;
             } finally {
                 repositoryLock.writeLock().unlock();
             }
         }).thenCompose(result -> result);
+    }
+
+    private static void deleteQuietly(Path path) {
+        if (path == null) return;
+        try {
+            Files.deleteIfExists(path);
+        } catch (java.io.IOException ignored) {
+        }
     }
 
     private RemoteAssetOperationResult mutate(Mutation operation) throws Exception {
@@ -149,5 +201,8 @@ public final class RemoteAssetRepositoryService {
             directory = directory == null ? "" : directory;
             entries = entries == null ? List.of() : List.copyOf(entries);
         }
+    }
+
+    public record TransferFile(byte[] content, long size, long lastModified) {
     }
 }

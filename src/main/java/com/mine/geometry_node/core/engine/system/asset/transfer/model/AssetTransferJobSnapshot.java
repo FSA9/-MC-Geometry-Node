@@ -22,16 +22,12 @@ public record AssetTransferJobSnapshot(
         createdAtEpochMillis = Math.max(0L, createdAtEpochMillis);
     }
 
-    public long totalBytes() {
-        return files.stream().mapToLong(AssetTransferFileSnapshot::totalBytes).sum();
-    }
-
-    public long transferredBytes() {
-        return files.stream().mapToLong(AssetTransferFileSnapshot::transferredBytes).sum();
-    }
-
     public long completedFileCount() {
         return files.stream().filter(file -> file.state() == AssetTransferState.COMPLETED).count();
+    }
+
+    public long processedFileCount() {
+        return files.stream().filter(file -> file.state().isTerminal()).count();
     }
 
     public boolean isTerminal() {

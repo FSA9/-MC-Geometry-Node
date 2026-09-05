@@ -11,13 +11,9 @@ import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleRegistry;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetRepositoryService;
 import com.mine.geometry_node.core.engine.system.asset.transfer.service.ServerAssetTransferService;
 import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewService;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferAck;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferCancel;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferChunk;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferComplete;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferOpen;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileDownloadRequest;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileUpload;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanRequest;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferResult;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
 import com.mine.geometry_node.core.network.packet.c2s.PacketCaptureEntityTemplateRequest;
 import com.mine.geometry_node.core.network.packet.c2s.PacketBehaviorDebugSubscription;
@@ -37,7 +33,7 @@ import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteA
 import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
-import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryTransferStaging;
+import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryRepositoryService;
 import com.mine.geometry_node.core.engine.system.data.library.RemoteDataLibraryService;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryRequest;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
@@ -63,10 +59,8 @@ public class NetworkHandler {
     public static void init() {
         ClientboundPayloadRegistry.registerDedicatedServerTypes();
         GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
-        ServerAssetTransferService.INSTANCE.init();
         ServerAssetPreviewService.INSTANCE.init();
         RemoteDataLibraryService.INSTANCE.init();
-        RemoteDataLibraryTransferStaging.INSTANCE.init();
         BehaviorTreeDebugService.INSTANCE.init();
 
         NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketBehaviorDebugSubscription.TYPE,
@@ -83,12 +77,14 @@ public class NetworkHandler {
                 }));
         NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetPreviewCancel.TYPE,
                 PacketAssetPreviewCancel.STREAM_CODEC, (payload, context) -> context.queue(() -> {
-                    if (context.getPlayer() instanceof ServerPlayer player) ServerAssetPreviewService.INSTANCE.cancel(player, payload.requestId());
-                }));
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetTransferOpen.TYPE,
-                PacketAssetTransferOpen.STREAM_CODEC, (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() instanceof ServerPlayer player) {
-                        ServerAssetTransferService.INSTANCE.handleOpen(player, payload);
+                        ServerAssetPreviewService.INSTANCE.cancel(player, payload);
+                    }
+                }));
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetFileUpload.TYPE,
+                PacketAssetFileUpload.STREAM_CODEC, (payload, context) -> context.queue(() -> {
+                    if (context.getPlayer() instanceof ServerPlayer player) {
+                        ServerAssetTransferService.INSTANCE.handleUpload(player, payload);
                     }
                 }));
         NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetTransferPlanRequest.TYPE,
@@ -97,34 +93,10 @@ public class NetworkHandler {
                         ServerAssetTransferService.INSTANCE.handlePlan(player, payload);
                     }
                 }));
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetTransferChunk.TYPE,
-                PacketAssetTransferChunk.STREAM_CODEC, (payload, context) -> context.queue(() -> {
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetFileDownloadRequest.TYPE,
+                PacketAssetFileDownloadRequest.STREAM_CODEC, (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() instanceof ServerPlayer player) {
-                        ServerAssetTransferService.INSTANCE.handleChunk(player, payload);
-                    }
-                }));
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetTransferAck.TYPE,
-                PacketAssetTransferAck.STREAM_CODEC, (payload, context) -> context.queue(() -> {
-                    if (context.getPlayer() instanceof ServerPlayer player) {
-                        ServerAssetTransferService.INSTANCE.handleAck(player, payload);
-                    }
-                }));
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetTransferComplete.TYPE,
-                PacketAssetTransferComplete.STREAM_CODEC, (payload, context) -> context.queue(() -> {
-                    if (context.getPlayer() instanceof ServerPlayer player) {
-                        ServerAssetTransferService.INSTANCE.handleComplete(player, payload);
-                    }
-                }));
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetTransferResult.TYPE,
-                PacketAssetTransferResult.STREAM_CODEC, (payload, context) -> context.queue(() -> {
-                    if (context.getPlayer() instanceof ServerPlayer player) {
-                        ServerAssetTransferService.INSTANCE.handleResult(player, payload);
-                    }
-                }));
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetTransferCancel.TYPE,
-                PacketAssetTransferCancel.STREAM_CODEC, (payload, context) -> context.queue(() -> {
-                    if (context.getPlayer() instanceof ServerPlayer player) {
-                        ServerAssetTransferService.INSTANCE.handleCancel(player, payload);
+                        ServerAssetTransferService.INSTANCE.handleDownloadRequest(player, payload);
                     }
                 }));
 
@@ -462,24 +434,12 @@ public class NetworkHandler {
 
     private static void handleRemoteDataLibrary(PacketRemoteDataLibraryRequest payload, ServerPlayer player) {
         try {
-            var staging = RemoteDataLibraryTransferStaging.INSTANCE;
+            var repository = RemoteDataLibraryRepositoryService.INSTANCE;
             switch (payload.operation()) {
-                case PREPARE_REFRESH -> {
-                    requireDataLibraryPermission(RemoteAssetPermissions.canBrowseRemoteAssets(player)
-                            && RemoteAssetPermissions.canDownloadAssets(player));
-                    MinecraftServer server = player.level().getServer();
-                    staging.prepareDownloadAsync(player)
-                            .whenComplete((ticket, error) -> server.execute(() -> sendToPlayer(player,
-                                    error == null
-                                            ? new PacketRemoteDataLibraryResponse(
-                                                    payload.requestId(), true, "", ticket.token())
-                                            : new PacketRemoteDataLibraryResponse(
-                                                    payload.requestId(), false, failureMessage(error), ""))));
-                }
                 case CREATE_FOLDER -> {
                     requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
                     MinecraftServer server = player.level().getServer();
-                    staging.createFolderAsync(player, payload.parentId(), payload.name())
+                    repository.createFolderAsync(player, payload.parentId(), payload.name())
                             .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
                                     error == null
                                             ? new PacketRemoteDataLibraryResponse(payload.requestId(), true, "", "")
@@ -489,7 +449,7 @@ public class NetworkHandler {
                     requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
                     if (payload.objectId() == null) throw new IllegalArgumentException("Folder UUID is required");
                     MinecraftServer server = player.level().getServer();
-                    staging.updateFolderAsync(player, payload.objectId(), payload.parentId(), payload.name(),
+                    repository.updateFolderAsync(player, payload.objectId(), payload.parentId(), payload.name(),
                                     payload.expectedFingerprint())
                             .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
                                     error == null
@@ -499,7 +459,7 @@ public class NetworkHandler {
                 case MOVE_ENTRY -> {
                     requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
                     MinecraftServer server = player.level().getServer();
-                    staging.moveEntryAsync(player, payload.objectId(), payload.parentId(), payload.expectedFingerprint())
+                    repository.moveEntryAsync(player, payload.objectId(), payload.parentId(), payload.expectedFingerprint())
                             .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
                                     error == null
                                             ? new PacketRemoteDataLibraryResponse(payload.requestId(), true, "", "")
@@ -508,7 +468,7 @@ public class NetworkHandler {
                 case MOVE_FOLDER -> {
                     requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
                     MinecraftServer server = player.level().getServer();
-                    staging.moveFolderAsync(player, payload.objectId(), payload.parentId(), payload.expectedFingerprint())
+                    repository.moveFolderAsync(player, payload.objectId(), payload.parentId(), payload.expectedFingerprint())
                             .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
                                     error == null
                                             ? new PacketRemoteDataLibraryResponse(payload.requestId(), true, "", "")
@@ -517,7 +477,7 @@ public class NetworkHandler {
                 case DELETE -> {
                     requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
                     MinecraftServer server = player.level().getServer();
-                    staging.deleteAsync(player, payload.keys(), payload.expectedFingerprint())
+                    repository.deleteAsync(player, payload.keys(), payload.expectedFingerprint())
                             .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
                                     error == null
                                             ? new PacketRemoteDataLibraryResponse(

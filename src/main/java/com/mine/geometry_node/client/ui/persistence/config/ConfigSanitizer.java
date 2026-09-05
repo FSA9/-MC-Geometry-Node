@@ -16,7 +16,7 @@ final class ConfigSanitizer {
 
     static boolean looksLikeConfig(JsonObject root) {
         return root != null && (root.has("assetBrowser") || root.has("viewport") || root.has("node")
-                || root.has("networkTransfer") || root.has("previewCache") || root.has("terminal")
+                || root.has("previewCache") || root.has("terminal")
                 || root.has("keyBindings"));
     }
 
@@ -171,14 +171,7 @@ final class ConfigSanitizer {
         JsonObject keyBindings = readObject(root, "keyBindings");
         changed |= readKeyBindings(keyBindings, config, defaults);
 
-        JsonObject networkTransfer = readObject(root, "networkTransfer");
-        if (networkTransfer == null) {
-            config.networkTransfer = defaults.networkTransfer;
-            changed = true;
-        } else {
-            config.networkTransfer = new AppConfig.NetworkTransferConfig();
-            changed |= readNetworkTransfer(networkTransfer, config.networkTransfer, defaults.networkTransfer);
-        }
+        if (root.has("networkTransfer")) changed = true;
         JsonObject previewCache = readObject(root, "previewCache");
         if (previewCache == null) {
             config.previewCache = defaults.previewCache;
@@ -277,43 +270,12 @@ final class ConfigSanitizer {
             changed |= sanitizeKeyBindings(config.keyBindings, defaults.keyBindings);
         }
 
-        if (config.networkTransfer == null) {
-            config.networkTransfer = defaults.networkTransfer;
-            changed = true;
-        }
         if (config.previewCache == null) {
             config.previewCache = defaults.previewCache;
             changed = true;
         }
         changed |= ConfigRegistry.INSTANCE.normalize(config);
         return new Result(config, changed);
-    }
-
-    private static boolean readNetworkTransfer(JsonObject source, AppConfig.NetworkTransferConfig target,
-                                               AppConfig.NetworkTransferConfig defaults) {
-        boolean changed = false;
-        ReadInt maxUpload = readInt(source, "maxUploadFileSizeMiB");
-        target.maxUploadFileSizeMiB = maxUpload.valid ? maxUpload.value : defaults.maxUploadFileSizeMiB;
-        changed |= !maxUpload.valid || maxUpload.changed;
-        ReadInt maxDownload = readInt(source, "maxDownloadFileSizeMiB");
-        target.maxDownloadFileSizeMiB = maxDownload.valid ? maxDownload.value : defaults.maxDownloadFileSizeMiB;
-        changed |= !maxDownload.valid || maxDownload.changed;
-        ReadInt chunkSize = readInt(source, "chunkSizeKiB");
-        target.chunkSizeKiB = chunkSize.valid ? chunkSize.value : defaults.chunkSizeKiB;
-        changed |= !chunkSize.valid || chunkSize.changed;
-        ReadInt uploadRate = readInt(source, "uploadRateLimitKiBps");
-        target.uploadRateLimitKiBps = uploadRate.valid ? uploadRate.value : defaults.uploadRateLimitKiBps;
-        changed |= !uploadRate.valid || uploadRate.changed;
-        ReadInt downloadRate = readInt(source, "downloadRateLimitKiBps");
-        target.downloadRateLimitKiBps = downloadRate.valid ? downloadRate.value : defaults.downloadRateLimitKiBps;
-        changed |= !downloadRate.valid || downloadRate.changed;
-        ReadInt completedHistory = readInt(source, "completedHistoryLimit");
-        target.completedHistoryLimit = completedHistory.valid ? completedHistory.value : defaults.completedHistoryLimit;
-        changed |= !completedHistory.valid || completedHistory.changed;
-        ReadInt failedHistory = readInt(source, "failedHistoryLimit");
-        target.failedHistoryLimit = failedHistory.valid ? failedHistory.value : defaults.failedHistoryLimit;
-        changed |= !failedHistory.valid || failedHistory.changed;
-        return changed;
     }
 
     private static boolean readPreviewCache(JsonObject source, AppConfig.PreviewCacheConfig target,

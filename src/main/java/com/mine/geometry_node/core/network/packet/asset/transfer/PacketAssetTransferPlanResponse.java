@@ -27,7 +27,7 @@ public record PacketAssetTransferPlanResponse(
 
     public PacketAssetTransferPlanResponse {
         kind = java.util.Objects.requireNonNull(kind, "kind");
-        message = java.util.Objects.requireNonNullElse(message, "");
+        message = AssetTransferPacketCodecs.bounded(message, AssetTransferPacketCodecs.MAX_DETAIL_LENGTH);
         files = files == null ? List.of() : List.copyOf(files);
         conflicts = conflicts == null ? List.of() : List.copyOf(conflicts);
         AssetPacketLimits.requireCount(files.size(), AssetPacketLimits.MAX_TRANSFER_MANIFEST_ENTRIES,

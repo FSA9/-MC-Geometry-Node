@@ -1,7 +1,5 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
-import com.mine.geometry_node.core.engine.system.asset.transfer.config.AssetTransferProtocolLimits;
-
 public final class AssetPreviewLimits {
     public static final int FORMAT_VERSION = 4;
     public static final int TARGET_WIDTH = 256;
@@ -16,7 +14,6 @@ public final class AssetPreviewLimits {
     public static final int MAX_IMAGE_SOURCE_HEIGHT = 8192;
     public static final long MAX_IMAGE_SOURCE_PIXELS = 16L * 1024L * 1024L;
     public static final int MAX_PATH_LENGTH = 1024;
-    public static final int MAX_CHUNK_BYTES = AssetTransferProtocolLimits.MAX_CHUNK_BYTES;
     public static final int CACHE_KEY_HEX_LENGTH = 64;
     public static final int SHA256_HEX_LENGTH = CACHE_KEY_HEX_LENGTH;
     public static final int PACKET_DETAIL_MAX_LENGTH = 512;

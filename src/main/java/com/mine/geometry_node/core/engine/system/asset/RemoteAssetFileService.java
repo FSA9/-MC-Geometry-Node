@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset;
 
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.VerifiedAssetCommitter;
+import com.mine.geometry_node.core.engine.system.asset.transfer.io.AtomicAssetCommitter;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import net.minecraft.server.MinecraftServer;
 
@@ -77,23 +77,25 @@ public final class RemoteAssetFileService {
         return root(server).resolveSibling(".geometrynode-nativepreview-cache").toAbsolutePath().normalize();
     }
 
-    public static CompletableFuture<UploadCommitResult> commitVerifiedUpload(
+    public static CompletableFuture<UploadCommitResult> commitUpload(
             MinecraftServer server,
             String targetPath,
-            Path verifiedTemporaryFile,
+            Path stagingFile,
             AssetTransferConflictPolicy conflictPolicy
     ) throws IOException {
         Path target = resolveFile(server, targetPath);
         validateAssetCandidatePath(target);
         AssetMetadata oldMetadata = AssetTypeCatalog.inspect(target, targetPath);
-        AssetMetadata newMetadata = AssetTypeCatalog.inspect(verifiedTemporaryFile, targetPath);
+        AssetMetadata newMetadata = AssetTypeCatalog.inspect(stagingFile, targetPath);
         if (!newMetadata.isKnown()) {
             throw new IOException("Uploaded file is not a recognized asset: " + targetPath);
         }
-        VerifiedAssetCommitter.CommitResult commit =
-                VerifiedAssetCommitter.commit(verifiedTemporaryFile, target, conflictPolicy);
-        if (commit != VerifiedAssetCommitter.CommitResult.COMMITTED) {
-            return CompletableFuture.completedFuture(new UploadCommitResult(commit, null));
+        long sourceSize = Files.size(stagingFile);
+        long sourceLastModified = Files.getLastModifiedTime(stagingFile).toMillis();
+        AtomicAssetCommitter.CommitResult commit =
+                AtomicAssetCommitter.commit(stagingFile, target, conflictPolicy);
+        if (commit != AtomicAssetCommitter.CommitResult.COMMITTED) {
+            return CompletableFuture.completedFuture(new UploadCommitResult(commit, null, 0L, 0L));
         }
         ServerAssetMetadataCache.INSTANCE.invalidate(server, target);
 
@@ -101,13 +103,15 @@ public final class RemoteAssetFileService {
         if (oldMetadata.isKnown()) affectedTypeIds.add(oldMetadata.typeId());
         if (newMetadata.isKnown()) affectedTypeIds.add(newMetadata.typeId());
         if (affectedTypeIds.isEmpty()) {
-            return CompletableFuture.completedFuture(new UploadCommitResult(commit, null));
+            return CompletableFuture.completedFuture(new UploadCommitResult(
+                    commit, null, sourceSize, sourceLastModified));
         }
 
         String committedPath = ServerAssetPaths.pathToId(root(server), target);
         return AssetLifecycleRegistry.INSTANCE.refresh(
                         server, affectedTypeIds, Set.of(committedPath), false)
-                .handle((ignored, refreshFailure) -> new UploadCommitResult(commit, refreshFailure));
+                .handle((ignored, refreshFailure) -> new UploadCommitResult(
+                        commit, refreshFailure, sourceSize, sourceLastModified));
     }
 
     public static List<AssetDescriptor> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
@@ -707,8 +711,10 @@ public final class RemoteAssetFileService {
     }
 
     /** A storage commit remains successful even when a dependent runtime refresh reports a warning. */
-    public record UploadCommitResult(VerifiedAssetCommitter.CommitResult commit,
-                                     Throwable refreshFailure) {
+    public record UploadCommitResult(AtomicAssetCommitter.CommitResult commit,
+                                     Throwable refreshFailure,
+                                     long sourceSize,
+                                     long sourceLastModified) {
     }
 
 }

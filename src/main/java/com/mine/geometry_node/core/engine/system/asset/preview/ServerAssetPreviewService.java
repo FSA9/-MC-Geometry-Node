@@ -10,23 +10,17 @@ import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerA
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewAccepted;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewChunk;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewComplete;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewCancel;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewRequest;
-import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResult;
+import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResponse;
 import dev.architectury.event.events.common.PlayerEvent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,8 +32,6 @@ public final class ServerAssetPreviewService implements AutoCloseable {
 
     private static final int MAX_ACTIVE_PER_PLAYER = 8;
     private static final int MAX_ACTIVE_PER_SERVER = 64;
-    private static final int MAX_CHUNKS_PER_SERVER_TICK = 8;
-    private static final long REQUEST_TIMEOUT_NANOS = Duration.ofSeconds(30).toNanos();
 
     private final ServerAssetPreviewStore store = new ServerAssetPreviewStore();
     private final ServerAssetPreviewGeneratorRegistry generators = new ServerAssetPreviewGeneratorRegistry();
@@ -61,7 +53,6 @@ public final class ServerAssetPreviewService implements AutoCloseable {
         ServerAssetPreviewAssociations.init();
         PlayerEvent.PLAYER_QUIT.register(player -> cancelPlayer(
                 player.level().getServer(), player.getUUID()));
-        NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) -> tick(event.getServer()));
         NeoForge.EVENT_BUS.addListener((ServerStoppingEvent event) -> closeServer(event.getServer()));
     }
 
@@ -92,18 +83,28 @@ public final class ServerAssetPreviewService implements AutoCloseable {
         }
 
         AssetPreviewRevision revision = packet.request().revision();
-        ActiveRequest request = new ActiveRequest(revision, deadline());
+        ActiveRequest request = new ActiveRequest(revision);
         state.active.put(key, request);
         long generation = state.generation;
-        acquirePreview(state, revision).whenComplete((stored, error) -> {
+        CompletableFuture<Optional<ServerAssetPreviewStore.StoredPreview>> acquisition;
+        try {
+            acquisition = acquirePreview(state, revision);
+        } catch (RuntimeException exception) {
+            state.active.remove(key, request);
+            result(player, requestId, AssetPreviewResultCode.IO_FAILURE, "preview_generation_failed");
+            return;
+        }
+        acquisition.whenComplete((stored, error) -> {
             if (currentRequest(state, generation, key) == null) return;
             server.execute(() -> completeResolution(state, generation, key, stored, error));
         });
     }
 
-    public void cancel(ServerPlayer player, UUID requestId) {
+    public void cancel(ServerPlayer player, PacketAssetPreviewCancel packet) {
         ServerState state = states.get(player.level().getServer());
-        if (state != null) removeRequest(state, new RequestKey(player.getUUID(), requestId));
+        if (state != null) {
+            removeRequest(state, new RequestKey(player.getUUID(), packet.requestId()));
+        }
     }
 
     private CompletableFuture<Optional<ServerAssetPreviewStore.StoredPreview>> acquirePreview(
@@ -159,12 +160,14 @@ public final class ServerAssetPreviewService implements AutoCloseable {
         }
 
         ServerAssetPreviewStore.StoredPreview preview = stored.get();
-        request.deadlineNanos = deadline();
-        if (!resultAccepted(state, key, preview)) {
+        CompletableFuture<byte[]> artifactRead;
+        try {
+            artifactRead = io.submit(() -> Files.readAllBytes(preview.path()));
+        } catch (RuntimeException exception) {
             removeRequest(state, key);
+            result(state, key, AssetPreviewResultCode.IO_FAILURE, "artifact_read_failed");
             return;
         }
-        CompletableFuture<byte[]> artifactRead = io.submit(() -> Files.readAllBytes(preview.path()));
         request.artifactRead = artifactRead;
         artifactRead.whenComplete((content, readError) -> {
             if (currentRequest(state, generation, key) == null) return;
@@ -182,47 +185,11 @@ public final class ServerAssetPreviewService implements AutoCloseable {
             result(state, key, AssetPreviewResultCode.IO_FAILURE, "artifact_read_failed");
             return;
         }
-        request.send = new SendState(content);
-        request.deadlineNanos = deadline();
-        state.outbound.addLast(key);
-    }
-
-    private void tick(MinecraftServer server) {
-        ServerState state = states.get(server);
-        if (state == null) return;
-        long now = System.nanoTime();
-        for (Map.Entry<RequestKey, ActiveRequest> entry : Map.copyOf(state.active).entrySet()) {
-            if (entry.getValue().deadlineNanos > now) continue;
-            if (removeRequest(state, entry.getKey(), entry.getValue())) {
-                result(state, entry.getKey(), AssetPreviewResultCode.IO_FAILURE, "request_timeout");
-            }
-        }
-
-        int remaining = MAX_CHUNKS_PER_SERVER_TICK;
-        while (remaining-- > 0 && !state.outbound.isEmpty()) {
-            RequestKey key = state.outbound.pollFirst();
-            ActiveRequest request = state.active.get(key);
-            if (request == null || request.send == null) continue;
-            ServerPlayer player = onlinePlayer(state, key);
-            if (player == null) {
-                removeRequest(state, key);
-                continue;
-            }
-            SendState send = request.send;
-            int end = Math.min(send.content.length, send.offset + AssetPreviewLimits.MAX_CHUNK_BYTES);
-            NetworkHandler.sendToPlayer(player, new PacketAssetPreviewChunk(
-                    key.requestId(), send.sequence++, send.offset,
-                    Arrays.copyOfRange(send.content, send.offset, end)));
-            send.offset = end;
-            request.deadlineNanos = deadline();
-            if (send.offset >= send.content.length) {
-                if (removeRequest(state, key, request)) {
-                    NetworkHandler.sendToPlayer(player,
-                            new PacketAssetPreviewComplete(key.requestId()));
-                }
-            } else {
-                state.outbound.addLast(key);
-            }
+        if (!removeRequest(state, key, request)) return;
+        ServerPlayer player = onlinePlayer(state, key);
+        if (player != null) {
+            NetworkHandler.sendToPlayer(player, PacketAssetPreviewResponse.available(
+                    key.requestId(), stored.descriptor(), content));
         }
     }
 
@@ -245,7 +212,6 @@ public final class ServerAssetPreviewService implements AutoCloseable {
                 if (request.artifactRead != null) request.artifactRead.cancel(false);
             });
             state.active.clear();
-            state.outbound.clear();
             state.inFlight.values().forEach(InFlightPreview::cancel);
             state.inFlight.clear();
         }
@@ -258,7 +224,6 @@ public final class ServerAssetPreviewService implements AutoCloseable {
 
     private static boolean removeRequest(ServerState state, RequestKey key, ActiveRequest expected) {
         if (!state.active.remove(key, expected)) return false;
-        state.outbound.removeIf(key::equals);
         if (expected.artifactRead != null) expected.artifactRead.cancel(false);
         releasePreview(state, expected.revision);
         return true;
@@ -279,20 +244,8 @@ public final class ServerAssetPreviewService implements AutoCloseable {
         }
     }
 
-    private static long deadline() {
-        return System.nanoTime() + REQUEST_TIMEOUT_NANOS;
-    }
-
     private static ServerPlayer onlinePlayer(ServerState state, RequestKey key) {
         return state.server.getPlayerList().getPlayer(key.playerId());
-    }
-
-    private static boolean resultAccepted(ServerState state, RequestKey key,
-                                          ServerAssetPreviewStore.StoredPreview stored) {
-        ServerPlayer player = onlinePlayer(state, key);
-        if (player == null) return false;
-        NetworkHandler.sendToPlayer(player, new PacketAssetPreviewAccepted(key.requestId(), stored.descriptor()));
-        return true;
     }
 
     private static void result(ServerState state, RequestKey key, AssetPreviewResultCode code, String detail) {
@@ -329,7 +282,9 @@ public final class ServerAssetPreviewService implements AutoCloseable {
     }
 
     private static void result(ServerPlayer player, UUID id, AssetPreviewResultCode code, String detail) {
-        if (player != null) NetworkHandler.sendToPlayer(player, new PacketAssetPreviewResult(id, code, detail));
+        if (player != null) {
+            NetworkHandler.sendToPlayer(player, PacketAssetPreviewResponse.failure(id, code, detail));
+        }
     }
 
     @Override
@@ -343,13 +298,10 @@ public final class ServerAssetPreviewService implements AutoCloseable {
 
     private static final class ActiveRequest {
         private final AssetPreviewRevision revision;
-        private long deadlineNanos;
-        private SendState send;
         private CompletableFuture<byte[]> artifactRead;
 
-        private ActiveRequest(AssetPreviewRevision revision, long deadlineNanos) {
+        private ActiveRequest(AssetPreviewRevision revision) {
             this.revision = revision;
-            this.deadlineNanos = deadlineNanos;
         }
     }
 
@@ -371,21 +323,10 @@ public final class ServerAssetPreviewService implements AutoCloseable {
         }
     }
 
-    private static final class SendState {
-        private final byte[] content;
-        private int offset;
-        private int sequence;
-
-        private SendState(byte[] content) {
-            this.content = content;
-        }
-    }
-
     private static final class ServerState {
         private final MinecraftServer server;
         private final Map<RequestKey, ActiveRequest> active = new ConcurrentHashMap<>();
         private final Map<AssetPreviewRevision, InFlightPreview> inFlight = new ConcurrentHashMap<>();
-        private final ArrayDeque<RequestKey> outbound = new ArrayDeque<>();
         private long generation;
 
         private ServerState(MinecraftServer server) {

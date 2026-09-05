@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
 
-/** Remote Data Library control plane; payload bytes use the shared chunked transfer service. */
+/** Remote Data Library control plane; document bytes use the shared file transfer service. */
 public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryGateway {
     public static final NetworkRemoteDataLibraryGateway INSTANCE = new NetworkRemoteDataLibraryGateway();
     private static final ClientRequestTracker.Group REQUESTS = ClientRequestTracker.group("remote-data-library");
@@ -300,48 +300,40 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
 
     private void refreshNow(long generation, Runnable completion) {
         if (!isGenerationActive(generation)) return;
-        control(RemoteDataLibraryOperation.PREPARE_REFRESH, Set.of(), prepared -> {
-            if (!isGenerationActive(generation)) return;
-            if (!prepared.success()) {
-                failure(RemoteDataLibraryOperation.PREPARE_REFRESH, prepared.message());
-                run(completion);
-                return;
-            }
-            Path target;
+        Path target;
+        try {
+            target = Files.createTempFile("geometrynode-data-library-download-", ".json");
+            Files.deleteIfExists(target);
+        } catch (Exception exception) {
+            failure(AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD, exception.getMessage());
+            run(completion);
+            return;
+        }
+        if (!isGenerationActive(generation)) {
+            deleteQuietly(target);
+            return;
+        }
+        UUID job = ClientAssetTransferService.INSTANCE.submit(List.of(
+                ClientAssetTransferRequest.dataLibraryDownload(target)));
+        ClientAssetTransferService.INSTANCE.completion(job).whenComplete((result, error) -> {
             try {
-                target = Files.createTempFile("geometrynode-data-library-download-", ".json");
-                Files.deleteIfExists(target);
-            } catch (Exception exception) {
-                failure(RemoteDataLibraryOperation.PREPARE_REFRESH, exception.getMessage());
-                run(completion);
-                return;
-            }
-            if (!isGenerationActive(generation)) {
-                deleteQuietly(target);
-                return;
-            }
-            UUID job = ClientAssetTransferService.INSTANCE.submit(List.of(
-                    ClientAssetTransferRequest.dataLibraryDownload(prepared.token(), target)));
-            ClientAssetTransferService.INSTANCE.completion(job).whenComplete((result, error) -> {
-                try {
-                    if (!isGenerationActive(generation)) return;
-                    if (error != null || result.files().stream().anyMatch(file -> file.state() != AssetTransferState.COMPLETED)) {
-                        failure(RemoteDataLibraryOperation.PREPARE_REFRESH,
-                                transferFailure(result, error, "staging download failed"));
-                        return;
-                    }
-                    DataLibraryLoadResult loaded = DataLibraryFileStore.read(target, registries());
-                    publishSnapshot(generation, new Snapshot(DataLibraryUiMapper.folders(loaded),
-                            DataLibraryUiMapper.fromDocument(loaded), true));
-                } catch (Exception exception) {
-                    if (isGenerationActive(generation)) {
-                        failure(RemoteDataLibraryOperation.PREPARE_REFRESH, exception.getMessage());
-                    }
-                } finally {
-                    deleteQuietly(target);
-                    if (isGenerationActive(generation)) run(completion);
+                if (!isGenerationActive(generation)) return;
+                if (error != null || result.files().stream().anyMatch(file -> file.state() != AssetTransferState.COMPLETED)) {
+                    failure(AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD,
+                            transferFailure(result, error, "Data Library download failed"));
+                    return;
                 }
-            });
+                DataLibraryLoadResult loaded = DataLibraryFileStore.read(target, registries());
+                publishSnapshot(generation, new Snapshot(DataLibraryUiMapper.folders(loaded),
+                        DataLibraryUiMapper.fromDocument(loaded), true));
+            } catch (Exception exception) {
+                if (isGenerationActive(generation)) {
+                    failure(AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD, exception.getMessage());
+                }
+            } finally {
+                deleteQuietly(target);
+                if (isGenerationActive(generation)) run(completion);
+            }
         });
     }
 

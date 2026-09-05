@@ -72,11 +72,6 @@ public record PacketRemoteDataLibraryRequest(
     private static void validateFields(RemoteDataLibraryOperation operation, Set<DataLibraryObjectKey> keys,
                                        UUID objectId, String name, String expectedFingerprint) {
         switch (operation) {
-            case PREPARE_REFRESH -> {
-                if (!keys.isEmpty() || objectId != null || !name.isEmpty() || !expectedFingerprint.isEmpty()) {
-                    throw new IllegalArgumentException("Refresh request contains unexpected fields");
-                }
-            }
             case CREATE_FOLDER -> {
                 if (!keys.isEmpty() || objectId != null || name.isBlank() || !expectedFingerprint.isEmpty()) {
                     throw new IllegalArgumentException("Invalid create-folder request");

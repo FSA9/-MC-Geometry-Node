@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.system.asset.transfer.model;
 
 import java.util.Locale;
 
-/** Canonical SHA-256 text validation shared by packets and transfer IO. */
+/** Canonical SHA-256 text validation for persistent asset metadata. */
 public final class AssetContentHash {
     public static final int HEX_LENGTH = 64;
 

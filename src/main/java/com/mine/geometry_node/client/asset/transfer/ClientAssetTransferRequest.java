@@ -48,8 +48,8 @@ public record ClientAssetTransferRequest(
                 AssetTransferConflictPolicy.OVERWRITE, purpose);
     }
 
-    public static ClientAssetTransferRequest dataLibraryDownload(String token, Path target) {
-        return new ClientAssetTransferRequest(AssetTransferDirection.DOWNLOAD, target, token,
+    public static ClientAssetTransferRequest dataLibraryDownload(Path target) {
+        return new ClientAssetTransferRequest(AssetTransferDirection.DOWNLOAD, target, "data-library",
                 AssetTransferConflictPolicy.OVERWRITE, AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD);
     }
 
