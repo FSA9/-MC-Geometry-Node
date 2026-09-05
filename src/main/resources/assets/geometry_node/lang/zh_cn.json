@@ -1414,6 +1414,8 @@
     "geometry_node.settings.entry.keyBindings.global.delete.description":  "删除当前作用域选中的内容。",
     "geometry_node.settings.entry.keyBindings.global.rename.label":  "重命名",
     "geometry_node.settings.entry.keyBindings.global.rename.description":  "重命名当前选中的资产。",
+    "geometry_node.settings.entry.keyBindings.viewport.selectAll.label":  "全选",
+    "geometry_node.settings.entry.keyBindings.viewport.selectAll.description":  "选中当前视口中可见的所有节点。",
     "geometry_node.settings.entry.keyBindings.viewport.delete.label":  "删除节点",
     "geometry_node.settings.entry.keyBindings.viewport.delete.description":  "删除视口中选中的节点或图框。",
     "geometry_node.settings.entry.keyBindings.viewport.toggleSnapToGrid.label":  "切换吸附",

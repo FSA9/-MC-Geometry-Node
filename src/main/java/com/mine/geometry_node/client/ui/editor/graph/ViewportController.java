@@ -474,6 +474,7 @@ public class ViewportController implements EditorContext.EditorListener,
         if (id == null) return;
         ViewportActionRequest actionRequest = request != null ? request : ViewportActionRequest.EMPTY;
         switch (id) {
+            case SELECT_ALL -> mViewport.selectAll();
             case UNDO -> undo();
             case REDO -> redo();
             case SAVE -> save();

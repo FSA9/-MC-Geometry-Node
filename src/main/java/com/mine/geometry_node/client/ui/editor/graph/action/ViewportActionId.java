@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.action;
 
 public enum ViewportActionId {
+    SELECT_ALL,
     UNDO,
     REDO,
     SAVE,

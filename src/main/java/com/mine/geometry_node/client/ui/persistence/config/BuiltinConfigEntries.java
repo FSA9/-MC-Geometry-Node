@@ -126,6 +126,8 @@ public final class BuiltinConfigEntries {
 
     public static final ConfigEntry<String> VIEWPORT_DELETE = key("keyBindings.viewport.delete", SHORTCUT_VIEWPORT, 100, KeyScope.VIEWPORT,
             config -> config.keyBindings.viewport.delete, (config, value) -> config.keyBindings.viewport.delete = value);
+    public static final ConfigEntry<String> VIEWPORT_SELECT_ALL = key("keyBindings.viewport.selectAll", SHORTCUT_VIEWPORT, 50, KeyScope.VIEWPORT,
+            config -> config.keyBindings.viewport.selectAll, (config, value) -> config.keyBindings.viewport.selectAll = value);
     public static final ConfigEntry<String> VIEWPORT_TOGGLE_SNAP = key("keyBindings.viewport.toggleSnapToGrid", SHORTCUT_VIEWPORT, 200, KeyScope.VIEWPORT,
             config -> config.keyBindings.viewport.toggleSnapToGrid, (config, value) -> config.keyBindings.viewport.toggleSnapToGrid = value);
     public static final ConfigEntry<String> VIEWPORT_TOGGLE_GRID = key("keyBindings.viewport.toggleGridAndAxis", SHORTCUT_VIEWPORT, 300, KeyScope.VIEWPORT,
@@ -157,7 +159,7 @@ public final class BuiltinConfigEntries {
             TRANSFER_COMPLETED_HISTORY_LIMIT, TRANSFER_FAILED_HISTORY_LIMIT,
             PREVIEW_MAX_SIZE_MIB, PREVIEW_LOCATION,
             GLOBAL_UNDO, GLOBAL_REDO, GLOBAL_SAVE, GLOBAL_COPY, GLOBAL_PASTE, GLOBAL_CUT, GLOBAL_DELETE, GLOBAL_RENAME,
-            VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
+            VIEWPORT_SELECT_ALL, VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
             VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT);
 
     private BuiltinConfigEntries() {}

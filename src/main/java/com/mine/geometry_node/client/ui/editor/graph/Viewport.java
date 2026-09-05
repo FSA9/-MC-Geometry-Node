@@ -433,6 +433,12 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
         mSelection.clear();
         applySelectionToLayers();
     }
+
+    public void selectAll() {
+        mSelection.setNodes(mNodeLayer != null ? mNodeLayer.getNodeVisuals().keySet() : java.util.Collections.emptySet());
+        mSelection.setFrames(java.util.Collections.emptySet());
+        applySelectionToLayers();
+    }
     @Override
     public void addToSelection(NodeVisualAdapter node) {
         mSelection.selectNode(node);

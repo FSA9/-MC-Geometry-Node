@@ -14,6 +14,8 @@ public final class ViewportActionRegistry {
     private static final Map<ViewportActionId, ViewportAction> ACTIONS = new EnumMap<>(ViewportActionId.class);
 
     static {
+        register(KeyScope.VIEWPORT, ViewportActionId.SELECT_ALL, BuiltinConfigEntries.VIEWPORT_SELECT_ALL,
+                ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.UNDO, BuiltinConfigEntries.GLOBAL_UNDO, ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.REDO, BuiltinConfigEntries.GLOBAL_REDO, ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.SAVE, BuiltinConfigEntries.GLOBAL_SAVE, state -> true);

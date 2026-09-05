@@ -149,6 +149,7 @@ public class AppConfig {
     }
 
     public static class ViewportKeyBindingsConfig {
+        public String selectAll = "A";
         public String delete = "DELETE";
         public String toggleSnapToGrid = "SHIFT+TAB";
         public String toggleGridAndAxis = "SHIFT+ALT+Z";
@@ -159,6 +160,7 @@ public class AppConfig {
 
         ViewportKeyBindingsConfig copy() {
             ViewportKeyBindingsConfig copy = new ViewportKeyBindingsConfig();
+            copy.selectAll = selectAll;
             copy.delete = delete;
             copy.toggleSnapToGrid = toggleSnapToGrid;
             copy.toggleGridAndAxis = toggleGridAndAxis;

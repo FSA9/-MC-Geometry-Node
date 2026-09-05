@@ -1414,6 +1414,8 @@
     "geometry_node.settings.entry.keyBindings.global.delete.description":  "Delete the current scoped selection.",
     "geometry_node.settings.entry.keyBindings.global.rename.label":  "Rename",
     "geometry_node.settings.entry.keyBindings.global.rename.description":  "Rename the selected asset.",
+    "geometry_node.settings.entry.keyBindings.viewport.selectAll.label":  "Select All",
+    "geometry_node.settings.entry.keyBindings.viewport.selectAll.description":  "Select all nodes visible in the viewport.",
     "geometry_node.settings.entry.keyBindings.viewport.delete.label":  "Delete Nodes",
     "geometry_node.settings.entry.keyBindings.viewport.delete.description":  "Delete selected nodes or frames in the viewport.",
     "geometry_node.settings.entry.keyBindings.viewport.toggleSnapToGrid.label":  "Toggle Snapping",
