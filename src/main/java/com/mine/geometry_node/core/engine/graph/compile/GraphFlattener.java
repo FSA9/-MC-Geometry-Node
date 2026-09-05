@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.Gson;
+import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph.DataConnectionSource;
 import com.mine.geometry_node.core.engine.graph.compile.FlattenedGraph.InputKey;
@@ -12,6 +13,7 @@ import com.mine.geometry_node.core.node.group.GroupNodeTypes;
 import com.mine.geometry_node.core.node.value.GraphNumberNormalizer;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
@@ -21,6 +23,7 @@ import java.util.*;
 /** Expands nested node groups into a graph-family-neutral compiler input. */
 public final class GraphFlattener {
     private static final Gson GSON = new Gson();
+    private static final int MAX_SCHEMA_RESOLUTION_PASSES = 16;
 
     private final Map<String, JsonObject> nodeDataLookup = new HashMap<>();
     private final Map<String, NodeData> nodeInstanceLookup = new HashMap<>();
@@ -34,6 +37,7 @@ public final class GraphFlattener {
     private final Map<String, GroupBoundary> groupBoundaries = new HashMap<>();
     private final Map<String, String> boundaryToGroupMap = new HashMap<>();
     private final Set<String> virtualNodeIds = new HashSet<>();
+    private final Set<String> dynamicSchemaNodeIds = new LinkedHashSet<>();
     private final Map<InputKey, DataResolution> dataResolutionCache = new HashMap<>();
     private final Map<InputKey, Optional<TargetConnection>> executionTargetCache = new HashMap<>();
 
@@ -52,15 +56,11 @@ public final class GraphFlattener {
         flattenRecursive("", rootNodes);
         Map<InputKey, DataConnectionSource> unbridgedInputs = new HashMap<>(inputLookup);
 
-        bridgeDataInputs();
-        finalizeNodeSchemas();
-
-        resetBridgedStaticInputs();
-        inputLookup.clear();
-        inputLookup.putAll(unbridgedInputs);
-        dataResolutionCache.clear();
-        bridgeDataInputs();
-        finalizeNodeSchemas();
+        if (dynamicSchemaNodeIds.isEmpty()) {
+            bridgeDataInputs();
+        } else {
+            resolveDynamicSchemas(unbridgedInputs);
+        }
 
         bridgeExecutionOutputs();
         removeVirtualNodes();
@@ -85,6 +85,11 @@ public final class GraphFlattener {
             NodeDef instanceDefinition = NodeRegistry.INSTANCE.resolveDefinition(instanceData);
             CanonicalNodeSchema schema = CanonicalNodeSchema.from(type, instanceDefinition);
             nodeSchemaLookup.put(globalId, schema);
+            var registeredNode = NodeRegistry.INSTANCE.get(type);
+            if (!isVirtualType(type) && registeredNode != null
+                    && registeredNode.hasDynamicDefinition()) {
+                dynamicSchemaNodeIds.add(globalId);
+            }
 
             if (isVirtualType(type)) {
                 virtualNodeIds.add(globalId);
@@ -139,15 +144,31 @@ public final class GraphFlattener {
         }
     }
 
-    /**
-     * Publishes the final schema after group inputs have been bridged. Dynamic definitions may
-     * depend on selector inputs, so the preliminary schema used to flatten connections is not
-     * necessarily the schema that runtime compilation must consume.
-     */
-    private void finalizeNodeSchemas() {
-        for (Map.Entry<String, NodeData> entry : nodeInstanceLookup.entrySet()) {
-            String nodeId = entry.getKey();
-            NodeData instance = entry.getValue();
+    private void resolveDynamicSchemas(Map<InputKey, DataConnectionSource> unbridgedInputs) {
+        ConvergenceState previous = captureConvergenceState();
+        for (int pass = 1; pass <= MAX_SCHEMA_RESOLUTION_PASSES; pass++) {
+            resetBridgedStaticInputs();
+            inputLookup.clear();
+            inputLookup.putAll(unbridgedInputs);
+            dataResolutionCache.clear();
+
+            bridgeDataInputs();
+            finalizeDynamicNodeSchemas();
+
+            ConvergenceState current = captureConvergenceState();
+            if (current.equivalentTo(previous)) return;
+            previous = current;
+        }
+        throw new IllegalStateException("Dynamic graph schema did not converge after "
+                + MAX_SCHEMA_RESOLUTION_PASSES + " passes: "
+                + String.join(", ", dynamicSchemaNodeIds));
+    }
+
+    /** Rebuilds only definitions whose schema is allowed to depend on instance inputs. */
+    private void finalizeDynamicNodeSchemas() {
+        for (String nodeId : dynamicSchemaNodeIds) {
+            NodeData instance = nodeInstanceLookup.get(nodeId);
+            if (instance == null) continue;
             Map<String, Object> staticInputs = staticInputLookup.getOrDefault(nodeId, Map.of());
             Map<String, Object> definitionInputs = new LinkedHashMap<>();
             staticInputs.forEach((port, value) -> {
@@ -165,6 +186,18 @@ public final class GraphFlattener {
             canonicalizeStaticInputs(canonicalInputs, schema);
             staticInputLookup.put(nodeId, canonicalInputs);
         }
+    }
+
+    private ConvergenceState captureConvergenceState() {
+        Map<String, SchemaShape> schemas = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> inputs = new LinkedHashMap<>();
+        for (String nodeId : dynamicSchemaNodeIds) {
+            CanonicalNodeSchema schema = nodeSchemaLookup.get(nodeId);
+            if (schema != null) schemas.put(nodeId, SchemaShape.from(schema));
+            inputs.put(nodeId, GraphValueSnapshot.snapshotValues(
+                    staticInputLookup.getOrDefault(nodeId, Map.of())));
+        }
+        return new ConvergenceState(Map.copyOf(schemas), Map.copyOf(inputs));
     }
 
     private void resetBridgedStaticInputs() {
@@ -602,6 +635,40 @@ public final class GraphFlattener {
             names.add(source.sourcePortName());
         });
         return names;
+    }
+
+    private record ConvergenceState(Map<String, SchemaShape> schemas,
+                                    Map<String, Map<String, Object>> inputs) {
+        private boolean equivalentTo(ConvergenceState other) {
+            if (other == null || !schemas.equals(other.schemas)
+                    || !inputs.keySet().equals(other.inputs.keySet())) {
+                return false;
+            }
+            for (String nodeId : inputs.keySet()) {
+                if (!GraphValueSnapshot.equivalent(inputs.get(nodeId), other.inputs.get(nodeId))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    /** Runtime-relevant schema shape; editor labels do not participate in convergence. */
+    private record SchemaShape(List<PortShape> inputs, List<PortShape> outputs,
+                               Set<String> passthroughOutputs) {
+        private static SchemaShape from(CanonicalNodeSchema schema) {
+            return new SchemaShape(
+                    schema.inputs().values().stream().map(PortShape::from).toList(),
+                    schema.outputs().values().stream().map(PortShape::from).toList(),
+                    schema.dataPassthroughOutputs());
+        }
+    }
+
+    private record PortShape(String id, PortType type, boolean hidden,
+                             boolean liveExpression) {
+        private static PortShape from(PortDef port) {
+            return new PortShape(port.id(), port.type(), port.hidePin(), port.liveExpressionEnabled());
+        }
     }
 
     private record GroupBoundary(String groupId, String groupInId, String groupOutId) {}

@@ -21,6 +21,7 @@ import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.definition.port.PortConversionRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -233,14 +234,14 @@ public final class BehaviorTreeEvaluator {
         Object value = instance.dataEvaluation().evaluate(source.sourceNodeId(), source.sourcePortName(),
                 (nodeIndex, outputPort) -> computeDataNode(instance, nodeIndex, outputPort));
         return PortConversionRegistry.convert(value, source.sourceType(), source.targetType(),
-                new BehaviorDataContext(instance, targetNodeIndex));
+                dataContext(instance, targetNodeIndex));
     }
 
     @Nullable
     <T> T resolveInput(BehaviorTreeProcess instance, int targetNodeIndex,
                        String portName, Class<T> type) {
         return TypeConverter.convert(resolveInput(instance, targetNodeIndex, portName),
-                type, new BehaviorDataContext(instance, targetNodeIndex));
+                type, dataContext(instance, targetNodeIndex));
     }
 
     @Nullable
@@ -248,14 +249,14 @@ public final class BehaviorTreeEvaluator {
                                String portName, int index, Class<T> type) {
         return TypeConverter.convertFromList(
                 resolveInput(instance, targetNodeIndex, portName), index, type,
-                new BehaviorDataContext(instance, targetNodeIndex));
+                dataContext(instance, targetNodeIndex));
     }
 
     @Nullable
     <T> T convertInput(BehaviorTreeProcess instance, int targetNodeIndex,
                        Object value, Class<T> type) {
         return TypeConverter.convert(value, type,
-                new BehaviorDataContext(instance, targetNodeIndex));
+                dataContext(instance, targetNodeIndex));
     }
 
     private Object computeDataNode(BehaviorTreeProcess instance, int nodeIndex, String outputPort) {
@@ -267,7 +268,16 @@ public final class BehaviorTreeEvaluator {
             throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA,
                     "Data node implementation is unavailable: " + instance.plan().getNodeType(nodeIndex));
         }
-        return node.compute(new BehaviorDataContext(instance, nodeIndex), outputPort);
+        return node.compute(dataContext(instance, nodeIndex), outputPort);
+    }
+
+    private BehaviorDataContext dataContext(BehaviorTreeProcess instance, int nodeIndex) {
+        EvaluationPass pass = currentPass.get();
+        if (pass == null || pass.instance != instance) {
+            return new BehaviorDataContext(instance, nodeIndex);
+        }
+        return pass.dataContexts.computeIfAbsent(nodeIndex,
+                ignored -> new BehaviorDataContext(instance, nodeIndex));
     }
 
     private void enterNode(BehaviorTreeProcess instance, int nodeIndex, BehaviorNodeExecutor executor,
@@ -512,6 +522,8 @@ public final class BehaviorTreeEvaluator {
 
     private static final class EvaluationPass {
         private final BehaviorTreeProcess instance;
+        private final Int2ObjectOpenHashMap<BehaviorDataContext> dataContexts =
+                new Int2ObjectOpenHashMap<>();
         @Nullable private PendingPreemption pendingPreemption;
         private int visits;
 

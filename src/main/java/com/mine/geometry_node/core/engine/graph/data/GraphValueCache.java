@@ -12,9 +12,6 @@ public final class GraphValueCache {
     private static final Object CACHE_MISS = new Object();
     private static final Object CACHED_NULL = new Object();
 
-    private record CachedValue(Object value, boolean copyOnRead) {
-    }
-
     private final Long2ObjectOpenHashMap<Object> frameCache = new Long2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Map<String, Object>> dynamicFrameCache = new Int2ObjectOpenHashMap<>();
     private final boolean[] recursionGuard;
@@ -61,26 +58,23 @@ public final class GraphValueCache {
         if (cached == null) {
             return CACHE_MISS;
         }
-        if (cached == CACHED_NULL) return null;
-        CachedValue value = (CachedValue) cached;
-        return value.copyOnRead() ? GraphValueSnapshot.snapshot(value.value()) : value.value();
+        return read(cached);
     }
 
     public static boolean isCacheMiss(Object value) {
         return value == CACHE_MISS;
     }
 
-    public void put(int nodeId, String portName, int portId, Object value) {
+    public Object put(int nodeId, String portName, int portId, Object value) {
         Object cacheValue;
         if (value == null) {
             cacheValue = CACHED_NULL;
         } else {
-            Object snapshot = GraphValueSnapshot.snapshot(value);
-            cacheValue = new CachedValue(snapshot, GraphValueSnapshot.requiresReadCopy(snapshot));
+            cacheValue = GraphValueSnapshot.freeze(value);
         }
         if (portId != -1) {
             frameCache.put(cacheKey(nodeId, portId), cacheValue);
-            return;
+            return read(cacheValue);
         }
 
         Map<String, Object> nodeDynamicCache = dynamicFrameCache.get(nodeId);
@@ -89,6 +83,13 @@ public final class GraphValueCache {
             dynamicFrameCache.put(nodeId, nodeDynamicCache);
         }
         nodeDynamicCache.put(portName, cacheValue);
+        return read(cacheValue);
+    }
+
+    private static Object read(Object cached) {
+        if (cached == CACHED_NULL) return null;
+        GraphValueSnapshot.FrozenValue value = (GraphValueSnapshot.FrozenValue) cached;
+        return value.copyOnRead() ? GraphValueSnapshot.snapshot(value.value()) : value.value();
     }
 
     private static long cacheKey(int nodeId, int portId) {

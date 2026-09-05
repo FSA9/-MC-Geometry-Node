@@ -25,33 +25,50 @@ public final class GraphValueSnapshot {
     }
 
     public static Object snapshot(Object value) {
+        return snapshot(value, null);
+    }
+
+    /**
+     * Freezes a producer-owned value and records whether readers still need an
+     * independent copy of mutable leaves.
+     */
+    public static FrozenValue freeze(Object value) {
+        SnapshotState state = new SnapshotState();
+        Object frozen = snapshot(value, state);
+        return new FrozenValue(frozen, state.copyOnRead);
+    }
+
+    private static Object snapshot(Object value, SnapshotState state) {
         if (value == null) return null;
         if (value instanceof Entity entity) return entity.getUUID();
         if (value instanceof Number number) return GraphNumberNormalizer.normalize(number);
-        if (value instanceof ItemStack stack) return stack.copy();
-        if (value instanceof RichTextValue richText) return snapshotRichText(richText);
+        if (value instanceof ItemStack stack) {
+            if (state != null) state.copyOnRead = true;
+            return stack.copy();
+        }
+        if (value instanceof RichTextValue richText) return snapshotRichText(richText, state);
         if (value instanceof Map<?, ?> map) {
             Map<Object, Object> copy = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
-                copy.put(snapshot(entry.getKey()), snapshot(entry.getValue()));
+                copy.put(snapshot(entry.getKey(), state), snapshot(entry.getValue(), state));
             }
             return Collections.unmodifiableMap(copy);
         }
         if (value instanceof List<?> list) {
             List<Object> copy = new ArrayList<>(list.size());
-            for (Object item : list) copy.add(snapshot(item));
+            for (Object item : list) copy.add(snapshot(item, state));
             return Collections.unmodifiableList(copy);
         }
         if (value instanceof Set<?> set) {
             Set<Object> copy = new LinkedHashSet<>();
-            for (Object item : set) copy.add(snapshot(item));
+            for (Object item : set) copy.add(snapshot(item, state));
             return Collections.unmodifiableSet(copy);
         }
         if (value.getClass().isArray()) {
             int length = Array.getLength(value);
             List<Object> copy = new ArrayList<>(length);
             for (int index = 0; index < length; index++) {
-                copy.add(snapshot(Array.get(value, index)));
+                copy.add(snapshot(Array.get(value, index), state));
             }
             return Collections.unmodifiableList(copy);
         }
@@ -89,10 +106,10 @@ public final class GraphValueSnapshot {
     }
 
     @SuppressWarnings("unchecked")
-    private static RichTextValue snapshotRichText(RichTextValue value) {
+    private static RichTextValue snapshotRichText(RichTextValue value, SnapshotState state) {
         List<RichTextValue.Segment> segments = new ArrayList<>(value.segments().size());
         for (RichTextValue.Segment segment : value.segments()) {
-            Map<String, Object> style = (Map<String, Object>) snapshot(segment.style());
+            Map<String, Object> style = (Map<String, Object>) snapshot(segment.style(), state);
             segments.add(new RichTextValue.Segment(
                     segment.kind(), segment.text(), segment.source(), segment.display(), style));
         }
@@ -102,6 +119,12 @@ public final class GraphValueSnapshot {
     /** Whether a frozen value still contains a mutable leaf that must be copied for readers. */
     public static boolean requiresReadCopy(Object value) {
         if (value instanceof ItemStack) return true;
+        if (value instanceof RichTextValue richText) {
+            for (RichTextValue.Segment segment : richText.segments()) {
+                if (requiresReadCopy(segment.style())) return true;
+            }
+            return false;
+        }
         if (value instanceof Map<?, ?> map) {
             return map.entrySet().stream().anyMatch(entry ->
                     requiresReadCopy(entry.getKey()) || requiresReadCopy(entry.getValue()));
@@ -117,6 +140,13 @@ public final class GraphValueSnapshot {
             }
         }
         return false;
+    }
+
+    public record FrozenValue(Object value, boolean copyOnRead) {
+    }
+
+    private static final class SnapshotState {
+        private boolean copyOnRead;
     }
 
     /** Compares detached graph values without relying on mutable-object identity. */
