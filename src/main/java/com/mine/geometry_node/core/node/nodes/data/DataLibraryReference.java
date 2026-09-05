@@ -12,9 +12,11 @@ import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.node.document.NodeData;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -52,6 +54,11 @@ public final class DataLibraryReference extends com.mine.geometry_node.core.node
                 .addRow(new PortRow(null, new PortDef(VALUE,
                                 Component.translatable("geometry_node.port.data_library_value"),
                                 type, type.getDefaultValue(), false), UIHint.DEFAULT, null, null))
+                .addStaticInput(PortDef.create(ENTRY_TYPE,
+                                "geometry_node.port.data_library_entry_type",
+                                PortType.STRING, DEFAULT_TYPE.name()),
+                        UIHint.SELECT, null,
+                        Map.of(PortMetaKeys.OPTIONS, DataLibraryTypes.optionIds()))
                 .addPassthroughInput(StandardPorts.ENTRY_ID.toInput(), UIHint.INPUT, null, null)
                 .addRow(new PortRow(null, null, UIHint.CUSTOM, INFO_WIDGET_ID, null))
                 .build();
