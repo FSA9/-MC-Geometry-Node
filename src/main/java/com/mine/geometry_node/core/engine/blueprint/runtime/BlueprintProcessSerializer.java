@@ -316,7 +316,7 @@ public class BlueprintProcessSerializer {
     private record DecodedRegisters(Object[] statics, Map<String, Object> dynamics) {}
 
     public static CompoundTag saveContainer(BlueprintProcessContainer container, CompoundTag tag, HolderLookup.Provider provider) {
-        CompoundTag snapshot = new CompoundTag();
+        tag.remove("ActiveProcesses");
         if (!container.getProcessesMap().isEmpty()) {
             ListTag processList = new ListTag();
             for (BlueprintProcess process : container.getProcessesMap().values()) {
@@ -324,9 +324,8 @@ public class BlueprintProcessSerializer {
                 save(process, processTag, provider);
                 processList.add(processTag);
             }
-            snapshot.put("ActiveProcesses", processList);
+            tag.put("ActiveProcesses", processList);
         }
-        replaceContents(tag, snapshot);
         return tag;
     }
 
