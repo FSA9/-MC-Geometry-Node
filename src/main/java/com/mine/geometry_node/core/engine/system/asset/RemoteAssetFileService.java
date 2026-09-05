@@ -76,7 +76,7 @@ public final class RemoteAssetFileService {
         return root(server).resolveSibling(".geometrynode-nativepreview-cache").toAbsolutePath().normalize();
     }
 
-    public static CompletableFuture<VerifiedAssetCommitter.CommitResult> commitVerifiedUpload(
+    public static CompletableFuture<UploadCommitResult> commitVerifiedUpload(
             MinecraftServer server,
             String targetPath,
             Path verifiedTemporaryFile,
@@ -92,18 +92,20 @@ public final class RemoteAssetFileService {
         VerifiedAssetCommitter.CommitResult commit =
                 VerifiedAssetCommitter.commit(verifiedTemporaryFile, target, conflictPolicy);
         if (commit != VerifiedAssetCommitter.CommitResult.COMMITTED) {
-            return CompletableFuture.completedFuture(commit);
+            return CompletableFuture.completedFuture(new UploadCommitResult(commit, null));
         }
 
         Set<String> affectedTypeIds = new HashSet<>();
         if (oldMetadata.isKnown()) affectedTypeIds.add(oldMetadata.typeId());
         if (newMetadata.isKnown()) affectedTypeIds.add(newMetadata.typeId());
-        if (affectedTypeIds.isEmpty()) return CompletableFuture.completedFuture(commit);
+        if (affectedTypeIds.isEmpty()) {
+            return CompletableFuture.completedFuture(new UploadCommitResult(commit, null));
+        }
 
         String committedPath = ServerAssetPaths.pathToId(root(server), target);
         return AssetLifecycleRegistry.INSTANCE.refresh(
                         server, affectedTypeIds, Set.of(committedPath), false)
-                .thenApply(ignored -> commit);
+                .handle((ignored, refreshFailure) -> new UploadCommitResult(commit, refreshFailure));
     }
 
     public static List<AssetDescriptor> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
@@ -697,6 +699,11 @@ public final class RemoteAssetFileService {
         if (!Files.isRegularFile(path)) return;
         AssetMetadata metadata = AssetTypeCatalog.inspect(path);
         if (metadata.isKnown()) destination.add(metadata.typeId());
+    }
+
+    /** A storage commit remains successful even when a dependent runtime refresh reports a warning. */
+    public record UploadCommitResult(VerifiedAssetCommitter.CommitResult commit,
+                                     Throwable refreshFailure) {
     }
 
 }

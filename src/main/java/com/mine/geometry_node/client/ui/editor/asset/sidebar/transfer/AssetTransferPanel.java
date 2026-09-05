@@ -51,6 +51,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     private static final int COLOR_UPLOAD = 0xFF5793C1;
     private static final int COLOR_DOWNLOAD = 0xFF62A56B;
     private static final int COLOR_ERROR = 0xFFD87575;
+    private static final int COLOR_WARNING = 0xFFE0B35B;
     private static final int COLOR_HOVER = 0xFF4A4A4A;
     private static final long UI_UPDATE_DELAY_MS = 100L;
 
@@ -232,16 +233,17 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
 
         LinearLayout text = new LinearLayout(getContext());
         text.setOrientation(LinearLayout.VERTICAL);
-        TextView name = label(fileName(file), 9, failed ? COLOR_ERROR : COLOR_TEXT);
+        boolean hasIssue = file.failure() != null;
+        TextView name = label(fileName(file), 9, failed ? COLOR_ERROR : hasIssue ? COLOR_WARNING : COLOR_TEXT);
         name.setSingleLine(true);
         text.addView(name, match(18));
-        String secondary = failed && file.failure() != null
+        String secondary = hasIssue
                 ? Component.translatable(file.failure().messageKey(), file.failure().messageArguments().toArray()).getString()
                 : formatBytes(file.totalBytes());
         TextView detail = label(secondary, 8, COLOR_MUTED);
         detail.setSingleLine(true);
         text.addView(detail, match(17));
-        if (failed && file.failure() != null && !file.failure().detail().isBlank()) {
+        if (hasIssue && !file.failure().detail().isBlank()) {
             row.setTooltipText(secondary + "\n" + file.failure().detail());
         }
         row.addView(text, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));

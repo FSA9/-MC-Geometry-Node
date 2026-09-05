@@ -193,16 +193,20 @@ public final class ServerAssetTransferService implements AutoCloseable {
                 }
                 BasicFileAttributes committedRevision = Files.readAttributes(temporary, BasicFileAttributes.class);
                 if (session.open.purpose() == AssetTransferPurpose.ASSET_REPOSITORY) {
-                    VerifiedAssetCommitter.CommitResult result = RemoteAssetRepositoryService.INSTANCE.commitVerifiedUpload(
+                    RemoteAssetFileService.UploadCommitResult result = RemoteAssetRepositoryService.INSTANCE.commitVerifiedUpload(
                             player.level().getServer(), session.remotePath, temporary,
                             session.open.conflictPolicy()).join();
-                    if (result != VerifiedAssetCommitter.CommitResult.COMMITTED) return CommitOutcome.SKIPPED;
+                    if (result.commit() != VerifiedAssetCommitter.CommitResult.COMMITTED) return CommitOutcome.SKIPPED;
+                    String refreshWarning = result.refreshFailure() == null
+                            ? "" : rootMessage(result.refreshFailure());
+                    return new CommitOutcome(true, committedRevision.size(),
+                            committedRevision.lastModifiedTime().toMillis(), refreshWarning);
                 } else {
                     commitDataLibraryUpload(session, temporary);
                     Files.deleteIfExists(temporary);
                 }
                 return new CommitOutcome(true, committedRevision.size(),
-                        committedRevision.lastModifiedTime().toMillis());
+                        committedRevision.lastModifiedTime().toMillis(), "");
             } catch (Throwable throwable) {
                 Files.deleteIfExists(temporary);
                 throw throwable;
@@ -394,8 +398,12 @@ public final class ServerAssetTransferService implements AutoCloseable {
         }
         closeSession(owner, session);
         if (!session.detached) {
+            boolean refreshWarning = !outcome.refreshWarning.isEmpty();
             NetworkHandler.sendToPlayer(session.player, new PacketAssetTransferServerResult(session.transferId,
-                    AssetTransferState.COMPLETED, AssetTransferErrorCode.NONE, "", "", outcome.committed,
+                    AssetTransferState.COMPLETED,
+                    refreshWarning ? AssetTransferErrorCode.GRAPH_RELOAD_FAILED : AssetTransferErrorCode.NONE,
+                    refreshWarning ? "geometry_node.asset_transfer.error.asset_refresh_failed" : "",
+                    outcome.refreshWarning, outcome.committed,
                     outcome.sourceSize, outcome.sourceLastModified));
         }
     }
@@ -581,8 +589,9 @@ public final class ServerAssetTransferService implements AutoCloseable {
 
     private record SessionLookup(PlayerContext owner, ServerSession session) { }
 
-    private record CommitOutcome(boolean committed, long sourceSize, long sourceLastModified) {
-        private static final CommitOutcome ABORTED = new CommitOutcome(false, 0L, 0L);
-        private static final CommitOutcome SKIPPED = new CommitOutcome(false, 0L, 0L);
+    private record CommitOutcome(boolean committed, long sourceSize, long sourceLastModified,
+                                 String refreshWarning) {
+        private static final CommitOutcome ABORTED = new CommitOutcome(false, 0L, 0L, "");
+        private static final CommitOutcome SKIPPED = new CommitOutcome(false, 0L, 0L, "");
     }
 }

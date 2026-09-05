@@ -58,6 +58,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
     });
     private final Map<UUID, ClientJob> jobs = new LinkedHashMap<>();
     private final Map<UUID, ClientFile> filesByTransferId = new LinkedHashMap<>();
+    private final Map<UUID, ClientAssetTransferRequest> retryRequestsByTransferId = new LinkedHashMap<>();
     private final Deque<ClientJob> uploadRoundRobin = new ArrayDeque<>();
     private final Deque<ClientJob> downloadRoundRobin = new ArrayDeque<>();
     private final Deque<AssetTransferFileSnapshot> completedHistory = new ArrayDeque<>();
@@ -112,17 +113,16 @@ public final class ClientAssetTransferService implements AutoCloseable {
     }
 
     public synchronized UUID retry(UUID transferId) {
-        ClientFile previous = filesByTransferId.get(transferId);
-        if (previous == null || previous.failure == null || !previous.failure.isRetryable()) return null;
-        return submit(List.of(previous.request));
+        ClientAssetTransferRequest request = retryRequestsByTransferId.get(transferId);
+        return request != null ? submit(List.of(request)) : null;
     }
 
     public synchronized List<UUID> retryAll() {
         Map<AssetTransferDirection, List<ClientAssetTransferRequest>> requests = new LinkedHashMap<>();
         for (AssetTransferFileSnapshot failed : failedHistory) {
-            ClientFile file = filesByTransferId.get(failed.transferId());
-            if (file != null && file.failure != null && file.failure.isRetryable()) {
-                requests.computeIfAbsent(file.direction, ignored -> new ArrayList<>()).add(file.request);
+            ClientAssetTransferRequest request = retryRequestsByTransferId.get(failed.transferId());
+            if (request != null) {
+                requests.computeIfAbsent(request.direction(), ignored -> new ArrayList<>()).add(request);
             }
         }
         List<UUID> jobIds = new ArrayList<>();
@@ -152,6 +152,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
 
     public synchronized void clearFailedHistory() {
         failedHistory.clear();
+        retryRequestsByTransferId.clear();
         publish();
     }
 
@@ -276,15 +277,16 @@ public final class ClientAssetTransferService implements AutoCloseable {
     public synchronized void handle(PacketAssetTransferServerResult packet) {
         ClientFile file = filesByTransferId.get(packet.transferId());
         if (file == null || file.state.isTerminal()) return;
-        AssetTransferFailure failure = packet.state() == AssetTransferState.COMPLETED ? null : new AssetTransferFailure(
-                packet.errorCode(), packet.messageKey(), List.of(), packet.detail());
+        AssetTransferFailure failure = packet.state() == AssetTransferState.COMPLETED
+                && packet.errorCode() == AssetTransferErrorCode.NONE ? null : new AssetTransferFailure(
+                        packet.errorCode(), packet.messageKey(), List.of(), packet.detail());
         finish(file, packet.state(), failure);
         publish();
         pump(file.direction);
     }
 
     public synchronized void resetConnection() {
-        for (ClientJob job : jobs.values()) {
+        for (ClientJob job : List.copyOf(jobs.values())) {
             for (ClientFile file : job.files) {
                 if (!file.state.isTerminal()) finish(file, AssetTransferState.CANCELLED,
                         new AssetTransferFailure(AssetTransferErrorCode.DISCONNECTED,
@@ -293,6 +295,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
         }
         jobs.clear();
         filesByTransferId.clear();
+        retryRequestsByTransferId.clear();
         uploadRoundRobin.clear();
         downloadRoundRobin.clear();
         completedHistory.clear();
@@ -417,12 +420,24 @@ public final class ClientAssetTransferService implements AutoCloseable {
         AssetTransferClientPreferences preferences = preferences();
         if (state == AssetTransferState.COMPLETED) {
             completedHistory.addFirst(terminal);
-            trim(completedHistory, preferences.completedHistoryLimit());
+            trimCompletedHistory(preferences.completedHistoryLimit());
         } else if (state == AssetTransferState.FAILED) {
             failedHistory.addFirst(terminal);
-            trim(failedHistory, preferences.failedHistoryLimit());
+            if (failure != null && failure.isRetryable()) {
+                retryRequestsByTransferId.put(file.transferId, file.request);
+            }
+            trimFailedHistory(preferences.failedHistoryLimit());
         }
-        if (file.job.isTerminal()) file.job.completion.complete(file.job.snapshot());
+        if (file.job.isTerminal()) {
+            AssetTransferJobSnapshot result = file.job.snapshot();
+            file.job.completion.complete(result);
+            jobs.remove(file.job.jobId, file.job);
+            uploadRoundRobin.remove(file.job);
+            downloadRoundRobin.remove(file.job);
+            for (ClientFile completed : file.job.files) {
+                filesByTransferId.remove(completed.transferId, completed);
+            }
+        }
     }
 
     private void publish() {
@@ -453,8 +468,15 @@ public final class ClientAssetTransferService implements AutoCloseable {
         return AssetTransferConfigAdapter.from(ConfigManager.INSTANCE.getConfig().networkTransfer);
     }
 
-    private static void trim(Deque<?> values, int limit) {
-        while (values.size() > limit) values.removeLast();
+    private void trimCompletedHistory(int limit) {
+        while (completedHistory.size() > limit) completedHistory.removeLast();
+    }
+
+    private void trimFailedHistory(int limit) {
+        while (failedHistory.size() > limit) {
+            AssetTransferFileSnapshot removed = failedHistory.removeLast();
+            retryRequestsByTransferId.remove(removed.transferId());
+        }
     }
 
     private static void post(Runnable task) { Minecraft.getInstance().execute(task); }

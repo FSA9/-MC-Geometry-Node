@@ -1502,6 +1502,7 @@
     "geometry_node.asset_transfer.error.invalid_sequence":  "传输数据块的序列无效。",
     "geometry_node.asset_transfer.error.invalid_acknowledgement":  "传输确认信息无效。",
     "geometry_node.asset_transfer.error.verification_or_commit_failed":  "文件校验失败或无法提交到目标位置。",
+    "geometry_node.asset_transfer.error.asset_refresh_failed":  "文件已保存，但相关运行时数据刷新失败。",
     "geometry_node.asset_transfer.error.stale_object": "数据库对象已在服务端发生变化，请刷新后重试。",
     "geometry_node.asset_transfer.error.open_failed":  "无法打开传输文件。",
     "geometry_node.asset_transfer.error.file_too_large":  "文件超过了配置的传输大小限制。",

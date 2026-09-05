@@ -87,7 +87,7 @@ public final class RemoteAssetRepositoryService {
                 () -> RemoteAssetFileService.rename(server, sourcePath, destinationPath)));
     }
 
-    public CompletableFuture<VerifiedAssetCommitter.CommitResult> commitVerifiedUpload(
+    public CompletableFuture<RemoteAssetFileService.UploadCommitResult> commitVerifiedUpload(
             MinecraftServer server,
             String targetPath,
             Path verifiedTemporaryFile,

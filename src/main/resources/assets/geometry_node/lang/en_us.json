@@ -1502,6 +1502,7 @@
     "geometry_node.asset_transfer.error.invalid_sequence":  "The transfer chunk sequence is invalid.",
     "geometry_node.asset_transfer.error.invalid_acknowledgement":  "The transfer acknowledgement is invalid.",
     "geometry_node.asset_transfer.error.verification_or_commit_failed":  "The transferred file failed verification or could not be committed.",
+    "geometry_node.asset_transfer.error.asset_refresh_failed":  "The file was saved, but dependent runtime data could not be refreshed.",
     "geometry_node.asset_transfer.error.stale_object": "The Data Library object changed on the server. Refresh and try again.",
     "geometry_node.asset_transfer.error.open_failed":  "The transfer file could not be opened.",
     "geometry_node.asset_transfer.error.file_too_large":  "The file exceeds the configured transfer limit.",
